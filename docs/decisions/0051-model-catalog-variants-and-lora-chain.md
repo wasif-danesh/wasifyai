@@ -1,6 +1,6 @@
 # ADR-0051: Model catalog, capability variants and the LoRA chain
 
-- **Status:** Proposed
+- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wd-studio-ai`, in its own repository (`wd-studio-hub`); wd-ai does not implement it. Nothing here was built.
 - **Date:** 2026-10-12
 
 ## Context

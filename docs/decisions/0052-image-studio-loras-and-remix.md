@@ -1,6 +1,6 @@
 # ADR-0052: Image studio: base model, LoRAs, stored parameters and Remix
 
-- **Status:** Proposed
+- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wd-studio-ai`, in its own repository (`wd-studio-hub`); wd-ai does not implement it. Nothing here was built.
 - **Date:** 2026-10-12
 - **Depends on:** ADR-0051. **Extends:** ADR-0036 (it does not supersede it).
 

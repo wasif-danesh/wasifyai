@@ -1,6 +1,6 @@
 # ADR-0054: LoRA training: dataset, captions, trainer service, publish
 
-- **Status:** Proposed
+- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wd-studio-ai`, in its own repository (`wd-studio-hub`); wd-ai does not implement it. Nothing here was built.
 - **Date:** 2026-10-12
 - **Depends on:** ADR-0051 (catalog, LoRA chain). Follows the pattern of ADR-0044 (an external native service) and
   ADR-0037 (a long job the user can leave).

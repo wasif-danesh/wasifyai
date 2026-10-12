@@ -1,6 +1,6 @@
 # ADR-0053: AI Tools: a manifest-driven product, and Change Clothes
 
-- **Status:** Proposed
+- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wd-studio-ai`, in its own repository (`wd-studio-hub`); wd-ai does not implement it. Nothing here was built.
 - **Date:** 2026-10-12
 - **Depends on:** ADR-0051 (variants). Uses ADR-0035, ADR-0039 (pictures), ADR-0038 (Enhance), ADR-0040/0041 (library).
 

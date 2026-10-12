@@ -1,0 +1,81 @@
+# The model aliases the platform ships with (ADR-0025). Graphs and products ask for these names; an
+# admin can point any of them at another provider and model, and "reset" returns to what is here.
+#
+# The API seeds these into LiteLLM's database at start (idempotent). `{OLLAMA_BASE_URL}` and
+# `{OLLAMA_OPENAI_BASE_URL}` are filled from the API's settings. `ollama_chat/<model>` entries are
+# also the models `make setup` pulls (scripts/lib.sh reads this file).
+#
+# Behaviour parameters (temperature, think, reasoning_effort) stay with the alias when an admin
+# changes provider or model; LiteLLM drops the ones a provider does not support.
+aliases:
+  # Gemma 4 "thinks" by default: reasoning tokens count against max_tokens, double the latency and
+  # did not improve lyric quality in our test. Off for creative/chat aliases (ADR-0018).
+  default-chat:
+    purpose: General chat (the hello demo and tests)
+    kind: chat
+    litellm_params:
+      model: ollama_chat/gemma4:e4b
+      api_base: "{OLLAMA_BASE_URL}"
+      think: false
+  lyrics-writer:
+    purpose: Writes song titles, lyrics, style tags and cover prompts
+    kind: chat
+    litellm_params:
+      model: ollama_chat/gemma4:e4b
+      api_base: "{OLLAMA_BASE_URL}"
+      think: false
+  # Rewrites a user's prompt for the image, video and music models (ADR-0038). A little sampling
+  # randomness is wanted; thinking is off, as for the other creative aliases.
+  prompt-enhancer:
+    purpose: Rewrites a user's prompt into a clearer one for the generation models
+    kind: chat
+    litellm_params:
+      model: ollama_chat/gemma4:e4b
+      api_base: "{OLLAMA_BASE_URL}"
+      temperature: 0.7
+      think: false
+  # A classifier must give the same answer every time: no sampling randomness. It keeps thinking
+  # on; see products/wasifyai-music/evals for the measurements behind both settings (ADR-0022).
+  moderator:
+    purpose: Safety classifier for every request, lyrics and cover prompt (guardrail)
+    kind: chat
+    protected: true   # a change must pass the product's canary checks first
+    litellm_params:
+      model: ollama_chat/gemma4:e4b
+      api_base: "{OLLAMA_BASE_URL}"
+      temperature: 0
+  # Evaluation only: the same classifier without thinking, to compare speed and accuracy.
+  moderator-nothink:
+    purpose: Evaluation only (guardrail without thinking)
+    kind: chat
+    litellm_params:
+      model: ollama_chat/gemma4:e4b
+      api_base: "{OLLAMA_BASE_URL}"
+      temperature: 0
+      think: false
+  # Same model through Ollama's OpenAI-compatible API (`openai/` here means Ollama's /v1, not
+  # OpenAI). Unlike `ollama_chat/` it accepts audio input parts, so use this alias for
+  # capabilities that take image or audio input (ADR-0020).
+  multimodal:
+    purpose: Image and audio input to the model (also checks uploaded pictures for the image guardrail)
+    kind: chat
+    protected: true   # a change must pass the image guardrail's canary checks first
+    litellm_params:
+      model: openai/gemma4:e4b
+      api_base: "{OLLAMA_OPENAI_BASE_URL}"
+      api_key: none
+      reasoning_effort: none  # this route ignores `think`; reasoning_effort is honoured
+  # Search over a user's own creations (ADR-0041): multilingual (bge-m3, MIT, 1024 dimensions). The
+  # `embedder` above stays on 768 dimensions for the RAG helper (migration 0003), so search has its own.
+  creation-embedder:
+    purpose: Multilingual embeddings for searching My creations
+    kind: embedding
+    litellm_params:
+      model: ollama/bge-m3
+      api_base: "{OLLAMA_BASE_URL}"
+  embedder:
+    purpose: Text embeddings for search (RAG)
+    kind: embedding
+    litellm_params:
+      model: ollama/nomic-embed-text
+      api_base: "{OLLAMA_BASE_URL}"

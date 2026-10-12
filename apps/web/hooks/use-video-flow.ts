@@ -12,8 +12,8 @@ import {
 } from "@/lib/video-flow";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 
-export const VIDEO_PRODUCT = "wd-video-ai";
-const STORAGE_KEY = "wd-video-ai:run";
+export const VIDEO_PRODUCT = "wasifyai-video";
+const STORAGE_KEY = "wasifyai-video:run";
 const MAX_RECONNECTS = 6;
 
 /** `imageKey` is the key of a picture already uploaded (ADR-0039); text to video has none. */

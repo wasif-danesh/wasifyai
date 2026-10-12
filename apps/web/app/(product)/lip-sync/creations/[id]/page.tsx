@@ -2,7 +2,7 @@ import { LipSyncView } from "@/components/lipsync/LipSyncView";
 import { ApiError, apiGet } from "@/lib/api";
 import { isUuid } from "@/lib/proxy";
 import { backLink } from "@/lib/styles";
-import type { LipSyncSummary } from "@wd/contracts";
+import type { LipSyncSummary } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -16,7 +16,7 @@ export default async function LipSyncDetail({ params }: Props) {
   if (!isUuid(id)) notFound();
   let lipsync: LipSyncSummary;
   try {
-    lipsync = await apiGet<LipSyncSummary>(`/products/wd-lipsync-ai/lipsyncs/${id}`);
+    lipsync = await apiGet<LipSyncSummary>(`/products/wasifyai-lipsync/lipsyncs/${id}`);
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;

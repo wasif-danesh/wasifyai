@@ -36,7 +36,7 @@ SERVICES = [
         "API docs",
         "Swagger UI for the API",
         "http://localhost:8000/docs",
-        "kubectl -n wd-ai port-forward svc/wd-ai-api 8000:8000",
+        "kubectl -n wasifyai port-forward svc/wasifyai-api 8000:8000",
         "http://localhost:8000/docs",
         "/health for liveness",
     ),
@@ -44,7 +44,7 @@ SERVICES = [
         "LiteLLM",
         "the model gateway",
         "http://localhost:4000",
-        "kubectl -n wd-ai port-forward svc/wd-ai-litellm 4000:4000",
+        "kubectl -n wasifyai port-forward svc/wasifyai-litellm 4000:4000",
         "http://localhost:4000",
         "needs LITELLM_API_KEY",
     ),
@@ -52,7 +52,7 @@ SERVICES = [
         "Object storage",
         "S3 API (SeaweedFS)",
         "http://localhost:8333",
-        "kubectl -n wd-ai port-forward svc/wd-ai-storage 8333:8333",
+        "kubectl -n wasifyai port-forward svc/wasifyai-storage 8333:8333",
         "http://localhost:8333",
         "",
     ),
@@ -60,7 +60,7 @@ SERVICES = [
         "Speech: Kokoro, Whisper",
         "text to speech, speech to text",
         "http://localhost:8100",
-        "kubectl -n wd-ai port-forward svc/wd-ai-speech 8100:8000",
+        "kubectl -n wasifyai port-forward svc/wasifyai-speech 8100:8000",
         "http://localhost:8100",
         "Speaches",
     ),
@@ -84,7 +84,7 @@ SERVICES = [
         "Lip sync server",
         "MuseTalk",
         "http://localhost:8191",
-        "kubectl -n wd-ai port-forward svc/wd-ai-lipsync 8191:8000",
+        "kubectl -n wasifyai port-forward svc/wasifyai-lipsync 8191:8000",
         "http://localhost:8191",
         "native on a Mac in Compose mode; a pod in kind",
     ),
@@ -92,7 +92,7 @@ SERVICES = [
         "ComfyUI",
         "images, music (and video on :8189)",
         "http://localhost:8188",
-        "kubectl -n wd-ai port-forward svc/wd-ai-comfyui 8188:8188",
+        "kubectl -n wasifyai port-forward svc/wasifyai-comfyui 8188:8188",
         "http://localhost:8188",
         "native in Compose mode; a pod in kind",
     ),
@@ -100,7 +100,7 @@ SERVICES = [
         "Ollama",
         "the language models",
         "http://localhost:11434",
-        "kubectl -n wd-ai port-forward svc/wd-ai-ollama 11434:11434",
+        "kubectl -n wasifyai port-forward svc/wasifyai-ollama 11434:11434",
         "http://localhost:11434",
         "native in Compose mode; a pod in kind",
     ),
@@ -108,15 +108,15 @@ SERVICES = [
         "Postgres",
         "database, checkpoints, usage events",
         "localhost:5432",
-        "kubectl -n wd-ai port-forward svc/wd-ai-postgres 5432:5432",
+        "kubectl -n wasifyai port-forward svc/wasifyai-postgres 5432:5432",
         "localhost:5432",
-        "user wd",
+        "user wasifyai",
     ),
     (
         "Redis",
         "job queue and run events",
         "localhost:6379",
-        "kubectl -n wd-ai port-forward svc/wd-ai-redis 6379:6379",
+        "kubectl -n wasifyai port-forward svc/wasifyai-redis 6379:6379",
         "localhost:6379",
         "",
     ),
@@ -198,13 +198,13 @@ def mode() -> str:
                 ["kubectl", "config", "current-context"], capture_output=True, text=True, timeout=5
             )
             pods = subprocess.run(
-                ["kubectl", "-n", "wd-ai", "get", "pods", "-o", "json"],
+                ["kubectl", "-n", "wasifyai", "get", "pods", "-o", "json"],
                 capture_output=True,
                 text=True,
                 timeout=8,
             )
             if (
-                ctx.stdout.strip() == "kind-wd-ai"
+                ctx.stdout.strip() == "kind-wasifyai"
                 and pods.returncode == 0
                 and json.loads(pods.stdout)["items"]
             ):

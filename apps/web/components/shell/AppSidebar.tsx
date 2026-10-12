@@ -52,11 +52,11 @@ export function AppSidebar({ isAdmin, footer }: { isAdmin: boolean; footer: Reac
       <SidebarHeader>
         <Link
           href="/"
-          aria-label="WD AI Studio, home"
+          aria-label="WasifyAI Studio, home"
           className="flex items-center gap-2 rounded-md px-2 py-1.5 font-semibold outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <Equaliser still />
-          <span className="group-data-[collapsible=icon]:hidden">WD AI Studio</span>
+          <span className="group-data-[collapsible=icon]:hidden">WasifyAI Studio</span>
         </Link>
       </SidebarHeader>
 

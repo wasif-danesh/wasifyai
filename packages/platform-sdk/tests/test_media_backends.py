@@ -1,6 +1,6 @@
 import httpx
 import pytest
-from wd_platform_sdk import (
+from wasifyai_platform_sdk import (
     BACKENDS,
     InvalidBackendConfig,
     SecretBox,

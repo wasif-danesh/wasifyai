@@ -1,9 +1,9 @@
-# Bootstrap wd-ai on Windows by setting up WSL2 + Ubuntu and running the normal Linux setup
+# Bootstrap wasifyai on Windows by setting up WSL2 + Ubuntu and running the normal Linux setup
 # inside it. Run from an elevated PowerShell. NOT yet tested on a Windows machine.
 #   powershell -ExecutionPolicy Bypass -File scripts\windows-bootstrap.ps1
 $ErrorActionPreference = "Stop"
 $distro = "Ubuntu-24.04"
-$repo = "https://github.com/wasif-danesh/wd-ai.git"
+$repo = "https://github.com/wasif-danesh/wasifyai.git"
 
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
   Write-Error "Run this from an elevated (Administrator) PowerShell."
@@ -21,8 +21,8 @@ Write-Host "Enabling systemd in $distro (restart follows)."
 wsl -d $distro -u root -- bash -c "grep -q systemd=true /etc/wsl.conf 2>/dev/null || printf '[boot]\nsystemd=true\n' >> /etc/wsl.conf"
 wsl --terminate $distro
 
-Write-Host "Cloning wd-ai into the Linux home directory and running setup."
-wsl -d $distro -- bash -lc "cd ~ && { [ -d wd-ai ] || git clone $repo; } && cd wd-ai && make setup"
+Write-Host "Cloning wasifyai into the Linux home directory and running setup."
+wsl -d $distro -- bash -lc "cd ~ && { [ -d wasifyai ] || git clone $repo; } && cd wasifyai && make setup"
 
 Write-Host ""
-Write-Host "Setup finished. In Ubuntu: cd ~/wd-ai && make dev   then open http://localhost:3000"
+Write-Host "Setup finished. In Ubuntu: cd ~/wasifyai && make dev   then open http://localhost:3000"

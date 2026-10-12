@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ImageSummary } from "@wd/contracts";
+import type { ImageSummary } from "@wasifyai/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ImageForm } from "./ImageForm";
 import { ImageView } from "./ImageView";
@@ -69,7 +69,7 @@ describe("ImageForm", () => {
 
     await user.upload(screen.getByLabelText("Your picture"), png());
     await waitFor(() => expect(go).toBeEnabled());
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/products/wd-image-ai/uploads/images");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/products/wasifyai-image/uploads/images");
     await user.click(go);
     const value = onSubmit.mock.calls[0][0];
     expect(value).toMatchObject({ mode: "image", prompt: "make it blue", size: "square" });
@@ -139,7 +139,7 @@ describe("ImageForm", () => {
     await waitFor(() => expect(screen.getByAltText(/preview of your upload/i)).toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: /remove/i }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock.mock.calls[1][0]).toBe("/api/products/wd-image-ai/uploads/images/u3");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/products/wasifyai-image/uploads/images/u3");
     expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "DELETE" });
     expect(screen.getByRole("button", { name: /choose a picture/i })).toBeInTheDocument();
   });
@@ -152,7 +152,7 @@ describe("ImageView", () => {
     render(<ImageView image={img("a")} when="today" />);
     expect(screen.getByRole("link", { name: /download/i })).toHaveAttribute(
       "href",
-      "/api/products/wd-image-ai/images/a/download",
+      "/api/products/wasifyai-image/images/a/download",
     );
     await user.click(screen.getByRole("button", { name: /^delete$/i }));
     expect(fetchMock).not.toHaveBeenCalled();

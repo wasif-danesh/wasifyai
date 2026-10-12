@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-litellm
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+data:
+  # Settings only: the model aliases live in LiteLLM's database and are managed by the API (ADR-0025).
+  config.yaml: |
+    litellm_settings:
+      drop_params: true

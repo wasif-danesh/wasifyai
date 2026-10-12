@@ -2,11 +2,11 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from wd_api.admin import InMemoryAdminStore
-from wd_api.config import get_settings
-from wd_api.safeguards import KEY, ForcedOn, InMemorySettingsStore, Safeguards
-from wd_api.users import InMemoryUserStore
-from wd_platform_sdk import Capabilities, InMemoryUsageRecorder
+from wasifyai_api.admin import InMemoryAdminStore
+from wasifyai_api.config import get_settings
+from wasifyai_api.safeguards import KEY, ForcedOn, InMemorySettingsStore, Safeguards
+from wasifyai_api.users import InMemoryUserStore
+from wasifyai_platform_sdk import Capabilities, InMemoryUsageRecorder
 
 from tests.test_admin import ADMIN_EMAIL, as_admin, as_user
 from tests.test_auth import SECRET

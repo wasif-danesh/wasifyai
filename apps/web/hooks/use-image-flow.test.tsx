@@ -30,12 +30,12 @@ describe("useImageFlow", () => {
     act(() => hook.current.start({ mode: "text", prompt: "a cat", size: "wide" }));
     await waitFor(() => expect(hook.current.state.phase).toBe("done"));
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/api/products/wd-image-ai/runs");
+    expect(url).toBe("/api/products/wasifyai-image/runs");
     expect(JSON.parse(init.body as string)).toEqual({
       input: { mode: "text", prompt: "a cat", size: "wide" },
     });
     expect(hook.current.state.result?.imageId).toBe("i1");
-    expect(sessionStorage.getItem("wd-image-ai:run")).toBeNull();
+    expect(sessionStorage.getItem("wasifyai-image:run")).toBeNull();
   });
 
   it("runs image to image with the key of a picture that is already uploaded", async () => {
@@ -57,7 +57,7 @@ describe("useImageFlow", () => {
   });
 
   it("re-attaches to a remembered run after a reload", async () => {
-    sessionStorage.setItem("wd-image-ai:run", RUN);
+    sessionStorage.setItem("wasifyai-image:run", RUN);
     fetchMock.mockResolvedValueOnce(sse([node("generate_image"), result]));
     const { result: hook } = renderHook(() => useImageFlow());
     await waitFor(() => expect(hook.current.state.phase).toBe("done"));

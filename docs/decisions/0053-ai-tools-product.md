@@ -1,6 +1,6 @@
 # ADR-0053: AI Tools: a manifest-driven product, and Change Clothes
 
-- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wd-studio-ai`, in its own repository (`wd-studio-hub`); wd-ai does not implement it. Nothing here was built.
+- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wasifyai-art`, in its own repository (`wasifyai-art`); wasifyai does not implement it. Nothing here was built.
 - **Date:** 2026-10-12
 - **Depends on:** ADR-0051 (variants). Uses ADR-0035, ADR-0039 (pictures), ADR-0038 (Enhance), ADR-0040/0041 (library).
 
@@ -15,13 +15,13 @@ so the cost of the second tool must be a file, not a feature. Two platform limit
 
 ## Decision
 
-- **A new product, `wd-tools-ai`,** web area `/tools`, side panel entry "AI Tools" with one view per tool. A tool is
+- **A new product, `wasifyai-tools-ai`,** web area `/tools`, side panel entry "AI Tools" with one view per tool. A tool is
   a folder, not code:
 
   ```
-  products/wd-tools-ai/tools/change-clothes/tool.yaml   # manifest (below)
-  products/wd-tools-ai/workflows/change-clothes-*.json + .map.yaml
-  products/wd-tools-ai/prompts/change_clothes.md        # fixed instruction template
+  products/wasifyai-tools-ai/tools/change-clothes/tool.yaml   # manifest (below)
+  products/wasifyai-tools-ai/workflows/change-clothes-*.json + .map.yaml
+  products/wasifyai-tools-ai/prompts/change_clothes.md        # fixed instruction template
   ```
 
   ```yaml
@@ -41,7 +41,7 @@ so the cost of the second tool must be a file, not a feature. Two platform limit
   fails the deploy, not a user's request.
 - **Several pictures per job (platform change).** `image_key` becomes an alias of `image_keys: {"image": key}`; a
   job may carry `image_keys: {name: key}`. The worker reads each key under the user's own `uploads/` prefix (same
-  checks as today), uploads each as `wd-{job_id}-{name}.png` to ComfyUI's temp area, and replaces that placeholder
+  checks as today), uploads each as `wasifyai-{job_id}-{name}.png` to ComfyUI's temp area, and replaces that placeholder
   in the graph. The map file lists one input per name. `input_image_name(job_id)` keeps its old result for `image`.
   A new verb `caps.image.compose(variant=..., image_keys=..., prompt=..., seed=...)` (family `image`, like `edit`).
 - **Inputs are deleted.** Both pictures are removed as soon as they are not needed: when the request is refused,
@@ -108,7 +108,7 @@ mechanism (ADR-0051) supports without code. Artifacts: `~/gen-studio/docs/spikes
   capability verb; the upload route already accepts any product that lists `uploads.image`.
 - Web: `PictureInput` is used once per slot (two instances on one form), `/tools` list and `/tools/[toolId]`, a
   library card, a side panel entry in `lib/products.ts` (`id: "tools"`, `library: "tools"`).
-- New: migration `tool_results`, product package (entry point `wd_ai.products`), `evals/` with the spike's pairs.
+- New: migration `tool_results`, product package (entry point `wasifyai.products`), `evals/` with the spike's pairs.
 - Two pictures about double the edit's reference tokens, so time per result is higher than ADR-0036's edit.
 - Tools are all single-image-output in this version.
 
@@ -121,4 +121,4 @@ reviewed node).
 ## Docs to update if accepted
 
 `docs/configuration.md` (named pictures, `compose`), `docs/architecture.md`, `apps/web/README.md`,
-`products/wd-tools-ai/README.md` (new), `docs/decisions/README.md`.
+`products/wasifyai-tools-ai/README.md` (new), `docs/decisions/README.md`.

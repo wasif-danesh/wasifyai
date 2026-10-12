@@ -10,15 +10,15 @@ import urllib.request
 import httpx
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
-from wd_api.graphs.media_demo import build_media_demo
-from wd_api.main import create_app
-from wd_media_worker.comfy import ComfyClient
-from wd_media_worker.consumer import Worker
-from wd_media_worker.gpu import RedisGpuLock
-from wd_media_worker.processor import ComfyRunner, JobProcessor, StubRunner
-from wd_media_worker.settings import WorkerSettings
-from wd_media_worker.state import RedisJobState
-from wd_platform_sdk import (
+from wasifyai_api.graphs.media_demo import build_media_demo
+from wasifyai_api.main import create_app
+from wasifyai_media_worker.comfy import ComfyClient
+from wasifyai_media_worker.consumer import Worker
+from wasifyai_media_worker.gpu import RedisGpuLock
+from wasifyai_media_worker.processor import ComfyRunner, JobProcessor, StubRunner
+from wasifyai_media_worker.settings import WorkerSettings
+from wasifyai_media_worker.state import RedisJobState
+from wasifyai_platform_sdk import (
     GraphRegistry,
     InMemoryUsageRecorder,
     RedisEventLog,
@@ -107,7 +107,7 @@ async def test_run_queues_a_job_the_worker_runs_and_the_graph_finishes(redis_con
 async def test_a_failing_job_ends_the_run_with_a_clean_error(redis_conn):
     class Failing:
         async def run(self, job, on_progress):
-            from wd_media_worker.comfy import ComfyError
+            from wasifyai_media_worker.comfy import ComfyError
 
             raise ComfyError("execution_failed", "The generation failed on the GPU worker.")
 
@@ -145,7 +145,7 @@ async def test_real_comfyui_generates_an_image_end_to_end(redis_conn):
 
     assert events[-1][0] == "done", events[-1]
     key = events[-1][1]["outputs"]["image_key"]
-    from wd_platform_sdk import object_key
+    from wasifyai_platform_sdk import object_key
 
     png = await p.raw.get(object_key("dev-tenant", "media-demo", "dev-user", key))
     assert png.startswith(b"\x89PNG\r\n\x1a\n") and len(png) > 10_000  # a real picture, not a stub

@@ -1,8 +1,8 @@
 from uuid import uuid4
 
 from sqlalchemy import text
-from wd_api.rag import DIMENSIONS, RagService, chunk_text
-from wd_platform_sdk import (
+from wasifyai_api.rag import DIMENSIONS, RagService, chunk_text
+from wasifyai_platform_sdk import (
     CapabilityBinding,
     InMemoryUsageRecorder,
     PostgresUsageRecorder,
@@ -10,7 +10,7 @@ from wd_platform_sdk import (
     UsageEvent,
     set_context,
 )
-from wd_platform_sdk.providers.fake import FakeTextProvider
+from wasifyai_platform_sdk.providers.fake import FakeTextProvider
 
 
 async def test_usage_event_is_stored_with_tenancy(engine, run_ctx):
@@ -71,7 +71,7 @@ async def test_rag_ingest_search_replace_and_isolation(engine, run_ctx):
     # another tenant sees nothing from this collection
     token = set_context(RunContext("other-tenant", "it-product", "u"))
     assert await rag.search(coll, "cats", k=5) == []
-    from wd_platform_sdk import reset_context
+    from wasifyai_platform_sdk import reset_context
 
     reset_context(token)
 

@@ -1,9 +1,12 @@
 import pytest
-from wd_platform_sdk import ScopedStorage, memory_storage, object_key
+from wasifyai_platform_sdk import ScopedStorage, memory_storage, object_key
 
 
 def test_object_key_layout_and_validation():
-    assert object_key("t", "wd-music-ai", "u", "s1", "audio.mp3") == "t/wd-music-ai/u/s1/audio.mp3"
+    assert (
+        object_key("t", "wasifyai-music", "u", "s1", "audio.mp3")
+        == "t/wasifyai-music/u/s1/audio.mp3"
+    )
     for bad in ("../x", "a//b", "/abs", "a/../b", " sp", ""):
         with pytest.raises(ValueError):
             object_key("t", "p", "u", bad)

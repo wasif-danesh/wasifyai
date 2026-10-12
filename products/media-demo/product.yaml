@@ -1,5 +1,5 @@
 # Sample product for the media pipeline: one image job through the queue, worker and ComfyUI.
-# Its graph is services/api/src/wd_api/graphs/media_demo.py. The workflow below targets models
+# Its graph is services/api/src/wasifyai_api/graphs/media_demo.py. The workflow below targets models
 # installed on the developer's ComfyUI (Z-Image-Turbo); it is for verifying the platform, not a
 # product choice (the cover model is FLUX.2 klein, ADR-0019).
 id: media-demo

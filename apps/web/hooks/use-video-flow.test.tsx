@@ -34,11 +34,11 @@ describe("useVideoFlow", () => {
     expect(result.current.state.phase).toBe("checking");
     await waitFor(() => expect(result.current.state.phase).toBe("making"));
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/api/products/wd-video-ai/runs");
+    expect(url).toBe("/api/products/wasifyai-video/runs");
     expect(JSON.parse(init.body as string)).toEqual({
       input: { mode: "text", prompt: "a fox", seconds: 5, shape: "portrait" },
     });
-    expect(sessionStorage.getItem("wd-video-ai:run")).toBe(RUN); // a reload can pick it up
+    expect(sessionStorage.getItem("wasifyai-video:run")).toBe(RUN); // a reload can pick it up
   });
 
   it("runs image to video with the key of a picture that is already uploaded", async () => {
@@ -58,7 +58,7 @@ describe("useVideoFlow", () => {
       input: { mode: "image", prompt: "snow", seconds: 2, image_key: "uploads/1.png" },
     });
     expect(result.current.state.result?.videoId).toBe("v1");
-    expect(sessionStorage.getItem("wd-video-ai:run")).toBeNull(); // finished: nothing to restore
+    expect(sessionStorage.getItem("wasifyai-video:run")).toBeNull(); // finished: nothing to restore
   });
 
   it("asks for a picture in picture mode", async () => {
@@ -69,7 +69,7 @@ describe("useVideoFlow", () => {
   });
 
   it("re-attaches to a remembered run after a reload", async () => {
-    sessionStorage.setItem("wd-video-ai:run", RUN);
+    sessionStorage.setItem("wasifyai-video:run", RUN);
     fetchMock.mockResolvedValueOnce(sse([node("generate_video"), finished]));
     const { result } = renderHook(() => useVideoFlow());
     await waitFor(() => expect(result.current.state.phase).toBe("done"));

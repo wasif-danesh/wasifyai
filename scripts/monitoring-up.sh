@@ -10,7 +10,7 @@
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 cd "$ROOT"
-NS=monitoring; APP_NS="${APP_NS:-wd-ai}"
+NS=monitoring; APP_NS="${APP_NS:-wasifyai}"
 KPS_VERSION=92.3.0; LOKI_VERSION=2.10.3
 
 NOTIFY="${ALERT_NOTIFICATIONS:-$(env_value ALERT_NOTIFICATIONS || true)}"
@@ -44,7 +44,7 @@ else
 fi
 kubectl -n "$NS" create secret generic alert-secrets --from-file="$tmp/telegram-token" \
   --from-file="$tmp/heartbeat-url" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-kubectl -n "$NS" create secret generic alertmanager-wd-config --from-file="$tmp/alertmanager.yaml" \
+kubectl -n "$NS" create secret generic alertmanager-wasifyai-config --from-file="$tmp/alertmanager.yaml" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 if ! kubectl -n "$NS" get secret grafana-admin >/dev/null 2>&1; then
   kubectl -n "$NS" create secret generic grafana-admin --from-literal=admin-user=admin \
@@ -65,9 +65,9 @@ helm upgrade --install loki grafana/loki-stack -n "$NS" --version "$LOKI_VERSION
   -f deploy/monitoring/loki-stack.values.yaml --wait --timeout 10m
 
 # The application chart creates its scrape target, alerts and dashboard only once the CRDs exist.
-if helm status wd-ai -n "$APP_NS" >/dev/null 2>&1; then
+if helm status wasifyai -n "$APP_NS" >/dev/null 2>&1; then
   step "Telling the application chart the stack is there"
-  helm upgrade wd-ai deploy/helm/wd-ai -n "$APP_NS" --reset-then-reuse-values --wait --timeout 10m >/dev/null
+  helm upgrade wasifyai deploy/helm/wasifyai -n "$APP_NS" --reset-then-reuse-values --wait --timeout 10m >/dev/null
   ok "scrape target, alert rules and dashboard created"
 fi
 

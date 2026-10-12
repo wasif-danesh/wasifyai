@@ -1,7 +1,7 @@
 "use server";
 
 import { apiSend } from "@/lib/api";
-import type { ModelUpdated, TestOutcome } from "@wd/contracts";
+import type { ModelUpdated, TestOutcome } from "@wasifyai/contracts";
 import { revalidatePath } from "next/cache";
 
 export type FormState =

@@ -108,7 +108,7 @@ export function IdeaForm({
             Describe a story, a feeling or a scene. Press Ctrl or ⌘ + Enter to start.
           </span>
           <EnhanceButton
-            product="wd-music-ai"
+            product="wasifyai-music"
             kind="song_idea"
             value={idea}
             maxChars={MAX_IDEA}

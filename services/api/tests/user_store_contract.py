@@ -1,6 +1,6 @@
 """Rules every UserStore must follow (ADR-0030); run against memory and Postgres."""
 
-from wd_api.auth import Claims
+from wasifyai_api.auth import Claims
 
 NO_ADMINS: frozenset[str] = frozenset()
 

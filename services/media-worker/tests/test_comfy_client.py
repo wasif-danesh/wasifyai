@@ -1,5 +1,5 @@
 import pytest
-from wd_media_worker.comfy import ComfyClient, ComfyError
+from wasifyai_media_worker.comfy import ComfyClient, ComfyError
 
 GRAPH = {
     "8": {"class_type": "KSampler", "inputs": {}},

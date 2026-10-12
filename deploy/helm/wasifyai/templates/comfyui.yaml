@@ -1,0 +1,68 @@
+{{- if .Values.comfyui.enabled }}
+{{- $image := required "comfyui.image is required when comfyui.enabled (no default image is chosen for you)" .Values.comfyui.image }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-comfyui
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep   # models are large; keep them across upgrades
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.comfyui.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources: { requests: { storage: {{ .Values.comfyui.storage }} } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-comfyui
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: {{- include "wasifyai.selector" (dict "root" . "component" "comfyui") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "wasifyai.selector" (dict "root" . "component" "comfyui") | nindent 8 }}
+    spec:
+      {{- with .Values.comfyui.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.comfyui.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: comfyui
+          image: {{ $image }}
+          {{- if hasKey .Values.comfyui "args" }}
+          env:
+            - { name: COMFYUI_ARGS, value: {{ .Values.comfyui.args | quote }} }   # the image defaults to --cpu
+          {{- end }}
+          ports: [{ name: http, containerPort: {{ .Values.comfyui.port }} }]
+          readinessProbe:
+            httpGet: { path: /system_stats, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          volumeMounts: [{ name: data, mountPath: /data }]
+          resources:
+            {{- $r := deepCopy .Values.comfyui.resources }}
+            {{- if .Values.comfyui.gpuResources }}
+            {{- $_ := set $r "limits" (merge (default (dict) $r.limits) .Values.comfyui.gpuResources) }}
+            {{- end }}
+            {{- toYaml $r | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: {{ .Release.Name }}-comfyui }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-comfyui
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "wasifyai.selector" (dict "root" . "component" "comfyui") | nindent 4 }}
+  ports: [{ name: http, port: {{ .Values.comfyui.port }}, targetPort: http }]
+{{- end }}

@@ -14,7 +14,7 @@ text, image, audio and combinations. On that route Gemma "thinks" by default and
 ## Decision
 
 - **API:** a prompt is a string or a list of parts: strings, `Image` and `Audio`
-  (`wd_platform_sdk.parts`). `caps.text.stream/complete(name, system, prompt)` accepts either, so
+  (`wasifyai_platform_sdk.parts`). `caps.text.stream/complete(name, system, prompt)` accepts either, so
   existing graphs are unchanged. Limits: images up to 10 MB (png, jpeg, webp, gif), audio up to
   25 MB (wav, mp3). Messages with only text stay plain strings.
 - **Declared modalities:** each binding lists the inputs its model accepts (`inputs: [text, image,

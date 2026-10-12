@@ -17,12 +17,12 @@ import { useRecorder } from "@/hooks/use-recorder";
 import { clock } from "@/lib/format";
 import { actions, field, fieldError, fieldLabel, hint, panel } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import type { SpokenLanguages } from "@wd/contracts";
+import type { SpokenLanguages } from "@wasifyai/contracts";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { Bar } from "../create/Progress";
 import { Recorder } from "./Recorder";
 
-export const PRODUCT = "wd-stt-ai";
+export const PRODUCT = "wasifyai-stt";
 export const AUTO = "auto";
 
 export type TranscribeFormValue = { audioKey: string; language: string };

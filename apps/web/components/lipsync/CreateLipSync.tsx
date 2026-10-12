@@ -9,7 +9,7 @@ import { STARTED_EVENT } from "@/hooks/use-lipsync-activity";
 import { useLipSyncFlow } from "@/hooks/use-lipsync-flow";
 import { actions, eyebrow, panel } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import type { VoiceCatalog } from "@wd/contracts";
+import type { VoiceCatalog } from "@wasifyai/contracts";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LipSyncForm, type LipSyncFormValue } from "./LipSyncForm";
@@ -142,7 +142,7 @@ export function CreateLipSync({ catalog }: { catalog: VoiceCatalog }) {
                 {state.result.lipsyncId ? (
                   <Button asChild>
                     <a
-                      href={`/api/products/wd-lipsync-ai/lipsyncs/${state.result.lipsyncId}/download`}
+                      href={`/api/products/wasifyai-lipsync/lipsyncs/${state.result.lipsyncId}/download`}
                       download
                     >
                       Download

@@ -1,7 +1,7 @@
 import { Notice } from "@/components/Notice";
 import { CreateSpeech } from "@/components/speech/CreateSpeech";
 import { apiGet } from "@/lib/api";
-import type { VoiceCatalog } from "@wd/contracts";
+import type { VoiceCatalog } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Text to Speech" };
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function TextToSpeechPage() {
   let catalog: VoiceCatalog | null = null;
   try {
-    catalog = await apiGet<VoiceCatalog>("/products/wd-tts-ai/voices");
+    catalog = await apiGet<VoiceCatalog>("/products/wasifyai-tts/voices");
   } catch {
     // shown below
   }

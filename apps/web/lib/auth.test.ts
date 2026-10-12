@@ -23,7 +23,10 @@ describe("mintApiToken", () => {
 
   it("signs a short-lived token the API can verify", async () => {
     const token = await mintApiToken(claims, SECRET);
-    const { payload } = await jwtVerify(token, key, { issuer: "wd-web", audience: "wd-api" });
+    const { payload } = await jwtVerify(token, key, {
+      issuer: "wasifyai-web",
+      audience: "wasifyai-api",
+    });
     expect(payload.sub).toBe("google:1001");
     expect(payload.email).toBe("ann@example.com");
     expect(payload.email_verified).toBe(true);
@@ -57,12 +60,15 @@ describe("apiAuthHeaders", () => {
     vi.doMock("@/auth", () => ({
       auth: async () => ({
         user: { email: "ann@example.com", name: "Ann" },
-        wd: { provider: "github", accountId: "77", emailVerified: false },
+        wasifyai: { provider: "github", accountId: "77", emailVerified: false },
       }),
     }));
     const headers = await apiAuthHeaders();
     const token = headers?.authorization?.replace("Bearer ", "") ?? "";
-    const { payload } = await jwtVerify(token, key, { issuer: "wd-web", audience: "wd-api" });
+    const { payload } = await jwtVerify(token, key, {
+      issuer: "wasifyai-web",
+      audience: "wasifyai-api",
+    });
     expect(payload.sub).toBe("github:77");
     expect(payload.email_verified).toBe(false);
   });

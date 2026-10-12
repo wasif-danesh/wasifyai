@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
-from wd_api.users import PostgresUserStore
+from wasifyai_api.users import PostgresUserStore
 
 from tests.user_store_contract import NO_ADMINS, check_contract, claims
 

@@ -3,7 +3,7 @@ import { MediaForm } from "@/components/admin/MediaForm";
 import { TextLink } from "@/components/ui/text-link";
 import { apiGet } from "@/lib/api";
 import { muted, pager } from "@/lib/styles";
-import type { MediaList } from "@wd/contracts";
+import type { MediaList } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 

@@ -12,12 +12,12 @@ them: one file that shows the cover while the song plays.
 ## Decision
 
 - **Downloads come from the app's own origin**, through
-  `GET /products/wd-music-ai/songs/{id}/download/{audio|cover|video}` (API) and the same path under
+  `GET /products/wasifyai-music/songs/{id}/download/{audio|cover|video}` (API) and the same path under
   `/api/` (web). The response carries `Content-Disposition: attachment` and a readable file name. The
   song is looked up for the signed-in user only, so another user's song, a missing file or a song with
   no cover are all a plain 404. This is the one place the API streams file bytes (rule 10); events and
   JSON still carry URLs.
-- **`audio` is the MP3 with an ID3v2.3 tag**: title, artist ("WD AI Studio"), album, lyrics, a comment
+- **`audio` is the MP3 with an ID3v2.3 tag**: title, artist ("WasifyAI Studio"), album, lyrics, a comment
   and the cover as front-cover art (a JPEG of at most 1000 px, about 200 KB, made from the stored PNG).
   Phone, desktop and car players and file thumbnails then show the cover. The audio frames are not
   re-encoded, the stored file is not changed, and the tag is added on each download. If the cover or
@@ -44,7 +44,7 @@ them: one file that shows the cover while the song plays.
 
 ## Consequences
 
-- New dependencies in `wd-music-ai`: `pillow` and `imageio-ffmpeg`. No system packages.
+- New dependencies in `wasifyai-music`: `pillow` and `imageio-ffmpeg`. No system packages.
 - A downloaded MP3 is about 200 KB larger than the stored one.
 - A video is stored for each song someone downloads it for (about 2 MB); there is no clean-up yet.
 - The first "Download video" click takes a second or two. Cached video is not invalidated if a cover

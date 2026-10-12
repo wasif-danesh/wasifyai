@@ -1,0 +1,61 @@
+{{- if .Values.sttIndic.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-stt-indic
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep   # keep the downloaded model (IndicConformer) across upgrades
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.sttIndic.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources: { requests: { storage: {{ .Values.sttIndic.storage }} } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-stt-indic
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: {{- include "wasifyai.selector" (dict "root" . "component" "stt-indic") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "wasifyai.selector" (dict "root" . "component" "stt-indic") | nindent 8 }}
+    spec:
+      containers:
+        - name: stt-indic
+          image: {{ include "wasifyai.image" (dict "root" . "name" "stt-indic") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            # The model is gated: the token comes from a Secret you create, never from values.
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.sttIndic.hfTokenSecret.name }}
+                  key: {{ .Values.sttIndic.hfTokenSecret.key }}
+            - { name: LOG_LEVEL, value: {{ .Values.env.LOG_LEVEL | quote }} }
+          ports: [{ name: http, containerPort: 8000 }]
+          volumeMounts:
+            - { name: models, mountPath: /models }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+          resources: {{- toYaml .Values.sttIndic.resources | nindent 12 }}
+      volumes:
+        - name: models
+          persistentVolumeClaim: { claimName: {{ .Release.Name }}-stt-indic }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-stt-indic
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "wasifyai.selector" (dict "root" . "component" "stt-indic") | nindent 4 }}
+  ports: [{ name: http, port: 8000, targetPort: http }]
+{{- end }}

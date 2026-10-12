@@ -4,7 +4,7 @@ import json
 import sys
 from pathlib import Path
 
-from wd_api.main import app
+from wasifyai_api.main import app
 
 out = Path(sys.argv[1] if len(sys.argv) > 1 else "packages/contracts-ts/openapi.json")
 out.parent.mkdir(parents=True, exist_ok=True)

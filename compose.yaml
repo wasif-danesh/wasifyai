@@ -1,11 +1,11 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    environment: { POSTGRES_USER: wd, POSTGRES_PASSWORD: wd, POSTGRES_DB: wd }
+    environment: { POSTGRES_USER: wasifyai, POSTGRES_PASSWORD: wasifyai, POSTGRES_DB: wasifyai }
     ports: ["5432:5432"]
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U wd -d wd"]
+      test: ["CMD-SHELL", "pg_isready -U wasifyai -d wasifyai"]
       interval: 3s
       retries: 30
   redis:
@@ -18,7 +18,7 @@ services:
     command:
       - |
         cat > /tmp/s3.json <<EOF
-        {"identities":[{"name":"wd","credentials":[{"accessKey":"$$STORAGE_ACCESS_KEY","secretKey":"$$STORAGE_SECRET_KEY"}],"actions":["Admin","Read","Write","List","Tagging"]}]}
+        {"identities":[{"name":"wasifyai","credentials":[{"accessKey":"$$STORAGE_ACCESS_KEY","secretKey":"$$STORAGE_SECRET_KEY"}],"actions":["Admin","Read","Write","List","Tagging"]}]}
         EOF
         exec weed server -dir=/data -s3 -s3.port=8333 -s3.config=/tmp/s3.json -volume.max=20 -master.volumeSizeLimitMB=256 -ip.bind=0.0.0.0
     environment:
@@ -43,7 +43,7 @@ services:
         done
         exit 1
     environment:
-      STORAGE_BUCKET: ${STORAGE_BUCKET:-wd-ai}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-wasifyai}
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
     command: ["--config", "/app/config.yaml", "--port", "4000"]
@@ -55,7 +55,7 @@ services:
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_API_KEY:?set LITELLM_API_KEY in .env}
       LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?run make setup}
-      DATABASE_URL: postgresql://wd:wd@postgres:5432/wd?schema=litellm
+      DATABASE_URL: postgresql://wasifyai:wasifyai@postgres:5432/wasifyai?schema=litellm
       STORE_MODEL_IN_DB: "True"
     volumes: ["./deploy/compose/litellm.yaml:/app/config.yaml:ro"]
     ports: ["4000:4000"]

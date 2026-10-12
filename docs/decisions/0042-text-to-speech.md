@@ -32,7 +32,7 @@ APIs (ADR-0032), so the same pattern fits speech.
 
 ## Decision
 
-- **A new product, `wd-tts-ai`,** with its own tenancy, usage and quota, built like the image product (ADR-0036).
+- **A new product, `wasifyai-tts`,** with its own tenancy, usage and quota, built like the image product (ADR-0036).
   Web area `/text-to-speech` (create) and `/text-to-speech/creations/{id}` (one result). The existing
   Coming-soon card and page stay until it is accepted and built.
 - **A voice catalog, not a model name, is what the product and the user see.** `voices.yaml` lists voices as
@@ -112,7 +112,7 @@ worse than the engine's own English figure by a margin we state, with the table 
 ## Results of the Kokoro slice (2026-10-09, development Mac, CPU in a container)
 
 - **Built and working end to end:** the `speech` service (Speaches, Whisper with int8), the worker runner, the
-  product `wd-tts-ai`, `voices.yaml` (41 voices in 7 languages), the web area and My creations with search.
+  product `wasifyai-tts`, `voices.yaml` (41 voices in 7 languages), the web area and My creations with search.
   A real request takes about 7 seconds.
 - **Round trip with Whisper large-v3-turbo** (five sentences per voice, numbers avoided because Whisper writes
   digits): English (US and UK), Spanish and Italian are at or near 0 to 2 percent word error; French about 2

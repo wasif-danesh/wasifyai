@@ -1,5 +1,5 @@
 # LiteLLM settings only. The model aliases live in LiteLLM's database and are seeded and managed by
-# the API (ADR-0025); their defaults are in services/api/src/wd_api/model_defaults.yaml.
+# the API (ADR-0025); their defaults are in services/api/src/wasifyai_api/model_defaults.yaml.
 litellm_settings:
   # Backends differ in what they accept (e.g. Ollama rejects `encoding_format`); the gateway drops
   # parameters a backend does not support so callers can use one OpenAI-compatible API.

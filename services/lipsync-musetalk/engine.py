@@ -133,7 +133,7 @@ class Engine:
                 ).sample  # fmt: skip
                 frames.extend(self.vae.decode_latents(pred))
 
-            with tempfile.TemporaryDirectory(prefix="wd-lipsync-") as tmp:
+            with tempfile.TemporaryDirectory(prefix="wasifyai-lipsync-") as tmp:
                 mp4 = Path(tmp) / "clip.mp4"
                 h, w = frame.shape[:2]
                 # the blended frames go straight to ffmpeg: a long song is thousands of frames

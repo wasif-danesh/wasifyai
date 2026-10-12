@@ -33,7 +33,7 @@ describe("useVideoActivity", () => {
     await flush();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe(
-      "/api/products/wd-video-ai/videos?status=working&limit=5",
+      "/api/products/wasifyai-video/videos?status=working&limit=5",
     );
     expect(result.current.working).toEqual([]);
     await act(async () => void (await vi.advanceTimersByTimeAsync(POLL_MS * 3)));

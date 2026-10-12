@@ -2,7 +2,7 @@ import { VideoView } from "@/components/video/VideoView";
 import { ApiError, apiGet } from "@/lib/api";
 import { isUuid } from "@/lib/proxy";
 import { backLink } from "@/lib/styles";
-import type { VideoSummary } from "@wd/contracts";
+import type { VideoSummary } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -16,7 +16,7 @@ export default async function VideoDetail({ params }: Props) {
   if (!isUuid(id)) notFound();
   let video: VideoSummary;
   try {
-    video = await apiGet<VideoSummary>(`/products/wd-video-ai/videos/${id}`);
+    video = await apiGet<VideoSummary>(`/products/wasifyai-video/videos/${id}`);
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;

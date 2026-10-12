@@ -13,7 +13,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { clock, fullDate } from "@/lib/format";
 import { actions, eyebrow, panel } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import type { TranscriptDetail } from "@wd/contracts";
+import type { TranscriptDetail } from "@wasifyai/contracts";
 import { Check, ChevronDown, Copy } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -36,7 +36,7 @@ export function TranscriptView({ initial }: { initial: TranscriptDetail }) {
     if (t.status !== "working") return;
     const timer = setInterval(async () => {
       try {
-        const res = await fetch(`/api/products/wd-stt-ai/transcripts/${t.id}`);
+        const res = await fetch(`/api/products/wasifyai-stt/transcripts/${t.id}`);
         if (res.ok) setT((await res.json()) as TranscriptDetail);
       } catch {
         // try again at the next tick
@@ -56,7 +56,7 @@ export function TranscriptView({ initial }: { initial: TranscriptDetail }) {
   }
 
   const download = (format: string) =>
-    `/api/products/wd-stt-ai/transcripts/${t.id}/download?format=${format}`;
+    `/api/products/wasifyai-stt/transcripts/${t.id}/download?format=${format}`;
 
   return (
     <article className={cn(panel, "@container")}>
@@ -139,7 +139,7 @@ export function TranscriptView({ initial }: { initial: TranscriptDetail }) {
         <div className={actions}>
           {t.status === "working" ? null : (
             <DeleteControls
-              url={`/api/products/wd-stt-ai/transcripts/${t.id}`}
+              url={`/api/products/wasifyai-stt/transcripts/${t.id}`}
               noun="transcript"
               label={t.status === "failed" ? "Remove" : "Delete"}
             />

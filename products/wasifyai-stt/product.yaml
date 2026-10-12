@@ -1,0 +1,7 @@
+id: wasifyai-stt
+capabilities:
+  speech.transcribe: { provider: speech }
+quotas:
+  minutes_per_user_per_day: 120
+uploads:
+  audio: { max_bytes: 104857600, max_seconds: 1800 }

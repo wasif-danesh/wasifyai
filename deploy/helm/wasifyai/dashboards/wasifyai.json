@@ -1,0 +1,28 @@
+{
+  "title": "wasifyai overview",
+  "uid": "wasifyai-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    { "id": 1, "type": "timeseries", "title": "Runs by product and outcome (per minute)", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [ { "expr": "sum by (product, outcome) (rate(wdai_runs_total[5m])) * 60", "legendFormat": "{{product}} {{outcome}}" } ] },
+    { "id": 2, "type": "timeseries", "title": "Media jobs by capability and status (per minute)", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [ { "expr": "sum by (capability, status) (rate(wdai_jobs_total[5m])) * 60", "legendFormat": "{{capability}} {{status}}" } ] },
+    { "id": 3, "type": "stat", "title": "Jobs waiting / in flight", "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
+      "targets": [ { "expr": "wdai_jobs_queued", "legendFormat": "waiting" }, { "expr": "wdai_jobs_in_flight", "legendFormat": "in flight" } ] },
+    { "id": 4, "type": "timeseries", "title": "Job duration p95 (seconds)", "gridPos": { "h": 6, "w": 9, "x": 6, "y": 8 },
+      "targets": [ { "expr": "histogram_quantile(0.95, sum by (le, capability) (rate(wdai_job_seconds_bucket[10m])))", "legendFormat": "{{capability}}" } ] },
+    { "id": 5, "type": "timeseries", "title": "GPU seconds used (per minute)", "gridPos": { "h": 6, "w": 9, "x": 15, "y": 8 },
+      "targets": [ { "expr": "sum by (capability) (rate(wdai_job_gpu_seconds_total[5m])) * 60", "legendFormat": "{{capability}}" } ] },
+    { "id": 6, "type": "timeseries", "title": "Refusals by category", "gridPos": { "h": 7, "w": 8, "x": 0, "y": 14 },
+      "targets": [ { "expr": "sum by (product, category) (increase(wdai_refusals_total[1h]))", "legendFormat": "{{product}} {{category}}" } ] },
+    { "id": 7, "type": "timeseries", "title": "Run errors by code", "gridPos": { "h": 7, "w": 8, "x": 8, "y": 14 },
+      "targets": [ { "expr": "sum by (product, code) (increase(wdai_run_errors_total[1h]))", "legendFormat": "{{product}} {{code}}" } ] },
+    { "id": 8, "type": "timeseries", "title": "API requests by status (per second)", "gridPos": { "h": 7, "w": 8, "x": 16, "y": 14 },
+      "targets": [ { "expr": "sum by (status) (rate(wdai_http_requests_total[5m]))", "legendFormat": "{{status}}" } ] },
+    { "id": 9, "type": "logs", "title": "Errors in the logs", "datasource": "Loki", "gridPos": { "h": 8, "w": 24, "x": 0, "y": 21 },
+      "targets": [ { "expr": "{namespace=\"wasifyai\"} |~ \"(?i)error|exception|traceback\"" } ] }
+  ]
+}

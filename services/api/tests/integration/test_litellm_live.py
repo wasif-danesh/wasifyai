@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from sqlalchemy import text
-from wd_api.rag import DIMENSIONS, RagService
-from wd_platform_sdk import (
+from wasifyai_api.rag import DIMENSIONS, RagService
+from wasifyai_platform_sdk import (
     PostgresUsageRecorder,
     ProviderDeps,
     build_capabilities,

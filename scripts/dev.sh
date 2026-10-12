@@ -17,10 +17,10 @@ step "Speech models (installed once; skipped when present)"
 
 step "Waiting for Postgres"
 for _ in $(seq 1 60); do
-  "$CONTAINER_ENGINE" compose exec -T postgres pg_isready -U wd -d wd >/dev/null 2>&1 && break
+  "$CONTAINER_ENGINE" compose exec -T postgres pg_isready -U wasifyai -d wasifyai >/dev/null 2>&1 && break
   sleep 1
 done
-"$CONTAINER_ENGINE" compose exec -T postgres pg_isready -U wd -d wd >/dev/null || { bad "Postgres did not become ready"; exit 1; }
+"$CONTAINER_ENGINE" compose exec -T postgres pg_isready -U wasifyai -d wasifyai >/dev/null || { bad "Postgres did not become ready"; exit 1; }
 
 step "Applying migrations"
 (cd services/api && uv run alembic upgrade head)

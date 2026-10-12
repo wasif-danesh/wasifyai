@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
-from wd_platform_sdk import MediaBinding, PostgresMediaBindingStore
+from wasifyai_platform_sdk import MediaBinding, PostgresMediaBindingStore
 
 
 @pytest.fixture

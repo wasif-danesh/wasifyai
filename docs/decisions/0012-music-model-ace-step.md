@@ -5,7 +5,7 @@
 
 ## Context
 
-`wd-music-ai` needs lyrics-to-song generation on a 24 GB GPU. YuE2-3B (released 2026-09) has strong benchmarks but is licensed CC-BY-NC-4.0 (non-commercial), and its ComfyUI support was initially on a separate branch.
+`wasifyai-music` needs lyrics-to-song generation on a 24 GB GPU. YuE2-3B (released 2026-09) has strong benchmarks but is licensed CC-BY-NC-4.0 (non-commercial), and its ComfyUI support was initially on a separate branch.
 
 ## Decision
 

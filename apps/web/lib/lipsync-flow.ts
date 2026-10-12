@@ -1,5 +1,5 @@
 // Turns the lip sync run's event stream into UI state. Pure: no fetch, no React, so it is tested
-// against recorded event sequences. See products/wd-lipsync-ai/README.md for the contract.
+// against recorded event sequences. See products/wasifyai-lipsync/README.md for the contract.
 import type { ParsedEvent } from "./sse";
 
 export type Source = "script" | "audio";

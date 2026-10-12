@@ -1,5 +1,5 @@
 # The platform's sample product: proves the stack end to end. Its graph lives in
-# services/api/src/wd_api/graphs/hello.py.
+# services/api/src/wasifyai_api/graphs/hello.py.
 id: hello
 capabilities:
   text.chat: { provider: litellm, model: default-chat }

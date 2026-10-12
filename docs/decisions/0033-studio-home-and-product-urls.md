@@ -11,7 +11,7 @@ product in its own area.
 
 ## Decision
 
-- **`/` is the studio home, "WD AI Studio"**: one card per product, from a single list
+- **`/` is the studio home, "WasifyAI Studio"**: one card per product, from a single list
   (`lib/products.ts`). Music is live; image and video are marked "Coming soon" on their cards and
   link to plain "Coming soon" pages.
 - **Public and protected pages.** The home page, `/image`, `/video` and `/signin` need no session and

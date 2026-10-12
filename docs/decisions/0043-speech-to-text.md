@@ -27,7 +27,7 @@ decides the language by itself or takes a language hint.
 
 ## Decision
 
-- **A new product, `wd-stt-ai`,** built like the video product (ADR-0037): a row exists from the moment a job
+- **A new product, `wasifyai-stt`,** built like the video product (ADR-0037): a row exists from the moment a job
   starts (`status = working`), the user can leave the page, and the header badge and the "ready" notice work for
   it too (the badge, now named for "working" creations of any kind, is generalised from the video one). Web area
   `/speech-to-text` and `/speech-to-text/creations/{id}`.
@@ -186,7 +186,7 @@ What this decides:
   protocol, the demuxer named, no tags, one audio stream) writing a 16 kHz mono WAV, 30 minute limit, 60 uploads an
   hour, migration 0013 (`uploads.kind`, `uploads.seconds`). Hostile files are tested: a text file called `.mp3`,
   a WAV header with junk, a picture, an empty body, an over-long recording, an over-size body.
-- **The product** `wd-stt-ai`: graph, `transcripts` table (migration 0014), routes (languages, list, one, download
+- **The product** `wasifyai-stt`: graph, `transcripts` table (migration 0014), routes (languages, list, one, download
   in text, SRT, WebVTT and JSON, delete), the daily 120 minutes from usage events, one recording at a time.
 - **Worker**: `OpenAITranscriptionRunner` with detection by large-v3 on the first 30 seconds, then transcription by turbo.
 - **Web**: `/speech-to-text` with upload, drag and drop, paste and the microphone recorder (level meter, pause,

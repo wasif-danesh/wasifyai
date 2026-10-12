@@ -20,7 +20,7 @@ import type {
   SpeechPage,
   TranscriptPage,
   VideoPage,
-} from "@wd/contracts";
+} from "@wasifyai/contracts";
 import { LayoutGrid, Table2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useMemo, useState } from "react";
@@ -154,7 +154,7 @@ export function CreationsList({
     }
     if (imageNext && (filter === "all" || filter === "images")) {
       jobs.push(
-        page<ImagePage>(`/api/products/wd-image-ai/images?${q(imageNext)}`, (p) => {
+        page<ImagePage>(`/api/products/wasifyai-image/images?${q(imageNext)}`, (p) => {
           setImages((cur) => [...cur, ...p.images]);
           setImageNext(p.next_before ?? null);
         }),
@@ -162,7 +162,7 @@ export function CreationsList({
     }
     if (videoNext && (filter === "all" || filter === "videos")) {
       jobs.push(
-        page<VideoPage>(`/api/products/wd-video-ai/videos?${q(videoNext)}`, (p) => {
+        page<VideoPage>(`/api/products/wasifyai-video/videos?${q(videoNext)}`, (p) => {
           setVideos((cur) => [...cur, ...p.videos]);
           setVideoNext(p.next_before ?? null);
         }),
@@ -170,7 +170,7 @@ export function CreationsList({
     }
     if (speechNext && (filter === "all" || filter === "speeches")) {
       jobs.push(
-        page<SpeechPage>(`/api/products/wd-tts-ai/speeches?${q(speechNext)}`, (p) => {
+        page<SpeechPage>(`/api/products/wasifyai-tts/speeches?${q(speechNext)}`, (p) => {
           setSpeeches((cur) => [...cur, ...p.speeches]);
           setSpeechNext(p.next_before ?? null);
         }),
@@ -178,7 +178,7 @@ export function CreationsList({
     }
     if (transcriptNext && (filter === "all" || filter === "transcripts")) {
       jobs.push(
-        page<TranscriptPage>(`/api/products/wd-stt-ai/transcripts?${q(transcriptNext)}`, (p) => {
+        page<TranscriptPage>(`/api/products/wasifyai-stt/transcripts?${q(transcriptNext)}`, (p) => {
           setTranscripts((cur) => [...cur, ...p.transcripts]);
           setTranscriptNext(p.next_before ?? null);
         }),
@@ -186,7 +186,7 @@ export function CreationsList({
     }
     if (lipsyncNext && (filter === "all" || filter === "lipsyncs")) {
       jobs.push(
-        page<LipSyncPage>(`/api/products/wd-lipsync-ai/lipsyncs?${q(lipsyncNext)}`, (p) => {
+        page<LipSyncPage>(`/api/products/wasifyai-lipsync/lipsyncs?${q(lipsyncNext)}`, (p) => {
           setLipsyncs((cur) => [...cur, ...p.lipsyncs]);
           setLipsyncNext(p.next_before ?? null);
         }),

@@ -21,11 +21,11 @@ and could make this worse.
 - **One endpoint per product, built from one platform helper.** `POST /products/{product_id}/prompt/enhance`
   with `{"kind": "...", "prompt": "...", "upload_id": null | "..."}`; it returns `{"prompt": "...",
   "changed": true|false}`. The product mounts it as one of its own routes (ADR-0023) using a helper in the
-  platform SDK (`wd_platform_sdk.enhance`), so the platform stays generic and each product decides its kinds, its
+  platform SDK (`wasifyai_platform_sdk.enhance`), so the platform stays generic and each product decides its kinds, its
   limits and which guardrail runs. Identity is required like every other route.
 - **Kinds, set per product in `product.yaml`** (`enhance:`): each kind names a prompt file, the output limit and
-  whether it needs the user's picture. First kinds: `wd-image-ai`: `text_to_image`, `edit_image` (picture);
-  `wd-video-ai`: `text_to_video`, `image_to_video` (picture); `wd-music-ai`: `song_idea`. An unknown kind is a 422.
+  whether it needs the user's picture. First kinds: `wasifyai-image`: `text_to_image`, `edit_image` (picture);
+  `wasifyai-video`: `text_to_video`, `image_to_video` (picture); `wasifyai-music`: `song_idea`. An unknown kind is a 422.
 - **A new alias, `prompt-enhancer`,** seeded like the others (ADR-0025): Gemma 4, thinking off, temperature
   about 0.7 (a rewrite should vary a little), editable at `/admin/models`. The product binds it with a new
   capability `text.enhance`; graph code never names the model (rule 4). The seed check in `kind-smoke` expects

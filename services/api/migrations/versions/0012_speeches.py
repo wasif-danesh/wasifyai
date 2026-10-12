@@ -1,4 +1,4 @@
-"""speeches: finished text to speech results of the wd-tts-ai product (ADR-0042)
+"""speeches: finished text to speech results of the wasifyai-tts product (ADR-0042)
 
 The file is in object storage; the row holds its key, relative to the user's prefix, and the words
 that were spoken (the words are what search finds, ADR-0041).

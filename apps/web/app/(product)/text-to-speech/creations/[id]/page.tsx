@@ -2,7 +2,7 @@ import { SpeechView } from "@/components/speech/SpeechView";
 import { ApiError, apiGet } from "@/lib/api";
 import { isUuid } from "@/lib/proxy";
 import { backLink } from "@/lib/styles";
-import type { SpeechSummary } from "@wd/contracts";
+import type { SpeechSummary } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -16,7 +16,7 @@ export default async function SpeechDetail({ params }: Props) {
   if (!isUuid(id)) notFound();
   let speech: SpeechSummary;
   try {
-    speech = await apiGet<SpeechSummary>(`/products/wd-tts-ai/speeches/${id}`);
+    speech = await apiGet<SpeechSummary>(`/products/wasifyai-tts/speeches/${id}`);
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;

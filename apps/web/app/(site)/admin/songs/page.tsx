@@ -5,7 +5,7 @@ import { TextLink } from "@/components/ui/text-link";
 import { apiGet } from "@/lib/api";
 import { fullDate } from "@/lib/format";
 import { pager } from "@/lib/styles";
-import type { AdminSongPage } from "@wd/contracts";
+import type { AdminSongPage } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Songs" };

@@ -21,7 +21,7 @@ showed behaviour the plan did not assume. These are the constraints the implemen
 - **Two calls to update one entry.** `POST /model/update` changes `litellm_params` and ignores
   `model_info`; `PATCH /model/{id}/update` changes `model_info`. Our own metadata (source, provider,
   model, server address, whether a key is saved, who changed it and when) is kept under
-  `model_info.wd`, which is replaced as a whole on each change.
+  `model_info.wasifyai`, which is replaced as a whole on each change.
 - **Updates merge into what is stored, so a key must be overwritten, never omitted.** An update that
   leaves `api_key` out keeps the old key, which LiteLLM would then send to whatever server the alias
   points at after the change (a Gemini key to an arbitrary "server address", for example). Every save
@@ -36,7 +36,7 @@ showed behaviour the plan did not assume. These are the constraints the implemen
 - **Protected aliases (`moderator`) need the product's checks to pass first.** A product registers a
   check for a capability (`registry.add_check`); the platform runs every check for products whose
   capability uses that alias, with the capability pointed at the candidate, and rejects the change
-  with the failures. `wd-music-ai` registers a canary of 11 must-refuse and 6 must-allow cases drawn
+  with the failures. `wasifyai-music` registers a canary of 11 must-refuse and 6 must-allow cases drawn
   from its evaluation set: every must-refuse case has to be refused, and at most one harmless request may
   be refused. On the default model it passes in about 30 seconds; a model that cannot classify (an
   embedding model, a bad key) fails every case and is rejected in under a second.

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { clock, fullDate } from "@/lib/format";
 import { actions, eyebrow, panel } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import type { LipSyncSummary } from "@wd/contracts";
+import type { LipSyncSummary } from "@wasifyai/contracts";
 import { useEffect, useState } from "react";
 
 const POLL_MS = 10_000;
@@ -20,7 +20,7 @@ export function LipSyncView({ initial }: { initial: LipSyncSummary }) {
     if (item.status !== "working") return;
     const timer = setInterval(async () => {
       try {
-        const res = await fetch(`/api/products/wd-lipsync-ai/lipsyncs/${item.id}`);
+        const res = await fetch(`/api/products/wasifyai-lipsync/lipsyncs/${item.id}`);
         if (res.ok) setItem((await res.json()) as LipSyncSummary);
       } catch {
         // try again at the next tick
@@ -63,14 +63,14 @@ export function LipSyncView({ initial }: { initial: LipSyncSummary }) {
         <div className={actions}>
           {item.status === "done" ? (
             <Button asChild>
-              <a href={`/api/products/wd-lipsync-ai/lipsyncs/${item.id}/download`} download>
+              <a href={`/api/products/wasifyai-lipsync/lipsyncs/${item.id}/download`} download>
                 Download
               </a>
             </Button>
           ) : null}
           {item.status === "working" ? null : (
             <DeleteControls
-              url={`/api/products/wd-lipsync-ai/lipsyncs/${item.id}`}
+              url={`/api/products/wasifyai-lipsync/lipsyncs/${item.id}`}
               noun="lip sync"
               label={item.status === "failed" ? "Remove" : "Delete"}
             />

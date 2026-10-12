@@ -1,6 +1,6 @@
 # SSE event contract
 
-Status: **Finalised (Phase 1)**. Changes need an ADR. The Pydantic models in `packages/contracts` (`wd_contracts/events.py`) are the source of truth;
+Status: **Finalised (Phase 1)**. Changes need an ADR. The Pydantic models in `packages/contracts` (`wasifyai_contracts/events.py`) are the source of truth;
 this doc describes them. TypeScript types are generated into `packages/contracts-ts` with
 `make contracts`.
 

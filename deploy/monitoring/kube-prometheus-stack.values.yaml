@@ -30,7 +30,7 @@ alertmanager:
   alertmanagerSpec:
     # The routing and the Telegram receiver are in a Secret that scripts/monitoring-up.sh builds from .env: it
     # holds the chat id. The bot token and the heartbeat URL are files in the `alert-secrets` Secret.
-    configSecret: alertmanager-wd-config
+    configSecret: alertmanager-wasifyai-config
     secrets: [alert-secrets]
     resources:
       requests: { cpu: 10m, memory: 40Mi }

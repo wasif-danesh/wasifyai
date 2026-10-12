@@ -12,15 +12,15 @@ import httpx
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 from sqlalchemy import text
-from wd_api.config import get_settings
-from wd_api.main import create_app
-from wd_media_worker.consumer import Worker
-from wd_media_worker.gpu import RedisGpuLock
-from wd_media_worker.processor import JobProcessor, StubRunner
-from wd_media_worker.settings import WorkerSettings
-from wd_media_worker.state import RedisJobState
-from wd_music_ai import register
-from wd_platform_sdk import (
+from wasifyai_api.config import get_settings
+from wasifyai_api.main import create_app
+from wasifyai_media_worker.consumer import Worker
+from wasifyai_media_worker.gpu import RedisGpuLock
+from wasifyai_media_worker.processor import JobProcessor, StubRunner
+from wasifyai_media_worker.settings import WorkerSettings
+from wasifyai_media_worker.state import RedisJobState
+from wasifyai_music import register
+from wasifyai_platform_sdk import (
     GraphRegistry,
     PostgresUsageRecorder,
     RedisEventLog,
@@ -49,7 +49,7 @@ async def identity(engine, monkeypatch):
     tenant, user = f"it-songs-{uuid4().hex[:8]}", f"user-{uuid4().hex[:8]}"
     monkeypatch.setenv("DEFAULT_TENANT_ID", tenant)
     monkeypatch.setenv("DEV_USER_ID", user)
-    monkeypatch.setenv("WD_MUSIC_AI__QUOTAS__SONGS_PER_USER_PER_DAY", "1")
+    monkeypatch.setenv("WASIFYAI_MUSIC__QUOTAS__SONGS_PER_USER_PER_DAY", "1")
     get_settings.cache_clear()
     yield tenant, user
     get_settings.cache_clear()
@@ -99,7 +99,7 @@ async def test_a_song_end_to_end_then_the_quota_stops_the_next_one(
             ) as c:
                 # 1. the request streams lyrics, then waits for the user
                 r = await c.post(
-                    "/products/wd-music-ai/runs",
+                    "/products/wasifyai-music/runs",
                     json={
                         "input": {
                             "idea": "a rainy night in Tokyo",
@@ -136,7 +136,7 @@ async def test_a_song_end_to_end_then_the_quota_stops_the_next_one(
 
                 # 3. quota (1 a day here): the next request is refused before any model runs
                 r = await c.post(
-                    "/products/wd-music-ai/runs", json={"input": {"idea": "another song"}}
+                    "/products/wasifyai-music/runs", json={"input": {"idea": "another song"}}
                 )
                 refused = parse(r.text)[-1]
                 assert refused[0] == "done" and refused[1]["outputs"]["status"] == "refused"

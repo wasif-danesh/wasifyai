@@ -3,7 +3,7 @@
 # Usage: scripts/k8s-secrets.sh [namespace] [secret-name]
 # Values are generated locally and never printed or passed on a command line.
 set -euo pipefail
-NS="${1:-wd-ai}"; NAME="${2:-wd-ai-secrets}"
+NS="${1:-wasifyai}"; NAME="${2:-wasifyai-secrets}"
 
 kubectl get namespace "$NS" >/dev/null 2>&1 || kubectl create namespace "$NS" >/dev/null
 if kubectl -n "$NS" get secret "$NAME" >/dev/null 2>&1; then

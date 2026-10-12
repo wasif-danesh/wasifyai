@@ -16,7 +16,7 @@ from fastapi.responses import Response
 log = logging.getLogger("lipsync")
 MAX_BYTES = 40 * 1024 * 1024
 
-app = FastAPI(title="wd-ai lip sync (MuseTalk)")
+app = FastAPI(title="wasifyai lip sync (MuseTalk)")
 engine = Engine()
 
 
@@ -36,7 +36,7 @@ async def lipsync(
         raise HTTPException(422, "a picture and a voice are needed")
     if not 5 <= fps <= 60:
         raise HTTPException(422, "fps out of range")
-    with tempfile.TemporaryDirectory(prefix="wd-voice-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="wasifyai-voice-") as tmp:
         path = Path(tmp) / "voice.wav"
         path.write_bytes(voice)
         try:

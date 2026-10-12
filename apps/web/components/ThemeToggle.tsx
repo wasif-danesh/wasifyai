@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
-const STORAGE_KEY = "wd-ai-theme";
+const STORAGE_KEY = "wasifyai-theme";
 
 function applyColorScheme(theme: Theme) {
   document.documentElement.style.colorScheme = theme;

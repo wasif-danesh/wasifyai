@@ -7,7 +7,7 @@ import { Accent, PageHero } from "@/components/ui/page-hero";
 import { useSpeechFlow } from "@/hooks/use-speech-flow";
 import { actions, eyebrow, panel, player } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import type { VoiceCatalog } from "@wd/contracts";
+import type { VoiceCatalog } from "@wasifyai/contracts";
 import Link from "next/link";
 import { useState } from "react";
 import { SpeechForm, type SpeechFormValue } from "./SpeechForm";
@@ -77,7 +77,7 @@ export function CreateSpeech({ catalog }: { catalog: VoiceCatalog }) {
                 {state.result.speechId ? (
                   <Button asChild>
                     <a
-                      href={`/api/products/wd-tts-ai/speeches/${state.result.speechId}/download`}
+                      href={`/api/products/wasifyai-tts/speeches/${state.result.speechId}/download`}
                       download
                     >
                       Download MP3

@@ -4,8 +4,8 @@ import re
 
 from fastapi.testclient import TestClient
 from prometheus_client import generate_latest
-from wd_api.metrics import UPLOADS, record_run
-from wd_platform_sdk import InMemoryUsageRecorder
+from wasifyai_api.metrics import UPLOADS, record_run
+from wasifyai_platform_sdk import InMemoryUsageRecorder
 
 from tests.test_runs import hello_registry, mem_app
 
@@ -29,16 +29,16 @@ def test_a_run_is_counted_by_product_and_outcome(tmp_path):
 
 
 def test_refusals_and_errors_use_bounded_codes():
-    record_run("wd-image-ai", "refused", refusal="real_person_photo")
-    record_run("wd-video-ai", "error", code="job_failed")
+    record_run("wasifyai-image", "refused", refusal="real_person_photo")
+    record_run("wasifyai-video", "error", code="job_failed")
     UPLOADS.labels("image", "refused").inc()
     text = scrape()
-    assert 'wdai_refusals_total{category="real_person_photo",product="wd-image-ai"}' in text
-    assert 'wdai_run_errors_total{code="job_failed",product="wd-video-ai"}' in text
+    assert 'wdai_refusals_total{category="real_person_photo",product="wasifyai-image"}' in text
+    assert 'wdai_run_errors_total{code="job_failed",product="wasifyai-video"}' in text
 
 
 def test_no_label_carries_a_user_id_an_email_or_a_uuid():
-    record_run("wd-music-ai", "done")
+    record_run("wasifyai-music", "done")
     pairs = re.findall(r'(\w+)="([^"]*)"', " ".join(re.findall(r"\{([^}]*)\}", scrape())))
     names = {name for name, _ in pairs}
     # a label may be a route template like /admin/users, but never an identity or content field

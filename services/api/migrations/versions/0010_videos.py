@@ -1,4 +1,4 @@
-"""videos: clips of the wd-video-ai product, including ones still being made (ADR-0037)
+"""videos: clips of the wasifyai-video product, including ones still being made (ADR-0037)
 
 A row is created when a run starts, with status "working", and set to "done" (with its files) or
 "failed" (with a message for the user). The files are in object storage; the row holds their keys,

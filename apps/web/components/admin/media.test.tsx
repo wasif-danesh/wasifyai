@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { MediaBackend, MediaView } from "@wd/contracts";
+import type { MediaBackend, MediaView } from "@wasifyai/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiSend = vi.fn();
@@ -78,7 +78,7 @@ const backends: MediaBackend[] = [
 ];
 
 const item = (over: Partial<MediaView> = {}): MediaView => ({
-  product_id: "wd-music-ai",
+  product_id: "wasifyai-music",
   capability: "image.generate",
   workflow: "flux2",
   backend: "comfyui-local",
@@ -111,7 +111,7 @@ describe("submitMedia (the server action)", () => {
     apiSend.mockResolvedValue({ status: 200, data: { ok: true, message: "fine", latency_ms: 5 } });
     const { submitMedia } = await import("../../app/(site)/admin/media/actions");
     const out = await submitMedia(
-      "wd-music-ai",
+      "wasifyai-music",
       "image.generate",
       { status: "idle" },
       form({
@@ -122,11 +122,15 @@ describe("submitMedia (the server action)", () => {
         api_key: KEY,
       }),
     );
-    expect(apiSend).toHaveBeenCalledWith("POST", "/admin/media/wd-music-ai/image.generate/test", {
-      backend: "comfy-api",
-      config: { base_url: "https://c.example" }, // blank settings are not sent
-      api_key: KEY,
-    });
+    expect(apiSend).toHaveBeenCalledWith(
+      "POST",
+      "/admin/media/wasifyai-music/image.generate/test",
+      {
+        backend: "comfy-api",
+        config: { base_url: "https://c.example" }, // blank settings are not sent
+        api_key: KEY,
+      },
+    );
     expect(out.status).toBe("tested");
     expect(JSON.stringify(out)).not.toContain(KEY);
   });

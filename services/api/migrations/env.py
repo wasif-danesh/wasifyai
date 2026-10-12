@@ -2,7 +2,7 @@ import asyncio
 
 from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
-from wd_api.config import get_settings
+from wasifyai_api.config import get_settings
 
 url = get_settings().database_url
 

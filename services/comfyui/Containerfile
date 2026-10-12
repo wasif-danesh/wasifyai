@@ -3,7 +3,7 @@
 # host build with the CUDA wheels:
 #   --build-arg TORCH_INDEX=https://download.pytorch.org/whl/cu126
 # Models, outputs and inputs live in the volume mounted at /data, never in the image. Build from the repository
-# root:  podman build -f services/comfyui/Containerfile -t wd-ai/comfyui .
+# root:  podman build -f services/comfyui/Containerfile -t wasifyai/comfyui .
 FROM python:3.11-slim
 ARG COMFYUI_REF=v0.39.2
 ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu

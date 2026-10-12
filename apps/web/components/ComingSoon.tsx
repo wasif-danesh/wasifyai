@@ -12,7 +12,7 @@ export function ComingSoon({ title, children }: { title: string; children: strin
       <p className="text-muted-foreground">{children}</p>
       <Button asChild variant="outline">
         <Link href="/">
-          <span aria-hidden="true">←</span> Back to WD AI Studio
+          <span aria-hidden="true">←</span> Back to WasifyAI Studio
         </Link>
       </Button>
     </section>

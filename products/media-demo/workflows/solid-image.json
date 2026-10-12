@@ -1,6 +1,6 @@
 {
   "1": {"class_type": "EmptyImage", "inputs": {"width": 512, "height": 512, "batch_size": 1, "color": 3368618}},
-  "2": {"class_type": "SaveImage", "inputs": {"images": ["1", 0], "filename_prefix": "wd-solid"}},
+  "2": {"class_type": "SaveImage", "inputs": {"images": ["1", 0], "filename_prefix": "wasifyai-solid"}},
   "3": {"class_type": "PrimitiveString", "inputs": {"value": ""}},
   "4": {"class_type": "PrimitiveInt", "inputs": {"value": 0}},
   "5": {"class_type": "PrimitiveInt", "inputs": {"value": 4}}

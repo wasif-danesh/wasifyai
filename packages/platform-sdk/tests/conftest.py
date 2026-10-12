@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
-from wd_platform_sdk import RunContext, reset_context, set_context
+from wasifyai_platform_sdk import RunContext, reset_context, set_context
 
 CTX = RunContext(tenant_id="t1", product_id="demo", user_id="u1", run_id="r1")
 

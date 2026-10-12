@@ -10,7 +10,7 @@ import type {
   SpeechPage,
   TranscriptPage,
   VideoPage,
-} from "@wd/contracts";
+} from "@wasifyai/contracts";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "My creations" };
@@ -34,11 +34,11 @@ export default async function Creations({
     lipsyncsResult,
   ] = await Promise.allSettled([
     apiGet<SongPage>(`/products/${PRODUCT}/songs?limit=12`),
-    apiGet<ImagePage>("/products/wd-image-ai/images?limit=12"),
-    apiGet<VideoPage>("/products/wd-video-ai/videos?limit=12"),
-    apiGet<SpeechPage>("/products/wd-tts-ai/speeches?limit=12"),
-    apiGet<TranscriptPage>("/products/wd-stt-ai/transcripts?limit=12"),
-    apiGet<LipSyncPage>("/products/wd-lipsync-ai/lipsyncs?limit=12"),
+    apiGet<ImagePage>("/products/wasifyai-image/images?limit=12"),
+    apiGet<VideoPage>("/products/wasifyai-video/videos?limit=12"),
+    apiGet<SpeechPage>("/products/wasifyai-tts/speeches?limit=12"),
+    apiGet<TranscriptPage>("/products/wasifyai-stt/transcripts?limit=12"),
+    apiGet<LipSyncPage>("/products/wasifyai-lipsync/lipsyncs?limit=12"),
   ]);
   const songs = songsResult.status === "fulfilled" ? songsResult.value : null;
   const images = imagesResult.status === "fulfilled" ? imagesResult.value : null;

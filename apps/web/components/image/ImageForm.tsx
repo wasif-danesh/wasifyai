@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { type FormEvent, useId, useState } from "react";
 
 export const MAX_PROMPT = 500;
-const PRODUCT = "wd-image-ai";
+const PRODUCT = "wasifyai-image";
 
 export const SIZES = [
   { id: "square", label: "Square", hint: "1:1" },

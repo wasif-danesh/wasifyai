@@ -39,8 +39,8 @@ Items marked *(open)* are undecided between the listed options.
 | vLLM | High-throughput LLM serving on dedicated GPUs in prod |
 | ComfyUI | Image, music and video generation via versioned JSON workflows |
 | Gemma 4 E4B | Default text model (multimodal input); Qwen or Llama remain possible behind LiteLLM (ADR-0018) |
-| ACE-Step 1.5 | Music generation for `wd-music-ai` (commercial use permitted; see ADR-0012) |
-| FLUX.2 [klein] 4B | Cover art generation for `wd-music-ai` (Apache 2.0, ~13 GB VRAM; see ADR-0019) |
+| ACE-Step 1.5 | Music generation for `wasifyai-music` (commercial use permitted; see ADR-0012) |
+| FLUX.2 [klein] 4B | Cover art generation for `wasifyai-music` (Apache 2.0, ~13 GB VRAM; see ADR-0019) |
 | SD 1.5 / SDXL / other Flux | Other image models available through the same capability |
 
 ## Data and storage

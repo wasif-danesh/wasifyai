@@ -277,7 +277,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-image-ai/images": {
+    "/products/wasifyai-image/images": {
         parameters: {
             query?: never;
             header?: never;
@@ -285,7 +285,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Images */
-        get: operations["list_images_products_wd_image_ai_images_get"];
+        get: operations["list_images_products_wasifyai_image_images_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -294,7 +294,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-image-ai/images/{image_id}": {
+    "/products/wasifyai-image/images/{image_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -302,20 +302,20 @@ export interface paths {
             cookie?: never;
         };
         /** Get Image */
-        get: operations["get_image_products_wd_image_ai_images__image_id__get"];
+        get: operations["get_image_products_wasifyai_image_images__image_id__get"];
         put?: never;
         post?: never;
         /**
          * Delete Image
          * @description Delete an image: its files first, then the record.
          */
-        delete: operations["delete_image_products_wd_image_ai_images__image_id__delete"];
+        delete: operations["delete_image_products_wasifyai_image_images__image_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/products/wd-image-ai/images/{image_id}/download": {
+    "/products/wasifyai-image/images/{image_id}/download": {
         parameters: {
             query?: never;
             header?: never;
@@ -327,7 +327,7 @@ export interface paths {
          * @description The image as a file the browser saves (browsers ignore `download` on links to the
          *     storage host, ADR-0034).
          */
-        get: operations["download_products_wd_image_ai_images__image_id__download_get"];
+        get: operations["download_products_wasifyai_image_images__image_id__download_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -336,7 +336,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-image-ai/prompt/enhance": {
+    "/products/wasifyai-image/prompt/enhance": {
         parameters: {
             query?: never;
             header?: never;
@@ -346,14 +346,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Enhance */
-        post: operations["enhance_products_wd_image_ai_prompt_enhance_post"];
+        post: operations["enhance_products_wasifyai_image_prompt_enhance_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/products/wd-lipsync-ai/lipsyncs": {
+    "/products/wasifyai-lipsync/lipsyncs": {
         parameters: {
             query?: never;
             header?: never;
@@ -361,7 +361,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Lipsyncs */
-        get: operations["list_lipsyncs_products_wd_lipsync_ai_lipsyncs_get"];
+        get: operations["list_lipsyncs_products_wasifyai_lipsync_lipsyncs_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -370,7 +370,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-lipsync-ai/lipsyncs/{video_id}": {
+    "/products/wasifyai-lipsync/lipsyncs/{video_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -378,7 +378,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Lipsync */
-        get: operations["get_lipsync_products_wd_lipsync_ai_lipsyncs__video_id__get"];
+        get: operations["get_lipsync_products_wasifyai_lipsync_lipsyncs__video_id__get"];
         put?: never;
         post?: never;
         /**
@@ -386,13 +386,13 @@ export interface paths {
          * @description Delete a clip (or dismiss a failed one): its files first, then the record. A clip still
          *     being made cannot be deleted: its job is running.
          */
-        delete: operations["delete_lipsync_products_wd_lipsync_ai_lipsyncs__video_id__delete"];
+        delete: operations["delete_lipsync_products_wasifyai_lipsync_lipsyncs__video_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/products/wd-lipsync-ai/lipsyncs/{video_id}/download": {
+    "/products/wasifyai-lipsync/lipsyncs/{video_id}/download": {
         parameters: {
             query?: never;
             header?: never;
@@ -404,7 +404,7 @@ export interface paths {
          * @description The clip as a file the browser saves (browsers ignore `download` on links to the
          *     storage host, ADR-0034).
          */
-        get: operations["download_products_wd_lipsync_ai_lipsyncs__video_id__download_get"];
+        get: operations["download_products_wasifyai_lipsync_lipsyncs__video_id__download_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -413,7 +413,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-music-ai/prompt/enhance": {
+    "/products/wasifyai-music/prompt/enhance": {
         parameters: {
             query?: never;
             header?: never;
@@ -423,14 +423,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Enhance */
-        post: operations["enhance_products_wd_music_ai_prompt_enhance_post"];
+        post: operations["enhance_products_wasifyai_music_prompt_enhance_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/products/wd-music-ai/songs": {
+    "/products/wasifyai-music/songs": {
         parameters: {
             query?: never;
             header?: never;
@@ -438,7 +438,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Songs */
-        get: operations["list_songs_products_wd_music_ai_songs_get"];
+        get: operations["list_songs_products_wasifyai_music_songs_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -447,7 +447,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-music-ai/songs/{song_id}": {
+    "/products/wasifyai-music/songs/{song_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -455,7 +455,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Song */
-        get: operations["get_song_products_wd_music_ai_songs__song_id__get"];
+        get: operations["get_song_products_wasifyai_music_songs__song_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -464,7 +464,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-music-ai/songs/{song_id}/download/{kind}": {
+    "/products/wasifyai-music/songs/{song_id}/download/{kind}": {
         parameters: {
             query?: never;
             header?: never;
@@ -481,7 +481,7 @@ export interface paths {
          *     player shows the cover. `video` is the cover as a picture with the song playing, made on the
          *     first request and kept in storage.
          */
-        get: operations["download_products_wd_music_ai_songs__song_id__download__kind__get"];
+        get: operations["download_products_wasifyai_music_songs__song_id__download__kind__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -490,7 +490,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-stt-ai/languages": {
+    "/products/wasifyai-stt/languages": {
         parameters: {
             query?: never;
             header?: never;
@@ -501,7 +501,7 @@ export interface paths {
          * Languages
          * @description The languages to choose from, and what an upload may be.
          */
-        get: operations["languages_products_wd_stt_ai_languages_get"];
+        get: operations["languages_products_wasifyai_stt_languages_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -510,7 +510,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-stt-ai/transcripts": {
+    "/products/wasifyai-stt/transcripts": {
         parameters: {
             query?: never;
             header?: never;
@@ -518,7 +518,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Transcripts */
-        get: operations["list_transcripts_products_wd_stt_ai_transcripts_get"];
+        get: operations["list_transcripts_products_wasifyai_stt_transcripts_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -527,7 +527,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-stt-ai/transcripts/{transcript_id}": {
+    "/products/wasifyai-stt/transcripts/{transcript_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -535,20 +535,20 @@ export interface paths {
             cookie?: never;
         };
         /** Get Transcript */
-        get: operations["get_transcript_products_wd_stt_ai_transcripts__transcript_id__get"];
+        get: operations["get_transcript_products_wasifyai_stt_transcripts__transcript_id__get"];
         put?: never;
         post?: never;
         /**
          * Delete Transcript
          * @description Delete a transcript (or dismiss a failed one). One still being made cannot be deleted.
          */
-        delete: operations["delete_transcript_products_wd_stt_ai_transcripts__transcript_id__delete"];
+        delete: operations["delete_transcript_products_wasifyai_stt_transcripts__transcript_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/products/wd-stt-ai/transcripts/{transcript_id}/download": {
+    "/products/wasifyai-stt/transcripts/{transcript_id}/download": {
         parameters: {
             query?: never;
             header?: never;
@@ -559,7 +559,7 @@ export interface paths {
          * Download
          * @description The transcript as a file the browser saves: plain text, SRT, WebVTT or JSON.
          */
-        get: operations["download_products_wd_stt_ai_transcripts__transcript_id__download_get"];
+        get: operations["download_products_wasifyai_stt_transcripts__transcript_id__download_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -568,7 +568,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-tts-ai/speeches": {
+    "/products/wasifyai-tts/speeches": {
         parameters: {
             query?: never;
             header?: never;
@@ -576,7 +576,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Speeches */
-        get: operations["list_speeches_products_wd_tts_ai_speeches_get"];
+        get: operations["list_speeches_products_wasifyai_tts_speeches_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -585,7 +585,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-tts-ai/speeches/{speech_id}": {
+    "/products/wasifyai-tts/speeches/{speech_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -593,20 +593,20 @@ export interface paths {
             cookie?: never;
         };
         /** Get Speech */
-        get: operations["get_speech_products_wd_tts_ai_speeches__speech_id__get"];
+        get: operations["get_speech_products_wasifyai_tts_speeches__speech_id__get"];
         put?: never;
         post?: never;
         /**
          * Delete Speech
          * @description Delete a result: its file first, then the record.
          */
-        delete: operations["delete_speech_products_wd_tts_ai_speeches__speech_id__delete"];
+        delete: operations["delete_speech_products_wasifyai_tts_speeches__speech_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/products/wd-tts-ai/speeches/{speech_id}/download": {
+    "/products/wasifyai-tts/speeches/{speech_id}/download": {
         parameters: {
             query?: never;
             header?: never;
@@ -618,7 +618,7 @@ export interface paths {
          * @description The speech as a file the browser saves (browsers ignore `download` on links to the
          *     storage host, ADR-0034).
          */
-        get: operations["download_products_wd_tts_ai_speeches__speech_id__download_get"];
+        get: operations["download_products_wasifyai_tts_speeches__speech_id__download_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -627,7 +627,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-tts-ai/voices": {
+    "/products/wasifyai-tts/voices": {
         parameters: {
             query?: never;
             header?: never;
@@ -638,7 +638,7 @@ export interface paths {
          * List Voices
          * @description The languages and voices the form offers: a gender with no voice is an empty list.
          */
-        get: operations["list_voices_products_wd_tts_ai_voices_get"];
+        get: operations["list_voices_products_wasifyai_tts_voices_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -647,7 +647,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-video-ai/prompt/enhance": {
+    "/products/wasifyai-video/prompt/enhance": {
         parameters: {
             query?: never;
             header?: never;
@@ -657,14 +657,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Enhance */
-        post: operations["enhance_products_wd_video_ai_prompt_enhance_post"];
+        post: operations["enhance_products_wasifyai_video_prompt_enhance_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/products/wd-video-ai/videos": {
+    "/products/wasifyai-video/videos": {
         parameters: {
             query?: never;
             header?: never;
@@ -672,7 +672,7 @@ export interface paths {
             cookie?: never;
         };
         /** List Videos */
-        get: operations["list_videos_products_wd_video_ai_videos_get"];
+        get: operations["list_videos_products_wasifyai_video_videos_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -681,7 +681,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wd-video-ai/videos/{video_id}": {
+    "/products/wasifyai-video/videos/{video_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -689,7 +689,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Video */
-        get: operations["get_video_products_wd_video_ai_videos__video_id__get"];
+        get: operations["get_video_products_wasifyai_video_videos__video_id__get"];
         put?: never;
         post?: never;
         /**
@@ -697,13 +697,13 @@ export interface paths {
          * @description Delete a clip (or dismiss a failed one): its files first, then the record. A clip still
          *     being made cannot be deleted: its job is running.
          */
-        delete: operations["delete_video_products_wd_video_ai_videos__video_id__delete"];
+        delete: operations["delete_video_products_wasifyai_video_videos__video_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/products/wd-video-ai/videos/{video_id}/download": {
+    "/products/wasifyai-video/videos/{video_id}/download": {
         parameters: {
             query?: never;
             header?: never;
@@ -715,7 +715,7 @@ export interface paths {
          * @description The clip as a file the browser saves (browsers ignore `download` on links to the
          *     storage host, ADR-0034).
          */
-        get: operations["download_products_wd_video_ai_videos__video_id__download_get"];
+        get: operations["download_products_wasifyai_video_videos__video_id__download_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2279,7 +2279,7 @@ export interface operations {
             };
         };
     };
-    list_images_products_wd_image_ai_images_get: {
+    list_images_products_wasifyai_image_images_get: {
         parameters: {
             query?: {
                 limit?: number;
@@ -2312,7 +2312,7 @@ export interface operations {
             };
         };
     };
-    get_image_products_wd_image_ai_images__image_id__get: {
+    get_image_products_wasifyai_image_images__image_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2343,7 +2343,7 @@ export interface operations {
             };
         };
     };
-    delete_image_products_wd_image_ai_images__image_id__delete: {
+    delete_image_products_wasifyai_image_images__image_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -2372,7 +2372,7 @@ export interface operations {
             };
         };
     };
-    download_products_wd_image_ai_images__image_id__download_get: {
+    download_products_wasifyai_image_images__image_id__download_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2403,7 +2403,7 @@ export interface operations {
             };
         };
     };
-    enhance_products_wd_image_ai_prompt_enhance_post: {
+    enhance_products_wasifyai_image_prompt_enhance_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2436,7 +2436,7 @@ export interface operations {
             };
         };
     };
-    list_lipsyncs_products_wd_lipsync_ai_lipsyncs_get: {
+    list_lipsyncs_products_wasifyai_lipsync_lipsyncs_get: {
         parameters: {
             query?: {
                 limit?: number;
@@ -2470,7 +2470,7 @@ export interface operations {
             };
         };
     };
-    get_lipsync_products_wd_lipsync_ai_lipsyncs__video_id__get: {
+    get_lipsync_products_wasifyai_lipsync_lipsyncs__video_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2501,7 +2501,7 @@ export interface operations {
             };
         };
     };
-    delete_lipsync_products_wd_lipsync_ai_lipsyncs__video_id__delete: {
+    delete_lipsync_products_wasifyai_lipsync_lipsyncs__video_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -2530,7 +2530,7 @@ export interface operations {
             };
         };
     };
-    download_products_wd_lipsync_ai_lipsyncs__video_id__download_get: {
+    download_products_wasifyai_lipsync_lipsyncs__video_id__download_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2561,7 +2561,7 @@ export interface operations {
             };
         };
     };
-    enhance_products_wd_music_ai_prompt_enhance_post: {
+    enhance_products_wasifyai_music_prompt_enhance_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2594,7 +2594,7 @@ export interface operations {
             };
         };
     };
-    list_songs_products_wd_music_ai_songs_get: {
+    list_songs_products_wasifyai_music_songs_get: {
         parameters: {
             query?: {
                 limit?: number;
@@ -2627,7 +2627,7 @@ export interface operations {
             };
         };
     };
-    get_song_products_wd_music_ai_songs__song_id__get: {
+    get_song_products_wasifyai_music_songs__song_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2658,7 +2658,7 @@ export interface operations {
             };
         };
     };
-    download_products_wd_music_ai_songs__song_id__download__kind__get: {
+    download_products_wasifyai_music_songs__song_id__download__kind__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2690,7 +2690,7 @@ export interface operations {
             };
         };
     };
-    languages_products_wd_stt_ai_languages_get: {
+    languages_products_wasifyai_stt_languages_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2710,7 +2710,7 @@ export interface operations {
             };
         };
     };
-    list_transcripts_products_wd_stt_ai_transcripts_get: {
+    list_transcripts_products_wasifyai_stt_transcripts_get: {
         parameters: {
             query?: {
                 limit?: number;
@@ -2744,7 +2744,7 @@ export interface operations {
             };
         };
     };
-    get_transcript_products_wd_stt_ai_transcripts__transcript_id__get: {
+    get_transcript_products_wasifyai_stt_transcripts__transcript_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2775,7 +2775,7 @@ export interface operations {
             };
         };
     };
-    delete_transcript_products_wd_stt_ai_transcripts__transcript_id__delete: {
+    delete_transcript_products_wasifyai_stt_transcripts__transcript_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -2804,7 +2804,7 @@ export interface operations {
             };
         };
     };
-    download_products_wd_stt_ai_transcripts__transcript_id__download_get: {
+    download_products_wasifyai_stt_transcripts__transcript_id__download_get: {
         parameters: {
             query?: {
                 format?: "txt" | "srt" | "vtt" | "json";
@@ -2837,7 +2837,7 @@ export interface operations {
             };
         };
     };
-    list_speeches_products_wd_tts_ai_speeches_get: {
+    list_speeches_products_wasifyai_tts_speeches_get: {
         parameters: {
             query?: {
                 limit?: number;
@@ -2870,7 +2870,7 @@ export interface operations {
             };
         };
     };
-    get_speech_products_wd_tts_ai_speeches__speech_id__get: {
+    get_speech_products_wasifyai_tts_speeches__speech_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2901,7 +2901,7 @@ export interface operations {
             };
         };
     };
-    delete_speech_products_wd_tts_ai_speeches__speech_id__delete: {
+    delete_speech_products_wasifyai_tts_speeches__speech_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -2930,7 +2930,7 @@ export interface operations {
             };
         };
     };
-    download_products_wd_tts_ai_speeches__speech_id__download_get: {
+    download_products_wasifyai_tts_speeches__speech_id__download_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2961,7 +2961,7 @@ export interface operations {
             };
         };
     };
-    list_voices_products_wd_tts_ai_voices_get: {
+    list_voices_products_wasifyai_tts_voices_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2981,7 +2981,7 @@ export interface operations {
             };
         };
     };
-    enhance_products_wd_video_ai_prompt_enhance_post: {
+    enhance_products_wasifyai_video_prompt_enhance_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -3014,7 +3014,7 @@ export interface operations {
             };
         };
     };
-    list_videos_products_wd_video_ai_videos_get: {
+    list_videos_products_wasifyai_video_videos_get: {
         parameters: {
             query?: {
                 limit?: number;
@@ -3048,7 +3048,7 @@ export interface operations {
             };
         };
     };
-    get_video_products_wd_video_ai_videos__video_id__get: {
+    get_video_products_wasifyai_video_videos__video_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -3079,7 +3079,7 @@ export interface operations {
             };
         };
     };
-    delete_video_products_wd_video_ai_videos__video_id__delete: {
+    delete_video_products_wasifyai_video_videos__video_id__delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -3108,7 +3108,7 @@ export interface operations {
             };
         };
     };
-    download_products_wd_video_ai_videos__video_id__download_get: {
+    download_products_wasifyai_video_videos__video_id__download_get: {
         parameters: {
             query?: never;
             header?: never;

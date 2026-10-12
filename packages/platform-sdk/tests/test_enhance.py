@@ -5,7 +5,7 @@ import yaml
 from fastapi import FastAPI, Header
 from fastapi.testclient import TestClient
 from PIL import Image as PILImage
-from wd_platform_sdk import (
+from wasifyai_platform_sdk import (
     Identity,
     InMemoryUploadLimiter,
     InMemoryUploadStore,
@@ -21,7 +21,7 @@ from wd_platform_sdk import (
     memory_storage,
     new_upload,
 )
-from wd_platform_sdk.enhance import EnhanceRefused
+from wasifyai_platform_sdk.enhance import EnhanceRefused
 
 
 def who(x_user: str = Header("u1")) -> Identity:

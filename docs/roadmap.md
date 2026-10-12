@@ -64,7 +64,7 @@ create anything with the 6 products.
 
 ## Phase 2: Skeleton on Kubernetes
 
-- [x] Helm chart with `base` / `env` / `cloud` values (`deploy/helm/wd-ai`, ADR-0016)
+- [x] Helm chart with `base` / `env` / `cloud` values (`deploy/helm/wasifyai`, ADR-0016)
 - [x] Install to `kind` locally (`make kind-up`, `make kind-test`)
 - [x] CI smoke test on `kind` (`helm-kind` job gates the image push)
 - [x] In-cluster Ollama pulls its model into a PVC (tested on kind with a small model)
@@ -78,7 +78,7 @@ create anything with the 6 products.
       loading and validation (ADR-0017)
 - [x] Storage interface (obstore) with an S3-compatible adapter; SeaweedFS replaces MinIO, whose
       community image was withdrawn
-- [x] pgvector + RAG helpers (not needed by `wd-music-ai`, but part of the core)
+- [x] pgvector + RAG helpers (not needed by `wasifyai-music`, but part of the core)
 - [x] Usage events written for LLM calls
 - [ ] Follow-up (Phase 4): deploy object storage in the Helm chart when the media worker needs it
 
@@ -96,9 +96,9 @@ create anything with the 6 products.
       written (`deploy/k8s/gpu-time-slicing.yaml`, `comfyui.*` chart values, runbook) but need
       the GPU host to be tested. Also needs a ComfyUI container image chosen for your GPU
 
-## Phase 5: `wd-music-ai` MVP
+## Phase 5: `wasifyai-music` MVP
 
-See [product spec](../products/wd-music-ai/README.md).
+See [product spec](../products/wasifyai-music/README.md).
 
 - [x] Song graph: guardrail → lyrics → approve → music job → cover job → done, with per-user
       daily quota, validated and streamed lyrics, `songs` table (migration 0004); tested with a
@@ -114,14 +114,14 @@ See [product spec](../products/wd-music-ai/README.md).
 - [x] Read API for "My songs" as product-provided routes (ADR-0023)
 - [x] Song downloads (ADR-0034): real file downloads, the MP3 with cover art and lyrics in its tag, an MP4
       video of the cover with the song playing
-- [x] Studio home "WD AI Studio" with a card per product, `/music` area, "Coming soon" pages for image and
+- [x] Studio home "WasifyAI Studio" with a card per product, `/music` area, "Coming soon" pages for image and
       video, sign-in asked when a visitor opens music (ADR-0033)
 - [x] Secured upload endpoint for images (ADR-0035): identity required, size/type/pixel limits,
       re-encoded without metadata, hourly limit, swept after 24 hours. Audio uploads are not designed yet
-- [x] Image product `wd-image-ai` (ADR-0036): text to image and image to image on FLUX.2 klein 4B, guardrail
+- [x] Image product `wasifyai-image` (ADR-0036): text to image and image to image on FLUX.2 klein 4B, guardrail
       on prompt and picture, My images, downloads, delete. Output screening is not in the first version
 
-- [x] Video product `wd-video-ai` (ADR-0037): text to video and image to video on LTX-Video 2B, 2 or 5
+- [x] Video product `wasifyai-video` (ADR-0037): text to video and image to video on LTX-Video 2B, 2 or 5
       second clips made in the background, with a header badge and a notice when a clip is ready
 - [x] Prompt enhancement on every product (ADR-0038) and a shared picture input: choose, drag and drop, paste
       (ADR-0039)

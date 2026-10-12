@@ -3,7 +3,7 @@
 #   --build-arg BASE=pytorch/pytorch:2.7.0-cuda12.6-cudnn9-runtime --build-arg TORCH_INDEX=
 # and run with LIPSYNC_DEVICE=cuda. The model files are fetched on first start into the volume at
 # /opt/musetalk/models, never baked into the image. Build from the repository root:
-#   podman build -f services/lipsync-musetalk/Containerfile -t wd-ai/lipsync-musetalk .
+#   podman build -f services/lipsync-musetalk/Containerfile -t wasifyai/lipsync-musetalk .
 ARG BASE=python:3.11-slim
 FROM ${BASE}
 ARG MUSETALK_COMMIT=0a89dec

@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
-from wd_platform_sdk import ConfigError, load_product_config
+from wasifyai_platform_sdk import ConfigError, load_product_config
 
 REPO_PRODUCTS = Path(__file__).resolve().parents[3] / "products"
 
@@ -76,7 +76,7 @@ def test_unknown_keys_are_rejected(products):
         load_product_config(products, "demo", environ={})
 
 
-@pytest.mark.parametrize("product", ["hello", "media-demo", "wd-music-ai"])
+@pytest.mark.parametrize("product", ["hello", "media-demo", "wasifyai-music"])
 def test_committed_product_configs_are_valid(product):
     """Every shipped product loads, its workflows and map files exist, and every mapped node ID
     is present in the workflow JSON."""

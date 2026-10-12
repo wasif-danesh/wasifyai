@@ -4,7 +4,7 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 cd "$ROOT"
 
-CLUSTER=wd-ai; NS=wd-ai; TAG=dev; REG=localhost/wd-ai
+CLUSTER=wasifyai; NS=wasifyai; TAG=dev; REG=localhost/wasifyai
 # KIND_MODE=full (the default): every service runs as a pod, nothing native: Ollama with its models, the CPU
 #   speech servers, the lip sync server and ComfyUI. Needs a Podman VM of about 24 GB and a few tens of GB of
 #   model downloads on first start; no GPU, so the GPU media models are placeholders (stub mode).
@@ -51,7 +51,7 @@ step "Loading images into the cluster"
 for pair in "${IMAGES[@]}"; do
   name="${pair%%:*}"; img="$REG/$name:$TAG"
   if [ "$CONTAINER_ENGINE" = "podman" ]; then
-    tar="$(mktemp -t wd-ai-image).tar"
+    tar="$(mktemp -t wasifyai-image).tar"
     "$CONTAINER_ENGINE" save -o "$tar" "$img" >/dev/null
     kind load image-archive "$tar" --name "$CLUSTER" >/dev/null; rm -f "$tar"
   else
@@ -106,8 +106,8 @@ fi
 step "Installing the chart"
 if [ "$MODE" = "full" ]; then
   # nothing native: every service is a pod
-  helm upgrade --install wd-ai deploy/helm/wd-ai -n "$NS" \
-    -f deploy/helm/wd-ai/values/local.yaml \
+  helm upgrade --install wasifyai deploy/helm/wasifyai -n "$NS" \
+    -f deploy/helm/wasifyai/values/local.yaml \
     --set ollama.enabled=true --set ollama.externalUrl= \
     --set speech.enabled=true --set mediaWorker.speechMode=real \
     --set lipsync.enabled=true \
@@ -116,8 +116,8 @@ if [ "$MODE" = "full" ]; then
     ${extra[@]+"${extra[@]}"} \
     --wait --timeout 90m
 else
-  helm upgrade --install wd-ai deploy/helm/wd-ai -n "$NS" \
-    -f deploy/helm/wd-ai/values/local.yaml \
+  helm upgrade --install wasifyai deploy/helm/wasifyai -n "$NS" \
+    -f deploy/helm/wasifyai/values/local.yaml \
     --set "ollama.externalUrl=$OLLAMA_EXTERNAL_URL" \
     ${LIPSYNC_EXTERNAL_URL:+--set "lipsync.serverUrl=$LIPSYNC_EXTERNAL_URL"} \
     ${extra[@]+"${extra[@]}"} \

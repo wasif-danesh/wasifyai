@@ -5,7 +5,7 @@ import struct
 import zlib
 from pathlib import Path
 
-from wd_platform_sdk import (
+from wasifyai_platform_sdk import (
     InMemoryUsageRecorder,
     ProviderDeps,
     ScopedStorage,

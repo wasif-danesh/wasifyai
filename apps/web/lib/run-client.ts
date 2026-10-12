@@ -1,6 +1,6 @@
 import { type ParsedEvent, parseSse } from "./sse";
 
-export const PRODUCT = "wd-music-ai";
+export const PRODUCT = "wasifyai-music";
 
 export type SongInput = { idea: string; genre?: string; mood?: string };
 export type Approval = {

@@ -5,7 +5,7 @@ import { TextLink } from "@/components/ui/text-link";
 import { apiGet } from "@/lib/api";
 import { fullDate } from "@/lib/format";
 import { muted } from "@/lib/styles";
-import type { MediaList } from "@wd/contracts";
+import type { MediaList } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Media" };

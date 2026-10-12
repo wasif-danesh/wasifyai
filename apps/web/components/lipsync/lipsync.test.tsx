@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { LipSyncSummary, VoiceCatalog } from "@wd/contracts";
+import type { LipSyncSummary, VoiceCatalog } from "@wasifyai/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreationsList } from "../creations/CreationsList";
 import { LipSyncForm } from "./LipSyncForm";
@@ -133,7 +133,7 @@ describe("LipSyncView", () => {
     expect(container.querySelector("video")).toHaveAttribute("src", "http://x/v.mp4");
     expect(screen.getByRole("link", { name: /download/i })).toHaveAttribute(
       "href",
-      "/api/products/wd-lipsync-ai/lipsyncs/00000000-0000-0000-0000-000000000001/download",
+      "/api/products/wasifyai-lipsync/lipsyncs/00000000-0000-0000-0000-000000000001/download",
     );
     await user.click(screen.getByRole("button", { name: /^delete$/i }));
     expect(fetchMock).not.toHaveBeenCalled();

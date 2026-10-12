@@ -1,4 +1,4 @@
-# Running wd-ai on Windows (WSL2)
+# Running wasifyai on Windows (WSL2)
 
 The repo's tooling is bash, so on Windows you run everything **inside WSL2** with an Ubuntu
 distro. That is a real Linux environment, so `make setup`, `make dev`, `make kind-up` and the
@@ -40,7 +40,7 @@ wsl --install -d Ubuntu-24.04     # reboot if asked, then finish the Ubuntu firs
    mounts are slow, break file permissions and can introduce CRLF line endings.
 
    ```bash
-   cd ~ && git clone https://github.com/wasif-danesh/wd-ai.git && cd wd-ai
+   cd ~ && git clone https://github.com/wasif-danesh/wasifyai.git && cd wasifyai
    ```
 
 3. Run the normal flow:

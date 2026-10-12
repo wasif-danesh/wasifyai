@@ -4,7 +4,7 @@
 
 In the `monitoring` namespace of each cluster: Prometheus, Alertmanager, Grafana, Loki (7 days of logs) and Promtail.
 The application chart adds the scrape target (API and worker, port 9464, not reachable from outside the cluster), 10
-alert rules plus the always-firing `Watchdog`, and a Grafana dashboard ("wd-ai overview").
+alert rules plus the always-firing `Watchdog`, and a Grafana dashboard ("wasifyai overview").
 
 Install: `make monitoring-up` (also part of `make kind-up` in full mode). **Only production sends:** without
 `ALERT_NOTIFICATIONS=on` alerts fire and show in Alertmanager and Grafana, but nothing is sent and no token is stored.
@@ -17,7 +17,7 @@ stores them in Secrets; nothing is written to a file in the repository. For the 
 
 | Need | How |
 |---|---|
-| Dashboards and logs | `kubectl -n monitoring port-forward svc/monitoring-grafana 3001:80`, user `admin`, password: `kubectl -n monitoring get secret grafana-admin -o jsonpath={.data.admin-password} \| base64 -d`. Logs: Explore, data source Loki, `{namespace="wd-ai"}`. |
+| Dashboards and logs | `kubectl -n monitoring port-forward svc/monitoring-grafana 3001:80`, user `admin`, password: `kubectl -n monitoring get secret grafana-admin -o jsonpath={.data.admin-password} \| base64 -d`. Logs: Explore, data source Loki, `{namespace="wasifyai"}`. |
 | What is firing | `kubectl -n monitoring port-forward svc/monitoring-alertmanager 9093:9093`, then http://localhost:9093 |
 | Raw metrics, queries | `kubectl -n monitoring port-forward svc/monitoring-prometheus 9090:9090`, then http://localhost:9090 |
 
@@ -45,7 +45,7 @@ thresholds are chart values (`metrics.alerts.*`).
 
 Labels are bounded values only: a product id, a capability, an outcome, an error or refusal code, an HTTP route
 template. Never a user id, an email, a prompt or any content (a test checks this). New metrics go in
-`services/api/src/wd_api/metrics.py` or `services/media-worker/src/wd_media_worker/metrics.py`.
+`services/api/src/wasifyai_api/metrics.py` or `services/media-worker/src/wasifyai_media_worker/metrics.py`.
 
 ## Known limits
 

@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { panel } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { LanguageChoice, VoiceCatalog, VoiceChoice } from "@wd/contracts";
+import type { LanguageChoice, VoiceCatalog, VoiceChoice } from "@wasifyai/contracts";
 import { Loader2 } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import { useForm } from "react-hook-form";

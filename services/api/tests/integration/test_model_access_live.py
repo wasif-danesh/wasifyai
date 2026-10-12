@@ -10,8 +10,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import httpx
 import pytest
-from wd_api.litellm_admin import LiteLLMBackend
-from wd_api.model_access import Binding, ModelAccess
+from wasifyai_api.litellm_admin import LiteLLMBackend
+from wasifyai_api.model_access import Binding, ModelAccess
 
 ALIAS = "it-keytest"
 DEFAULTS = {

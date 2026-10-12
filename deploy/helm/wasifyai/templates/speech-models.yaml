@@ -1,0 +1,35 @@
+{{- if .Values.speech.enabled }}
+# Installs the speech models into the speech server's volume (it downloads them on request). One Job per
+# release revision; it waits for the server, so it can be created at the same time. Finished Jobs are removed.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-speech-models-{{ .Release.Revision }}
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 4
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: install
+          image: {{ .Values.speech.image }}   # has curl
+          command:
+            - sh
+            - -c
+            - |
+              base="http://{{ .Release.Name }}-speech:8000"
+              for i in $(seq 1 150); do curl -fsS -m 3 "$base/health" >/dev/null 2>&1 && break; sleep 2; done
+              status=0
+              n=0
+              for m in {{ range .Values.speech.models }}{{ . | replace "/" "%2F" | quote }} {{ end }}; do
+                n=$((n + 1))
+                code=$(curl -sS -o /dev/null -w '%{http_code}' -m 3000 -X POST "$base/v1/models/$m")
+                case "$code" in 200|201|409) echo "ok: $m" ;; *) echo "FAILED ($code): $m"; status=1 ;; esac
+              done
+              [ "$n" -gt 0 ] || { echo "no models listed (speech.models is empty)"; status=1; }
+              exit $status
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+{{- end }}

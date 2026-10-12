@@ -47,7 +47,7 @@ Findings that shape the decision:
 
 ## Decision
 
-- **A new product, `wd-video-ai`**, with its own tenancy, usage and quota, built like `wd-image-ai` (ADR-0036).
+- **A new product, `wasifyai-video`**, with its own tenancy, usage and quota, built like `wasifyai-image` (ADR-0036).
   Web area `/video` (create) and `/video/creations/{id}` (one clip). The home card goes live and the "Coming soon"
   page is retired.
 - **Model: LTX-Video 2B 0.9.5** (`ltx-video-2b-v0.9.5.safetensors`, 6.3 GB, and the `t5xxl_fp16` text encoder,

@@ -1,12 +1,12 @@
 # ADR-0052: Image studio: base model, LoRAs, stored parameters and Remix
 
-- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wd-studio-ai`, in its own repository (`wd-studio-hub`); wd-ai does not implement it. Nothing here was built.
+- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wasifyai-art`, in its own repository (`wasifyai-art`); wasifyai does not implement it. Nothing here was built.
 - **Date:** 2026-10-12
 - **Depends on:** ADR-0051. **Extends:** ADR-0036 (it does not supersede it).
 
 ## Context
 
-`wd-image-ai` (ADR-0036) makes an image from a prompt and a size, or from one picture and an instruction, on one
+`wasifyai-image` (ADR-0036) makes an image from a prompt and a size, or from one picture and an instruction, on one
 base model. It stores the prompt and the size, not how the image was made. The owner wants to choose the base model,
 add several LoRAs, and **remix** an earlier creation: start again from its settings, or from the picture itself.
 Tensor.art's creation page shows the same set of facts for each image (models used, prompt, sampler, steps, seed,
@@ -36,7 +36,7 @@ size) with a Remix button; that is the model for the detail page here.
   1. *Remix settings:* the web opens `/image?remix={id}`, loads prompt, base model, LoRAs, weights and size from
      `GET /images/{id}` (which now returns `params`), and offers "keep the seed / new seed". The new creation's
      `parent_id` points back.
-  2. *Remix the picture:* `POST /products/wd-image-ai/uploads/from-image/{image_id}` copies the caller's own creation
+  2. *Remix the picture:* `POST /products/wasifyai-image/uploads/from-image/{image_id}` copies the caller's own creation
      into their `uploads/` prefix (same re-encode, metadata strip, size cap and 24 hour sweep as ADR-0035; counts
      against the hourly upload limit) and returns an `upload_id`; the form switches to *Image to image* with the
      original prompt as the starting instruction. No new model path: it is the edit workflow, now with LoRAs.
@@ -73,4 +73,4 @@ models that have none, a public gallery or sharing, and searching by LoRA name.
 
 ## Docs to update if accepted
 
-`products/wd-image-ai/README.md`, `docs/configuration.md` (the `settings` keys), `docs/decisions/README.md`.
+`products/wasifyai-image/README.md`, `docs/configuration.md` (the `settings` keys), `docs/decisions/README.md`.

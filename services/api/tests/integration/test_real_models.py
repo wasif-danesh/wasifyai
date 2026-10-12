@@ -16,12 +16,12 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from wd_media_worker.comfy import ComfyClient
-from wd_media_worker.gpu import LocalGpuLock
-from wd_media_worker.processor import ComfyRunner, JobProcessor
-from wd_media_worker.settings import WorkerSettings
-from wd_media_worker.state import InMemoryJobState
-from wd_platform_sdk import (
+from wasifyai_media_worker.comfy import ComfyClient
+from wasifyai_media_worker.gpu import LocalGpuLock
+from wasifyai_media_worker.processor import ComfyRunner, JobProcessor
+from wasifyai_media_worker.settings import WorkerSettings
+from wasifyai_media_worker.state import InMemoryJobState
+from wasifyai_platform_sdk import (
     InMemoryEventLog,
     InMemoryJobSink,
     InMemoryUsageRecorder,
@@ -99,9 +99,9 @@ def probe(data: bytes, suffix: str) -> dict:
 
 @pytest.fixture
 async def worker():
-    set_context(RunContext("real", "wd-music-ai", "u1", str(uuid4()), str(uuid4())))
+    set_context(RunContext("real", "wasifyai-music", "u1", str(uuid4()), str(uuid4())))
     sink, storage = InMemoryJobSink(), memory_storage()
-    config = load_product_config(PRODUCTS_DIR, "wd-music-ai", environ={})
+    config = load_product_config(PRODUCTS_DIR, "wasifyai-music", environ={})
     caps = build_capabilities(
         config, ProviderDeps(PRODUCTS_DIR, usage=InMemoryUsageRecorder(), job_sink=sink)
     )
@@ -127,7 +127,7 @@ async def test_ace_step_makes_a_song_of_the_requested_length(worker):
     assert result.status == "completed", result.error
     out = result.outputs["audio"]
     assert out.content_type == "audio/mpeg" and out.key.endswith("/audio.mp3")
-    audio = await storage.get(object_key("real", "wd-music-ai", "u1", out.key))
+    audio = await storage.get(object_key("real", "wasifyai-music", "u1", out.key))
     keep("song.mp3", audio)
     info = probe(audio, ".mp3")
     assert info["streams"][0]["codec_name"] == "mp3"
@@ -147,7 +147,7 @@ async def test_flux2_klein_paints_a_1024_cover(worker):
 
     assert result.status == "completed", result.error
     out = result.outputs["image"]
-    png = await storage.get(object_key("real", "wd-music-ai", "u1", out.key))
+    png = await storage.get(object_key("real", "wasifyai-music", "u1", out.key))
     keep("cover.png", png)
     assert png.startswith(b"\x89PNG\r\n\x1a\n")
     width, height = struct.unpack(">II", png[16:24])

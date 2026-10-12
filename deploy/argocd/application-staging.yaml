@@ -1,26 +1,26 @@
 # Argo CD Application for staging (home lab k3s). Apply once after Argo CD is installed:
 #   kubectl apply -f deploy/argocd/application-staging.yaml
-# Prerequisite: the Secret `wd-ai-secrets` exists in the `wd-ai` namespace
-#   (scripts/k8s-secrets.sh wd-ai). Secrets are never stored in Git.
+# Prerequisite: the Secret `wasifyai-secrets` exists in the `wasifyai` namespace
+#   (scripts/k8s-secrets.sh wasifyai). Secrets are never stored in Git.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: wd-ai-staging
+  name: wasifyai-staging
   namespace: argocd
 spec:
   project: default
   source:
-    repoURL: https://github.com/wasif-danesh/wd-ai.git
+    repoURL: https://github.com/wasif-danesh/wasifyai.git
     targetRevision: main
-    path: deploy/helm/wd-ai
+    path: deploy/helm/wasifyai
     helm:
-      releaseName: wd-ai
+      releaseName: wasifyai
       valueFiles:
         - values/staging.yaml
         - values/cloud/homelab.yaml
   destination:
     server: https://kubernetes.default.svc
-    namespace: wd-ai
+    namespace: wasifyai
   syncPolicy:
     automated:
       prune: true

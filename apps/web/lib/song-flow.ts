@@ -1,5 +1,5 @@
 // Turns the server's event stream into UI state. Pure: no fetch, no React, so it is tested
-// against recorded event sequences. See products/wd-music-ai/README.md for the contract.
+// against recorded event sequences. See products/wasifyai-music/README.md for the contract.
 import type { ParsedEvent } from "./sse";
 
 export type Phase =

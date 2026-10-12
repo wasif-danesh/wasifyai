@@ -33,9 +33,9 @@ describe("mediaProblem", () => {
 describe("useMedia", () => {
   it("uploads a chosen file at once and keeps its key and length", async () => {
     fetchMock.mockResolvedValue(uploaded());
-    const { result } = renderHook(() => useMedia("wd-stt-ai", 100_000));
+    const { result } = renderHook(() => useMedia("wasifyai-stt", 100_000));
     await act(async () => result.current.choose(file()));
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/products/wd-stt-ai/uploads/media");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/products/wasifyai-stt/uploads/media");
     expect(result.current.recording).toMatchObject({
       key: "uploads/a.wav",
       seconds: 12.3,
@@ -45,7 +45,7 @@ describe("useMedia", () => {
   });
 
   it("does not upload a file that cannot be used", async () => {
-    const { result } = renderHook(() => useMedia("wd-stt-ai", 1000));
+    const { result } = renderHook(() => useMedia("wasifyai-stt", 1000));
     await act(async () => result.current.choose(file("audio/mpeg", 5000)));
     expect(fetchMock).not.toHaveBeenCalled();
     expect(result.current.error).toMatch(/over/);
@@ -56,7 +56,7 @@ describe("useMedia", () => {
     fetchMock.mockResolvedValue(
       Response.json({ detail: "That file could not be read as audio." }, { status: 422 }),
     );
-    const { result } = renderHook(() => useMedia("wd-stt-ai", 100_000));
+    const { result } = renderHook(() => useMedia("wasifyai-stt", 100_000));
     await act(async () => result.current.choose(file()));
     expect(result.current.error).toBe("That file could not be read as audio.");
     expect(result.current.recording).toBeNull();
@@ -66,17 +66,17 @@ describe("useMedia", () => {
     fetchMock
       .mockResolvedValueOnce(uploaded())
       .mockResolvedValue(new Response(null, { status: 204 }));
-    const { result } = renderHook(() => useMedia("wd-stt-ai", 100_000));
+    const { result } = renderHook(() => useMedia("wasifyai-stt", 100_000));
     await act(async () => result.current.choose(file()));
     act(() => result.current.clear());
-    expect(fetchMock.mock.calls[1][0]).toBe("/api/products/wd-stt-ai/uploads/media/u1");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/products/wasifyai-stt/uploads/media/u1");
     expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "DELETE" });
     expect(result.current.recording).toBeNull();
   });
 
   it("leaves the recording alone once a run owns it", async () => {
     fetchMock.mockResolvedValue(uploaded());
-    const { result, unmount } = renderHook(() => useMedia("wd-stt-ai", 100_000));
+    const { result, unmount } = renderHook(() => useMedia("wasifyai-stt", 100_000));
     await act(async () => result.current.choose(file()));
     act(() => result.current.handOver());
     unmount();

@@ -2,7 +2,7 @@ import { TranscriptView } from "@/components/transcribe/TranscriptView";
 import { ApiError, apiGet } from "@/lib/api";
 import { isUuid } from "@/lib/proxy";
 import { backLink } from "@/lib/styles";
-import type { TranscriptDetail } from "@wd/contracts";
+import type { TranscriptDetail } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -16,7 +16,7 @@ export default async function TranscriptPage({ params }: Props) {
   if (!isUuid(id)) notFound();
   let transcript: TranscriptDetail;
   try {
-    transcript = await apiGet<TranscriptDetail>(`/products/wd-stt-ai/transcripts/${id}`);
+    transcript = await apiGet<TranscriptDetail>(`/products/wasifyai-stt/transcripts/${id}`);
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;

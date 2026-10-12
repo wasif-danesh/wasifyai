@@ -1,5 +1,5 @@
 // Turns the video run's event stream into UI state. Pure: no fetch, no React, so it is tested against
-// recorded event sequences. See products/wd-video-ai/README.md for the contract.
+// recorded event sequences. See products/wasifyai-video/README.md for the contract.
 import type { ParsedEvent } from "./sse";
 
 export type Mode = "text" | "image";

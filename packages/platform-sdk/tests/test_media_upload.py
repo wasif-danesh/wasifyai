@@ -3,8 +3,8 @@ import struct
 import wave
 
 import pytest
-from wd_platform_sdk import UploadError, process_audio
-from wd_platform_sdk.media_upload import sniff
+from wasifyai_platform_sdk import UploadError, process_audio
+from wasifyai_platform_sdk.media_upload import sniff
 
 
 def tone(seconds: float = 1.0, rate: int = 22050) -> bytes:

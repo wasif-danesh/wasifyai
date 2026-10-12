@@ -2,7 +2,7 @@ import type { Entry } from "@/lib/creations";
 // @vitest-environment jsdom
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { SongSummary, SpeechSummary } from "@wd/contracts";
+import type { SongSummary, SpeechSummary } from "@wasifyai/contracts";
 import { describe, expect, it } from "vitest";
 import { CreationsTable } from "./CreationsTable";
 

@@ -4,7 +4,7 @@ import { fullDate } from "@/lib/format";
 import { isUuid } from "@/lib/proxy";
 import { PRODUCT } from "@/lib/run-client";
 import { backLink } from "@/lib/styles";
-import type { SongDetail } from "@wd/contracts";
+import type { SongDetail } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";

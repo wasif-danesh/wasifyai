@@ -5,7 +5,7 @@ import type { Entry } from "@/lib/creations";
 import { clock, styleTags, timeAgo } from "@/lib/format";
 import { clamp2, coverTile } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import type { LipSyncSummary, VideoSummary } from "@wd/contracts";
+import type { LipSyncSummary, VideoSummary } from "@wasifyai/contracts";
 import { Mic } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";

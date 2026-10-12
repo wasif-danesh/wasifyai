@@ -127,7 +127,7 @@ export function CreateVideo() {
                 {state.result.videoId ? (
                   <Button asChild>
                     <a
-                      href={`/api/products/wd-video-ai/videos/${state.result.videoId}/download`}
+                      href={`/api/products/wasifyai-video/videos/${state.result.videoId}/download`}
                       download
                     >
                       Download

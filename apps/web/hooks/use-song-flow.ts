@@ -18,7 +18,7 @@ import {
 import type { ParsedEvent } from "@/lib/sse";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 
-const STORAGE_KEY = "wd-music-ai:run";
+const STORAGE_KEY = "wasifyai-music:run";
 const MAX_RECONNECTS = 6;
 
 const sleep = (ms: number, signal: AbortSignal) =>

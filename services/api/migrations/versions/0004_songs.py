@@ -1,4 +1,4 @@
-"""songs: finished songs of the wd-music-ai product
+"""songs: finished songs of the wasifyai-music product
 
 Product tables live in the shared database and carry tenant_id and product_id like every
 other table (rule 7).

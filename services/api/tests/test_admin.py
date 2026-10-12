@@ -2,10 +2,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from wd_api.admin import AdminSong, AdminUser, InMemoryAdminStore, UsageReport, UsageTotal
-from wd_api.config import get_settings
-from wd_api.users import InMemoryUserStore
-from wd_platform_sdk import InMemoryUsageRecorder
+from wasifyai_api.admin import AdminSong, AdminUser, InMemoryAdminStore, UsageReport, UsageTotal
+from wasifyai_api.config import get_settings
+from wasifyai_api.users import InMemoryUserStore
+from wasifyai_platform_sdk import InMemoryUsageRecorder
 
 from tests.test_auth import SECRET, token
 from tests.test_runs import hello_registry, mem_app
@@ -26,7 +26,7 @@ def store():
     ]  # fmt: skip
     s.song_rows = [
         AdminSong(
-            id="s1", product_id="wd-music-ai", title="A song", user_id="u1",
+            id="s1", product_id="wasifyai-music", title="A song", user_id="u1",
             user_email="user1@example.com", created_at=NOW,
         )
     ]  # fmt: skip

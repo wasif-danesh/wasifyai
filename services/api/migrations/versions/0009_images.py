@@ -1,4 +1,4 @@
-"""images: finished images of the wd-image-ai product (ADR-0036)
+"""images: finished images of the wasifyai-image product (ADR-0036)
 
 Product tables live in the shared database and carry tenant_id and product_id like every other
 table (rule 7). The files are in object storage; the row holds their keys, relative to the user's

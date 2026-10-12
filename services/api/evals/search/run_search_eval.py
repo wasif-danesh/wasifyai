@@ -145,7 +145,8 @@ async def main() -> dict:
     report: dict = {"items": len(items), "queries": len(queries), "nomatch": len(nomatch)}
 
     engine = create_async_engine(
-        f"postgresql+asyncpg://wd:{env.get('POSTGRES_PASSWORD', 'wd')}@localhost:5432/wd"
+        "postgresql+asyncpg://wasifyai:"
+        f"{env.get('POSTGRES_PASSWORD', 'wasifyai')}@localhost:5432/wasifyai"
     )
     async with httpx.AsyncClient(timeout=120) as http, engine.connect() as conn:
         await conn.execute(text("CREATE TEMP TABLE docs (idx int, tsv tsvector)"))

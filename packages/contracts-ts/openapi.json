@@ -2415,7 +2415,7 @@
     }
   },
   "info": {
-    "title": "wd-ai API",
+    "title": "wasifyai API",
     "version": "0.0.0"
   },
   "openapi": "3.1.0",
@@ -3192,9 +3192,9 @@
         ]
       }
     },
-    "/products/wd-image-ai/images": {
+    "/products/wasifyai-image/images": {
       "get": {
-        "operationId": "list_images_products_wd_image_ai_images_get",
+        "operationId": "list_images_products_wasifyai_image_images_get",
         "parameters": [
           {
             "in": "query",
@@ -3267,14 +3267,14 @@
         },
         "summary": "List Images",
         "tags": [
-          "wd-image-ai"
+          "wasifyai-image"
         ]
       }
     },
-    "/products/wd-image-ai/images/{image_id}": {
+    "/products/wasifyai-image/images/{image_id}": {
       "delete": {
         "description": "Delete an image: its files first, then the record.",
-        "operationId": "delete_image_products_wd_image_ai_images__image_id__delete",
+        "operationId": "delete_image_products_wasifyai_image_images__image_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -3303,11 +3303,11 @@
         },
         "summary": "Delete Image",
         "tags": [
-          "wd-image-ai"
+          "wasifyai-image"
         ]
       },
       "get": {
-        "operationId": "get_image_products_wd_image_ai_images__image_id__get",
+        "operationId": "get_image_products_wasifyai_image_images__image_id__get",
         "parameters": [
           {
             "in": "path",
@@ -3343,14 +3343,14 @@
         },
         "summary": "Get Image",
         "tags": [
-          "wd-image-ai"
+          "wasifyai-image"
         ]
       }
     },
-    "/products/wd-image-ai/images/{image_id}/download": {
+    "/products/wasifyai-image/images/{image_id}/download": {
       "get": {
         "description": "The image as a file the browser saves (browsers ignore `download` on links to the\nstorage host, ADR-0034).",
-        "operationId": "download_products_wd_image_ai_images__image_id__download_get",
+        "operationId": "download_products_wasifyai_image_images__image_id__download_get",
         "parameters": [
           {
             "in": "path",
@@ -3384,13 +3384,13 @@
         },
         "summary": "Download",
         "tags": [
-          "wd-image-ai"
+          "wasifyai-image"
         ]
       }
     },
-    "/products/wd-image-ai/prompt/enhance": {
+    "/products/wasifyai-image/prompt/enhance": {
       "post": {
-        "operationId": "enhance_products_wd_image_ai_prompt_enhance_post",
+        "operationId": "enhance_products_wasifyai_image_prompt_enhance_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3425,14 +3425,14 @@
         },
         "summary": "Enhance",
         "tags": [
-          "wd-image-ai",
-          "wd-image-ai"
+          "wasifyai-image",
+          "wasifyai-image"
         ]
       }
     },
-    "/products/wd-lipsync-ai/lipsyncs": {
+    "/products/wasifyai-lipsync/lipsyncs": {
       "get": {
-        "operationId": "list_lipsyncs_products_wd_lipsync_ai_lipsyncs_get",
+        "operationId": "list_lipsyncs_products_wasifyai_lipsync_lipsyncs_get",
         "parameters": [
           {
             "in": "query",
@@ -3526,14 +3526,14 @@
         },
         "summary": "List Lipsyncs",
         "tags": [
-          "wd-lipsync-ai"
+          "wasifyai-lipsync"
         ]
       }
     },
-    "/products/wd-lipsync-ai/lipsyncs/{video_id}": {
+    "/products/wasifyai-lipsync/lipsyncs/{video_id}": {
       "delete": {
         "description": "Delete a clip (or dismiss a failed one): its files first, then the record. A clip still\nbeing made cannot be deleted: its job is running.",
-        "operationId": "delete_lipsync_products_wd_lipsync_ai_lipsyncs__video_id__delete",
+        "operationId": "delete_lipsync_products_wasifyai_lipsync_lipsyncs__video_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -3562,11 +3562,11 @@
         },
         "summary": "Delete Lipsync",
         "tags": [
-          "wd-lipsync-ai"
+          "wasifyai-lipsync"
         ]
       },
       "get": {
-        "operationId": "get_lipsync_products_wd_lipsync_ai_lipsyncs__video_id__get",
+        "operationId": "get_lipsync_products_wasifyai_lipsync_lipsyncs__video_id__get",
         "parameters": [
           {
             "in": "path",
@@ -3602,14 +3602,14 @@
         },
         "summary": "Get Lipsync",
         "tags": [
-          "wd-lipsync-ai"
+          "wasifyai-lipsync"
         ]
       }
     },
-    "/products/wd-lipsync-ai/lipsyncs/{video_id}/download": {
+    "/products/wasifyai-lipsync/lipsyncs/{video_id}/download": {
       "get": {
         "description": "The clip as a file the browser saves (browsers ignore `download` on links to the\nstorage host, ADR-0034).",
-        "operationId": "download_products_wd_lipsync_ai_lipsyncs__video_id__download_get",
+        "operationId": "download_products_wasifyai_lipsync_lipsyncs__video_id__download_get",
         "parameters": [
           {
             "in": "path",
@@ -3643,13 +3643,13 @@
         },
         "summary": "Download",
         "tags": [
-          "wd-lipsync-ai"
+          "wasifyai-lipsync"
         ]
       }
     },
-    "/products/wd-music-ai/prompt/enhance": {
+    "/products/wasifyai-music/prompt/enhance": {
       "post": {
-        "operationId": "enhance_products_wd_music_ai_prompt_enhance_post",
+        "operationId": "enhance_products_wasifyai_music_prompt_enhance_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -3684,14 +3684,14 @@
         },
         "summary": "Enhance",
         "tags": [
-          "wd-music-ai",
-          "wd-music-ai"
+          "wasifyai-music",
+          "wasifyai-music"
         ]
       }
     },
-    "/products/wd-music-ai/songs": {
+    "/products/wasifyai-music/songs": {
       "get": {
-        "operationId": "list_songs_products_wd_music_ai_songs_get",
+        "operationId": "list_songs_products_wasifyai_music_songs_get",
         "parameters": [
           {
             "in": "query",
@@ -3764,13 +3764,13 @@
         },
         "summary": "List Songs",
         "tags": [
-          "wd-music-ai"
+          "wasifyai-music"
         ]
       }
     },
-    "/products/wd-music-ai/songs/{song_id}": {
+    "/products/wasifyai-music/songs/{song_id}": {
       "get": {
-        "operationId": "get_song_products_wd_music_ai_songs__song_id__get",
+        "operationId": "get_song_products_wasifyai_music_songs__song_id__get",
         "parameters": [
           {
             "in": "path",
@@ -3806,14 +3806,14 @@
         },
         "summary": "Get Song",
         "tags": [
-          "wd-music-ai"
+          "wasifyai-music"
         ]
       }
     },
-    "/products/wd-music-ai/songs/{song_id}/download/{kind}": {
+    "/products/wasifyai-music/songs/{song_id}/download/{kind}": {
       "get": {
         "description": "A file the browser saves. Browsers ignore `download` on links to another origin (the\nstorage host), so files are served from here with a Content-Disposition. The song is looked\nup for this user only, like every other route.\n\n`audio` is the MP3 with the title, lyrics and cover art written into its tag, so a music\nplayer shows the cover. `video` is the cover as a picture with the song playing, made on the\nfirst request and kept in storage.",
-        "operationId": "download_products_wd_music_ai_songs__song_id__download__kind__get",
+        "operationId": "download_products_wasifyai_music_songs__song_id__download__kind__get",
         "parameters": [
           {
             "in": "path",
@@ -3861,14 +3861,14 @@
         },
         "summary": "Download",
         "tags": [
-          "wd-music-ai"
+          "wasifyai-music"
         ]
       }
     },
-    "/products/wd-stt-ai/languages": {
+    "/products/wasifyai-stt/languages": {
       "get": {
         "description": "The languages to choose from, and what an upload may be.",
-        "operationId": "languages_products_wd_stt_ai_languages_get",
+        "operationId": "languages_products_wasifyai_stt_languages_get",
         "responses": {
           "200": {
             "content": {
@@ -3883,13 +3883,13 @@
         },
         "summary": "Languages",
         "tags": [
-          "wd-stt-ai"
+          "wasifyai-stt"
         ]
       }
     },
-    "/products/wd-stt-ai/transcripts": {
+    "/products/wasifyai-stt/transcripts": {
       "get": {
-        "operationId": "list_transcripts_products_wd_stt_ai_transcripts_get",
+        "operationId": "list_transcripts_products_wasifyai_stt_transcripts_get",
         "parameters": [
           {
             "in": "query",
@@ -3983,14 +3983,14 @@
         },
         "summary": "List Transcripts",
         "tags": [
-          "wd-stt-ai"
+          "wasifyai-stt"
         ]
       }
     },
-    "/products/wd-stt-ai/transcripts/{transcript_id}": {
+    "/products/wasifyai-stt/transcripts/{transcript_id}": {
       "delete": {
         "description": "Delete a transcript (or dismiss a failed one). One still being made cannot be deleted.",
-        "operationId": "delete_transcript_products_wd_stt_ai_transcripts__transcript_id__delete",
+        "operationId": "delete_transcript_products_wasifyai_stt_transcripts__transcript_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -4019,11 +4019,11 @@
         },
         "summary": "Delete Transcript",
         "tags": [
-          "wd-stt-ai"
+          "wasifyai-stt"
         ]
       },
       "get": {
-        "operationId": "get_transcript_products_wd_stt_ai_transcripts__transcript_id__get",
+        "operationId": "get_transcript_products_wasifyai_stt_transcripts__transcript_id__get",
         "parameters": [
           {
             "in": "path",
@@ -4059,14 +4059,14 @@
         },
         "summary": "Get Transcript",
         "tags": [
-          "wd-stt-ai"
+          "wasifyai-stt"
         ]
       }
     },
-    "/products/wd-stt-ai/transcripts/{transcript_id}/download": {
+    "/products/wasifyai-stt/transcripts/{transcript_id}/download": {
       "get": {
         "description": "The transcript as a file the browser saves: plain text, SRT, WebVTT or JSON.",
-        "operationId": "download_products_wd_stt_ai_transcripts__transcript_id__download_get",
+        "operationId": "download_products_wasifyai_stt_transcripts__transcript_id__download_get",
         "parameters": [
           {
             "in": "path",
@@ -4116,13 +4116,13 @@
         },
         "summary": "Download",
         "tags": [
-          "wd-stt-ai"
+          "wasifyai-stt"
         ]
       }
     },
-    "/products/wd-tts-ai/speeches": {
+    "/products/wasifyai-tts/speeches": {
       "get": {
-        "operationId": "list_speeches_products_wd_tts_ai_speeches_get",
+        "operationId": "list_speeches_products_wasifyai_tts_speeches_get",
         "parameters": [
           {
             "in": "query",
@@ -4195,14 +4195,14 @@
         },
         "summary": "List Speeches",
         "tags": [
-          "wd-tts-ai"
+          "wasifyai-tts"
         ]
       }
     },
-    "/products/wd-tts-ai/speeches/{speech_id}": {
+    "/products/wasifyai-tts/speeches/{speech_id}": {
       "delete": {
         "description": "Delete a result: its file first, then the record.",
-        "operationId": "delete_speech_products_wd_tts_ai_speeches__speech_id__delete",
+        "operationId": "delete_speech_products_wasifyai_tts_speeches__speech_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -4231,11 +4231,11 @@
         },
         "summary": "Delete Speech",
         "tags": [
-          "wd-tts-ai"
+          "wasifyai-tts"
         ]
       },
       "get": {
-        "operationId": "get_speech_products_wd_tts_ai_speeches__speech_id__get",
+        "operationId": "get_speech_products_wasifyai_tts_speeches__speech_id__get",
         "parameters": [
           {
             "in": "path",
@@ -4271,14 +4271,14 @@
         },
         "summary": "Get Speech",
         "tags": [
-          "wd-tts-ai"
+          "wasifyai-tts"
         ]
       }
     },
-    "/products/wd-tts-ai/speeches/{speech_id}/download": {
+    "/products/wasifyai-tts/speeches/{speech_id}/download": {
       "get": {
         "description": "The speech as a file the browser saves (browsers ignore `download` on links to the\nstorage host, ADR-0034).",
-        "operationId": "download_products_wd_tts_ai_speeches__speech_id__download_get",
+        "operationId": "download_products_wasifyai_tts_speeches__speech_id__download_get",
         "parameters": [
           {
             "in": "path",
@@ -4312,14 +4312,14 @@
         },
         "summary": "Download",
         "tags": [
-          "wd-tts-ai"
+          "wasifyai-tts"
         ]
       }
     },
-    "/products/wd-tts-ai/voices": {
+    "/products/wasifyai-tts/voices": {
       "get": {
         "description": "The languages and voices the form offers: a gender with no voice is an empty list.",
-        "operationId": "list_voices_products_wd_tts_ai_voices_get",
+        "operationId": "list_voices_products_wasifyai_tts_voices_get",
         "responses": {
           "200": {
             "content": {
@@ -4334,13 +4334,13 @@
         },
         "summary": "List Voices",
         "tags": [
-          "wd-tts-ai"
+          "wasifyai-tts"
         ]
       }
     },
-    "/products/wd-video-ai/prompt/enhance": {
+    "/products/wasifyai-video/prompt/enhance": {
       "post": {
-        "operationId": "enhance_products_wd_video_ai_prompt_enhance_post",
+        "operationId": "enhance_products_wasifyai_video_prompt_enhance_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -4375,14 +4375,14 @@
         },
         "summary": "Enhance",
         "tags": [
-          "wd-video-ai",
-          "wd-video-ai"
+          "wasifyai-video",
+          "wasifyai-video"
         ]
       }
     },
-    "/products/wd-video-ai/videos": {
+    "/products/wasifyai-video/videos": {
       "get": {
-        "operationId": "list_videos_products_wd_video_ai_videos_get",
+        "operationId": "list_videos_products_wasifyai_video_videos_get",
         "parameters": [
           {
             "in": "query",
@@ -4476,14 +4476,14 @@
         },
         "summary": "List Videos",
         "tags": [
-          "wd-video-ai"
+          "wasifyai-video"
         ]
       }
     },
-    "/products/wd-video-ai/videos/{video_id}": {
+    "/products/wasifyai-video/videos/{video_id}": {
       "delete": {
         "description": "Delete a clip (or dismiss a failed one): its files first, then the record. A clip still\nbeing made cannot be deleted: its job is running.",
-        "operationId": "delete_video_products_wd_video_ai_videos__video_id__delete",
+        "operationId": "delete_video_products_wasifyai_video_videos__video_id__delete",
         "parameters": [
           {
             "in": "path",
@@ -4512,11 +4512,11 @@
         },
         "summary": "Delete Video",
         "tags": [
-          "wd-video-ai"
+          "wasifyai-video"
         ]
       },
       "get": {
-        "operationId": "get_video_products_wd_video_ai_videos__video_id__get",
+        "operationId": "get_video_products_wasifyai_video_videos__video_id__get",
         "parameters": [
           {
             "in": "path",
@@ -4552,14 +4552,14 @@
         },
         "summary": "Get Video",
         "tags": [
-          "wd-video-ai"
+          "wasifyai-video"
         ]
       }
     },
-    "/products/wd-video-ai/videos/{video_id}/download": {
+    "/products/wasifyai-video/videos/{video_id}/download": {
       "get": {
         "description": "The clip as a file the browser saves (browsers ignore `download` on links to the\nstorage host, ADR-0034).",
-        "operationId": "download_products_wd_video_ai_videos__video_id__download_get",
+        "operationId": "download_products_wasifyai_video_videos__video_id__download_get",
         "parameters": [
           {
             "in": "path",
@@ -4593,7 +4593,7 @@
         },
         "summary": "Download",
         "tags": [
-          "wd-video-ai"
+          "wasifyai-video"
         ]
       }
     },

@@ -5,8 +5,8 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
-from wd_api.creation_index import DIMENSIONS, CreationIndex, PostgresIndexStore
-from wd_platform_sdk import IndexItem
+from wasifyai_api.creation_index import DIMENSIONS, CreationIndex, PostgresIndexStore
+from wasifyai_platform_sdk import IndexItem
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ def unit(i: int) -> list[float]:
     return v
 
 
-def item(tenant, n, body, user="u1", kind="song", product="wd-music-ai"):
+def item(tenant, n, body, user="u1", kind="song", product="wasifyai-music"):
     return IndexItem(tenant, product, user, kind, f"it-{n}", body)
 
 
@@ -75,16 +75,16 @@ async def test_upsert_replaces_models_and_orphan_lookup_work(store):
     s, tenant = store
     await s.upsert(item(tenant, 1, "old"), "m1", unit(0))
     await s.upsert(item(tenant, 1, "new words"), "m2", unit(1))
-    assert await s.models("wd-music-ai", ["it-1", "it-9"]) == {"it-1": "m2"}
+    assert await s.models("wasifyai-music", ["it-1", "it-9"]) == {"it-1": "m2"}
     assert [h.item_id for h in await s.with_words(tenant, "u1", ["new"], None, 5)] == ["it-1"]
     await s.upsert(item(tenant, 2, "x"), "m2", unit(2))
-    ids = await s.ids_after("wd-music-ai", None, 100)
+    ids = await s.ids_after("wasifyai-music", None, 100)
     assert "it-1" in ids and "it-2" in ids and ids == sorted(ids)
-    after = await s.ids_after("wd-music-ai", "it-1", 100)
+    after = await s.ids_after("wasifyai-music", "it-1", 100)
     assert "it-1" not in after and "it-2" in after
-    await s.delete_ids("wd-music-ai", ["it-1"])
-    await s.delete(tenant, "wd-music-ai", "it-2")
-    assert await s.models("wd-music-ai", ["it-1", "it-2"]) == {}
+    await s.delete_ids("wasifyai-music", ["it-1"])
+    await s.delete(tenant, "wasifyai-music", "it-2")
+    assert await s.models("wasifyai-music", ["it-1", "it-2"]) == {}
 
 
 async def test_the_whole_index_with_a_scripted_embedder(store):
@@ -94,7 +94,7 @@ async def test_the_whole_index_with_a_scripted_embedder(store):
         return [unit(len(t) % 50) for t in texts]
 
     index = CreationIndex(s, embed, "m", min_similarity=0.5)
-    await index.index(tenant, "wd-image-ai", "u1", "image", "it-7", "a red fox")
+    await index.index(tenant, "wasifyai-image", "u1", "image", "it-7", "a red fox")
     hits, degraded = await index.search(tenant, "u1", "fox", None, 5)
     assert not degraded and [(h.item_id, h.match) for h in hits] == [("it-7", "words")]
 
@@ -119,9 +119,9 @@ async def tables(engine):
 
 
 async def test_the_sources_list_and_check_real_rows(engine, tables):
-    from wd_image_ai.index import ImageIndexSource
-    from wd_music_ai.index import SongIndexSource
-    from wd_video_ai.index import VideoIndexSource
+    from wasifyai_image.index import ImageIndexSource
+    from wasifyai_music.index import SongIndexSource
+    from wasifyai_video.index import VideoIndexSource
 
     tenant = tables
     ids = {k: str(uuid4()) for k in ("song", "image", "video", "working")}
@@ -129,7 +129,7 @@ async def test_the_sources_list_and_check_real_rows(engine, tables):
         await c.execute(
             text(
                 "INSERT INTO songs (id, tenant_id, product_id, user_id, title, lyrics, style, "
-                "audio_key) VALUES (:id, :t, 'wd-music-ai', 'u1', 'Lluvia', "
+                "audio_key) VALUES (:id, :t, 'wasifyai-music', 'u1', 'Lluvia', "
                 "'[verse]\nhola mundo', 'pop', 'k')"
             ),
             {"id": ids["song"], "t": tenant},
@@ -137,7 +137,7 @@ async def test_the_sources_list_and_check_real_rows(engine, tables):
         await c.execute(
             text(
                 "INSERT INTO images (id, tenant_id, product_id, user_id, mode, prompt, width, "
-                "height, image_key, thumb_key) VALUES (:id, :t, 'wd-image-ai', 'u1', 'text', "
+                "height, image_key, thumb_key) VALUES (:id, :t, 'wasifyai-image', 'u1', 'text', "
                 "'a red fox', 1, 1, 'k', 'k')"
             ),
             {"id": ids["image"], "t": tenant},
@@ -146,7 +146,7 @@ async def test_the_sources_list_and_check_real_rows(engine, tables):
             await c.execute(
                 text(
                     "INSERT INTO videos (id, tenant_id, product_id, user_id, mode, status, prompt, "
-                    "seconds, frames, fps) VALUES (:id, :t, 'wd-video-ai', 'u1', 'text', :s, "
+                    "seconds, frames, fps) VALUES (:id, :t, 'wasifyai-video', 'u1', 'text', :s, "
                     "'fox walks', 2, 49, 24)"
                 ),
                 {"id": ids[key], "t": tenant, "s": status},

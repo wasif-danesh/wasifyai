@@ -18,7 +18,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 # Models the stack needs, derived from the single source of truth (the API's model defaults).
 required_models() {
-  grep -vE '^[[:space:]]*#' "$ROOT/services/api/src/wd_api/model_defaults.yaml" | grep -oE '(ollama(_chat)?|openai)/[^[:space:]]+' | sed -E 's#^(ollama(_chat)?|openai)/##' | sort -u
+  grep -vE '^[[:space:]]*#' "$ROOT/services/api/src/wasifyai_api/model_defaults.yaml" | grep -oE '(ollama(_chat)?|openai)/[^[:space:]]+' | sed -E 's#^(ollama(_chat)?|openai)/##' | sort -u
 }
 
 ollama_up() { curl -fsS -m 3 "$OLLAMA_URL/api/tags" >/dev/null 2>&1; }

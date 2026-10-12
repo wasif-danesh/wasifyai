@@ -1,5 +1,5 @@
 // Turns the text to speech run's event stream into UI state. Pure: no fetch, no React, so it is tested against
-// recorded event sequences. See products/wd-tts-ai/README.md for the contract.
+// recorded event sequences. See products/wasifyai-tts/README.md for the contract.
 import type { ParsedEvent } from "./sse";
 
 export type Phase =

@@ -4,7 +4,7 @@ import { DeleteControls } from "@/components/create/shared";
 import { Button } from "@/components/ui/button";
 import { actions, eyebrow, panel } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import type { ImageSummary } from "@wd/contracts";
+import type { ImageSummary } from "@wasifyai/contracts";
 
 /** A saved image: the picture, its prompt, a download and a two-step delete. */
 export function ImageView({ image, when }: { image: ImageSummary; when: string }) {
@@ -26,11 +26,11 @@ export function ImageView({ image, when }: { image: ImageSummary; when: string }
         <p>{image.prompt}</p>
         <div className={actions}>
           <Button asChild>
-            <a href={`/api/products/wd-image-ai/images/${image.id}/download`} download>
+            <a href={`/api/products/wasifyai-image/images/${image.id}/download`} download>
               Download
             </a>
           </Button>
-          <DeleteControls url={`/api/products/wd-image-ai/images/${image.id}`} noun="image" />
+          <DeleteControls url={`/api/products/wasifyai-image/images/${image.id}`} noun="image" />
         </div>
       </div>
     </article>

@@ -12,7 +12,7 @@ export async function verifiedPrimaryEmail(
       headers: {
         authorization: `Bearer ${accessToken}`,
         accept: "application/vnd.github+json",
-        "user-agent": "wd-ai",
+        "user-agent": "wasifyai",
       },
       signal: AbortSignal.timeout(5000),
     });

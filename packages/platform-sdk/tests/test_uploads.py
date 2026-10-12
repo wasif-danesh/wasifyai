@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from PIL import Image
-from wd_platform_sdk import (
+from wasifyai_platform_sdk import (
     InMemoryUploadLimiter,
     InMemoryUploadStore,
     UploadError,

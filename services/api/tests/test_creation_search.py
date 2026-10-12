@@ -7,17 +7,17 @@ import time
 import jwt
 import pytest
 from fastapi.testclient import TestClient
-from wd_api.admin import InMemoryAdminStore
-from wd_api.config import get_settings
-from wd_api.creation_index import (
+from wasifyai_api.admin import InMemoryAdminStore
+from wasifyai_api.config import get_settings
+from wasifyai_api.creation_index import (
     ContextIndexer,
     CreationIndex,
     InMemoryIndexStore,
     like_patterns,
     query_words,
 )
-from wd_api.users import InMemoryUserStore
-from wd_platform_sdk import (
+from wasifyai_api.users import InMemoryUserStore
+from wasifyai_platform_sdk import (
     IndexItem,
     InMemoryUploadLimiter,
     InMemoryUsageRecorder,
@@ -48,7 +48,7 @@ def make_index(store=None, embed=fake_embed, floor=0.3, model="m1"):
     return CreationIndex(store or InMemoryIndexStore(), embed, model, floor)
 
 
-def item(n, text, user="u1", tenant="t1", kind="song", product="wd-music-ai"):
+def item(n, text, user="u1", tenant="t1", kind="song", product="wasifyai-music"):
     return IndexItem(tenant, product, user, kind, f"id-{n}", text)
 
 
@@ -61,7 +61,7 @@ async def fill(index, *items):
 
 
 def test_one_character_is_enough_in_chinese_japanese_and_korean_only():
-    from wd_api.creation_index import long_enough
+    from wasifyai_api.creation_index import long_enough
 
     assert not long_enough("a") and not long_enough(" a ") and long_enough("ab")
     assert long_enough("龙") and long_enough("の") and long_enough("カ") and long_enough("한")
@@ -111,7 +111,7 @@ async def test_search_never_crosses_users_or_tenants_and_can_filter_by_kind():
         item(1, "rain city", user="u1"),
         item(2, "rain city", user="u2"),
         item(3, "rain city", tenant="other"),
-        item(4, "rain city", kind="image", product="wd-image-ai"),
+        item(4, "rain city", kind="image", product="wasifyai-image"),
     )
     hits, _ = await index.search("t1", "u1", "rain city", None, 10)
     assert sorted(h.item_id for h in hits) == ["id-1", "id-4"]
@@ -125,7 +125,7 @@ async def test_limit_and_removal():
     await fill(index, *[item(n, f"rain {n}") for n in range(5)])
     hits, _ = await index.search("t1", "u1", "rain", None, 3)
     assert len(hits) == 3
-    await index.remove("t1", "wd-music-ai", "id-0")
+    await index.remove("t1", "wasifyai-music", "id-0")
     hits, _ = await index.search("t1", "u1", "rain", None, 10)
     assert "id-0" not in [h.item_id for h in hits]
 
@@ -152,14 +152,14 @@ async def test_indexing_the_same_item_again_replaces_it():
 async def test_the_context_indexer_indexes_for_the_user_of_the_run():
     store = InMemoryIndexStore()
     indexer = ContextIndexer(make_index(store))
-    token = set_context(RunContext("t9", "wd-image-ai", "u9", "run", "thread"))
+    token = set_context(RunContext("t9", "wasifyai-image", "u9", "run", "thread"))
     try:
         await indexer.index("image", "img-1", "a red fox")
     finally:
         reset_context(token)
     ((it, model, _),) = store.rows.values()
     assert (it.tenant_id, it.product_id, it.user_id, it.kind, it.item_id) == (
-        "t9", "wd-image-ai", "u9", "image", "img-1",
+        "t9", "wasifyai-image", "u9", "image", "img-1",
     )  # fmt: skip
     assert model == "m1"
 
@@ -168,7 +168,7 @@ async def test_the_context_indexer_indexes_for_the_user_of_the_run():
 
 
 async def test_index_creation_is_best_effort(tmp_path):
-    from wd_platform_sdk import ProviderDeps, build_capabilities, load_product_config
+    from wasifyai_platform_sdk import ProviderDeps, build_capabilities, load_product_config
 
     (tmp_path / "p").mkdir()
     (tmp_path / "p" / "product.yaml").write_text("id: p\ncapabilities: {}\n")
@@ -210,7 +210,7 @@ class Source:
 async def test_reconcile_backfills_missing_items_within_a_budget_and_finishes_later():
     store = InMemoryIndexStore()
     index = make_index(store)
-    src = Source("wd-music-ai", "song", [item(n, f"song number {n}") for n in range(5)])
+    src = Source("wasifyai-music", "song", [item(n, f"song number {n}") for n in range(5)])
     first = await index.reconcile([src], budget=3)
     assert first == {"embedded": 3, "removed": 0} and len(store.rows) == 3
     second = await index.reconcile([src], budget=3)
@@ -225,9 +225,9 @@ async def test_reconcile_removes_rows_whose_item_is_gone_and_skips_other_product
         index,
         item(1, "kept"),
         item(2, "deleted"),
-        item(9, "other", product="wd-image-ai", kind="image"),
+        item(9, "other", product="wasifyai-image", kind="image"),
     )
-    src = Source("wd-music-ai", "song", [item(1, "kept")])
+    src = Source("wasifyai-music", "song", [item(1, "kept")])
     assert await index.reconcile([src]) == {"embedded": 0, "removed": 1}
     assert sorted(k[2] for k in store.rows) == ["id-1", "id-9"]
 
@@ -236,7 +236,7 @@ async def test_reconcile_re_embeds_what_another_embedder_made():
     store = InMemoryIndexStore()
     await fill(make_index(store, model="old"), item(1, "words"))
     report = await make_index(store, model="new").reconcile(
-        [Source("wd-music-ai", "song", [item(1, "words")])]
+        [Source("wasifyai-music", "song", [item(1, "words")])]
     )
     assert report["embedded"] == 1 and next(iter(store.rows.values()))[1] == "new"
 
@@ -246,7 +246,7 @@ async def test_reconcile_stops_quietly_when_the_embedder_is_down():
         raise ConnectionError("down")
 
     index = make_index(embed=broken)
-    src = Source("wd-music-ai", "song", [item(n, "x y") for n in range(3)])
+    src = Source("wasifyai-music", "song", [item(n, "x y") for n in range(3)])
     assert await index.reconcile([src]) == {"embedded": 0, "removed": 0}
 
 
@@ -256,7 +256,7 @@ async def test_reconcile_stops_quietly_when_the_embedder_is_down():
 def token(sub="google:1", email="ann@example.com"):
     now = int(time.time())
     claims = {
-        "iss": "wd-web", "aud": "wd-api", "iat": now, "exp": now + 300,
+        "iss": "wasifyai-web", "aud": "wasifyai-api", "iat": now, "exp": now + 300,
         "sub": sub, "email": email, "email_verified": True,
     }  # fmt: skip
     return {"authorization": "Bearer " + jwt.encode(claims, SECRET, algorithm="HS256")}
@@ -302,7 +302,7 @@ def test_the_route_returns_ranked_references_and_counts_the_search(search_app):
                 user="dev-user",
                 tenant="dev-tenant",
                 kind="image",
-                product="wd-image-ai",
+                product="wasifyai-image",
             ),
             item(3, "rain in madrid", user="someone-else", tenant="dev-tenant"),
         )
@@ -312,7 +312,7 @@ def test_the_route_returns_ranked_references_and_counts_the_search(search_app):
     body = r.json()
     assert body["query"] == "rain madrid" and body["degraded"] is False
     assert [(h["kind"], h["product_id"], h["id"], h["match"]) for h in body["results"]] == [
-        ("song", "wd-music-ai", "id-1", "words")
+        ("song", "wasifyai-music", "id-1", "words")
     ]  # someone else's creation is never in the results
     only_images = search_app.get(
         "/creations/search", params={"q": "fox snow", "kind": "image"}
@@ -363,7 +363,7 @@ def test_searching_needs_a_signed_in_user(monkeypatch, tmp_path):
 
 
 def test_indexed_text_runs_together_as_sentences():
-    from wd_platform_sdk import search_text
+    from wasifyai_platform_sdk import search_text
 
     assert search_text("Lluvia", "pop.", "walking\nhome\n\nin the rain") == (
         "Lluvia. pop. walking home in the rain"

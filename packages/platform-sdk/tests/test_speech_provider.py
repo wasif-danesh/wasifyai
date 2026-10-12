@@ -1,7 +1,7 @@
 """The speech capability makes a job with no workflow graph (ADR-0042)."""
 
 import yaml
-from wd_platform_sdk import (
+from wasifyai_platform_sdk import (
     InMemoryJobSink,
     ProviderDeps,
     RunContext,

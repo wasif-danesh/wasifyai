@@ -6,9 +6,14 @@ from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
-from wd_api.graphs.hello import build_hello
-from wd_api.main import create_app
-from wd_platform_sdk import GraphRegistry, InMemoryEventLog, InMemoryRunStore, InMemoryUsageRecorder
+from wasifyai_api.graphs.hello import build_hello
+from wasifyai_api.main import create_app
+from wasifyai_platform_sdk import (
+    GraphRegistry,
+    InMemoryEventLog,
+    InMemoryRunStore,
+    InMemoryUsageRecorder,
+)
 
 
 def hello_registry() -> GraphRegistry:
@@ -142,7 +147,7 @@ def test_interrupt_and_resume(tmp_path):
 
 @pytest.fixture
 def media_client(tmp_path, usage):
-    from wd_platform_sdk import ScopedStorage, memory_storage, object_key
+    from wasifyai_platform_sdk import ScopedStorage, memory_storage, object_key
 
     d = tmp_path / "hello"
     d.mkdir()
@@ -194,7 +199,7 @@ def test_bad_media_keys_end_in_a_clean_error_event(media_client, key):
 
 
 def test_run_error_ends_the_run_with_its_own_clean_message(tmp_path):
-    from wd_platform_sdk import RunError
+    from wasifyai_platform_sdk import RunError
 
     def boom_graph(caps, checkpointer):
         def node(state):

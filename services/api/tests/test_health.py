@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from wd_api.main import app
+from wasifyai_api.main import app
 
 
 def test_health():

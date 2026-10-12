@@ -1,6 +1,6 @@
 # ADR-0054: LoRA training: dataset, captions, trainer service, publish
 
-- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wd-studio-ai`, in its own repository (`wd-studio-hub`); wd-ai does not implement it. Nothing here was built.
+- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wasifyai-art`, in its own repository (`wasifyai-art`); wasifyai does not implement it. Nothing here was built.
 - **Date:** 2026-10-12
 - **Depends on:** ADR-0051 (catalog, LoRA chain). Follows the pattern of ADR-0044 (an external native service) and
   ADR-0037 (a long job the user can leave).
@@ -22,7 +22,7 @@ later option, not a requirement. What is known from what was read, and what is n
 
 ## Decision
 
-- **A new product `wd-lora-ai`** (web area `/lora`) and a **new service `services/lora-trainer`**, shaped like
+- **A new product `wasifyai-lora-ai`** (web area `/lora`) and a **new service `services/lora-trainer`**, shaped like
   Lip Sync (ADR-0044): a small HTTP server run **natively on the Mac** (`scripts/lora-trainer-server.sh`, since a
   container cannot reach Metal), reached by the media worker at `TRAINER_SERVER_URL`. A CUDA container of the same
   server is the same code later. `TRAINER_MODE=stub|real`: stub writes a tiny valid placeholder LoRA and sample
@@ -84,7 +84,7 @@ On the 64 GB Mac, 15 synthetic or owned images, one family (`flux2-klein`):
 
 ## Consequences
 
-- New: product `wd-lora-ai`, service `services/lora-trainer` (script, Containerfile, stub), provider `trainer` and
+- New: product `wasifyai-lora-ai`, service `services/lora-trainer` (script, Containerfile, stub), provider `trainer` and
   verb `caps.lora.train`, `TRAINER_SERVER_URL`, `TRAINER_MODE`, `LORAS_DIR`, per-capability `timeout_s`, the
   `dataset_image` upload kind, four tables, a wizard UI, and a web area with a side panel entry.
 - A new service (a trainer with its own Python environment, several GB). CLAUDE.md says to ask before adding a

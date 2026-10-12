@@ -52,9 +52,10 @@
 | [0048](0048-monitoring-and-alerting.md) | Monitoring and alerting (Prometheus stack in cluster, Telegram, external heartbeat) | Accepted |
 | [0049](0049-data-inspection-tools.md) | Redis and Postgres viewers in every environment | Accepted |
 | [0050](0050-langfuse-llm-observability.md) | LLM observability, analytics and cost tracking with Langfuse | Accepted |
-| [0051](0051-model-catalog-variants-and-lora-chain.md) | Model catalog, capability variants and the LoRA chain | Withdrawn (moved to wd-studio-hub) |
-| [0052](0052-image-studio-loras-and-remix.md) | Image studio: base model, LoRAs, stored parameters and Remix | Withdrawn (moved to wd-studio-hub) |
-| [0053](0053-ai-tools-product.md) | AI Tools: a manifest-driven product, and Change Clothes | Withdrawn (moved to wd-studio-hub) |
-| [0054](0054-lora-training-product.md) | LoRA training: dataset, captions, trainer service, publish (Mac first) | Withdrawn (moved to wd-studio-hub) |
+| [0051](0051-model-catalog-variants-and-lora-chain.md) | Model catalog, capability variants and the LoRA chain | Withdrawn (moved to wasifyai-art) |
+| [0052](0052-image-studio-loras-and-remix.md) | Image studio: base model, LoRAs, stored parameters and Remix | Withdrawn (moved to wasifyai-art) |
+| [0053](0053-ai-tools-product.md) | AI Tools: a manifest-driven product, and Change Clothes | Withdrawn (moved to wasifyai-art) |
+| [0054](0054-lora-training-product.md) | LoRA training: dataset, captions, trainer service, publish (Mac first) | Withdrawn (moved to wasifyai-art) |
+| [0055](0055-rename-to-wasifyai.md) | Rename the project and every product from `wd-*` to `wasifyai` | Proposed |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

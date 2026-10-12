@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { fullDate } from "@/lib/format";
 import { actions, eyebrow, panel } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import type { VideoSummary } from "@wd/contracts";
+import type { VideoSummary } from "@wasifyai/contracts";
 import { useEffect, useState } from "react";
 
 const POLL_MS = 10_000;
@@ -20,7 +20,7 @@ export function VideoView({ initial }: { initial: VideoSummary }) {
     if (video.status !== "working") return;
     const timer = setInterval(async () => {
       try {
-        const res = await fetch(`/api/products/wd-video-ai/videos/${video.id}`);
+        const res = await fetch(`/api/products/wasifyai-video/videos/${video.id}`);
         if (res.ok) setVideo((await res.json()) as VideoSummary);
       } catch {
         // try again at the next tick
@@ -63,14 +63,14 @@ export function VideoView({ initial }: { initial: VideoSummary }) {
         <div className={actions}>
           {video.status === "done" ? (
             <Button asChild>
-              <a href={`/api/products/wd-video-ai/videos/${video.id}/download`} download>
+              <a href={`/api/products/wasifyai-video/videos/${video.id}/download`} download>
                 Download
               </a>
             </Button>
           ) : null}
           {video.status === "working" ? null : (
             <DeleteControls
-              url={`/api/products/wd-video-ai/videos/${video.id}`}
+              url={`/api/products/wasifyai-video/videos/${video.id}`}
               noun="video"
               label={video.status === "failed" ? "Remove" : "Delete"}
             />

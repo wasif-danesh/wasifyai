@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install the speech models into the speech server (Speaches) once: it downloads them on request, and
 # without them every text to speech and speech to text job answers "not found" (ADR-0042, ADR-0043).
-# The same list is in deploy/helm/wd-ai/values.yaml (speech.models) for the cluster.
+# The same list is in deploy/helm/wasifyai/values.yaml (speech.models) for the cluster.
 #
 # Usage: scripts/speech-models.sh [base_url]     (default http://localhost:8100, the Compose port)
 # Safe to run again: a model already installed is skipped by the server.

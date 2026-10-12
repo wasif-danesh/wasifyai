@@ -4,17 +4,17 @@ requires-python = ">=3.12"
 
 [manifest]
 members = [
-    "wd-ai",
-    "wd-api",
-    "wd-contracts",
-    "wd-image-ai",
-    "wd-lipsync-ai",
-    "wd-media-worker",
-    "wd-music-ai",
-    "wd-platform-sdk",
-    "wd-stt-ai",
-    "wd-tts-ai",
-    "wd-video-ai",
+    "wasifyai",
+    "wasifyai-api",
+    "wasifyai-contracts",
+    "wasifyai-image",
+    "wasifyai-lipsync",
+    "wasifyai-media-worker",
+    "wasifyai-music",
+    "wasifyai-platform-sdk",
+    "wasifyai-stt",
+    "wasifyai-tts",
+    "wasifyai-video",
 ]
 
 [[package]]
@@ -2049,6 +2049,293 @@ wheels = [
 ]
 
 [[package]]
+name = "wasifyai"
+version = "0.0.0"
+source = { virtual = "." }
+
+[package.dev-dependencies]
+dev = [
+    { name = "httpx" },
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pyright", specifier = ">=1.1.380" },
+    { name = "pytest", specifier = ">=8" },
+    { name = "pytest-asyncio", specifier = ">=0.24" },
+    { name = "ruff", specifier = ">=0.8" },
+]
+
+[[package]]
+name = "wasifyai-api"
+version = "0.0.0"
+source = { editable = "services/api" }
+dependencies = [
+    { name = "alembic" },
+    { name = "asyncpg" },
+    { name = "fastapi" },
+    { name = "langgraph" },
+    { name = "langgraph-checkpoint-postgres" },
+    { name = "openai" },
+    { name = "prometheus-client" },
+    { name = "psycopg", extra = ["binary", "pool"] },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "pyjwt" },
+    { name = "python-json-logger" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "uvicorn", extra = ["standard"] },
+    { name = "wasifyai-contracts" },
+    { name = "wasifyai-platform-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "alembic", specifier = ">=1.14" },
+    { name = "asyncpg", specifier = ">=0.30" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "langgraph", specifier = ">=0.6" },
+    { name = "langgraph-checkpoint-postgres", specifier = ">=2.0" },
+    { name = "openai", specifier = ">=1.50" },
+    { name = "prometheus-client", specifier = ">=0.21" },
+    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "pyjwt", specifier = ">=2.9" },
+    { name = "python-json-logger", specifier = ">=2.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+    { name = "wasifyai-contracts", editable = "packages/contracts" },
+    { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
+]
+
+[[package]]
+name = "wasifyai-contracts"
+version = "0.0.0"
+source = { editable = "packages/contracts" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.9" }]
+
+[[package]]
+name = "wasifyai-image"
+version = "0.0.0"
+source = { editable = "products/wasifyai-image" }
+dependencies = [
+    { name = "langgraph" },
+    { name = "pillow" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "wasifyai-platform-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "langgraph", specifier = ">=0.6" },
+    { name = "pillow", specifier = ">=10" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+    { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
+]
+
+[[package]]
+name = "wasifyai-lipsync"
+version = "0.0.0"
+source = { editable = "products/wasifyai-lipsync" }
+dependencies = [
+    { name = "imageio-ffmpeg" },
+    { name = "langgraph" },
+    { name = "pillow" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "wasifyai-platform-sdk" },
+    { name = "wasifyai-stt" },
+    { name = "wasifyai-tts" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "imageio-ffmpeg", specifier = ">=0.5" },
+    { name = "langgraph", specifier = ">=0.6" },
+    { name = "pillow", specifier = ">=10" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+    { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
+    { name = "wasifyai-stt", editable = "products/wasifyai-stt" },
+    { name = "wasifyai-tts", editable = "products/wasifyai-tts" },
+]
+
+[[package]]
+name = "wasifyai-media-worker"
+version = "0.0.0"
+source = { editable = "services/media-worker" }
+dependencies = [
+    { name = "httpx" },
+    { name = "numpy" },
+    { name = "prometheus-client" },
+    { name = "pydantic-settings" },
+    { name = "redis" },
+    { name = "wasifyai-contracts" },
+    { name = "wasifyai-platform-sdk" },
+    { name = "websockets" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "numpy", specifier = ">=1.26" },
+    { name = "prometheus-client", specifier = ">=0.21" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "redis", specifier = ">=5" },
+    { name = "wasifyai-contracts", editable = "packages/contracts" },
+    { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
+    { name = "websockets", specifier = ">=16.1.1" },
+]
+
+[[package]]
+name = "wasifyai-music"
+version = "0.0.0"
+source = { editable = "products/wasifyai-music" }
+dependencies = [
+    { name = "imageio-ffmpeg" },
+    { name = "langgraph" },
+    { name = "pillow" },
+    { name = "pydantic" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "wasifyai-platform-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "imageio-ffmpeg", specifier = ">=0.5" },
+    { name = "langgraph", specifier = ">=0.6" },
+    { name = "pillow", specifier = ">=10" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+    { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
+]
+
+[[package]]
+name = "wasifyai-platform-sdk"
+version = "0.0.0"
+source = { editable = "packages/platform-sdk" }
+dependencies = [
+    { name = "asyncpg" },
+    { name = "cryptography" },
+    { name = "fastapi" },
+    { name = "imageio-ffmpeg" },
+    { name = "langgraph" },
+    { name = "obstore" },
+    { name = "openai" },
+    { name = "pillow" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "redis" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "wasifyai-contracts" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncpg", specifier = ">=0.32.0" },
+    { name = "cryptography", specifier = ">=43" },
+    { name = "fastapi", specifier = ">=0.142.2" },
+    { name = "imageio-ffmpeg", specifier = ">=0.5" },
+    { name = "langgraph", specifier = ">=1.2.14" },
+    { name = "obstore", specifier = ">=0.11.1" },
+    { name = "openai", specifier = ">=3.26.0" },
+    { name = "pillow", specifier = ">=10" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6" },
+    { name = "redis", specifier = ">=8.1.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.1.3" },
+    { name = "wasifyai-contracts", editable = "packages/contracts" },
+]
+
+[[package]]
+name = "wasifyai-stt"
+version = "0.0.0"
+source = { editable = "products/wasifyai-stt" }
+dependencies = [
+    { name = "langgraph" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "wasifyai-platform-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "langgraph", specifier = ">=0.6" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+    { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
+]
+
+[[package]]
+name = "wasifyai-tts"
+version = "0.0.0"
+source = { editable = "products/wasifyai-tts" }
+dependencies = [
+    { name = "imageio-ffmpeg" },
+    { name = "langgraph" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "wasifyai-platform-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "imageio-ffmpeg", specifier = ">=0.5" },
+    { name = "langgraph", specifier = ">=0.6" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+    { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
+]
+
+[[package]]
+name = "wasifyai-video"
+version = "0.0.0"
+source = { editable = "products/wasifyai-video" }
+dependencies = [
+    { name = "imageio-ffmpeg" },
+    { name = "langgraph" },
+    { name = "pillow" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "wasifyai-platform-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "imageio-ffmpeg", specifier = ">=0.5" },
+    { name = "langgraph", specifier = ">=0.6" },
+    { name = "pillow", specifier = ">=10" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+    { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
+]
+
+[[package]]
 name = "watchfiles"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2085,293 +2372,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/25/9d/b9deb52f1e4528ffe44338c5ebab95c32ed79203082da661de50288e130a/watchfiles-1.3.0-cp314-cp314t-win32.whl", hash = "sha256:81c989d7267bfb7b676cd32c83bec97914e396870983cbf493e29415037bff5e", size = 270863, upload-time = "2026-09-21T09:08:46.518Z" },
     { url = "https://files.pythonhosted.org/packages/59/59/8b1881afccbafda06248be4185e28034dd73c80c85e4da24f2cb0c1321eb/watchfiles-1.3.0-cp314-cp314t-win_amd64.whl", hash = "sha256:d754e049006e81a9be49dc78ba7802081cee426e968cbc63ee19e164fa2d0e39", size = 286879, upload-time = "2026-09-21T09:08:47.874Z" },
     { url = "https://files.pythonhosted.org/packages/46/dd/41c12ae9745d5d72f709333287679d71cbba68ad7678fed872207bba94f4/watchfiles-1.3.0-cp314-cp314t-win_arm64.whl", hash = "sha256:a5b631db08fd3032db57ec6a92d1777cd60f88803287e4e941a4858c53aab1e0", size = 276924, upload-time = "2026-09-21T09:08:48.976Z" },
-]
-
-[[package]]
-name = "wd-ai"
-version = "0.0.0"
-source = { virtual = "." }
-
-[package.dev-dependencies]
-dev = [
-    { name = "httpx" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pyright", specifier = ">=1.1.380" },
-    { name = "pytest", specifier = ">=8" },
-    { name = "pytest-asyncio", specifier = ">=0.24" },
-    { name = "ruff", specifier = ">=0.8" },
-]
-
-[[package]]
-name = "wd-api"
-version = "0.0.0"
-source = { editable = "services/api" }
-dependencies = [
-    { name = "alembic" },
-    { name = "asyncpg" },
-    { name = "fastapi" },
-    { name = "langgraph" },
-    { name = "langgraph-checkpoint-postgres" },
-    { name = "openai" },
-    { name = "prometheus-client" },
-    { name = "psycopg", extra = ["binary", "pool"] },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "pyjwt" },
-    { name = "python-json-logger" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "uvicorn", extra = ["standard"] },
-    { name = "wd-contracts" },
-    { name = "wd-platform-sdk" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "alembic", specifier = ">=1.14" },
-    { name = "asyncpg", specifier = ">=0.30" },
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "langgraph", specifier = ">=0.6" },
-    { name = "langgraph-checkpoint-postgres", specifier = ">=2.0" },
-    { name = "openai", specifier = ">=1.50" },
-    { name = "prometheus-client", specifier = ">=0.21" },
-    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pydantic-settings", specifier = ">=2.6" },
-    { name = "pyjwt", specifier = ">=2.9" },
-    { name = "python-json-logger", specifier = ">=2.0" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
-    { name = "wd-contracts", editable = "packages/contracts" },
-    { name = "wd-platform-sdk", editable = "packages/platform-sdk" },
-]
-
-[[package]]
-name = "wd-contracts"
-version = "0.0.0"
-source = { editable = "packages/contracts" }
-dependencies = [
-    { name = "pydantic" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.9" }]
-
-[[package]]
-name = "wd-image-ai"
-version = "0.0.0"
-source = { editable = "products/wd-image-ai" }
-dependencies = [
-    { name = "langgraph" },
-    { name = "pillow" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "wd-platform-sdk" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "langgraph", specifier = ">=0.6" },
-    { name = "pillow", specifier = ">=10" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pyyaml", specifier = ">=6" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
-    { name = "wd-platform-sdk", editable = "packages/platform-sdk" },
-]
-
-[[package]]
-name = "wd-lipsync-ai"
-version = "0.0.0"
-source = { editable = "products/wd-lipsync-ai" }
-dependencies = [
-    { name = "imageio-ffmpeg" },
-    { name = "langgraph" },
-    { name = "pillow" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "wd-platform-sdk" },
-    { name = "wd-stt-ai" },
-    { name = "wd-tts-ai" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "imageio-ffmpeg", specifier = ">=0.5" },
-    { name = "langgraph", specifier = ">=0.6" },
-    { name = "pillow", specifier = ">=10" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pyyaml", specifier = ">=6" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
-    { name = "wd-platform-sdk", editable = "packages/platform-sdk" },
-    { name = "wd-stt-ai", editable = "products/wd-stt-ai" },
-    { name = "wd-tts-ai", editable = "products/wd-tts-ai" },
-]
-
-[[package]]
-name = "wd-media-worker"
-version = "0.0.0"
-source = { editable = "services/media-worker" }
-dependencies = [
-    { name = "httpx" },
-    { name = "numpy" },
-    { name = "prometheus-client" },
-    { name = "pydantic-settings" },
-    { name = "redis" },
-    { name = "wd-contracts" },
-    { name = "wd-platform-sdk" },
-    { name = "websockets" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "numpy", specifier = ">=1.26" },
-    { name = "prometheus-client", specifier = ">=0.21" },
-    { name = "pydantic-settings", specifier = ">=2.6" },
-    { name = "redis", specifier = ">=5" },
-    { name = "wd-contracts", editable = "packages/contracts" },
-    { name = "wd-platform-sdk", editable = "packages/platform-sdk" },
-    { name = "websockets", specifier = ">=16.1.1" },
-]
-
-[[package]]
-name = "wd-music-ai"
-version = "0.0.0"
-source = { editable = "products/wd-music-ai" }
-dependencies = [
-    { name = "imageio-ffmpeg" },
-    { name = "langgraph" },
-    { name = "pillow" },
-    { name = "pydantic" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "wd-platform-sdk" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "imageio-ffmpeg", specifier = ">=0.5" },
-    { name = "langgraph", specifier = ">=0.6" },
-    { name = "pillow", specifier = ">=10" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
-    { name = "wd-platform-sdk", editable = "packages/platform-sdk" },
-]
-
-[[package]]
-name = "wd-platform-sdk"
-version = "0.0.0"
-source = { editable = "packages/platform-sdk" }
-dependencies = [
-    { name = "asyncpg" },
-    { name = "cryptography" },
-    { name = "fastapi" },
-    { name = "imageio-ffmpeg" },
-    { name = "langgraph" },
-    { name = "obstore" },
-    { name = "openai" },
-    { name = "pillow" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-    { name = "redis" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "wd-contracts" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "asyncpg", specifier = ">=0.32.0" },
-    { name = "cryptography", specifier = ">=43" },
-    { name = "fastapi", specifier = ">=0.142.2" },
-    { name = "imageio-ffmpeg", specifier = ">=0.5" },
-    { name = "langgraph", specifier = ">=1.2.14" },
-    { name = "obstore", specifier = ">=0.11.1" },
-    { name = "openai", specifier = ">=3.26.0" },
-    { name = "pillow", specifier = ">=10" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pyyaml", specifier = ">=6" },
-    { name = "redis", specifier = ">=8.1.0" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.1.3" },
-    { name = "wd-contracts", editable = "packages/contracts" },
-]
-
-[[package]]
-name = "wd-stt-ai"
-version = "0.0.0"
-source = { editable = "products/wd-stt-ai" }
-dependencies = [
-    { name = "langgraph" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "wd-platform-sdk" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "langgraph", specifier = ">=0.6" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pyyaml", specifier = ">=6" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
-    { name = "wd-platform-sdk", editable = "packages/platform-sdk" },
-]
-
-[[package]]
-name = "wd-tts-ai"
-version = "0.0.0"
-source = { editable = "products/wd-tts-ai" }
-dependencies = [
-    { name = "imageio-ffmpeg" },
-    { name = "langgraph" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "wd-platform-sdk" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "imageio-ffmpeg", specifier = ">=0.5" },
-    { name = "langgraph", specifier = ">=0.6" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pyyaml", specifier = ">=6" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
-    { name = "wd-platform-sdk", editable = "packages/platform-sdk" },
-]
-
-[[package]]
-name = "wd-video-ai"
-version = "0.0.0"
-source = { editable = "products/wd-video-ai" }
-dependencies = [
-    { name = "imageio-ffmpeg" },
-    { name = "langgraph" },
-    { name = "pillow" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "wd-platform-sdk" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "imageio-ffmpeg", specifier = ">=0.5" },
-    { name = "langgraph", specifier = ">=0.6" },
-    { name = "pillow", specifier = ">=10" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pyyaml", specifier = ">=6" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
-    { name = "wd-platform-sdk", editable = "packages/platform-sdk" },
 ]
 
 [[package]]

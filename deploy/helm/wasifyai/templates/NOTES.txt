@@ -1,0 +1,9 @@
+wasifyai installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Web:   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Release.Name }}-web 3000:3000
+API:   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Release.Name }}-api 8000:8000
+{{- if .Values.ollama.enabled }}
+Ollama pulls its models on first start; watch: kubectl -n {{ .Release.Namespace }} logs deploy/{{ .Release.Name }}-ollama -f
+{{- end }}
+
+Requires Secret "{{ .Values.secrets.existingSecret }}" (see scripts/k8s-secrets.sh).

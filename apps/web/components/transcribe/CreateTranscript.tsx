@@ -9,7 +9,7 @@ import { TRANSCRIPT_STARTED_EVENT } from "@/hooks/use-activity";
 import { useTranscriptFlow } from "@/hooks/use-transcript-flow";
 import { clock } from "@/lib/format";
 import { actions, panel } from "@/lib/styles";
-import type { SpokenLanguages } from "@wd/contracts";
+import type { SpokenLanguages } from "@wasifyai/contracts";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { TranscribeForm, type TranscribeFormValue } from "./TranscribeForm";

@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 import yaml
-from wd_api.model_access import DEFAULTS_FILE
+from wasifyai_api.model_access import DEFAULTS_FILE
 
-VALUES = Path(__file__).resolve().parents[3] / "deploy" / "helm" / "wd-ai" / "values.yaml"
+VALUES = Path(__file__).resolve().parents[3] / "deploy" / "helm" / "wasifyai" / "values.yaml"
 
 
 def test_helm_pulls_exactly_the_ollama_models_the_defaults_use():

@@ -6,17 +6,17 @@ jobs:
     services:
       postgres:
         image: pgvector/pgvector:pg16
-        env: { POSTGRES_USER: wd, POSTGRES_PASSWORD: wd, POSTGRES_DB: wd }
+        env: { POSTGRES_USER: wasifyai, POSTGRES_PASSWORD: wasifyai, POSTGRES_DB: wasifyai }
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U wd" --health-interval 5s --health-timeout 5s --health-retries 10
+          --health-cmd "pg_isready -U wasifyai" --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: redis:7
         ports: ["6379:6379"]
         options: >-
           --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      DATABASE_URL: postgresql+asyncpg://wd:wd@localhost:5432/wd
+      DATABASE_URL: postgresql+asyncpg://wasifyai:wasifyai@localhost:5432/wasifyai
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -72,9 +72,9 @@ jobs:
       - run: ./scripts/kind-smoke.sh
       - if: failure()
         run: |
-          kubectl -n wd-ai get pods -o wide
-          kubectl -n wd-ai describe pods | tail -80
-          for d in api litellm web; do echo "--- $d"; kubectl -n wd-ai logs deploy/wd-ai-$d --tail=40 || true; done
+          kubectl -n wasifyai get pods -o wide
+          kubectl -n wasifyai describe pods | tail -80
+          for d in api litellm web; do echo "--- $d"; kubectl -n wasifyai logs deploy/wasifyai-$d --tail=40 || true; done
   images:
     if: github.ref == 'refs/heads/main'
     needs: [python, web, helm-kind]

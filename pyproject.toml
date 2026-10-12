@@ -1,5 +1,5 @@
 [project]
-name = "wd-ai"
+name = "wasifyai"
 version = "0.0.0"
 license = "Apache-2.0"
 requires-python = ">=3.12"
@@ -13,14 +13,14 @@ members = ["services/*", "packages/contracts", "packages/platform-sdk", "product
 exclude = ["products/hello", "products/media-demo", "services/speech-indic", "services/stt-indic", "services/lipsync-musetalk", "services/comfyui"]   # config-only samples; a container-only service
 
 [tool.uv.sources]
-wd-api = { workspace = true }
-wd-media-worker = { workspace = true }
-wd-contracts = { workspace = true }
-wd-platform-sdk = { workspace = true }
-wd-music-ai = { workspace = true }
-wd-stt-ai = { workspace = true }
-wd-tts-ai = { workspace = true }
-wd-lipsync-ai = { workspace = true }
+wasifyai-api = { workspace = true }
+wasifyai-media-worker = { workspace = true }
+wasifyai-contracts = { workspace = true }
+wasifyai-platform-sdk = { workspace = true }
+wasifyai-music = { workspace = true }
+wasifyai-stt = { workspace = true }
+wasifyai-tts = { workspace = true }
+wasifyai-lipsync = { workspace = true }
 
 [tool.ruff]
 line-length = 100
@@ -39,7 +39,7 @@ exclude = ["services/speech-indic", "services/stt-indic", "services/lipsync-muse
 typeCheckingMode = "standard"
 # Test helper modules (conftest, fake_comfyui) are imported by name; pytest puts their folders on
 # sys.path, so tell pyright too.
-extraPaths = ["products/wd-music-ai/tests", "products/wd-image-ai/tests", "products/wd-video-ai/tests", "products/wd-tts-ai/tests", "products/wd-stt-ai/tests", "products/wd-lipsync-ai/tests", "services/media-worker/tests"]
+extraPaths = ["products/wasifyai-music/tests", "products/wasifyai-image/tests", "products/wasifyai-video/tests", "products/wasifyai-tts/tests", "products/wasifyai-stt/tests", "products/wasifyai-lipsync/tests", "services/media-worker/tests"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

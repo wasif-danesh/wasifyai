@@ -1,5 +1,5 @@
 import pytest
-from wd_platform_sdk import ScopedStorage, s3_storage
+from wasifyai_platform_sdk import ScopedStorage, s3_storage
 
 
 async def test_s3_round_trip_with_presigned_url(storage_settings, run_ctx):

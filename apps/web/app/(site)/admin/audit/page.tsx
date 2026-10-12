@@ -3,7 +3,7 @@ import { AuditTable } from "@/components/admin/tables";
 import { TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { apiGet } from "@/lib/api";
 import { fullDate } from "@/lib/format";
-import type { AuditPage } from "@wd/contracts";
+import type { AuditPage } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Audit log" };

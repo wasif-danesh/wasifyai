@@ -12,7 +12,7 @@ picture plus an instruction ("image to image"). FLUX.2 klein 4B, already install
 
 ## Decision
 
-- **A new product, `wd-image-ai`**, with its own tenancy, usage and quota. Web area: `/image` (create),
+- **A new product, `wasifyai-image`**, with its own tenancy, usage and quota. Web area: `/image` (create),
   `/image/creations` (My images) and `/image/creations/{id}`; the home card goes live. The "Coming soon"
   page is retired.
 - **Two modes.** *Text to image*: a prompt and a size (1:1 1024x1024, 4:3 1152x864, 3:4 864x1152,
@@ -25,7 +25,7 @@ picture plus an instruction ("image to image"). FLUX.2 klein 4B, already install
   at `/admin/media` (ADR-0032). The `openai-images` backend gains `/images/edits` for the edit mode;
   Comfy Cloud for edits is unverified like the rest of that backend.
 - **Input images reach the backend by the job.** The graph passes `image_key`; the worker reads it from
-  storage and hands it to the backend: uploaded to ComfyUI's `temp` area as `wd-{job_id}.png` before the run (it never lands in
+  storage and hands it to the backend: uploaded to ComfyUI's `temp` area as `wasifyai-{job_id}.png` before the run (it never lands in
   ComfyUI's input folder; the API fills that name into the workflow, so the job id is fixed before the graph
   is built). The worker only reads keys under the user's own `uploads/` prefix, sent as
   multipart to `/images/edits`, or uploaded to Comfy Cloud.
@@ -60,7 +60,7 @@ picture plus an instruction ("image to image"). FLUX.2 klein 4B, already install
 
 - The workflows were run for real on the local ComfyUI, and the whole flow (upload, guardrail, job,
   result, deletion of the upload) was run end to end against the real worker.
-- The guardrail evaluation (`products/wd-image-ai/evals/`) uses only harmless synthetic pictures in git.
+- The guardrail evaluation (`products/wasifyai-image/evals/`) uses only harmless synthetic pictures in git.
   Unsafe picture categories can be measured with `--private-dir`, but have **not** been verified; treat
   the picture check as a first line of defence, not proven.
 - Not verified: Comfy Cloud and the OpenAI-compatible backend for edits.

@@ -12,7 +12,7 @@ server named in earlier docs is no longer obtainable.
 
 ## Decision
 
-- **Capability layer** (`wd_platform_sdk`): `caps.text.stream/complete/embed(name, ...)` and
+- **Capability layer** (`wasifyai_platform_sdk`): `caps.text.stream/complete/embed(name, ...)` and
   `caps.image|music|video.generate(**inputs)`. A provider registry maps `provider:` in
   `product.yaml` to an implementation: `litellm` (text and embeddings), `comfyui` (media) and
   `fake` (tests). The API builds one `Capabilities` per product at startup.
@@ -20,7 +20,7 @@ server named in earlier docs is no longer obtainable.
   run). Capabilities read it for usage events, job payloads and storage keys, so graph code
   cannot forget tenancy.
 - **Config:** `product.yaml`, then `product.<env>.yaml`, then env vars `<PRODUCT_ID>__<PATH>`
-  (e.g. `WD_MUSIC_AI__CAPABILITIES__MUSIC_GENERATE__WORKFLOW`). One Pydantic model validates the
+  (e.g. `WASIFYAI_MUSIC__CAPABILITIES__MUSIC_GENERATE__WORKFLOW`). One Pydantic model validates the
   result at startup and reports every problem at once, including missing workflow or map files
   and mapped node IDs absent from the workflow JSON. Unknown keys are rejected. Free-form
   product values live under `settings:`.

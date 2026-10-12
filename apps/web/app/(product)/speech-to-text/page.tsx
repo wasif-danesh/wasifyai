@@ -1,7 +1,7 @@
 import { Notice } from "@/components/Notice";
 import { CreateTranscript } from "@/components/transcribe/CreateTranscript";
 import { apiGet } from "@/lib/api";
-import type { SpokenLanguages } from "@wd/contracts";
+import type { SpokenLanguages } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Speech to Text" };
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function SpeechToTextPage() {
   let catalog: SpokenLanguages | null = null;
   try {
-    catalog = await apiGet<SpokenLanguages>("/products/wd-stt-ai/languages");
+    catalog = await apiGet<SpokenLanguages>("/products/wasifyai-stt/languages");
   } catch {
     // shown below
   }

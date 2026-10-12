@@ -110,7 +110,7 @@ export function CreateImage() {
                 {state.result.imageId ? (
                   <Button asChild>
                     <a
-                      href={`/api/products/wd-image-ai/images/${state.result.imageId}/download`}
+                      href={`/api/products/wasifyai-image/images/${state.result.imageId}/download`}
                       download
                     >
                       Download

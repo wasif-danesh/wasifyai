@@ -166,7 +166,7 @@ if [ "$TOOLS_ONLY" != "1" ]; then
       if confirm "Make Ollama listen on 0.0.0.0?"; then
         if has_systemd && systemctl list-unit-files 2>/dev/null | grep -q '^ollama'; then
           sudo mkdir -p /etc/systemd/system/ollama.service.d
-          printf '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0"\n' | sudo tee /etc/systemd/system/ollama.service.d/wd-ai.conf >/dev/null
+          printf '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0"\n' | sudo tee /etc/systemd/system/ollama.service.d/wasifyai.conf >/dev/null
           sudo systemctl daemon-reload && sudo systemctl restart ollama
         else
           pkill -f "ollama serve" 2>/dev/null || true; sleep 1
@@ -182,7 +182,7 @@ if [ "$TOOLS_ONLY" != "1" ]; then
   if [ "$PLATFORM" = "darwin" ]; then mem_gb=$(( $(sysctl -n hw.memsize) / 1073741824 ))
   else mem_gb=$(( $(awk '/MemTotal/{print $2}' /proc/meminfo) / 1048576 )); fi
   free_gb=$(df -Pk "$HOME" | awk 'NR==2{print int($4/1048576)}')
-  [ "$mem_gb" -ge 8 ] || warn "Only ${mem_gb} GB RAM: the default model (gemma4:e4b) needs about 8 GB and may be very slow or fail. Change the model in services/api/src/wd_api/model_defaults.yaml (or in the admin area once running) to use a smaller one."
+  [ "$mem_gb" -ge 8 ] || warn "Only ${mem_gb} GB RAM: the default model (gemma4:e4b) needs about 8 GB and may be very slow or fail. Change the model in services/api/src/wasifyai_api/model_defaults.yaml (or in the admin area once running) to use a smaller one."
   [ "$PLATFORM" = "darwin" ] && [ "$ARCH" = "x86_64" ] && warn "Intel Mac: Ollama runs CPU-only, so replies will be slow."
 
   for m in $(required_models); do

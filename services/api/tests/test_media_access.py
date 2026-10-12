@@ -4,19 +4,19 @@ import httpx
 import jwt
 import pytest
 from fastapi.testclient import TestClient
-from wd_api.admin import InMemoryAdminStore
-from wd_api.config import get_settings
-from wd_api.media_access import MediaAccess, MediaAccessError, MediaBindingIn, MediaCapability
-from wd_api.users import InMemoryUserStore
-from wd_platform_sdk import InMemoryMediaBindingStore, InMemoryUsageRecorder, SecretBox
+from wasifyai_api.admin import InMemoryAdminStore
+from wasifyai_api.config import get_settings
+from wasifyai_api.media_access import MediaAccess, MediaAccessError, MediaBindingIn, MediaCapability
+from wasifyai_api.users import InMemoryUserStore
+from wasifyai_platform_sdk import InMemoryMediaBindingStore, InMemoryUsageRecorder, SecretBox
 
 from tests.test_auth import SECRET
 from tests.test_runs import hello_registry, mem_app
 
 KEY = "comfyui-0123456789abcdef0123456789abcdef"
 CAPS = [
-    MediaCapability(product_id="wd-music-ai", capability="image.generate", workflow="flux2"),
-    MediaCapability(product_id="wd-music-ai", capability="music.generate", workflow="ace"),
+    MediaCapability(product_id="wasifyai-music", capability="image.generate", workflow="flux2"),
+    MediaCapability(product_id="wasifyai-music", capability="music.generate", workflow="ace"),
 ]
 
 
@@ -28,8 +28,8 @@ def make(ready=True, handler=None):
 
 
 T = "tenant"
-IMG = ("wd-music-ai", "image.generate")
-MUS = ("wd-music-ai", "music.generate")
+IMG = ("wasifyai-music", "image.generate")
+MUS = ("wasifyai-music", "music.generate")
 
 
 async def test_everything_starts_on_the_product_default():
@@ -130,7 +130,7 @@ async def test_a_key_is_refused_while_the_encryption_key_is_missing():
 async def test_unknown_capabilities_and_reset():
     media, store, _ = make()
     with pytest.raises(MediaAccessError, match="no media capability"):
-        await media.get(T, "wd-music-ai", "video.generate")
+        await media.get(T, "wasifyai-music", "video.generate")
     await media.set(T, *IMG, MediaBindingIn(backend="comfyui-local"), "a")
     view = await media.reset(T, *IMG)
     assert (view.backend, view.source) == ("comfyui-local", "default") and await store.get(
@@ -172,7 +172,7 @@ async def test_test_connection_uses_a_proposed_binding_or_the_saved_one_and_neve
 def _token(sub, email, verified):
     now = int(time.time())
     claims = {
-        "iss": "wd-web", "aud": "wd-api", "iat": now, "exp": now + 300,
+        "iss": "wasifyai-web", "aud": "wasifyai-api", "iat": now, "exp": now + 300,
         "sub": sub, "email": email, "email_verified": verified,
     }  # fmt: skip
     return "Bearer " + jwt.encode(claims, SECRET, algorithm="HS256")
@@ -205,7 +205,7 @@ def routes(monkeypatch, tmp_path):
     get_settings.cache_clear()
 
 
-PATH = "/admin/media/wd-music-ai/image.generate"
+PATH = "/admin/media/wasifyai-music/image.generate"
 
 
 def test_routes_are_for_admins_only(routes):
@@ -244,7 +244,8 @@ def test_the_audit_log_records_settings_but_never_the_key(routes):
     assert {"admin.media.update", "admin.media.test", "admin.media.reset"} <= set(entries)
     update = entries["admin.media.update"]
     assert (
-        update.target_id == "wd-music-ai/image.generate" and update.detail["key_provided"] is True
+        update.target_id == "wasifyai-music/image.generate"
+        and update.detail["key_provided"] is True
     )
     assert all(KEY not in e.model_dump_json() for e in routes.audit.entries)
 
@@ -263,6 +264,8 @@ def test_bad_input_is_422(routes, body):
 
 def test_unknown_capability_is_422(routes):
     r = routes.put(
-        "/admin/media/wd-music-ai/video.generate", json={"backend": "comfyui-local"}, headers=ADMIN
+        "/admin/media/wasifyai-music/video.generate",
+        json={"backend": "comfyui-local"},
+        headers=ADMIN,
     )
     assert r.status_code == 422

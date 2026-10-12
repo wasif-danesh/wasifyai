@@ -24,11 +24,11 @@ import { clock } from "@/lib/format";
 import type { Source } from "@/lib/lipsync-flow";
 import { actions, chips, field, fieldError, fieldLabel, hint, panel } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import type { LanguageChoice, VoiceCatalog, VoiceChoice } from "@wd/contracts";
+import type { LanguageChoice, VoiceCatalog, VoiceChoice } from "@wasifyai/contracts";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { Bar } from "../create/Progress";
 
-export const PRODUCT = "wd-lipsync-ai";
+export const PRODUCT = "wasifyai-lipsync";
 export const MAX_SCRIPT = 1000;
 export const MAX_STYLE = 120;
 /** A lip sync is at most 5 minutes (a song). It takes about six times as long as the clip. */

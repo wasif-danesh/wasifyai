@@ -5,8 +5,8 @@
 
 ## Context
 
-When a job seems stuck or a run ends oddly, the answer is in two places: the Redis streams (`wd:jobs`,
-`wd:done`, the per-run event streams, consumer groups and their pending entries) and the Postgres tables
+When a job seems stuck or a run ends oddly, the answer is in two places: the Redis streams (`wasifyai:jobs`,
+`wasifyai:done`, the per-run event streams, consumer groups and their pending entries) and the Postgres tables
 (LangGraph checkpoints, `runs`, `jobs`, `usage_events`, the product tables). Until now the only way in was
 `redis-cli` and `psql` through a port-forward. The owner wants a graphical Redis viewer and a Postgres viewer in
 **development, staging and production**.
@@ -30,7 +30,7 @@ Facts (checked 2026-10-10):
    proves not to work for staging or production.
 2. **Postgres: Adminer in the cluster**, one chart component `tools.postgresViewer`, off by default and switched
    on per environment by values only (rule 1). `ClusterIP` only, **no ingress in any environment**. A patched
-   version is pinned. It connects with a dedicated **read-only role** `wd_viewer` (`SELECT` only, created by a
+   version is pinned. It connects with a dedicated **read-only role** `wasifyai_viewer` (`SELECT` only, created by a
    migration). A write attempt fails in the database, not in the viewer. The same read-only role also works from a
    desktop SQL client over a port-forward, so Adminer is a convenience, not the only way.
 3. **Production is on demand.** Adminer is installed but at **zero replicas**. `make tools-up` scales it to one
@@ -43,7 +43,7 @@ Facts (checked 2026-10-10):
 
 ## Evaluation
 
-1. RedisInsight desktop, through a port-forward to the kind Redis, shows `wd:jobs`, its consumer group and pending
+1. RedisInsight desktop, through a port-forward to the kind Redis, shows `wasifyai:jobs`, its consumer group and pending
    entries while a job runs. The same procedure is written for staging (Tailscale) and the GCP test.
 2. On kind with the tools on: Adminer shows the tables, a write is refused, and nothing answers without
    credentials.
@@ -74,5 +74,5 @@ Facts (checked 2026-10-10):
 ## Docs to update
 
 `docs/environments.md`, `docs/configuration.md`, `README.md` and `scripts/urls.py` (the URL table; add the Redis
-desktop route), `docs/runbooks/monitoring.md` (a link), a migration for the `wd_viewer` role, and a short
+desktop route), `docs/runbooks/monitoring.md` (a link), a migration for the `wasifyai_viewer` role, and a short
 runbook "Looking inside Redis and Postgres".

@@ -3,7 +3,7 @@ import { ApiError, apiGet } from "@/lib/api";
 import { fullDate } from "@/lib/format";
 import { isUuid } from "@/lib/proxy";
 import { backLink } from "@/lib/styles";
-import type { ImageSummary } from "@wd/contracts";
+import type { ImageSummary } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -17,7 +17,7 @@ export default async function ImageDetail({ params }: Props) {
   if (!isUuid(id)) notFound();
   let image: ImageSummary;
   try {
-    image = await apiGet<ImageSummary>(`/products/wd-image-ai/images/${id}`);
+    image = await apiGet<ImageSummary>(`/products/wasifyai-image/images/${id}`);
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;

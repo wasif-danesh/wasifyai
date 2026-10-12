@@ -1,10 +1,10 @@
 import pytest
 from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import InMemorySaver
-from wd_api.graphs import default_registry
-from wd_api.graphs.hello import build_hello
-from wd_api.main import create_app
-from wd_platform_sdk import (
+from wasifyai_api.graphs import default_registry
+from wasifyai_api.graphs.hello import build_hello
+from wasifyai_api.main import create_app
+from wasifyai_platform_sdk import (
     ConfigError,
     GraphRegistry,
     InMemoryEventLog,
@@ -55,7 +55,7 @@ def test_every_product_route_requires_an_identity():
     from pathlib import Path
 
     from fastapi import HTTPException
-    from wd_api.identity import get_identity
+    from wasifyai_api.identity import get_identity
 
     products = Path(__file__).resolve().parents[3] / "products"
     app = create_app(
@@ -72,8 +72,11 @@ def test_every_product_route_requires_an_identity():
 
     app.dependency_overrides[get_identity] = nobody
     paths = app.openapi()["paths"]
-    mine = {p: ops for p, ops in paths.items() if p.startswith("/products/wd-music-ai/")}
-    assert "/products/wd-music-ai/songs" in mine and "/products/wd-music-ai/songs/{song_id}" in mine
+    mine = {p: ops for p, ops in paths.items() if p.startswith("/products/wasifyai-music/")}
+    assert (
+        "/products/wasifyai-music/songs" in mine
+        and "/products/wasifyai-music/songs/{song_id}" in mine
+    )
     with TestClient(app, raise_server_exceptions=False) as client:
         for path, ops in mine.items():
             for method in ops:

@@ -5,6 +5,6 @@ COPY pyproject.toml uv.lock* ./
 COPY services ./services
 COPY packages ./packages
 COPY products ./products
-RUN uv sync --frozen --no-dev --package wd-media-worker || uv sync --no-dev --package wd-media-worker
+RUN uv sync --frozen --no-dev --package wasifyai-media-worker || uv sync --no-dev --package wasifyai-media-worker
 ENV PATH="/app/.venv/bin:$PATH"
-CMD ["python", "-m", "wd_media_worker"]
+CMD ["python", "-m", "wasifyai_media_worker"]

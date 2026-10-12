@@ -14,7 +14,7 @@ import type { Mode } from "@/lib/video-flow";
 import { type FormEvent, useId, useState } from "react";
 
 export const MAX_PROMPT = 500;
-const PRODUCT = "wd-video-ai";
+const PRODUCT = "wasifyai-video";
 
 export const SHAPES = [
   { id: "landscape", label: "Landscape", hint: "3:2" },

@@ -11,7 +11,7 @@ export type DoneEvent = components["schemas"]["DoneEvent"];
 export type RunRequest = components["schemas"]["RunRequest"];
 export type ResumeRequest = components["schemas"]["ResumeRequest"];
 
-// wd-music-ai's read API (product-provided routes)
+// wasifyai-music's read API (product-provided routes)
 export type SongSummary = components["schemas"]["SongSummary"];
 export type SongDetail = components["schemas"]["SongDetail"];
 export type SongPage = components["schemas"]["SongPage"];
@@ -42,12 +42,12 @@ export type MediaField = components["schemas"]["FieldView"];
 export type MediaTestOutcome = components["schemas"]["MediaTestOutcome"];
 export type SafeguardsStatus = components["schemas"]["SafeguardsStatus"];
 
-// wd-image-ai's read API and the upload endpoint
+// wasifyai-image's read API and the upload endpoint
 export type ImageSummary = components["schemas"]["ImageSummary"];
 export type ImagePage = components["schemas"]["ImagePage"];
 export type UploadResult = components["schemas"]["UploadResult"];
 
-// wd-video-ai's read API and the prompt enhancer every product shares
+// wasifyai-video's read API and the prompt enhancer every product shares
 export type VideoSummary = components["schemas"]["VideoSummary"];
 export type VideoPage = components["schemas"]["VideoPage"];
 export type LipSyncSummary = components["schemas"]["LipSyncSummary"];
@@ -58,14 +58,14 @@ export type EnhanceResult = components["schemas"]["EnhanceOut"];
 export type SearchHit = components["schemas"]["SearchHit"];
 export type SearchResponse = components["schemas"]["SearchResponse"];
 
-// wd-tts-ai: the voice catalog and a user's speech results (ADR-0042)
+// wasifyai-tts: the voice catalog and a user's speech results (ADR-0042)
 export type SpeechSummary = components["schemas"]["SpeechSummary"];
 export type SpeechPage = components["schemas"]["SpeechPage"];
 export type VoiceCatalog = components["schemas"]["VoiceCatalog"];
 export type LanguageChoice = components["schemas"]["LanguageChoice"];
 export type VoiceChoice = components["schemas"]["VoiceChoice"];
 
-// wd-stt-ai: the languages to choose from and a user's transcripts (ADR-0043)
+// wasifyai-stt: the languages to choose from and a user's transcripts (ADR-0043)
 export type SpokenLanguages = components["schemas"]["LanguageCatalog"];
 export type SpokenLanguage = components["schemas"]["SpokenLanguage"];
 export type TranscriptSummary = components["schemas"]["TranscriptSummary"];

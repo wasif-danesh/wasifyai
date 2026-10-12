@@ -3,7 +3,7 @@ import { DailyEventsTable, UsageTotalsTable } from "@/components/admin/tables";
 import { TextLink } from "@/components/ui/text-link";
 import { apiGet } from "@/lib/api";
 import { pager } from "@/lib/styles";
-import type { UsageReport } from "@wd/contracts";
+import type { UsageReport } from "@wasifyai/contracts";
 
 export const dynamic = "force-dynamic";
 

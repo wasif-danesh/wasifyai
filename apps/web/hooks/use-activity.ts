@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export const POLL_MS = 10_000; // a clip or a transcript takes minutes: there is no need to ask faster
 export const BURST_MS = 3_000; // right after one starts, until its row shows up
 export const BURST_FOR_MS = 45_000;
-export const TRANSCRIPT_STARTED_EVENT = "wd:transcript-started";
+export const TRANSCRIPT_STARTED_EVENT = "wasifyai:transcript-started";
 
 type Item = { id: string; status: string; error?: string | null };
 

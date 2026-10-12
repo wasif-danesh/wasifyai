@@ -18,7 +18,7 @@ function Harness(props: { start?: string; needsPicture?: boolean; uploadId?: str
     <>
       <output aria-label="text">{value}</output>
       <EnhanceButton
-        product="wd-image-ai"
+        product="wasifyai-image"
         kind="text_to_image"
         value={value}
         needsPicture={props.needsPicture}
@@ -40,7 +40,7 @@ describe("EnhanceButton", () => {
       expect(screen.getByLabelText("text")).toHaveTextContent("A red fox in snow."),
     );
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/api/products/wd-image-ai/prompt/enhance");
+    expect(url).toBe("/api/products/wasifyai-image/prompt/enhance");
     expect(JSON.parse(init.body as string)).toEqual({
       kind: "text_to_image",
       prompt: "a fox",

@@ -5,7 +5,7 @@
 
 ## Context
 
-`wd-music-ai` turns an idea into lyrics, a track and cover art. Its product rules make the
+`wasifyai-music` turns an idea into lyrics, a track and cover art. Its product rules make the
 guardrail mandatory (no artist-voice imitation, no reproduced lyrics, no disallowed content) and
 require the quota to be checked before GPU work. ADR-0018 left open whether `gemma4:e4b` is good
 enough for that guardrail or whether the moderator needs `gemma4:12b`.
@@ -39,7 +39,7 @@ enough for that guardrail or whether the moderator needs `gemma4:12b`.
 
 Cases: 26 legitimate requests (dark, political, sad, other languages, artists named only as a
 topic), 10 artist-voice, 8 reproduced-lyrics, 12 disallowed content, 6 prompt-injection attempts,
-and lyrics and cover-art screening. The set is in `products/wd-music-ai/evals/`.
+and lyrics and cover-art screening. The set is in `products/wasifyai-music/evals/`.
 
 | Moderator | Wrongly allowed | Wrongly refused | Answers that varied | Time per verdict |
 |---|---|---|---|---|
@@ -65,7 +65,7 @@ section tags before retries. That is why validation and retry exist.
 - **Limits of the evidence.** The cases were written by the author of the prompt, in English
   (plus one Spanish), and are few. This is not red-teaming. Before a public launch, evaluate with
   cases from outside the team, in more languages, and re-run it whenever the prompt or model changes
-  (`products/wd-music-ai/evals/run_guardrail_eval.py`; exits non-zero on a false allow).
+  (`products/wasifyai-music/evals/run_guardrail_eval.py`; exits non-zero on a false allow).
 - Thinking costs about 2 s per screen, three screens per song, all before or between GPU jobs.
 - The ACE-Step and FLUX.2 workflows are structure-validated against ComfyUI but not executed (the
   models are not installed); the map files say so.

@@ -44,7 +44,7 @@ What the project documents, and what it does **not** say:
 
 ## Decision
 
-- **A new product, `wd-lipsync-ai`,** built like the video product: a row with `status = working`, the user can
+- **A new product, `wasifyai-lipsync`,** built like the video product: a row with `status = working`, the user can
   leave, the same badge and notice, a "Lip syncs" kind in My creations. Web area `/lip-sync` and
   `/lip-sync/creations/{id}`. The Coming-soon card and page stay until it is accepted and built.
 - **Inputs.** (1) A character image (PNG, JPEG or WebP, up to 10 MB, one face). (2) A voice, in one of three ways:
@@ -162,7 +162,7 @@ seconds, sharing or a public gallery, and translating a voice into another langu
 
 Built as designed, with these differences, all small and recorded here:
 
-- The product is `wd-lipsync-ai`; the table is `lipsyncs` (migration 0016: 0015 became the system settings table of ADR-0047).
+- The product is `wasifyai-lipsync`; the table is `lipsyncs` (migration 0016: 0015 became the system settings table of ADR-0047).
 - It takes the **voice as a script or as an audio file or recording** and a **style hint**; the **Enhance button is not
   built** for the hint (it is short and optional).
 - **Safeguards follow the owner's switch** (ADR-0047): off on local and staging, forced on in production. This covers the

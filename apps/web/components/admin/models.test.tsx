@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ModelView, ProviderView } from "@wd/contracts";
+import type { ModelView, ProviderView } from "@wasifyai/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiSend = vi.fn();

@@ -1,0 +1,16 @@
+# Home lab k3s (Debian/Ubuntu host). Overlay on top of values/staging.yaml.
+ingress:
+  enabled: true
+  className: traefik         # bundled with k3s
+  host: wasifyai.home.arpa      # change to your Tailscale MagicDNS name or LAN host
+
+ollama:
+  enabled: true
+  storageClass: local-path   # k3s default provisioner
+  storage: 20Gi
+  # Phase 4 (GPU): after the NVIDIA GPU Operator is installed, uncomment.
+  # gpuResources: { nvidia.com/gpu: 1 }
+  # tolerations: [{ key: nvidia.com/gpu, operator: Exists, effect: NoSchedule }]
+
+postgres:
+  storageClass: local-path

@@ -1,4 +1,4 @@
-import type { Me } from "@wd/contracts";
+import type { Me } from "@wasifyai/contracts";
 import { apiGet } from "./api";
 
 /** Who the API thinks the caller is; null when the API cannot be reached or says no. */

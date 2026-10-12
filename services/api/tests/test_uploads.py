@@ -4,9 +4,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
-from wd_api.config import get_settings
-from wd_api.uploads import sweep_uploads
-from wd_platform_sdk import (
+from wasifyai_api.config import get_settings
+from wasifyai_api.uploads import sweep_uploads
+from wasifyai_platform_sdk import (
     InMemoryUploadLimiter,
     InMemoryUploadStore,
     InMemoryUsageRecorder,

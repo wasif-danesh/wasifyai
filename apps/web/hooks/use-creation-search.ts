@@ -10,7 +10,7 @@ import type {
   SpeechPage,
   TranscriptPage,
   VideoPage,
-} from "@wd/contracts";
+} from "@wasifyai/contracts";
 import { useEffect, useState } from "react";
 
 export const DEBOUNCE_MS = 300;
@@ -47,25 +47,28 @@ async function cards(response: SearchResponse, signal: AbortSignal): Promise<Ent
       .join(",");
   const [songs, images, videos, speeches, transcripts, lipsyncs] = await Promise.all([
     by("song").length
-      ? getJson<SongPage>(`/api/products/wd-music-ai/songs?ids=${ids("song")}`, signal)
+      ? getJson<SongPage>(`/api/products/wasifyai-music/songs?ids=${ids("song")}`, signal)
       : null,
     by("image").length
-      ? getJson<ImagePage>(`/api/products/wd-image-ai/images?ids=${ids("image")}`, signal)
+      ? getJson<ImagePage>(`/api/products/wasifyai-image/images?ids=${ids("image")}`, signal)
       : null,
     by("video").length
-      ? getJson<VideoPage>(`/api/products/wd-video-ai/videos?ids=${ids("video")}`, signal)
+      ? getJson<VideoPage>(`/api/products/wasifyai-video/videos?ids=${ids("video")}`, signal)
       : null,
     by("speech").length
-      ? getJson<SpeechPage>(`/api/products/wd-tts-ai/speeches?ids=${ids("speech")}`, signal)
+      ? getJson<SpeechPage>(`/api/products/wasifyai-tts/speeches?ids=${ids("speech")}`, signal)
       : null,
     by("transcript").length
       ? getJson<TranscriptPage>(
-          `/api/products/wd-stt-ai/transcripts?ids=${ids("transcript")}`,
+          `/api/products/wasifyai-stt/transcripts?ids=${ids("transcript")}`,
           signal,
         )
       : null,
     by("lipsync").length
-      ? getJson<LipSyncPage>(`/api/products/wd-lipsync-ai/lipsyncs?ids=${ids("lipsync")}`, signal)
+      ? getJson<LipSyncPage>(
+          `/api/products/wasifyai-lipsync/lipsyncs?ids=${ids("lipsync")}`,
+          signal,
+        )
       : null,
   ]);
   const found = new Map<string, Entry>();

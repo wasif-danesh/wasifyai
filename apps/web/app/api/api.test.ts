@@ -41,7 +41,7 @@ describe("song downloads", () => {
     const res = await downloadGET(
       new Request("http://web/x"),
       params({
-        productId: "wd-music-ai",
+        productId: "wasifyai-music",
         songId: "3f2b8c1e-0000-4000-8000-000000000001",
         kind: "video",
       }),
@@ -64,10 +64,12 @@ describe("song downloads", () => {
       }),
     );
     const res = await downloadGET(
-      new Request(`http://web/api/products/wd-music-ai/songs/${id}/download/audio`),
-      params({ productId: "wd-music-ai", songId: id, kind: "audio" }),
+      new Request(`http://web/api/products/wasifyai-music/songs/${id}/download/audio`),
+      params({ productId: "wasifyai-music", songId: id, kind: "audio" }),
     );
-    expect(upstreamUrl()).toMatch(new RegExp(`/products/wd-music-ai/songs/${id}/download/audio$`));
+    expect(upstreamUrl()).toMatch(
+      new RegExp(`/products/wasifyai-music/songs/${id}/download/audio$`),
+    );
     expect(res.headers.get("content-disposition")).toBe('attachment; filename="neon-rain.mp3"');
     expect(res.headers.get("content-type")).toBe("audio/mpeg");
     expect(res.headers.get("cache-control")).toBe("private, no-store");
@@ -82,7 +84,7 @@ describe("song downloads", () => {
   ])("rejects kind %j for song %j before calling the API", async (kind, songId) => {
     const res = await downloadGET(
       new Request("http://web/x"),
-      params({ productId: "wd-music-ai", songId, kind }),
+      params({ productId: "wasifyai-music", songId, kind }),
     );
     expect(res.status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -101,8 +103,8 @@ describe("without a session", () => {
     vi.doMock("@/auth", () => ({ auth: async () => null }));
     const { GET } = await import("./products/[productId]/songs/route");
     const res = await GET(
-      new Request("http://web/api/products/wd-music-ai/songs"),
-      params({ productId: "wd-music-ai" }),
+      new Request("http://web/api/products/wasifyai-music/songs"),
+      params({ productId: "wasifyai-music" }),
     );
     expect(res.status).toBe(401);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -113,13 +115,13 @@ describe("start a run", () => {
   it("forwards the body to the API and streams the events back unchanged", async () => {
     fetchMock.mockResolvedValueOnce(sse([["token", { node: "write_lyrics", text: "hi" }]]));
     const res = await runsPOST(
-      new Request("http://web/api/products/wd-music-ai/runs", {
+      new Request("http://web/api/products/wasifyai-music/runs", {
         method: "POST",
         body: '{"input":{"idea":"x"}}',
       }),
-      params({ productId: "wd-music-ai" }),
+      params({ productId: "wasifyai-music" }),
     );
-    expect(upstreamUrl()).toMatch(/\/products\/wd-music-ai\/runs$/);
+    expect(upstreamUrl()).toMatch(/\/products\/wasifyai-music\/runs$/);
     expect(upstreamInit().method).toBe("POST");
     expect(upstreamInit().body).toBe('{"input":{"idea":"x"}}');
     expect(res.headers.get("content-type")).toMatch(/text\/event-stream/);
@@ -127,7 +129,7 @@ describe("start a run", () => {
     expect(await res.text()).toContain("event: token");
   });
 
-  it.each(["../admin", "A B", "wd music", "", "x".repeat(80)])(
+  it.each(["../admin", "A B", "wasifyai music", "", "x".repeat(80)])(
     "rejects the product id %j before calling the API",
     async (id) => {
       const res = await runsPOST(
@@ -200,21 +202,24 @@ describe("songs", () => {
     fetchMock.mockResolvedValueOnce(Response.json({ songs: [], next_before: null }));
     const res = await songsGET(
       new Request("http://web/api/x?limit=5&before=2026-10-08T00:00:00Z"),
-      params({ productId: "wd-music-ai" }),
+      params({ productId: "wasifyai-music" }),
     );
     expect(upstreamUrl()).toMatch(
-      /\/products\/wd-music-ai\/songs\?limit=5&before=2026-10-08T00:00:00Z$/,
+      /\/products\/wasifyai-music\/songs\?limit=5&before=2026-10-08T00:00:00Z$/,
     );
     expect(await res.json()).toEqual({ songs: [], next_before: null });
   });
 
   it("fetches one song by id, and refuses ids that are not UUIDs", async () => {
     fetchMock.mockResolvedValueOnce(Response.json({ id: RUN }));
-    await songGET(new Request("http://web/x"), params({ productId: "wd-music-ai", songId: RUN }));
+    await songGET(
+      new Request("http://web/x"),
+      params({ productId: "wasifyai-music", songId: RUN }),
+    );
     expect(upstreamUrl()).toMatch(new RegExp(`/songs/${RUN}$`));
     const bad = await songGET(
       new Request("http://web/x"),
-      params({ productId: "wd-music-ai", songId: "../runs" }),
+      params({ productId: "wasifyai-music", songId: "../runs" }),
     );
     expect(bad.status).toBe(400);
   });
@@ -229,10 +234,10 @@ describe("images and uploads", () => {
         headers: { "content-type": "image/png" },
         body: new Uint8Array([1, 2, 3]),
       }),
-      params({ productId: "wd-image-ai" }),
+      params({ productId: "wasifyai-image" }),
     );
     expect(res.status).toBe(200);
-    expect(upstreamUrl()).toMatch(/\/products\/wd-image-ai\/uploads\/images$/);
+    expect(upstreamUrl()).toMatch(/\/products\/wasifyai-image\/uploads\/images$/);
     expect(new Headers(upstreamInit().headers).get("content-type")).toBe("image/png");
   });
 
@@ -243,7 +248,7 @@ describe("images and uploads", () => {
         headers: { "content-length": String(100 * 1024 * 1024) },
         body: "x",
       }),
-      params({ productId: "wd-image-ai" }),
+      params({ productId: "wasifyai-image" }),
     );
     expect(res.status).toBe(413);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -251,17 +256,20 @@ describe("images and uploads", () => {
 
   it("gets and deletes an image by id and refuses ids that are not UUIDs", async () => {
     fetchMock.mockResolvedValueOnce(Response.json({ id: RUN }));
-    await imageGET(new Request("http://web/x"), params({ productId: "wd-image-ai", imageId: RUN }));
+    await imageGET(
+      new Request("http://web/x"),
+      params({ productId: "wasifyai-image", imageId: RUN }),
+    );
     expect(upstreamUrl()).toMatch(new RegExp(`/images/${RUN}$`));
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
     await imageDELETE(
       new Request("http://web/x", { method: "DELETE" }),
-      params({ productId: "wd-image-ai", imageId: RUN }),
+      params({ productId: "wasifyai-image", imageId: RUN }),
     );
     expect(upstreamInit().method).toBe("DELETE");
     const bad = await imageGET(
       new Request("http://web/x"),
-      params({ productId: "wd-image-ai", imageId: "../x" }),
+      params({ productId: "wasifyai-image", imageId: "../x" }),
     );
     expect(bad.status).toBe(400);
   });
@@ -277,7 +285,7 @@ describe("images and uploads", () => {
     );
     const res = await imageDownloadGET(
       new Request("http://web/x"),
-      params({ productId: "wd-image-ai", imageId: RUN }),
+      params({ productId: "wasifyai-image", imageId: RUN }),
     );
     expect(res.headers.get("content-disposition")).toBe('attachment; filename="a.png"');
     expect(await res.text()).toBe("PNG");
@@ -287,14 +295,14 @@ describe("images and uploads", () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
     const res = await uploadDELETE(
       new Request("http://web/x", { method: "DELETE" }),
-      params({ productId: "wd-image-ai", uploadId: RUN }),
+      params({ productId: "wasifyai-image", uploadId: RUN }),
     );
     expect(res.status).toBe(204);
     expect(upstreamUrl()).toMatch(new RegExp(`/uploads/images/${RUN}$`));
     expect(upstreamInit().method).toBe("DELETE");
     const bad = await uploadDELETE(
       new Request("http://web/x", { method: "DELETE" }),
-      params({ productId: "wd-image-ai", uploadId: "../x" }),
+      params({ productId: "wasifyai-image", uploadId: "../x" }),
     );
     expect(bad.status).toBe(400);
   });
@@ -306,14 +314,14 @@ describe("images and uploads", () => {
         method: "POST",
         body: JSON.stringify({ kind: "text_to_image", prompt: "fox", upload_id: null }),
       }),
-      params({ productId: "wd-image-ai" }),
+      params({ productId: "wasifyai-image" }),
     );
     expect(await res.json()).toEqual({ prompt: "A fox.", changed: true });
-    expect(upstreamUrl()).toMatch(/\/products\/wd-image-ai\/prompt\/enhance$/);
+    expect(upstreamUrl()).toMatch(/\/products\/wasifyai-image\/prompt\/enhance$/);
     expect(JSON.parse(upstreamInit().body as string).kind).toBe("text_to_image");
     const huge = await enhancePOST(
       new Request("http://web/x", { method: "POST", body: "x".repeat(30_000) }),
-      params({ productId: "wd-image-ai" }),
+      params({ productId: "wasifyai-image" }),
     );
     expect(huge.status).toBe(400);
   });
@@ -322,16 +330,19 @@ describe("images and uploads", () => {
     fetchMock.mockResolvedValueOnce(Response.json({ videos: [], next_before: null }));
     await videosGET(
       new Request("http://web/x?status=working&limit=5"),
-      params({ productId: "wd-video-ai" }),
+      params({ productId: "wasifyai-video" }),
     );
-    expect(upstreamUrl()).toMatch(/\/products\/wd-video-ai\/videos\?status=working&limit=5$/);
+    expect(upstreamUrl()).toMatch(/\/products\/wasifyai-video\/videos\?status=working&limit=5$/);
     fetchMock.mockResolvedValueOnce(Response.json({ id: RUN }));
-    await videoGET(new Request("http://web/x"), params({ productId: "wd-video-ai", videoId: RUN }));
+    await videoGET(
+      new Request("http://web/x"),
+      params({ productId: "wasifyai-video", videoId: RUN }),
+    );
     expect(upstreamUrl()).toMatch(new RegExp(`/videos/${RUN}$`));
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
     await videoDELETE(
       new Request("http://web/x", { method: "DELETE" }),
-      params({ productId: "wd-video-ai", videoId: RUN }),
+      params({ productId: "wasifyai-video", videoId: RUN }),
     );
     expect(upstreamInit().method).toBe("DELETE");
     fetchMock.mockResolvedValueOnce(
@@ -344,13 +355,13 @@ describe("images and uploads", () => {
     );
     const res = await videoDownloadGET(
       new Request("http://web/x"),
-      params({ productId: "wd-video-ai", videoId: RUN }),
+      params({ productId: "wasifyai-video", videoId: RUN }),
     );
     expect(res.headers.get("content-disposition")).toBe('attachment; filename="a.mp4"');
     expect(upstreamUrl()).toMatch(/\/download$/);
     const bad = await videoGET(
       new Request("http://web/x"),
-      params({ productId: "wd-video-ai", videoId: "../x" }),
+      params({ productId: "wasifyai-video", videoId: "../x" }),
     );
     expect(bad.status).toBe(400);
   });

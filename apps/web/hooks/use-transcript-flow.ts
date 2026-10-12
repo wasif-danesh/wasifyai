@@ -11,8 +11,8 @@ import {
 } from "@/lib/transcript-flow";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 
-export const TRANSCRIBE_PRODUCT = "wd-stt-ai";
-const STORAGE_KEY = "wd-stt-ai:run";
+export const TRANSCRIBE_PRODUCT = "wasifyai-stt";
+const STORAGE_KEY = "wasifyai-stt:run";
 const MAX_RECONNECTS = 6;
 
 /** `audioKey` is the key of a recording already uploaded; `language` is a code, or "auto" to detect it. */

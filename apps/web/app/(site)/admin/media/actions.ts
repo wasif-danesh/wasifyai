@@ -1,7 +1,7 @@
 "use server";
 
 import { apiSend } from "@/lib/api";
-import type { MediaTestOutcome } from "@wd/contracts";
+import type { MediaTestOutcome } from "@wasifyai/contracts";
 import { revalidatePath } from "next/cache";
 
 export type MediaFormState =

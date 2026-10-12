@@ -1,10 +1,10 @@
 "use client";
 
-import type { TranscriptSummary } from "@wd/contracts";
+import type { TranscriptSummary } from "@wasifyai/contracts";
 import { TRANSCRIPT_STARTED_EVENT, useWorkingActivity } from "./use-activity";
 
 const CONFIG = {
-  product: "wd-stt-ai",
+  product: "wasifyai-stt",
   collection: "transcripts",
   label: (t: TranscriptSummary) => t.title,
   startedEvent: TRANSCRIPT_STARTED_EVENT,

@@ -5,10 +5,10 @@ import time
 import jwt
 import pytest
 from fastapi.testclient import TestClient
-from wd_api.admin import InMemoryAdminStore
-from wd_api.config import get_settings
-from wd_api.litellm_admin import InMemoryModelBackend
-from wd_api.model_access import (
+from wasifyai_api.admin import InMemoryAdminStore
+from wasifyai_api.config import get_settings
+from wasifyai_api.litellm_admin import InMemoryModelBackend
+from wasifyai_api.model_access import (
     Binding,
     CanaryFailed,
     ModelAccess,
@@ -18,8 +18,8 @@ from wd_api.model_access import (
     load_defaults,
     validate_binding,
 )
-from wd_api.users import InMemoryUserStore
-from wd_platform_sdk import InMemoryUsageRecorder
+from wasifyai_api.users import InMemoryUserStore
+from wasifyai_platform_sdk import InMemoryUsageRecorder
 
 from tests.test_auth import SECRET
 from tests.test_runs import hello_registry, mem_app
@@ -102,8 +102,8 @@ async def test_a_missing_alias_is_shown_as_missing():
 
 async def test_seed_removes_old_canary_leftovers_only():
     backend, models, _ = make()
-    old = {"id": "candidate:moderator:old", "wd": {"created_at": "2020-01-01T00:00:00+00:00"}}
-    fresh = {"id": "candidate:moderator:new", "wd": {"created_at": models._now()}}
+    old = {"id": "candidate:moderator:old", "wasifyai": {"created_at": "2020-01-01T00:00:00+00:00"}}
+    fresh = {"id": "candidate:moderator:new", "wasifyai": {"created_at": models._now()}}
     await backend.add("moderator", {}, old)
     await backend.add("moderator", {}, fresh)
     await models.seed()
@@ -236,8 +236,8 @@ async def test_test_connection_uses_the_alias_or_a_candidate_and_redacts_errors(
 def _token(sub, email, verified):
     now = int(time.time())
     claims = {
-        "iss": "wd-web",
-        "aud": "wd-api",
+        "iss": "wasifyai-web",
+        "aud": "wasifyai-api",
         "iat": now,
         "exp": now + 300,
         "sub": sub,

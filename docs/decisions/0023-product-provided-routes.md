@@ -16,8 +16,10 @@ A product can register an authenticated router next to its graph, through the sa
 
 ```python
 def register(registry):
-    registry.register("wd-music-ai", build_song)
-    registry.add_routes("wd-music-ai", build_routes)  # build_routes(deps: RouteDeps) -> APIRouter
+    registry.register("wasifyai-music", build_song)
+    registry.add_routes(
+        "wasifyai-music", build_routes
+    )  # build_routes(deps: RouteDeps) -> APIRouter
 ```
 
 The API mounts it under `/products/{product_id}/`. `RouteDeps` supplies what a route may use: the
@@ -28,8 +30,8 @@ appear in the OpenAPI document and in the generated TypeScript types.
 Rules for product routes: depend on `deps.identity` (rule 8), scope every query by tenant, product
 and user, and answer 404 (not 403) for anything that is not the caller's, so existence is not leaked.
 
-`wd-music-ai` uses this for `GET /products/wd-music-ai/songs` (newest first, keyset-paginated by
-`before`) and `GET /products/wd-music-ai/songs/{song_id}` (with lyrics). Both sign fresh audio and
+`wasifyai-music` uses this for `GET /products/wasifyai-music/songs` (newest first, keyset-paginated by
+`before`) and `GET /products/wasifyai-music/songs/{song_id}` (with lyrics). Both sign fresh audio and
 cover links on every call.
 
 ## Consequences
@@ -38,5 +40,5 @@ cover links on every call.
   everyone and requires every product route to answer 401. A new product route that forgets identity
   fails CI.
 - Product data stays in the product package; the platform learns nothing about songs.
-- The shared `Identity` type moved into `wd_platform_sdk` so products can use it.
+- The shared `Identity` type moved into `wasifyai_platform_sdk` so products can use it.
 - Writes still go through graphs. A product route that mutates data needs its own decision.

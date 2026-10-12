@@ -5,7 +5,7 @@
 
 ## Context
 
-`wd-music-ai` generates cover art through ComfyUI behind the `image.generate` capability. The
+`wasifyai-music` generates cover art through ComfyUI behind the `image.generate` capability. The
 first choice, Qwen-Image, is too large for a prototype. Candidates were FLUX.2 [klein] 4B and
 Stable Diffusion 1.5.
 

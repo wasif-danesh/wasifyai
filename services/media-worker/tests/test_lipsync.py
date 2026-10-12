@@ -3,12 +3,12 @@ comes back; the router picks this runner only for jobs made by the lip sync prov
 
 import httpx
 import pytest
-from wd_media_worker.backends import BackendRouter, BackendUnavailable
-from wd_media_worker.comfy import ComfyError
-from wd_media_worker.lipsync import LipSyncRunner
-from wd_media_worker.processor import StubRunner
-from wd_media_worker.settings import WorkerSettings
-from wd_platform_sdk import InMemoryMediaBindingStore, JobRequest, SecretBox
+from wasifyai_media_worker.backends import BackendRouter, BackendUnavailable
+from wasifyai_media_worker.comfy import ComfyError
+from wasifyai_media_worker.lipsync import LipSyncRunner
+from wasifyai_media_worker.processor import StubRunner
+from wasifyai_media_worker.settings import WorkerSettings
+from wasifyai_platform_sdk import InMemoryMediaBindingStore, JobRequest, SecretBox
 
 RUN, THREAD = "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"
 

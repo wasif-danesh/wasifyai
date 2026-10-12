@@ -8,7 +8,7 @@ import type {
   SpeechSummary,
   TranscriptSummary,
   VideoSummary,
-} from "@wd/contracts";
+} from "@wasifyai/contracts";
 
 export type Entry =
   | { kind: "song"; id: string; createdAt: string; song: SongSummary }

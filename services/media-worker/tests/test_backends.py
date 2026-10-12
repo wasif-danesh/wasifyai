@@ -8,17 +8,17 @@ from contextlib import asynccontextmanager
 
 import httpx
 import pytest
-from wd_media_worker.backends import (
+from wasifyai_media_worker.backends import (
     BackendRouter,
     BackendUnavailable,
     ComfyApiRunner,
     OpenAIImagesRunner,
 )
-from wd_media_worker.comfy import ComfyError
-from wd_media_worker.processor import ComfyRunner, JobProcessor, StubRunner
-from wd_media_worker.settings import WorkerSettings
-from wd_media_worker.state import InMemoryJobState
-from wd_platform_sdk import (
+from wasifyai_media_worker.comfy import ComfyError
+from wasifyai_media_worker.processor import ComfyRunner, JobProcessor, StubRunner
+from wasifyai_media_worker.settings import WorkerSettings
+from wasifyai_media_worker.state import InMemoryJobState
+from wasifyai_platform_sdk import (
     InMemoryEventLog,
     InMemoryMediaBindingStore,
     InMemoryUsageRecorder,
@@ -461,7 +461,7 @@ PICTURE = b"\x89PNG\r\n\x1a\n" + b"the-users-picture"
 
 def edit_job(**over) -> JobRequest:
     graph = {
-        "5": {"class_type": "LoadImage", "inputs": {"image": "wd-JOB.png"}},
+        "5": {"class_type": "LoadImage", "inputs": {"image": "wasifyai-JOB.png"}},
         "10": {"class_type": "SaveImage", "inputs": {}},
     }
     base = {
@@ -477,7 +477,7 @@ async def test_comfy_api_uploads_the_picture_and_points_the_workflow_at_it():
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
         if request.url.path == "/api/upload/image":
-            return httpx.Response(200, json={"name": "wd-JOB.png", "subfolder": ""})
+            return httpx.Response(200, json={"name": "wasifyai-JOB.png", "subfolder": ""})
         return comfy_api([{"status": "succeeded"}])[0](request)
 
     files = await runner(handler).run(edit_job(), Progress(), files={"image": PICTURE})
@@ -486,7 +486,7 @@ async def test_comfy_api_uploads_the_picture_and_points_the_workflow_at_it():
     assert PICTURE in upload.content and b'name="type"' in upload.content
     assert upload.headers["authorization"] == f"Bearer {KEY}" and upload.headers["x-api-key"] == KEY
     submitted = next(r for r in seen if r.url.path == "/api/v2/jobs" and r.method == "POST")
-    assert json.loads(submitted.content)["workflow"]["5"]["inputs"]["image"] == "wd-JOB.png"
+    assert json.loads(submitted.content)["workflow"]["5"]["inputs"]["image"] == "wasifyai-JOB.png"
 
 
 async def test_a_job_without_a_picture_makes_no_upload():

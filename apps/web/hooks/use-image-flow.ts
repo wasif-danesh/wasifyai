@@ -12,8 +12,8 @@ import { HttpError, startRun, watchRun } from "@/lib/run-client";
 import type { ParsedEvent } from "@/lib/sse";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 
-export const IMAGE_PRODUCT = "wd-image-ai";
-const STORAGE_KEY = "wd-image-ai:run";
+export const IMAGE_PRODUCT = "wasifyai-image";
+const STORAGE_KEY = "wasifyai-image:run";
 const MAX_RECONNECTS = 6;
 
 /** `imageKey` is the key of a picture already uploaded (ADR-0039); text to image has none. */

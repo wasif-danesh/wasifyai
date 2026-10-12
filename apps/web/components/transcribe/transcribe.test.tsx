@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { SpokenLanguages, TranscriptDetail } from "@wd/contracts";
+import type { SpokenLanguages, TranscriptDetail } from "@wasifyai/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TranscribeForm } from "./TranscribeForm";
 import { TranscriptView } from "./TranscriptView";
@@ -125,7 +125,7 @@ describe("TranscriptView", () => {
     expect(hrefs).toEqual(
       ["txt", "srt", "vtt", "json"].map(
         (f) =>
-          `/api/products/wd-stt-ai/transcripts/11111111-1111-1111-1111-111111111111/download?format=${f}`,
+          `/api/products/wasifyai-stt/transcripts/11111111-1111-1111-1111-111111111111/download?format=${f}`,
       ),
     );
   });

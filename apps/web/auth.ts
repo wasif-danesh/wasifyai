@@ -9,7 +9,7 @@ import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 
 declare module "next-auth" {
   interface Session {
-    wd?: { provider: string; accountId: string; emailVerified: boolean };
+    wasifyai?: { provider: string; accountId: string; emailVerified: boolean };
   }
 }
 const has = (...names: string[]) => names.every((n) => Boolean(process.env[n]));
@@ -63,7 +63,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     session({ session, token }) {
       if (typeof token.provider === "string" && typeof token.accountId === "string") {
-        session.wd = {
+        session.wasifyai = {
           provider: token.provider,
           accountId: token.accountId,
           emailVerified: token.emailVerified === true,

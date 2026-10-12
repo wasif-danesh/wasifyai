@@ -78,7 +78,7 @@ main      ─► Argo CD auto-sync ─► staging (home lab)
 release   ─► tag or promotion PR ─► Argo CD ─► prod
 ```
 
-- Helm values: `deploy/helm/wd-ai/values.yaml` (base), then `values/{local,staging,prod}.yaml`,
+- Helm values: `deploy/helm/wasifyai/values.yaml` (base), then `values/{local,staging,prod}.yaml`,
   then `values/cloud/{homelab,gcp,...}.yaml` (ADR-0016).
 - Local Kubernetes: `make kind-up`, `make kind-test`, `make kind-down` (kind on Podman).
 - Home lab setup: [runbooks/homelab-k3s.md](runbooks/homelab-k3s.md).

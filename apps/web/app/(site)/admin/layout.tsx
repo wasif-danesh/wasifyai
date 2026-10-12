@@ -3,7 +3,7 @@ import { Notice } from "@/components/Notice";
 import { PageHero } from "@/components/ui/page-hero";
 import { apiGet } from "@/lib/api";
 import { getMe } from "@/lib/me";
-import type { SafeguardsStatus } from "@wd/contracts";
+import type { SafeguardsStatus } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 

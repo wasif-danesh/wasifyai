@@ -9,8 +9,8 @@ from urllib.parse import urlparse
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
-from wd_api.config import get_settings
-from wd_platform_sdk import RunContext, reset_context, set_context
+from wasifyai_api.config import get_settings
+from wasifyai_platform_sdk import RunContext, reset_context, set_context
 
 PRODUCTS_DIR = Path(__file__).resolve().parents[4] / "products"
 

@@ -7,10 +7,10 @@ import json
 import httpx
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
-from wd_api.graphs.media_demo import build_media_demo
-from wd_api.jobs_consumer import handle_completion
-from wd_api.main import create_app
-from wd_platform_sdk import (
+from wasifyai_api.graphs.media_demo import build_media_demo
+from wasifyai_api.jobs_consumer import handle_completion
+from wasifyai_api.main import create_app
+from wasifyai_platform_sdk import (
     GraphRegistry,
     InMemoryEventLog,
     InMemoryJobSink,

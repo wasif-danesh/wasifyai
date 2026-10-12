@@ -98,7 +98,10 @@ describe("ComingSoon", () => {
     render(<ComingSoon title="Image generation">It is on its way.</ComingSoon>);
     expect(screen.getByRole("heading", { name: "Image generation" })).toBeInTheDocument();
     expect(screen.getByText("It is on its way.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Back to WD AI Studio/ })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: /Back to WasifyAI Studio/ })).toHaveAttribute(
+      "href",
+      "/",
+    );
   });
 });
 

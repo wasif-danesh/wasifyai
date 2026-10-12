@@ -9,7 +9,7 @@ Each product needs a frontend. Separate apps duplicate Auth.js config, the BFF p
 
 ## Decision
 
-A single `apps/web` Next.js app with one route group per product (e.g. `app/(wd-music-ai)/`). Shared auth, BFF and SSE client code live once.
+A single `apps/web` Next.js app with one route group per product (e.g. `app/(wasifyai-music)/`). Shared auth, BFF and SSE client code live once.
 
 ## Consequences
 

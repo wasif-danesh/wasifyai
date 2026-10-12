@@ -133,7 +133,7 @@ class FakeComfy:
 
     async def upload(self, request: Request) -> Response:
         self.uploads.append((request.headers.get("content-type", ""), await request.body()))
-        return JSONResponse({"name": "wd-uploaded.png", "subfolder": "", "type": "temp"})
+        return JSONResponse({"name": "wasifyai-uploaded.png", "subfolder": "", "type": "temp"})
 
     async def free(self, request: Request) -> Response:
         self.freed += 1

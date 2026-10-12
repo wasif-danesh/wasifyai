@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { fullDate } from "@/lib/format";
 import { actions, eyebrow, panel, player } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import type { SpeechSummary } from "@wd/contracts";
+import type { SpeechSummary } from "@wasifyai/contracts";
 
 /** A saved speech: the player, the words, a download and a two-step delete. */
 export function SpeechView({ speech }: { speech: SpeechSummary }) {
@@ -25,11 +25,11 @@ export function SpeechView({ speech }: { speech: SpeechSummary }) {
         <p lang={speech.language}>{speech.text}</p>
         <div className={actions}>
           <Button asChild>
-            <a href={`/api/products/wd-tts-ai/speeches/${speech.id}/download`} download>
+            <a href={`/api/products/wasifyai-tts/speeches/${speech.id}/download`} download>
               Download MP3
             </a>
           </Button>
-          <DeleteControls url={`/api/products/wd-tts-ai/speeches/${speech.id}`} noun="speech" />
+          <DeleteControls url={`/api/products/wasifyai-tts/speeches/${speech.id}`} noun="speech" />
         </div>
       </div>
     </article>

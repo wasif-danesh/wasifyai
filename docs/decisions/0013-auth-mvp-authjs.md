@@ -5,7 +5,7 @@
 
 ## Context
 
-`wd-music-ai` requires sign-in with Google and other common providers. A central identity provider is overkill for one product.
+`wasifyai-music` requires sign-in with Google and other common providers. A central identity provider is overkill for one product.
 
 ## Decision
 

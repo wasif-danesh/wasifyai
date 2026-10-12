@@ -2,7 +2,7 @@ import { Notice } from "@/components/Notice";
 import { SafeguardsForm } from "@/components/admin/SafeguardsForm";
 import { apiGet } from "@/lib/api";
 import { muted } from "@/lib/styles";
-import type { SafeguardsStatus } from "@wd/contracts";
+import type { SafeguardsStatus } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Safeguards" };

@@ -7,12 +7,12 @@ import wave
 
 import httpx
 import pytest
-from wd_media_worker.backends import BackendRouter, BackendUnavailable
-from wd_media_worker.comfy import ComfyError
-from wd_media_worker.processor import StubRunner
-from wd_media_worker.settings import WorkerSettings
-from wd_media_worker.transcribe import OpenAITranscriptionRunner, first_seconds, split_pieces
-from wd_platform_sdk import InMemoryMediaBindingStore, JobRequest, SecretBox
+from wasifyai_media_worker.backends import BackendRouter, BackendUnavailable
+from wasifyai_media_worker.comfy import ComfyError
+from wasifyai_media_worker.processor import StubRunner
+from wasifyai_media_worker.settings import WorkerSettings
+from wasifyai_media_worker.transcribe import OpenAITranscriptionRunner, first_seconds, split_pieces
+from wasifyai_platform_sdk import InMemoryMediaBindingStore, JobRequest, SecretBox
 
 RUN, THREAD = "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"
 

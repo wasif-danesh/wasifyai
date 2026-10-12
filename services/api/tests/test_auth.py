@@ -4,11 +4,11 @@ from uuid import uuid4
 import jwt
 import pytest
 from fastapi.testclient import TestClient
-from wd_api.auth import AuthError, verify_token
-from wd_api.config import get_settings
-from wd_api.main import create_app
-from wd_api.users import CachedUsers, InMemoryUserStore
-from wd_platform_sdk import (
+from wasifyai_api.auth import AuthError, verify_token
+from wasifyai_api.config import get_settings
+from wasifyai_api.main import create_app
+from wasifyai_api.users import CachedUsers, InMemoryUserStore
+from wasifyai_platform_sdk import (
     InMemoryEventLog,
     InMemoryRunStore,
     InMemoryUsageRecorder,
@@ -34,8 +34,8 @@ def products(tmp_path):
 def token(secret=SECRET, **over) -> str:
     now = int(time.time())
     data = {
-        "iss": "wd-web",
-        "aud": "wd-api",
+        "iss": "wasifyai-web",
+        "aud": "wasifyai-api",
         "iat": now,
         "exp": now + 300,
         "sub": "google:1001",
@@ -69,7 +69,9 @@ def test_a_good_token_yields_claims():
         token(sub=None),
         token(exp=None),
         "not-a-token",
-        jwt.encode({"iss": "wd-web", "aud": "wd-api", "sub": "google:1"}, "", algorithm="none"),
+        jwt.encode(
+            {"iss": "wasifyai-web", "aud": "wasifyai-api", "sub": "google:1"}, "", algorithm="none"
+        ),
     ],
 )
 def test_bad_tokens_are_rejected(bad):

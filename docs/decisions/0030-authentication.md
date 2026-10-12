@@ -16,7 +16,7 @@ directly (BFF), and the API must not trust anything the browser can forge.
 - **Sign-in in the web app with Auth.js v5**, JWT session cookie, no database adapter. Google,
   GitHub and Microsoft Entra ID are each enabled only when their client id and secret are set.
 - **The BFF mints a short-lived API token per request.** After checking the Auth.js session, the
-  route handler (or server component) signs an HS256 JWT (`iss=wd-web`, `aud=wd-api`, five-minute
+  route handler (or server component) signs an HS256 JWT (`iss=wasifyai-web`, `aud=wasifyai-api`, five-minute
   expiry) and sends it as `Authorization: Bearer`. Claims: `sub` = `<provider>:<account id>`,
   `email`, `email_verified`, `name`, `picture`. The shared secret (`API_AUTH_SECRET`, at least 32
   bytes) is separate from `AUTH_SECRET`. The Auth.js cookie is never forwarded. Moving to asymmetric

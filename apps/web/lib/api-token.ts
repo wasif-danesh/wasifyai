@@ -30,8 +30,8 @@ export async function mintApiToken(
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(`${claims.provider}:${claims.accountId}`)
-    .setIssuer("wd-web")
-    .setAudience("wd-api")
+    .setIssuer("wasifyai-web")
+    .setAudience("wasifyai-api")
     .setIssuedAt()
     .setExpirationTime(`${LIFETIME_SECONDS}s`)
     .sign(new TextEncoder().encode(secret));
@@ -45,12 +45,12 @@ export async function apiAuthHeaders(): Promise<Record<string, string> | null> {
   if (!authEnabled()) return {};
   const { auth } = await import("@/auth");
   const session = await auth();
-  if (!session?.wd) return null;
+  if (!session?.wasifyai) return null;
   const token = await mintApiToken({
-    provider: session.wd.provider,
-    accountId: session.wd.accountId,
+    provider: session.wasifyai.provider,
+    accountId: session.wasifyai.accountId,
     email: session.user?.email,
-    emailVerified: session.wd.emailVerified,
+    emailVerified: session.wasifyai.emailVerified,
     name: session.user?.name,
     image: session.user?.image,
   });

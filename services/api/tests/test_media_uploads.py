@@ -7,7 +7,7 @@ import wave
 
 import pytest
 from fastapi.testclient import TestClient
-from wd_platform_sdk import (
+from wasifyai_platform_sdk import (
     InMemoryUploadLimiter,
     InMemoryUploadStore,
     InMemoryUsageRecorder,

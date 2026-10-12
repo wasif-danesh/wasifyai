@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { VideoSummary } from "@wd/contracts";
+import type { VideoSummary } from "@wasifyai/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreationsList } from "../creations/CreationsList";
 import { VideoForm } from "./VideoForm";
@@ -99,7 +99,7 @@ describe("VideoForm", () => {
       expect(screen.getByRole("textbox")).toHaveValue("A fox trots through snow."),
     );
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/api/products/wd-video-ai/prompt/enhance");
+    expect(url).toBe("/api/products/wasifyai-video/prompt/enhance");
     expect(JSON.parse(init.body as string)).toMatchObject({ kind: "text_to_video", prompt: "fox" });
   });
 });
@@ -112,7 +112,7 @@ describe("VideoView", () => {
     expect(container.querySelector("video")).toHaveAttribute("src", "http://x/v.mp4");
     expect(screen.getByRole("link", { name: /download/i })).toHaveAttribute(
       "href",
-      "/api/products/wd-video-ai/videos/00000000-0000-0000-0000-000000000001/download",
+      "/api/products/wasifyai-video/videos/00000000-0000-0000-0000-000000000001/download",
     );
     await user.click(screen.getByRole("button", { name: /^delete$/i }));
     expect(fetchMock).not.toHaveBeenCalled();
@@ -204,7 +204,7 @@ describe("creations with videos", () => {
       expect(screen.getByRole("link", { name: /older clip/i })).toBeInTheDocument(),
     );
     expect(fetchMock.mock.calls[0][0]).toContain(
-      "/api/products/wd-video-ai/videos?limit=12&before=",
+      "/api/products/wasifyai-video/videos?limit=12&before=",
     );
   });
 });
@@ -216,7 +216,7 @@ describe("searching My creations", () => {
     Response.json({ query: "fox", degraded, results });
   const hit = (kind: string, id: string, match = "meaning") => ({
     kind,
-    product_id: `wd-${kind}-ai`,
+    product_id: `wasifyai-${kind}-ai`,
     id,
     score: 0.7,
     match,

@@ -1,4 +1,4 @@
-"""lipsyncs: talking-character clips of the wd-lipsync-ai product (ADR-0044)
+"""lipsyncs: talking-character clips of the wasifyai-lipsync product (ADR-0044)
 
 Like videos: a row exists from the moment a run starts (status "working"), then "done" (with its
 files) or "failed" (with a message for the user). The picture and the voice are not kept.

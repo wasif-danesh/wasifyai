@@ -41,11 +41,11 @@ describe("SongView", () => {
     render(<SongView song={{ ...song, songId: "3f2b8c1e-0000-4000-8000-000000000001" }} />);
     expect(screen.getByRole("link", { name: "Download audio" })).toHaveAttribute(
       "href",
-      "/api/products/wd-music-ai/songs/3f2b8c1e-0000-4000-8000-000000000001/download/audio",
+      "/api/products/wasifyai-music/songs/3f2b8c1e-0000-4000-8000-000000000001/download/audio",
     );
     expect(screen.getByRole("link", { name: "Download cover" })).toHaveAttribute(
       "href",
-      "/api/products/wd-music-ai/songs/3f2b8c1e-0000-4000-8000-000000000001/download/cover",
+      "/api/products/wasifyai-music/songs/3f2b8c1e-0000-4000-8000-000000000001/download/cover",
     );
     // playing and showing still use the storage links
     expect(screen.getByRole("img", { name: /Cover art/ })).toHaveAttribute("src", song.coverUrl);
@@ -56,7 +56,7 @@ describe("SongView", () => {
     const video = screen.getByRole("link", { name: "Download video" });
     expect(video).toHaveAttribute(
       "href",
-      "/api/products/wd-music-ai/songs/3f2b8c1e-0000-4000-8000-000000000001/download/video",
+      "/api/products/wasifyai-music/songs/3f2b8c1e-0000-4000-8000-000000000001/download/video",
     );
     expect(video).toHaveAttribute("download", "neon-rain.mp4");
   });

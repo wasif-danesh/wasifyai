@@ -22,7 +22,7 @@ test:
 	pnpm test
 # Needs the stack running (make dev): real Postgres + pgvector, SeaweedFS, LiteLLM + Ollama.
 test-integration:
-	DATABASE_URL=postgresql+asyncpg://wd:wd@localhost:5432/wd \
+	DATABASE_URL=postgresql+asyncpg://wasifyai:wasifyai@localhost:5432/wasifyai \
 	LITELLM_BASE_URL=http://localhost:4000 STORAGE_ENDPOINT=http://localhost:8333 \
 	uv run pytest services/api/tests/integration -v
 # Real generation on your local ComfyUI: an image, then (if installed) the product's own music and
@@ -36,10 +36,10 @@ format:
 	uv run ruff format . && uv run ruff check --fix .
 contracts:
 	uv run python scripts/export_openapi.py
-	pnpm --filter @wd/contracts generate
+	pnpm --filter @wasifyai/contracts generate
 helm-lint:
-	@for f in "" "-f deploy/helm/wd-ai/values/local.yaml" "-f deploy/helm/wd-ai/values/staging.yaml -f deploy/helm/wd-ai/values/cloud/homelab.yaml" "-f deploy/helm/wd-ai/values/prod.yaml"; do \
-		helm lint deploy/helm/wd-ai $$f >/dev/null && helm template t deploy/helm/wd-ai $$f >/dev/null && echo "ok: helm $$f" || exit 1; done
+	@for f in "" "-f deploy/helm/wasifyai/values/local.yaml" "-f deploy/helm/wasifyai/values/staging.yaml -f deploy/helm/wasifyai/values/cloud/homelab.yaml" "-f deploy/helm/wasifyai/values/prod.yaml"; do \
+		helm lint deploy/helm/wasifyai $$f >/dev/null && helm template t deploy/helm/wasifyai $$f >/dev/null && echo "ok: helm $$f" || exit 1; done
 kind-up:
 	./scripts/kind-up.sh
 urls:

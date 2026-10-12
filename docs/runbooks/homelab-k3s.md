@@ -13,7 +13,7 @@ is tested on kind (`make kind-up && make kind-test`). Record anything that diffe
 | Linux host, amd64 or arm64 | 8 GB RAM minimum, 16 GB recommended, for `gemma4:e4b` on CPU; 25+ GB free disk |
 | Internet access | To pull images from GHCR and Docker Hub, the model from the Ollama registry, and the chart from GitHub. A fully offline lab needs a registry mirror and a local Git server first |
 | `cgroup2` | `stat -fc %T /sys/fs/cgroup` should print `cgroup2fs` |
-| CI has pushed images | The `images` job on `main` publishes `ghcr.io/wasif-danesh/wd-ai/{api,web,media-worker}:latest` |
+| CI has pushed images | The `images` job on `main` publishes `ghcr.io/wasif-danesh/wasifyai/{api,web,media-worker}:latest` |
 | GHCR packages public | GitHub → profile → Packages → each package → Settings → Change visibility. Or create an image pull secret and set `image.pullSecrets` |
 
 ## 1. Install k3s
@@ -45,23 +45,23 @@ Change it and delete that Secret.
 Secrets are not in Git. From a checkout of this repo, with kubectl pointing at k3s:
 
 ```bash
-scripts/k8s-secrets.sh wd-ai
+scripts/k8s-secrets.sh wasifyai
 ```
 
-This creates `wd-ai/wd-ai-secrets` with random `LITELLM_API_KEY` and `POSTGRES_PASSWORD`,
+This creates `wasifyai/wasifyai-secrets` with random `LITELLM_API_KEY` and `POSTGRES_PASSWORD`,
 without printing them. It leaves an existing Secret unchanged.
 
 ## 4. Point Argo CD at the chart
 
-Edit `ingress.host` in `deploy/helm/wd-ai/values/cloud/homelab.yaml` (see step 6), commit and
+Edit `ingress.host` in `deploy/helm/wasifyai/values/cloud/homelab.yaml` (see step 6), commit and
 push, then:
 
 ```bash
 kubectl apply -f deploy/argocd/application-staging.yaml
-kubectl -n argocd get application wd-ai-staging -w
+kubectl -n argocd get application wasifyai-staging -w
 ```
 
-Argo CD syncs `deploy/helm/wd-ai` with `values/staging.yaml` and `values/cloud/homelab.yaml`,
+Argo CD syncs `deploy/helm/wasifyai` with `values/staging.yaml` and `values/cloud/homelab.yaml`,
 then runs the migration Job as a PostSync hook.
 
 ## 5. Wait for the model
@@ -70,12 +70,12 @@ The Ollama pod downloads `gemma4:e4b` (about 10 GB) on first start and is not Re
 finishes. The model lives on a PVC, so this happens once.
 
 ```bash
-kubectl -n wd-ai logs deploy/wd-ai-ollama -f
-kubectl -n wd-ai get pods
+kubectl -n wasifyai logs deploy/wasifyai-ollama -f
+kubectl -n wasifyai get pods
 ```
 
 To use a smaller model, change it in the admin area (`/admin/models`) or in
-`services/api/src/wd_api/model_defaults.yaml`, update `ollama.models` in values to match, and lower
+`services/api/src/wasifyai_api/model_defaults.yaml`, update `ollama.models` in values to match, and lower
 `ollama.resources`.
 
 ## 5b. GPU and real media generation (Phase 4)
@@ -104,13 +104,13 @@ and on your devices. Set `ingress.host` to the node's MagicDNS name
 `http://<machine>.<tailnet>.ts.net` reaches the web app. Nothing is forwarded from the
 internet.
 
-Without Tailscale: `kubectl -n wd-ai port-forward svc/wd-ai-web 3000:3000`.
+Without Tailscale: `kubectl -n wasifyai port-forward svc/wasifyai-web 3000:3000`.
 
 ## 7. Verify
 
 ```bash
-kubectl -n wd-ai get pods                                   # all Running; migrate Completed
-kubectl -n wd-ai port-forward svc/wd-ai-web 3000:3000 &
+kubectl -n wasifyai get pods                                   # all Running; migrate Completed
+kubectl -n wasifyai port-forward svc/wasifyai-web 3000:3000 &
 curl -N -X POST localhost:3000/api/products/hello/runs \
   -H 'content-type: application/json' -d '{"input":{"message":"Say hi"}}'
 ```
@@ -120,7 +120,7 @@ Expect `node`, `token`... and `done` events.
 ## Known limitations
 
 - Staging uses the `latest` tag, so a new image does not trigger a rollout by itself. After CI
-  pushes new images, restart the workloads: `kubectl -n wd-ai rollout restart deploy`.
+  pushes new images, restart the workloads: `kubectl -n wasifyai rollout restart deploy`.
 - In-cluster Postgres is a single replica, suitable for staging only.
 - GPU support (GPU Operator, time-slicing) arrives in Phase 4.
 
@@ -129,7 +129,7 @@ Expect `node`, `token`... and `done` events.
 | Symptom | Check |
 |---|---|
 | `ImagePullBackOff` on api/web/worker | GHCR package visibility, or a pull secret |
-| Ollama pod never Ready | `kubectl -n wd-ai logs deploy/wd-ai-ollama`; disk space; internet access |
-| Pods `Pending` | `kubectl -n wd-ai describe pod <name>`; usually memory requests exceed the node |
+| Ollama pod never Ready | `kubectl -n wasifyai logs deploy/wasifyai-ollama`; disk space; internet access |
+| Pods `Pending` | `kubectl -n wasifyai describe pod <name>`; usually memory requests exceed the node |
 | Argo CD `OutOfSync` on the PVC | Expected to be ignored; the chart marks it `resource-policy: keep` |
 | SSE stream cut off | Ingress timeouts or buffering; Traefik needs no change, nginx needs buffering off |

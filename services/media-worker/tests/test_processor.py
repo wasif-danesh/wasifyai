@@ -2,12 +2,12 @@ import asyncio
 
 import httpx
 import pytest
-from wd_media_worker.comfy import ComfyClient
-from wd_media_worker.gpu import LocalGpuLock, unload_llms
-from wd_media_worker.processor import ComfyRunner, JobProcessor, RetryJob, StubRunner
-from wd_media_worker.settings import WorkerSettings
-from wd_media_worker.state import InMemoryJobState
-from wd_platform_sdk import (
+from wasifyai_media_worker.comfy import ComfyClient
+from wasifyai_media_worker.gpu import LocalGpuLock, unload_llms
+from wasifyai_media_worker.processor import ComfyRunner, JobProcessor, RetryJob, StubRunner
+from wasifyai_media_worker.settings import WorkerSettings
+from wasifyai_media_worker.state import InMemoryJobState
+from wasifyai_platform_sdk import (
     InMemoryEventLog,
     InMemoryUsageRecorder,
     JobRequest,
@@ -217,7 +217,7 @@ PICTURE = b"\x89PNG\r\n\x1a\n" + b"the-users-picture"
 
 def edit_job2(**over) -> JobRequest:
     graph = {
-        "5": {"class_type": "LoadImage", "inputs": {"image": "wd-JOB1.png"}},
+        "5": {"class_type": "LoadImage", "inputs": {"image": "wasifyai-JOB1.png"}},
         "10": {"class_type": "SaveImage", "inputs": {}},
     }
     return job(graph).model_copy(
@@ -237,11 +237,11 @@ async def test_the_users_picture_is_read_from_their_prefix_and_uploaded_to_temp(
     result = await rig.p.process(edit_job2())
     assert result.status == "completed"
     content_type, body = fake.uploads[0]
-    assert PICTURE in body and b'filename="wd-JOB1.png"' in body
+    assert PICTURE in body and b'filename="wasifyai-JOB1.png"' in body
     assert b'name="type"\r\n\r\ntemp' in body  # ComfyUI's temp folder, cleared on its restart
     # the workflow loads it by the temp reference
     graph = fake.submitted[0]["prompt"]
-    assert graph["5"]["inputs"]["image"] == "wd-uploaded.png [temp]"
+    assert graph["5"]["inputs"]["image"] == "wasifyai-uploaded.png [temp]"
 
 
 async def test_another_users_picture_is_never_read(comfy):

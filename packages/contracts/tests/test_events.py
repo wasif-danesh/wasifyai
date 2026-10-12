@@ -2,7 +2,7 @@ import json
 from uuid import uuid4
 
 from pydantic import TypeAdapter
-from wd_contracts import DoneEvent, SseEvent, TokenEvent, format_sse
+from wasifyai_contracts import DoneEvent, SseEvent, TokenEvent, format_sse
 
 RUN_ID, THREAD_ID = uuid4(), uuid4()
 

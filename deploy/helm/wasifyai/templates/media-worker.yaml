@@ -1,0 +1,73 @@
+{{- if .Values.mediaWorker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-media-worker
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.mediaWorker.replicas }}
+  selector:
+    matchLabels: {{- include "wasifyai.selector" (dict "root" . "component" "media-worker") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "wasifyai.selector" (dict "root" . "component" "media-worker") | nindent 8 }}
+    spec:
+      {{- include "wasifyai.pullSecrets" . | nindent 6 }}
+      {{- if .Values.postgres.enabled }}
+      initContainers:
+        - name: wait-for-db
+          image: {{ .Values.postgres.image }}
+          command: ["sh", "-c", "until pg_isready -h {{ .Release.Name }}-postgres -U {{ .Values.postgres.user }}; do sleep 2; done"]
+      {{- end }}
+      containers:
+        - name: media-worker
+          image: {{ include "wasifyai.image" (dict "root" . "name" "media-worker") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            {{- include "wasifyai.dbEnv" . | nindent 12 }}
+            - { name: REDIS_URL, value: "redis://{{ .Release.Name }}-redis:6379/0" }
+            - { name: COMFYUI_MODE, value: {{ .Values.mediaWorker.comfyuiMode | quote }} }
+            - { name: COMFYUI_BASE_URL, value: {{ include "wasifyai.comfyuiUrl" . | quote }} }
+            {{- with .Values.mediaWorker.speechMode }}
+            - { name: SPEECH_MODE, value: {{ . | quote }} }
+            {{- end }}
+            {{- if .Values.lipsync.enabled }}
+            - { name: LIPSYNC_SERVER_URL, value: "http://{{ .Release.Name }}-lipsync:8000" }
+            {{- else if .Values.lipsync.serverUrl }}
+            - { name: LIPSYNC_SERVER_URL, value: {{ .Values.lipsync.serverUrl | quote }} }
+            {{- end }}
+            # Lets the worker free the GPU of LLMs before each generation job.
+            - { name: OLLAMA_BASE_URL, value: {{ include "wasifyai.ollamaUrl" . | quote }} }
+            {{- $servers := list }}
+            {{- if .Values.speech.enabled }}
+            {{- $servers = append $servers (printf "kokoro=http://%s-speech:8000" .Release.Name) }}
+            {{- $servers = append $servers (printf "whisper=http://%s-speech:8000" .Release.Name) }}
+            {{- end }}
+            {{- if .Values.speechIndic.enabled }}
+            {{- $servers = append $servers (printf "indic-parler=http://%s-speech-indic:8000" .Release.Name) }}
+            {{- end }}
+            {{- if .Values.sttIndic.enabled }}
+            {{- $servers = append $servers (printf "indic-stt=http://%s-stt-indic:8000" .Release.Name) }}
+            {{- end }}
+            {{- if $servers }}
+            - name: SPEECH_SERVERS
+              value: {{ join "," $servers | quote }}
+            {{- end }}
+            - { name: GPU_ID, value: {{ .Values.mediaWorker.gpuId | quote }} }
+            - { name: JOB_TIMEOUT_S, value: {{ .Values.mediaWorker.jobTimeoutSeconds | quote }} }
+            - { name: LOG_LEVEL, value: {{ .Values.env.LOG_LEVEL | quote }} }
+            {{- include "wasifyai.mediaSecretsEnv" . | nindent 12 }}
+            {{- include "wasifyai.storageEnv" . | nindent 12 }}
+          ports: [{ name: metrics, containerPort: 9464 }]
+          securityContext: { allowPrivilegeEscalation: false }
+          resources: {{- toYaml .Values.mediaWorker.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-media-worker
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "wasifyai.selector" (dict "root" . "component" "media-worker") | nindent 4 }}
+  ports: [{ name: metrics, port: 9464, targetPort: metrics }]
+{{- end }}

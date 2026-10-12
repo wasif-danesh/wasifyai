@@ -5,7 +5,7 @@ import { RUN, done, interrupt, node, sse, token } from "../test-utils";
 import { useSongFlow } from "./use-song-flow";
 
 const fetchMock = vi.fn();
-const KEY = "wd-music-ai:run";
+const KEY = "wasifyai-music:run";
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -31,7 +31,7 @@ describe("useSongFlow", () => {
 
     await waitFor(() => expect(result.current.state.phase).toBe("approving"));
     const [url, init] = lastCall();
-    expect(url).toBe("/api/products/wd-music-ai/runs");
+    expect(url).toBe("/api/products/wasifyai-music/runs");
     expect(JSON.parse(init.body as string)).toEqual({ input: { idea: "rain", genre: "Pop" } });
     expect(result.current.state.draft?.title).toBe("Rain");
     expect(sessionStorage.getItem(KEY)).toBe(RUN); // so a reload can pick the run up again

@@ -6,13 +6,13 @@ import json
 from uuid import uuid4
 
 import httpx
-from wd_api.jobs_consumer import JobCompletionConsumer
-from wd_media_worker.consumer import Worker
-from wd_media_worker.gpu import RedisGpuLock
-from wd_media_worker.processor import JobProcessor, StubRunner
-from wd_media_worker.settings import WorkerSettings
-from wd_media_worker.state import InMemoryJobState
-from wd_platform_sdk import (
+from wasifyai_api.jobs_consumer import JobCompletionConsumer
+from wasifyai_media_worker.consumer import Worker
+from wasifyai_media_worker.gpu import RedisGpuLock
+from wasifyai_media_worker.processor import JobProcessor, StubRunner
+from wasifyai_media_worker.settings import WorkerSettings
+from wasifyai_media_worker.state import InMemoryJobState
+from wasifyai_platform_sdk import (
     InMemoryUsageRecorder,
     JobRequest,
     RedisEventLog,
@@ -21,7 +21,13 @@ from wd_platform_sdk import (
     RunRecord,
     memory_storage,
 )
-from wd_platform_sdk.jobqueue import DONE_GROUP, DONE_STREAM, JOBS_GROUP, JOBS_STREAM, ensure_groups
+from wasifyai_platform_sdk.jobqueue import (
+    DONE_GROUP,
+    DONE_STREAM,
+    JOBS_GROUP,
+    JOBS_STREAM,
+    ensure_groups,
+)
 
 
 def make_job(tenant: str = "t") -> JobRequest:
@@ -131,7 +137,7 @@ async def test_job_wait_is_taken_only_for_the_exact_job(redis_conn):
 def make_worker(redis_conn, runner=None, **settings):
     s = WorkerSettings(ollama_base_url="", job_timeout_s=1, **settings)
     log, storage = RedisEventLog(redis_conn), memory_storage()
-    from wd_media_worker.gpu import LocalGpuLock
+    from wasifyai_media_worker.gpu import LocalGpuLock
 
     proc = JobProcessor(
         s,
@@ -242,11 +248,13 @@ async def test_gpu_lock_serialises_holders_and_survives_a_crashed_holder(redis_c
     await asyncio.gather(*(work(RedisGpuLock(redis_conn, "g1", poll_s=0.02)) for _ in range(3)))
     assert peak == 1
 
-    await redis_conn.set("wd:gpu:g2", "crashed-worker", px=300)  # holder died without releasing
+    await redis_conn.set(
+        "wasifyai:gpu:g2", "crashed-worker", px=300
+    )  # holder died without releasing
     async with asyncio.timeout(3):
         async with RedisGpuLock(redis_conn, "g2", poll_s=0.05).hold():
             pass  # acquired after the stale lock expired
-    assert await redis_conn.get("wd:gpu:g2") is None  # released again
+    assert await redis_conn.get("wasifyai:gpu:g2") is None  # released again
 
 
 # ---- API completion consumer ----------------------------------------------------------------

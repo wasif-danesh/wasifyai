@@ -131,21 +131,21 @@ def checks():
     yield (
         "music",
         lambda: run(
-            "wd-music-ai", {"idea": "a rainy night in Tokyo", "genre": "indie pop"}, approve=True
+            "wasifyai-music", {"idea": "a rainy night in Tokyo", "genre": "indie pop"}, approve=True
         ),
     )
-    yield "image", lambda: run("wd-image-ai", {"mode": "text", "prompt": "a lighthouse at dawn"})
+    yield "image", lambda: run("wasifyai-image", {"mode": "text", "prompt": "a lighthouse at dawn"})
     yield (
         "video",
         lambda: run(
-            "wd-video-ai",
+            "wasifyai-video",
             {"mode": "text", "prompt": "waves on a beach", "shape": "landscape", "seconds": 2},
         ),
     )
     yield (
         "text to speech",
         lambda: run(
-            "wd-tts-ai",
+            "wasifyai-tts",
             {"text": "Hello there, how are you today?", "language": "en-US", "gender": "female"},
         ),
     )
@@ -159,15 +159,15 @@ def checks():
         return open(path, "rb").read() if path else png()
 
     def stt():
-        key = upload("wd-stt-ai", "media", voice(), "audio/wav")
-        return run("wd-stt-ai", {"audio_key": key, "language": "auto"})
+        key = upload("wasifyai-stt", "media", voice(), "audio/wav")
+        return run("wasifyai-stt", {"audio_key": key, "language": "auto"})
 
     yield "speech to text", stt
 
     def lipsync():
-        image = upload("wd-lipsync-ai", "images", face(), "image/png")
-        sound = upload("wd-lipsync-ai", "media", voice(), "audio/wav")
-        return run("wd-lipsync-ai", {"source": "audio", "image_key": image, "audio_key": sound})
+        image = upload("wasifyai-lipsync", "images", face(), "image/png")
+        sound = upload("wasifyai-lipsync", "media", voice(), "audio/wav")
+        return run("wasifyai-lipsync", {"source": "audio", "image_key": image, "audio_key": sound})
 
     yield "lip sync", lipsync
 

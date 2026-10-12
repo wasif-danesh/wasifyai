@@ -1,6 +1,0 @@
-apiVersion: v2
-name: wd-ai
-description: wd-ai platform core (API, web, LiteLLM, media worker) and its backing services
-type: application
-version: 0.1.0
-appVersion: "0.0.0"

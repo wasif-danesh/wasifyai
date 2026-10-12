@@ -11,8 +11,8 @@ import {
 import type { ParsedEvent } from "@/lib/sse";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 
-export const SPEECH_PRODUCT = "wd-tts-ai";
-const STORAGE_KEY = "wd-tts-ai:run";
+export const SPEECH_PRODUCT = "wasifyai-tts";
+const STORAGE_KEY = "wasifyai-tts:run";
 const MAX_RECONNECTS = 6;
 
 export type SpeechRequest = { text: string; language: string; gender: string; voice?: string };

@@ -15,7 +15,7 @@ import {
 import { panel } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 
-import type { MediaBackend, MediaView } from "@wd/contracts";
+import type { MediaBackend, MediaView } from "@wasifyai/contracts";
 import { useActionState, useId, useState } from "react";
 
 const IDLE: MediaFormState = { status: "idle" };

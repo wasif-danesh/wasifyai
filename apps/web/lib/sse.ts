@@ -1,4 +1,4 @@
-import type { SseEvent } from "@wd/contracts";
+import type { SseEvent } from "@wasifyai/contracts";
 
 export type ParsedEvent = { event: SseEvent["event"]; data: SseEvent; id?: string };
 

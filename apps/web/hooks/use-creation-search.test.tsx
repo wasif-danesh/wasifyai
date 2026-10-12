@@ -16,7 +16,7 @@ afterEach(() => {
 
 const hit = (kind: string, id: string, match = "meaning") => ({
   kind,
-  product_id: `wd-${kind}-ai`,
+  product_id: `wasifyai-${kind}-ai`,
   id,
   score: 0.7,
   match,
@@ -79,8 +79,8 @@ describe("useCreationSearch", () => {
     const urls = fetchMock.mock.calls.map((c) => c[0] as string);
     expect(urls[0]).toBe("/api/creations/search?q=rain+madrid&limit=30");
     expect(urls.slice(1).sort()).toEqual([
-      "/api/products/wd-image-ai/images?ids=i1",
-      "/api/products/wd-music-ai/songs?ids=s2,s1",
+      "/api/products/wasifyai-image/images?ids=i1",
+      "/api/products/wasifyai-music/songs?ids=s2,s1",
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     const s = result.current;

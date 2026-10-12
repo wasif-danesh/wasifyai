@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-litellm
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {{- include "wasifyai.selector" (dict "root" . "component" "litellm") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "wasifyai.selector" (dict "root" . "component" "litellm") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/litellm-config.yaml") . | sha256sum | trunc 16 | quote }}
+    spec:
+      {{- if .Values.postgres.enabled }}
+      initContainers:
+        - name: wait-for-db
+          image: {{ .Values.postgres.image }}
+          command: ["sh", "-c", "until pg_isready -h {{ .Release.Name }}-postgres -U {{ .Values.postgres.user }}; do sleep 2; done"]
+      {{- end }}
+      containers:
+        - name: litellm
+          image: {{ .Values.litellm.image }}
+          args: ["--config", "/app/config.yaml", "--port", "4000"]
+          ports: [{ name: http, containerPort: 4000 }]
+          env:
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: LITELLM_API_KEY }
+            - name: LITELLM_SALT_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: LITELLM_SALT_KEY }
+            - { name: STORE_MODEL_IN_DB, value: "True" }
+            {{- if .Values.postgres.enabled }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: POSTGRES_PASSWORD }
+            - name: DATABASE_URL
+              value: "postgresql://{{ .Values.postgres.user }}:$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgres:5432/{{ .Values.postgres.database }}?schema=litellm"
+            {{- else }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: LITELLM_DATABASE_URL }
+            {{- end }}
+          readinessProbe:
+            httpGet: { path: /health/readiness, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - { name: config, mountPath: /app/config.yaml, subPath: config.yaml, readOnly: true }
+          resources: {{- toYaml .Values.litellm.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap: { name: {{ .Release.Name }}-litellm }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-litellm
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "wasifyai.selector" (dict "root" . "component" "litellm") | nindent 4 }}
+  ports: [{ name: http, port: 4000, targetPort: http }]

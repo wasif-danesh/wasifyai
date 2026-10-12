@@ -4,8 +4,8 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
-from wd_api.admin import AuditEntry, PostgresAdminStore
-from wd_api.users import PostgresUserStore
+from wasifyai_api.admin import AuditEntry, PostgresAdminStore
+from wasifyai_api.users import PostgresUserStore
 
 from tests.user_store_contract import NO_ADMINS, claims
 
@@ -46,7 +46,7 @@ async def test_users_songs_usage_and_audit(engine, stores):
         await conn.execute(
             text(
                 "INSERT INTO songs (id, tenant_id, product_id, user_id, title, lyrics, style, "
-                "audio_key) VALUES (:id, :t, 'wd-music-ai', :u, 'Hi', 'l', 's', 'a.mp3')"
+                "audio_key) VALUES (:id, :t, 'wasifyai-music', :u, 'Hi', 'l', 's', 'a.mp3')"
             ),
             {"id": uuid4(), "t": tenant, "u": ann.id},
         )
@@ -54,7 +54,7 @@ async def test_users_songs_usage_and_audit(engine, stores):
             await conn.execute(
                 text(
                     "INSERT INTO usage_events (id, tenant_id, product_id, user_id, kind, quantity, "
-                    "unit) VALUES (:id, :t, 'wd-music-ai', :u, :k, :q, 'x')"
+                    "unit) VALUES (:id, :t, 'wasifyai-music', :u, :k, :q, 'x')"
                 ),
                 {"id": uuid4(), "t": tenant, "u": ann.id, "k": kind, "q": qty},
             )

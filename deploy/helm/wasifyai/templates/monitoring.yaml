@@ -1,0 +1,115 @@
+{{- if and .Values.metrics.enabled (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") }}
+# What Prometheus scrapes, when it alerts and the dashboard (ADR-0048). The stack is installed separately.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}-api
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+    release: {{ .Values.metrics.releaseLabel }}
+spec:
+  selector:
+    matchLabels: {{- include "wasifyai.labels" . | nindent 6 }}
+  namespaceSelector: { matchNames: [{{ .Release.Namespace }}] }
+  endpoints:
+    - { port: metrics, interval: 15s }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-alerts
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+    release: {{ .Values.metrics.releaseLabel }}
+spec:
+  groups:
+    - name: wasifyai.meta
+      rules:
+        # Always firing: Alertmanager forwards it to the outside heartbeat (ADR-0048).
+        - alert: Watchdog
+          expr: vector(1)
+          labels: { severity: none }
+          annotations: { summary: "Watchdog: monitoring is alive" }
+    - name: wasifyai.critical
+      rules:
+        - alert: ApiDown
+          expr: up{service="{{ .Release.Name }}-api", endpoint="metrics"} == 0
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: "The API is not answering"
+            runbook: "kubectl -n {{ .Release.Namespace }} get pods; kubectl -n {{ .Release.Namespace }} logs deploy/{{ .Release.Name }}-api"
+        - alert: MediaWorkerDown
+          expr: up{service="{{ .Release.Name }}-media-worker", endpoint="metrics"} == 0 or absent(up{service="{{ .Release.Name }}-media-worker"})
+          for: {{ .Values.metrics.alerts.workerDownFor }}
+          labels: { severity: critical }
+          annotations:
+            summary: "The media worker is down: no job will run"
+            runbook: "kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/component=media-worker"
+        - alert: JobQueueStuck
+          expr: wdai_jobs_queued > 0 and rate(wdai_jobs_total[10m]) == 0
+          for: {{ .Values.metrics.alerts.queueStuckFor }}
+          labels: { severity: critical }
+          annotations:
+            summary: "Jobs are waiting and none has finished for a while"
+            runbook: "Check the worker and the GPU server (ComfyUI, lip sync, speech) it is waiting on"
+        - alert: JobFailureRateHigh
+          expr: |
+            sum(rate(wdai_jobs_total{status="failed"}[10m]))
+              / clamp_min(sum(rate(wdai_jobs_total[10m])), 0.001) > {{ .Values.metrics.alerts.failureRatioCritical }}
+          for: 10m
+          labels: { severity: critical }
+          annotations:
+            summary: "More than half of the media jobs are failing"
+            runbook: "kubectl -n {{ .Release.Namespace }} logs deploy/{{ .Release.Name }}-media-worker --tail=100"
+        - alert: VolumeAlmostFull
+          expr: |
+            (kubelet_volume_stats_used_bytes{namespace="{{ .Release.Namespace }}"}
+              / kubelet_volume_stats_capacity_bytes{namespace="{{ .Release.Namespace }}"}) * 100 > {{ .Values.metrics.alerts.volumeFullPercent }}
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "A volume is more than {{ .Values.metrics.alerts.volumeFullPercent }}% full: {{`{{ $labels.persistentvolumeclaim }}`}}"
+            runbook: "Models and the database live on volumes: grow it or clear what is not needed"
+        - alert: PodNotReady
+          expr: kube_pod_status_ready{namespace="{{ .Release.Namespace }}", condition="true"} == 0
+          for: 10m
+          labels: { severity: critical }
+          annotations:
+            summary: "A pod has not been ready for 10 minutes: {{`{{ $labels.pod }}`}}"
+            runbook: "kubectl -n {{ .Release.Namespace }} describe pod {{`{{ $labels.pod }}`}}"
+    - name: wasifyai.warning
+      rules:
+        - alert: JobFailureRateElevated
+          expr: |
+            sum(rate(wdai_jobs_total{status="failed"}[15m]))
+              / clamp_min(sum(rate(wdai_jobs_total[15m])), 0.001) > {{ .Values.metrics.alerts.failureRatioWarning }}
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: "More than a fifth of the media jobs are failing"
+        - alert: ModerationUnavailable
+          expr: increase(wdai_run_errors_total{code="moderation_unavailable"}[10m]) > 3
+          labels: { severity: warning }
+          annotations:
+            summary: "The moderation model could not be reached several times (runs fail closed)"
+        - alert: RunErrorsSpike
+          expr: sum(increase(wdai_run_errors_total[10m])) > 10
+          labels: { severity: warning }
+          annotations:
+            summary: "Many runs ended in an error in the last 10 minutes"
+        - alert: ApiServerErrors
+          expr: sum(rate(wdai_http_requests_total{status=~"5.."}[5m])) > 0.1
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "The API is answering 5xx errors"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-dashboard
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  wasifyai.json: |
+{{ .Files.Get "dashboards/wasifyai.json" | indent 4 }}
+{{- end }}

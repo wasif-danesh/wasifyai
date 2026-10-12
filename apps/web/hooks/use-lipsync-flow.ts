@@ -12,8 +12,8 @@ import { HttpError, startRun, watchRun } from "@/lib/run-client";
 import type { ParsedEvent } from "@/lib/sse";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 
-export const LIPSYNC_PRODUCT = "wd-lipsync-ai";
-const STORAGE_KEY = "wd-lipsync-ai:run";
+export const LIPSYNC_PRODUCT = "wasifyai-lipsync";
+const STORAGE_KEY = "wasifyai-lipsync:run";
 const MAX_RECONNECTS = 6;
 
 /** The picture and a voice already uploaded (ADR-0039, ADR-0043), or a script and the voice to read it. */

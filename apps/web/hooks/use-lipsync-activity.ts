@@ -1,14 +1,14 @@
 "use client";
 
-import type { LipSyncSummary } from "@wd/contracts";
+import type { LipSyncSummary } from "@wasifyai/contracts";
 import { BURST_FOR_MS, BURST_MS, type Outcome, POLL_MS, useWorkingActivity } from "./use-activity";
 
 export { BURST_FOR_MS, BURST_MS, POLL_MS };
 export type { Outcome };
-export const STARTED_EVENT = "wd:lipsync-started";
+export const STARTED_EVENT = "wasifyai:lipsync-started";
 
 const CONFIG = {
-  product: "wd-lipsync-ai",
+  product: "wasifyai-lipsync",
   collection: "lipsyncs",
   label: (v: LipSyncSummary) => v.text || "Lip sync",
   startedEvent: STARTED_EVENT,

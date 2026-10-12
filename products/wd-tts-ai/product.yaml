@@ -1,6 +1,0 @@
-id: wd-tts-ai
-capabilities:
-  text.moderate:     { provider: litellm, model: moderator }
-  speech.synthesize: { provider: speech }
-quotas:
-  speeches_per_user_per_day: 30

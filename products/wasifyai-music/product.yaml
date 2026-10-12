@@ -1,0 +1,13 @@
+id: wasifyai-music
+capabilities:
+  text.moderate:  { provider: litellm, model: moderator }
+  text.lyrics:    { provider: litellm, model: lyrics-writer }
+  text.enhance:   { provider: litellm, model: prompt-enhancer }
+  music.generate: { provider: comfyui, workflow: ace-step-1.5-turbo, defaults: { duration_s: 60 } }
+  image.generate: { provider: comfyui, workflow: flux2-klein-4b, defaults: { width: 1024, height: 1024 } }
+quotas:
+  songs_per_user_per_day: 10
+settings:
+  audio_format: mp3
+enhance:
+  song_idea: { prompt: enhance_song_idea, max_chars: 500 }

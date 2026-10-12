@@ -19,10 +19,10 @@ events reach the browser when the process that resumes it is not the one holding
   in-memory implementation remains for tests.
 - **Run records in Redis** (owner, status, what the run waits for). Taking a pending user
   answer or job wait is atomic, so two concurrent resumes cannot both win.
-- **Job queue and results as streams with consumer groups.** `wd:jobs` (group `workers`) carries
-  jobs; `wd:jobs:done` (group `api`) carries results. This gives at-least-once delivery, crash
+- **Job queue and results as streams with consumer groups.** `wasifyai:jobs` (group `workers`) carries
+  jobs; `wasifyai:jobs:done` (group `api`) carries results. This gives at-least-once delivery, crash
   recovery (a job idle past its timeout is re-claimed) and queue positions without extra state.
-- **Completion without an HTTP callback.** The worker writes the result to `wd:jobs:done`; one API
+- **Completion without an HTTP callback.** The worker writes the result to `wasifyai:jobs:done`; one API
   replica claims it, takes the run's job wait atomically and resumes the graph. If the result
   arrives before the graph reached its wait, the entry stays unacknowledged and is retried.
   This replaces ADR-0006's "calls back the API": no new HTTP surface, shared secret or retry
@@ -40,12 +40,12 @@ events reach the browser when the process that resumes it is not the one holding
   placeholder images or audio with simulated progress, so the whole flow runs without a GPU.
 - **Usage.** The worker records `gpu.seconds` and `job.completed`; job outputs are stored under the
   owner's `tenant/product/user` prefix and results carry keys relative to it.
-- Keys are prefixed with the tenant (`wd:{tenant}:run:{run}:...`); product and user are checked
+- Keys are prefixed with the tenant (`wasifyai:{tenant}:run:{run}:...`); product and user are checked
   against the run record.
 
 ## Consequences
 
-- API replicas and workers scale independently; KEDA can scale workers on `wd:jobs` length.
+- API replicas and workers scale independently; KEDA can scale workers on `wasifyai:jobs` length.
 - Redis is now required for runs (it was already in the stack). It holds run state for 7 days.
 - Completion messages for runs that ended are dropped after a retry window.
 - The Helm chart gains an in-cluster object store, worker wiring and an optional ComfyUI

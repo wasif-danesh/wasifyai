@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from wd_platform_sdk import (
+from wasifyai_platform_sdk import (
     Audio,
     CapabilityBinding,
     Image,
@@ -15,8 +15,8 @@ from wd_platform_sdk import (
     load_product_config,
     part_from_file,
 )
-from wd_platform_sdk.parts import counts, modalities, to_openai_content
-from wd_platform_sdk.providers.litellm import LiteLLMTextProvider
+from wasifyai_platform_sdk.parts import counts, modalities, to_openai_content
+from wasifyai_platform_sdk.providers.litellm import LiteLLMTextProvider
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 16
 

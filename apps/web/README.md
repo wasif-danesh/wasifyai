@@ -9,7 +9,7 @@ product the user navigates with a **side panel** (ADR-0046), and the home page k
 
 | Page | What it is |
 |---|---|
-| `/` | The studio home, "WD AI Studio": a card per product (public) |
+| `/` | The studio home, "WasifyAI Studio": a card per product (public) |
 | `/music`, `/image`, `/video`, `/text-to-speech` | Create a song, an image, a video or speech (sign-in required). A video is made in the background: the top bar shows "Making your video…" and a notice says when it is ready |
 | `/music/songs/[id]`, `/image/creations/[id]`, `/video/creations/[id]`, `/text-to-speech/creations/[id]` | One saved result: the media, its words, downloads, delete (links are signed fresh on every visit) |
 | `/creations` | My creations: one library of everything the user made, newest first, as cards or a sortable table, with filters (`?show=songs\|images\|videos\|speeches`), "Load more" and a search that finds things by meaning or exact words in any language (sign-in required) |
@@ -38,14 +38,14 @@ Browser ── fetch ──► app/api/* (BFF route handlers) ──► FastAPI 
 so every behaviour is tested against recorded event sequences. `hooks/use-song-flow.ts` does the I/O
 around it:
 
-- starts a run and answers the approval (`/api/products/wd-music-ai/runs`, `/api/runs/{id}/resume`);
+- starts a run and answers the approval (`/api/products/wasifyai-music/runs`, `/api/runs/{id}/resume`);
 - **reconnects** if the stream drops mid-run, asking only for what it missed (`Last-Event-ID`);
 - **re-attaches after a reload** while a run is in progress or waiting for approval (the run id is
   kept in `sessionStorage`; the server replays the events). A *finished* run is not restored: the song
   lives in My creations, and the create page opens on an empty form;
 - shows an unreachable server or an API error in plain words, with Try again where retrying can help.
 
-The event contract the UI builds against is in `products/wd-music-ai/README.md`.
+The event contract the UI builds against is in `products/wasifyai-music/README.md`.
 
 ## Styling
 
@@ -96,7 +96,7 @@ admin (Google's verified email, or the primary verified address on your GitHub a
 
 ## Downloads
 
-The Download buttons point at `/api/products/wd-music-ai/songs/{id}/download/{audio|cover|video}`, not at the
+The Download buttons point at `/api/products/wasifyai-music/songs/{id}/download/{audio|cover|video}`, not at the
 storage link. Browsers ignore the `download` attribute on a link to another origin (the storage host), so
 the file would open in a tab. The route is served from the app's own origin with `Content-Disposition:
 attachment` and a readable name (`neon-rain.mp3`); the API looks the song up for the signed-in user only
@@ -124,7 +124,7 @@ lets a must-refuse request through; this takes about half a minute. **Reset to d
 
 ### Media
 
-`/admin/media` lists each product's media capabilities (for example `wd-music-ai` `image.generate` and `music.generate`) and
+`/admin/media` lists each product's media capabilities (for example `wasifyai-music` `image.generate` and `music.generate`) and
 what runs them. By default that is the product's own ComfyUI workflow on the local ComfyUI. Choose **Comfy Cloud / Comfy API (v2)**
 or, for images, an **OpenAI-compatible image API**, enter its address and key, then **Test connection** (it checks the service
 answers; it does not generate anything) or **Save**. The next job uses it. A saved key is kept when you save again for the same

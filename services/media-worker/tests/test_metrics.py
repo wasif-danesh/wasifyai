@@ -1,7 +1,7 @@
 """Worker metrics (ADR-0048): jobs are counted by capability and status; GPU time is summed."""
 
 from prometheus_client import generate_latest
-from wd_media_worker.metrics import record_job
+from wasifyai_media_worker.metrics import record_job
 
 
 def test_a_job_is_counted_timed_and_its_gpu_seconds_summed():

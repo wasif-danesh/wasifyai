@@ -1,0 +1,10 @@
+# Alertmanager routing when ALERT_NOTIFICATIONS is not "on" (every environment but production). Alerts still fire
+# and show in the Alertmanager and Grafana UIs; nothing is sent anywhere, and no token or heartbeat URL is stored.
+global:
+  resolve_timeout: 5m
+route:
+  receiver: "null"
+  group_by: [alertname]
+receivers:
+  - name: "null"
+inhibit_rules: []

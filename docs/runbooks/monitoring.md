@@ -6,9 +6,12 @@ In the `monitoring` namespace of each cluster: Prometheus, Alertmanager, Grafana
 The application chart adds the scrape target (API and worker, port 9464, not reachable from outside the cluster), 10
 alert rules plus the always-firing `Watchdog`, and a Grafana dashboard ("wd-ai overview").
 
-Install: `make monitoring-up` (also part of `make kind-up` in full mode). It reads `TELEGRAM_BOT_TOKEN`,
-`TELEGRAM_CHAT_ID` and `HEALTHCHECKS_PING_URL` from `.env` and stores them in Secrets; nothing is written to a file in
-the repository. Remove with `helm uninstall loki monitoring -n monitoring`.
+Install: `make monitoring-up` (also part of `make kind-up` in full mode). **Only production sends:** without
+`ALERT_NOTIFICATIONS=on` alerts fire and show in Alertmanager and Grafana, but nothing is sent and no token is stored.
+With it on, the script reads `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` and `HEALTHCHECKS_PING_URL` from `.env` and
+stores them in Secrets; nothing is written to a file in the repository. For the drills on kind:
+`ALERT_NOTIFICATIONS=on make monitoring-up`. To mute production temporarily, create a silence in Alertmanager
+(`kubectl -n monitoring port-forward svc/monitoring-alertmanager 9093:9093`, Silences, New silence). Remove with `helm uninstall loki monitoring -n monitoring`.
 
 ## Where to look
 

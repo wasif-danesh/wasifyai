@@ -280,8 +280,9 @@ make monitoring-drill   # stop the worker and expect an alert on Telegram, then 
 make monitoring-drill-meta   # stop Prometheus and expect Healthchecks.io to message you
 ```
 
-Alerts go to Telegram (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` in `.env`), and a heartbeat to Healthchecks.io
-(`HEALTHCHECKS_PING_URL`) tells you when the whole cluster is down. Dashboards, alert list and fire drills:
+Only production sends: with `ALERT_NOTIFICATIONS=on` alerts go to Telegram (`TELEGRAM_BOT_TOKEN`,
+`TELEGRAM_CHAT_ID` in `.env`) and a heartbeat to Healthchecks.io (`HEALTHCHECKS_PING_URL`) tells you when the whole
+cluster is down. Everywhere else alerts still show in Alertmanager and Grafana but nothing is sent. Dashboards, alert list and fire drills:
 [runbook](docs/runbooks/monitoring.md), [ADR-0048](docs/decisions/0048-monitoring-and-alerting.md).
 
 ### Develop with live reload

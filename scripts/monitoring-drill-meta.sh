@@ -5,6 +5,8 @@
 # the check's period plus grace must be shorter than this).
 set -uo pipefail
 . "$(dirname "$0")/lib.sh"
+NOTIFY="${ALERT_NOTIFICATIONS:-$(env_value ALERT_NOTIFICATIONS || true)}"
+[ "$NOTIFY" = "on" ] || { bad "ALERT_NOTIFICATIONS is not on, so no heartbeat is sent and there is nothing to test"; exit 1; }
 MON=monitoring; WAIT="${DRILL_WAIT_MIN:-12}"
 restore() {
   kubectl -n $MON scale deploy/monitoring-operator --replicas=1 >/dev/null 2>&1

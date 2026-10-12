@@ -208,7 +208,13 @@ creations that are missing from the index and how many it embeds each time.
 The API and the media worker serve Prometheus metrics on `METRICS_PORT` (default 9464, separate from the API's
 public port; `0` turns it off). Nothing but the cluster's Prometheus reaches it. See `docs/runbooks/monitoring.md`
 and ADR-0048. The alert thresholds are chart values (`metrics.alerts.*`) and the stack is installed with
-`make monitoring-up`, from `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` and `HEALTHCHECKS_PING_URL` in `.env`.
+`make monitoring-up`.
+
+**Only production sends alerts.** `ALERT_NOTIFICATIONS=on` (production values, or `.env` for a drill on kind) makes
+Alertmanager send to Telegram and the Watchdog heartbeat go to Healthchecks.io, using `TELEGRAM_BOT_TOKEN`,
+`TELEGRAM_CHAT_ID` and `HEALTHCHECKS_PING_URL`. Anything else (the default) routes every alert to a null receiver and
+stores no token in the cluster: alerts still fire and show in Alertmanager and Grafana. There is no admin switch; to
+mute production for a while, use an Alertmanager silence.
 
 ### A separate ComfyUI for video
 

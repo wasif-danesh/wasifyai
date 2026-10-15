@@ -14,3 +14,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["wasifyai_image"]
+
+# The prompt templates are product files, not Python, but a wheel has to carry them.
+[tool.hatch.build.targets.wheel.force-include]
+"prompts" = "wasifyai_image/prompts"

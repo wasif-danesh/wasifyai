@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { createRunClient } from "@wasifyai/client";
-import { Button, CreateImage, Notice, PageHero, Spinner, page } from "@wasifyai/ui";
+import { Button, CreateImage, JobMeter, Notice, PageHero, Spinner, page } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
 import {
   type EngineStatus,
+  type UpdateStatus,
+  engineRepair,
   engineRestart,
   engineSession,
   engineStatus,
+  installFraction,
   onEngineStatus,
+  updateCheck,
+  updateInstall,
 } from "./engine";
 import { runSmoke, smokeEnabled } from "./smoke";
 import { createEngineTransport } from "./transport";
@@ -17,15 +22,42 @@ const transport = createEngineTransport(engineSession);
 const client = createRunClient(transport);
 
 function EngineState({ status }: { status: Exclude<EngineStatus, { state: "ready" }> }) {
+  if (status.state === "installing") {
+    const p = status.progress;
+    return (
+      <section className="grid gap-4" aria-label="Setting up">
+        <p className="text-muted-foreground">
+          Setting up the engine on this computer. This happens once and needs an internet
+          connection.
+        </p>
+        <JobMeter
+          title={`Step ${p.index} of ${p.count}: ${p.label}`}
+          text={`${Math.round(installFraction(p) * 100)}%`}
+          value={installFraction(p)}
+          label="Setup progress"
+        />
+        {p.detail ? (
+          <p className="truncate text-muted-foreground text-sm" aria-live="off">
+            {p.detail}
+          </p>
+        ) : null}
+      </section>
+    );
+  }
   if (status.state === "failed") {
     return (
       <Notice
         tone="error"
-        title="The engine could not start"
+        title={status.step ? "The engine could not be set up" : "The engine could not start"}
         actions={
-          <Button type="button" onClick={() => void engineRestart()}>
-            Try again
-          </Button>
+          <>
+            <Button type="button" onClick={() => void engineRestart()}>
+              Try again
+            </Button>
+            <Button type="button" variant="outline" onClick={() => void engineRepair()}>
+              Repair the installation
+            </Button>
+          </>
         }
       >
         {status.message}
@@ -51,6 +83,37 @@ function EngineState({ status }: { status: Exclude<EngineStatus, { state: "ready
         ? `Starting the engine (attempt ${status.attempt})`
         : "Starting the engine"}
     </output>
+  );
+}
+
+/** An update, when this build has a feed and one is waiting. Quiet otherwise. */
+function UpdateBanner() {
+  const [update, setUpdate] = useState<UpdateStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    updateCheck()
+      .then(setUpdate)
+      .catch(() => {});
+  }, []);
+  if (update?.state !== "available") return null;
+  return (
+    <Notice
+      title={`wasifyai ${update.version} is available`}
+      actions={
+        <Button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            updateInstall().catch(() => setBusy(false));
+          }}
+        >
+          {busy ? "Installing…" : "Install and restart"}
+        </Button>
+      }
+    >
+      {update.notes}
+    </Notice>
   );
 }
 
@@ -87,7 +150,10 @@ export function App() {
   return (
     <main id="main" className={page}>
       {status.state === "ready" ? (
-        <CreateImage client={client} readyNote="It's saved on this computer." />
+        <>
+          <UpdateBanner />
+          <CreateImage client={client} readyNote="It's saved on this computer." />
+        </>
       ) : (
         <>
           <PageHero title="wasifyai" />

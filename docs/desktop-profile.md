@@ -92,6 +92,60 @@ output goes to `<app data>/logs/engine.log`. Tests: `uv run pytest services/api/
 packages/platform-sdk/tests/test_sqlite_adapters.py services/api/tests/test_sqlite_stores.py` and
 `cargo test` in `apps/desktop/src-tauri`.
 
+## Provisioning: how the engine gets onto a computer
+
+An installed app carries no Python. On first run (and on "Repair") the shell builds the engine's environment
+under `<app data>/engine` from two things: the **component manifest** compiled into the shell
+(`apps/desktop/src-tauri/engine-manifest.json`: exact uv and Python versions, a SHA-256 and size for the uv
+download of each platform, the free space needed) and the **engine bundle** shipped inside the app
+(`scripts/build-engine-bundle.sh`, or `make engine-bundle`: our wheels, `requirements.lock` with a hash for
+every third-party package, product config, and `bundle.json` with a SHA-256 for every file).
+
+| Step | What happens | Shown in the window as |
+|---|---|---|
+| 1 check | every bundle file is checked against `bundle.json`; free disk space against the manifest (1 GiB) | "Checking this computer" |
+| 2 uv | uv is downloaded from its pinned release, its SHA-256 is checked, it is unpacked; a later run checks the unpacked binary against the checksum recorded then | "Getting the installer", with bytes |
+| 3 python | `uv python install 3.12.15` into `engine/python` (uv checks the Python build it downloads) | "Installing Python" |
+| 4 environment | `uv venv` into `engine/venv` | "Creating the engine's environment" |
+| 5 packages | `uv pip install --require-hashes --no-deps -r requirements.lock`, then our wheels | "Installing the engine" |
+| 6 verify | imports the engine in the new environment, writes `engine/state.json` (uv, Python, bundle checksum), removes uv's download cache | "Checking the engine" |
+
+The window shows `Step n of 6`, a bar, and the installer's latest output line. Output goes to
+`<app data>/logs/provision.log`. A step that fails says which and why, and the window offers **Try again** and
+**Repair the installation**. Repair removes the environment, checks uv again, installs everything, and if the
+new environment still does not work throws Python and uv's cache away and does it once more. A damaged bundle or
+too little disk space stops at step 1 and is not retried.
+
+Which engine the shell uses, in order: `WASIFYAI_ENGINE_PYTHON` (a path); with `WASIFYAI_PROVISION=1` the managed
+environment; a development checkout's `.venv`; the managed environment, installed from the bundle when missing
+or out of date (what an installed app does).
+
+Measured on this Mac (M5 Pro, macOS, from nothing, over the network): **25 s** for the whole install, **3.4 s**
+launch when it is already installed, **18 s** for a repair of a damaged environment. On disk afterwards:
+venv 195 MB, Python 66 MB, uv 34 MB (**294 MB**); the peak during install is about 520 MB because uv's
+download cache holds a second copy of the packages until step 6 removes it.
+
+| Variable | Meaning |
+|---|---|
+| `WASIFYAI_ENGINE_BUNDLE` | the engine bundle to install from (default: the app's resources, then the checkout's `apps/desktop/engine-bundle`) |
+| `WASIFYAI_PROVISION` | `1`: use the managed environment even in a checkout that has a `.venv` |
+| `WASIFYAI_REPAIR` | `1`: rebuild the environment at start |
+| `WASIFYAI_DATA_DIR` | another app data folder (tests, trying the installer) |
+| `WASIFYAI_ENGINE_PYTHON` | an explicit Python for the engine |
+
+Not done here: the bundle is not yet inside a packaged app (`cargo tauri build` with a `bundle.resources`
+entry is part of the installer work), and ComfyUI and the models are Phase 2 (ADR-0059). The window needs an
+internet connection for step 2 and 5; an offline install would need a wheelhouse in the bundle.
+
+## Updates of the app
+
+`updater.rs` is a skeleton that is off until a build has a signing key and a feed: compile with
+`WASIFYAI_UPDATER_PUBKEY` and `WASIFYAI_UPDATER_ENDPOINT` set and pass `--config` with a filled-in
+`tauri.updater.conf.example.json` (the plugin will not start without a key in the configuration, so it is not
+registered otherwise). The window checks once when the engine is ready and shows "Install and restart" if
+an update is waiting. Without those values the commands answer `not_configured` and nothing is contacted.
+Not verified against a real feed or a signed archive.
+
 ## Shared screens (packages/ui and packages/client)
 
 The image create screen is one piece of code that the web app and the desktop window both mount.
@@ -124,7 +178,6 @@ exercised. It needs the engine environment (`.venv`).
 
 ## What is not done
 
-- **Provisioning.** The shell finds an engine environment by path; nothing creates one yet (Phase 1, step 3).
 - **Result actions on desktop.** The window shows the picture and "Make another"; download and a library
   screen come with the gallery (Phase 2). There is no router yet.
 - **Other screens** (music, video, speech, ...) still live in `apps/web`; only the image screen is shared.

@@ -112,3 +112,44 @@ jobs:
         working-directory: apps/desktop/src-tauri
         env: { WASIFYAI_SMOKE: "1" }
         run: xvfb-run -a cargo run --locked
+
+  install:
+    # A clean install, as a first run does it: build the engine bundle, let the app download uv and Python
+    # and install the packages into an empty folder, then make an image in the window.
+    needs: [engine, shell]
+    strategy:
+      fail-fast: false
+      matrix: { os: [macos-latest, ubuntu-latest, windows-latest] }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install
+      - run: pnpm --filter @wasifyai/desktop build
+      - name: Engine bundle
+        shell: bash
+        run: ./scripts/build-engine-bundle.sh
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libayatana-appindicator3-dev libssl-dev patchelf xvfb
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: apps/desktop/src-tauri }
+      - name: Install and self-test
+        shell: bash
+        working-directory: apps/desktop/src-tauri
+        env:
+          WASIFYAI_SMOKE: "1"
+          WASIFYAI_PROVISION: "1"
+          WASIFYAI_DATA_DIR: ${{ runner.temp }}/wasifyai-data
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a cargo run --locked; else cargo run --locked; fi
+      - if: always()
+        name: Installer log
+        shell: bash
+        run: cat "${{ runner.temp }}/wasifyai-data/logs/provision.log" || true

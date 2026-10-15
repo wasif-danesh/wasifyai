@@ -1,7 +1,7 @@
 CONTAINER_ENGINE ?= podman
 export CONTAINER_ENGINE
 
-.PHONY: test-comfyui test-integration setup setup-k8s preflight dev down logs migrate test lint format contracts helm-lint kind-up kind-test kind-e2e kind-down monitoring-up monitoring-drill monitoring-drill-meta urls
+.PHONY: engine-bundle test-comfyui test-integration setup setup-k8s preflight dev down logs migrate test lint format contracts helm-lint kind-up kind-test kind-e2e kind-down monitoring-up monitoring-drill monitoring-drill-meta urls
 setup:
 	./scripts/setup.sh
 setup-k8s:
@@ -34,6 +34,8 @@ lint:
 	pnpm lint && pnpm typecheck
 format:
 	uv run ruff format . && uv run ruff check --fix .
+engine-bundle:   # the files the desktop app installs the engine from (apps/desktop/engine-bundle)
+	./scripts/build-engine-bundle.sh
 contracts:
 	uv run python scripts/export_openapi.py
 	pnpm --filter @wasifyai/contracts generate

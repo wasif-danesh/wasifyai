@@ -7,10 +7,16 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod disk;
+mod download;
 mod engine;
+mod logsink;
 #[allow(dead_code)]
 mod loopback_http;
+mod manifest;
+mod provision;
 mod session;
+mod updater;
 mod windows_job;
 
 use engine::{Engine, Session, Status};
@@ -31,10 +37,27 @@ fn engine_restart(engine: State<'_, Engine>) {
     engine.restart();
 }
 
+#[tauri::command]
+async fn update_check(app: tauri::AppHandle) -> updater::UpdateStatus {
+    updater::check(&app).await
+}
+
+#[tauri::command]
+async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
+    updater::install(&app).await
+}
+
+#[tauri::command]
+fn engine_repair(engine: State<'_, Engine>) {
+    engine.repair();
+}
+
 /// True when the shell was started to test itself (`WASIFYAI_SMOKE=1`): the window then drives its
 /// own create screen and calls `smoke_report`. Used by `cargo run` in CI and by hand.
 fn smoke_requested() -> bool {
-    std::env::var("WASIFYAI_SMOKE").map(|v| v == "1").unwrap_or(false)
+    std::env::var("WASIFYAI_SMOKE")
+        .map(|v| v == "1")
+        .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -87,7 +110,7 @@ fn main() {
     windows_job::initialize();
 
     let engine = Engine::new();
-    let app = tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         // a second launch brings the first window forward instead of starting another engine
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main_window(app);
@@ -97,16 +120,35 @@ fn main() {
             engine_status,
             engine_session,
             engine_restart,
+            engine_repair,
+            update_check,
+            update_install,
             smoke_enabled,
             smoke_report
         ])
         .setup(move |app| {
-            let data_dir = app.path().app_data_dir()?;
+            // WASIFYAI_DATA_DIR: a different app data folder, for tests and for trying the installer
+            // without touching the real one.
+            let data_dir = match std::env::var_os("WASIFYAI_DATA_DIR") {
+                Some(d) => std::path::PathBuf::from(d),
+                None => app.path().app_data_dir()?,
+            };
             std::fs::create_dir_all(&data_dir)?;
-            engine.start(app.handle().clone(), data_dir);
+            engine.start(
+                app.handle().clone(),
+                engine::Input {
+                    data_dir,
+                    resource_dir: app.path().resource_dir().ok(),
+                },
+            );
             quit_on_signals(app.handle().clone());
             Ok(())
-        })
+        });
+    // Only a build with a signing key and a feed registers the updater (see updater.rs).
+    if updater::configured().is_some() {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    }
+    let app = builder
         .build(tauri::generate_context!())
         .expect("failed to build the wasifyai desktop app");
 

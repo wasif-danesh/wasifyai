@@ -10,7 +10,9 @@ apps/desktop/
 ├─ src/                 the window (Vite + React): the shared create screen, or the engine's state
 │                       transport.ts (loopback + token), smoke.ts (the self-test)
 ├─ src-tauri/           the shell (Rust)
-│  └─ src/              engine.rs (supervision), session.rs (the window's token), main.rs
+│  ├─ engine-manifest.json   exact uv and Python pins and checksums
+│  └─ src/              engine.rs (supervision), provision.rs + manifest.rs + download.rs (the installer),
+│                       updater.rs (off until a key and feed are set), session.rs, main.rs
 │                       windows_job.rs, loopback_http.rs: imported, see PROVENANCE.md
 └─ LICENSE-AGPL
 ```
@@ -32,10 +34,11 @@ pnpm --filter @wasifyai/desktop test      # the transport
 cd src-tauri && WASIFYAI_SMOKE=1 cargo run   # the self-test: make an image in the real window, exit 0 or 1
 ```
 
-The engine's Python is taken from `WASIFYAI_ENGINE_PYTHON`, then `<app data>/engine/venv`, then the
-checkout's `.venv`. Logs: `<app data>/logs/engine.log` (macOS: `~/Library/Application Support/ai.wasifyai.desktop`).
+The engine's Python is taken from `WASIFYAI_ENGINE_PYTHON`, then (with `WASIFYAI_PROVISION=1`) the managed
+environment, then the checkout's `.venv`, then the managed environment installed from the engine bundle
+(`make engine-bundle`); see `docs/desktop-profile.md`. Logs: `<app data>/logs/engine.log` (macOS: `~/Library/Application Support/ai.wasifyai.desktop`).
 
 ## Not yet
 
-Signing and notarisation, the updater, the installer/provisioner, tray and deep links. The bundle identifier
+Signing and notarisation, a packaged installer that carries the engine bundle, tray and deep links. The bundle identifier
 `ai.wasifyai.desktop` and the icons are placeholders.

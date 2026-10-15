@@ -1,8 +1,8 @@
 # Desktop Phase 1: evidence (engine profile and shell)
 
-Date: 2026-10-15. Machine: MacBook Pro M5 Pro, 64 GB, macOS. Scope done: ADR-0056 steps 1, 2, 4 and 5
-(engine desktop profile, Tauri shell, shared image screen in `packages/ui` + `packages/client`, end to end on the
-Mac). Provisioning and the CI run are not done; see "Not verified" below. Everything is a **debug build against the repository's `.venv`**, not a
+Date: 2026-10-15. Machine: MacBook Pro M5 Pro, 64 GB, macOS. Scope done: ADR-0056 steps 1 to 5
+(engine desktop profile, Tauri shell with installer and updater skeleton, shared image screen in `packages/ui` +
+`packages/client`, end to end on the Mac). The CI run (step 6) has not happened; see "Not verified" below. Everything is a **debug build against the repository's `.venv`**, not a
 packaged app.
 
 ## Measured
@@ -38,6 +38,20 @@ number needs to come down.
 | Second launch while the first runs | exits within 4 s, one shell and one engine remain |
 | SIGTERM while running | engine and shell gone within 1 s |
 
+## Provisioning (step 3), run for real
+
+`WASIFYAI_PROVISION=1 WASIFYAI_DATA_DIR=<empty folder> WASIFYAI_SMOKE=1 ./target/debug/wasifyai-desktop`, on the
+Mac, over the network (uv 17 MB from GitHub; Python and 77 packages through uv):
+
+| Run | Time | Result |
+|---|---|---|
+| From nothing: download uv, install Python 3.12.15, venv, packages, verify, then the whole self-test | **25.6 s** | exit 0, image made in the window |
+| Second launch, already installed | **3.4 s** | exit 0, nothing downloaded |
+| Repair after deleting a file from the engine package (`WASIFYAI_REPAIR=1`) | **17.9 s** | exit 0; the file is back |
+
+Disk afterwards: venv 195 MB, Python 66 MB, uv 34 MB: **294 MB**. Before the cache is removed at the end of
+install the folder held 218 MB more, so the free-space requirement is set at 1 GiB.
+
 ## Tests that exist now
 
 | Where | What | Result here |
@@ -47,11 +61,11 @@ number needs to come down.
 | `products/wasifyai-image/tests/test_image_sqlite.py` | image records, index source | pass |
 | `packages/platform-sdk/tests/test_storage.py` | local files and signed links | pass |
 | `services/api/tests/test_desktop_profile.py` | an image made end to end through the queue and worker, file links, search, replay, restart, a real launcher subprocess | pass |
-| `apps/desktop/src-tauri` `cargo test` | ready-line parsing, token claims, loopback client | 8 pass (Windows-only job tests did not run) |
+| `apps/desktop/src-tauri` `cargo test` | ready line, token claims, loopback client; manifest pins; download and checksum (loopback server); archive extraction; free space; the installer's steps, repair, disk and bundle checks against a fake uv; updater status | 31 pass (Windows-only job tests did not run; the fake-uv tests are Unix-only) |
 | `packages/client` | transport and run client, SSE parser, image flow reducer | 16 pass |
 | `packages/ui` | image form, flow hook, create screen with the app's own actions, picture helpers | 15 pass |
 | `apps/web` | the whole suite, with the image screen now mounted from `packages/ui`; `next build` | 279 + 1 pass; build passes |
-| `apps/desktop` | the engine transport | 6 pass |
+| `apps/desktop` | the engine transport, the install progress fraction | 9 pass |
 | whole Python suite | | 760 passed, 38 skipped (integration tests that need Postgres, Redis or models) |
 
 ## Not verified
@@ -63,5 +77,10 @@ number needs to come down.
 - **What the window looks like.** The self-test drives and checks the DOM, not pixels; no screenshot was
   taken, and the web app's own pages were not compared before and after the move (the built CSS does contain
   the shared package's classes, and the web test suite and `next build` pass).
-- **A packaged app** (`.app`, `.dmg`, signing): not built.
+- **A packaged app** (`.app`, `.dmg`, signing): not built. The engine bundle is found next to the checkout, not
+  inside an app's resources, and `cargo tauri build` was not run.
+- **The installer on Windows and Linux**, and the Intel Mac build of uv: the manifest has the checksums, nothing
+  was run. The Unix-only installer tests do not run on Windows.
+- **The updater** against a real feed and a signed archive.
+- **Offline install.** Step 2 and step 5 need the network.
 - **Image generation on a real engine.** The stub image engine makes placeholder files.

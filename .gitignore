@@ -67,3 +67,6 @@ GEMINI.md
 .gemini/
 .github/copilot-instructions.md
 bengali-review/
+
+# The engine bundle the desktop app installs from (scripts/build-engine-bundle.sh)
+apps/desktop/engine-bundle/

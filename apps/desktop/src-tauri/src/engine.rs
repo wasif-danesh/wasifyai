@@ -10,7 +10,6 @@
 //! The process-group and tree-kill handling follows the approach of Unsloth Studio's
 //! `process.rs` (see PROVENANCE.md); the code is written for this engine.
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -22,6 +21,9 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::Notify;
 
+use crate::logsink::LogSink;
+use crate::manifest::{host_target, Manifest};
+use crate::provision::{self, Mode, Progress, ProvisionConfig};
 use crate::{loopback_http, session};
 
 pub const STATUS_EVENT: &str = "engine://status";
@@ -32,7 +34,6 @@ const HEALTH_EVERY: Duration = Duration::from_millis(250);
 const GRACE: Duration = Duration::from_secs(8);
 const MAX_RESTARTS: usize = 5;
 const RESTART_WINDOW: Duration = Duration::from_secs(60);
-const LOG_ROTATE_BYTES: u64 = 5 * 1024 * 1024;
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -41,9 +42,22 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum Status {
-    Starting { attempt: u32 },
-    Ready { base_url: String, pid: u32 },
-    Failed { message: String },
+    /// First run, or a repair: the engine's environment is being installed.
+    Installing {
+        progress: Progress,
+    },
+    Starting {
+        attempt: u32,
+    },
+    Ready {
+        base_url: String,
+        pid: u32,
+    },
+    /// `step` is the install step that failed, when the failure was an install.
+    Failed {
+        message: String,
+        step: Option<String>,
+    },
     Stopped,
 }
 
@@ -68,6 +82,7 @@ struct Shared {
     status: Mutex<Status>,
     secret: String,
     stopping: AtomicBool,
+    repair_requested: AtomicBool,
     stop: Notify,
     restart: Notify,
     task: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
@@ -85,6 +100,8 @@ impl Engine {
                 status: Mutex::new(Status::Stopped),
                 secret: new_secret(),
                 stopping: AtomicBool::new(false),
+                // WASIFYAI_REPAIR=1: rebuild the environment at start (support, tests)
+                repair_requested: AtomicBool::new(env_flag("WASIFYAI_REPAIR")),
                 stop: Notify::new(),
                 restart: Notify::new(),
                 task: Mutex::new(None),
@@ -107,25 +124,26 @@ impl Engine {
                     expires_at: t.expires_at,
                 })
             }
-            Status::Failed { message } => Err(message),
+            Status::Failed { message, .. } => Err(message),
             _ => Err("the engine is not ready yet".into()),
         }
     }
 
     /// Start the supervisor on the app's async runtime.
-    pub fn start(&self, app: AppHandle, data_dir: PathBuf) {
+    pub fn start(&self, app: AppHandle, input: Input) {
         let shared = self.shared.clone();
-        let handle = tauri::async_runtime::spawn(async move {
-            match resolve(&data_dir) {
-                Ok(cfg) => supervise(app, shared, cfg).await,
-                Err(message) => set_status(&app, &shared, Status::Failed { message }),
-            }
-        });
+        let handle = tauri::async_runtime::spawn(supervise(app, shared, input));
         *self.shared.task.lock().unwrap() = Some(handle);
     }
 
     /// Ask for a fresh start (the window's "restart engine" button).
     pub fn restart(&self) {
+        self.shared.restart.notify_one();
+    }
+
+    /// Rebuild the engine's environment and start it again (the window's "Repair" button).
+    pub fn repair(&self) {
+        self.shared.repair_requested.store(true, Ordering::SeqCst);
         self.shared.restart.notify_one();
     }
 
@@ -153,10 +171,32 @@ fn set_status(app: &AppHandle, shared: &Shared, status: Status) {
 
 // ---- where the engine is ---------------------------------------------------------------------
 
-/// The engine's Python, in order: an explicit path (development), the environment the provisioner
-/// made under the app data folder, the repository's own `.venv` (a development checkout).
-pub fn resolve(data_dir: &Path) -> Result<LaunchConfig, String> {
-    let repo = std::env::var_os("WASIFYAI_REPO")
+/// What the shell knows when it starts.
+#[derive(Clone, Debug)]
+pub struct Input {
+    pub data_dir: PathBuf,
+    /// Where the app's bundled files are (the engine bundle sits in `engine-bundle` under it).
+    pub resource_dir: Option<PathBuf>,
+}
+
+/// What to do before the engine can start.
+enum Plan {
+    /// There is an engine to run now.
+    Use(LaunchConfig),
+    /// Install it first (or again).
+    Provision(ProvisionConfig, LaunchConfig),
+}
+
+fn venv_python_in(root: &Path) -> PathBuf {
+    if cfg!(windows) {
+        root.join("Scripts").join("python.exe")
+    } else {
+        root.join("bin").join("python")
+    }
+}
+
+fn dev_repo() -> Option<PathBuf> {
+    std::env::var_os("WASIFYAI_REPO")
         .map(PathBuf::from)
         .or_else(|| {
             // apps/desktop/src-tauri -> the repository root, for a development build
@@ -165,79 +205,104 @@ pub fn resolve(data_dir: &Path) -> Result<LaunchConfig, String> {
                 .nth(3)
                 .map(Path::to_path_buf)
         })
-        .filter(|p| p.join("services/api").is_dir());
-
-    let venv_python = |root: &Path| -> PathBuf {
-        if cfg!(windows) {
-            root.join("Scripts").join("python.exe")
-        } else {
-            root.join("bin").join("python")
-        }
-    };
-
-    let python = if let Some(p) = std::env::var_os("WASIFYAI_ENGINE_PYTHON") {
-        PathBuf::from(p)
-    } else {
-        let managed = venv_python(&data_dir.join("engine").join("venv"));
-        if managed.is_file() {
-            managed
-        } else if let Some(r) = &repo {
-            venv_python(&r.join(".venv"))
-        } else {
-            managed
-        }
-    };
-    if !python.is_file() {
-        return Err(format!(
-            "The engine is not installed ({} is missing). Run `make setup` in a development checkout, \
-             or set WASIFYAI_ENGINE_PYTHON.",
-            python.display()
-        ));
-    }
-
-    let products_dir = std::env::var_os("WASIFYAI_PRODUCTS_DIR")
-        .map(PathBuf::from)
-        .or_else(|| repo.as_ref().map(|r| r.join("products")))
-        .unwrap_or_else(|| data_dir.join("engine").join("products"));
-    // The data folder, never the checkout: the engine's settings reader would pick up a development
-    // `.env` (database URLs, keys) from its working directory.
-    let cwd = data_dir.to_path_buf();
-    Ok(LaunchConfig {
-        python,
-        cwd,
-        products_dir,
-        data_dir: data_dir.to_path_buf(),
-        image_engine: std::env::var("WASIFYAI_IMAGE_ENGINE").unwrap_or_else(|_| "stub".into()),
-    })
+        .filter(|p| p.join("services/api").is_dir())
 }
 
-// ---- the engine's own log --------------------------------------------------------------------
+fn env_flag(name: &str) -> bool {
+    std::env::var(name).map(|v| v == "1").unwrap_or(false)
+}
 
-#[derive(Clone)]
-struct LogSink(Arc<Mutex<Option<std::fs::File>>>);
+/// The engine's Python, in order:
+///
+/// 1. `WASIFYAI_ENGINE_PYTHON`, an explicit path (development, tests);
+/// 2. with `WASIFYAI_PROVISION=1`: the managed environment, installed from the bundle;
+/// 3. a development checkout's own `.venv`;
+/// 4. the managed environment, installed from the bundle when it is missing or out of date: this is
+///    what an installed app does on its first run.
+fn plan(input: &Input, repair: bool) -> Result<Plan, String> {
+    let data_dir = &input.data_dir;
+    let repo = dev_repo();
+    let cwd = data_dir.clone(); // never the checkout: its `.env` must not reach the engine
+    let image_engine = std::env::var("WASIFYAI_IMAGE_ENGINE").unwrap_or_else(|_| "stub".into());
+    let products_env = std::env::var_os("WASIFYAI_PRODUCTS_DIR").map(PathBuf::from);
 
-impl LogSink {
-    fn open(data_dir: &Path) -> LogSink {
-        let dir = data_dir.join("logs");
-        let _ = std::fs::create_dir_all(&dir);
-        let path = dir.join("engine.log");
-        if std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0) > LOG_ROTATE_BYTES {
-            let _ = std::fs::rename(&path, dir.join("engine.log.1"));
+    let launch = |python: PathBuf, products_dir: PathBuf| LaunchConfig {
+        python,
+        cwd: cwd.clone(),
+        products_dir,
+        data_dir: data_dir.clone(),
+        image_engine: image_engine.clone(),
+    };
+
+    if let Some(p) = std::env::var_os("WASIFYAI_ENGINE_PYTHON") {
+        let python = PathBuf::from(p);
+        if !python.is_file() {
+            return Err(format!(
+                "WASIFYAI_ENGINE_PYTHON points at {}, which is not a file",
+                python.display()
+            ));
         }
-        let file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .ok();
-        LogSink(Arc::new(Mutex::new(file)))
+        let products = products_env
+            .or_else(|| repo.as_ref().map(|r| r.join("products")))
+            .unwrap_or_else(|| data_dir.join("engine").join("products"));
+        return Ok(Plan::Use(launch(python, products)));
     }
 
-    fn line(&self, source: &str, text: &str) {
-        log::debug!("[engine {source}] {text}");
-        if let Some(f) = self.0.lock().unwrap().as_mut() {
-            let _ = writeln!(f, "[{source}] {text}");
+    let manifest = Manifest::load()?;
+    let layout = provision::Layout::new(data_dir, &manifest);
+    let managed_python = venv_python_in(&layout.venv_dir());
+
+    let bundle_dir = std::env::var_os("WASIFYAI_ENGINE_BUNDLE")
+        .map(PathBuf::from)
+        .or_else(|| input.resource_dir.as_ref().map(|r| r.join("engine-bundle")))
+        .filter(|p| p.join("bundle.json").is_file())
+        .or_else(|| {
+            repo.as_ref()
+                .map(|r| r.join("apps/desktop/engine-bundle"))
+                .filter(|p| p.join("bundle.json").is_file())
+        });
+
+    let dev_python = repo.as_ref().map(|r| venv_python_in(&r.join(".venv")));
+    if !env_flag("WASIFYAI_PROVISION") {
+        if let (Some(py), Some(r)) = (&dev_python, &repo) {
+            if py.is_file() {
+                let products = products_env.unwrap_or_else(|| r.join("products"));
+                return Ok(Plan::Use(launch(py.clone(), products)));
+            }
         }
     }
+
+    let Some(bundle_dir) = bundle_dir else {
+        return Err(
+            "The engine is not installed and this app has no engine files to install it from. \
+             In a development checkout run `make setup`; to try the installer run \
+             scripts/build-engine-bundle.sh."
+                .into(),
+        );
+    };
+    let products = products_env.unwrap_or_else(|| bundle_dir.join("products"));
+    let launch_cfg = launch(managed_python, products);
+    let (_, bundle_sha) = provision::load_bundle(&bundle_dir)?;
+    // a repair rebuilds even an environment that looks complete
+    if !repair && provision::is_provisioned(&layout, &manifest, &bundle_sha) {
+        return Ok(Plan::Use(launch_cfg));
+    }
+    host_target().ok_or_else(|| {
+        format!(
+            "This computer ({} {}) is not supported yet.",
+            std::env::consts::OS,
+            std::env::consts::ARCH
+        )
+    })?;
+    Ok(Plan::Provision(
+        ProvisionConfig {
+            data_dir: data_dir.clone(),
+            bundle_dir,
+            manifest,
+            allow_http: false,
+        },
+        launch_cfg,
+    ))
 }
 
 // ---- the supervisor --------------------------------------------------------------------------
@@ -251,8 +316,51 @@ enum Outcome {
     Failed(String),
 }
 
-async fn supervise(app: AppHandle, shared: Arc<Shared>, cfg: LaunchConfig) {
-    let sink = LogSink::open(&cfg.data_dir);
+/// Make sure there is an engine to start: use the one that is there, or install it (or repair it).
+async fn prepare(
+    app: &AppHandle,
+    shared: &Arc<Shared>,
+    input: &Input,
+    sink: &LogSink,
+) -> Result<LaunchConfig, (String, Option<String>)> {
+    let repair = shared.repair_requested.swap(false, Ordering::SeqCst);
+    let (pcfg, launch) = match plan(input, repair) {
+        Ok(Plan::Use(cfg)) => {
+            if repair {
+                sink.line(
+                    "shell",
+                    "repair asked for, but this engine is not managed by the app",
+                );
+            }
+            return Ok(cfg);
+        }
+        Ok(Plan::Provision(p, l)) => (p, l),
+        Err(message) => return Err((message, None)),
+    };
+    let mode = if repair { Mode::Repair } else { Mode::Install };
+    sink.line("shell", &format!("installing the engine ({mode:?})"));
+
+    let (app2, shared2) = (app.clone(), shared.clone());
+    let on = Arc::new(move |progress: Progress| {
+        set_status(&app2, &shared2, Status::Installing { progress });
+    });
+    let result = tokio::select! {
+        r = provision::provision(&pcfg, mode, on) => r,
+        _ = shared.stop.notified() => {
+            return Err(("the app is closing".into(), None));
+        }
+    };
+    match result {
+        Ok(()) => {
+            sink.line("shell", "the engine is installed");
+            Ok(launch)
+        }
+        Err(e) => Err((e.message, Some(e.step))),
+    }
+}
+
+async fn supervise(app: AppHandle, shared: Arc<Shared>, input: Input) {
+    let sink = LogSink::open(&input.data_dir, "engine.log");
     let mut recent: Vec<Instant> = Vec::new();
     let mut attempt = 0u32;
     loop {
@@ -261,6 +369,25 @@ async fn supervise(app: AppHandle, shared: Arc<Shared>, cfg: LaunchConfig) {
         }
         attempt += 1;
         set_status(&app, &shared, Status::Starting { attempt });
+        let cfg = match prepare(&app, &shared, &input, &sink).await {
+            Ok(cfg) => cfg,
+            Err((message, step)) => {
+                if shared.stopping.load(Ordering::SeqCst) {
+                    break;
+                }
+                sink.line("shell", &format!("could not get an engine: {message}"));
+                set_status(&app, &shared, Status::Failed { message, step });
+                // an install does not fix itself: wait for Repair or Restart, or for the app to quit
+                tokio::select! {
+                    _ = shared.stop.notified() => break,
+                    _ = shared.restart.notified() => {
+                        recent.clear();
+                        attempt = 0;
+                        continue;
+                    }
+                }
+            }
+        };
         match run_once(&app, &shared, &cfg, &sink).await {
             Outcome::Stopped => break,
             Outcome::Restart => {
@@ -273,7 +400,14 @@ async fn supervise(app: AppHandle, shared: Arc<Shared>, cfg: LaunchConfig) {
                 recent.retain(|t| now.duration_since(*t) < RESTART_WINDOW);
                 recent.push(now);
                 if recent.len() > MAX_RESTARTS {
-                    set_status(&app, &shared, Status::Failed { message });
+                    set_status(
+                        &app,
+                        &shared,
+                        Status::Failed {
+                            message,
+                            step: None,
+                        },
+                    );
                     // wait for the person to ask again, or for the app to quit
                     tokio::select! {
                         _ = shared.stop.notified() => break,
@@ -508,8 +642,14 @@ mod tests {
     #[test]
     fn other_output_is_not_a_ready_line() {
         assert_eq!(parse_ready("INFO uvicorn started"), None);
-        assert_eq!(parse_ready(r#"{"event": "other", "port": 1, "pid": 2}"#), None);
-        assert_eq!(parse_ready(r#"{"event": "wasifyai.engine.ready", "port": 70000, "pid": 2}"#), None);
+        assert_eq!(
+            parse_ready(r#"{"event": "other", "port": 1, "pid": 2}"#),
+            None
+        );
+        assert_eq!(
+            parse_ready(r#"{"event": "wasifyai.engine.ready", "port": 70000, "pid": 2}"#),
+            None
+        );
     }
 
     #[test]
@@ -530,6 +670,9 @@ mod tests {
         .unwrap();
         assert_eq!(s["state"], "ready");
         assert_eq!(s["base_url"], "http://127.0.0.1:1");
-        assert_eq!(serde_json::to_value(Status::Stopped).unwrap()["state"], "stopped");
+        assert_eq!(
+            serde_json::to_value(Status::Stopped).unwrap()["state"],
+            "stopped"
+        );
     }
 }

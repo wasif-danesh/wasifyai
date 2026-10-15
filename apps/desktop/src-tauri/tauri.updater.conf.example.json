@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "plugins": {
+    "updater": {
+      "pubkey": "<the same value as WASIFYAI_UPDATER_PUBKEY>",
+      "endpoints": ["<the same value as WASIFYAI_UPDATER_ENDPOINT>"]
+    }
+  },
+  "bundle": { "createUpdaterArtifacts": true }
+}

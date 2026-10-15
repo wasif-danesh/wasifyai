@@ -83,6 +83,8 @@ pub struct LaunchConfig {
 #[derive(Default)]
 struct Measure {
     installed: bool,
+    /// when the shell's setup hook asked the engine to start (the window exists by then)
+    setup_ms: Option<u64>,
     ready_ms: Option<u64>,
     engine_pid: Option<u32>,
     engine_rss_ready: Option<u64>,
@@ -93,8 +95,12 @@ struct Measure {
 pub struct Measurements {
     /// the first run installed the engine before it started
     pub installed: bool,
+    /// from the shell's start to its setup hook (the window is being created until then)
+    pub shell_setup_ms: Option<u64>,
     /// from the shell's start to the engine answering, install included
     pub ready_ms: Option<u64>,
+    /// from the setup hook to the engine answering: the engine's own part, install included
+    pub engine_ms: Option<u64>,
     pub engine_rss_mb_at_ready: Option<u64>,
     pub engine_rss_mb_now: Option<u64>,
     pub shell_rss_mb: Option<u64>,
@@ -158,6 +164,7 @@ impl Engine {
     /// Start the supervisor on the app's async runtime.
     pub fn start(&self, app: AppHandle, input: Input) {
         let shared = self.shared.clone();
+        shared.measure.lock().unwrap().setup_ms = Some(shared.started.elapsed().as_millis() as u64);
         let handle = tauri::async_runtime::spawn(supervise(app, shared, input));
         *self.shared.task.lock().unwrap() = Some(handle);
     }
@@ -167,7 +174,9 @@ impl Engine {
         let mb = |b: u64| b / 1_000_000;
         Measurements {
             installed: m.installed,
+            shell_setup_ms: m.setup_ms,
             ready_ms: m.ready_ms,
+            engine_ms: m.ready_ms.zip(m.setup_ms).map(|(r, s)| r.saturating_sub(s)),
             engine_rss_mb_at_ready: m.engine_rss_ready.map(mb),
             engine_rss_mb_now: m.engine_pid.and_then(memory::rss_bytes).map(mb),
             shell_rss_mb: memory::rss_bytes(std::process::id()).map(mb),
@@ -543,8 +552,8 @@ async fn run_once(
         }
     })
     .await;
-    let port = match ready {
-        Ok(Ok((port, _pid))) => port,
+    let (port, engine_pid) = match ready {
+        Ok(Ok((port, engine_pid))) => (port, engine_pid),
         Ok(Err(message)) => {
             stop_child(&mut child, stdin).await;
             return Outcome::Failed(message);
@@ -571,8 +580,20 @@ async fn run_once(
         stop_child(&mut child, stdin).await;
         return Outcome::Failed(message);
     }
-    set_status(app, shared, Status::Ready { base_url, pid });
-    sink.line("shell", &format!("engine ready on port {port} (pid {pid})"));
+    // `pid` is the process we started; on Windows a venv's python.exe is a launcher that starts the
+    // real interpreter, whose pid the engine reports. Memory is read from the real one.
+    set_status(
+        app,
+        shared,
+        Status::Ready {
+            base_url,
+            pid: engine_pid,
+        },
+    );
+    sink.line(
+        "shell",
+        &format!("engine ready on port {port} (pid {engine_pid}, started as {pid})"),
+    );
 
     tokio::select! {
         status = child.wait() => {

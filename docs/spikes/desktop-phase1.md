@@ -101,10 +101,41 @@ for the WebKit helpers, which are other processes the shell does not own (those 
 was built and the folder created; the machine was not rebooted, so the engine's Python files and Python itself
 were not cold in the operating system's file cache on the relaunches.
 
-The same self-test prints these lines on every system (`SMOKE_METRICS {...}`); the `package` job of the
-`desktop` workflow runs the packaged app on macOS (`.app`), Linux (`.deb`, unpacked) and Windows (NSIS
-installer, silent) and prints them, so the Windows and Linux numbers come from CI runs, not from this Mac.
-Memory there is resident set size (Linux, macOS) or working set (Windows).
+### The same packaged app on the three CI systems (run 38703782545, commit f56bb08)
+
+The `package` job builds the app for each system, then runs the packaged result on a machine with no
+checkout: macOS runs `wasifyai.app`; Linux unpacks the `.deb` and runs `usr/bin/wasifyai-desktop` under xvfb;
+Windows installs the NSIS setup silently and runs the installed `wasifyai-desktop.exe`. Each runs twice: the
+first launch installs the engine, the second finds it installed. All six runs **passed** the self-test (a picture
+was made in the window).
+
+| | macOS (hosted runner, arm64) | Ubuntu (hosted runner, x64) | Windows (hosted runner, x64) |
+|---|---|---|---|
+| Packaged size | `.app` 18.1 MiB | `.deb` 7.8 MiB | NSIS setup 4.4 MB |
+| First launch, shell start to engine answering (install included) | 29.7 s | 47.4 s | 18.0 s |
+| Relaunch, shell start to engine answering | 3.1 s | **31.9 s** (see below) | 2.3 s |
+| Engine resident memory at ready, first and second launch | 167 MB, 155 MB | 169 MB, 159 MB | **not valid** (see below) |
+| Engine memory after one image | 171 MB, 161 MB | 177 MB, 168 MB | not valid |
+| Shell process memory | 101 to 104 MB | 184 to 196 MB | 33 to 42 MB |
+
+Hosted runners are shared virtual machines: they are for comparing systems against the Mac numbers above, not
+for a promise to users. Shell memory does not include the web view's own processes on any system (the Mac's
+96 MB of WebKit helpers were counted separately above; the numbers for Linux's WebKitGTK helpers and Windows'
+WebView2 were not taken).
+
+Two results are not clean, and the next CI run is set up to explain them:
+
+- **Windows engine memory (4 MB) is a measurement bug, not the engine's footprint.** The shell read the memory of
+  the process it started, and on Windows a venv's `python.exe` is a small launcher that starts the real
+  interpreter. The shell now reads the pid the engine itself reports.
+- **Linux relaunch 31.9 s** against 3.1 s (macOS) and 2.3 s (Windows) for an engine that is already
+  installed. The time is measured from the shell's start, so it also holds the time the window took to appear;
+  GTK on a runner with no accessibility bus is known to wait around 25 s. The shell now reports separately when
+  its setup hook ran (`shell_setup_ms`) and the engine's own part (`engine_ms`), and the job sets
+  `NO_AT_BRIDGE=1`. Until that run, the 31.9 s is **not** attributed to the engine.
+
+The macOS runner numbers are close to the M5 Pro's (24.8 s first launch, 2.1 s relaunch, 171 MB engine), which
+is the expected order for a smaller machine; engine memory is within 20 MB across Linux and macOS.
 
 ## CI on three systems (step 6): the second run, commit 2db73f6
 
@@ -142,8 +173,8 @@ like (the self-test checks the DOM), and anything about a packaged, signed app.
 
 ## Not verified
 
-- **Memory and cold start on Windows and Linux** come from the `package` job once it has run; until then only
-  the Mac was measured.
+- **Windows engine memory and the cause of Linux's 31.9 s relaunch**: see "The same packaged app on the three CI
+  systems"; they need one more CI run with the fixed measurement.
 - **What the window looks like.** The self-test drives and checks the DOM, not pixels; no screenshot was
   taken, and the web app's own pages were not compared before and after the move (the built CSS does contain
   the shared package's classes, and the web test suite and `next build` pass).

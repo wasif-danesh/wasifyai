@@ -39,7 +39,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uvx --from actionlint-py actionlint
+      # syntax, contexts and expressions of every workflow
+      - run: uvx --from actionlint-py actionlint -shellcheck=
+      # and shellcheck on the scripts of the desktop workflow too (ci.yml predates this check)
+      - run: uvx --from actionlint-py actionlint .github/workflows/desktop.yml
 
   engine:
     strategy:
@@ -188,15 +191,19 @@ jobs:
       WASIFYAI_SMOKE: "1"
       WEBKIT_DISABLE_COMPOSITING_MODE: "1"
       LIBGL_ALWAYS_SOFTWARE: "1"
+      # a hosted Linux runner has no accessibility bus; GTK would otherwise wait for one (Linux only)
+      NO_AT_BRIDGE: "1"
     steps:
       - uses: actions/checkout@v4
       # (the `runner` context is not available in a job's `env`, so these are set here)
       - name: Paths for the run
         shell: bash
         run: |
-          echo "WASIFYAI_REPO=$RUNNER_TEMP/no-checkout" >> "$GITHUB_ENV"
-          echo "WASIFYAI_DATA_DIR=$RUNNER_TEMP/wasifyai-data" >> "$GITHUB_ENV"
-          echo "WASIFYAI_SMOKE_OUT=$RUNNER_TEMP/smoke.txt" >> "$GITHUB_ENV"
+          {
+            echo "WASIFYAI_REPO=$RUNNER_TEMP/no-checkout"
+            echo "WASIFYAI_DATA_DIR=$RUNNER_TEMP/wasifyai-data"
+            echo "WASIFYAI_SMOKE_OUT=$RUNNER_TEMP/smoke.txt"
+          } >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@v5
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -224,7 +231,8 @@ jobs:
         name: Run the packaged app (first run installs the engine)
         shell: bash
         run: |
-          app=$(ls -d apps/desktop/src-tauri/target/release/bundle/macos/*.app | head -1)
+          apps=(apps/desktop/src-tauri/target/release/bundle/macos/*.app)
+          app="${apps[0]}"
           "$app/Contents/MacOS/wasifyai-desktop"
           echo "--- second run, already installed"
           "$app/Contents/MacOS/wasifyai-desktop"
@@ -232,8 +240,8 @@ jobs:
         name: Run the packaged app (first run installs the engine)
         shell: bash
         run: |
-          deb=$(ls apps/desktop/src-tauri/target/release/bundle/deb/*.deb | head -1)
-          dpkg-deb -x "$deb" "$RUNNER_TEMP/deb-root"
+          debs=(apps/desktop/src-tauri/target/release/bundle/deb/*.deb)
+          dpkg-deb -x "${debs[0]}" "$RUNNER_TEMP/deb-root"
           exe="$RUNNER_TEMP/deb-root/usr/bin/wasifyai-desktop"
           xvfb-run -a "$exe"
           echo "--- second run, already installed"

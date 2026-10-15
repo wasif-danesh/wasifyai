@@ -130,6 +130,21 @@ Details: [configuration.md](configuration.md), ADR-0010.
 
 Docker/Podman on macOS cannot reach the Metal GPU, so GPU services run natively on the Mac.
 
+## Desktop app and assistant (proposed)
+
+A desktop application (Tauri shell, Mac first) and an assistant home screen are proposed on top of this platform:
+the same engine runs under a `desktop` profile (SQLite, in-process queue, local files) next to the `web` profile
+described above. Nothing here changes until the ADRs are accepted. Start with
+[ADR-0056](decisions/0056-desktop-app-and-web-share-one-engine.md) (the shape) and
+[ADR-0062](decisions/0062-reuse-matrix-engines-per-capability.md) (the engine per capability, with measurements in
+[`spikes/unsloth-phase0.md`](spikes/unsloth-phase0.md)); then
+[0057](decisions/0057-ai-assistant-chat-first-shell.md) (assistant),
+[0058](decisions/0058-desktop-link-runner-and-remote-ui.md) (web to desktop link),
+[0059](decisions/0059-comfyui-managed-sidecar-image-engine.md) (image engine),
+[0060](decisions/0060-documents-local-first-rag.md) (documents) and
+[0061](decisions/0061-how-unsloth-code-enters-wasifyai.md) (how Unsloth code is imported). v1 is desktop first,
+Mac first, image first, English only.
+
 ## Everything a user makes is searchable
 
 My creations (`/creations`, ADR-0040) is one library with one search (ADR-0041): a per-user index of the words

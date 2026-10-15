@@ -2,8 +2,8 @@
 
 Date: 2026-10-15. Machine: MacBook Pro M5 Pro, 64 GB, macOS. Scope done: ADR-0056 steps 1 to 5
 (engine desktop profile, Tauri shell with installer and updater skeleton, shared image screen in `packages/ui` +
-`packages/client`, end to end on the Mac). Step 6 (three-OS CI) ran twice and is green on all
-three systems apart from one test assumption that is fixed (see "CI on three systems"). The measured numbers
+`packages/client`, end to end on the Mac). Step 6 (three-OS CI) is done: the `desktop` workflow is green on all
+three systems (12 jobs, commit dcd3b29; see "CI on three systems"). The measured numbers
 below are from the Mac and are a **debug build against the repository's `.venv`**, not a packaged app.
 
 ## Measured
@@ -82,7 +82,7 @@ Every job of the `desktop` workflow on GitHub's hosted runners (macOS arm64, Win
 | Job | macOS | Windows | Linux |
 |---|---|---|---|
 | shell: `cargo test --locked` and `cargo build --release --locked` (webview libraries on Linux) | pass | pass | pass |
-| engine: desktop-profile tests (SQLite adapters, local files, stores, the real launcher) | pass | **35 of 36**; the launcher test compared the engine's pid with the pid of the process the test started, which a venv's `python.exe` launcher on Windows makes different (a test assumption, fixed) | pass |
+| engine: desktop-profile tests (SQLite adapters, local files, stores, the real launcher) | pass | **35 of 36** on this commit: the launcher test compared the engine's pid with the pid of the process the test started, which a venv's `python.exe` launcher on Windows makes different (a test assumption; **fixed in dcd3b29, all pass**) | pass |
 | smoke: the window, driven like a person, against the checkout's `.venv` | **PASS** | **PASS** | **PASS** (xvfb, software rendering) |
 | install: build the engine bundle, install uv, Python and the 77 packages into an empty folder, then the same self-test | **PASS** (159 s for the step, which also compiles the shell) | **PASS** (240 s) | **PASS** (176 s) |
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // One transport, one run client and one models client for the whole window, so hooks that depend on
 // them see stable functions.
-import { createRunClient } from "@wasifyai/client";
+import { createAssistantApi, createRunClient } from "@wasifyai/client";
 import { createDiscoveryApi } from "./discovery";
 import { engineSession } from "./engine";
 import { createHubApi } from "./hub";
@@ -15,3 +15,4 @@ export const modelsApi = createModelsApi(transport);
 export const discoveryApi = createDiscoveryApi(transport);
 export const languageApi = createLanguageApi(transport);
 export const hubApi = createHubApi(transport);
+export const assistantApi = createAssistantApi(transport);

@@ -10,7 +10,10 @@ type Tab = "device" | "discover";
 
 /** The model hub (ADR-0064): what is on this computer, and finding more. */
 export function ModelsPage() {
-  const [tab, setTab] = useState<Tab>("device");
+  // `#/models?tab=discover` opens Discover (the chat's "Get a recommended model" goes there)
+  const [tab, setTab] = useState<Tab>(() =>
+    window.location.hash.includes("tab=discover") ? "discover" : "device",
+  );
   // using a found file or finishing a download changes the lists: they read again
   const [version, setVersion] = useState(0);
   const changed = () => setVersion((v) => v + 1);

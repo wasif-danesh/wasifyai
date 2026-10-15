@@ -7,23 +7,28 @@ models:
   - repo: unsloth/Qwen3-4B-GGUF
     title: Qwen3 4B
     capability: language
-    note: "A good first model: quick, follows instructions well, runs on most computers (about 2.5 GB at Q4)."
+    recommended: true
+    note: "Measured for the assistant: all 11 tool-choice cases right, about 2 s to an answer and 87 tokens a second on an Apple M-series Mac, 2.5 GB to get and about 4 GB in memory. Start here."
   - repo: unsloth/Qwen3-8B-GGUF
     title: Qwen3 8B
     capability: language
-    note: "Stronger answers, needs a computer with 16 GB of memory or more (about 5 GB at Q4)."
+    note: "The same 11 of 11, slower (about 4 s, 49 tokens a second) and larger (5 GB to get, about 6.5 GB in memory). For computers with 16 GB or more that want fuller answers."
+  - repo: unsloth/Qwen3-0.6B-GGUF
+    title: Qwen3 0.6B
+    capability: language
+    note: "For very small computers: 0.4 GB, very fast, 10 of 11 cases (it reaches for the picture tool when only asked whether it can draw)."
   - repo: bartowski/Llama-3.2-3B-Instruct-GGUF
     title: Llama 3.2 3B Instruct
     capability: language
-    note: "Small and fast. Meta's Llama 3.2 licence applies."
+    note: "Good for plain chat. As the assistant it uses its tools too eagerly (6 of 11: it makes pictures and searches when only a reply was wanted). Meta's Llama 3.2 licence applies."
   - repo: unsloth/gemma-3-4b-it-GGUF
     title: Gemma 3 4B
     capability: language
-    note: "Google's small model. The Gemma terms apply."
+    note: "Chat only: with this app's engine it does not call the picture and search tools (5 of 11). The Gemma terms apply."
   - repo: unsloth/gpt-oss-20b-GGUF
     title: gpt-oss 20B
     capability: language
-    note: "A large open model that shows its reasoning; about 11 to 14 GB, for computers with 32 GB or more."
+    note: "A large open model that shows its reasoning; about 11 to 14 GB, for computers with 32 GB or more. Not measured for the assistant yet."
   - repo: nomic-ai/nomic-embed-text-v1.5-GGUF
     title: Nomic Embed Text v1.5
     capability: embedding

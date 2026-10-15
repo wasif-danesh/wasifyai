@@ -314,6 +314,13 @@ Tools are an explicit list in `wasifyai_assistant/tools.py`. `generate_image` ru
 run, so the picture is saved, indexed and has its recipe like any other; `search_creations` looks in the person's
 own library. The model never sees a file or a link, only a sentence and ids.
 
+### Evaluating a model for the assistant
+
+`uv run python products/wasifyai-assistant/evals/run_tool_eval.py --gguf <file> --data-dir <app data>` runs the
+tool-choice cases in `evals/cases.yaml` against a model with the assistant's own prompt and tools and prints
+accuracy, answer time, speed and the server's memory. Add a case for every mistake a model makes in real use.
+The recommended model on the hub shelf is the one that scores best here.
+
 ## The model hub (ADR-0064, stage D2b)
 
 Models has two tabs. **On device** is the app's models, the chat model and what other tools left here.

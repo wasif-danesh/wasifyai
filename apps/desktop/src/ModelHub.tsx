@@ -234,7 +234,14 @@ function Shelf({ shelf, onOpen }: { shelf: ShelfItem[]; onOpen: (repo: string) =
               className="grid w-full gap-1 rounded-lg border p-3 text-start outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => onOpen(m.repo)}
             >
-              <span className="font-medium">{m.title}</span>
+              <span className="flex items-center gap-2 font-medium">
+                {m.title}
+                {m.recommended ? (
+                  <span className="rounded-full border border-primary/50 px-2 py-0.5 font-normal text-primary text-xs">
+                    Recommended
+                  </span>
+                ) : null}
+              </span>
               <span className="text-muted-foreground text-xs">{m.note}</span>
             </button>
           </li>

@@ -38,6 +38,27 @@ function type(el: HTMLTextAreaElement, text: string) {
 
 export async function runSmoke(): Promise<void> {
   try {
+    // the home screen is the assistant (ADR-0057): say hello and wait for an answer or a plain error
+    // (with no chat model chosen, as on a fresh computer, the error says what to do)
+    window.location.hash = "/";
+    await new Promise((r) => setTimeout(r, 150));
+    const hello = await until("the message box", () =>
+      document.querySelector<HTMLTextAreaElement>('textarea[placeholder="Ask anything"]'),
+    );
+    type(hello, "Hello");
+    (
+      await until("the Send button", () =>
+        [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+          (b) => b.getAttribute("aria-label") === "Send" && !b.disabled,
+        ),
+      )
+    ).click();
+    // the answer is under way while a Stop button is there; an error is a notice
+    const stopButton = () =>
+      [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Stop");
+    const failed = () => document.body.textContent?.includes("That did not work");
+    await until("the answer to start", () => stopButton() || failed());
+    await until("the answer to finish", () => !stopButton());
     window.location.hash = "/images/create"; // the create screen
     await new Promise((r) => setTimeout(r, 100));
     const box = await until("the prompt box", () => document.querySelector("textarea"));

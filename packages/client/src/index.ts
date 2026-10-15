@@ -35,3 +35,21 @@ export {
   type ImagesApi,
   type ListOptions,
 } from "./images";
+export {
+  ASSISTANT_PRODUCT,
+  chatReducer,
+  createAssistantApi,
+  fromStored,
+  initialChat,
+  type AssistantApi,
+  type ChatAction,
+  type ChatError,
+  type ChatMessage,
+  type ChatPart,
+  type ChatState,
+  type Conversation,
+  type ConversationSummary,
+  type StoredMessage,
+  type StoredPart,
+  type ToolStatus,
+} from "./assistant";

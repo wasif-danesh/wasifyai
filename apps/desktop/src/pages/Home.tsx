@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { Button } from "@wasifyai/ui";
-import { ArrowUp, Sparkles } from "lucide-react";
-import type { Route } from "../router";
+// The home screen is the assistant (ADR-0057): a greeting and "Ask anything", then the conversation.
+import { Button, ChatScreen, Notice } from "@wasifyai/ui";
+import { Pencil, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { assistantApi, client, languageApi } from "../api";
+import { conversationsChanged } from "../conversations";
+import { images } from "../images";
+import { type Route, openChat } from "../router";
 
 export function greeting(hour: number): string {
   if (hour < 5) return "Good night";
@@ -10,45 +15,161 @@ export function greeting(hour: number): string {
   return "Good evening";
 }
 
-/** The home screen. The assistant (ADR-0057) is not built yet, so its box says so and the actions that
- * work today sit next to it. */
-export function HomePage({ go }: { go: (r: Route) => void }) {
+const EXAMPLES = [
+  "Draw a lighthouse at sunrise",
+  "What did I make last week?",
+  "Explain how a transistor works",
+];
+
+/** Whether a chat model is chosen (null while it is not known): without one the box says so. */
+function useChatModel(): { chosen: boolean | null; name: string } {
+  const [state, setState] = useState<{ chosen: boolean | null; name: string }>({
+    chosen: null,
+    name: "",
+  });
+  useEffect(() => {
+    let gone = false;
+    languageApi
+      .state()
+      .then((s) => !gone && setState({ chosen: s.selected !== null, name: s.selected?.name ?? "" }))
+      .catch(() => {});
+    return () => {
+      gone = true;
+    };
+  }, []);
+  return state;
+}
+
+export function HomePage({
+  go,
+  conversationId,
+  onAdopt,
+}: {
+  go: (r: Route) => void;
+  conversationId: string | null;
+  onAdopt: (id: string) => void;
+}) {
+  const model = useChatModel();
+  const [title, setTitle] = useState("");
+
+  useEffect(() => {
+    if (!conversationId) {
+      setTitle("");
+      return;
+    }
+    let gone = false;
+    assistantApi
+      .list(100)
+      .then((l) => !gone && setTitle(l.find((c) => c.id === conversationId)?.title ?? ""))
+      .catch(() => {});
+    return () => {
+      gone = true;
+    };
+  }, [conversationId]);
+
+  async function rename() {
+    if (!conversationId) return;
+    const next = window.prompt("Name this chat", title)?.trim();
+    if (!next) return;
+    try {
+      const c = await assistantApi.rename(conversationId, next);
+      setTitle(c.title);
+      conversationsChanged();
+    } catch {
+      // the name stays as it was
+    }
+  }
+
+  async function remove() {
+    if (!conversationId) return;
+    if (!window.confirm("Delete this chat? Pictures it made stay in your library.")) return;
+    try {
+      await assistantApi.remove(conversationId);
+      conversationsChanged();
+      openChat(null);
+    } catch {
+      // still there: nothing to do
+    }
+  }
+
+  const hero = (
+    <h1 className="flex items-center gap-4 font-medium text-4xl tracking-tight">
+      <span
+        aria-hidden="true"
+        className="grid size-14 place-items-center rounded-full bg-primary font-bold text-2xl text-primary-foreground"
+      >
+        w
+      </span>
+      {greeting(new Date().getHours())}
+    </h1>
+  );
+
+  const notices =
+    model.chosen === false ? (
+      <Notice
+        tone="info"
+        title="Choose a chat model"
+        actions={
+          <>
+            <Button
+              type="button"
+              onClick={() => {
+                window.location.hash = "/models?tab=discover";
+              }}
+            >
+              Get a recommended model
+            </Button>
+            <Button type="button" variant="outline" onClick={() => go("models")}>
+              Use one I have
+            </Button>
+          </>
+        }
+      >
+        Wasify AI answers with a model that runs on this computer. Pick one you already have, or get
+        one in Discover.
+      </Notice>
+    ) : null;
+
   return (
-    <div className="grid min-h-full content-center justify-items-center gap-8 px-8 py-16">
-      <h1 className="flex items-center gap-4 font-medium text-4xl tracking-tight">
-        <span
-          aria-hidden="true"
-          className="grid size-14 place-items-center rounded-full bg-primary font-bold text-2xl text-primary-foreground"
-        >
-          w
-        </span>
-        {greeting(new Date().getHours())}
-      </h1>
-
-      <div className="w-full max-w-3xl rounded-3xl border bg-card px-6 py-5 shadow-card">
-        <p className="min-h-10 text-lg text-muted-foreground">Ask anything</p>
-        <div className="mt-6 flex items-center gap-3 text-muted-foreground text-sm">
-          <span>The assistant arrives in a later version. Images work now.</span>
-          <span
-            aria-hidden="true"
-            className="ms-auto grid size-10 place-items-center rounded-full bg-primary/40 text-primary-foreground"
-          >
-            <ArrowUp className="size-5" />
-          </span>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap justify-center gap-3">
-        <Button type="button" onClick={() => go("create")}>
-          <Sparkles className="size-4" /> Create an image
-        </Button>
-        <Button type="button" variant="outline" onClick={() => go("edit")}>
-          Edit a picture
-        </Button>
-        <Button type="button" variant="outline" onClick={() => go("library")}>
-          Open the library
-        </Button>
-      </div>
-    </div>
+    <ChatScreen
+      runs={client}
+      assistant={assistantApi}
+      images={images}
+      conversationId={conversationId}
+      onConversation={(id) => {
+        conversationsChanged();
+        if (!conversationId) onAdopt(id); // a new chat now has an address, and stays as it is
+      }}
+      hero={hero}
+      examples={conversationId ? [] : EXAMPLES}
+      notices={notices}
+      onNeedModel={() => go("models")}
+      onOpenCreation={(kind) => {
+        if (kind === "image") go("library");
+      }}
+      title={conversationId ? title || "Chat" : undefined}
+      actions={
+        conversationId ? (
+          <>
+            <button
+              type="button"
+              aria-label="Rename this chat"
+              className="rounded-md p-2 text-muted-foreground hover:bg-accent"
+              onClick={() => void rename()}
+            >
+              <Pencil className="size-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Delete this chat"
+              className="rounded-md p-2 text-muted-foreground hover:bg-accent"
+              onClick={() => void remove()}
+            >
+              <Trash2 className="size-4" />
+            </button>
+          </>
+        ) : undefined
+      }
+    />
   );
 }

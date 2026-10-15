@@ -162,6 +162,20 @@ def test_a_model_card_becomes_plain_text_without_pictures():
     assert text == "# Demo\n\nHi there\n\nEnd"
 
 
+def test_the_recommended_model_comes_first_on_the_shelf(tmp_path):
+    f = tmp_path / "shelf.yaml"
+    f.write_text(
+        "models:\n"
+        "  - {repo: a/one, title: One, capability: language, note: n}\n"
+        "  - {repo: b/two, title: Two, capability: language, note: n, recommended: true}\n"
+        "  - {repo: c/three, title: Three, capability: language, note: n}\n"
+        "  - {repo: 'not a repo', title: Bad, capability: language, note: n}\n"
+    )
+    shelf = load_shelf(f)
+    assert [m["repo"] for m in shelf] == ["b/two", "a/one", "c/three"]
+    assert [m["recommended"] for m in shelf] == [True, False, False]
+
+
 def test_the_shelf_names_real_looking_repositories():
     shelf = load_shelf()
     assert len(shelf) >= 5

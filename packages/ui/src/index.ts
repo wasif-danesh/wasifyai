@@ -42,3 +42,7 @@ export {
   type WorkspacePreset,
 } from "./image/ImageWorkspace";
 export { ImageLibrary, type ImageLibraryProps } from "./image/ImageLibrary";
+export { ChatScreen, type ChatScreenProps } from "./chat/ChatScreen";
+export { ToolCard, type ToolCardProps } from "./chat/ToolCard";
+export { Markdown, inline, parseBlocks } from "./chat/markdown";
+export { type UseAssistantChatOptions, useAssistantChat } from "./chat/use-assistant-chat";

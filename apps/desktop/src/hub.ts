@@ -9,7 +9,14 @@ import type { Fit } from "./models";
 export type Capability = "language" | "embedding" | "image" | "video";
 export type Sort = "downloads" | "likes" | "recent";
 
-export type ShelfItem = { repo: string; title: string; capability: string; note: string };
+export type ShelfItem = {
+  repo: string;
+  title: string;
+  capability: string;
+  note: string;
+  /** the one we measured and suggest to start with */
+  recommended: boolean;
+};
 
 export type HubState = {
   enabled: boolean;

@@ -1,7 +1,6 @@
 # Phase 2, stage D: the assistant on desktop (plan)
 
-Status: **Approved 2026-10-15** with all five recommended answers below (owner: "all recommended"). **D1, D2, D2b, D3 and D4 done**
-(see the evidence sections at the end); D5 and D6 not started. Implements
+Status: **Approved 2026-10-15** with all five recommended answers below (owner: "all recommended"). **Stage D is done** (D1 to D6; evidence sections at the end). Implements
 ADR-0057 (the assistant product) on the desktop with a managed local language model (ADR-0062: llama.cpp), the
 slot manager (ADR-0056) and the model discovery and fit checks that exist today (ADR-0063).
 
@@ -224,3 +223,63 @@ shadcn) is a short spike with the ADR-0057 criteria before D5.
 - **Not done:** the chat UI and the home screen (D5); Recents in the side menu (D5); the conversation card in
   My creations on the web; moderation of assistant text (off locally, as ADR-0047 says; a model check for
   `text.chat` joins the hosted product's checks).
+
+## D5 evidence (2026-10-16): the chat screen and the home
+
+- **Decision (ADR-0057 decision 7, the UI spike):** our own components, not `assistant-ui`. The criteria were
+  streaming, tool cards, accessibility, bundle size, right-to-left and mounting in both shells. The chat is
+  about 700 lines on the primitives we already have (no new dependency, no second design system), the tool cards
+  are ours anyway, and the markdown renderer builds React nodes (never HTML strings), so nothing a model writes
+  can run as markup and a link opens only if it is `http(s)`. Revisit if branching or voice make the screen
+  outgrow it.
+- **Shared** (`@wasifyai/client`, `@wasifyai/ui`): `createAssistantApi` (list, read, rename, delete),
+  `chatReducer` (folds a turn's events into what the screen shows; a stored conversation folds into the same
+  shape, so a reload looks like the stream did), `useAssistantChat` (send, stop, try again, open a saved chat,
+  re-attach to a run after a broken connection), and `ChatScreen` with `ToolCard` (a picture being made, then
+  shown with a way to open it; what a search found), `Markdown` and the box (Enter sends, Shift+Enter is a new
+  line, Stop while it answers, the box is the same element before and after the first message).
+- **Desktop:** the home is the chat (greeting, "Ask anything", examples). A new chat takes its address
+  (`#/chat/<id>`) without being reloaded; Recents in the side menu lists the latest chats; a chat has Rename and
+  Delete; with no model chosen the screen says so and offers "Get a recommended model" (Discover) and "Use one I
+  have" (Models). Picture and search cards open the library.
+- **Self-test:** the window sends "Hello" on the home screen and waits for the answer or a plain error. With a
+  chat model chosen (the owner's Mac, Qwen3 4B) the window's DOM sent it and the answer
+  ("Hello! How can I assist you today?") was stored; with none chosen (a fresh computer, CI) the error says
+  what to do.
+- **Tests:** 7 reducer and API tests (client), 11 chat tests (markdown safety and blocks; send, continue,
+  picture card, no model, try again, blocked, open a saved chat), router and Recents.
+
+## D6 evidence (2026-10-16): the bake-off and the recommended model
+
+Method: the assistant's own system prompt and tool definitions (`products/wasifyai-assistant/evals`), 11
+cases kept in the repository (`cases.yaml`: 4 pictures including a Spanish request, 2 searches, 5 plain chats
+where no tool is wanted), each model run by the app's own `llama-server` (llama.cpp b11655, Metal, context
+8192, temperature 0.2, no thinking switch) on the owner's Mac (M5 Pro, 64 GB). Every file was fetched through the
+model hub and checked against its published SHA-256. One run per model, so the speeds carry some noise.
+
+| Model (Q4_K_M) | Get | Memory | Cases right | Tool cases | Median answer | Speed |
+|---|---|---|---|---|---|---|
+| **Qwen3 4B** | 2.5 GB | 3.9 GB | **11 / 11** | 6 / 6 | 2.0 s | 87 tokens/s |
+| Qwen3 8B | 5.0 GB | 6.4 GB | 11 / 11 | 6 / 6 | 3.9 s | 49 tokens/s |
+| Qwen3 0.6B | 0.4 GB | 1.5 GB | 10 / 11 | 6 / 6 | 0.4 s | 328 tokens/s |
+| Llama 3.2 3B Instruct | 2.0 GB | 3.2 GB | 6 / 11 | 6 / 6 | 0.2 s | 99 tokens/s |
+| Gemma 3 4B | 2.5 GB | 3.0 GB | 5 / 11 | 0 / 6 | 0.3 s | 66 tokens/s |
+
+- **Recommended: Qwen3 4B.** It got every case right at about two seconds an answer and four gigabytes of
+  memory. The 8B model is as accurate and about twice as slow and large: the choice for 16 GB computers that want
+  fuller answers. The 0.6B model is the fallback for very small computers.
+- **Llama 3.2 3B** called a tool on five of the five plain-chat cases it should have answered in words (it
+  searched for a capital city). **Gemma 3 4B** made no tool calls at all with this engine: its template carries
+  no tool section. Both stay on the shelf with those facts in their notes.
+- **Found while measuring:** a YAML `yes` in an expected-answer list is a boolean, which broke the comparison.
+  The cases quote it, and the runner turns every expected word into text first.
+- **The shelf** (`hub-shelf.yaml`) puts the recommended model first with the numbers above in its note;
+  Discover marks it "Recommended", and a new person with no chat model is offered "Get a recommended model".
+- **Not measured:** other languages beyond the one Spanish request (v1 is English only), long conversations,
+  models above 8B, the web profile's hosted models.
+
+## What stage D left for later
+
+Image tools beyond `generate_image` (edit, remix: stage C), documents and retrieval in chat (stage E), voice,
+sign-in for gated models (the keychain), the models header, CUDA and Vulkan builds of the language engine, a
+moderation check for `text.chat` on the hosted product, and the conversation card in the web's My creations.

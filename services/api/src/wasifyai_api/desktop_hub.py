@@ -217,13 +217,20 @@ class HubClient:
         await self._client.aclose()
 
 
-def load_shelf(path: Path = SHELF_FILE) -> list[dict[str, str]]:
+def load_shelf(path: Path = SHELF_FILE) -> list[dict[str, Any]]:
+    """The curated shelf; the recommended model comes first (chosen by measurement)."""
     raw = yaml.safe_load(path.read_text()) or {}
-    out = []
+    out: list[dict[str, Any]] = []
     for m in raw.get("models") or []:
         if REPO.match(str(m.get("repo", ""))):
-            out.append({k: str(m.get(k, "")) for k in ("repo", "title", "capability", "note")})
-    return out
+            row: dict[str, Any] = {
+                k: str(m.get(k, "")) for k in ("repo", "title", "capability", "note")
+            }
+            row["recommended"] = bool(m.get("recommended", False))
+            out.append(row)
+    return sorted(
+        out, key=lambda r: not r["recommended"]
+    )  # a stable sort: the rest keep their order
 
 
 class HubService:

@@ -62,11 +62,14 @@ its own security decision first. Voice input waits for the audio vertical.
 
 | Decision | State |
 |---|---|
-| 1 a product `wasifyai-assistant`, one graph with a tool loop | done (desktop: home screen is D5) |
+| 1 a product `wasifyai-assistant`, one graph with a tool loop | done; it is the desktop's home screen |
 | 2 tools are capabilities, explicitly allowed | done: `generate_image` and `search_creations`; the image tool is a child run of the image product |
 | 3 conversations are creations, tables, searchable | done: migration 0018, SQLite on desktop, kind `conversation` indexed and removed on delete |
 | 4 events: `tool_call`, `tool_result` | done in the contract and the run manager; `interrupt` for costly actions is not used yet |
 | 5 the model rule, one slot | done for the desktop (D2): chat and image take turns |
-| 6 ChatGPT-like look and behaviour | not started (D5): streaming markdown, stop, regenerate, tool cards |
-| 7 UI library decided in a spike | not started (D5) |
+| 6 ChatGPT-like look and behaviour | done on the desktop (D5): streaming markdown, stop, try again, tool cards, Recents; regenerate and edit-and-resend are not built |
+| 7 UI library decided in a spike | done: our own components on the existing primitives (`docs/phase2-stage-d-plan.md`, D5) |
 | 8 safeguards and quotas | usage events recorded; the safeguard switch is not applied to assistant text yet |
+
+**Measured (2026-10-16):** the evaluation cases the consequences ask for are `products/wasifyai-assistant/evals/`;
+the recommended local model, Qwen3 4B, got 11 of 11 (see `docs/phase2-stage-d-plan.md`, D6).

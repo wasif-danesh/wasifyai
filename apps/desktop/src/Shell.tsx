@@ -23,7 +23,7 @@ function readCollapsed(): boolean {
 
 /** The window once the engine is ready: the side menu and the screen it points at. */
 export function Shell() {
-  const [route, go] = useRoute();
+  const [route, go, conversationId, chatKey, adopt] = useRoute();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   // an image whose recipe was sent to Create ("make it again"); used once, then forgotten
   const [again, setAgain] = useState<ImageSummary | null>(null);
@@ -41,7 +41,14 @@ export function Shell() {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background text-foreground">
-      {collapsed ? null : <Sidebar route={route} go={go} onCollapse={() => set(true)} />}
+      {collapsed ? null : (
+        <Sidebar
+          route={route}
+          go={go}
+          onCollapse={() => set(true)}
+          conversationId={conversationId}
+        />
+      )}
       <div className="relative flex min-w-0 flex-1 flex-col">
         <div data-tauri-drag-region className="absolute inset-x-0 top-0 z-10 h-2.5" />
         {collapsed ? (
@@ -55,7 +62,9 @@ export function Shell() {
           </button>
         ) : null}
         <main id="main" className="min-h-0 flex-1 overflow-auto">
-          {route === "home" ? <HomePage go={go} /> : null}
+          {route === "home" ? (
+            <HomePage key={chatKey} go={go} conversationId={conversationId} onAdopt={adopt} />
+          ) : null}
           {route === "create" ? (
             <CreatePage
               key={`create-${again?.id ?? ""}`}

@@ -1,0 +1,58 @@
+# Tool-choice cases for the assistant (ADR-0057 consequences): does a model call the right tool, with
+# arguments that are usable, and stay quiet when no tool is wanted? Run with run_tool_eval.py against
+# any OpenAI-compatible server or a GGUF file. Add a case for every mistake a model makes in real use.
+#
+#   expect:  tool name, or "none" (answer in words)
+#   args:    for a tool: argument names that must be present and non-empty
+#   mentions: words the tool's text argument should contain (any one of them, case-insensitive)
+#   answer:  for "none": words the answer should contain (any one of them)
+cases:
+  - id: draw-plain
+    say: "Please draw a red teapot on a wooden table."
+    expect: generate_image
+    args: [prompt]
+    mentions: [teapot]
+  - id: draw-wide
+    say: "Make me a wide picture of a cat dressed as an astronaut on the moon."
+    expect: generate_image
+    args: [prompt]
+    mentions: [cat]
+    size: wide
+  - id: draw-spanish
+    say: "Dibuja un faro al amanecer."
+    expect: generate_image
+    args: [prompt]
+    mentions: [lighthouse, faro]
+  - id: draw-verb-paint
+    say: "Paint a quiet mountain lake at dusk for me."
+    expect: generate_image
+    args: [prompt]
+    mentions: [lake, mountain]
+  - id: search-picture
+    say: "Which teapot picture did I make last week?"
+    expect: search_creations
+    args: [query]
+    mentions: [teapot]
+  - id: search-song
+    say: "Find the song I made about the rain."
+    expect: search_creations
+    args: [query]
+    mentions: [rain]
+  - id: chat-fact
+    say: "What is the capital of France?"
+    expect: none
+    answer: [paris]
+  - id: chat-explain
+    say: "In one sentence, what does a transistor do?"
+    expect: none
+    answer: [switch, amplif, current, signal]
+  - id: chat-greeting
+    say: "Hi!"
+    expect: none
+  - id: chat-can-you
+    say: "Can you draw pictures?"
+    expect: none
+    answer: ["yes", "can", picture, image]  # quoted: a bare yes is a boolean in YAML
+  - id: chat-poem
+    say: "Write a two-line poem about the sea."
+    expect: none

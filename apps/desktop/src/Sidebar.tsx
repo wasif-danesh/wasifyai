@@ -20,7 +20,8 @@ import {
   ZoomIn,
 } from "lucide-react";
 import { useState } from "react";
-import type { Route } from "./router";
+import { useConversations } from "./conversations";
+import { type Route, openChat } from "./router";
 
 type Leaf = { label: string; icon: LucideIcon; route?: Route; soon?: boolean };
 
@@ -53,11 +54,14 @@ export function Sidebar({
   route,
   go,
   onCollapse,
+  conversationId,
 }: {
   route: Route;
   go: (r: Route) => void;
   onCollapse: () => void;
+  conversationId: string | null;
 }) {
+  const recents = useConversations();
   const inImages = route === "create" || route === "edit";
   const [imagesOpen, setImagesOpen] = useState(inImages);
   const open = imagesOpen || inImages;
@@ -101,8 +105,11 @@ export function Sidebar({
       <div className="mt-2 grid gap-0.5">
         <button
           type="button"
-          className={cn(ITEM, active("home") && "bg-accent")}
-          onClick={() => go("home")}
+          className={cn(ITEM, active("home") && !conversationId && "bg-accent")}
+          onClick={() => {
+            openChat(null);
+            go("home");
+          }}
         >
           <SquarePen className="size-4" /> New chat
         </button>
@@ -175,7 +182,31 @@ export function Sidebar({
       <div className="mt-4 px-3 text-muted-foreground text-sm">Projects</div>
       <div className="px-3 py-1 text-muted-foreground/80 text-sm">No projects</div>
       <div className="mt-3 px-3 text-muted-foreground text-sm">Recents</div>
-      <div className="px-3 py-1 text-muted-foreground/80 text-sm">No chats yet</div>
+      {recents.length === 0 ? (
+        <div className="px-3 py-1 text-muted-foreground/80 text-sm">No chats yet</div>
+      ) : (
+        <ul className="grid gap-0.5 overflow-y-auto" aria-label="Recent chats">
+          {recents.map((c) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                title={c.title}
+                aria-current={active("home") && conversationId === c.id ? "page" : undefined}
+                className={cn(
+                  ITEM,
+                  "py-1.5 text-[0.9rem]",
+                  active("home") && conversationId === c.id && "bg-accent",
+                )}
+                onClick={() => {
+                  openChat(c.id);
+                }}
+              >
+                <span className="truncate">{c.title || "New chat"}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="mt-auto flex items-center gap-3 px-2 pt-3">
         <span

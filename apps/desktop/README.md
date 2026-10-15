@@ -32,6 +32,8 @@ cd src-tauri && cargo run                 # shell + engine (builds with the embe
 cd src-tauri && cargo test
 pnpm --filter @wasifyai/desktop test      # the transport
 cd src-tauri && WASIFYAI_SMOKE=1 cargo run   # the self-test: make an image in the real window, exit 0 or 1
+make engine-bundle && pnpm exec tauri build --config src-tauri/tauri.bundle.conf.json --bundles app
+                                          # the packaged, unsigned app with the engine bundle inside
 ```
 
 The engine's Python is taken from `WASIFYAI_ENGINE_PYTHON`, then (with `WASIFYAI_PROVISION=1`) the managed
@@ -40,5 +42,5 @@ environment, then the checkout's `.venv`, then the managed environment installed
 
 ## Not yet
 
-Signing and notarisation, a packaged installer that carries the engine bundle, tray and deep links. The bundle identifier
+Signing and notarisation, tray and deep links. The bundle identifier
 `ai.wasifyai.desktop` and the icons are placeholders.

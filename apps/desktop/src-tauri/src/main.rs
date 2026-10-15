@@ -14,6 +14,7 @@ mod logsink;
 #[allow(dead_code)]
 mod loopback_http;
 mod manifest;
+mod memory;
 mod provision;
 mod session;
 mod updater;
@@ -67,11 +68,36 @@ fn smoke_enabled() -> bool {
 
 /// The self-test's verdict: print it and quit with 0 (passed) or 1. Does nothing in a normal run.
 #[tauri::command]
-fn smoke_report(app: tauri::AppHandle, ok: bool, detail: String) {
+fn smoke_report(app: tauri::AppHandle, engine: State<'_, Engine>, ok: bool, detail: String) {
     if !smoke_requested() {
         return;
     }
-    println!("SMOKE {} {}", if ok { "PASS" } else { "FAIL" }, detail);
+    let mut lines = vec![format!(
+        "SMOKE {} {}",
+        if ok { "PASS" } else { "FAIL" },
+        detail
+    )];
+    // timings and memory of this run, one JSON line, for the evidence documents (see memory.rs)
+    if let Ok(json) = serde_json::to_string(&engine.measurements()) {
+        lines.push(format!("SMOKE_METRICS {json}"));
+    }
+    for l in &lines {
+        println!("{l}");
+    }
+    // A release build on Windows has no console, so the lines also go to a file when asked
+    // (WASIFYAI_SMOKE_OUT), which is how CI reads the packaged app's verdict.
+    if let Some(path) = std::env::var_os("WASIFYAI_SMOKE_OUT") {
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            for l in &lines {
+                let _ = writeln!(f, "{l}");
+            }
+        }
+    }
     app.exit(if ok { 0 } else { 1 });
 }
 

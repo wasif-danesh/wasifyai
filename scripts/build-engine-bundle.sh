@@ -25,6 +25,7 @@ for p in $PACKAGES; do
   uv build --wheel --package "$p" --out-dir "$OUT/wheels" >/dev/null
 done
 
+rm -f "$OUT/wheels/.gitignore"  # uv writes one; it is not part of the bundle
 echo "locking third-party packages"
 uv export --package wasifyai-api --extra desktop --no-emit-workspace --no-dev --hashes \
   --format requirements-txt --no-header --quiet > "$OUT/requirements.lock"

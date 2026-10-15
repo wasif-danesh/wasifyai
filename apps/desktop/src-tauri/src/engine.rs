@@ -23,6 +23,7 @@ use tokio::sync::Notify;
 
 use crate::logsink::LogSink;
 use crate::manifest::{host_target, Manifest};
+use crate::memory;
 use crate::provision::{self, Mode, Progress, ProvisionConfig};
 use crate::{loopback_http, session};
 
@@ -78,7 +79,30 @@ pub struct LaunchConfig {
     pub image_engine: String,
 }
 
+/// What the shell noticed about this run, for the evidence documents and the self-test's report.
+#[derive(Default)]
+struct Measure {
+    installed: bool,
+    ready_ms: Option<u64>,
+    engine_pid: Option<u32>,
+    engine_rss_ready: Option<u64>,
+}
+
+/// The numbers `smoke_report` prints.
+#[derive(Debug, Serialize)]
+pub struct Measurements {
+    /// the first run installed the engine before it started
+    pub installed: bool,
+    /// from the shell's start to the engine answering, install included
+    pub ready_ms: Option<u64>,
+    pub engine_rss_mb_at_ready: Option<u64>,
+    pub engine_rss_mb_now: Option<u64>,
+    pub shell_rss_mb: Option<u64>,
+}
+
 struct Shared {
+    started: Instant,
+    measure: Mutex<Measure>,
     status: Mutex<Status>,
     secret: String,
     stopping: AtomicBool,
@@ -97,6 +121,8 @@ impl Engine {
     pub fn new() -> Self {
         Engine {
             shared: Arc::new(Shared {
+                started: Instant::now(),
+                measure: Mutex::new(Measure::default()),
                 status: Mutex::new(Status::Stopped),
                 secret: new_secret(),
                 stopping: AtomicBool::new(false),
@@ -136,6 +162,18 @@ impl Engine {
         *self.shared.task.lock().unwrap() = Some(handle);
     }
 
+    pub fn measurements(&self) -> Measurements {
+        let m = self.shared.measure.lock().unwrap();
+        let mb = |b: u64| b / 1_000_000;
+        Measurements {
+            installed: m.installed,
+            ready_ms: m.ready_ms,
+            engine_rss_mb_at_ready: m.engine_rss_ready.map(mb),
+            engine_rss_mb_now: m.engine_pid.and_then(memory::rss_bytes).map(mb),
+            shell_rss_mb: memory::rss_bytes(std::process::id()).map(mb),
+        }
+    }
+
     /// Ask for a fresh start (the window's "restart engine" button).
     pub fn restart(&self) {
         self.shared.restart.notify_one();
@@ -165,6 +203,21 @@ fn new_secret() -> String {
 }
 
 fn set_status(app: &AppHandle, shared: &Shared, status: Status) {
+    match &status {
+        Status::Installing { .. } => shared.measure.lock().unwrap().installed = true,
+        Status::Ready { pid, .. } => {
+            let pid = *pid;
+            {
+                let mut m = shared.measure.lock().unwrap();
+                m.ready_ms = Some(shared.started.elapsed().as_millis() as u64);
+                m.engine_pid = Some(pid);
+            }
+            // memory at the moment it became ready: the engine has done nothing yet
+            let rss = memory::rss_bytes(pid);
+            shared.measure.lock().unwrap().engine_rss_ready = rss;
+        }
+        _ => {}
+    }
     *shared.status.lock().unwrap() = status.clone();
     let _ = app.emit(STATUS_EVENT, &status);
 }

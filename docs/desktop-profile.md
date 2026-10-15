@@ -134,9 +134,14 @@ download cache holds a second copy of the packages until step 6 removes it.
 | `WASIFYAI_DATA_DIR` | another app data folder (tests, trying the installer) |
 | `WASIFYAI_ENGINE_PYTHON` | an explicit Python for the engine |
 
-Not done here: the bundle is not yet inside a packaged app (`cargo tauri build` with a `bundle.resources`
-entry is part of the installer work), and ComfyUI and the models are Phase 2 (ADR-0059). The window needs an
-internet connection for step 2 and 5; an offline install would need a wheelhouse in the bundle.
+Packaging: `make engine-bundle`, then in `apps/desktop`
+`pnpm exec tauri build --config src-tauri/tauri.bundle.conf.json --bundles app` (macOS; `deb` on Linux,
+`nsis` on Windows). The extra config puts `engine-bundle/` in the app's resources; the plain build leaves it
+out so a checkout without a bundle still builds. The result is unsigned. Measured numbers for the packaged app
+are in `docs/spikes/desktop-phase1.md`.
+
+Not done here: ComfyUI and the models are Phase 2 (ADR-0059). The window needs an internet connection for
+steps 2 and 5; an offline install would need a wheelhouse in the bundle.
 
 ## Updates of the app
 

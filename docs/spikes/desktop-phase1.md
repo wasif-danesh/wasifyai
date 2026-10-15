@@ -75,6 +75,37 @@ its connection; the connection was already closed and never answered, so the tas
 shutdown, waited forever. The lifespan now waits for the cancelled tasks before it closes anything: 40
 consecutive clean runs afterwards. This affects the web profile's shutdown in the same way.
 
+## The packaged app (step 7), measured on the Mac
+
+`tauri build --config src-tauri/tauri.bundle.conf.json --bundles app` produced `wasifyai.app` (16.5 MiB; the
+engine bundle is in its Resources, 680 KB). It was run from `Contents/MacOS` with a fresh app data folder,
+`WASIFYAI_REPO` pointing nowhere (so it finds no checkout, no `.venv`) and the self-test on. MacBook Pro M5 Pro,
+64 GB, macOS, release build, network on, unsigned. Times are the shell's own clock from its start.
+
+| Measure | Result |
+|---|---|
+| **First launch** (installs uv, Python 3.12.15 and 77 packages, then starts the engine) | engine answering after **24.8 s**; app start to picture shown and quit **26.4 s** |
+| **Relaunch** (already installed), two runs | engine answering after **2.1 s**; start to picture shown and quit **3.3 s** |
+| **Engine process, idle** (resident memory, 10 s after launch, nothing asked) | **171 MB**; 178 to 179 MB at the instant it answers; 182 MB after one image |
+| **Shell process** | **111 to 121 MB** |
+| **WebKit helper processes** (WebContent 52, GPU 32, Networking 12 MB) | **96 MB** |
+| **Whole app idle** (engine + shell + WebKit helpers) | **about 380 MB** |
+| **On disk** | app 16.5 MiB + engine folder **294 MB** (venv 195, Python 66, uv 34) |
+| Quit | engine process gone, none left |
+| ADR-0056 budget (engine idle under 300 MB) | **met** (171 MB) |
+
+Method: no measuring tool was added to the repository; the numbers come from the shell itself
+(`SMOKE_METRICS`: `ready_ms`, resident memory of the engine at ready and after the run, of the shell) and `ps`
+for the WebKit helpers, which are other processes the shell does not own (those were the new
+`com.apple.WebKit.*` processes that appeared while the app ran). "Cold" means the first launch after the app
+was built and the folder created; the machine was not rebooted, so the engine's Python files and Python itself
+were not cold in the operating system's file cache on the relaunches.
+
+The same self-test prints these lines on every system (`SMOKE_METRICS {...}`); the `package` job of the
+`desktop` workflow runs the packaged app on macOS (`.app`), Linux (`.deb`, unpacked) and Windows (NSIS
+installer, silent) and prints them, so the Windows and Linux numbers come from CI runs, not from this Mac.
+Memory there is resident set size (Linux, macOS) or working set (Windows).
+
 ## CI on three systems (step 6): the second run, commit 2db73f6
 
 Every job of the `desktop` workflow on GitHub's hosted runners (macOS arm64, Windows x64, Ubuntu x64):
@@ -111,13 +142,13 @@ like (the self-test checks the DOM), and anything about a packaged, signed app.
 
 ## Not verified
 
-- **Memory and cold start on Windows and Linux.** CI proves the shell builds, the engine runs and the window
-  makes an image there; it does not record numbers. Only the Mac was measured.
+- **Memory and cold start on Windows and Linux** come from the `package` job once it has run; until then only
+  the Mac was measured.
 - **What the window looks like.** The self-test drives and checks the DOM, not pixels; no screenshot was
   taken, and the web app's own pages were not compared before and after the move (the built CSS does contain
   the shared package's classes, and the web test suite and `next build` pass).
-- **A packaged app** (`.app`, `.dmg`, signing): not built. The engine bundle is found next to the checkout, not
-  inside an app's resources, and `cargo tauri build` was not run.
+- **A signed, notarised app**, a `.dmg`, an AppImage: not built. The `.app` above is unsigned (Gatekeeper will
+  ask on another Mac); the engine bundle is inside it.
 - **The Intel Mac build of uv and the Linux arm64 build**: the manifest has their checksums; no runner of
   those kinds was used. The Unix-only installer tests (fake uv) do not run on Windows; the real install does
   (the `install` job).

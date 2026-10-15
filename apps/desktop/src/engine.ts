@@ -66,6 +66,7 @@ export type ComponentStatus =
   | { state: "failed"; message: string; step: string | null };
 
 export const COMFYUI = "comfyui";
+export const LLAMACPP = "llamacpp";
 const COMPONENT_EVENT = "component://status";
 
 export const componentStatus = (id: string) => invoke<ComponentStatus>("component_status", { id });

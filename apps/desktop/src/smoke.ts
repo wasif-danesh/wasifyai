@@ -109,24 +109,40 @@ export async function runSmoke(): Promise<void> {
   }
 }
 
-/** Set up the image engine the way a person does: press the button, wait until it says it is installed. */
-export async function runComponentSmoke(): Promise<void> {
+/** What the self-test presses and waits for, per optional component. */
+const COMPONENTS = {
+  comfyui: {
+    button: "Set up image generation",
+    done: "Image engine installed",
+    failed: "could not be set up",
+  },
+  llamacpp: {
+    button: "Set up the language engine",
+    done: "Language engine installed",
+    failed: "could not be set up",
+  },
+} as const;
+
+/** Set up an optional engine the way a person does: press its button on Settings, wait until it says it
+ * is installed. */
+export async function runComponentSmoke(id: keyof typeof COMPONENTS = "comfyui"): Promise<void> {
   const started = Date.now();
+  const words = COMPONENTS[id];
   try {
-    window.location.hash = "/settings"; // where the image engine is set up
+    window.location.hash = "/settings"; // where the engines are set up
     await new Promise((r) => setTimeout(r, 100));
-    const go = await until("the Set up image generation button", () =>
+    const go = await until(`the ${words.button} button`, () =>
       [...document.querySelectorAll("button")].find(
-        (b) => b.textContent?.includes("Set up image generation") && !b.disabled,
+        (b) => b.textContent?.includes(words.button) && !b.disabled,
       ),
     );
     go.click();
     const verdict = await until(
-      "the image engine to be installed",
+      `${id} to be installed`,
       () => {
         const text = document.body.textContent ?? "";
-        if (text.includes("Image engine installed")) return "installed";
-        if (text.includes("could not be set up")) return "failed";
+        if (text.includes(words.done)) return "installed";
+        if (text.includes(words.failed)) return "failed";
         return null;
       },
       INSTALL_TIMEOUT_MS,
@@ -138,10 +154,9 @@ export async function runComponentSmoke(): Promise<void> {
       return;
     }
     const line =
-      [...document.querySelectorAll("p")].find((p) =>
-        p.textContent?.startsWith("Image engine installed"),
-      )?.textContent ?? "";
-    await report(true, `image engine installed in ${secs}s: ${line}`);
+      [...document.querySelectorAll("p")].find((p) => p.textContent?.startsWith(words.done))
+        ?.textContent ?? "";
+    await report(true, `${id} installed in ${secs}s: ${line}`);
   } catch (e) {
     await report(false, e instanceof Error ? e.message : String(e)).catch(() => {});
   }

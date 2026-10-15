@@ -647,6 +647,13 @@ LATER = {
 }  # fmt: skip
 
 
+# Architectures a tool stores under its own name, which llama.cpp does not read. Found by running
+# the engine on a real model: Ollama's own gpt-oss file says "gptoss", llama.cpp's says "gpt-oss".
+INCOMPATIBLE = {
+    "gptoss": "Ollama keeps this model in its own format, which llama.cpp cannot read. A file of "
+    "the same model made for llama.cpp works.",
+}
+
 PARTS = frozenset(
     {"lora", "vae", "text_encoder", "controlnet", "upscaler", "vision_encoder", "other", "unknown"}
 )
@@ -691,6 +698,9 @@ def assess(
                 f"Used for {match[1]}." if used
                 else f"This is a file of {match[1]}. One click lets the app use it where it is."
             )  # fmt: skip
+        elif it.format == "gguf" and it.family in INCOMPATIBLE:
+            it.state = "unsupported"
+            it.reason = INCOMPATIBLE[it.family]
         elif it.format == "ckpt":
             it.state = "unsupported"
             it.reason = "Old .ckpt files can run code when opened, so the app does not open them."

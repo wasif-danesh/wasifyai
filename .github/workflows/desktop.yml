@@ -283,6 +283,53 @@ jobs:
           echo "--- self-test lines"; cat "$WASIFYAI_SMOKE_OUT" || true
           echo "--- installer log"; cat "$WASIFYAI_DATA_DIR/logs/provision.log" || true
 
+  llamacpp:
+    # The optional language engine, as a person gets it: press "Set up the language engine" (the window's
+    # self-test does), then start the installed llama-server on a tiny model and ask it for a chat answer.
+    # The model is 1.2 MB, pinned by commit and checked by SHA-256. macOS here: that is where the engine
+    # uses a GPU; the other platforms are covered by the unit tests of the installer.
+    runs-on: macos-latest
+    env:
+      WASIFYAI_SMOKE: "1"
+      WASIFYAI_SMOKE_COMPONENT: llamacpp
+    steps:
+      - uses: actions/checkout@v4
+      - name: Paths for the run
+        shell: bash
+        run: |
+          {
+            echo "WASIFYAI_DATA_DIR=$RUNNER_TEMP/wasifyai-data"
+            echo "WASIFYAI_LLAMA_DATA_DIR=$RUNNER_TEMP/wasifyai-data"
+            echo "WASIFYAI_SMOKE_OUT=$RUNNER_TEMP/smoke.txt"
+            echo "WASIFYAI_LLAMA_MODEL=$RUNNER_TEMP/stories260K.gguf"
+          } >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install
+      - run: pnpm --filter @wasifyai/desktop build
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: apps/desktop/src-tauri }
+      - name: Engine environment
+        run: uv sync --all-packages
+      - name: Set up the language engine in the window
+        working-directory: apps/desktop/src-tauri
+        run: cargo run --locked
+      - name: A tiny model
+        run: |
+          curl -sSL --fail -o "$WASIFYAI_LLAMA_MODEL" \
+            "https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/tinyllamas/stories260K.gguf"
+          echo "270cba1bd5109f42d03350f60406024560464db173c0e387d91f0426d3bd256d  $WASIFYAI_LLAMA_MODEL" | shasum -a 256 -c -
+      - name: Start the installed server on it and ask for an answer
+        run: uv run pytest -s services/api/tests/integration/test_llama_installed.py
+      - if: always()
+        name: Verdict and installer log
+        run: |
+          echo "--- self-test"; cat "$WASIFYAI_SMOKE_OUT" || true
+          echo "--- installer log"; tail -n 40 "$WASIFYAI_DATA_DIR/logs/provision.log" || true
+
   comfyui:
     # The optional image engine, as a person gets it: press "Set up image generation" (the window's
     # self-test does), then start the installed ComfyUI and ask it what device it found. No model is

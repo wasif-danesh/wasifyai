@@ -359,3 +359,11 @@ async def test_scans_do_not_overlap_and_a_failure_does_not_stick(tmp_path):
     svc = DiscoveryService(InMemorySettingsStore(), None, tools_for(tmp_path))
     await asyncio.gather(svc.scan(), svc.scan())
     assert svc.running is False and svc.scanned_at is not None
+
+
+def test_a_tools_own_format_that_llama_cpp_cannot_read_is_said_so(tmp_path):
+    ollama = gguf(tmp_path / "blob", arch="gptoss", name="gpt-oss 20B")
+    item = found(ollama, "language")
+    item.family, item.format = "gptoss", "gguf"
+    assess([item], [], [], machine=None)
+    assert item.state == "unsupported" and "own format" in item.reason

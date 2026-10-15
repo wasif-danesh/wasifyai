@@ -180,9 +180,34 @@ pub fn extract_file(archive: &Path, kind: &str, wanted: &str, dest: &Path) -> Re
     std::fs::rename(&part, dest).map_err(|e| e.to_string())
 }
 
+/// Is `link` (a symbolic link's target, relative to the folder it sits in) safe? It must stay inside the
+/// unpacked tree: no absolute path, no drive, and never above the top.
+fn link_stays_inside(parent_rel: &Path, link: &Path) -> bool {
+    use std::path::Component;
+    if link.is_absolute() {
+        return false;
+    }
+    let mut depth = parent_rel.components().count() as i64;
+    for c in link.components() {
+        match c {
+            Component::Normal(_) => depth += 1,
+            Component::CurDir => {}
+            Component::ParentDir => {
+                depth -= 1;
+                if depth < 0 {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+    }
+    true
+}
+
 /// Unpack a `.tar.gz` into `dest`, dropping the first `strip` path components (the archive's top folder).
-/// Only regular files and folders are written; a link, an absolute path or a `..` is an error, so an
-/// archive cannot write outside `dest`.
+/// Regular files, folders and symbolic links are written. An absolute path or a `..` in an entry's name is
+/// an error, and so is a link that points outside the tree, so an archive cannot write or point outside
+/// `dest`. Hard links and special files are errors. Returns the number of files written.
 pub fn extract_tree(archive: &Path, strip: usize, dest: &Path) -> Result<u64, String> {
     use std::path::Component;
     let f = File::open(archive).map_err(|e| e.to_string())?;
@@ -223,16 +248,104 @@ pub fn extract_tree(archive: &Path, strip: usize, dest: &Path) -> Result<u64, St
                 }
             }
             files += 1;
+        } else if kind.is_symlink() {
+            let link = entry
+                .link_name()
+                .map_err(|e| e.to_string())?
+                .map(|l| l.into_owned())
+                .ok_or_else(|| format!("a link without a target: {}", path.display()))?;
+            let parent_rel = rel.parent().map(Path::to_path_buf).unwrap_or_default();
+            if !link_stays_inside(&parent_rel, &link) {
+                return Err(format!(
+                    "the archive holds a link that points outside itself: {}",
+                    path.display()
+                ));
+            }
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            #[cfg(unix)]
+            {
+                let _ = std::fs::remove_file(&target);
+                std::os::unix::fs::symlink(&link, &target).map_err(|e| e.to_string())?;
+            }
+            #[cfg(not(unix))]
+            {
+                return Err(format!(
+                    "the archive holds a link this system cannot make: {}",
+                    path.display()
+                ));
+            }
         } else if kind.is_pax_global_extensions() || kind.is_pax_local_extensions() {
             continue; // archive metadata (GitHub writes one)
         } else {
             return Err(format!(
-                "the archive holds a link or special file: {}",
+                "the archive holds a hard link or special file: {}",
                 path.display()
             ));
         }
     }
     Ok(files)
+}
+
+/// Unpack a `.zip` into `dest`, dropping the first `strip` path components. Files and folders only;
+/// a name that escapes the folder is an error. Returns the number of files written.
+pub fn extract_zip_tree(archive: &Path, strip: usize, dest: &Path) -> Result<u64, String> {
+    use std::path::Component;
+    let f = File::open(archive).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipArchive::new(f).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(dest).map_err(|e| e.to_string())?;
+    let mut files = 0u64;
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
+        let name = entry
+            .enclosed_name()
+            .ok_or_else(|| format!("the archive names a path outside itself: {}", entry.name()))?;
+        if name
+            .components()
+            .any(|c| !matches!(c, Component::Normal(_)))
+        {
+            return Err(format!(
+                "the archive names a path outside itself: {}",
+                name.display()
+            ));
+        }
+        let rel: PathBuf = name.components().skip(strip).collect();
+        if rel.as_os_str().is_empty() {
+            continue;
+        }
+        let target = dest.join(&rel);
+        if entry.is_dir() {
+            std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
+        } else if entry.is_file() {
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            let mut out = File::create(&target).map_err(|e| e.to_string())?;
+            std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
+            files += 1;
+        } else {
+            return Err(format!(
+                "the archive holds a link or special file: {}",
+                name.display()
+            ));
+        }
+    }
+    Ok(files)
+}
+
+/// Unpack an archive of either supported kind (`"tar.gz"` or `"zip"`) into `dest`.
+pub fn extract_archive_tree(
+    archive: &Path,
+    kind: &str,
+    strip: usize,
+    dest: &Path,
+) -> Result<u64, String> {
+    match kind {
+        "tar.gz" => extract_tree(archive, strip, dest),
+        "zip" => extract_zip_tree(archive, strip, dest),
+        other => Err(format!("unknown archive type {other}")),
+    }
 }
 
 fn file_name_is(path: &Path, wanted: &str) -> bool {
@@ -409,7 +522,7 @@ mod tests {
 
     #[test]
     fn the_wanted_file_is_found_in_a_zip() {
-        let dir = temp("zip");
+        let dir = temp("zip-tree");
         let archive = dir.join("a.zip");
         {
             let mut z = zip::ZipWriter::new(File::create(&archive).unwrap());
@@ -483,6 +596,99 @@ mod tests {
             tar.into_inner().unwrap().finish().unwrap();
         }
         let err = extract_tree(&archive, 1, &dir.join("out")).unwrap_err();
+        assert!(err.contains("outside"), "{err}");
+        assert!(!dir.join("evil.txt").exists());
+    }
+
+    fn archive_with_link(dir: &Path, link_target: &str) -> PathBuf {
+        let archive = dir.join("links.tar.gz");
+        let gz = flate2::write::GzEncoder::new(
+            File::create(&archive).unwrap(),
+            flate2::Compression::fast(),
+        );
+        let mut tar = tar::Builder::new(gz);
+        let data = b"library";
+        let mut h = tar::Header::new_gnu();
+        h.set_size(data.len() as u64);
+        h.set_mode(0o755);
+        h.set_cksum();
+        tar.append_data(&mut h, "bin-1/libx.1.0.dylib", &data[..])
+            .unwrap();
+        let mut l = tar::Header::new_gnu();
+        l.set_entry_type(tar::EntryType::Symlink);
+        l.set_size(0);
+        l.set_mode(0o755);
+        l.set_cksum();
+        tar.append_link(&mut l, "bin-1/libx.dylib", link_target)
+            .unwrap();
+        tar.into_inner().unwrap().finish().unwrap();
+        archive
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_inside_the_tree_is_kept_and_works() {
+        let dir = temp("link-ok");
+        let archive = archive_with_link(&dir, "libx.1.0.dylib");
+        let dest = dir.join("out");
+        assert_eq!(extract_tree(&archive, 1, &dest).unwrap(), 1);
+        assert_eq!(std::fs::read(dest.join("libx.dylib")).unwrap(), b"library");
+        assert!(std::fs::symlink_metadata(dest.join("libx.dylib"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_that_points_outside_the_tree_is_refused() {
+        for target in ["/etc/passwd", "../../outside", "../x"] {
+            let dir = temp("link-bad");
+            let archive = archive_with_link(&dir, target);
+            let err = extract_tree(&archive, 1, &dir.join("out")).unwrap_err();
+            assert!(err.contains("points outside"), "{target}: {err}");
+        }
+    }
+
+    #[test]
+    fn links_are_judged_by_where_they_sit() {
+        // a link in `sub/` may go up one folder, not two
+        assert!(link_stays_inside(Path::new("sub"), Path::new("../a")));
+        assert!(!link_stays_inside(Path::new("sub"), Path::new("../../a")));
+        assert!(link_stays_inside(Path::new(""), Path::new("a/../b")));
+        assert!(!link_stays_inside(Path::new(""), Path::new("../a")));
+    }
+
+    #[test]
+    fn a_zip_is_unpacked_without_its_top_folder_and_cannot_climb() {
+        use std::io::Write as _;
+        let dir = temp("zip");
+        let archive = dir.join("a.zip");
+        {
+            let mut z = zip::ZipWriter::new(File::create(&archive).unwrap());
+            let opts = zip::write::SimpleFileOptions::default();
+            z.start_file("llama-1/llama-server.exe", opts).unwrap();
+            z.write_all(b"exe").unwrap();
+            z.start_file("llama-1/ggml.dll", opts).unwrap();
+            z.write_all(b"dll").unwrap();
+            z.finish().unwrap();
+        }
+        let dest = dir.join("out");
+        assert_eq!(extract_zip_tree(&archive, 1, &dest).unwrap(), 2);
+        assert_eq!(
+            std::fs::read(dest.join("llama-server.exe")).unwrap(),
+            b"exe"
+        );
+
+        let bad = dir.join("bad.zip");
+        {
+            let mut z = zip::ZipWriter::new(File::create(&bad).unwrap());
+            z.start_file("../evil.txt", zip::write::SimpleFileOptions::default())
+                .unwrap();
+            z.write_all(b"x").unwrap();
+            z.finish().unwrap();
+        }
+        let err = extract_zip_tree(&bad, 0, &dir.join("out2")).unwrap_err();
         assert!(err.contains("outside"), "{err}");
         assert!(!dir.join("evil.txt").exists());
     }

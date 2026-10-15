@@ -3,7 +3,7 @@ import { Button } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
 import { discoveryApi } from "../api";
 import { engineRepair, engineRestart } from "../engine";
-import { ImageEngineCard, UpdateBanner } from "../parts";
+import { ImageEngineCard, LanguageEngineCard, UpdateBanner } from "../parts";
 
 const INPUT =
   "min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
@@ -93,6 +93,11 @@ export function SettingsPage() {
       <section className="grid gap-3" aria-label="Image generation">
         <h2 className="font-semibold text-lg">Image generation</h2>
         <ImageEngineCard />
+      </section>
+
+      <section className="grid gap-3" aria-label="Language models">
+        <h2 className="font-semibold text-lg">Language models</h2>
+        <LanguageEngineCard />
       </section>
 
       <FindingModels />

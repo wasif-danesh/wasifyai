@@ -39,6 +39,7 @@ from wasifyai_api.desktop_discovery import DiscoveryService
 from wasifyai_api.desktop_fit import assess_fit, need_declared
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
+from wasifyai_api.llama_server import LlamaServer
 from wasifyai_api.runs import RunManager
 from wasifyai_api.safeguards import SettingsStore
 from wasifyai_api.sqlite_stores import SqliteIndexStore, SqliteSettingsStore, SqliteUserStore
@@ -69,6 +70,7 @@ class DesktopBackends:
     _worker_cleanup: Any = None
     models: ModelsService | None = None
     discovery: DiscoveryService | None = None
+    llama: LlamaServer | None = None
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
     async def start(self, runs: RunManager) -> None:
@@ -87,6 +89,8 @@ class DesktopBackends:
     async def stop(self) -> None:
         if self.discovery is not None:
             await self.discovery.stop()
+        if self.llama is not None:
+            await self.llama.close()  # the language model's memory goes back with its process
         if self._consumer:
             await self._consumer.stop()
         if self._worker_task:
@@ -121,6 +125,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     return DesktopBackends(
         models=models,
         discovery=DiscoveryService(SqliteSettingsStore(engine), models),
+        llama=LlamaServer(settings.desktop_dir),
         engine=engine,
         event_log=log_,
         run_store=SqliteRunStore(engine),

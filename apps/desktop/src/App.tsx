@@ -3,7 +3,7 @@ import { PageHero, page } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
 import { Shell } from "./Shell";
 import { transport } from "./api";
-import { COMFYUI, type EngineStatus, engineStatus, onEngineStatus } from "./engine";
+import { COMFYUI, type EngineStatus, LLAMACPP, engineStatus, onEngineStatus } from "./engine";
 import { EngineState } from "./parts";
 import { runComponentSmoke, runSmoke, smokeComponent, smokeEnabled } from "./smoke";
 
@@ -36,7 +36,9 @@ export function App() {
       .then(async (on) => {
         if (!on) return;
         // WASIFYAI_SMOKE_COMPONENT=comfyui: set the image engine up instead of making an image
-        return (await smokeComponent()) === COMFYUI ? runComponentSmoke() : runSmoke();
+        const component = await smokeComponent();
+        if (component === COMFYUI || component === LLAMACPP) return runComponentSmoke(component);
+        return runSmoke();
       })
       .catch(() => {});
   }, [status.state]);

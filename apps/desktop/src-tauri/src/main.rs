@@ -11,6 +11,7 @@ mod comfyui;
 mod disk;
 mod download;
 mod engine;
+mod llamacpp;
 mod logsink;
 #[allow(dead_code)]
 mod loopback_http;
@@ -52,12 +53,14 @@ async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn component_status(
     id: String,
-    components: State<'_, comfyui::Components>,
+    comfy: State<'_, comfyui::Components>,
+    llama: State<'_, llamacpp::Components>,
 ) -> Result<comfyui::ComponentStatus, String> {
-    if id != comfyui::COMPONENT {
-        return Err(format!("unknown component {id}"));
+    match id.as_str() {
+        comfyui::COMPONENT => Ok(comfy.status()),
+        llamacpp::COMPONENT => Ok(llama.status()),
+        _ => Err(format!("unknown component {id}")),
     }
-    Ok(components.status())
 }
 
 #[tauri::command]
@@ -65,12 +68,14 @@ fn component_install(
     id: String,
     repair: bool,
     app: tauri::AppHandle,
-    components: State<'_, comfyui::Components>,
+    comfy: State<'_, comfyui::Components>,
+    llama: State<'_, llamacpp::Components>,
 ) -> Result<(), String> {
-    if id != comfyui::COMPONENT {
-        return Err(format!("unknown component {id}"));
+    match id.as_str() {
+        comfyui::COMPONENT => comfy.start(app, repair),
+        llamacpp::COMPONENT => llama.start(app, repair),
+        _ => Err(format!("unknown component {id}")),
     }
-    components.start(app, repair)
 }
 
 #[tauri::command]
@@ -204,6 +209,7 @@ fn main() {
                 resource_dir: app.path().resource_dir().ok(),
             };
             app.manage(comfyui::Components::new(input.clone()));
+            app.manage(llamacpp::Components::new(input.clone()));
             engine.start(app.handle().clone(), input);
             quit_on_signals(app.handle().clone());
             Ok(())

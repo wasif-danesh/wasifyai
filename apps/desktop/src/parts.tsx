@@ -7,6 +7,7 @@ import {
   COMFYUI,
   type ComponentStatus,
   type EngineStatus,
+  LLAMACPP,
   type UpdateStatus,
   componentInstall,
   componentStatus,
@@ -166,6 +167,95 @@ export function ImageEngineCard() {
                 type="button"
                 variant="outline"
                 onClick={() => void componentInstall(COMFYUI, true)}
+              >
+                Repair
+              </Button>
+            </>
+          }
+        >
+          {status.message}
+        </Notice>
+      );
+  }
+}
+
+/** The local language engine (llama.cpp, stage D): the same shape as the image engine's card. */
+export function LanguageEngineCard() {
+  const [status, setStatus] = useState<ComponentStatus | null>(null);
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let gone = false;
+    componentStatus(LLAMACPP)
+      .then((s) => !gone && setStatus(s))
+      .catch(() => {});
+    onComponentStatus((id, s) => id === LLAMACPP && !gone && setStatus(s)).then((off) => {
+      stop = off;
+      if (gone) off();
+    });
+    return () => {
+      gone = true;
+      stop?.();
+    };
+  }, []);
+
+  if (!status) return null;
+  switch (status.state) {
+    case "unsupported":
+      return <p className="text-muted-foreground text-sm">Local chat: {status.reason}</p>;
+    case "not_installed":
+      return (
+        <Notice
+          title="Run language models on this computer"
+          actions={
+            <Button type="button" onClick={() => void componentInstall(LLAMACPP)}>
+              Set up the language engine
+            </Button>
+          }
+        >
+          This is done once and needs an internet connection and about{" "}
+          {humanBytes(status.needs_bytes)} of disk space. Models are found on this computer or
+          downloaded separately.
+        </Notice>
+      );
+    case "installing": {
+      const p = status.progress;
+      return (
+        <section className="grid gap-3" aria-label="Setting up the language engine">
+          <JobMeter
+            title={`Setting up the language engine, step ${p.index} of ${p.count}: ${p.label}`}
+            text={`${Math.round(installFraction(p) * 100)}%`}
+            value={installFraction(p)}
+            label="Language engine setup progress"
+          />
+          {p.detail ? (
+            <p className="truncate text-muted-foreground text-sm" aria-live="off">
+              {p.detail}
+            </p>
+          ) : null}
+        </section>
+      );
+    }
+    case "installed":
+      return (
+        <p className="text-muted-foreground text-sm">
+          Language engine installed (llama.cpp {status.version},{" "}
+          {status.accelerator === "metal" ? "Apple GPU" : "processor only: models run slower"}).
+        </p>
+      );
+    case "failed":
+      return (
+        <Notice
+          tone="error"
+          title="The language engine could not be set up"
+          actions={
+            <>
+              <Button type="button" onClick={() => void componentInstall(LLAMACPP)}>
+                Try again
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void componentInstall(LLAMACPP, true)}
               >
                 Repair
               </Button>

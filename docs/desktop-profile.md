@@ -292,6 +292,16 @@ Measured on the owner's Mac (Ollama, the Hugging Face cache, Comfy Desktop's sha
 found in 0.1 s: 4 language, 6 image, 2 video, 3 embedding, 1 LoRA, 9 parts and files of image models; three
 FLUX.2 klein files are `can_use`.
 
+## The language engine (llama.cpp, stage D)
+
+An optional component like the image engine, installed on demand from Settings ("Set up the language engine").
+It is llama.cpp's prebuilt release for this platform (pinned in `engine-manifest.json`, checksum checked,
+about 12 to 20 MB, no Python), unpacked under `<app data>/engine/llamacpp/<release>/` with a `state.json` the
+engine reads. The engine (`llama_server.py`) runs one `llama-server` at a time on loopback for one model file and
+stops it to free the memory. Only the Apple-silicon build uses a GPU; the other builds run on the processor.
+`GET /desktop/language-engine` and `POST /desktop/language-engine/stop` are the routes; choosing a model and the
+chat provider are D2 (`docs/phase2-stage-d-plan.md`).
+
 ## Will it fit? (ADR-0063)
 
 `desktop_fit.py` answers `fits`, `tight` or `too_big` for a model, with a reason in plain words, from what the

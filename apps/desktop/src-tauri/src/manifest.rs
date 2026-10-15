@@ -17,6 +17,29 @@ pub struct Manifest {
     /// The optional image-engine component (ADR-0059). Absent: no component on this build.
     #[serde(default)]
     pub comfyui: Option<ComfyUi>,
+    /// The optional local language-engine component (ADR-0062, stage D). Absent: none on this build.
+    #[serde(default)]
+    pub llamacpp: Option<LlamaCpp>,
+}
+
+/// llama.cpp's prebuilt `llama-server`, one release archive per platform.
+#[derive(Debug, Clone, Deserialize)]
+pub struct LlamaCpp {
+    /// the release tag, for example "b11655"
+    pub version: String,
+    /// Keyed by Rust target triple.
+    pub assets: BTreeMap<String, LlamaAsset>,
+    pub disk: Disk,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct LlamaAsset {
+    #[serde(flatten)]
+    pub asset: Asset,
+    /// path components of the archive's top folder to drop (the Mac and Linux archives have one)
+    pub strip: usize,
+    /// what the engine uses on this platform: "metal" (Apple GPU) or "cpu"
+    pub backend: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -98,6 +121,17 @@ impl Manifest {
                 "Real images need an Apple-silicon Mac in this version. The placeholder engine still works."
                     .into(),
             ),
+        }
+    }
+
+    /// Why the language engine cannot be installed here, or None when it can.
+    pub fn llamacpp_unsupported(&self) -> Option<String> {
+        let Some(l) = &self.llamacpp else {
+            return Some("This build has no local language engine.".into());
+        };
+        match host_target() {
+            Some(t) if l.assets.contains_key(t) => None,
+            _ => Some("The local language engine is not available for this computer yet.".into()),
         }
     }
 
@@ -198,6 +232,47 @@ mod tests {
         assert_eq!(
             m.comfyui_unsupported().is_none(),
             host_target() == Some("aarch64-apple-darwin")
+        );
+    }
+
+    #[test]
+    fn llamacpp_is_pinned_exactly_for_every_platform() {
+        let m = Manifest::load().unwrap();
+        let l = m
+            .llamacpp
+            .as_ref()
+            .expect("the manifest carries the engine");
+        assert!(l.version.starts_with('b') && l.version[1..].chars().all(|c| c.is_ascii_digit()));
+        for target in [
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+            "x86_64-pc-windows-msvc",
+            "x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-gnu",
+        ] {
+            let a = l
+                .assets
+                .get(target)
+                .unwrap_or_else(|| panic!("no llama.cpp for {target}"));
+            assert!(is_sha256(&a.asset.sha256), "{target}: sha256");
+            assert!(a.asset.size > 1_000_000, "{target}: size looks wrong");
+            assert!(a
+                .asset
+                .url
+                .starts_with("https://github.com/ggml-org/llama.cpp/releases/download/"));
+            assert!(
+                a.asset.url.contains(&format!("/{}/", l.version)),
+                "{target}: url is not for the pinned release"
+            );
+            assert_eq!(a.asset.archive == "zip", target.contains("windows"));
+            assert!(a.backend == "metal" || a.backend == "cpu");
+            assert_eq!(a.backend == "metal", target == "aarch64-apple-darwin");
+        }
+        assert!(l.disk.min_free_bytes > 100_000_000);
+        // supported exactly where this machine has an entry
+        assert_eq!(
+            m.llamacpp_unsupported().is_none(),
+            host_target().is_some_and(|t| l.assets.contains_key(t))
         );
     }
 

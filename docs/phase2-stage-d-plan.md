@@ -1,6 +1,7 @@
 # Phase 2, stage D: the assistant on desktop (plan)
 
-Status: **Proposed 2026-10-15**, waiting for the owner's answers to the questions at the end. Implements
+Status: **Approved 2026-10-15** with all five recommended answers below (owner: "all recommended"). **D1 done**
+(see "D1 evidence" at the end); D2 to D6 not started. Implements
 ADR-0057 (the assistant product) on the desktop with a managed local language model (ADR-0062: llama.cpp), the
 slot manager (ADR-0056) and the model discovery and fit checks that exist today (ADR-0063).
 
@@ -79,7 +80,7 @@ shadcn) is a short spike with the ADR-0057 criteria before D5.
 | D5 | Shared chat UI and the desktop home | component tests; the window self-test sends a message and reads the answer |
 | D6 | Recommended model in the catalogue, the bake-off numbers, docs, ADR status | measured table below |
 
-## Questions for the owner (recommended answer first)
+## Decisions (all five approved as recommended)
 
 1. **Engine.** Managed llama.cpp installed on demand, with a running Ollama or LM Studio usable as a provider
    (recommended). The alternative, "only use the person's Ollama", breaks the self-sufficient aim.
@@ -102,3 +103,33 @@ shadcn) is a short spike with the ADR-0057 criteria before D5.
 - Found language models: `gpt-oss:20b` (Ollama, 13.8 GB, estimated need 14.8 GB), embedding models
   `bge-m3` and `nomic-embed-text` (Ollama).
 - Unsloth's bundled llama.cpp is 224 MB on disk (`docs/spikes/unsloth-phase0.md`).
+
+## D1 evidence (2026-10-15): the llama.cpp component
+
+- **Pin:** llama.cpp release `b11655`, one archive per platform in `engine-manifest.json` (macOS arm64 with
+  Metal, macOS x64, Linux x64 and arm64, Windows x64; processor builds off the Mac). The five SHA-256 values and
+  sizes were checked by downloading each archive, not only read from the release page.
+- **Installer** (`llamacpp.rs`): check, download (checksum and size), unpack, verify (`llama-server --version`),
+  `state.json`. Four steps, no Python. The archive extractor now keeps symbolic links that stay inside the tree
+  (the Mac and Linux archives are made of them) and refuses any that do not; zip archives are unpacked the same
+  way. Tests: install, wrong checksum, no server in the archive, a server that does not start, unsupported
+  platform, link safety.
+- **Engine** (`llama_server.py`): finds the install from `state.json`, starts one `llama-server` on loopback
+  and a free port for one model, restarts when the model or context changes, stops it to give memory back, and
+  names the usual failures (not installed, model file gone, unknown architecture, out of memory).
+  `GET /desktop/language-engine` and `POST .../stop` report and stop it.
+- **Window:** Settings has a "Language models" card (set up, progress, installed version and backend, repair).
+- **On the owner's Mac (M5 Pro, 64 GB):** installed through the window's self-test in 3 s (12 MB archive);
+  `b11655` with Metal loaded a 13.8 GB gpt-oss 20B file found in Ollama's folder and answered a chat request in
+  4.7 s including the model load. A 1.2 MB test model loads and answers in 0.6 s.
+- **Two findings:**
+  1. **Ollama's own gpt-oss file does not load.** It stores the architecture as `gptoss`, which llama.cpp
+     refuses ("unknown model architecture"). A llama.cpp-format file of the same model (also in the Ollama
+     folder, named `llamacpp:...`) loads. Discovery now marks `gptoss` as unsupported with that reason, and the
+     engine turns the server's message into a plain sentence. Expect more tool-specific names: the real answer is
+     to try to load, which D2's model selection does.
+  2. **Off the Mac the build is processor-only.** The fit check (`desktop_fit.py`) must treat the engine as
+     `cpu` when the installed backend is `cpu`, even on a computer with an NVIDIA card; CUDA and Vulkan builds
+     are a separate pin to choose later. D2 passes the backend into the fit check.
+- **CI:** a `llamacpp` job installs the component through the window's self-test on macOS, downloads a 1.2 MB
+  model pinned by commit and SHA-256, starts the installed server on it and asks for an answer.

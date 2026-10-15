@@ -1,9 +1,12 @@
 {
   "schema": 1,
-  "comment": "What the app installs the engine's Python environment from. Pins are exact. uv is downloaded from its GitHub release and checked against the SHA-256 below before it is run; uv itself checks the Python build it downloads (the pinned uv version carries that checksum table). Packages come from the engine bundle (bundle.json, requirements.lock with hashes). Change a pin here and in docs/desktop-profile.md together.",
+  "comment": "What the app installs the engine's Python environment from. Pins are exact. uv is downloaded from its GitHub release and checked against the SHA-256 below before it is run; uv itself checks the Python build it downloads (the pinned uv version carries that checksum table). Packages come from the engine bundle (bundle.json, requirements.lock with hashes). Change a pin here and in docs/desktop-profile.md together. The llamacpp pins are the release archives of ggml-org/llama.cpp (sizes and SHA-256 as GitHub publishes them, re-checked by downloading); only the Apple-silicon build uses a GPU, the others are processor builds until a CUDA or Vulkan variant is chosen (docs/phase2-stage-d-plan.md).",
   "uv": {
     "version": "0.12.23",
-    "binary": { "unix": "uv", "windows": "uv.exe" },
+    "binary": {
+      "unix": "uv",
+      "windows": "uv.exe"
+    },
     "assets": {
       "aarch64-apple-darwin": {
         "url": "https://github.com/astral-sh/uv/releases/download/0.12.23/uv-aarch64-apple-darwin.tar.gz",
@@ -37,8 +40,12 @@
       }
     }
   },
-  "python": { "version": "3.12.15" },
-  "disk": { "min_free_bytes": 1073741824 },
+  "python": {
+    "version": "3.12.15"
+  },
+  "disk": {
+    "min_free_bytes": 1073741824
+  },
   "comfyui": {
     "version": "0.40.0",
     "source": {
@@ -48,6 +55,56 @@
       "archive": "tar.gz"
     },
     "platforms": ["aarch64-apple-darwin"],
-    "disk": { "min_free_bytes": 4294967296 }
+    "disk": {
+      "min_free_bytes": 4294967296
+    }
+  },
+  "llamacpp": {
+    "version": "b11655",
+    "assets": {
+      "aarch64-apple-darwin": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11655/llama-b11655-bin-macos-arm64.tar.gz",
+        "sha256": "e6be96363b99def1b4ee6b06aa91cc81beb4ddec7523cb9614a653536814fe37",
+        "size": 12182376,
+        "archive": "tar.gz",
+        "strip": 1,
+        "backend": "metal"
+      },
+      "x86_64-apple-darwin": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11655/llama-b11655-bin-macos-x64.tar.gz",
+        "sha256": "c3924eacb8580ea8843e48ee6179302b22e6a1602e85c2fd5253e8b1e3357316",
+        "size": 11664084,
+        "archive": "tar.gz",
+        "strip": 1,
+        "backend": "cpu"
+      },
+      "x86_64-unknown-linux-gnu": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11655/llama-b11655-bin-ubuntu-x64.tar.gz",
+        "sha256": "0e3f2cb057d2f4439ddacc281761b370a47b74f2d9f6d74f29c5b6546a459a0c",
+        "size": 17834204,
+        "archive": "tar.gz",
+        "strip": 1,
+        "backend": "cpu"
+      },
+      "aarch64-unknown-linux-gnu": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11655/llama-b11655-bin-ubuntu-arm64.tar.gz",
+        "sha256": "5b3b62ede4f1ea1e33a1f50018f536d45a1b11ece980b1f9d9adefe43817ffa6",
+        "size": 13886215,
+        "archive": "tar.gz",
+        "strip": 1,
+        "backend": "cpu"
+      },
+      "x86_64-pc-windows-msvc": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11655/llama-b11655-bin-win-cpu-x64.zip",
+        "sha256": "5963904d774b2189ac912c8547830fd8bc502acecd4fdf5e5e931b6284f4bfa6",
+        "size": 19526871,
+        "archive": "zip",
+        "strip": 0,
+        "backend": "cpu"
+      }
+    },
+    "disk": {
+      "min_free_bytes": 268435456
+    }
   }
 }

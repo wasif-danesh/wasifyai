@@ -113,6 +113,31 @@ What was checked for this decision:
 - **A separate desktop repository.** Rejected: it recreates the divergence this ADR removes.
 - **Replace LangGraph.** Rejected on measurement.
 
+## Before the first public release (pre-release steps)
+
+None of these is needed to build, run or test the desktop app on a developer's own Mac, Windows or Linux
+machine, and none blocks the phases of ADR-0061. They are needed before **other people** install the app, and
+each is owned by the person who holds the accounts and keys. State at the end of Phase 1 (2026-10-15):
+
+| # | Step | State | Needs from the owner |
+|---|---|---|---|
+| 1 | **Code signing and notarisation, macOS**: sign with a Developer ID certificate, notarise with Apple, staple; check the hardened app can still start uv and Python from the app data folder | not done; the `.app` is unsigned | Apple Developer Program membership; certificate and notarisation credentials as CI secrets |
+| 2 | **Code signing, Windows**: sign the NSIS installer (a certificate, or a cloud signing service) | not done; the installer is unsigned and shows a SmartScreen warning | a certificate or signing-service account; secrets in CI |
+| 3 | **Installers per system**: `.dmg` (macOS), NSIS (Windows), `.deb` and AppImage (Linux), built from a release workflow, with the engine bundle inside | `.app`, NSIS and `.deb` build in CI and run; `.dmg` and AppImage are not built; there is no release workflow | none beyond 1 and 2 |
+| 4 | **Offline install**: carry uv, Python and every wheel in the installer so the first run needs no network (the first run downloads about 250 MB today) | not done; decide whether the first release needs it | a decision on installer size (about 300 MB per system) |
+| 5 | **Updater**: an update key pair, a feed (GitHub Releases or another host), signed update archives, a release workflow that writes the feed, and an update tested from an older build | skeleton only (`updater.rs`, off until `WASIFYAI_UPDATER_PUBKEY` and `WASIFYAI_UPDATER_ENDPOINT` are set at build) | the private update key as a CI secret; where releases are hosted |
+| 6 | **Linux first-start delay**: about 30 s before the shell's setup hook runs on a bare CI runner (the engine itself starts in 1.5 s); timed on a real desktop | cause open; an experiment is in `desktop.yml` | a Linux desktop to time it on |
+| 7 | **Memory of the web view's processes** on Windows (WebView2) and Linux (WebKitGTK), which the shell numbers exclude | not measured | none |
+
+Steps 1, 2, 3 and 5 are done together in one release workflow. When signing is switched on, add a check to it
+that the signed app still installs the engine and makes an image (the self-test, `WASIFYAI_SMOKE=1`, already
+does this unsigned on all three systems).
+
+Developer testing without any of the above: build and run from a checkout (`cargo run` in
+`apps/desktop/src-tauri`), or build the unsigned packages (`docs/desktop-profile.md`). An unsigned macOS app
+built on the same machine opens normally; one copied from another machine needs right-click > Open. An unsigned
+Windows installer shows SmartScreen's "More info" > "Run anyway".
+
 ## Open questions
 
 1. Meaning of "documents" for the second vertical.

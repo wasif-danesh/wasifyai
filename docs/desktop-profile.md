@@ -145,6 +145,9 @@ steps 2 and 5; an offline install would need a wheelhouse in the bundle.
 
 ## Updates of the app
 
+The steps that remain before a public release (signing, notarisation, installers, offline install, the
+updater's key and feed) are listed in ADR-0056, "Before the first public release".
+
 `updater.rs` is a skeleton that is off until a build has a signing key and a feed: compile with
 `WASIFYAI_UPDATER_PUBKEY` and `WASIFYAI_UPDATER_ENDPOINT` set and pass `--config` with a filled-in
 `tauri.updater.conf.example.json` (the plugin will not start without a key in the configuration, so it is not

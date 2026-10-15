@@ -266,6 +266,16 @@ without one the graph draws it, so the recipe always holds the seed that made th
 The recipe does not name the model: the graph asks for a capability. The same seed gives the same picture on the
 same installed model. `docs/phase2-stage-b-plan.md` has the decisions.
 
+### Styles (LoRAs), Vary and Edit this result
+
+A request may carry `loras: [{name, weight}]` (at most 3, weight 0.1 to 2.0, names relative to a `loras` folder).
+The image graph validates them before any model is asked, the recipe keeps them, and a workflow whose map file has
+no `lora_chain` refuses them. `GET /desktop/loras` answers `{ready, available}`: a LoRA in a ComfyUI-layout folder
+(`<root>/loras/...`) is usable once its root is a read-only folder ("Use it"); the app's own `models/loras` folder
+is scanned too. The loader is model-only (`LoraLoaderModelOnly`). A missing file stops the job with `lora_missing`.
+Vary re-runs the recipe with a new seed; Edit this result makes the picture Edit's source. Evidence and numbers:
+`docs/phase2-stage-c-plan.md`.
+
 The window may `PATCH`: the desktop CORS list includes it (the self-test found it was missing).
 
 ## Finding models other tools left here (ADR-0063)

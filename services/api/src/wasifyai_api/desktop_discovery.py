@@ -328,6 +328,7 @@ class Found:
     reason: str = ""
     use_root: str | None = None  # the folder `can_use` would add
     use: str = ""  # what `can_use` does: "folder" (add its models folder) or "chat" (choose it)
+    lora_name: str = ""  # a LoRA: its name relative to a `loras` folder, as a workflow names it
     needs_gb: float = 0.0
     fit: dict[str, Any] | None = None
     # what a language model's memory need is worked out from (GGUF header; 0 when unknown)
@@ -667,7 +668,7 @@ LATER = {
     "embedding": "Search and documents (a coming stage) will be able to use this.",
     "diffusion": "No image workflow of ours uses this model yet.",
     "video": "Video generation is a coming stage.",
-    "lora": "LoRAs apply in the edit and remix stage (coming).",
+    "lora": "Put it in a `loras` folder of a models folder to use it.",
     "vae": "Used together with an image model; no workflow of ours takes it on its own yet.",
     "text_encoder": "Used together with an image model; no workflow of ours takes it alone yet.",
 }  # fmt: skip
@@ -679,6 +680,45 @@ INCOMPATIBLE = {
     "gptoss": "Ollama keeps this model in its own format, which llama.cpp cannot read. A file of "
     "the same model made for llama.cpp works.",
 }
+
+LORA_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()/-]{0,200}\.safetensors$")
+
+
+def lora_location(path: Path) -> tuple[Path, str] | None:
+    """(the models folder, the name a workflow uses) for a LoRA that sits under a `loras` folder."""
+    for parent in path.parents:
+        if parent.name == "loras":
+            name = path.relative_to(parent).as_posix()
+            if LORA_NAME.match(name) and ".." not in name:
+                return parent.parent, name
+            return None
+    return None
+
+
+def _assess_lora(it: Found, path: Path, roots: list[Path]) -> None:
+    found = lora_location(path)
+    if found is None:
+        it.state = "unsupported"
+        it.reason = (
+            "The image engine reads LoRAs from a `loras` folder, and this file is not in one "
+            "(or its name has characters it cannot use)."
+        )
+        return
+    root, name = found
+    it.lora_name = name
+    try:
+        used = any(root.resolve() == r.resolve() for r in roots if r.exists())
+    except OSError:
+        used = False
+    if used:
+        it.state, it.reason = "ready", "The image engine can apply this style (LoRA)."
+    else:
+        it.state, it.use, it.use_root = "can_use", "folder", str(root)
+        it.reason = (
+            "One click lets the image engine read this style where it is. Make sure it was "
+            "trained for FLUX.2 klein 4B."
+        )
+
 
 PARTS = frozenset(
     {"lora", "vae", "text_encoder", "controlnet", "upscaler", "vision_encoder", "other", "unknown"}
@@ -761,6 +801,8 @@ def assess(
                 it.reason = (
                     "Set up the language engine in Settings, then this can be chosen for chat."
                 )
+        elif it.kind == "lora" and it.format == "safetensors":
+            _assess_lora(it, p, roots)
         elif it.kind in LATER:
             it.state = "later"
             it.reason = LATER[it.kind]
@@ -905,8 +947,12 @@ class DiscoveryService:
         try:
             tools = list(self.tools)
             if self.models is not None:  # what this app downloaded itself (the model hub)
-                app_dir = self.models.models_dir / "language"
-                tools.append(Tool("app", "Wasify AI", "files", [app_dir]))
+                tools.append(
+                    Tool(
+                        "app", "Wasify AI", "files",
+                        [self.models.models_dir / "language", self.models.models_dir / "loras"],
+                    )
+                )  # fmt: skip
             result = await asyncio.to_thread(scan_folders, tools, list(self.folders))
             roots = self.models.roots() if self.models else []
             catalogue = list(self.models.catalogue.values()) if self.models else []
@@ -996,6 +1042,24 @@ class Use(BaseModel):
 @router.get("/discovery")
 async def get_discovery(request: Request, _: Identity = Depends(get_identity)) -> dict[str, Any]:
     return _svc(request).state()
+
+
+@router.get("/loras")
+async def loras(request: Request, _: Identity = Depends(get_identity)) -> dict[str, Any]:
+    """The styles (LoRAs) the image engine can apply now, and the ones one click away."""
+    items = _svc(request).items
+
+    def row(i: Found) -> dict[str, Any]:
+        return {
+            "id": i.id, "name": i.lora_name, "title": i.name, "family": i.family,
+            "size": i.size, "tool": i.tool_title, "reason": i.reason, "use": i.use,
+        }  # fmt: skip
+
+    kind = [i for i in items if i.kind == "lora" and i.lora_name]
+    return {
+        "ready": [row(i) for i in kind if i.state == "ready"],
+        "available": [row(i) for i in kind if i.state == "can_use"],
+    }
 
 
 @router.post("/discovery/scan")

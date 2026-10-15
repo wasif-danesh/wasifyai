@@ -27,8 +27,11 @@ export function Shell() {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   // an image whose recipe was sent to Create ("make it again"); used once, then forgotten
   const [again, setAgain] = useState<ImageSummary | null>(null);
+  // a result sent to Edit as its source picture ("Edit this result")
+  const [editSource, setEditSource] = useState<{ url: string; name: string } | null>(null);
   useEffect(() => {
     if (route !== "create") setAgain(null);
+    if (route !== "edit") setEditSource(null);
   }, [route]);
   const set = (v: boolean) => {
     setCollapsed(v);
@@ -71,9 +74,20 @@ export function Shell() {
               mode="text"
               go={go}
               preset={again ? presetOf(again) : null}
+              onEditThis={(image) => {
+                setEditSource({ url: image.image_url, name: `${image.id}.png` });
+                go("edit");
+              }}
             />
           ) : null}
-          {route === "edit" ? <CreatePage key="edit" mode="image" go={go} /> : null}
+          {route === "edit" ? (
+            <CreatePage
+              key={`edit-${editSource?.url ?? ""}`}
+              mode="image"
+              go={go}
+              source={editSource}
+            />
+          ) : null}
           {route === "library" ? (
             <LibraryPage
               go={go}

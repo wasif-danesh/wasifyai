@@ -31,6 +31,7 @@ export {
   when,
   type ImagePage,
   type ImageRecipe,
+  type LoraChoice,
   type ImageSummary,
   type ImagesApi,
   type ListOptions,

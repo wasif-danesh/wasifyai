@@ -3,12 +3,13 @@
 import {
   type ImageSummary,
   type ImagesApi,
+  type LoraChoice,
   type RunClient,
   canRunAgain,
   sizeName,
   when,
 } from "@wasifyai/client";
-import { Heart, ImageIcon, Info, Library, RotateCw, Save } from "lucide-react";
+import { Heart, ImageIcon, Info, Library, Pencil, RotateCw, Save, Shuffle } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useId, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
@@ -37,12 +38,22 @@ const EXAMPLES = {
 } as const;
 
 /** A recipe loaded into the form: what "make it again" starts from. */
-export type WorkspacePreset = { prompt: string; size: string | null; seed: number };
+export type WorkspacePreset = {
+  prompt: string;
+  size: string | null;
+  seed: number;
+  loras: LoraChoice[];
+};
+
+/** A style the image engine can apply (or could, with one click). */
+export type LoraOption = { id?: string; name: string; title: string; size?: number };
+
+const MAX_STYLES = 3;
 
 export function presetOf(image: ImageSummary): WorkspacePreset | null {
   const r = image.recipe;
   if (!canRunAgain(image) || r === null) return null;
-  return { prompt: r.prompt, size: r.size, seed: r.seed };
+  return { prompt: r.prompt, size: r.size, seed: r.seed, loras: r.loras ?? [] };
 }
 
 export type ImageWorkspaceProps = {
@@ -62,6 +73,15 @@ export type ImageWorkspaceProps = {
   canSave?: boolean;
   /** Why making an image is not possible right now (for example: the model cannot fit). */
   blockedReason?: string | null;
+  /** Styles (LoRAs) the image engine can apply now. */
+  loras?: LoraOption[];
+  /** Styles one click away (their folder is not read yet), with `onUseLora` to do it. */
+  availableLoras?: LoraOption[];
+  onUseLora?: (id: string) => Promise<void> | void;
+  /** Take a result into Edit as its source picture (the app opens the Edit screen). */
+  onEditThis?: (image: ImageSummary) => void;
+  /** A picture to start Edit from: fetched and handed over like one the person chose. */
+  sourceImage?: { url: string; name: string } | null;
 };
 
 function useRecent(refreshOn: string | undefined, api: ImagesApi) {
@@ -107,6 +127,11 @@ export function ImageWorkspace({
   onOpenLibrary,
   canSave = false,
   blockedReason = null,
+  loras = [],
+  availableLoras = [],
+  onUseLora,
+  onEditThis,
+  sourceImage = null,
 }: ImageWorkspaceProps) {
   const id = useId();
   const flow = useImageFlow(runs);
@@ -114,6 +139,8 @@ export function ImageWorkspace({
   const [prompt, setPrompt] = useState(preset?.prompt ?? "");
   const [size, setSize] = useState<string>(preset?.size ?? "square");
   const [seed, setSeed] = useState<number | null>(preset?.seed ?? null);
+  const [styles, setStyles] = useState<LoraChoice[]>(preset?.loras ?? []);
+  const [stylesOpen, setStylesOpen] = useState((preset?.loras ?? []).length > 0);
   const [picked, setPicked] = useState<ImageSummary | null>(null);
   const [made, setMade] = useState<ImageSummary | null>(null);
   const [recipeOpen, setRecipeOpen] = useState(false);
@@ -151,8 +178,26 @@ export function ImageWorkspace({
     (mode === "text" || (pic.picture !== null && pic.status !== "uploading")) &&
     !blockedReason;
 
+  // an image sent from another screen ("Edit this result") becomes the Edit source, once
+  const sourceKey = sourceImage?.url ?? "";
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the url is the trigger; `pic` is stable enough
+  useEffect(() => {
+    if (mode !== "image" || !sourceImage) return;
+    let gone = false;
+    fetch(sourceImage.url)
+      .then((r) => r.blob())
+      .then((blob) => {
+        if (gone) return;
+        void pic.choose(new File([blob], sourceImage.name, { type: blob.type || "image/png" }));
+      })
+      .catch(() => !gone && setProblem("That picture could not be opened for editing."));
+    return () => {
+      gone = true;
+    };
+  }, [sourceKey, mode]);
+
   const begin = useCallback(
-    (text: string, sizeId: string, withSeed: number | null) => {
+    (text: string, sizeId: string, withSeed: number | null, withStyles: LoraChoice[]) => {
       setPicked(null);
       setRecipeOpen(false);
       setSaved(null);
@@ -164,14 +209,15 @@ export function ImageWorkspace({
         size: mode === "text" ? sizeId : undefined,
         imageKey: mode === "image" ? pic.picture?.key : undefined,
         seed: mode === "text" && withSeed !== null ? withSeed : undefined,
+        loras: withStyles.length > 0 ? withStyles : undefined,
       });
     },
     [mode, pic, flow],
   );
 
   const generate = useCallback(() => {
-    if (valid && !working) begin(trimmed, size, seed);
-  }, [valid, working, begin, trimmed, size, seed]);
+    if (valid && !working) begin(trimmed, size, seed, styles);
+  }, [valid, working, begin, trimmed, size, seed, styles]);
 
   const shown: ImageSummary | null =
     picked ??
@@ -197,7 +243,33 @@ export function ImageWorkspace({
     setPrompt(p.prompt);
     setSize(p.size ?? "square");
     setSeed(p.seed);
-    begin(p.prompt, p.size ?? "square", p.seed);
+    setStyles(p.loras);
+    begin(p.prompt, p.size ?? "square", p.seed, p.loras);
+  }
+
+  /** The same recipe with a new seed: another picture in the same spirit. */
+  function vary(image: ImageSummary) {
+    const p = presetOf(image);
+    if (!p || working) return;
+    setPrompt(p.prompt);
+    setSize(p.size ?? "square");
+    setSeed(null);
+    setStyles(p.loras);
+    begin(p.prompt, p.size ?? "square", null, p.loras);
+  }
+
+  function toggleStyle(name: string) {
+    setStyles((cur) =>
+      cur.some((s) => s.name === name)
+        ? cur.filter((s) => s.name !== name)
+        : cur.length >= MAX_STYLES
+          ? cur
+          : [...cur, { name, weight: 1 }],
+    );
+  }
+
+  function setStrength(name: string, weight: number) {
+    setStyles((cur) => cur.map((s) => (s.name === name ? { ...s, weight } : s)));
   }
 
   async function toggleFavourite(image: ImageSummary) {
@@ -318,6 +390,107 @@ export function ImageWorkspace({
                 </p>
               )}
 
+              {loras.length > 0 || availableLoras.length > 0 || styles.length > 0 ? (
+                <section className="grid gap-2" aria-label="Styles">
+                  <button
+                    type="button"
+                    className="flex items-center justify-between font-semibold text-[0.95rem]"
+                    aria-expanded={stylesOpen}
+                    onClick={() => setStylesOpen((v) => !v)}
+                  >
+                    <span>
+                      Styles{" "}
+                      <span className="font-normal text-muted-foreground">
+                        {styles.length ? `(${styles.length} chosen)` : "(optional)"}
+                      </span>
+                    </span>
+                    <span aria-hidden="true">{stylesOpen ? "−" : "+"}</span>
+                  </button>
+                  {stylesOpen ? (
+                    <div className="grid gap-2">
+                      <p className="text-muted-foreground text-xs">
+                        A style (LoRA) changes the look. Use ones made for FLUX.2 klein 4B; others
+                        give noise. Up to {MAX_STYLES}.
+                      </p>
+                      {loras.map((l) => {
+                        const on = styles.find((s) => s.name === l.name);
+                        return (
+                          <div key={l.name} className="grid gap-1 rounded-md border px-3 py-2">
+                            <label className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(on)}
+                                disabled={!on && styles.length >= MAX_STYLES}
+                                onChange={() => toggleStyle(l.name)}
+                              />
+                              <span className="min-w-0 flex-1 truncate" title={l.name}>
+                                {l.title}
+                              </span>
+                            </label>
+                            {on ? (
+                              <label className="flex items-center gap-2 text-muted-foreground text-xs">
+                                Strength
+                                <input
+                                  type="range"
+                                  min={0.1}
+                                  max={2}
+                                  step={0.05}
+                                  value={on.weight}
+                                  aria-label={`Strength of ${l.title}`}
+                                  className="flex-1"
+                                  onChange={(e) => setStrength(l.name, Number(e.target.value))}
+                                />
+                                <span className="w-9 text-end tabular-nums">
+                                  {on.weight.toFixed(2)}
+                                </span>
+                              </label>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                      {styles
+                        .filter((s) => !loras.some((l) => l.name === s.name))
+                        .map((s) => (
+                          <p key={s.name} className="rounded-md border px-3 py-2 text-sm">
+                            {s.name}{" "}
+                            <span className="text-muted-foreground">is not available here</span>{" "}
+                            <button
+                              type="button"
+                              className="underline underline-offset-4"
+                              onClick={() => toggleStyle(s.name)}
+                            >
+                              Take it out
+                            </button>
+                          </p>
+                        ))}
+                      {availableLoras.map((l) => (
+                        <div
+                          key={l.id ?? l.name}
+                          className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm"
+                        >
+                          <span
+                            className="min-w-0 flex-1 truncate text-muted-foreground"
+                            title={l.name}
+                          >
+                            {l.title}
+                          </span>
+                          {onUseLora && l.id ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void onUseLora(l.id as string)}
+                            >
+                              Use it
+                            </Button>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
+
               {mode === "text" && seed !== null ? (
                 <p className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
                   <span>
@@ -425,6 +598,21 @@ export function ImageWorkspace({
                       <RotateCw className="size-4" /> Make it again
                     </Button>
                   ) : null}
+                  {canRunAgain(shown) ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={working}
+                      onClick={() => vary(shown)}
+                    >
+                      <Shuffle className="size-4" /> Vary
+                    </Button>
+                  ) : null}
+                  {onEditThis ? (
+                    <Button type="button" variant="outline" onClick={() => onEditThis(shown)}>
+                      <Pencil className="size-4" /> Edit this result
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="outline"
@@ -501,6 +689,12 @@ export function RecipeList({ image }: { image: ImageSummary }) {
         <>
           <dt className="text-muted-foreground">Seed</dt>
           <dd className="font-mono">{r.seed}</dd>
+          {r.loras && r.loras.length > 0 ? (
+            <>
+              <dt className="text-muted-foreground">Styles</dt>
+              <dd>{r.loras.map((l) => `${l.name} (${l.weight})`).join(", ")}</dd>
+            </>
+          ) : null}
         </>
       ) : null}
       <dt className="text-muted-foreground">Made</dt>

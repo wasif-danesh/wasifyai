@@ -278,6 +278,18 @@ class SidecarRunner:
         missing = self._sidecar.missing_models(job.prompt)
         if missing:
             log.warning("model files missing for job %s: %s", job.job_id, ", ".join(missing))
+            wanted = {
+                str((n.get("inputs") or {}).get("lora_name"))
+                for n in job.prompt.values()
+                if isinstance(n, dict)
+            }
+            lost = [m for m in missing if m in wanted]
+            if lost:  # a LoRA the person chose is no longer in a folder the engine reads
+                raise ComfyError(
+                    "lora_missing",
+                    f"The style {lost[0]} is not on this computer any more. "
+                    "Choose another or take it out.",
+                )
             raise ComfyError(
                 "models_missing",
                 "The image model files are not on this computer yet. Get the model first.",

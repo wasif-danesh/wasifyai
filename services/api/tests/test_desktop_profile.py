@@ -178,7 +178,7 @@ def test_models_already_on_the_computer_are_found_and_used_in_place(data_dir):
             time.sleep(0.05)
         assert state["enabled"] is True
         kinds = {(i["name"], i["kind"], i["state"]) for i in state["items"]}
-        assert kinds == {("style", "lora", "later")}
+        assert kinds == {("style", "lora", "can_use")}
         assert any(s["tool"] == "ComfyUI" for s in state["scanned"])
 
         # the switch and an added folder are kept
@@ -191,6 +191,41 @@ def test_models_already_on_the_computer_are_found_and_used_in_place(data_dir):
         assert (
             c.post("/desktop/discovery/use", json={"id": "nope"}, headers=auth()).status_code == 404
         )
+
+
+def test_styles_the_image_engine_can_apply_are_listed_and_one_click_away(data_dir):
+    import struct
+
+    home = data_dir.parent / "home"
+    tensors = ["lora_down.0.weight", "lora_up.0.weight"]
+    head = json.dumps(
+        {n: {"dtype": "F16", "shape": [1], "data_offsets": [0, 2]} for n in tensors}
+    ).encode()
+    lora = home / "ComfyUI-Shared" / "models" / "loras" / "ink.safetensors"
+    lora.parent.mkdir(parents=True)
+    lora.write_bytes(struct.pack("<Q", len(head)) + head + b"\0" * 2_000_000)
+
+    with TestClient(create_app()) as c:
+        c.post("/desktop/discovery/scan", headers=auth())
+        for _ in range(100):
+            state = c.get("/desktop/discovery", headers=auth()).json()
+            if state["scanned_at"] and not state["running"]:
+                break
+            time.sleep(0.05)
+        listing = c.get("/desktop/loras", headers=auth()).json()
+        assert listing["ready"] == []
+        (one,) = listing["available"]
+        assert one["name"] == "ink.safetensors" and one["use"] == "folder"
+
+        used = c.post("/desktop/discovery/use", json={"id": one["id"]}, headers=auth())
+        assert used.status_code == 200 and used.json()["folder"].endswith("ComfyUI-Shared/models")
+        ready: list[dict] = []
+        for _ in range(100):
+            ready = c.get("/desktop/loras", headers=auth()).json()["ready"]
+            if ready:
+                break
+            time.sleep(0.05)
+        assert [r["name"] for r in ready] == ["ink.safetensors"]
 
 
 def test_the_engine_refuses_requests_without_the_shells_token(data_dir):

@@ -21,3 +21,11 @@ inputs:
     - { node: "7", field: height }
 outputs:
   image: { node: "13", type: image }
+# LoRAs (ADR-0051): the diffusion model's output goes through up to three model-only LoRA loaders
+# before the guider. A klein LoRA patches the diffusion model; the text encoder is not patched.
+lora_chain:
+  loader: LoraLoaderModelOnly
+  max: 3
+  from: { node: "1", output: 0 }
+  to:
+    - { node: "10", field: model }

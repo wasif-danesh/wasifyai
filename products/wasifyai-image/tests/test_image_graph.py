@@ -292,7 +292,7 @@ async def test_the_recipe_keeps_the_seed_the_job_used(tmp_path, ctx):
     job = rig.sink.submitted[0]
     assert image.recipe == {
         "v": 1, "mode": "text", "prompt": "a fox", "size": "wide",
-        "width": 1024, "height": 768, "seed": job.prompt["seed"],
+        "width": 1024, "height": 768, "seed": job.prompt["seed"], "loras": [],
     }  # fmt: skip
     assert image.recipe is not None and 0 <= image.recipe["seed"] <= 2**31 - 1
 
@@ -320,4 +320,54 @@ async def test_a_seed_that_is_not_valid_is_refused_before_any_work(tmp_path, ctx
     rig = make_rig(tmp_path)
     s = await Story(rig).start({"mode": "text", "prompt": "a fox", "seed": seed})
     assert s.state["status"] == "refused" and "seed" in s.state["refusal"]["message"]
+    assert rig.asked() == [] and rig.sink.submitted == []
+
+
+# ---- LoRAs (stage C) ---------------------------------------------------------------------------
+
+
+async def test_loras_reach_the_job_and_stay_in_the_recipe(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+    loras = [{"name": "ink.safetensors", "weight": 0.8}, {"name": "style/film.safetensors"}]
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "loras": loras})
+    assert rig.sink.submitted[0].prompt["loras"] == [
+        {"name": "ink.safetensors", "weight": 0.8},
+        {"name": "style/film.safetensors", "weight": 1.0},  # a missing strength is 1
+    ]
+    await s.finish_job()
+    (image,) = s.images.images
+    assert (
+        image.recipe is not None and image.recipe["loras"] == rig.sink.submitted[0].prompt["loras"]
+    )
+
+
+async def test_an_edit_may_use_loras_too(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+    up = await put_upload(rig)
+    s = await Story(rig).start(
+        {"mode": "image", "prompt": "make it dusk", "image_key": up.key,
+         "loras": [{"name": "ink.safetensors", "weight": 1.0}]}
+    )  # fmt: skip
+    assert rig.sink.submitted[0].capability == "image.edit"
+    assert rig.sink.submitted[0].prompt["loras"][0]["name"] == "ink.safetensors"
+    assert s.waiting["kind"] == "job"
+
+
+@pytest.mark.parametrize(
+    ("loras", "fragment"),
+    [
+        ([{"name": "../secret.safetensors", "weight": 1}], "cannot be used"),
+        ([{"name": "/etc/passwd.safetensors", "weight": 1}], "cannot be used"),
+        ([{"name": "model.ckpt", "weight": 1}], "cannot be used"),
+        ([{"name": "a.safetensors", "weight": 5}], "between"),
+        ([{"name": "a.safetensors", "weight": "heavy"}], "number"),
+        ([{"name": "a.safetensors"}, {"name": "a.safetensors"}], "once"),
+        ([{"name": f"{n}.safetensors"} for n in range(4)], "at most 3"),
+        ("ink.safetensors", "from the list"),
+    ],
+)
+async def test_bad_loras_are_refused_before_any_model_is_asked(tmp_path, ctx, loras, fragment):
+    rig = make_rig(tmp_path)
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "loras": loras})
+    assert s.state["status"] == "refused" and fragment in s.state["refusal"]["message"]
     assert rig.asked() == [] and rig.sink.submitted == []

@@ -13,7 +13,22 @@ from wasifyai_platform_sdk.context import require_context
 from wasifyai_platform_sdk.jobs import JobHandle, JobRequest, JobSink, input_image_name
 from wasifyai_platform_sdk.workflows import Workflow
 
-RESERVED_INPUTS = {"image_key"}  # for the job, not for the workflow
+RESERVED_INPUTS = {"image_key", "loras"}  # for the job, not for the workflow
+MAX_LORAS = 8
+
+
+def _loras(raw: Any) -> list[tuple[str, float]]:
+    """`[{"name", "weight"}]` from a job's inputs as pairs; anything else is an error."""
+    if not raw:
+        return []
+    if not isinstance(raw, list) or len(raw) > MAX_LORAS:
+        raise ValueError("loras must be a short list")
+    out: list[tuple[str, float]] = []
+    for item in raw:
+        if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+            raise ValueError("each LoRA needs a name")
+        out.append((item["name"], float(item.get("weight", 1.0))))
+    return out
 
 
 class ComfyUIProvider:
@@ -41,7 +56,10 @@ class ComfyUIProvider:
             if "image" not in wf.map.inputs:
                 raise ValueError(f"workflow {wf.name!r} has no picture input")
             workflow_inputs["image"] = input_image_name(job_id)
-        graph = wf.fill(workflow_inputs)
+        loras = _loras(merged.get("loras"))
+        if loras and not wf.accepts_loras:
+            raise ValueError(f"workflow {wf.name!r} does not take LoRAs")
+        graph = wf.fill(workflow_inputs, loras or None)
         request = JobRequest(
             job_id=job_id,
             tenant_id=ctx.tenant_id,

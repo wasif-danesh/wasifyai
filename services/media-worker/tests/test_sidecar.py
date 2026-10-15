@@ -225,6 +225,23 @@ async def test_the_runner_says_so_when_model_files_are_missing(comfy):
     assert fake.submitted == [] and s.started == 0  # nothing was started or sent
 
 
+async def test_a_missing_style_is_named_not_blamed_on_the_model(comfy):
+    base, fake = comfy
+    job_with_lora = graph_job()
+    job_with_lora.prompt = {
+        **job_with_lora.prompt,
+        "50": {
+            "class_type": "LoraLoaderModelOnly",
+            "inputs": {"model": ["1", 0], "lora_name": "ink.safetensors", "strength_model": 1.0},
+        },
+    }
+    s = FakeSidecar(base, missing=["ink.safetensors"])
+    with pytest.raises(ComfyError) as e:
+        await SidecarRunner(s, 10).run(job_with_lora, lambda p: None)  # type: ignore[arg-type]
+    assert e.value.code == "lora_missing" and "ink.safetensors" in e.value.message
+    assert fake.submitted == []
+
+
 async def test_the_runner_says_so_when_the_engine_is_not_installed(comfy):
     base, _ = comfy
     s = FakeSidecar(base, installed=False)

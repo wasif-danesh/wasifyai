@@ -139,7 +139,10 @@ export async function runSmoke(): Promise<void> {
       `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}`,
     );
   } catch (e) {
-    await report(false, e instanceof Error ? e.message : String(e)).catch(() => {});
+    // what the window was saying when it gave up makes a CI log readable
+    const notice = document.querySelector('[role="alert"]')?.textContent?.trim().slice(0, 200);
+    const message = e instanceof Error ? e.message : String(e);
+    await report(false, notice ? `${message} (the window said: ${notice})` : message).catch(() => {});
   }
 }
 

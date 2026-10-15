@@ -277,7 +277,7 @@ def test_states_say_what_can_be_done(tmp_path):
     cat = [entry("diffusion_models", "demo.safetensors", unet.stat().st_size)]
     assess(items, cat, [], machine=None)
     states = {i.id: i.state for i in items}
-    assert states == {"demo.safetensors": "can_use", "x.safetensors": "later",
+    assert states == {"demo.safetensors": "can_use", "x.safetensors": "can_use",
                       "old.ckpt": "unsupported", "m.gguf": "later"}  # fmt: skip
     assert items[0].use_root == str(models)
     assert "language engine" in items[3].reason
@@ -377,3 +377,53 @@ def test_a_missing_chat_template_is_detected_without_loading_the_tokenizer(tmp_p
     junk = tmp_path / "junk.gguf"
     junk.write_bytes(b"not a model")
     assert gguf_has_chat_template(junk) is None
+
+
+# ---- LoRAs (stage C) ---------------------------------------------------------------------------
+
+LORA = ["lora_unet_double_blocks_0.lora_down.weight", "lora_unet_double_blocks_0.lora_up.weight"]
+
+
+def lora_found(path: Path) -> Found:
+    return found(path, "lora")
+
+
+def test_a_lora_in_a_loras_folder_of_a_used_models_folder_is_ready(tmp_path):
+    from wasifyai_api.desktop_discovery import lora_location
+
+    root = tmp_path / "shared"
+    ink = safetensors(root / "loras" / "style" / "ink.safetensors", LORA)
+    assert lora_location(ink) == (root, "style/ink.safetensors")
+
+    item = lora_found(ink)
+    assess([item], [], [root], machine=None)
+    assert item.state == "ready" and item.lora_name == "style/ink.safetensors"
+
+    # not a folder the engine reads yet: one click adds the models folder
+    other = lora_found(ink)
+    assess([other], [], [], machine=None)
+    assert (other.state, other.use, other.use_root) == ("can_use", "folder", str(root))
+    assert "FLUX.2 klein" in other.reason
+
+
+def test_a_lora_outside_a_loras_folder_or_with_an_odd_name_is_not_offered(tmp_path):
+    from wasifyai_api.desktop_discovery import lora_location
+
+    loose = safetensors(tmp_path / "somewhere" / "ink.safetensors", LORA)
+    item = lora_found(loose)
+    assess([item], [], [tmp_path], machine=None)
+    assert item.state == "unsupported" and "`loras` folder" in item.reason
+
+    odd = safetensors(tmp_path / "m" / "loras" / "in$k.safetensors", LORA)
+    assert lora_location(odd) is None
+
+
+def test_the_apps_own_loras_folder_is_looked_in(tmp_path):
+    from wasifyai_api.desktop_discovery import resolve_tools
+
+    models = tmp_path / "app-models"
+    safetensors(models / "loras" / "mine.safetensors", LORA)
+    tools = [Tool("app", "Wasify AI", "files", [models / "language", models / "loras"])]
+    items = scan_folders(tools, []).items
+    assert [(i.name, i.kind) for i in items] == [("mine", "lora")]
+    assert resolve_tools  # (the data file's tools are unchanged)

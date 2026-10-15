@@ -36,6 +36,7 @@ export { CreateImage, type ResultActions } from "./image/CreateImage";
 export { ImageForm, type ImageFormValue, MAX_PROMPT, SIZES } from "./image/ImageForm";
 export {
   ImageWorkspace,
+  type LoraOption,
   presetOf,
   RecipeList,
   type ImageWorkspaceProps,

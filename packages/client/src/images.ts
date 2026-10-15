@@ -6,6 +6,9 @@ import { HttpError, type Transport, errorMessage } from "./transport";
 
 export const IMAGE_PRODUCT_ID = "wasifyai-image";
 
+/** A style (LoRA) applied to an image: its name relative to a `loras` folder, and its strength. */
+export type LoraChoice = { name: string; weight: number };
+
 /** What made an image (versioned). `size` is null for an edit: it keeps the picture's own size. */
 export type ImageRecipe = {
   v: number;
@@ -15,6 +18,8 @@ export type ImageRecipe = {
   width: number;
   height: number;
   seed: number;
+  /** absent on images made before styles existed */
+  loras?: LoraChoice[];
 };
 
 export type ImageSummary = {

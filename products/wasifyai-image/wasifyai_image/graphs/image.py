@@ -62,6 +62,7 @@ class ImageState(TypedDict, total=False):
     size: str
     image_key: str
     seed: int  # optional in the request; always set once the request is checked
+    loras: list[dict[str, Any]]  # [{name, weight}], checked: at most MAX_LORAS
     # job and result
     job_id: str
     result_key: str
@@ -78,6 +79,36 @@ class ImageState(TypedDict, total=False):
 
 MAX_SEED = 2**31 - 1
 RECIPE_VERSION = 1
+MAX_LORAS = 3
+LORA_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()/-]{0,200}\.safetensors$")
+MIN_WEIGHT, MAX_WEIGHT = 0.1, 2.0
+
+
+def check_loras(raw: object) -> tuple[list[dict[str, Any]], str]:
+    """The LoRAs of a request as `[{name, weight}]`, or why they are refused. A name is a file name
+    relative to a `loras` folder: no `..`, no absolute path, only `.safetensors`."""
+    if raw in (None, []):
+        return [], ""
+    if not isinstance(raw, list):
+        return [], "Please choose the styles from the list."
+    if len(raw) > MAX_LORAS:
+        return [], f"Please use at most {MAX_LORAS} styles."
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in raw:
+        name = item.get("name") if isinstance(item, dict) else None
+        weight = item.get("weight", 1.0) if isinstance(item, dict) else None
+        if not isinstance(name, str) or not LORA_NAME.match(name) or ".." in name:
+            return [], "One of the styles has a name that cannot be used."
+        if isinstance(weight, bool) or not isinstance(weight, int | float):
+            return [], "A style's strength must be a number."
+        if not MIN_WEIGHT <= float(weight) <= MAX_WEIGHT:
+            return [], f"A style's strength must be between {MIN_WEIGHT} and {MAX_WEIGHT}."
+        if name in seen:
+            return [], "Each style can be used once."
+        seen.add(name)
+        out.append({"name": name, "weight": round(float(weight), 2)})
+    return out, ""
 
 
 def recipe_of(state: ImageState, width: int, height: int) -> dict[str, Any]:
@@ -92,6 +123,7 @@ def recipe_of(state: ImageState, width: int, height: int) -> dict[str, Any]:
         "width": width,
         "height": height,
         "seed": state["seed"],
+        "loras": state.get("loras") or [],
     }
 
 
@@ -179,12 +211,17 @@ def build_image_graph(
             seed = secrets.randbelow(MAX_SEED + 1)
         elif isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= MAX_SEED:
             return refuse_with("invalid_request", "That seed is not valid.")
+        loras, why = check_loras(state.get("loras"))
+        if why:
+            await discard_upload(key if mode == "image" else None)
+            return refuse_with("invalid_request", why)
         out: ImageState = {
             "mode": mode,
             "prompt": prompt,
             "size": str(state.get("size") or DEFAULT_SIZE),
             "image_key": key if mode == "image" else "",
             "seed": seed,
+            "loras": loras,
             "status": "working",
         }
 
@@ -232,14 +269,15 @@ def build_image_graph(
             }
         )
         seed = state["seed"]
+        extra: dict[str, Any] = {"loras": state["loras"]} if state.get("loras") else {}
         if edit:
             handle = await caps.image.edit(
-                prompt=state["prompt"], image_key=state["image_key"], seed=seed
+                prompt=state["prompt"], image_key=state["image_key"], seed=seed, **extra
             )
         else:
             width, height = SIZES[state["size"]]
             handle = await caps.image.generate(
-                prompt=state["prompt"], width=width, height=height, seed=seed
+                prompt=state["prompt"], width=width, height=height, seed=seed, **extra
             )
         return {"job_id": handle.job_id}
 

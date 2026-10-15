@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type ImageSummary, type ImagesApi, createRunClient } from "@wasifyai/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -74,7 +74,12 @@ beforeEach(() => {
 
 describe("presetOf", () => {
   it("is there for a text image with a recipe, and only then", () => {
-    expect(presetOf(summary())).toEqual({ prompt: "a lighthouse", size: "wide", seed: 4242 });
+    expect(presetOf(summary())).toEqual({
+      prompt: "a lighthouse",
+      size: "wide",
+      seed: 4242,
+      loras: [],
+    });
     expect(presetOf(summary({ recipe: null }))).toBeNull();
     expect(presetOf(summary({ mode: "image" }))).toBeNull();
   });
@@ -146,7 +151,7 @@ describe("ImageWorkspace", () => {
         mode="text"
         runs={runs}
         images={fakeApi([])}
-        preset={{ prompt: "a fox", size: "tall", seed: 7 }}
+        preset={{ prompt: "a fox", size: "tall", seed: 7, loras: [] }}
       />,
     );
     expect(screen.getByRole("textbox")).toHaveValue("a fox");
@@ -223,5 +228,133 @@ describe("ImageWorkspace when the model cannot run", () => {
     expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
     expect(screen.getByRole("alert")).toHaveTextContent("will not fit");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("styles, Vary and the edit source", () => {
+  const withStyles = summary({
+    recipe: {
+      v: 1,
+      mode: "text",
+      prompt: "a lighthouse",
+      size: "wide",
+      width: 1344,
+      height: 768,
+      seed: 4242,
+      loras: [{ name: "ink.safetensors", weight: 0.8 }],
+    },
+  }); // fmt: skip
+
+  it("sends the styles that were chosen, with their strength", async () => {
+    fetchMock.mockResolvedValue(sse([node("check_request")]));
+    const user = userEvent.setup();
+    render(
+      <ImageWorkspace
+        mode="text"
+        runs={runs}
+        images={fakeApi([])}
+        loras={[
+          { name: "ink.safetensors", title: "Ink" },
+          { name: "film.safetensors", title: "Film" },
+        ]}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /styles/i }));
+    await user.click(screen.getByRole("checkbox", { name: "Ink" }));
+    const slider = screen.getByRole("slider", { name: "Strength of Ink" });
+    fireEvent.change(slider, { target: { value: "0.6" } });
+    await user.type(screen.getByRole("textbox", { name: /prompt/i }), "a fox");
+    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).input.loras).toEqual([
+      { name: "ink.safetensors", weight: 0.6 },
+    ]);
+  });
+
+  it("allows three styles and no more", async () => {
+    const user = userEvent.setup();
+    render(
+      <ImageWorkspace
+        mode="text"
+        runs={runs}
+        images={fakeApi([])}
+        loras={["a", "b", "c", "d"].map((n) => ({ name: `${n}.safetensors`, title: n }))}
+        preset={{ prompt: "x", size: null, seed: 1, loras: [] }}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /styles/i }));
+    for (const n of ["a", "b", "c"]) await user.click(screen.getByRole("checkbox", { name: n }));
+    expect(screen.getByRole("checkbox", { name: "d" })).toBeDisabled();
+  });
+
+  it("offers a style that is one click away, and does it", async () => {
+    const onUse = vi.fn(async () => {});
+    const user = userEvent.setup();
+    render(
+      <ImageWorkspace
+        mode="text"
+        runs={runs}
+        images={fakeApi([])}
+        availableLoras={[{ id: "l1", name: "ink.safetensors", title: "Ink" }]}
+        onUseLora={onUse}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /styles/i }));
+    await user.click(screen.getByRole("button", { name: "Use it" }));
+    expect(onUse).toHaveBeenCalledWith("l1");
+  });
+
+  it("makes a variation: the same recipe and styles with a new seed", async () => {
+    fetchMock.mockResolvedValue(sse([node("check_request")]));
+    const user = userEvent.setup();
+    render(
+      <ImageWorkspace
+        mode="text"
+        runs={runs}
+        images={fakeApi([withStyles])}
+        loras={[{ name: "ink.safetensors", title: "Ink" }]}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: "Open: a lighthouse" }));
+    await user.click(screen.getByRole("button", { name: /vary/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).input).toEqual({
+      mode: "text",
+      prompt: "a lighthouse",
+      size: "wide",
+      loras: [{ name: "ink.safetensors", weight: 0.8 }],
+    }); // no seed: the engine draws a new one
+  });
+
+  it("make it again keeps the seed and the styles", async () => {
+    fetchMock.mockResolvedValue(sse([node("check_request")]));
+    const user = userEvent.setup();
+    render(<ImageWorkspace mode="text" runs={runs} images={fakeApi([withStyles])} />);
+    await user.click(await screen.findByRole("button", { name: "Open: a lighthouse" }));
+    await user.click(screen.getByRole("button", { name: /make it again/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).input).toEqual({
+      mode: "text",
+      prompt: "a lighthouse",
+      size: "wide",
+      seed: 4242,
+      loras: [{ name: "ink.safetensors", weight: 0.8 }],
+    });
+  });
+
+  it("hands a result to Edit, and lists the styles in the recipe", async () => {
+    const onEdit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ImageWorkspace mode="text" runs={runs} images={fakeApi([withStyles])} onEditThis={onEdit} />,
+    );
+    await user.click(await screen.findByRole("button", { name: "Open: a lighthouse" }));
+    await user.click(screen.getByRole("button", { name: /^recipe$/i }));
+    expect(screen.getByText("ink.safetensors (0.8)")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /edit this result/i }));
+    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: "i1" }));
   });
 });

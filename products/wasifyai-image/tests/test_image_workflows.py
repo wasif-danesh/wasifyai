@@ -86,3 +86,71 @@ async def test_a_workflow_without_a_picture_input_refuses_an_edit():
             )
     finally:
         reset_context(token)
+
+
+# ---- LoRAs (stage C) ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("name", "guider"), [("flux2-klein-4b", "10"), ("flux2-klein-4b-edit", "16")]
+)
+def test_a_lora_goes_between_the_model_and_the_guider(name, guider):
+    wf = Workflow.load(WORKFLOWS, name)
+    assert wf.accepts_loras
+    values = {"prompt": "a fox", "seed": 1}
+    if name.endswith("edit"):
+        values["image"] = "wasifyai-JOB.png"
+    plain = wf.fill(values)
+    assert plain[guider]["inputs"]["model"] == ["1", 0]  # without LoRAs the graph is the original
+
+    graph = wf.fill(values, [("ink.safetensors", 0.8), ("style/film.safetensors", 1.25)])
+    top = max(int(k) for k in plain)
+    first, second = str(top + 1), str(top + 2)
+    assert graph[first]["class_type"] == "LoraLoaderModelOnly"
+    assert graph[first]["inputs"] == {
+        "model": ["1", 0], "lora_name": "ink.safetensors", "strength_model": 0.8,
+    }  # fmt: skip
+    assert graph[second]["inputs"]["model"] == [first, 0]
+    assert graph[second]["inputs"]["lora_name"] == "style/film.safetensors"
+    assert graph[guider]["inputs"]["model"] == [second, 0]
+    # the original graph object is not changed
+    assert wf.graph[guider]["inputs"]["model"] == ["1", 0]
+
+
+def test_too_many_loras_and_a_workflow_without_a_chain_are_refused():
+    wf = Workflow.load(WORKFLOWS, "flux2-klein-4b")
+    with pytest.raises(ValueError, match="at most 3"):
+        wf.fill({"prompt": "x"}, [(f"{n}.safetensors", 1.0) for n in range(4)])
+    song = Workflow.load(PRODUCTS / "wasifyai-music" / "workflows", "flux2-klein-4b")
+    if not song.accepts_loras:
+        with pytest.raises(ValueError, match="does not take LoRAs"):
+            song.fill({"prompt": "x"}, [("a.safetensors", 1.0)])
+
+
+def test_a_chain_that_points_at_a_missing_node_is_a_problem(tmp_path):
+    (tmp_path / "w.json").write_text('{"1": {"class_type": "UNETLoader", "inputs": {}}}')
+    (tmp_path / "w.map.yaml").write_text(
+        "workflow: w.json\ninputs: {}\nlora_chain:\n  loader: LoraLoaderModelOnly\n"
+        "  from: {node: '1', output: 0}\n  to: [{node: '9', field: model}]\n"
+    )
+    assert workflow_problems(tmp_path, "w") == ["w: lora_chain ends at missing node '9'"]
+
+
+@pytest.mark.asyncio
+async def test_the_provider_puts_loras_in_the_graph_and_in_the_job(ctx):
+    sink = InMemoryJobSink()
+    provider = ComfyUIProvider(WORKFLOWS, sink)
+    binding = CapabilityBinding(provider="comfyui", workflow="flux2-klein-4b")
+    loras = [{"name": "ink.safetensors", "weight": 0.7}]
+    await provider.generate(
+        "image.generate", binding, {"prompt": "a fox", "seed": 3, "loras": loras}
+    )
+    (job,) = sink.submitted
+    assert job.inputs["loras"] == loras  # a backend that ignores the graph can still see them
+    chain = [n for n in job.prompt.values() if n["class_type"] == "LoraLoaderModelOnly"]
+    assert [n["inputs"]["lora_name"] for n in chain] == ["ink.safetensors"]
+
+    with pytest.raises(ValueError, match="needs a name|each LoRA"):
+        await provider.generate(
+            "image.generate", binding, {"prompt": "x", "loras": [{"weight": 1}]}
+        )

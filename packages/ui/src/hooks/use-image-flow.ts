@@ -28,6 +28,8 @@ export type ImageRequest = {
   imageKey?: string;
   /** Make the same picture again: the seed a recipe kept (text to image only). */
   seed?: number;
+  /** Styles (LoRAs) to apply, by name and strength. */
+  loras?: { name: string; weight: number }[];
 };
 
 const sleep = (ms: number, signal: AbortSignal) =>
@@ -138,6 +140,7 @@ export function useImageFlow(api: ImageFlowApi) {
         ...(request.mode === "text"
           ? { size: request.size, ...(request.seed !== undefined ? { seed: request.seed } : {}) }
           : { image_key: request.imageKey }),
+        ...(request.loras && request.loras.length > 0 ? { loras: request.loras } : {}),
       };
       void follow((signal) => startRun(IMAGE_PRODUCT, input, signal, onEvent), ctrl.signal);
     },

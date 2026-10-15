@@ -28,12 +28,12 @@ from wasifyai_platform_sdk import (
     Capabilities,
     InMemoryUploadStore,
     JobFailed,
-    PostgresUploadStore,
     RunError,
     UploadRecord,
     UploadStore,
     await_job,
     require_context,
+    upload_store,
 )
 
 from wasifyai_image import guardrail
@@ -42,9 +42,9 @@ from wasifyai_image.images import (
     ImageRecord,
     ImageStore,
     InMemoryImageStore,
-    PostgresImageStore,
     Quota,
     UsageQuota,
+    image_store,
     thumbnail_of,
 )
 from wasifyai_image.index import index_text
@@ -82,12 +82,8 @@ def _clean(value: object, limit: int) -> str:
 
 def build_image(caps: Capabilities, checkpointer: Any):
     """Registry entry point: wires the production stores from the capabilities."""
-    images: ImageStore = (
-        PostgresImageStore(caps.db) if caps.db is not None else InMemoryImageStore()
-    )
-    uploads: UploadStore = (
-        PostgresUploadStore(caps.db) if caps.db is not None else InMemoryUploadStore()
-    )
+    images: ImageStore = image_store(caps.db) if caps.db is not None else InMemoryImageStore()
+    uploads: UploadStore = upload_store(caps.db) if caps.db is not None else InMemoryUploadStore()
     quota: Quota | None = UsageQuota(caps.db) if caps.db is not None else None
     return build_image_graph(caps, checkpointer, images, uploads, quota)
 

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from pydantic import TypeAdapter
@@ -61,10 +62,13 @@ from wasifyai_api.creation_index import (
     reconcile_forever,
 )
 from wasifyai_api.creations import router as creations_router
+from wasifyai_api.desktop import files_router, open_desktop
 from wasifyai_api.graphs import default_registry
 from wasifyai_api.identity import get_identity
 from wasifyai_api.jobs_consumer import JobCompletionConsumer
 from wasifyai_api.litellm_admin import BackendError, InMemoryModelBackend, LiteLLMBackend
+from wasifyai_api.local_embedder import MODEL as LOCAL_EMBEDDER_MODEL
+from wasifyai_api.local_embedder import hashing_embed
 from wasifyai_api.logging import configure_logging, request_id
 from wasifyai_api.media_access import MediaAccess, media_capabilities_from
 from wasifyai_api.metrics import MetricsMiddleware
@@ -135,6 +139,9 @@ def create_app(
     also starts the completion consumer that resumes graphs paused on media jobs."""
     settings = get_settings()
     configure_logging(settings.log_level)
+    desktop_profile = settings.deployment_profile == "desktop"
+    if desktop_profile and settings.auth_mode != "jwt":
+        raise RuntimeError("the desktop profile signs in with the shell's token: AUTH_MODE=jwt")
     if settings.auth_mode not in ("jwt", "stub"):
         raise RuntimeError(f"AUTH_MODE must be 'jwt' or 'stub', not {settings.auth_mode!r}")
     if settings.auth_mode == "jwt" and len(settings.api_auth_secret.encode()) < MIN_SECRET_BYTES:
@@ -153,10 +160,12 @@ def create_app(
             serve_metrics(settings.metrics_port)
         reg = products_registry
         pdir = products_dir or Path(settings.products_dir)
-        db = engine or create_async_engine(settings.database_url)
-        recorder = usage or PostgresUsageRecorder(db)
         injected = event_log is not None or run_store is not None
-        owns_conn = redis is None and not injected
+        # The desktop profile (ADR-0056) serves the same interfaces from SQLite and local files.
+        desktop = open_desktop(settings) if desktop_profile and not injected else None
+        db = engine or (desktop.engine if desktop else create_async_engine(settings.database_url))
+        recorder = usage or (desktop.usage if desktop else PostgresUsageRecorder(db))
+        owns_conn = redis is None and not injected and desktop is None
         conn: Redis | None = redis or (
             Redis.from_url(
                 settings.redis_url, decode_responses=True, socket_timeout=REDIS_SOCKET_TIMEOUT_S
@@ -164,10 +173,12 @@ def create_app(
             if owns_conn
             else None
         )
-        log_ = event_log or RedisEventLog(conn)  # type: ignore[arg-type]
-        store_ = run_store or RedisRunStore(conn)  # type: ignore[arg-type]
-        sink = job_sink or (RedisJobSink(conn, log_) if conn else InMemoryJobSink())
-        store = storage
+        log_ = event_log or (desktop.event_log if desktop else RedisEventLog(conn))  # type: ignore[arg-type]
+        store_ = run_store or (desktop.run_store if desktop else RedisRunStore(conn))  # type: ignore[arg-type]
+        sink = job_sink or (
+            desktop.queue if desktop else (RedisJobSink(conn, log_) if conn else InMemoryJobSink())
+        )
+        store = storage or (desktop.storage if desktop else None)
         if store is None and settings.storage_access_key:
             store = ScopedStorage(
                 s3_storage(
@@ -181,7 +192,9 @@ def create_app(
             )
         # ADR-0047: off by default, forced on by SAFEGUARDS_FORCE_ON. Tests start with it on.
         guard = safeguards or Safeguards(
-            InMemorySettingsStore({KEY: True}) if injected else PostgresSettingsStore(db),
+            InMemorySettingsStore({KEY: True})
+            if injected
+            else (desktop.settings_store if desktop else PostgresSettingsStore(db)),
             settings.safeguards_force_on,
         )
         app.state.safeguards = guard
@@ -203,7 +216,7 @@ def create_app(
             defaults = load_defaults(
                 {"OLLAMA_BASE_URL": base, "OLLAMA_OPENAI_BASE_URL": f"{base}/v1"}
             )
-            if injected:  # tests: no gateway, nothing to seed
+            if injected or desktop:  # tests, desktop: no gateway to seed
                 models = ModelAccess(InMemoryModelBackend(), defaults)
             else:
                 models = ModelAccess(
@@ -214,7 +227,7 @@ def create_app(
                 seeder = asyncio.create_task(_seed_models(models))
         app.state.models = models
         app.state.media = media_access or MediaAccess(
-            InMemoryMediaBindingStore() if injected else PostgresMediaBindingStore(db),
+            InMemoryMediaBindingStore() if injected or desktop else PostgresMediaBindingStore(db),
             SecretBox(settings.media_secrets_key),
             lambda: media_capabilities_from(reg, pdir, settings.product_env),
             settings.comfyui_base_url,
@@ -230,7 +243,7 @@ def create_app(
 
         def build_graphs(saver: Any) -> dict[str, Any]:
             graphs: dict[str, Any] = {}
-            for product_id in reg.products():
+            for product_id in enabled(reg.products()):
                 # Fails at startup, with every problem listed, if the product config is bad.
                 config = load_product_config(pdir, product_id, env=settings.product_env)
                 configs[product_id] = config
@@ -242,13 +255,15 @@ def create_app(
                 graphs[product_id] = reg.build(product_id, caps, saver)
             return graphs
 
-        app.state.users = users or CachedUsers(PostgresUserStore(db))
+        app.state.users = users or CachedUsers(desktop.users if desktop else PostgresUserStore(db))
         app.state.admin = admin_store or PostgresAdminStore(db)
         seeder: asyncio.Task | None = None
         app.state.registry = reg
         app.state.usage = recorder
         app.state.uploads = uploads or (
-            InMemoryUploadStore() if injected else PostgresUploadStore(db)
+            InMemoryUploadStore()
+            if injected
+            else (desktop.uploads if desktop else PostgresUploadStore(db))
         )
         app.state.upload_limiter = upload_limiter or (
             RedisUploadLimiter(conn) if conn is not None else InMemoryUploadLimiter()
@@ -271,15 +286,29 @@ def create_app(
         async def litellm_embed(texts: list[str]) -> list[list[float]]:
             return await search_provider.embed("search.embed", search_binding, texts)
 
-        embed: Embedder = creation_embedder or litellm_embed
+        # A desktop engine without a gateway still indexes, with a small local embedder; its rows
+        # are replaced by real embeddings when a gateway is configured (the model name differs).
+        local_only = desktop is not None and not settings.litellm_base_url
+        embed: Embedder = creation_embedder or (hashing_embed if local_only else litellm_embed)
 
         app.state.creation_index = CreationIndex(
-            index_store or (InMemoryIndexStore() if injected else PostgresIndexStore(db)),
+            index_store
+            or (
+                InMemoryIndexStore()
+                if injected
+                else (desktop.index_store if desktop else PostgresIndexStore(db))
+            ),
             embed,
-            settings.search_index_model,
+            LOCAL_EMBEDDER_MODEL
+            if local_only and not creation_embedder
+            else settings.search_index_model,
             settings.search_min_similarity,
         )
-        index_sources = reg.index_sources()
+        index_sources = {
+            pid: make
+            for pid, make in reg.index_sources().items()
+            if pid in enabled(list(reg.products()))
+        }
         reconciler = (
             asyncio.create_task(
                 reconcile_forever(
@@ -299,12 +328,23 @@ def create_app(
         )
         app.state.engine = db
         app.state.storage = store
+        if desktop:
+            app.state.local_files = desktop.local_files
         app.state.heartbeat_s = heartbeat_s
         consumer: JobCompletionConsumer | None = None
         try:
             async with AsyncExitStack() as stack:
                 saver = checkpointer
-                if saver is None:
+                if saver is None and desktop:
+                    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+                    saver = await stack.enter_async_context(
+                        AsyncSqliteSaver.from_conn_string(
+                            str(settings.desktop_dir / "checkpoints.db")
+                        )
+                    )
+                    await saver.setup()
+                elif saver is None:
                     saver = await stack.enter_async_context(
                         AsyncPostgresSaver.from_conn_string(settings.checkpoint_url)
                     )
@@ -314,6 +354,8 @@ def create_app(
                 if conn is not None:  # resume graphs when workers report results
                     consumer = JobCompletionConsumer(conn, app.state.runs, store_)
                     await consumer.start()
+                if desktop:  # the worker runs in this process
+                    await desktop.start(app.state.runs)
                 yield
         finally:
             if seeder:
@@ -324,6 +366,8 @@ def create_app(
                 reconciler.cancel()
             if consumer:
                 await consumer.stop()
+            if desktop:
+                await desktop.stop()
             if getattr(app.state, "runs", None):
                 await app.state.runs.aclose()
             if owns_conn and conn is not None:
@@ -331,8 +375,24 @@ def create_app(
             if engine is None:
                 await db.dispose()
 
+    def enabled(product_ids: list[str]) -> list[str]:
+        """The products this deployment serves (all, unless PRODUCTS_ENABLED narrows it)."""
+        only = settings.enabled_product_set
+        return [p for p in product_ids if not only or p in only]
+
     app = FastAPI(title="wasifyai API", lifespan=lifespan)
     app.add_middleware(MetricsMiddleware)
+    if desktop_profile:
+        # The window is another origin (tauri://localhost) than this loopback engine.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[
+                o.strip() for o in settings.desktop_allowed_origins.split(",") if o.strip()
+            ],
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["authorization", "content-type", "last-event-id", "x-request-id"],
+            expose_headers=["x-request-id"],
+        )
 
     @app.middleware("http")
     async def add_request_id(request: Request, call_next):
@@ -354,13 +414,16 @@ def create_app(
     app.include_router(admin_safeguards_router)
     app.include_router(uploads_router)
     app.include_router(creations_router)
+    if desktop_profile:
+        app.include_router(files_router)
 
     # Product-provided routes (ADR-0023): mounted now so the OpenAPI schema (and the TypeScript
     # types generated from it) include them; the database and storage they use are read from
     # app.state at request time.
     route_deps = RouteDeps(app.state, get_identity)
     for product_id, factory in products_registry.route_factories().items():
-        app.include_router(factory(route_deps), prefix=f"/products/{product_id}")
+        if product_id in enabled([product_id]):
+            app.include_router(factory(route_deps), prefix=f"/products/{product_id}")
 
     def custom_openapi() -> dict[str, Any]:
         if app.openapi_schema:

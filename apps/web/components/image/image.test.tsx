@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ImageSummary } from "@wasifyai/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ImageForm } from "./ImageForm";
+import { CreateImage } from "./CreateImage";
 import { ImageView } from "./ImageView";
 
 const push = vi.fn();
@@ -22,9 +22,6 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-const png = (bytes = 10, type = "image/png") =>
-  new File([new Uint8Array(bytes)], "a.png", { type });
-
 const img = (id: string, prompt = "a cat"): ImageSummary => ({
   id,
   prompt,
@@ -34,115 +31,6 @@ const img = (id: string, prompt = "a cat"): ImageSummary => ({
   created_at: "2026-10-08T00:00:00Z",
   image_url: `http://x/${id}.png`,
   thumb_url: `http://x/${id}.jpg`,
-});
-
-describe("ImageForm", () => {
-  it("makes a text image with the chosen shape", async () => {
-    const onSubmit = vi.fn();
-    const user = userEvent.setup();
-    render(<ImageForm onSubmit={onSubmit} />);
-    const go = screen.getByRole("button", { name: /make my image/i });
-    expect(go).toBeDisabled();
-    await user.type(screen.getByRole("textbox"), "  a lighthouse ");
-    await user.click(screen.getByRole("button", { name: /wide/i }));
-    await user.click(go);
-    expect(onSubmit).toHaveBeenCalledWith({
-      mode: "text",
-      prompt: "a lighthouse",
-      size: "wide",
-      picture: null,
-    });
-  });
-
-  it("needs a picture in picture mode, uploads it at once, and hands it to the run", async () => {
-    fetchMock.mockResolvedValueOnce(
-      Response.json({ upload_id: "u1", key: "uploads/u1.png", width: 300, height: 200, bytes: 9 }),
-    );
-    const onSubmit = vi.fn();
-    const user = userEvent.setup({ applyAccept: false });
-    render(<ImageForm onSubmit={onSubmit} />);
-    await user.click(screen.getByRole("button", { name: /from a picture/i }));
-    await user.type(screen.getByRole("textbox"), "make it blue");
-    const go = screen.getByRole("button", { name: /make my image/i });
-    expect(go).toBeDisabled();
-    expect(screen.getByText(/deleted once it has been used/i)).toBeInTheDocument();
-
-    await user.upload(screen.getByLabelText("Your picture"), png());
-    await waitFor(() => expect(go).toBeEnabled());
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/products/wasifyai-image/uploads/images");
-    await user.click(go);
-    const value = onSubmit.mock.calls[0][0];
-    expect(value).toMatchObject({ mode: "image", prompt: "make it blue", size: "square" });
-    expect(value.picture).toMatchObject({ uploadId: "u1", key: "uploads/u1.png" });
-  });
-
-  it("refuses a bad file in the browser without uploading it", async () => {
-    const user = userEvent.setup({ applyAccept: false });
-    render(<ImageForm onSubmit={vi.fn()} />);
-    await user.click(screen.getByRole("button", { name: /from a picture/i }));
-    await user.upload(
-      screen.getByLabelText("Your picture"),
-      new File(["x"], "a.gif", { type: "image/gif" }),
-    );
-    expect(await screen.findByRole("alert")).toHaveTextContent(/PNG, JPEG or WebP/);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("switches to the picture mode when a picture is pasted, and ignores a text paste", async () => {
-    fetchMock.mockResolvedValueOnce(
-      Response.json({ upload_id: "u2", key: "uploads/u2.png", width: 3, height: 2, bytes: 9 }),
-    );
-    render(<ImageForm onSubmit={vi.fn()} />);
-    const file = png();
-    const paste = (types: string[], withFile: boolean) => {
-      const e = new Event("paste", { bubbles: true, cancelable: true }) as Event & {
-        clipboardData: unknown;
-      };
-      e.clipboardData = {
-        types,
-        items: withFile ? [{ kind: "file", getAsFile: () => file }] : [],
-        files: withFile ? [file] : [],
-      };
-      document.dispatchEvent(e);
-      return e;
-    };
-    expect(paste(["text/plain"], false).defaultPrevented).toBe(false);
-    expect(paste(["text/plain", "Files"], true).defaultPrevented).toBe(false); // a spreadsheet copy
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(paste(["Files"], true).defaultPrevented).toBe(true);
-    await waitFor(() => expect(screen.getByAltText(/preview of your upload/i)).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /from a picture/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-  });
-
-  it("accepts a dropped picture and takes it back from the server when removed", async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        Response.json({ upload_id: "u3", key: "uploads/u3.png", width: 3, height: 2, bytes: 9 }),
-      )
-      .mockResolvedValueOnce(new Response(null, { status: 204 }));
-    const user = userEvent.setup();
-    render(<ImageForm onSubmit={vi.fn()} />);
-    const file = png();
-    const drop = new Event("drop", { bubbles: true, cancelable: true }) as Event & {
-      dataTransfer: unknown;
-    };
-    drop.dataTransfer = {
-      types: ["Files"],
-      items: [{ kind: "file", getAsFile: () => file }],
-      files: [file],
-    };
-    window.dispatchEvent(drop);
-    expect(drop.defaultPrevented).toBe(true); // the browser must not open the file
-    await waitFor(() => expect(screen.getByAltText(/preview of your upload/i)).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: /remove/i }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock.mock.calls[1][0]).toBe("/api/products/wasifyai-image/uploads/images/u3");
-    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "DELETE" });
-    expect(screen.getByRole("button", { name: /choose a picture/i })).toBeInTheDocument();
-  });
 });
 
 describe("ImageView", () => {
@@ -172,5 +60,46 @@ describe("ImageView", () => {
     await user.click(screen.getByRole("button", { name: /yes, delete/i }));
     await waitFor(() => expect(screen.getByText(/couldn't delete/i)).toBeInTheDocument());
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe("CreateImage (the web app's mount of the shared screen)", () => {
+  it("goes through the BFF, and links the download and My creations", async () => {
+    const user = userEvent.setup();
+    const done = {
+      run_id: "r1",
+      thread_id: "t1",
+      seq: 2,
+      ts: "",
+      outputs: {
+        status: "done",
+        image_id: "i9",
+        image_url: "http://x/i9.png",
+        thumb_url: "http://x/i9.jpg",
+        width: 1024,
+        height: 1024,
+        prompt: "a lighthouse",
+        mode: "text",
+      },
+    };
+    fetchMock.mockResolvedValueOnce(
+      new Response(`id: 2\nevent: done\ndata: ${JSON.stringify(done)}\n\n`, {
+        headers: { "content-type": "text/event-stream" },
+      }),
+    );
+    render(<CreateImage />);
+    await user.type(screen.getByRole("textbox"), "a lighthouse");
+    await user.click(screen.getByRole("button", { name: /make my image/i }));
+
+    expect(await screen.findByRole("img", { name: "a lighthouse" })).toBeInTheDocument();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/products/wasifyai-image/runs");
+    expect(screen.getByRole("link", { name: /download/i })).toHaveAttribute(
+      "href",
+      "/api/products/wasifyai-image/images/i9/download",
+    );
+    expect(screen.getByRole("link", { name: /open in my creations/i })).toHaveAttribute(
+      "href",
+      "/image/creations/i9",
+    );
   });
 });

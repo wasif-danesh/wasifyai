@@ -1,17 +1,17 @@
 "use client";
 
-import { EnhanceButton } from "@/components/EnhanceButton";
-import { PictureInput } from "@/components/PictureInput";
-import { ModeTabs, PromptField } from "@/components/create/shared";
-import { Button } from "@/components/ui/button";
-import { Chip } from "@/components/ui/chip";
-import { Spinner } from "@/components/ui/spinner";
-import { type Picture, usePicture } from "@/hooks/use-picture";
-import { usePictureEvents } from "@/hooks/use-picture-events";
-import type { Mode } from "@/lib/image-flow";
-import { chips, field, fieldLabel, panel } from "@/lib/styles";
-import { cn } from "@/lib/utils";
+import type { Mode, RunClient } from "@wasifyai/client";
 import { type FormEvent, useId, useState } from "react";
+import { cn } from "../cn";
+import { Button } from "../components/button";
+import { Chip } from "../components/chip";
+import { ModeTabs, PromptField } from "../components/create";
+import { EnhanceButton } from "../components/enhance-button";
+import { PictureInput } from "../components/picture-input";
+import { Spinner } from "../components/spinner";
+import { type Picture, usePicture } from "../hooks/use-picture";
+import { usePictureEvents } from "../hooks/use-picture-events";
+import { chips, field, fieldLabel, panel } from "../styles";
 
 export const MAX_PROMPT = 500;
 const PRODUCT = "wasifyai-image";
@@ -46,10 +46,13 @@ export type ImageFormValue = {
 };
 
 export function ImageForm({
+  client,
   onSubmit,
   initial,
   busy = false,
 }: {
+  /** The app's client: uploads the picture and enhances the prompt. Keep it the same object. */
+  client: Pick<RunClient, "uploadImage" | "deleteUpload" | "enhancePrompt">;
   onSubmit: (value: ImageFormValue) => void;
   initial?: Partial<Pick<ImageFormValue, "mode" | "prompt" | "size">>;
   busy?: boolean;
@@ -58,7 +61,7 @@ export function ImageForm({
   const [mode, setMode] = useState<Mode>(initial?.mode ?? "text");
   const [prompt, setPrompt] = useState(initial?.prompt ?? "");
   const [size, setSize] = useState(initial?.size ?? "square");
-  const pic = usePicture(PRODUCT);
+  const pic = usePicture(PRODUCT, client);
   // A picture dropped or pasted while on "From text" switches to the picture mode.
   const { dragging } = usePictureEvents((file) => {
     setMode("image");
@@ -111,13 +114,14 @@ export function ImageForm({
         label={mode === "text" ? "What should the image show?" : "What should change?"}
         value={prompt}
         onChange={setPrompt}
-        placeholder={EXAMPLES[mode][0]}
+        placeholder={EXAMPLES[mode][0] ?? ""}
         hintText={"Press Ctrl or ⌘ + Enter to start."}
         max={MAX_PROMPT}
         examples={EXAMPLES[mode]}
-        exampleLabel={(ex) => ex.split(",")[0]}
+        exampleLabel={(ex) => ex.split(",")[0] ?? ex}
         enhance={
           <EnhanceButton
+            enhance={client.enhancePrompt}
             product={PRODUCT}
             kind={mode === "text" ? "text_to_image" : "edit_image"}
             value={prompt}

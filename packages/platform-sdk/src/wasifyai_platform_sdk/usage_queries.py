@@ -28,6 +28,12 @@ async def sum_usage(
     since: datetime,
 ) -> float:
     """Total quantity of `kind` events for one user since `since`."""
+    if engine.dialect.name == "sqlite":  # timestamps are UTC text there
+        from wasifyai_platform_sdk.sqlite.engine import to_iso
+
+        bound_since: datetime | str = to_iso(since)
+    else:
+        bound_since = since
     async with engine.connect() as conn:
         row = await conn.execute(
             _SUM,
@@ -36,7 +42,7 @@ async def sum_usage(
                 "product_id": product_id,
                 "user_id": user_id,
                 "kind": kind,
-                "since": since,
+                "since": bound_since,
             },
         )
         return float(row.scalar_one())

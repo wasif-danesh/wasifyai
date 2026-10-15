@@ -23,6 +23,19 @@ came from.
 | `SAFEGUARDS_FORCE_ON` | api | `true` in production (Helm `safeguards.forceOn`): moderation and quotas always apply and Admin > Safeguards is read-only. Unset elsewhere: off by default, an admin switches it (ADR-0047) |
 | `ADMIN_EMAILS` | api | Comma-separated; only a verified email becomes admin |
 
+## Deployment profile (desktop)
+
+`DEPLOYMENT_PROFILE=web` (default) or `desktop` (ADR-0056). The desktop profile is started by the shell, which
+sets these; see [desktop-profile.md](desktop-profile.md).
+
+| Variable | Meaning |
+|---|---|
+| `DESKTOP_DATA_DIR` | database, checkpoints and files (required on desktop) |
+| `DESKTOP_PUBLIC_URL` | the engine's own URL for signed file links (set by the launcher) |
+| `DESKTOP_ALLOWED_ORIGINS` | window origins allowed by CORS |
+| `DESKTOP_IMAGE_ENGINE` | `stub` (default, no GPU) or `comfyui` |
+| `PRODUCTS_ENABLED` | comma-separated product ids to serve; empty means all (desktop: `wasifyai-image`) |
+
 ## Precedence
 
 Later wins:

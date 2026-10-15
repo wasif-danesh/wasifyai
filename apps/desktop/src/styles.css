@@ -1,0 +1,4 @@
+/* The window's stylesheet: the tokens, theme and base styles are the ones the web app uses
+   (packages/ui); Tailwind scans the shared package for the class names it needs. */
+@import "../../../packages/ui/src/tailwind.css";
+@source "../../../packages/ui/src";

@@ -22,7 +22,7 @@ facts that decide it, from the research for ADR-0056 (file lists and selected so
 
 1. **wasifyai stays the repository.** We do not move it into a clone of Unsloth. It is the single source of
    truth (owner's decision) and keeps its history, ADRs, licence (Apache-2.0) and CI.
-2. **A reference clone lives outside the repo** (`~/Projects/_reference/unsloth`, pinned to a release tag). It is
+2. **A reference clone lives outside the repo** (`~/Projects/unsloth`, pinned to a release tag; verified at `v0.1.907-beta`). It is
    read and run for study. It is not a git remote of wasifyai and is never merged.
 3. **Selective, recorded import.** Code is copied into wasifyai folder by folder, by decision, each with a
    `PROVENANCE.md` (source path, commit, date, what changed) and, for AGPL-3.0 material, a `LICENSE-AGPL` and

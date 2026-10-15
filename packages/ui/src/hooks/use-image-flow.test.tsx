@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { createRunClient } from "@wasifyai/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RUN, done, node, sse } from "../test-utils";
 import { useImageFlow } from "./use-image-flow";
 
+// The engine's own paths: the transport is the only place a prefix or a header is added.
 const fetchMock = vi.fn();
+const client = createRunClient({ fetch: (path, init) => fetchMock(path, init) });
 beforeEach(() => {
   fetchMock.mockReset();
-  vi.stubGlobal("fetch", fetchMock);
   sessionStorage.clear();
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -26,11 +28,11 @@ const result = done({
 describe("useImageFlow", () => {
   it("runs text to image to the finished picture and forgets the run", async () => {
     fetchMock.mockResolvedValueOnce(sse([node("check_request"), node("generate_image"), result]));
-    const { result: hook } = renderHook(() => useImageFlow());
+    const { result: hook } = renderHook(() => useImageFlow(client));
     act(() => hook.current.start({ mode: "text", prompt: "a cat", size: "wide" }));
     await waitFor(() => expect(hook.current.state.phase).toBe("done"));
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/api/products/wasifyai-image/runs");
+    expect(url).toBe("/products/wasifyai-image/runs");
     expect(JSON.parse(init.body as string)).toEqual({
       input: { mode: "text", prompt: "a cat", size: "wide" },
     });
@@ -40,7 +42,7 @@ describe("useImageFlow", () => {
 
   it("runs image to image with the key of a picture that is already uploaded", async () => {
     fetchMock.mockResolvedValueOnce(sse([node("check_request"), result]));
-    const { result: hook } = renderHook(() => useImageFlow());
+    const { result: hook } = renderHook(() => useImageFlow(client));
     act(() => hook.current.start({ mode: "image", prompt: "blue", imageKey: "uploads/1.png" }));
     await waitFor(() => expect(hook.current.state.phase).toBe("done"));
     expect(fetchMock).toHaveBeenCalledTimes(1); // no upload here any more (ADR-0039)
@@ -50,7 +52,7 @@ describe("useImageFlow", () => {
   });
 
   it("asks for a picture in picture mode", async () => {
-    const { result: hook } = renderHook(() => useImageFlow());
+    const { result: hook } = renderHook(() => useImageFlow(client));
     act(() => hook.current.start({ mode: "image", prompt: "blue" }));
     await waitFor(() => expect(hook.current.state.phase).toBe("error"));
     expect(fetchMock).not.toHaveBeenCalled();
@@ -59,8 +61,8 @@ describe("useImageFlow", () => {
   it("re-attaches to a remembered run after a reload", async () => {
     sessionStorage.setItem("wasifyai-image:run", RUN);
     fetchMock.mockResolvedValueOnce(sse([node("generate_image"), result]));
-    const { result: hook } = renderHook(() => useImageFlow());
+    const { result: hook } = renderHook(() => useImageFlow(client));
     await waitFor(() => expect(hook.current.state.phase).toBe("done"));
-    expect(fetchMock.mock.calls[0][0]).toContain(`/api/runs/${RUN}/events`);
+    expect(fetchMock.mock.calls[0][0]).toContain(`/runs/${RUN}/events`);
   });
 });

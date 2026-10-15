@@ -1,0 +1,34 @@
+{
+  "name": "@wasifyai/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "tauri:dev": "cargo run --manifest-path src-tauri/Cargo.toml --no-default-features",
+    "tauri:build": "cargo build --release --manifest-path src-tauri/Cargo.toml"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.3",
+    "@wasifyai/client": "workspace:*",
+    "@wasifyai/ui": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "tailwindcss": "4.3.3",
+    "typescript": "^5.6.0",
+    "vite": "^8.3.4",
+    "vitest": "^2.1.0"
+  }
+}

@@ -3,6 +3,7 @@ name = "wasifyai-platform-sdk"
 version = "0.0.0"
 requires-python = ">=3.12"
 dependencies = [
+    "aiosqlite>=0.22.1",
     "asyncpg>=0.32.0",
     "cryptography>=43",
     "fastapi>=0.142.2",

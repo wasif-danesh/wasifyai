@@ -1,0 +1,114 @@
+name: desktop
+# ADR-0056: macOS, Windows and Linux from day one. The engine tests run the desktop profile (SQLite, the
+# in-process queue, local files); the shell job type-checks and builds the window and builds the Tauri shell.
+# No signing and no installer in Phase 1.
+on:
+  push:
+    paths:
+      - apps/desktop/**
+      - apps/web/**
+      - services/api/**
+      - services/media-worker/**
+      - packages/**
+      - products/wasifyai-image/**
+      - uv.lock
+      - pnpm-lock.yaml
+      - .github/workflows/desktop.yml
+  pull_request:
+    paths:
+      - apps/desktop/**
+      - apps/web/**
+      - services/api/**
+      - services/media-worker/**
+      - packages/**
+      - products/wasifyai-image/**
+      - uv.lock
+      - pnpm-lock.yaml
+      - .github/workflows/desktop.yml
+
+jobs:
+  engine:
+    strategy:
+      fail-fast: false
+      matrix: { os: [macos-latest, ubuntu-latest, windows-latest] }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-packages
+      - name: Engine tests under the desktop profile
+        run: >
+          uv run pytest -v
+          packages/platform-sdk/tests/test_sqlite_adapters.py
+          packages/platform-sdk/tests/test_storage.py
+          services/api/tests/test_sqlite_stores.py
+          services/api/tests/test_desktop_profile.py
+          services/api/tests/test_local_embedder.py
+          products/wasifyai-image/tests/test_image_sqlite.py
+
+  shell:
+    strategy:
+      fail-fast: false
+      matrix: { os: [macos-latest, ubuntu-latest, windows-latest] }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run: { working-directory: apps/desktop/src-tauri }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install
+        working-directory: .
+      - name: Build the window
+        run: pnpm --filter @wasifyai/desktop build
+        working-directory: .
+      - name: Window and shared package tests
+        run: pnpm --filter @wasifyai/desktop --filter @wasifyai/ui --filter @wasifyai/client test
+        working-directory: .
+      - if: runner.os == 'Linux'
+        name: System libraries for the webview
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libayatana-appindicator3-dev libssl-dev patchelf
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: apps/desktop/src-tauri }
+      - run: cargo test --locked
+      - run: cargo build --release --locked
+
+  smoke:
+    # The whole window, as a person would use it: make an image, exit 0 or 1 (apps/desktop/src/smoke.ts).
+    needs: [engine, shell]
+    strategy:
+      fail-fast: false
+      matrix: { os: [macos-latest, ubuntu-latest, windows-latest] }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-packages
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install
+      - run: pnpm --filter @wasifyai/desktop build
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libayatana-appindicator3-dev libssl-dev patchelf xvfb
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: apps/desktop/src-tauri }
+      - if: runner.os != 'Linux'
+        name: Self-test
+        working-directory: apps/desktop/src-tauri
+        env: { WASIFYAI_SMOKE: "1" }
+        run: cargo run --locked
+      - if: runner.os == 'Linux'
+        name: Self-test (virtual display)
+        working-directory: apps/desktop/src-tauri
+        env: { WASIFYAI_SMOKE: "1" }
+        run: xvfb-run -a cargo run --locked

@@ -67,7 +67,8 @@ async def start_run(
     identity: Identity = Depends(get_identity),
 ):
     st: Any = _state(request)
-    if product_id not in st.registry.products():
+    # served here: registered, and not left out by PRODUCTS_ENABLED
+    if product_id not in st.registry.products() or product_id not in st.runs.graphs:
         raise HTTPException(404, "unknown product")
     rec = await st.runs.start(
         product_id, identity.tenant_id, identity.user_id, body.thread_id, body.input

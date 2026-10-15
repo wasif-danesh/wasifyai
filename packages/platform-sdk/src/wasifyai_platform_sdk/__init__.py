@@ -73,6 +73,7 @@ from wasifyai_platform_sdk.search import (
 )
 from wasifyai_platform_sdk.secretbox import SecretBox, SecretsUnavailable
 from wasifyai_platform_sdk.storage import (
+    LocalFileStorage,
     ScopedStorage,
     Storage,
     memory_storage,
@@ -92,6 +93,7 @@ from wasifyai_platform_sdk.uploads import (
     UploadStore,
     new_upload,
     process_image,
+    upload_store,
 )
 from wasifyai_platform_sdk.usage import InMemoryUsageRecorder, UsageEvent, UsageRecorder
 from wasifyai_platform_sdk.usage_postgres import PostgresUsageRecorder
@@ -105,6 +107,7 @@ __all__ = [
     "clean_output",
     "InMemoryUploadStore",
     "PostgresUploadStore",
+    "upload_store",
     "ProcessedImage",
     "RedisUploadLimiter",
     "UploadError",
@@ -188,6 +191,7 @@ __all__ = [
     "build_capabilities",
     "load_product_config",
     "memory_storage",
+    "LocalFileStorage",
     "object_key",
     "part_from_file",
     "register_provider",

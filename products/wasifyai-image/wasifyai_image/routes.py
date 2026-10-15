@@ -12,7 +12,7 @@ from wasifyai_platform_sdk import Identity, RouteDeps, build_enhance_router, par
 
 from wasifyai_image import prompts
 from wasifyai_image.guardrail import enhance_guard
-from wasifyai_image.images import ImageRecord, ImageStore, PostgresImageStore
+from wasifyai_image.images import ImageRecord, ImageStore, image_store
 
 PRODUCT_ID = "wasifyai-image"
 CONTENT_TYPES = {
@@ -51,7 +51,7 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
     router.include_router(build_enhance_router(deps, PRODUCT_ID, prompts.load, enhance_guard))
 
     def images() -> ImageStore:
-        return store or PostgresImageStore(deps.engine)
+        return store or image_store(deps.engine)
 
     async def summary(image: ImageRecord) -> ImageSummary:
         assert deps.storage is not None, "object storage is not configured"

@@ -11,6 +11,7 @@ from PIL import Image
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import RunContext, start_of_day_utc, sum_usage
+from wasifyai_platform_sdk.sqlite import ensure_tables, from_iso, is_sqlite, now_iso, to_iso
 
 IMAGE_CREATED = "image.created"
 THUMB_PX = 480
@@ -126,6 +127,115 @@ class PostgresImageStore:
                 text("DELETE FROM images WHERE id = :id AND tenant_id = :t AND user_id = :u"),
                 {"id": iid, "t": tenant_id, "u": user_id},
             )
+
+
+_SQLITE_DDL = (
+    """
+    CREATE TABLE IF NOT EXISTS images (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        thread_id TEXT,
+        run_id TEXT,
+        mode TEXT NOT NULL,
+        prompt TEXT NOT NULL,
+        width INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        image_key TEXT NOT NULL,
+        thumb_key TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_images_user_created "
+    "ON images (tenant_id, product_id, user_id, created_at)",
+)
+
+
+class SqliteImageStore:
+    """The same records on the SQLite file of the desktop profile (ADR-0056)."""
+
+    def __init__(self, engine: AsyncEngine):
+        self._engine = engine
+
+    async def _ready(self) -> None:
+        await ensure_tables(self._engine, "images", _SQLITE_DDL)
+
+    @staticmethod
+    def _record(r) -> ImageRecord:
+        return ImageRecord(
+            id=r[0], tenant_id=r[1], product_id=r[2], user_id=r[3], thread_id=r[4], run_id=r[5],
+            mode=r[6], prompt=r[7], width=r[8], height=r[9], image_key=r[10], thumb_key=r[11],
+            created_at=from_iso(r[12]),
+        )  # fmt: skip
+
+    async def add(self, image: ImageRecord) -> None:
+        await self._ready()
+        values = {k: v for k, v in image.__dict__.items() if k != "created_at"}
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO images (id, tenant_id, product_id, user_id, thread_id, run_id, mode,
+                                        prompt, width, height, image_key, thumb_key, created_at)
+                    VALUES (:id, :tenant_id, :product_id, :user_id, :thread_id, :run_id, :mode,
+                            :prompt, :width, :height, :image_key, :thumb_key, :created_at)
+                    """
+                ),
+                {
+                    **values,
+                    "created_at": to_iso(image.created_at) if image.created_at else now_iso(),
+                },
+            )
+
+    async def list(
+        self, tenant_id: str, user_id: str, limit: int, before: datetime | None
+    ) -> list[ImageRecord]:
+        await self._ready()
+        async with self._engine.connect() as conn:
+            rows = await conn.execute(
+                text(
+                    f"""
+                    SELECT {_COLUMNS} FROM images
+                    WHERE tenant_id = :t AND product_id = 'wasifyai-image' AND user_id = :u
+                      AND (:before IS NULL OR created_at < :before)
+                    ORDER BY created_at DESC, id DESC LIMIT :limit
+                    """
+                ),
+                {
+                    "t": tenant_id, "u": user_id, "limit": limit,
+                    "before": to_iso(before) if before else None,
+                },
+            )  # fmt: skip
+            return [self._record(r) for r in rows]
+
+    async def get(self, tenant_id: str, user_id: str, image_id: str) -> ImageRecord | None:
+        await self._ready()
+        async with self._engine.connect() as conn:
+            row = (
+                await conn.execute(
+                    text(
+                        f"SELECT {_COLUMNS} FROM images WHERE id = :id AND tenant_id = :t "
+                        "AND user_id = :u AND product_id = 'wasifyai-image'"
+                    ),
+                    {"id": image_id, "t": tenant_id, "u": user_id},
+                )
+            ).first()
+            return self._record(row) if row else None
+
+    async def delete(self, tenant_id: str, user_id: str, image_id: str) -> None:
+        await self._ready()
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM images WHERE id = :id AND tenant_id = :t AND user_id = :u"),
+                {"id": image_id, "t": tenant_id, "u": user_id},
+            )
+
+
+def image_store(engine: AsyncEngine) -> ImageStore:
+    """The store for the database the engine speaks to: Postgres in the web profile, SQLite in the
+    desktop profile (ADR-0056). Callers do not know which."""
+    return SqliteImageStore(engine) if is_sqlite(engine) else PostgresImageStore(engine)
 
 
 class InMemoryImageStore:

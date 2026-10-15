@@ -14,6 +14,10 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
+# Rust (apps/desktop)
+target/
+apps/desktop/src-tauri/gen/
+
 # Node
 node_modules/
 .next/

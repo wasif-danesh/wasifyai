@@ -206,6 +206,16 @@ class PostgresUploadStore:
         return [self._row(r) for r in rows]
 
 
+def upload_store(engine: AsyncEngine) -> UploadStore:
+    """The upload store for the database the engine speaks to: Postgres in the web profile, SQLite
+    in the desktop profile (ADR-0056)."""
+    if engine.dialect.name == "sqlite":
+        from wasifyai_platform_sdk.sqlite.uploads import SqliteUploadStore
+
+        return SqliteUploadStore(engine)
+    return PostgresUploadStore(engine)
+
+
 class UploadLimiter(Protocol):
     async def allow(self, tenant_id: str, user_id: str) -> bool: ...
 

@@ -2,6 +2,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { type FlowState, type Job, stepViews } from "@/lib/song-flow";
 import { panel } from "@/lib/styles";
 import { cn } from "@/lib/utils";
+import { Bar } from "@wasifyai/ui";
 
 function jobLine(job: Job): { text: string; value?: number } {
   switch (job.status) {
@@ -20,27 +21,6 @@ function jobLine(job: Job): { text: string; value?: number } {
     default:
       return { text: "Getting ready" };
   }
-}
-
-/** A progress bar: filled to a value, or sliding while the job is only waiting its turn. */
-export function Bar({ value, className }: { value?: number; className?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={cn("h-[0.6rem] overflow-hidden rounded-full bg-muted", className)}
-      data-indeterminate={value === undefined || undefined}
-    >
-      <i
-        className={cn(
-          "block h-full rounded-[inherit] bg-primary transition-[width] duration-500 ease-out-soft",
-          value === undefined && "w-2/5 animate-slide",
-        )}
-        style={
-          value === undefined ? undefined : { width: `${Math.min(1, Math.max(0, value)) * 100}%` }
-        }
-      />
-    </div>
-  );
 }
 
 // The numbered steps: a ring with a counter, a line to the next one; one column when the box is narrow.
@@ -113,3 +93,5 @@ export function Progress({ state }: { state: FlowState }) {
     </section>
   );
 }
+
+export { Bar };

@@ -7,7 +7,7 @@ from image_rig import make_rig
 from test_image_graph import Story
 from test_image_routes import identity, image
 from wasifyai_image.images import InMemoryImageStore
-from wasifyai_image.index import ImageIndexSource, index_text
+from wasifyai_image.index import ImageIndexSource, image_index_source, index_text
 from wasifyai_image.routes import build_routes
 from wasifyai_platform_sdk import RouteDeps, ScopedStorage, memory_storage
 
@@ -31,7 +31,7 @@ def test_the_product_registers_an_index_source():
 
     registry = GraphRegistry()
     register(registry)
-    assert registry.index_sources() == {"wasifyai-image": ImageIndexSource}
+    assert registry.index_sources() == {"wasifyai-image": image_index_source}
     assert (ImageIndexSource.product_id, ImageIndexSource.kind) == ("wasifyai-image", "image")
 
 

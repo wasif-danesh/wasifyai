@@ -1,5 +1,7 @@
 from functools import lru_cache
+from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,6 +9,16 @@ class Settings(BaseSettings):
     """Secrets and environment wiring. Read only from env vars (see docs/configuration.md)."""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # The deployment profile (ADR-0056). `web`: Postgres, Redis Streams, S3 storage. `desktop`: one
+    # SQLite file, an in-process queue and event log, local files, loopback only; the shell passes
+    # DESKTOP_DATA_DIR, DESKTOP_PUBLIC_URL and a per-launch API_AUTH_SECRET.
+    deployment_profile: str = "web"
+    desktop_data_dir: str = ""  # database and files live here (the app data directory)
+    desktop_public_url: str = ""  # this engine's own URL, as the window reaches it (file links)
+    desktop_allowed_origins: str = "tauri://localhost,http://tauri.localhost,http://localhost:1420"
+    desktop_image_engine: str = "stub"  # stub (placeholder files) | comfyui
+    products_enabled: str = ""  # comma-separated product ids; empty: all (desktop: wasifyai-image)
 
     database_url: str = "postgresql+asyncpg://wasifyai:wasifyai@localhost:5432/wasifyai"
     redis_url: str = "redis://localhost:6379/0"
@@ -41,6 +53,30 @@ class Settings(BaseSettings):
     storage_region: str = "us-east-1"
     storage_access_key: str = ""
     storage_secret_key: str = ""
+
+    @model_validator(mode="after")
+    def _desktop_defaults(self) -> "Settings":
+        """Values that only make sense for one profile, unless the environment sets them."""
+        if self.deployment_profile not in ("web", "desktop"):
+            raise ValueError("DEPLOYMENT_PROFILE must be 'web' or 'desktop'")
+        if self.deployment_profile == "desktop":
+            if "litellm_base_url" not in self.model_fields_set:
+                self.litellm_base_url = ""  # no gateway yet: search and enhance wait for one
+            if "metrics_port" not in self.model_fields_set:
+                self.metrics_port = 0  # a desktop app opens no extra port
+            if "default_tenant_id" not in self.model_fields_set:
+                self.default_tenant_id = "local"  # one person, one tenant
+            if not self.products_enabled:
+                self.products_enabled = "wasifyai-image"
+        return self
+
+    @property
+    def desktop_dir(self) -> Path:
+        return Path(self.desktop_data_dir).expanduser()
+
+    @property
+    def enabled_product_set(self) -> frozenset[str]:
+        return frozenset(p.strip() for p in self.products_enabled.split(",") if p.strip())
 
     @property
     def checkpoint_url(self) -> str:

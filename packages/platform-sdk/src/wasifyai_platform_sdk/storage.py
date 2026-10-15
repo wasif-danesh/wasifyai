@@ -6,12 +6,17 @@ and Azure Blob through obstore. Keys always start with tenant and product (rule 
 API and SSE responses carry URLs from `url()`, never file bytes.
 """
 
+import hashlib
+import hmac
 import re
+import time
 from datetime import timedelta
+from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import obstore
-from obstore.store import MemoryStore, S3Store
+from obstore.store import LocalStore, MemoryStore, S3Store
 
 from wasifyai_platform_sdk.context import require_context
 
@@ -70,6 +75,43 @@ class Storage:
         if self._signer is None:
             return f"{self._hint}://{key}"
         return await obstore.sign_async(self._signer, "GET", key, expires_in=expires)
+
+
+class LocalFileStorage(Storage):
+    """Files in a folder on this machine (the desktop profile, ADR-0056). A link is a signed URL on
+    the engine's own loopback address, `{base}/files/{key}?e={expiry}&s={signature}`, valid for the
+    same hour a presigned S3 link is; the engine's `/files` route serves it after `verify`. The
+    signature covers the key and the expiry, so a link opens one file until it runs out."""
+
+    def __init__(self, root: Path, public_base_url: str, secret: str):
+        root.mkdir(parents=True, exist_ok=True)
+        super().__init__(LocalStore(str(root)), scheme_hint="file")
+        self._base = public_base_url.rstrip("/")
+        self._secret = secret.encode()
+
+    async def put(self, key: str, data: bytes, content_type: str | None = None) -> None:
+        # A folder has no per-file metadata; the type is taken from the extension when served.
+        await obstore.put_async(self._store, key, data)
+
+    def _signature(self, key: str, expires_at: int) -> str:
+        message = f"files\n{key}\n{expires_at}".encode()
+        return hmac.new(self._secret, message, hashlib.sha256).hexdigest()
+
+    async def url(self, key: str, expires: timedelta = timedelta(hours=1)) -> str:
+        _check(key.split("/"))
+        expires_at = int(time.time() + expires.total_seconds())
+        sig = self._signature(key, expires_at)
+        return f"{self._base}/files/{quote(key, safe='/')}?e={expires_at}&s={sig}"
+
+    def verify(self, key: str, expires_at: int, signature: str, now: float | None = None) -> bool:
+        """Whether a link for `key` is genuine and not expired."""
+        if (now if now is not None else time.time()) > expires_at:
+            return False
+        try:
+            _check(key.split("/"))
+        except ValueError:
+            return False
+        return hmac.compare_digest(self._signature(key, expires_at), signature)
 
 
 class ScopedStorage:

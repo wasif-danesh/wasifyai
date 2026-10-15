@@ -19,7 +19,12 @@ dependencies = [
   "wasifyai-platform-sdk",
   "pyjwt>=2.9",
   "prometheus-client>=0.21",
+  "langgraph-checkpoint-sqlite>=3.1.2",
 ]
+
+[project.optional-dependencies]
+# The desktop profile runs the media worker inside the engine process (ADR-0056)
+desktop = ["wasifyai-media-worker"]
 
 [build-system]
 requires = ["hatchling"]

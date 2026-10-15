@@ -3,6 +3,11 @@ Copyright 2026 Wasif Danesh
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 
+The folder apps/desktop (the desktop shell) is licensed under AGPL-3.0-only, because it contains code imported
+from Unsloth Studio (https://github.com/unslothai/unsloth, AGPL-3.0). Its licence text is apps/desktop/LICENSE-AGPL
+and the imported files are listed in apps/desktop/src-tauri/src/PROVENANCE.md. Nothing else in this repository is
+under that licence.
+
 Third-party software and models are not covered by that licence. They keep their own licences, which you must
 follow when you run, host or redistribute them. The ones recorded in this repository (the decision records in
 docs/decisions/ have the details and the sources):

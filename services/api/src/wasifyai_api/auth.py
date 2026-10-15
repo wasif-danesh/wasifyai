@@ -12,7 +12,8 @@ import jwt
 ISSUER = "wasifyai-web"
 AUDIENCE = "wasifyai-api"
 MIN_SECRET_BYTES = 32
-PROVIDERS = frozenset({"google", "github", "microsoft-entra-id"})
+# `desktop`: the token the desktop shell mints for its own window (ADR-0056)
+PROVIDERS = frozenset({"google", "github", "microsoft-entra-id", "desktop"})
 
 
 class AuthError(Exception):

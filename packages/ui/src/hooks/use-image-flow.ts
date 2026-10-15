@@ -3,18 +3,22 @@
 import {
   type FlowAction,
   type FlowState,
+  HttpError,
   type Mode,
+  type ParsedEvent,
+  type RunClient,
   flowReducer,
   initialState,
   isResting,
-} from "@/lib/image-flow";
-import { HttpError, startRun, watchRun } from "@/lib/run-client";
-import type { ParsedEvent } from "@/lib/sse";
+} from "@wasifyai/client";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 
 export const IMAGE_PRODUCT = "wasifyai-image";
 const STORAGE_KEY = "wasifyai-image:run";
 const MAX_RECONNECTS = 6;
+
+/** What the flow needs from the app's client: start a run and re-attach to one. */
+export type ImageFlowApi = Pick<RunClient, "startRun" | "watchRun">;
 
 /** `imageKey` is the key of a picture already uploaded (ADR-0039); text to image has none. */
 export type ImageRequest = { mode: Mode; prompt: string; size?: string; imageKey?: string };
@@ -50,7 +54,8 @@ function describe(e: unknown): string {
  * Drives one image from request to result: starts the run, folds its events into `state` with a pure reducer, reconnects when the connection drops and
  * re-attaches to a run after a page reload.
  */
-export function useImageFlow() {
+export function useImageFlow(api: ImageFlowApi) {
+  const { startRun, watchRun } = api;
   const [state, dispatchRaw] = useReducer(flowReducer, initialState);
   const local = useRef<FlowState>(initialState);
   const abort = useRef<AbortController | null>(null);
@@ -105,7 +110,7 @@ export function useImageFlow() {
         step = (s) => watchRun(runId, local.current.lastSeq, s, onEvent);
       }
     },
-    [dispatch, onEvent],
+    [dispatch, onEvent, watchRun],
   );
 
   const start = useCallback(
@@ -125,9 +130,9 @@ export function useImageFlow() {
         prompt: request.prompt,
         ...(request.mode === "text" ? { size: request.size } : { image_key: request.imageKey }),
       };
-      void follow((signal) => startRun(input, signal, onEvent, IMAGE_PRODUCT), ctrl.signal);
+      void follow((signal) => startRun(IMAGE_PRODUCT, input, signal, onEvent), ctrl.signal);
     },
-    [dispatch, follow, onEvent],
+    [dispatch, follow, onEvent, startRun],
   );
 
   const reset = useCallback(() => {
@@ -164,7 +169,7 @@ export function useImageFlow() {
       });
     }
     return () => abort.current?.abort();
-  }, [dispatch, follow, onEvent]);
+  }, [dispatch, follow, onEvent, watchRun]);
 
   return { state, start, reset, retry };
 }

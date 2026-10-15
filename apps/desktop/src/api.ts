@@ -2,6 +2,7 @@
 // One transport, one run client and one models client for the whole window, so hooks that depend on
 // them see stable functions.
 import { createRunClient } from "@wasifyai/client";
+import { createDiscoveryApi } from "./discovery";
 import { engineSession } from "./engine";
 import { createModelsApi } from "./models";
 import { createEngineTransport } from "./transport";
@@ -9,3 +10,4 @@ import { createEngineTransport } from "./transport";
 export const transport = createEngineTransport(engineSession);
 export const client = createRunClient(transport);
 export const modelsApi = createModelsApi(transport);
+export const discoveryApi = createDiscoveryApi(transport);

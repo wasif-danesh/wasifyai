@@ -49,6 +49,11 @@ def data_dir(tmp_path, monkeypatch) -> Iterator[Path]:
         "SAFEGUARDS_FORCE_ON": "false",
     }.items():
         monkeypatch.setenv(key, value)
+    # discovery looks in the person's home folder: give the engine an empty one
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     get_settings.cache_clear()
     yield root
     get_settings.cache_clear()
@@ -145,6 +150,46 @@ def test_recipes_favourites_and_saving_a_copy_on_the_desktop_profile(data_dir, m
         assert out.status_code == 200
         saved = export / out.json()["name"]
         assert saved.read_bytes().startswith(PNG) and out.json()["path"] == str(saved)
+
+
+def test_models_already_on_the_computer_are_found_and_used_in_place(data_dir):
+    import struct
+
+    home = data_dir.parent / "home"
+    folder = home / "ComfyUI-Shared" / "models" / "loras"
+    folder.mkdir(parents=True)
+    tensors = ["lora_down.0.weight", "lora_up.0.weight"]  # a LoRA, by its tensor names
+    head = json.dumps(
+        {n: {"dtype": "F16", "shape": [1], "data_offsets": [0, 2]} for n in tensors}
+    ).encode()
+    (folder / "style.safetensors").write_bytes(
+        struct.pack("<Q", len(head)) + head + b"\0" * 2_000_000
+    )
+
+    with TestClient(create_app()) as c:
+        # the first scan runs by itself shortly after start; ask for it now and wait
+        assert c.get("/desktop/discovery").status_code == 401  # a token is needed like anywhere
+        c.post("/desktop/discovery/scan", headers=auth())
+        for _ in range(100):
+            state = c.get("/desktop/discovery", headers=auth()).json()
+            if state["scanned_at"] and not state["running"]:
+                break
+            time.sleep(0.05)
+        assert state["enabled"] is True
+        kinds = {(i["name"], i["kind"], i["state"]) for i in state["items"]}
+        assert kinds == {("style", "lora", "later")}
+        assert any(s["tool"] == "ComfyUI" for s in state["scanned"])
+
+        # the switch and an added folder are kept
+        put = c.put(
+            "/desktop/discovery/settings",
+            json={"enabled": False, "folders": [str(home / "elsewhere")]},
+            headers=auth(),
+        )
+        assert put.status_code == 200 and put.json()["enabled"] is False
+        assert (
+            c.post("/desktop/discovery/use", json={"id": "nope"}, headers=auth()).status_code == 404
+        )
 
 
 def test_the_engine_refuses_requests_without_the_shells_token(data_dir):

@@ -35,6 +35,7 @@ from wasifyai_platform_sdk.sqlite import (
 
 from wasifyai_api.config import Settings
 from wasifyai_api.creation_index import IndexStore
+from wasifyai_api.desktop_discovery import DiscoveryService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
 from wasifyai_api.runs import RunManager
@@ -66,12 +67,16 @@ class DesktopBackends:
     _consumer: LocalCompletionConsumer | None = None
     _worker_cleanup: Any = None
     models: ModelsService | None = None
+    discovery: DiscoveryService | None = None
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
     async def start(self, runs: RunManager) -> None:
         """Start the in-process worker and the consumer that resumes graphs from its results."""
         if self.models is not None:
             await self.models.load()  # folders a person chose earlier
+        if self.discovery is not None:
+            await self.discovery.load()
+            self.discovery.start()  # a background scan of the known folders (ADR-0063)
         worker, self._worker_cleanup, self.slot = _build_worker(self)
         self._worker_task = asyncio.create_task(worker.run_forever())
         self._consumer = LocalCompletionConsumer(self.queue, runs, self.run_store)
@@ -79,6 +84,8 @@ class DesktopBackends:
         await self.event_log.prune()  # events older than the retention window
 
     async def stop(self) -> None:
+        if self.discovery is not None:
+            await self.discovery.stop()
         if self._consumer:
             await self._consumer.stop()
         if self._worker_task:
@@ -112,6 +119,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     )
     return DesktopBackends(
         models=models,
+        discovery=DiscoveryService(SqliteSettingsStore(engine), models),
         engine=engine,
         event_log=log_,
         run_store=SqliteRunStore(engine),

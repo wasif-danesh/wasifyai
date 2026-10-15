@@ -268,6 +268,30 @@ same installed model. `docs/phase2-stage-b-plan.md` has the decisions.
 
 The window may `PATCH`: the desktop CORS list includes it (the self-test found it was missing).
 
+## Finding models other tools left here (ADR-0063)
+
+The engine looks, by itself shortly after it starts, in the known folders of Ollama, LM Studio, the Hugging Face
+cache, ComfyUI (including Comfy Desktop's shared folder), Unsloth Studio, Pinokio, AnythingLLM, GPT4All and Jan.
+The list is data (`services/api/src/wasifyai_api/discovery.yaml`); `OLLAMA_MODELS` and `HF_HUB_CACHE` move
+their entries.
+
+| Piece | Where |
+|---|---|
+| Header readers: GGUF (architecture, name, quantisation, licence; the tokenizer is never read), safetensors (tensor names classify language / image / video / LoRA / VAE / text encoder), diffusers and transformers repos by `model_index.json` and `config.json`; `.ckpt` is named, never opened | `desktop_discovery.py` |
+| Bounded walk: depth 7, 60 000 files, 25 s; folder links are not followed; stubs under 1 MB and vocabulary-only GGUFs are dropped; shards count as one model | same |
+| States: `ready` (already in a folder the app uses), `can_use` (a catalogue file in the right folder: one click adds that folder as a read-only models folder), `later` (recognised, a planned stage uses it), `unsupported` | `assess()` |
+| Running servers (Ollama, LM Studio, ComfyUI) answered on loopback only; reported, never started or used yet | `probe_servers()` |
+| Routes: `GET /desktop/discovery`, `POST .../scan`, `PUT .../settings` `{enabled, folders}`, `POST .../use` `{id}` | same |
+| Window: "Found on this computer" under Models; "Finding models" in Settings (switch, more folders) | `FoundModels.tsx`, `pages/Settings.tsx` |
+
+macOS asks before an app reads Documents, Desktop, Downloads or removable drives, so such known folders
+(`needs_permission` in the data file) are offered with "Look in this folder" instead of being read. The result is
+kept in the settings store (`desktop.discovery`) and lives on this computer only.
+
+Measured on the owner's Mac (Ollama, the Hugging Face cache, Comfy Desktop's shared folder, Unsloth): 26 models
+found in 0.1 s: 4 language, 6 image, 2 video, 3 embedding, 1 LoRA, 9 parts and files of image models; three
+FLUX.2 klein files are `can_use`.
+
 ## The self-test
 
 `WASIFYAI_SMOKE=1 cargo run` (in `apps/desktop/src-tauri`) starts the shell as usual; once the engine is ready

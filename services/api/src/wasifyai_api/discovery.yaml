@@ -1,0 +1,100 @@
+# Where other AI tools keep their models (ADR-0063). Data, not code: add a tool by adding an entry.
+#
+# These folders are our best knowledge and must be verified per platform before a release (install the
+# tool, record where its files land). A folder that does not exist is skipped without a word.
+#
+#   id / title    shown next to a found model ("found in Ollama")
+#   layout        ollama   manifests + blobs, read through the manifest
+#                 hf-cache Hugging Face cache (models--org--name/snapshots/<rev>/...)
+#                 files    any folder: .gguf, .safetensors and .ckpt files, to a bounded depth
+#   env           an environment variable that moves the folder (replaces the first entry)
+#   folders       per platform: darwin, linux, win32. `~`, $VAR and %VAR% are expanded
+#   needs_permission  macOS asks the person before an app may read Documents, Desktop, Downloads and
+#                 removable drives: such a folder is only scanned after the person adds it
+#   servers       a local server the tool runs: probed on loopback only, offered as a provider
+version: 1
+tools:
+  - id: ollama
+    title: Ollama
+    layout: ollama
+    env: OLLAMA_MODELS
+    folders:
+      darwin: ["~/.ollama/models"]
+      linux: ["~/.ollama/models", "/usr/share/ollama/.ollama/models"]
+      win32: ["~/.ollama/models"]
+    servers: [{ url: "http://127.0.0.1:11434", probe: "/api/tags", kind: ollama }]
+
+  - id: lm-studio
+    title: LM Studio
+    layout: files
+    folders:
+      darwin: ["~/.lmstudio/models", "~/.cache/lm-studio/models"]
+      linux: ["~/.lmstudio/models", "~/.cache/lm-studio/models"]
+      win32: ["~/.lmstudio/models", "~/.cache/lm-studio/models"]
+    servers: [{ url: "http://127.0.0.1:1234", probe: "/v1/models", kind: openai }]
+
+  - id: huggingface
+    title: the Hugging Face cache
+    layout: hf-cache
+    env: HF_HUB_CACHE
+    folders:
+      darwin: ["~/.cache/huggingface/hub"]
+      linux: ["~/.cache/huggingface/hub"]
+      win32: ["~/.cache/huggingface/hub"]
+
+  - id: comfyui
+    title: ComfyUI
+    layout: files
+    folders:
+      darwin: ["~/ComfyUI-Shared/models", "~/ComfyUI-Installs/ComfyUI/models", "~/ComfyUI/models", "~/comfy/ComfyUI/models"]
+      linux: ["~/ComfyUI-Shared/models", "~/ComfyUI/models", "~/comfy/ComfyUI/models"]
+      win32: ["~/ComfyUI-Shared/models", "~/ComfyUI/models", "%LOCALAPPDATA%/Programs/ComfyUI/models"]
+    servers: [{ url: "http://127.0.0.1:8188", probe: "/system_stats", kind: comfyui }]
+
+  - id: comfyui-documents
+    title: ComfyUI
+    layout: files
+    needs_permission: true
+    folders:
+      darwin: ["~/Documents/ComfyUI/models"]
+      win32: ["~/Documents/ComfyUI/models"]
+
+  - id: unsloth
+    title: Unsloth Studio
+    layout: files
+    folders:
+      darwin: ["~/.unsloth"]
+      linux: ["~/.unsloth"]
+      win32: ["~/.unsloth"]
+
+  - id: pinokio
+    title: Pinokio
+    layout: files
+    folders:
+      darwin: ["~/pinokio/api"]
+      linux: ["~/pinokio/api"]
+      win32: ["~/pinokio/api", "C:/pinokio/api"]
+
+  - id: anythingllm
+    title: AnythingLLM
+    layout: files
+    folders:
+      darwin: ["~/Library/Application Support/anythingllm-desktop/storage/models"]
+      linux: ["~/.config/anythingllm-desktop/storage/models"]
+      win32: ["%APPDATA%/anythingllm-desktop/storage/models"]
+
+  - id: gpt4all
+    title: GPT4All
+    layout: files
+    folders:
+      darwin: ["~/Library/Application Support/nomic.ai/GPT4All"]
+      linux: ["~/.local/share/nomic.ai/GPT4All"]
+      win32: ["%LOCALAPPDATA%/nomic.ai/GPT4All"]
+
+  - id: jan
+    title: Jan
+    layout: files
+    folders:
+      darwin: ["~/jan/models", "~/Library/Application Support/Jan/data/models"]
+      linux: ["~/jan/models", "~/.config/Jan/data/models"]
+      win32: ["~/jan/models", "%APPDATA%/Jan/data/models"]

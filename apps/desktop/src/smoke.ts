@@ -86,6 +86,20 @@ export async function runSmoke(): Promise<void> {
     if (size !== `${picture.naturalWidth}x${picture.naturalHeight}`) {
       throw new Error(`the second picture has another size: ${size}`);
     }
+    // the Models screen lists what other tools left here (ADR-0063): the first scan finishes by itself
+    window.location.hash = "/models";
+    await until("the found models", () => {
+      const text = document.body.textContent ?? "";
+      return text.includes("Found on this computer") && !text.includes("Looking in the folders")
+        ? text
+        : null;
+    });
+    await until("the result of the look", () => {
+      const text = document.body.textContent ?? "";
+      return /Looked (just now|\d+ minutes? ago)|No models from other tools|Looking is turned off/.test(
+        text,
+      );
+    });
     await report(
       true,
       `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}`,

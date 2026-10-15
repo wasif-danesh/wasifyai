@@ -48,6 +48,13 @@ the port, is the same as for any local server such as Ollama, and was accepted b
 enforces a token stays possible if that changes. Also: custom nodes are none at all (the shipped workflows
 use core nodes only), and the sidecar is installed on demand, not at first run.
 
+## Amendment (2026-10-15, ADR-0063)
+
+Point 5 (models from the configured folder, read-only) now also covers models **found automatically** in other
+tools' known folders (Comfy Desktop's, the Hugging Face cache, ...): see ADR-0063. They are used in place,
+read-only, and only after the person selects them. Point 1 is unchanged: we never touch or reuse another tool's
+ComfyUI environment, only its model files.
+
 ## Pros and cons (from the research and from our own runs)
 
 | Pros | Cons |

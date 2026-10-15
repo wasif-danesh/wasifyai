@@ -277,6 +277,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-assistant/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Conversations */
+        get: operations["list_conversations_products_wasifyai_assistant_conversations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-assistant/conversations/{conversation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Conversation */
+        get: operations["get_conversation_products_wasifyai_assistant_conversations__conversation_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Conversation */
+        delete: operations["delete_conversation_products_wasifyai_assistant_conversations__conversation_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Conversation */
+        patch: operations["rename_conversation_products_wasifyai_assistant_conversations__conversation_id__patch"];
+        trace?: never;
+    };
     "/products/wasifyai-image/images": {
         parameters: {
             query?: never;
@@ -985,6 +1021,37 @@ export interface components {
             /** Provider */
             provider: string;
         };
+        /** ConversationList */
+        ConversationList: {
+            /** Conversations */
+            conversations: components["schemas"]["ConversationSummary"][];
+            /** Next Before */
+            next_before: string | null;
+        };
+        /** ConversationOut */
+        ConversationOut: {
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Messages */
+            messages: components["schemas"]["MessageOut"][];
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at: string;
+        };
+        /** ConversationSummary */
+        ConversationSummary: {
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at: string;
+        };
         /** DoneEvent */
         DoneEvent: {
             /**
@@ -1354,6 +1421,21 @@ export interface components {
             /** Workflow */
             workflow: string | null;
         };
+        /** MessageOut */
+        MessageOut: {
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Parts */
+            parts: {
+                [key: string]: unknown;
+            }[];
+            /** Role */
+            role: string;
+            /** Seq */
+            seq: number;
+        };
         /** ModelList */
         ModelList: {
             /** Models */
@@ -1439,6 +1521,11 @@ export interface components {
             /** Needs Key */
             needs_key: boolean;
         };
+        /** Rename */
+        Rename: {
+            /** Title */
+            title: string;
+        };
         /** ResumeRequest */
         ResumeRequest: {
             /** Interrupt Id */
@@ -1475,7 +1562,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "song" | "image" | "video" | "speech" | "transcript" | "lipsync";
+            kind: "song" | "image" | "video" | "speech" | "transcript" | "lipsync" | "conversation";
             /**
              * Match
              * @enum {string}
@@ -1596,7 +1683,7 @@ export interface components {
              */
             quality: "good" | "fair" | "limited" | "unrated";
         };
-        SseEvent: components["schemas"]["NodeEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["InterruptEvent"] | components["schemas"]["JobProgressEvent"] | components["schemas"]["ErrorEvent"] | components["schemas"]["DoneEvent"];
+        SseEvent: components["schemas"]["NodeEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["InterruptEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["JobProgressEvent"] | components["schemas"]["ErrorEvent"] | components["schemas"]["DoneEvent"];
         /** TestOutcome */
         TestOutcome: {
             /**
@@ -1632,6 +1719,78 @@ export interface components {
             seq: number;
             /** Text */
             text: string;
+            /**
+             * Thread Id
+             * Format: uuid
+             */
+            thread_id: string;
+            /** Ts */
+            ts?: string;
+        };
+        /**
+         * ToolCallEvent
+         * @description The assistant is calling a tool (ADR-0057): `id` ties it to its `tool_result`.
+         */
+        ToolCallEvent: {
+            /** Arguments */
+            arguments?: {
+                [key: string]: unknown;
+            };
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event: "tool_call";
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Seq */
+            seq: number;
+            /**
+             * Thread Id
+             * Format: uuid
+             */
+            thread_id: string;
+            /** Ts */
+            ts?: string;
+        };
+        /**
+         * ToolResultEvent
+         * @description A tool call finished. `output` is a small reference (an image id, search hits), never a
+         *     file: the window fetches the creation itself, with a fresh link.
+         */
+        ToolResultEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event: "tool_result";
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Output */
+            output?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Seq */
+            seq: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "refused" | "error";
             /**
              * Thread Id
              * Format: uuid
@@ -2254,7 +2413,7 @@ export interface operations {
         parameters: {
             query: {
                 q: string;
-                kind?: ("song" | "image" | "video" | "speech" | "transcript" | "lipsync") | null;
+                kind?: ("song" | "image" | "video" | "speech" | "transcript" | "lipsync" | "conversation") | null;
                 limit?: number;
             };
             header?: never;
@@ -2321,6 +2480,133 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+        };
+    };
+    list_conversations_products_wasifyai_assistant_conversations_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                before?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_conversation_products_wasifyai_assistant_conversations__conversation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_conversation_products_wasifyai_assistant_conversations__conversation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_conversation_products_wasifyai_assistant_conversations__conversation_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Rename"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

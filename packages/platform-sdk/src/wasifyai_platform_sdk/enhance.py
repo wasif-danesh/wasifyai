@@ -66,6 +66,28 @@ _LEAD = re.compile(
 )
 
 
+_THINK = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
+_WORKING = re.compile(
+    r"^\W*(?:we need to|we have|we are|we should|the user|let'?s |let me |okay[,.]|ok[,.]|hmm|"
+    r"alright|first,|so the user|i need to|i should|i will|the task|the instruction)",
+    re.IGNORECASE,
+)
+
+
+def strip_thinking(text: str) -> str:
+    """Take out a reasoning model's `<think>` block, which some servers leave in the answer."""
+    out = _THINK.sub("", text)
+    if "</think>" in out.lower():  # an opening tag the server consumed
+        out = re.split(r"</think>", out, flags=re.IGNORECASE)[-1]
+    return out.strip()
+
+
+def looks_like_working(text: str) -> bool:
+    """Does this read like the model thinking aloud ("We need to rewrite...") instead of a prompt?
+    A model without its chat template does this; pasting it into the prompt box would be wrong."""
+    return bool(_WORKING.match(text.strip())) or "The user says" in text[:300]
+
+
 def clean_output(text: str, limit: int) -> str:
     """The model's reply as a bare prompt: no fences, quotes, markdown or "Here is your prompt:",
     cut at a sentence boundary if it is over `limit`."""
@@ -139,6 +161,13 @@ def build_enhance_router(
                 raise HTTPException(
                     503, "We couldn't enhance your prompt right now. Please try again."
                 ) from None
+            result = strip_thinking(result)
+            if looks_like_working(result):
+                raise HTTPException(
+                    503,
+                    "The model answered with its working instead of a prompt. Try again, or "
+                    "choose another model in Models.",
+                )
             cleaned = clean_output(result, rule.max_chars)
             await caps.record_usage(ENHANCED, 1, "prompts", prompt_kind=body.kind)
         if not cleaned or cleaned == text:

@@ -302,6 +302,18 @@ stops it to free the memory. Only the Apple-silicon build uses a GPU; the other 
 `GET /desktop/language-engine` and `POST /desktop/language-engine/stop` are the routes; choosing a model and the
 chat provider are D2 (`docs/phase2-stage-d-plan.md`).
 
+## The assistant (ADR-0057, stage D3 and D4)
+
+`wasifyai-assistant` is a product like the others, enabled on the desktop by default. A turn is a run of its
+graph: `POST /products/wasifyai-assistant/runs` with `{"text": ..., "conversation_id"?: ...}` streams `token`,
+`tool_call`, `tool_result` and `job_progress` events and ends with `done` (`conversation_id`, `title`, `reply`).
+Conversations are listed, read, renamed and deleted under `/products/wasifyai-assistant/conversations`. It
+answers with the model chosen in Models; with none chosen the run ends with an error that says to choose one.
+
+Tools are an explicit list in `wasifyai_assistant/tools.py`. `generate_image` runs the image product as a child
+run, so the picture is saved, indexed and has its recipe like any other; `search_creations` looks in the person's
+own library. The model never sees a file or a link, only a sentence and ids.
+
 ## The model hub (ADR-0064, stage D2b)
 
 Models has two tabs. **On device** is the app's models, the chat model and what other tools left here.

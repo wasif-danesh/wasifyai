@@ -11,6 +11,8 @@ from wasifyai_contracts.events import (
     RunRequest,
     SseEvent,
     TokenEvent,
+    ToolCallEvent,
+    ToolResultEvent,
     format_sse,
     format_sse_dict,
 )
@@ -26,6 +28,8 @@ __all__ = [
     "RunRequest",
     "SseEvent",
     "TokenEvent",
+    "ToolCallEvent",
+    "ToolResultEvent",
     "format_sse",
     "format_sse_dict",
 ]

@@ -38,6 +38,26 @@ class InterruptEvent(_Envelope):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class ToolCallEvent(_Envelope):
+    """The assistant is calling a tool (ADR-0057): `id` ties it to its `tool_result`."""
+
+    event: Literal["tool_call"] = "tool_call"
+    id: str
+    name: str
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolResultEvent(_Envelope):
+    """A tool call finished. `output` is a small reference (an image id, search hits), never a
+    file: the window fetches the creation itself, with a fresh link."""
+
+    event: Literal["tool_result"] = "tool_result"
+    id: str
+    name: str
+    status: Literal["ok", "refused", "error"]
+    output: dict[str, Any] = Field(default_factory=dict)
+
+
 class JobProgressEvent(_Envelope):
     event: Literal["job_progress"] = "job_progress"
     job_id: str
@@ -62,7 +82,14 @@ class DoneEvent(_Envelope):
 
 
 SseEvent = Annotated[
-    NodeEvent | TokenEvent | InterruptEvent | JobProgressEvent | ErrorEvent | DoneEvent,
+    NodeEvent
+    | TokenEvent
+    | InterruptEvent
+    | ToolCallEvent
+    | ToolResultEvent
+    | JobProgressEvent
+    | ErrorEvent
+    | DoneEvent,
     Field(discriminator="event"),
 ]
 

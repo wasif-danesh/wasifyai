@@ -223,3 +223,53 @@ def test_run_error_ends_the_run_with_its_own_clean_message(tmp_path):
     assert events[-1][0] == "error"
     assert (code["code"], code["retryable"]) == ("lyrics_failed", True)
     assert code["message"] == "We could not write usable lyrics. Try rephrasing."
+
+
+async def test_a_child_run_yields_the_events_of_another_graph_until_it_ends(tmp_path):
+    """The assistant's tools run another product as a child run (ADR-0057): same events, own run."""
+    products = tmp_path
+    d = products / "hello"
+    d.mkdir()
+    (d / "product.yaml").write_text(
+        "id: hello\ncapabilities:\n"
+        '  text.chat: { provider: fake, defaults: { reply: "Hello there friend" } }\n'
+    )
+    from wasifyai_api.runs import RunManager
+    from wasifyai_platform_sdk import (
+        InMemoryUsageRecorder,
+        ProviderDeps,
+        build_capabilities,
+        load_product_config,
+    )
+
+    caps = build_capabilities(
+        load_product_config(products, "hello"),
+        ProviderDeps(products_dir=products, usage=InMemoryUsageRecorder()),
+    )
+    runs = RunManager(
+        InMemoryEventLog(), InMemoryRunStore(), {"hello": build_hello(caps, InMemorySaver())}
+    )
+    events = [e async for e in runs.run_child("hello", "t1", "u1", {"text": "hi"})]
+    names = [e["event"] for e in events]
+    assert names[-1] == "done" and "token" in names
+    assert [e["seq"] for e in events] == sorted(e["seq"] for e in events)
+    # its own run: owned by the same user, and it is in the store like any other
+    await runs.aclose()
+
+
+async def test_a_child_run_that_takes_too_long_ends_with_a_plain_error(tmp_path):
+    import asyncio
+
+    from wasifyai_api.runs import RunManager
+
+    class Never:
+        async def astream(self, *a, **k):
+            await asyncio.sleep(30)
+            yield "custom", {}
+
+        async def aget_state(self, *a, **k): ...
+
+    runs = RunManager(InMemoryEventLog(), InMemoryRunStore(), {"slow": Never()})
+    events = [e async for e in runs.run_child("slow", "t1", "u1", {}, timeout_s=0.3)]
+    assert events[-1]["event"] == "error" and events[-1]["code"] == "timeout"
+    await runs.aclose()

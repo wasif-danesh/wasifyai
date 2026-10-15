@@ -1,0 +1,4 @@
+id: wasifyai-assistant
+capabilities:
+  # the model that answers; on the desktop the person's chosen local model serves every text binding
+  text.chat: { provider: litellm, model: default-chat }

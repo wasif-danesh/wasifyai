@@ -324,6 +324,98 @@
         "title": "Binding",
         "type": "object"
       },
+      "ConversationList": {
+        "properties": {
+          "conversations": {
+            "items": {
+              "$ref": "#/components/schemas/ConversationSummary"
+            },
+            "title": "Conversations",
+            "type": "array"
+          },
+          "next_before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Before"
+          }
+        },
+        "required": [
+          "conversations",
+          "next_before"
+        ],
+        "title": "ConversationList",
+        "type": "object"
+      },
+      "ConversationOut": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/MessageOut"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "created_at",
+          "updated_at",
+          "messages"
+        ],
+        "title": "ConversationOut",
+        "type": "object"
+      },
+      "ConversationSummary": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ConversationSummary",
+        "type": "object"
+      },
       "DoneEvent": {
         "properties": {
           "event": {
@@ -1214,6 +1306,43 @@
         "title": "MediaView",
         "type": "object"
       },
+      "MessageOut": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "parts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "seq",
+          "role",
+          "parts",
+          "created_at"
+        ],
+        "title": "MessageOut",
+        "type": "object"
+      },
       "ModelList": {
         "properties": {
           "models": {
@@ -1441,6 +1570,22 @@
         "title": "ProviderView",
         "type": "object"
       },
+      "Rename": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "Rename",
+        "type": "object"
+      },
       "ResumeRequest": {
         "properties": {
           "interrupt_id": {
@@ -1528,7 +1673,8 @@
               "video",
               "speech",
               "transcript",
-              "lipsync"
+              "lipsync",
+              "conversation"
             ],
             "title": "Kind",
             "type": "string"
@@ -1865,7 +2011,9 @@
             "interrupt": "#/components/schemas/InterruptEvent",
             "job_progress": "#/components/schemas/JobProgressEvent",
             "node": "#/components/schemas/NodeEvent",
-            "token": "#/components/schemas/TokenEvent"
+            "token": "#/components/schemas/TokenEvent",
+            "tool_call": "#/components/schemas/ToolCallEvent",
+            "tool_result": "#/components/schemas/ToolResultEvent"
           },
           "propertyName": "event"
         },
@@ -1878,6 +2026,12 @@
           },
           {
             "$ref": "#/components/schemas/InterruptEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ToolCallEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ToolResultEvent"
           },
           {
             "$ref": "#/components/schemas/JobProgressEvent"
@@ -1961,6 +2115,118 @@
           "text"
         ],
         "title": "TokenEvent",
+        "type": "object"
+      },
+      "ToolCallEvent": {
+        "description": "The assistant is calling a tool (ADR-0057): `id` ties it to its `tool_result`.",
+        "properties": {
+          "arguments": {
+            "additionalProperties": true,
+            "title": "Arguments",
+            "type": "object"
+          },
+          "event": {
+            "const": "tool_call",
+            "default": "tool_call",
+            "title": "Event",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "uuid",
+            "title": "Thread Id",
+            "type": "string"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "thread_id",
+          "seq",
+          "id",
+          "name"
+        ],
+        "title": "ToolCallEvent",
+        "type": "object"
+      },
+      "ToolResultEvent": {
+        "description": "A tool call finished. `output` is a small reference (an image id, search hits), never a\nfile: the window fetches the creation itself, with a fresh link.",
+        "properties": {
+          "event": {
+            "const": "tool_result",
+            "default": "tool_result",
+            "title": "Event",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "output": {
+            "additionalProperties": true,
+            "title": "Output",
+            "type": "object"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "refused",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "uuid",
+            "title": "Thread Id",
+            "type": "string"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "thread_id",
+          "seq",
+          "id",
+          "name",
+          "status"
+        ],
+        "title": "ToolResultEvent",
         "type": "object"
       },
       "TranscriptDetail": {
@@ -3146,7 +3412,8 @@
                     "video",
                     "speech",
                     "transcript",
-                    "lipsync"
+                    "lipsync",
+                    "conversation"
                   ],
                   "type": "string"
                 },
@@ -3238,6 +3505,192 @@
         "summary": "Me",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/products/wasifyai-assistant/conversations": {
+      "get": {
+        "operationId": "list_conversations_products_wasifyai_assistant_conversations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Conversations",
+        "tags": [
+          "wasifyai-assistant"
+        ]
+      }
+    },
+    "/products/wasifyai-assistant/conversations/{conversation_id}": {
+      "delete": {
+        "operationId": "delete_conversation_products_wasifyai_assistant_conversations__conversation_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Conversation",
+        "tags": [
+          "wasifyai-assistant"
+        ]
+      },
+      "get": {
+        "operationId": "get_conversation_products_wasifyai_assistant_conversations__conversation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Conversation",
+        "tags": [
+          "wasifyai-assistant"
+        ]
+      },
+      "patch": {
+        "operationId": "rename_conversation_products_wasifyai_assistant_conversations__conversation_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Rename"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename Conversation",
+        "tags": [
+          "wasifyai-assistant"
         ]
       }
     },

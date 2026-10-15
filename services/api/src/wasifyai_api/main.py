@@ -90,6 +90,7 @@ from wasifyai_api.safeguards import (
     PostgresSettingsStore,
     Safeguards,
 )
+from wasifyai_api.tool_host import ApiToolHost
 from wasifyai_api.uploads import router as uploads_router
 from wasifyai_api.uploads import sweep_forever
 from wasifyai_api.users import CachedUsers, PostgresUserStore, UserStore
@@ -252,6 +253,19 @@ def create_app(
             configs[pid].uploads.get(kind) if pid in configs else None
         )
 
+        async def describe_image(tenant: str, user: str, item_id: str) -> str:
+            # the words an image was made from: what the assistant tells the model it found
+            from wasifyai_image.images import image_store
+
+            found = await image_store(db).get(tenant, user, item_id)
+            return found.prompt if found else ""
+
+        tool_host = ApiToolHost(
+            lambda: app.state.runs,
+            lambda: app.state.creation_index,
+            {"image": describe_image},
+        )
+
         def build_graphs(saver: Any) -> dict[str, Any]:
             graphs: dict[str, Any] = {}
             for product_id in enabled(reg.products()):
@@ -262,6 +276,7 @@ def create_app(
                 if "text.embed" in config.capabilities:
                     caps.rag = RagService(db, lambda texts, c=caps: c.text.embed("embed", texts))
                 caps.indexer = ContextIndexer(app.state.creation_index)
+                caps.extras["tool_host"] = tool_host  # the assistant's tools (ADR-0057)
                 app.state.caps[product_id] = caps
                 graphs[product_id] = reg.build(product_id, caps, saver)
             return graphs

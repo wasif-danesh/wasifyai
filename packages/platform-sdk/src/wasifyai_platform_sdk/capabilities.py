@@ -26,7 +26,32 @@ class CapabilityNotConfigured(LookupError):
     pass
 
 
+@dataclass(frozen=True)
+class ToolCall:
+    """A tool the model asked for. `arguments` is the JSON text the model wrote."""
+
+    id: str
+    name: str
+    arguments: str
+
+
+@dataclass
+class ChatChunk:
+    """One piece of a chat answer: a text delta, or (once, at the end) the tool calls."""
+
+    text: str = ""
+    tool_calls: list[ToolCall] = field(default_factory=list)
+
+
 class TextProvider(Protocol):
+    def chat(
+        self,
+        capability: str,
+        binding: CapabilityBinding,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AsyncIterator[ChatChunk]: ...
+
     def stream(
         self,
         capability: str,
@@ -81,6 +106,15 @@ class TextCapabilities:
                 f"contains {sorted(extra)}; bind a model that supports it (inputs: in product.yaml)"
             )
         return provider.stream(f"text.{name}", binding, system, prompt, schema)
+
+    def chat(
+        self, name: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None
+    ) -> AsyncIterator[ChatChunk]:
+        """A conversation turn: OpenAI-style `messages` (system, user, assistant, tool) and,
+        optionally, tool definitions. Yields text as it streams and the model's tool calls at the
+        end. Text only: a conversation with pictures is a later step."""
+        binding, provider = self._get(name)
+        return provider.chat(f"text.{name}", binding, messages, tools)
 
     async def complete(
         self, name: str, system: str, prompt: Prompt, schema: dict[str, Any] | None = None

@@ -21,10 +21,11 @@ from pathlib import Path
 from typing import Any
 
 from openai import AsyncOpenAI
-from wasifyai_platform_sdk import RunError
+from wasifyai_platform_sdk import ChatChunk, RunError
 from wasifyai_platform_sdk.config import CapabilityBinding
 from wasifyai_platform_sdk.context import require_context
 from wasifyai_platform_sdk.parts import Prompt, counts, to_openai_content
+from wasifyai_platform_sdk.providers.litellm import stream_chat
 from wasifyai_platform_sdk.usage import (
     LLM_INPUT_TOKENS,
     LLM_OUTPUT_TOKENS,
@@ -243,6 +244,22 @@ class LocalTextProvider:
                     self._usage,
                     UsageEvent.for_context(ctx, LLM_OUTPUT_TOKENS, out_tokens, "tokens", **meta),
                 )
+
+    async def chat(
+        self,
+        capability: str,
+        binding: CapabilityBinding,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AsyncIterator[ChatChunk]:
+        """A conversation turn on the chosen model, with the tools a graph offers it."""
+        async with self._language.session() as route:
+            label = self._language.selected.name if self._language.selected else ""
+            client = AsyncOpenAI(base_url=route.base_url, api_key="none", max_retries=0)
+            async for chunk in stream_chat(
+                client, route.model, messages, tools, self._usage, capability, label
+            ):
+                yield chunk
 
     async def embed(
         self, capability: str, binding: CapabilityBinding, texts: list[str]

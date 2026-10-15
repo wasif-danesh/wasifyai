@@ -1,10 +1,12 @@
 """Deterministic providers for tests: no GPU, no network (provider: fake)."""
 
 import hashlib
+import json
 from collections.abc import AsyncIterator
 from typing import Any
 from uuid import uuid4
 
+from wasifyai_platform_sdk.capabilities import ChatChunk, ToolCall
 from wasifyai_platform_sdk.config import CapabilityBinding
 from wasifyai_platform_sdk.context import require_context
 from wasifyai_platform_sdk.jobs import JobHandle, JobRequest, JobSink
@@ -29,6 +31,7 @@ class FakeTextProvider:
         self._dims = dims
         self.prompts: list[Prompt] = []  # what callers sent, for assertions
         self._calls: dict[str, int] = {}
+        self.chats: list[dict[str, Any]] = []  # each chat call's messages and tools
 
     async def stream(
         self,
@@ -60,6 +63,40 @@ class FakeTextProvider:
         await record_safely(
             self._usage,
             UsageEvent.for_context(ctx, LLM_OUTPUT_TOKENS, len(words), "tokens", **meta),
+        )
+
+    async def chat(
+        self,
+        capability: str,
+        binding: CapabilityBinding,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AsyncIterator[ChatChunk]:
+        """A scripted conversation: `defaults.turns` is a list of turns, one per call (the last one
+        repeats). A turn is `{"text": "...", "tool_calls": [{"name": ..., "arguments": {...}}]}`."""
+        ctx = require_context()
+        self.chats.append({"messages": messages, "tools": tools})
+        turns: list[dict[str, Any]] = binding.defaults.get("turns") or [
+            {"text": str(binding.defaults.get("reply", DEFAULT_REPLY))}
+        ]
+        i = self._calls.get("chat", 0)
+        self._calls["chat"] = i + 1
+        turn = turns[min(i, len(turns) - 1)]
+        text = str(turn.get("text", ""))
+        for w in [w for w in text.split(" ") if w]:
+            yield ChatChunk(text=w + " ")
+        calls = turn.get("tool_calls") or []
+        if calls:
+            yield ChatChunk(
+                tool_calls=[
+                    ToolCall(f"call_{i}_{n}", c["name"], json.dumps(c.get("arguments", {})))
+                    for n, c in enumerate(calls)
+                ]
+            )
+        meta: dict[str, Any] = {"capability": capability, "alias": binding.model, "estimated": True}
+        await record_safely(
+            self._usage,
+            UsageEvent.for_context(ctx, LLM_OUTPUT_TOKENS, len(text.split()), "tokens", **meta),
         )
 
     def _next_reply(self, capability: str, binding: CapabilityBinding) -> str:

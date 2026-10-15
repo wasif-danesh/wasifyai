@@ -5,6 +5,7 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
+from wasifyai_platform_sdk.capabilities import ChatChunk, ToolCall
 from wasifyai_platform_sdk.config import CapabilityBinding
 from wasifyai_platform_sdk.context import require_context
 from wasifyai_platform_sdk.parts import Prompt, counts, to_openai_content
@@ -73,6 +74,24 @@ class LiteLLMTextProvider:
                     UsageEvent.for_context(ctx, LLM_OUTPUT_TOKENS, out_tokens, "tokens", **meta),
                 )
 
+    async def chat(
+        self,
+        capability: str,
+        binding: CapabilityBinding,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AsyncIterator[ChatChunk]:
+        async for chunk in stream_chat(
+            self._client,
+            binding.model or "",
+            messages,
+            tools,
+            self._usage,
+            capability,
+            binding.model,
+        ):
+            yield chunk
+
     async def embed(
         self, capability: str, binding: CapabilityBinding, texts: list[str]
     ) -> list[list[float]]:
@@ -94,3 +113,64 @@ class LiteLLMTextProvider:
                 ),
             )
         return [d.embedding for d in sorted(resp.data, key=lambda d: d.index)]
+
+
+async def stream_chat(
+    client: AsyncOpenAI,
+    model: str,
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None,
+    usage: UsageRecorder,
+    capability: str,
+    alias: str | None,
+) -> AsyncIterator[ChatChunk]:
+    """Stream a chat turn from an OpenAI-compatible server: text deltas as they come, then the tool
+    calls once they are complete (the API sends them in pieces). Records token usage."""
+    ctx = require_context()
+    in_tokens = out_tokens = 0
+    calls: dict[int, dict[str, str]] = {}
+    try:
+        extra: dict[str, Any] = {}
+        if tools:
+            extra["tools"] = tools
+        stream = await client.chat.completions.create(
+            model=model,
+            stream=True,
+            stream_options={"include_usage": True},
+            messages=messages,  # type: ignore[arg-type]
+            **extra,
+        )
+        async for chunk in stream:
+            if chunk.usage:
+                in_tokens, out_tokens = chunk.usage.prompt_tokens, chunk.usage.completion_tokens
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta.content:
+                yield ChatChunk(text=delta.content)
+            for tc in delta.tool_calls or []:
+                slot = calls.setdefault(tc.index, {"id": "", "name": "", "arguments": ""})
+                if tc.id:
+                    slot["id"] = tc.id
+                if tc.function and tc.function.name:
+                    slot["name"] += tc.function.name
+                if tc.function and tc.function.arguments:
+                    slot["arguments"] += tc.function.arguments
+        if calls:
+            yield ChatChunk(
+                tool_calls=[
+                    ToolCall(c["id"] or f"call_{i}", c["name"], c["arguments"] or "{}")
+                    for i, c in sorted(calls.items())
+                    if c["name"]
+                ]
+            )
+    finally:
+        meta: dict[str, Any] = {"capability": capability, "alias": alias}
+        if in_tokens:
+            await record_safely(
+                usage, UsageEvent.for_context(ctx, LLM_INPUT_TOKENS, in_tokens, "tokens", **meta)
+            )
+        if out_tokens:
+            await record_safely(
+                usage, UsageEvent.for_context(ctx, LLM_OUTPUT_TOKENS, out_tokens, "tokens", **meta)
+            )

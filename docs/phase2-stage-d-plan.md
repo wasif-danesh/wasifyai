@@ -1,7 +1,7 @@
 # Phase 2, stage D: the assistant on desktop (plan)
 
-Status: **Approved 2026-10-15** with all five recommended answers below (owner: "all recommended"). **D1, D2 and D2b done**
-(see the evidence sections at the end); D3 to D6 not started. Implements
+Status: **Approved 2026-10-15** with all five recommended answers below (owner: "all recommended"). **D1, D2, D2b, D3 and D4 done**
+(see the evidence sections at the end); D5 and D6 not started. Implements
 ADR-0057 (the assistant product) on the desktop with a managed local language model (ADR-0062: llama.cpp), the
 slot manager (ADR-0056) and the model discovery and fit checks that exist today (ADR-0063).
 
@@ -186,3 +186,41 @@ shadcn) is a short spike with the ADR-0057 criteria before D5.
   file that has its template).
 - **Not done:** the keychain token and sign-in for gated models; the memory and disk header; image and video
   models are view-only until stage C and the video stage have workflows to run them.
+
+## D3 and D4 evidence (2026-10-16): the assistant product, conversations and tools
+
+- **Product** `wasifyai-assistant` (entry point, `product.yaml`, bundled with the desktop engine, enabled on
+  the desktop by default): one graph, `check_request` then `run_turn` then `finalise`. `run_turn` is the
+  tool loop: it streams the model's answer as `token` events; if the model asks for tools it runs them
+  (`tool_call`, `tool_result`, the child run's `job_progress`), gives the results back and goes again, four
+  rounds at most (the last round offers no tools). A failing model ends the run with a plain, retryable error;
+  nothing chosen says to choose one in Models.
+- **Text capability** (`caps.text.chat`): OpenAI-style messages and tool definitions in, text deltas and the
+  completed tool calls out. Implemented by the OpenAI-compatible provider (tool calls arrive in pieces and are
+  assembled), by the desktop's `LocalTextProvider` (on the chosen model, holding the `chat` slot) and by the
+  fake provider (scripted turns) for tests.
+- **Conversations** (`conversations`, `messages`): text ids and ISO times so one implementation serves
+  Postgres (migration 0018) and the desktop SQLite file; every query is scoped by tenant, product and user.
+  Message parts are JSON (`text`, `tool_call`, `tool_result`), so a reload shows what the stream showed. Read
+  API under `/products/wasifyai-assistant/conversations` (list, one, rename, delete).
+- **Searchable** (ADR-0041): a conversation is a creation of kind `conversation`, indexed by its title and what
+  the person wrote, with a backfill source and removal on delete.
+- **Tools** (an explicit allow-list in code, ADR-0057): `generate_image` runs the image product's own graph
+  as a child run (`RunManager.run_child`), so guardrails, quota, saving, indexing and the recipe are the image
+  product's; `search_creations` searches the person's own library. Results are references (an image id, hits),
+  never files. The platform gives the product a `ToolHost`; the product never touches the run manager.
+- **Contract:** `tool_call` and `tool_result` events added (`docs/contracts/sse-events.md`, generated types).
+- **Enhance guard** (D2 finding 2): a reasoning block is stripped, and an answer that reads like the model
+  thinking aloud ("We need to rewrite...") is refused with a plain message instead of being pasted into the
+  prompt box.
+- **Tests:** 13 graph tests (streaming, history, tool loop, refusal, failure, search, unknown tool, round
+  limit, ownership, trimming), 6 store/route/search-source tests on memory and SQLite, 4 end-to-end tests on
+  the desktop profile against a fake llama-server that streams a tool call in pieces, 2 child-run tests, the
+  guard's tests.
+- **On the owner's Mac** (Qwen3 4B Q4_K_M from the hub, llama.cpp b11655 Metal, the stub image engine):
+  a plain question answered in 2.4 s; "draw a red teapot" produced a correct `generate_image` call and the
+  picture in 5.5 s; "which teapot picture did I make?" produced a correct `search_creations` call, and the
+  answer named the pictures, in 5.4 s.
+- **Not done:** the chat UI and the home screen (D5); Recents in the side menu (D5); the conversation card in
+  My creations on the web; moderation of assistant text (off locally, as ADR-0047 says; a model check for
+  `text.chat` joins the hosted product's checks).

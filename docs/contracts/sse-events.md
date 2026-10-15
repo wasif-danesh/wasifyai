@@ -41,6 +41,8 @@ Every `data` object includes:
 | `node` | A graph node starts or finishes | `node`, `status` (`started` \| `completed`), `label` (human-readable) |
 | `token` | LLM output streams | `node`, `text` (delta) |
 | `interrupt` | Graph pauses for the user | `interrupt_id`, `kind` (e.g. `approve_lyrics`), `payload` (editable data) |
+| `tool_call` | The assistant calls a tool (ADR-0057) | `id`, `name`, `arguments` (object) |
+| `tool_result` | A tool call finished | `id` (same as its `tool_call`), `name`, `status` (`ok` \| `refused` \| `error`), `output` (a small reference: an image id, search hits; never a file) |
 | `job_progress` | Media job state changes | `job_id`, `capability`, `status` (`queued` \| `running` \| `completed` \| `failed`), `queue_position?`, `progress?` (0–1), `preview_url?` |
 | `error` | Recoverable or fatal error | `code`, `message` (user-safe), `retryable` (bool), `job_id?` |
 | `done` | Run finished | `outputs` (product-specific, e.g. `{title, lyrics, audio_url, cover_url}`) |

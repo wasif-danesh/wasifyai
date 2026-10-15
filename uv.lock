@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 members = [
     "wasifyai",
     "wasifyai-api",
+    "wasifyai-assistant",
     "wasifyai-contracts",
     "wasifyai-image",
     "wasifyai-lipsync",
@@ -2159,6 +2160,27 @@ requires-dist = [
     { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
 ]
 provides-extras = ["desktop"]
+
+[[package]]
+name = "wasifyai-assistant"
+version = "0.0.0"
+source = { editable = "products/wasifyai-assistant" }
+dependencies = [
+    { name = "langgraph" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "wasifyai-platform-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "langgraph", specifier = ">=0.6" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+    { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
+]
 
 [[package]]
 name = "wasifyai-contracts"

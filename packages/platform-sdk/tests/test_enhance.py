@@ -21,7 +21,7 @@ from wasifyai_platform_sdk import (
     memory_storage,
     new_upload,
 )
-from wasifyai_platform_sdk.enhance import EnhanceRefused
+from wasifyai_platform_sdk.enhance import EnhanceRefused, looks_like_working, strip_thinking
 
 
 def who(x_user: str = Header("u1")) -> Identity:
@@ -203,3 +203,40 @@ async def test_a_picture_must_be_the_callers_own_and_still_there(rig):
     assert rig.post({**body, "upload_id": mine.id}).status_code == 200
     await rig.uploads.consume(mine)
     assert rig.post({**body, "upload_id": mine.id}).status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("<think>The user wants a fox.</think>A red fox.", "A red fox."),
+        ("Some thinking.\n</think>\nA red fox.", "A red fox."),
+        ("A red fox.", "A red fox."),
+    ],
+)
+def test_a_reasoning_block_is_taken_out(raw, expected):
+    assert strip_thinking(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "We need to rewrite the short description into a better prompt.",
+        'The user says: "a fox in snow". We need a prompt.',
+        "Okay, the user wants a fox.",
+        "Let's craft a prompt about a fox.",
+        "Hmm, a fox in the snow is simple.",
+    ],
+)
+def test_thinking_aloud_is_not_a_prompt(raw):
+    assert looks_like_working(raw)
+
+
+def test_a_real_prompt_is_not_mistaken_for_working():
+    assert not looks_like_working("A red fox in fresh snow at dawn, soft light, 35mm photograph.")
+    assert not looks_like_working("Weather-beaten lighthouse; we see the waves below.")
+
+
+def test_a_model_that_thinks_aloud_gets_a_plain_error_not_a_pasted_prompt(tmp_path):
+    rig = Rig(tmp_path, enhance=["We need to rewrite the short description into a prompt."])
+    r = rig.post({"kind": "text_to_x", "prompt": "fox"})
+    assert r.status_code == 503 and "working" in r.json()["detail"]

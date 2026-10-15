@@ -1,8 +1,10 @@
 from wasifyai_platform_sdk.capabilities import (
     Capabilities,
     CapabilityNotConfigured,
+    ChatChunk,
     MediaCapabilities,
     TextCapabilities,
+    ToolCall,
 )
 from wasifyai_platform_sdk.config import (
     CapabilityBinding,
@@ -81,6 +83,7 @@ from wasifyai_platform_sdk.storage import (
     object_key,
     s3_storage,
 )
+from wasifyai_platform_sdk.tools import ToolHost
 from wasifyai_platform_sdk.uploads import (
     UPLOAD_CREATED,
     InMemoryUploadLimiter,
@@ -186,6 +189,9 @@ __all__ = [
     "ScopedStorage",
     "Storage",
     "TextCapabilities",
+    "ToolCall",
+    "ToolHost",
+    "ChatChunk",
     "UnsupportedInput",
     "UsageEvent",
     "UsageRecorder",

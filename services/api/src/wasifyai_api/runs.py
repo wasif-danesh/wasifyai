@@ -7,12 +7,22 @@ Any replica can therefore resume a run, and any replica can serve its SSE stream
 
 import asyncio
 import logging
-from collections.abc import Coroutine
+from collections.abc import AsyncIterator, Coroutine
 from typing import Any
 from uuid import UUID, uuid4
 
 from langgraph.types import Command
-from wasifyai_contracts import DoneEvent, ErrorEvent, InterruptEvent, NodeEvent, TokenEvent
+from wasifyai_contracts import (
+    TERMINAL_EVENTS,
+    DoneEvent,
+    ErrorEvent,
+    InterruptEvent,
+    JobProgressEvent,
+    NodeEvent,
+    TokenEvent,
+    ToolCallEvent,
+    ToolResultEvent,
+)
 from wasifyai_platform_sdk import (
     EventLog,
     JobFailed,
@@ -63,6 +73,33 @@ class RunManager:
         await self.store.create(rec)
         self._spawn(self._execute(rec, graph_input))
         return rec
+
+    async def run_child(
+        self,
+        product_id: str,
+        tenant_id: str,
+        user_id: str,
+        graph_input: dict[str, Any],
+        timeout_s: float = 900.0,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Run another product's graph for this user as its own run, and yield its events until it
+        ends. It runs in its own task, so the caller's run context is untouched. If it takes longer
+        than `timeout_s` an `error` event ends the stream (the child run is left to finish)."""
+        rec = await self.start(product_id, tenant_id, user_id, None, graph_input)
+        after = 0
+        deadline = asyncio.get_running_loop().time() + timeout_s
+        while True:
+            if asyncio.get_running_loop().time() > deadline:
+                yield {
+                    "event": "error", "code": "timeout", "retryable": True,
+                    "message": "That took too long.",
+                }  # fmt: skip
+                return
+            for ev in await self.log.read(tenant_id, rec.run_id, after, 1000):
+                after = max(after, int(ev.get("seq", after)))
+                yield ev
+                if ev.get("event") in TERMINAL_EVENTS:
+                    return
 
     def resume(self, rec: RunRecord, value: Any) -> None:
         """Continue a run that was waiting for a user's answer."""
@@ -167,6 +204,21 @@ class RunManager:
     async def _emit_custom(self, rec: RunRecord, chunk: dict[str, Any]) -> None:
         if chunk.get("type") == "token":
             await self._emit(rec, TokenEvent, node=chunk["node"], text=chunk["text"])
+        elif chunk.get("type") == "tool_call":
+            await self._emit(
+                rec, ToolCallEvent, id=chunk["id"], name=chunk["name"], arguments=chunk["arguments"]
+            )
+        elif chunk.get("type") == "tool_result":
+            await self._emit(
+                rec,
+                ToolResultEvent,
+                id=chunk["id"],
+                name=chunk["name"],
+                status=chunk["status"],
+                output=chunk.get("output", {}),
+            )
+        elif chunk.get("type") == "job_progress":
+            await self._emit(rec, JobProgressEvent, **chunk["data"])
         elif chunk.get("type") == "node":
             await self._emit(
                 rec,

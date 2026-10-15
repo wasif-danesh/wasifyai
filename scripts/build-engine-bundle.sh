@@ -51,6 +51,7 @@ rm -f "$COMFY_REQ"
 for p in $PRODUCTS; do
   mkdir -p "$OUT/products/$p"
   cp "products/$p/product.yaml" "$OUT/products/$p/"
+  [ -f "products/$p/models.yaml" ] && cp "products/$p/models.yaml" "$OUT/products/$p/"
   [ -d "products/$p/workflows" ] && cp -R "products/$p/workflows" "$OUT/products/$p/workflows"
 done
 

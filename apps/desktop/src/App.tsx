@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { createRunClient } from "@wasifyai/client";
 import { Button, CreateImage, JobMeter, Notice, PageHero, Spinner, page } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
+import { ModelsPanel } from "./ModelsPanel";
+import { client, transport } from "./api";
 import {
   COMFYUI,
   type ComponentStatus,
@@ -11,7 +12,6 @@ import {
   componentStatus,
   engineRepair,
   engineRestart,
-  engineSession,
   engineStatus,
   humanBytes,
   installFraction,
@@ -21,11 +21,6 @@ import {
   updateInstall,
 } from "./engine";
 import { runComponentSmoke, runSmoke, smokeComponent, smokeEnabled } from "./smoke";
-import { createEngineTransport } from "./transport";
-
-// One transport and one client for the window, so the screens' hooks see stable functions.
-const transport = createEngineTransport(engineSession);
-const client = createRunClient(transport);
 
 function EngineState({ status }: { status: Exclude<EngineStatus, { state: "ready" }> }) {
   if (status.state === "installing") {
@@ -257,6 +252,7 @@ export function App() {
         <>
           <UpdateBanner />
           <ImageEngineCard />
+          <ModelsPanel />
           <CreateImage client={client} readyNote="It's saved on this computer." />
         </>
       ) : (

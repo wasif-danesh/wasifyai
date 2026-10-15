@@ -174,7 +174,27 @@ exits with the engine.
 | `DESKTOP_IDLE_UNLOAD_S` | idle time before the model is unloaded |
 | `DESKTOP_COMFYUI_ARGS` | extra ComfyUI arguments, for tuning |
 
-Models are not downloaded by the app yet: that is A3 (`docs/phase2-stage-a-plan.md`).
+### Models (stage A3)
+
+Each product lists the models it can use in `products/<id>/models.yaml` (id, licence, source, files with
+folder, URL, size and SHA-256; URLs name a commit, not a branch). The engine reads them for the enabled products
+(`wasifyai_api/desktop_models.py`) and serves, under `/desktop` (token-protected like every route):
+
+| Route | What |
+|---|---|
+| `GET /desktop/models` | the catalogue with what is on this computer and where, the folders, memory, free disk, the current download |
+| `POST /desktop/models/{id}/download` | start a download; the body must repeat the exact missing files and total size the window showed (`409` otherwise): **nothing downloads without that confirmation** |
+| `GET /desktop/downloads/{id}`, `POST .../cancel` | progress; cancel (the partial file is kept) |
+| `DELETE /desktop/models/{id}` | remove files from the app's own folder only |
+| `PUT /desktop/models/folders` | the app's models folder and the read-only extra folders; remembered, and a running ComfyUI restarts on the next job |
+| `GET /desktop/engine`, `POST /desktop/engine/unload` | image engine and model state; unload now |
+
+Downloads: one at a time, resumable (`Range`), written as `<name>.part`, size and SHA-256 checked before the
+rename, free disk checked first (needs the files plus 1 GB). Files in the extra folders count as present when
+the size matches and are never written or deleted. The window's Models panel shows the list, a confirmation
+with files, sizes, source, licence and free space before any download, progress and cancel, the loaded model
+with Unload, and the folder settings. A memory warning is shown when the computer has less than the model's
+`approx_ram_gb` (24 for klein 4B bf16).
 
 ## Updates of the app
 

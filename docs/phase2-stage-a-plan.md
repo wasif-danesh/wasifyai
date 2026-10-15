@@ -1,6 +1,6 @@
 # Phase 2, stage A: real images in the desktop app (plan)
 
-Status: **Approved 2026-10-15** with the five recommended answers below. **A1 and A2 done** (see
+Status: **Approved 2026-10-15** with the five recommended answers below. **A1, A2 and A3 done** (see
 `docs/spikes/desktop-phase1.md`, "stage A1" and "stage A2"). Implements ADR-0059 (ComfyUI sidecar), ADR-0056
 decisions 5 and 6 (slot manager, provisioning) and the first slice of ADR-0061 phase 2. Evidence base:
 `docs/spikes/unsloth-phase0.md` (ComfyUI 9 s warm, 14 s cold for klein 4B on the M5 Pro, 17.6 GB process peak)

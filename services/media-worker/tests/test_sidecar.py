@@ -249,3 +249,23 @@ async def test_auto_uses_the_placeholder_until_the_engine_is_installed(comfy):
     assert auto.backend == "comfyui-local"
     await auto.run(graph_job(), on_progress)
     assert len(fake.submitted) == 1
+
+
+@unix_only
+async def test_changing_the_model_folders_restarts_a_running_comfyui(tmp_path):
+    install_fake(tmp_path)
+    s = sidecar(tmp_path)
+    try:
+        first = await s.ensure_running()
+        pid1 = json.loads((tmp_path / "comfyui-data" / "started.json").read_text())["pid"]
+        assert await s.ensure_running() == first  # same folders: reused
+
+        s.set_model_dirs(tmp_path / "other-models", (tmp_path / "shared",))
+        second = await s.ensure_running()
+        pid2 = json.loads((tmp_path / "comfyui-data" / "started.json").read_text())["pid"]
+        assert pid2 != pid1 and second.startswith("http://127.0.0.1:")
+        paths = yaml.safe_load((tmp_path / "comfyui-data" / "extra_model_paths.yaml").read_text())
+        assert paths["wasifyai_0"]["base_path"] == str(tmp_path / "other-models")
+        assert paths["wasifyai_1"]["base_path"] == str(tmp_path / "shared")
+    finally:
+        await s.stop()

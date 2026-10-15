@@ -240,3 +240,20 @@ the 3.85 GB fp4 encoder, is the obvious next speed-up and is not done.
 
 Findings: ComfyUI stops at start-up if its base directory has no `custom_nodes` folder (the sidecar creates the
 folders); an identical graph is answered from ComfyUI's cache in 0 s, which a benchmark has to avoid.
+
+## Phase 2, stage A3: models (2026-10-15)
+
+Catalogue, folders, download manager and the window's Models panel. **No model was downloaded** in this
+stage's checks; the download logic is tested against a loopback server.
+
+| Check | Result |
+|---|---|
+| Catalogue checksums against the published ones (Hugging Face `Comfy-Org/flux2-klein-4B`, commit `5f52667`) | all three files **match** the copies in `~/ComfyUI-Shared/models` (SHA-256 computed read-only): 7,751,105,712 + 8,044,982,048 + 336,211,292 bytes = 16.13 GB |
+| Engine with the owner's folder as a read-only extra | klein reported `ready`, three files present, none removable; a download request answers 409 "already on this computer" |
+| Engine with an empty folder | `missing`, 16,132,299,052 bytes to get; a download with a wrong confirmation answers 409 and nothing is fetched |
+| Computer as the engine sees it | 69 GB memory (decimal), 148 GB free |
+| Download tests (loopback server) | full download; resume from a partial file (`Range: bytes=120000-`); a server that ignores `Range`; a wrong checksum is deleted and reported; not enough disk is refused before any request; cancel keeps the partial file; one at a time |
+
+The 16.13 GB total needs about 24 GB of memory (bf16 transformer 7.75 GB + text encoder 8.04 GB, measured peak
+17.6 GB in Phase 0); the panel warns below that. The 3.85 GB fp4 text encoder is in the Hugging Face repository
+and is not offered yet.

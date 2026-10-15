@@ -18,6 +18,7 @@ import socket
 import sys
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -34,6 +35,7 @@ from wasifyai_platform_sdk.sqlite import (
 
 from wasifyai_api.config import Settings
 from wasifyai_api.creation_index import IndexStore
+from wasifyai_api.desktop_models import ModelsService, load_catalogue
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
 from wasifyai_api.runs import RunManager
 from wasifyai_api.safeguards import SettingsStore
@@ -63,10 +65,13 @@ class DesktopBackends:
     _worker_task: asyncio.Task | None = None
     _consumer: LocalCompletionConsumer | None = None
     _worker_cleanup: Any = None
+    models: ModelsService | None = None
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
     async def start(self, runs: RunManager) -> None:
         """Start the in-process worker and the consumer that resumes graphs from its results."""
+        if self.models is not None:
+            await self.models.load()  # folders a person chose earlier
         worker, self._worker_cleanup, self.slot = _build_worker(self)
         self._worker_task = asyncio.create_task(worker.run_forever())
         self._consumer = LocalCompletionConsumer(self.queue, runs, self.run_store)
@@ -98,7 +103,15 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     local_files = LocalFileStorage(
         root / FILES_DIR, settings.desktop_public_url, settings.api_auth_secret
     )
+    products = Path(settings.products_dir)
+    models = ModelsService(
+        load_catalogue(products, sorted(settings.enabled_product_set)),
+        settings.models_dir,
+        settings.extra_model_dirs,
+        SqliteSettingsStore(engine),
+    )
     return DesktopBackends(
+        models=models,
         engine=engine,
         event_log=log_,
         run_store=SqliteRunStore(engine),
@@ -132,7 +145,8 @@ def _build_worker(d: DesktopBackends):
     from wasifyai_platform_sdk import SlotManager
 
     s = d.settings
-    mode = s.desktop_image_engine  # stub | comfyui | auto
+    models = d.models
+    mode = s.desktop_image_engine  # stub | comfyui | auto | external
     ws = WorkerSettings(
         comfyui_mode="stub" if mode == "stub" else "real",
         comfyui_base_url=s.comfyui_base_url,
@@ -162,6 +176,8 @@ def _build_worker(d: DesktopBackends):
 
     # one big model in memory at a time; the image engine unloads through ComfyUI's /free
     slot = SlotManager({"image": sidecar.unload_models}, idle_unload_s=s.desktop_idle_unload_s)
+    if models is not None:
+        models.sidecar, models.slot = sidecar, slot
     processor = JobProcessor(
         ws,
         d.event_log,

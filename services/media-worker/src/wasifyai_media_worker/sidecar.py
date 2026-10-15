@@ -18,7 +18,7 @@ import os
 import socket
 import sys
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -85,6 +85,7 @@ class ComfySidecar:
         self._url: str | None = None
         self._start_lock = asyncio.Lock()
         self._http = httpx.AsyncClient(timeout=3)
+        self._started_with: tuple[Path, tuple[Path, ...]] | None = None
 
     # ---- what is installed ---------------------------------------------------------------
 
@@ -115,6 +116,10 @@ class ComfySidecar:
         return bool(src and (src / "main.py").is_file() and self.venv_python.is_file())
 
     # ---- models --------------------------------------------------------------------------
+
+    def set_model_dirs(self, models_dir: Path, extra_dirs: tuple[Path, ...]) -> None:
+        """The person chose other folders. A running ComfyUI is restarted by the next job."""
+        self._cfg = replace(self._cfg, models_dir=models_dir, extra_model_dirs=tuple(extra_dirs))
 
     def model_roots(self) -> list[Path]:
         return [self._cfg.models_dir, *self._cfg.extra_model_dirs]
@@ -153,7 +158,13 @@ class ComfySidecar:
     async def ensure_running(self) -> str:
         """The base URL of a running ComfyUI, starting it if needed."""
         async with self._start_lock:
-            if self.running and self._url and await self._healthy(self._url):
+            current = (self._cfg.models_dir, self._cfg.extra_model_dirs)
+            if (
+                self.running
+                and self._url
+                and self._started_with == current
+                and await self._healthy(self._url)
+            ):
                 return self._url
             await self._terminate()
             if not self.installed:
@@ -200,6 +211,7 @@ class ComfySidecar:
             )  # fmt: skip
         finally:
             out.close()
+        self._started_with = (self._cfg.models_dir, self._cfg.extra_model_dirs)
         log.info("started ComfyUI (pid %s) on %s", self._proc.pid, url)
         deadline = asyncio.get_running_loop().time() + self._cfg.startup_timeout_s
         while asyncio.get_running_loop().time() < deadline:

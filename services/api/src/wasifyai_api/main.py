@@ -63,6 +63,7 @@ from wasifyai_api.creation_index import (
 )
 from wasifyai_api.creations import router as creations_router
 from wasifyai_api.desktop import files_router, open_desktop
+from wasifyai_api.desktop_models import router as desktop_models_router
 from wasifyai_api.graphs import default_registry
 from wasifyai_api.identity import get_identity
 from wasifyai_api.jobs_consumer import JobCompletionConsumer
@@ -330,6 +331,7 @@ def create_app(
         app.state.storage = store
         if desktop:
             app.state.local_files = desktop.local_files
+            app.state.desktop_models = desktop.models
         app.state.heartbeat_s = heartbeat_s
         consumer: JobCompletionConsumer | None = None
         try:
@@ -418,6 +420,7 @@ def create_app(
     app.include_router(creations_router)
     if desktop_profile:
         app.include_router(files_router)
+        app.include_router(desktop_models_router)
 
     # Product-provided routes (ADR-0023): mounted now so the OpenAPI schema (and the TypeScript
     # types generated from it) include them; the database and storage they use are read from

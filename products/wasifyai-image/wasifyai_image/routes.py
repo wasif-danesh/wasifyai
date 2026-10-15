@@ -3,11 +3,13 @@
 Every query is scoped by tenant, product and user, and every link is signed fresh, so an image can
 be opened any time (the links themselves expire after an hour)."""
 
+import asyncio
 import re
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from wasifyai_platform_sdk import Identity, RouteDeps, build_enhance_router, parse_ids
 
 from wasifyai_image import prompts
@@ -32,6 +34,18 @@ class ImageSummary(BaseModel):
     created_at: datetime
     image_url: str
     thumb_url: str
+    recipe: dict | None = None  # null on images made before recipes existed
+    favourite: bool = False
+
+
+class ImageUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    favourite: bool
+
+
+class Exported(BaseModel):
+    name: str
+    path: str
 
 
 class ImagePage(BaseModel):
@@ -43,6 +57,20 @@ def file_name(prompt: str, ext: str) -> str:
     """A safe, readable file name from the prompt: letters, digits and hyphens only."""
     slug = re.sub(r"[^a-z0-9]+", "-", prompt.lower()).strip("-")[:48].strip("-") or "image"
     return f"{slug}.{ext}" if ext else slug
+
+
+def save_copy(folder: Path, stem: str, ext: str, data: bytes) -> Path:
+    """Write `data` as `stem.ext` in `folder`, as `stem-2.ext` and so on when that name is taken."""
+    folder.mkdir(parents=True, exist_ok=True)
+    path, n = folder / f"{stem}.{ext}", 1
+    while True:
+        try:
+            with path.open("xb") as f:  # exclusive: never replaces a file
+                f.write(data)
+            return path
+        except FileExistsError:
+            n += 1
+            path = folder / f"{stem}-{n}.{ext}"
 
 
 def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
@@ -61,6 +89,7 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
             height=image.height, created_at=image.created_at,
             image_url=await deps.storage.url(image.image_key),
             thumb_url=await deps.storage.url(image.thumb_key),
+            recipe=image.recipe, favourite=image.favourite,
         )  # fmt: skip
 
     @router.get("/images", response_model=ImagePage)
@@ -68,6 +97,7 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
         limit: int = Query(20, ge=1, le=50),
         before: datetime | None = None,
         ids: str | None = Query(None, max_length=2000),
+        favourites: bool = False,
         identity: Identity = Depends(deps.identity),
     ) -> ImagePage:
         wanted = parse_ids(ids)  # "these images, in this order": the cards for search results
@@ -76,7 +106,9 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
             with deps.acting_as(identity, PRODUCT_ID):
                 got = [await summary(i) for i in found if i is not None]
             return ImagePage(images=got, next_before=None)
-        rows = await images().list(identity.tenant_id, identity.user_id, limit + 1, before)
+        rows = await images().list(
+            identity.tenant_id, identity.user_id, limit + 1, before, favourites_only=favourites
+        )
         page, more = rows[:limit], len(rows) > limit
         with deps.acting_as(identity, PRODUCT_ID):
             items = [await summary(i) for i in page]
@@ -89,6 +121,41 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
             raise HTTPException(404, "image not found")
         with deps.acting_as(identity, PRODUCT_ID):
             return await summary(image)
+
+    @router.patch("/images/{image_id}", response_model=ImageSummary)
+    async def update_image(
+        image_id: str, body: ImageUpdate, identity: Identity = Depends(deps.identity)
+    ) -> ImageSummary:
+        """Mark or unmark a favourite."""
+        found = await images().set_favourite(
+            identity.tenant_id, identity.user_id, image_id, body.favourite
+        )
+        image = await images().get(identity.tenant_id, identity.user_id, image_id)
+        if not found or image is None:
+            raise HTTPException(404, "image not found")
+        with deps.acting_as(identity, PRODUCT_ID):
+            return await summary(image)
+
+    @router.post("/images/{image_id}/export", response_model=Exported)
+    async def export_image(image_id: str, identity: Identity = Depends(deps.identity)) -> Exported:
+        """Copy the image into the person's export folder (the desktop app sets one; a webview
+        cannot save a file by itself). Never overwrites: a second copy gets a number."""
+        folder = getattr(deps.state, "export_dir", None)
+        if folder is None or deps.storage is None:
+            raise HTTPException(404, "saving to a folder is not available here")
+        image = await images().get(identity.tenant_id, identity.user_id, image_id)
+        if image is None:
+            raise HTTPException(404, "image not found")
+        try:
+            with deps.acting_as(identity, PRODUCT_ID):
+                data = await deps.storage.get(image.image_key)
+        except FileNotFoundError:
+            raise HTTPException(404, "image not found") from None
+        ext = image.image_key.rsplit(".", 1)[-1].lower()
+        path = await asyncio.to_thread(
+            save_copy, Path(folder), file_name(image.prompt, ""), ext, data
+        )
+        return Exported(name=path.name, path=str(path))
 
     @router.get("/images/{image_id}/download")
     async def download(image_id: str, identity: Identity = Depends(deps.identity)) -> Response:

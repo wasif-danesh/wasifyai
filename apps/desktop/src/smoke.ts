@@ -59,9 +59,36 @@ export async function runSmoke(): Promise<void> {
     await until("the ready message", () =>
       document.body.textContent?.includes("Your image is ready"),
     );
+
+    // the recipe: favourite it, read its seed, then make it again and expect the same recipe
+    const buttonNamed = (name: string | RegExp) => () =>
+      [...document.querySelectorAll("button")].find((b) =>
+        typeof name === "string" ? b.textContent?.trim() === name : name.test(b.textContent ?? ""),
+      );
+    const readSeed = async () => {
+      if (!document.querySelector("dl")) (await until("Recipe", buttonNamed("Recipe"))).click();
+      const dd = await until("the seed", () => document.querySelector("dl dd.font-mono"));
+      return Number(dd.textContent);
+    };
+    (await until("Add to favourites", buttonNamed("Add to favourites"))).click();
+    await until("the favourite mark", buttonNamed("Favourite"));
+    const seed = await readSeed();
+    if (!Number.isInteger(seed)) throw new Error(`the recipe has no seed: ${seed}`);
+    (await until("Make it again", buttonNamed(/Make it again/))).click();
+    const again = await until("the second picture", () => {
+      const img = document.querySelector<HTMLImageElement>(`figure img[alt="${PROMPT}"]`);
+      return img?.complete && img.naturalWidth > 0 && img.src !== picture.src ? img : null;
+    });
+    await until("the second recipe", buttonNamed(/Make it again/));
+    const seedAgain = await readSeed();
+    if (seedAgain !== seed) throw new Error(`the seed changed: ${seed} then ${seedAgain}`);
+    const size = `${again.naturalWidth}x${again.naturalHeight}`;
+    if (size !== `${picture.naturalWidth}x${picture.naturalHeight}`) {
+      throw new Error(`the second picture has another size: ${size}`);
+    }
     await report(
       true,
-      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}`,
+      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}`,
     );
   } catch (e) {
     await report(false, e instanceof Error ? e.message : String(e)).catch(() => {});

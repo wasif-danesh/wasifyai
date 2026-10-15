@@ -61,6 +61,7 @@ class ImageState(TypedDict, total=False):
     prompt: str
     size: str
     image_key: str
+    seed: int  # optional in the request; always set once the request is checked
     # job and result
     job_id: str
     result_key: str
@@ -73,6 +74,25 @@ class ImageState(TypedDict, total=False):
     # outcome
     status: Status
     refusal: dict[str, str]
+
+
+MAX_SEED = 2**31 - 1
+RECIPE_VERSION = 1
+
+
+def recipe_of(state: ImageState, width: int, height: int) -> dict[str, Any]:
+    """What made the image, in the shape the window shows and "run again" reads. The model is not
+    named: the graph asks for a capability, not a model (see docs/phase2-stage-b-plan.md)."""
+    text_mode = state["mode"] == "text"
+    return {
+        "v": RECIPE_VERSION,
+        "mode": state["mode"],
+        "prompt": state["prompt"],
+        "size": state["size"] if text_mode else None,
+        "width": width,
+        "height": height,
+        "seed": state["seed"],
+    }
 
 
 def _clean(value: object, limit: int) -> str:
@@ -154,11 +174,17 @@ def build_image_graph(
             return refuse_with("invalid_request", "Please choose one of the image sizes.")
         if mode == "image" and (not key or await find_upload(key) is None):
             return refuse_with("invalid_request", "Please upload your picture again.")
+        seed = state.get("seed")
+        if seed is None:  # a new picture each time, unless the person asked for this one again
+            seed = secrets.randbelow(MAX_SEED + 1)
+        elif isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= MAX_SEED:
+            return refuse_with("invalid_request", "That seed is not valid.")
         out: ImageState = {
             "mode": mode,
             "prompt": prompt,
             "size": str(state.get("size") or DEFAULT_SIZE),
             "image_key": key if mode == "image" else "",
+            "seed": seed,
             "status": "working",
         }
 
@@ -205,7 +231,7 @@ def build_image_graph(
                 "label": "Changing your picture" if edit else "Painting your image",
             }
         )
-        seed = secrets.randbelow(2**31)
+        seed = state["seed"]
         if edit:
             handle = await caps.image.edit(
                 prompt=state["prompt"], image_key=state["image_key"], seed=seed
@@ -254,6 +280,7 @@ def build_image_graph(
                 height=height,
                 image_key=image_key,
                 thumb_key=thumb_key,
+                recipe=recipe_of(state, width, height),
             )
         )
         await discard_upload(state.get("image_key"))  # the user's original is not kept

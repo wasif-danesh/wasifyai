@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -332,6 +333,10 @@ def create_app(
         if desktop:
             app.state.local_files = desktop.local_files
             app.state.desktop_models = desktop.models
+            # "Save" in the window copies a picture here (the product's export route)
+            app.state.export_dir = Path(
+                os.environ.get("WASIFYAI_EXPORT_DIR") or Path.home() / "Downloads"
+            )
         app.state.heartbeat_s = heartbeat_s
         consumer: JobCompletionConsumer | None = None
         try:
@@ -393,7 +398,7 @@ def create_app(
             allow_origins=[
                 o.strip() for o in settings.desktop_allowed_origins.split(",") if o.strip()
             ],
-            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             allow_headers=["authorization", "content-type", "last-event-id", "x-request-id"],
             expose_headers=["x-request-id"],
         )

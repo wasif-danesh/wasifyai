@@ -312,7 +312,11 @@ export interface paths {
         delete: operations["delete_image_products_wasifyai_image_images__image_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Image
+         * @description Mark or unmark a favourite.
+         */
+        patch: operations["update_image_products_wasifyai_image_images__image_id__patch"];
         trace?: never;
     };
     "/products/wasifyai-image/images/{image_id}/download": {
@@ -330,6 +334,27 @@ export interface paths {
         get: operations["download_products_wasifyai_image_images__image_id__download_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-image/images/{image_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Image
+         * @description Copy the image into the person's export folder (the desktop app sets one; a webview
+         *     cannot save a file by itself). Never overwrites: a second copy gets a number.
+         */
+        post: operations["export_image_products_wasifyai_image_images__image_id__export_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1038,6 +1063,13 @@ export interface components {
             /** Ts */
             ts?: string;
         };
+        /** Exported */
+        Exported: {
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+        };
         /** FieldView */
         FieldView: {
             /** Help */
@@ -1072,6 +1104,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Favourite
+             * @default false
+             */
+            favourite: boolean;
             /** Height */
             height: number;
             /** Id */
@@ -1082,10 +1119,19 @@ export interface components {
             mode: string;
             /** Prompt */
             prompt: string;
+            /** Recipe */
+            recipe?: {
+                [key: string]: unknown;
+            } | null;
             /** Thumb Url */
             thumb_url: string;
             /** Width */
             width: number;
+        };
+        /** ImageUpdate */
+        ImageUpdate: {
+            /** Favourite */
+            favourite: boolean;
         };
         /** InterruptEvent */
         InterruptEvent: {
@@ -2285,6 +2331,7 @@ export interface operations {
                 limit?: number;
                 before?: string | null;
                 ids?: string | null;
+                favourites?: boolean;
             };
             header?: never;
             path?: never;
@@ -2372,6 +2419,41 @@ export interface operations {
             };
         };
     };
+    update_image_products_wasifyai_image_images__image_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     download_products_wasifyai_image_images__image_id__download_get: {
         parameters: {
             query?: never;
@@ -2390,6 +2472,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_image_products_wasifyai_image_images__image_id__export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exported"];
                 };
             };
             /** @description Validation Error */

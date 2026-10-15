@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import type { ImageSummary } from "@wasifyai/client";
+import { presetOf } from "@wasifyai/ui";
 import { PanelLeft } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { CreatePage } from "./pages/Create";
 import { HomePage } from "./pages/Home";
@@ -23,6 +25,11 @@ function readCollapsed(): boolean {
 export function Shell() {
   const [route, go] = useRoute();
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  // an image whose recipe was sent to Create ("make it again"); used once, then forgotten
+  const [again, setAgain] = useState<ImageSummary | null>(null);
+  useEffect(() => {
+    if (route !== "create") setAgain(null);
+  }, [route]);
   const set = (v: boolean) => {
     setCollapsed(v);
     try {
@@ -49,9 +56,24 @@ export function Shell() {
         ) : null}
         <main id="main" className="min-h-0 flex-1 overflow-auto">
           {route === "home" ? <HomePage go={go} /> : null}
-          {route === "create" ? <CreatePage key="create" mode="text" go={go} /> : null}
+          {route === "create" ? (
+            <CreatePage
+              key={`create-${again?.id ?? ""}`}
+              mode="text"
+              go={go}
+              preset={again ? presetOf(again) : null}
+            />
+          ) : null}
           {route === "edit" ? <CreatePage key="edit" mode="image" go={go} /> : null}
-          {route === "library" ? <LibraryPage go={go} /> : null}
+          {route === "library" ? (
+            <LibraryPage
+              go={go}
+              onRunAgain={(image) => {
+                setAgain(image);
+                go("create");
+              }}
+            />
+          ) : null}
           {route === "models" ? <ModelsPage /> : null}
           {route === "settings" ? <SettingsPage /> : null}
         </main>

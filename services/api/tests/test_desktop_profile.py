@@ -104,6 +104,49 @@ def test_an_image_is_made_end_to_end_on_the_desktop_profile(data_dir):
         assert replay[0][1]["seq"] == 2 and replay[-1][0] == "done"
 
 
+def test_recipes_favourites_and_saving_a_copy_on_the_desktop_profile(data_dir, monkeypatch):
+    export = data_dir / "Downloads"
+    monkeypatch.setenv("WASIFYAI_EXPORT_DIR", str(export))
+    path = "/products/wasifyai-image/images"
+    with TestClient(create_app()) as c:
+        r = c.post(
+            "/products/wasifyai-image/runs",
+            json={"input": {"mode": "text", "prompt": "a fox", "size": "wide", "seed": 4242}},
+            headers=auth(),
+        )
+        assert r.status_code == 200, r.text
+        made = parse(r.text)[-1][1]["outputs"]
+        assert made["status"] == "done"
+
+        # the recipe was kept with the seed that was asked for
+        item = c.get(f"{path}/{made['image_id']}", headers=auth()).json()
+        assert item["recipe"]["seed"] == 4242 and item["recipe"]["size"] == "wide"
+        assert item["favourite"] is False
+
+        # the window may PATCH from its own origin (the browser asks first)
+        pre = c.options(
+            f"{path}/{made['image_id']}",
+            headers={
+                "origin": "tauri://localhost",
+                "access-control-request-method": "PATCH",
+                "access-control-request-headers": "authorization,content-type",
+            },
+        )
+        assert pre.status_code == 200
+        assert "PATCH" in pre.headers["access-control-allow-methods"]
+
+        fav = c.patch(f"{path}/{made['image_id']}", json={"favourite": True}, headers=auth())
+        assert fav.status_code == 200 and fav.json()["favourite"] is True
+        only = c.get(path, params={"favourites": "true"}, headers=auth()).json()
+        assert [i["id"] for i in only["images"]] == [made["image_id"]]
+
+        # "Save a copy" puts the file in the export folder and says where
+        out = c.post(f"{path}/{made['image_id']}/export", headers=auth())
+        assert out.status_code == 200
+        saved = export / out.json()["name"]
+        assert saved.read_bytes().startswith(PNG) and out.json()["path"] == str(saved)
+
+
 def test_the_engine_refuses_requests_without_the_shells_token(data_dir):
     with TestClient(create_app()) as c:
         body = {"input": {"mode": "text", "prompt": "x"}}

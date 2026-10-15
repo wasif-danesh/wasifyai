@@ -279,3 +279,45 @@ async def test_under_the_limit_is_fine(tmp_path, ctx):
     rig = make_rig(tmp_path, quotas={"images_per_user_per_day": 3})
     s = await Story(rig, FixedQuota(2)).start({"mode": "text", "prompt": "a fox"})
     assert s.waiting and len(rig.sink.submitted) == 1
+
+
+# ---- recipes (stage B) -------------------------------------------------------------------
+
+
+async def test_the_recipe_keeps_the_seed_the_job_used(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "size": "wide"})
+    await s.finish_job()
+    (image,) = s.images.images
+    job = rig.sink.submitted[0]
+    assert image.recipe == {
+        "v": 1, "mode": "text", "prompt": "a fox", "size": "wide",
+        "width": 1024, "height": 768, "seed": job.prompt["seed"],
+    }  # fmt: skip
+    assert image.recipe is not None and 0 <= image.recipe["seed"] <= 2**31 - 1
+
+
+async def test_a_given_seed_is_used_as_it_is(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "seed": 424242})
+    assert rig.sink.submitted[0].prompt["seed"] == 424242
+    await s.finish_job()
+    recipe = s.images.images[0].recipe
+    assert recipe is not None and recipe["seed"] == 424242
+
+
+async def test_each_run_without_a_seed_draws_its_own(tmp_path, ctx):
+    seeds = set()
+    for n in range(4):
+        rig = make_rig(tmp_path / str(n))
+        await Story(rig).start({"mode": "text", "prompt": "a fox"})
+        seeds.add(rig.sink.submitted[0].prompt["seed"])
+    assert len(seeds) > 1
+
+
+@pytest.mark.parametrize("seed", [-1, 2**31, "7", 1.5, True])
+async def test_a_seed_that_is_not_valid_is_refused_before_any_work(tmp_path, ctx, seed):
+    rig = make_rig(tmp_path)
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "seed": seed})
+    assert s.state["status"] == "refused" and "seed" in s.state["refusal"]["message"]
+    assert rig.asked() == [] and rig.sink.submitted == []

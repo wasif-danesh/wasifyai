@@ -214,8 +214,8 @@ The image create screen is one piece of code that the web app and the desktop wi
 
 | Package | What | Knows about |
 |---|---|---|
-| `packages/client` (`@wasifyai/client`) | `createRunClient(transport)`: start, watch and resume runs (SSE), upload a picture, enhance a prompt; `HttpError`; the SSE parser; the image flow reducer | engine paths only (`/products/{id}/runs`); no React, no browser globals |
-| `packages/ui` (`@wasifyai/ui`) | `CreateImage`, `ImageForm`, `useImageFlow`, `usePicture`, the primitives (button, notice, ...) and the design tokens (`tailwind.css`) | a `RunClient` passed in as a prop; no Next.js, no Tauri |
+| `packages/client` (`@wasifyai/client`) | `createRunClient(transport)`: start, watch and resume runs (SSE), upload a picture, enhance a prompt; `createImagesApi(transport)`: list, search, open, favourite, save a copy, delete; `HttpError`; the SSE parser; the image flow reducer | engine paths only (`/products/{id}/runs`, `/products/{id}/images`); no React, no browser globals |
+| `packages/ui` (`@wasifyai/ui`) | `CreateImage`, `ImageForm`, **`ImageStudio`** (the two-panel Create/Edit screen), **`ImageLibrary`**, `useImageFlow`, `usePicture`, the primitives (button, notice, ...) and the design tokens (`tailwind.css`) | a `RunClient` and an `ImagesApi` passed in as props; no Next.js, no Tauri |
 
 A **transport** is `fetch(path, init)` plus `onUnauthorized`. The web app's sends `/api` + path to its BFF with the
 session cookie (`apps/web/lib/run-client.ts`). The window's (`apps/desktop/src/transport.ts`) sends path to
@@ -240,8 +240,8 @@ to `@wasifyai/ui` when it is migrated; delete the shim when nothing uses it.
 | Shell | `Shell.tsx` | side menu + the screen; the menu collapses (remembered in `localStorage`) |
 | Side menu | `Sidebar.tsx` | New chat (home), Models, Library, Images (expands: Create, Edit; Transform, Inpaint, Extend, Upscale, Reference marked "Soon"), Train ("Soon"), Projects, Recents, You + settings |
 | Home | `pages/Home.tsx` | greeting and the "Ask anything" box (the assistant, ADR-0057, is not built: the box says so) |
-| Create / Edit | `pages/Create.tsx` | controls on the left, the picture, Recipe and a strip of recent images on the right; Generate stays at the bottom of the controls |
-| Library | `pages/Library.tsx` | grid, search (My creations, ADR-0041), open, delete |
+| Create / Edit | `pages/Create.tsx` | wraps the shared `ImageStudio` with this window's model chip and setup notices |
+| Library | `pages/Library.tsx` | wraps the shared `ImageLibrary`; "Make it again" sends the recipe to Create (`Shell.tsx` holds it until the route changes) |
 | Models, Settings | `pages/Models.tsx`, `pages/Settings.tsx` | the model panel; the image engine card, updates, restart and repair |
 
 On macOS the title bar is an overlay (`titleBarStyle: Overlay`, traffic lights at 18,22) and the menu leaves
@@ -249,18 +249,36 @@ room for them; elsewhere the native title bar stays. Dragging uses `data-tauri-d
 `core:window:allow-start-dragging` capability. Items that are not built yet are shown disabled and labelled,
 not hidden, so the menu keeps its final shape.
 
+## Recipes, favourites and saving a copy (stage B)
+
+Every image row keeps a **recipe** (`images.recipe`, versioned JSON: prompt, mode, size name, width, height,
+seed) and a `favourite` flag. A run may carry a `seed` (0 to 2^31-1; anything else is refused before any work);
+without one the graph draws it, so the recipe always holds the seed that made the picture.
+
+| What | Where |
+|---|---|
+| `PATCH /products/wasifyai-image/images/{id}` `{favourite}`, `GET .../images?favourites=true` | `products/wasifyai-image/wasifyai_image/routes.py` |
+| `POST .../images/{id}/export`: copies the file into `~/Downloads` (or `WASIFYAI_EXPORT_DIR`), never overwrites, answers `{name, path}`; 404 where no folder is set (web profile) | same; `app.state.export_dir` is set by the desktop profile in `main.py` |
+| Postgres columns | migration `0017_image_recipes` |
+| SQLite columns on an older file | `ensure_columns` (SDK), run by the image store |
+| "Make it again" | text images with a recipe only: an edit's source picture is deleted once the image is saved |
+
+The recipe does not name the model: the graph asks for a capability. The same seed gives the same picture on the
+same installed model. `docs/phase2-stage-b-plan.md` has the decisions.
+
+The window may `PATCH`: the desktop CORS list includes it (the self-test found it was missing).
+
 ## The self-test
 
 `WASIFYAI_SMOKE=1 cargo run` (in `apps/desktop/src-tauri`) starts the shell as usual; once the engine is ready
-the window opens the Create screen (`#/images/create`), types a prompt, presses Generate, waits for the picture to load from the
+the window opens the Create screen (`#/images/create`), types a prompt, presses Generate, favourites the result, reads its seed, presses "Make it again" and expects the same seed and size, waits for the picture to load from the
 engine's signed link, and the shell prints `SMOKE PASS ...` and exits 0 (`SMOKE FAIL ...` and 1 otherwise).
 It drives the real DOM in the real webview, so CORS, the content security policy and the file link are all
 exercised. It needs the engine environment (`.venv`).
 
 ## What is not done
 
-- **Result actions on desktop.** The window shows the picture, its recipe and a library with search and
-  delete. Download/export, favourites, collections and re-run from a recipe come with the gallery (stage B).
+- **Gallery extras.** Collections, tags and bulk actions are not built; the model id is not in the recipe yet.
 - **Menu entries marked "Soon"**: Transform, Inpaint, Extend, Upscale, Reference, Train; Projects and
   Recents (they need the assistant and projects, ADR-0057). The home "Ask anything" box does not answer.
 - **Other screens** (music, video, speech, ...) still live in `apps/web`; only the image screen is shared.

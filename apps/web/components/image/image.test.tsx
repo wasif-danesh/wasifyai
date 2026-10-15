@@ -31,6 +31,7 @@ const img = (id: string, prompt = "a cat"): ImageSummary => ({
   created_at: "2026-10-08T00:00:00Z",
   image_url: `http://x/${id}.png`,
   thumb_url: `http://x/${id}.jpg`,
+  favourite: false,
 });
 
 describe("ImageView", () => {

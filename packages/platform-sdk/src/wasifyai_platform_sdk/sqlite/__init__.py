@@ -4,6 +4,7 @@ adapters from the engine's dialect and the deployment profile."""
 
 from wasifyai_platform_sdk.sqlite.engine import (
     create_sqlite_engine,
+    ensure_columns,
     ensure_tables,
     from_iso,
     is_sqlite,
@@ -25,6 +26,7 @@ __all__ = [
     "SqliteUploadStore",
     "SqliteUsageRecorder",
     "create_sqlite_engine",
+    "ensure_columns",
     "ensure_tables",
     "from_iso",
     "is_sqlite",

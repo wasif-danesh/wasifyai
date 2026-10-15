@@ -478,6 +478,24 @@
         "title": "ErrorEvent",
         "type": "object"
       },
+      "Exported": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path"
+        ],
+        "title": "Exported",
+        "type": "object"
+      },
       "FieldView": {
         "properties": {
           "help": {
@@ -565,6 +583,11 @@
             "title": "Created At",
             "type": "string"
           },
+          "favourite": {
+            "default": false,
+            "title": "Favourite",
+            "type": "boolean"
+          },
           "height": {
             "title": "Height",
             "type": "integer"
@@ -584,6 +607,18 @@
           "prompt": {
             "title": "Prompt",
             "type": "string"
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipe"
           },
           "thumb_url": {
             "title": "Thumb Url",
@@ -605,6 +640,20 @@
           "thumb_url"
         ],
         "title": "ImageSummary",
+        "type": "object"
+      },
+      "ImageUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "favourite": {
+            "title": "Favourite",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "favourite"
+        ],
+        "title": "ImageUpdate",
         "type": "object"
       },
       "InterruptEvent": {
@@ -3241,6 +3290,16 @@
               ],
               "title": "Ids"
             }
+          },
+          {
+            "in": "query",
+            "name": "favourites",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Favourites",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -3345,6 +3404,57 @@
         "tags": [
           "wasifyai-image"
         ]
+      },
+      "patch": {
+        "description": "Mark or unmark a favourite.",
+        "operationId": "update_image_products_wasifyai_image_images__image_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Image",
+        "tags": [
+          "wasifyai-image"
+        ]
       }
     },
     "/products/wasifyai-image/images/{image_id}/download": {
@@ -3383,6 +3493,49 @@
           }
         },
         "summary": "Download",
+        "tags": [
+          "wasifyai-image"
+        ]
+      }
+    },
+    "/products/wasifyai-image/images/{image_id}/export": {
+      "post": {
+        "description": "Copy the image into the person's export folder (the desktop app sets one; a webview\ncannot save a file by itself). Never overwrites: a second copy gets a number.",
+        "operationId": "export_image_products_wasifyai_image_images__image_id__export_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Exported"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Image",
         "tags": [
           "wasifyai-image"
         ]

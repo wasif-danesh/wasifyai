@@ -21,7 +21,14 @@ const MAX_RECONNECTS = 6;
 export type ImageFlowApi = Pick<RunClient, "startRun" | "watchRun">;
 
 /** `imageKey` is the key of a picture already uploaded (ADR-0039); text to image has none. */
-export type ImageRequest = { mode: Mode; prompt: string; size?: string; imageKey?: string };
+export type ImageRequest = {
+  mode: Mode;
+  prompt: string;
+  size?: string;
+  imageKey?: string;
+  /** Make the same picture again: the seed a recipe kept (text to image only). */
+  seed?: number;
+};
 
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
@@ -128,7 +135,9 @@ export function useImageFlow(api: ImageFlowApi) {
       const input = {
         mode: request.mode,
         prompt: request.prompt,
-        ...(request.mode === "text" ? { size: request.size } : { image_key: request.imageKey }),
+        ...(request.mode === "text"
+          ? { size: request.size, ...(request.seed !== undefined ? { seed: request.seed } : {}) }
+          : { image_key: request.imageKey }),
       };
       void follow((signal) => startRun(IMAGE_PRODUCT, input, signal, onEvent), ctrl.signal);
     },

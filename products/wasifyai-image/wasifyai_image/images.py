@@ -2,6 +2,7 @@
 
 import asyncio
 import io
+import json
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Protocol
@@ -11,7 +12,14 @@ from PIL import Image
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import RunContext, start_of_day_utc, sum_usage
-from wasifyai_platform_sdk.sqlite import ensure_tables, from_iso, is_sqlite, now_iso, to_iso
+from wasifyai_platform_sdk.sqlite import (
+    ensure_columns,
+    ensure_tables,
+    from_iso,
+    is_sqlite,
+    now_iso,
+    to_iso,
+)
 
 IMAGE_CREATED = "image.created"
 THUMB_PX = 480
@@ -31,6 +39,10 @@ class ImageRecord:
     height: int
     image_key: str  # relative to the user's storage prefix
     thumb_key: str
+    # What made the image (versioned JSON): prompt, mode, size, width, height, seed. None on rows
+    # from before recipes existed.
+    recipe: dict | None = None
+    favourite: bool = False
     created_at: datetime | None = field(default=None, compare=False)  # set by the database
 
 
@@ -38,9 +50,20 @@ class ImageStore(Protocol):
     async def add(self, image: ImageRecord) -> None: ...
 
     async def list(
-        self, tenant_id: str, user_id: str, limit: int, before: datetime | None
+        self,
+        tenant_id: str,
+        user_id: str,
+        limit: int,
+        before: datetime | None,
+        favourites_only: bool = False,
     ) -> list[ImageRecord]:
         """The user's images, newest first, strictly older than `before`."""
+        ...
+
+    async def set_favourite(
+        self, tenant_id: str, user_id: str, image_id: str, favourite: bool
+    ) -> bool:
+        """Mark or unmark; False when the user has no such image."""
         ...
 
     async def get(self, tenant_id: str, user_id: str, image_id: str) -> ImageRecord | None: ...
@@ -50,15 +73,25 @@ class ImageStore(Protocol):
 
 _COLUMNS = (
     "id, tenant_id, product_id, user_id, thread_id, run_id, mode, prompt, width, height, "
-    "image_key, thumb_key, created_at"
+    "image_key, thumb_key, recipe, favourite, created_at"
 )
+
+
+def _recipe_of(raw: str | None) -> dict | None:
+    if not raw:
+        return None
+    try:
+        value = json.loads(raw)
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def _record(r) -> ImageRecord:
     return ImageRecord(
         id=str(r[0]), tenant_id=r[1], product_id=r[2], user_id=r[3], thread_id=r[4], run_id=r[5],
         mode=r[6], prompt=r[7], width=r[8], height=r[9], image_key=r[10], thumb_key=r[11],
-        created_at=r[12],
+        recipe=_recipe_of(r[12]), favourite=bool(r[13]), created_at=r[14],
     )  # fmt: skip
 
 
@@ -72,19 +105,26 @@ class PostgresImageStore:
                 text(
                     """
                     INSERT INTO images (id, tenant_id, product_id, user_id, thread_id, run_id, mode,
-                                        prompt, width, height, image_key, thumb_key)
+                                        prompt, width, height, image_key, thumb_key, recipe,
+                                        favourite)
                     VALUES (:id, :tenant_id, :product_id, :user_id, :thread_id, :run_id, :mode,
-                            :prompt, :width, :height, :image_key, :thumb_key)
+                            :prompt, :width, :height, :image_key, :thumb_key, :recipe, :favourite)
                     """
                 ),
                 {
                     **{k: v for k, v in image.__dict__.items() if k != "created_at"},
                     "id": UUID(image.id),
+                    "recipe": json.dumps(image.recipe) if image.recipe is not None else None,
                 },
             )
 
     async def list(
-        self, tenant_id: str, user_id: str, limit: int, before: datetime | None
+        self,
+        tenant_id: str,
+        user_id: str,
+        limit: int,
+        before: datetime | None,
+        favourites_only: bool = False,
     ) -> list[ImageRecord]:
         async with self._engine.connect() as conn:
             rows = await conn.execute(
@@ -93,12 +133,33 @@ class PostgresImageStore:
                     SELECT {_COLUMNS} FROM images
                     WHERE tenant_id = :t AND product_id = 'wasifyai-image' AND user_id = :u
                       AND (CAST(:before AS timestamptz) IS NULL OR created_at < :before)
+                      AND (NOT :fav OR favourite)
                     ORDER BY created_at DESC, id DESC LIMIT :limit
                     """
                 ),
-                {"t": tenant_id, "u": user_id, "before": before, "limit": limit},
-            )
+                {
+                    "t": tenant_id, "u": user_id, "before": before, "limit": limit,
+                    "fav": favourites_only,
+                },
+            )  # fmt: skip
             return [_record(r) for r in rows]
+
+    async def set_favourite(
+        self, tenant_id: str, user_id: str, image_id: str, favourite: bool
+    ) -> bool:
+        try:
+            iid = UUID(image_id)
+        except ValueError:
+            return False
+        async with self._engine.begin() as conn:
+            res = await conn.execute(
+                text(
+                    "UPDATE images SET favourite = :f WHERE id = :id AND tenant_id = :t "
+                    "AND user_id = :u AND product_id = 'wasifyai-image'"
+                ),
+                {"f": favourite, "id": iid, "t": tenant_id, "u": user_id},
+            )
+            return (res.rowcount or 0) > 0
 
     async def get(self, tenant_id: str, user_id: str, image_id: str) -> ImageRecord | None:
         try:
@@ -144,12 +205,17 @@ _SQLITE_DDL = (
         height INTEGER NOT NULL,
         image_key TEXT NOT NULL,
         thumb_key TEXT NOT NULL,
+        recipe TEXT,
+        favourite INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL
     )
     """,
     "CREATE INDEX IF NOT EXISTS ix_images_user_created "
     "ON images (tenant_id, product_id, user_id, created_at)",
 )
+
+
+_SQLITE_NEW_COLUMNS = {"recipe": "TEXT", "favourite": "INTEGER NOT NULL DEFAULT 0"}
 
 
 class SqliteImageStore:
@@ -160,36 +226,47 @@ class SqliteImageStore:
 
     async def _ready(self) -> None:
         await ensure_tables(self._engine, "images", _SQLITE_DDL)
+        # files made before recipes existed
+        await ensure_columns(self._engine, "images", "images", _SQLITE_NEW_COLUMNS)
 
     @staticmethod
     def _record(r) -> ImageRecord:
         return ImageRecord(
             id=r[0], tenant_id=r[1], product_id=r[2], user_id=r[3], thread_id=r[4], run_id=r[5],
             mode=r[6], prompt=r[7], width=r[8], height=r[9], image_key=r[10], thumb_key=r[11],
-            created_at=from_iso(r[12]),
+            recipe=_recipe_of(r[12]), favourite=bool(r[13]), created_at=from_iso(r[14]),
         )  # fmt: skip
 
     async def add(self, image: ImageRecord) -> None:
         await self._ready()
-        values = {k: v for k, v in image.__dict__.items() if k != "created_at"}
+        values = {k: v for k, v in image.__dict__.items() if k not in ("created_at", "recipe")}
         async with self._engine.begin() as conn:
             await conn.execute(
                 text(
                     """
                     INSERT INTO images (id, tenant_id, product_id, user_id, thread_id, run_id, mode,
-                                        prompt, width, height, image_key, thumb_key, created_at)
+                                        prompt, width, height, image_key, thumb_key, recipe,
+                                        favourite, created_at)
                     VALUES (:id, :tenant_id, :product_id, :user_id, :thread_id, :run_id, :mode,
-                            :prompt, :width, :height, :image_key, :thumb_key, :created_at)
+                            :prompt, :width, :height, :image_key, :thumb_key, :recipe,
+                            :favourite, :created_at)
                     """
                 ),
                 {
                     **values,
+                    "recipe": json.dumps(image.recipe) if image.recipe is not None else None,
+                    "favourite": int(image.favourite),
                     "created_at": to_iso(image.created_at) if image.created_at else now_iso(),
                 },
             )
 
     async def list(
-        self, tenant_id: str, user_id: str, limit: int, before: datetime | None
+        self,
+        tenant_id: str,
+        user_id: str,
+        limit: int,
+        before: datetime | None,
+        favourites_only: bool = False,
     ) -> list[ImageRecord]:
         await self._ready()
         async with self._engine.connect() as conn:
@@ -199,15 +276,31 @@ class SqliteImageStore:
                     SELECT {_COLUMNS} FROM images
                     WHERE tenant_id = :t AND product_id = 'wasifyai-image' AND user_id = :u
                       AND (:before IS NULL OR created_at < :before)
+                      AND (:fav = 0 OR favourite = 1)
                     ORDER BY created_at DESC, id DESC LIMIT :limit
                     """
                 ),
                 {
                     "t": tenant_id, "u": user_id, "limit": limit,
                     "before": to_iso(before) if before else None,
+                    "fav": int(favourites_only),
                 },
             )  # fmt: skip
             return [self._record(r) for r in rows]
+
+    async def set_favourite(
+        self, tenant_id: str, user_id: str, image_id: str, favourite: bool
+    ) -> bool:
+        await self._ready()
+        async with self._engine.begin() as conn:
+            res = await conn.execute(
+                text(
+                    "UPDATE images SET favourite = :f WHERE id = :id AND tenant_id = :t "
+                    "AND user_id = :u AND product_id = 'wasifyai-image'"
+                ),
+                {"f": int(favourite), "id": image_id, "t": tenant_id, "u": user_id},
+            )
+            return (res.rowcount or 0) > 0
 
     async def get(self, tenant_id: str, user_id: str, image_id: str) -> ImageRecord | None:
         await self._ready()
@@ -246,9 +339,15 @@ class InMemoryImageStore:
         self.images.append(replace(image, created_at=image.created_at or datetime.now(UTC)))
 
     async def list(
-        self, tenant_id: str, user_id: str, limit: int, before: datetime | None
+        self,
+        tenant_id: str,
+        user_id: str,
+        limit: int,
+        before: datetime | None,
+        favourites_only: bool = False,
     ) -> list[ImageRecord]:
         mine = [i for i in self.images if (i.tenant_id, i.user_id) == (tenant_id, user_id)]
+        mine = [i for i in mine if i.favourite or not favourites_only]
         mine = [i for i in mine if before is None or (i.created_at and i.created_at < before)]
         return sorted(mine, key=lambda i: (i.created_at, i.id), reverse=True)[:limit]
 
@@ -261,6 +360,15 @@ class InMemoryImageStore:
             ),
             None,
         )
+
+    async def set_favourite(
+        self, tenant_id: str, user_id: str, image_id: str, favourite: bool
+    ) -> bool:
+        for n, i in enumerate(self.images):
+            if (i.tenant_id, i.user_id, i.id) == (tenant_id, user_id, image_id):
+                self.images[n] = replace(i, favourite=favourite)
+                return True
+        return False
 
     async def delete(self, tenant_id: str, user_id: str, image_id: str) -> None:
         self.images = [

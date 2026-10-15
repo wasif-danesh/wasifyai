@@ -1,5 +1,6 @@
 """Image records and their search source on the desktop profile SQLite file (ADR-0056)."""
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -49,6 +50,22 @@ async def check_store(store) -> None:
     assert await store.get("t1", "u1", other_user.id) is None
     assert await store.get("t1", "u1", "not-an-id") is None
 
+    # recipe and favourite round-trip; favourites can be listed on their own
+    recipe = {"v": 1, "mode": "text", "prompt": "a teapot", "size": "square", "seed": 7}
+    made = rec(at=T0 + timedelta(minutes=3))
+    made = replace(made, recipe=recipe)
+    await store.add(made)
+    got = await store.get("t1", "u1", made.id)
+    assert got is not None and got.recipe == recipe and got.favourite is False
+    assert (await store.get("t1", "u1", old.id)).recipe is None  # type: ignore[union-attr]
+    assert await store.set_favourite("t1", "u1", old.id, True) is True
+    assert await store.set_favourite("t1", "u2", mid.id, True) is False  # not theirs
+    assert await store.set_favourite("t1", "u1", "not-an-id", True) is False
+    assert [i.id for i in await store.list("t1", "u1", 10, None, favourites_only=True)] == [old.id]
+    assert await store.set_favourite("t1", "u1", old.id, False) is True
+    assert await store.list("t1", "u1", 10, None, favourites_only=True) == []
+    await store.delete("t1", "u1", made.id)
+
     # delete is scoped to the owner
     await store.delete("t1", "u2", mid.id)
     assert await store.get("t1", "u1", mid.id) is not None
@@ -85,3 +102,24 @@ async def test_the_index_source_pages_and_reports_what_is_present(engine):
     assert [i.item_id for i in await source.page(first[-1].item_id, 2)] == ids[2:]
     assert await source.present([ids[0], "gone"]) == {ids[0]}
     assert await source.present([]) == set()
+
+
+async def test_a_database_from_before_recipes_gets_the_new_columns(engine):
+    """A file made by the previous version has no recipe or favourite column."""
+    old_table = """
+        CREATE TABLE images (
+            id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, product_id TEXT NOT NULL,
+            user_id TEXT NOT NULL, thread_id TEXT, run_id TEXT, mode TEXT NOT NULL,
+            prompt TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL,
+            image_key TEXT NOT NULL, thumb_key TEXT NOT NULL, created_at TEXT NOT NULL
+        )"""
+    async with engine.begin() as conn:
+        await conn.exec_driver_sql(old_table)
+        await conn.exec_driver_sql(
+            "INSERT INTO images VALUES ('i1','t1','wasifyai-image','u1',NULL,NULL,'text',"
+            "'an old one',64,64,'i1/image.png','i1/thumb.jpg','2026-10-01T12:00:00.000000+00:00')"
+        )
+    store = SqliteImageStore(engine)
+    (got,) = await store.list("t1", "u1", 10, None)
+    assert got.prompt == "an old one" and got.recipe is None and got.favourite is False
+    assert await store.set_favourite("t1", "u1", "i1", True) is True

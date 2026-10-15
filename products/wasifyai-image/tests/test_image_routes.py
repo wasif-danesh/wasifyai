@@ -50,7 +50,7 @@ def put(client, user: str, rel: str, data: bytes):
 
 
 @pytest.fixture
-def client():
+def client(tmp_path):
     store = InMemoryImageStore()
     store.images = [
         image(1), image(2), image(3), image(4),
@@ -58,6 +58,7 @@ def client():
     ]  # fmt: skip
     app = FastAPI()
     app.state.storage = ScopedStorage(memory_storage())
+    app.state.export_dir = tmp_path / "Downloads"
     app.include_router(
         build_routes(RouteDeps(app.state, identity), store), prefix="/products/wasifyai-image"
     )
@@ -149,3 +150,48 @@ def test_file_names_are_safe():
     assert file_name('../../etc/passwd"; x', "png") == "etc-passwd-x.png"
     assert file_name("日本語", "png") == "image.png"
     assert file_name("a" * 200, "png") == "a" * 48 + ".png"
+
+
+def test_a_summary_carries_the_recipe_and_the_favourite_flag(client):
+    client.store.images[0] = ImageRecord(
+        **{**client.store.images[0].__dict__, "recipe": {"v": 1, "seed": 9}, "favourite": True}
+    )
+    body = client.get(f"{BASE}/{uid(1)}").json()
+    assert body["recipe"] == {"v": 1, "seed": 9} and body["favourite"] is True
+    plain = client.get(f"{BASE}/{uid(2)}").json()
+    assert plain["recipe"] is None and plain["favourite"] is False
+
+
+def test_favouriting_is_the_owners_and_can_be_listed(client):
+    assert client.patch(f"{BASE}/{uid(2)}", json={"favourite": True}).json()["favourite"] is True
+    assert [i["id"] for i in client.get(BASE, params={"favourites": "true"}).json()["images"]] == [
+        uid(2)
+    ]
+    # another user's image, an unknown one, and a body with anything else are all refused
+    assert (
+        client.patch(
+            f"{BASE}/{uid(2)}", json={"favourite": True}, headers={"x-user": "someone-else"}
+        ).status_code
+        == 404
+    )
+    assert client.patch(f"{BASE}/{uid(99)}", json={"favourite": True}).status_code == 404
+    assert client.patch(f"{BASE}/{uid(2)}", json={"prompt": "x"}).status_code == 422
+    client.patch(f"{BASE}/{uid(2)}", json={"favourite": False})
+    assert client.get(BASE, params={"favourites": "true"}).json()["images"] == []
+
+
+def test_export_copies_the_file_and_never_overwrites(client, tmp_path):
+    first = client.post(f"{BASE}/{uid(2)}/export")
+    assert first.status_code == 200
+    assert first.json()["name"] == "image-number-2.png"
+    saved = tmp_path / "Downloads" / "image-number-2.png"
+    assert saved.read_bytes()[:4] == b"\x89PNG" and first.json()["path"] == str(saved)
+    second = client.post(f"{BASE}/{uid(2)}/export").json()
+    assert second["name"] == "image-number-2-2.png" and saved.exists()
+
+
+def test_export_is_only_for_the_owner_and_only_where_a_folder_is_set(client):
+    other = client.post(f"{BASE}/{uid(2)}/export", headers={"x-user": "someone-else"})
+    assert other.status_code == 404
+    del client.app.state.export_dir  # the web profile never sets one
+    assert client.post(f"{BASE}/{uid(2)}/export").status_code == 404

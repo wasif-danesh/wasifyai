@@ -69,3 +69,22 @@ async def ensure_tables(engine: AsyncEngine, name: str, statements: Sequence[str
         for statement in statements:
             await conn.exec_driver_sql(statement)
     done.add(name)
+
+
+async def ensure_columns(
+    engine: AsyncEngine, name: str, table: str, columns: dict[str, str]
+) -> None:
+    """Add the columns an older database file does not have yet (`columns`: name -> definition).
+    Run once per engine after `ensure_tables`; `ADD COLUMN` has no IF NOT EXISTS in SQLite, so the
+    table is inspected first."""
+    done = _CREATED.setdefault(engine, set())
+    key = f"{name}:columns"
+    if key in done:
+        return
+    async with engine.begin() as conn:
+        rows = await conn.exec_driver_sql(f"PRAGMA table_info({table})")
+        have = {str(r._mapping["name"]) for r in rows}
+        for column, definition in columns.items():
+            if column not in have:
+                await conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    done.add(key)

@@ -137,6 +137,36 @@ def test_creations_and_users_survive_a_restart(data_dir):
         assert ids == [second["image_id"], first["image_id"]]  # newest first, same user
 
 
+def test_auto_makes_placeholders_until_the_image_engine_is_installed(data_dir, monkeypatch):
+    monkeypatch.setenv("DESKTOP_IMAGE_ENGINE", "auto")
+    get_settings.cache_clear()
+    with TestClient(create_app()) as c:
+        out = make_image(c)[-1][1]["outputs"]
+    assert out["status"] == "done" and out["width"] == 256  # the placeholder engine's picture
+
+
+def test_the_real_engine_not_being_set_up_is_said_in_plain_words(data_dir, monkeypatch):
+    monkeypatch.setenv("DESKTOP_IMAGE_ENGINE", "comfyui")
+    get_settings.cache_clear()
+    with TestClient(create_app()) as c:
+        events = make_image(c)
+    last_name, last = events[-1]
+    assert last_name == "error"
+    assert (
+        "not set up" in last["message"]
+        and last["retryable"] is False
+        or "set up" in last["message"]
+    )
+
+
+def test_the_engine_mode_must_be_known(data_dir, monkeypatch):
+    monkeypatch.setenv("DESKTOP_IMAGE_ENGINE", "magic")
+    get_settings.cache_clear()
+    with pytest.raises(RuntimeError, match="DESKTOP_IMAGE_ENGINE"):
+        with TestClient(create_app()):
+            pass
+
+
 def test_a_second_person_does_not_see_the_first_ones_images(data_dir):
     with TestClient(create_app()) as c:
         make_image(c)

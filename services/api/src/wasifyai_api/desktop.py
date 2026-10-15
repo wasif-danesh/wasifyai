@@ -63,10 +63,11 @@ class DesktopBackends:
     _worker_task: asyncio.Task | None = None
     _consumer: LocalCompletionConsumer | None = None
     _worker_cleanup: Any = None
+    slot: Any = None  # the SlotManager of the running worker (set by start)
 
     async def start(self, runs: RunManager) -> None:
         """Start the in-process worker and the consumer that resumes graphs from its results."""
-        worker, self._worker_cleanup = _build_worker(self)
+        worker, self._worker_cleanup, self.slot = _build_worker(self)
         self._worker_task = asyncio.create_task(worker.run_forever())
         self._consumer = LocalCompletionConsumer(self.queue, runs, self.run_store)
         await self._consumer.start()
@@ -118,15 +119,22 @@ def _build_worker(d: DesktopBackends):
     carry the worker package, and the desktop engine does (`wasifyai-api[desktop]`)."""
     import httpx
     from wasifyai_media_worker.comfy import ComfyClient
-    from wasifyai_media_worker.gpu import LocalGpuLock
     from wasifyai_media_worker.local import LocalWorker
     from wasifyai_media_worker.processor import ComfyRunner, JobProcessor, StubRunner
     from wasifyai_media_worker.settings import WorkerSettings
+    from wasifyai_media_worker.sidecar import (
+        AutoRunner,
+        ComfySidecar,
+        SidecarConfig,
+        SidecarRunner,
+    )
     from wasifyai_media_worker.state import InMemoryJobState
+    from wasifyai_platform_sdk import SlotManager
 
     s = d.settings
+    mode = s.desktop_image_engine  # stub | comfyui | auto
     ws = WorkerSettings(
-        comfyui_mode="stub" if s.desktop_image_engine == "stub" else "real",
+        comfyui_mode="stub" if mode == "stub" else "real",
         comfyui_base_url=s.comfyui_base_url,
         database_url="",
         metrics_port=0,
@@ -134,17 +142,42 @@ def _build_worker(d: DesktopBackends):
         unload_llm=False,
     )
     http = httpx.AsyncClient(timeout=30)
-    comfy = ComfyClient(ws.comfyui_base_url)
-    runner = StubRunner() if ws.comfyui_mode == "stub" else ComfyRunner(comfy, ws.job_timeout_s)
+    sidecar = ComfySidecar(SidecarConfig(s.desktop_dir, s.models_dir, s.extra_model_dirs))
+    placeholder = StubRunner()
+    real = SidecarRunner(sidecar, ws.job_timeout_s)
+    runner: Any
+    if mode == "stub":
+        runner = placeholder
+    elif mode == "comfyui":
+        runner = real
+    elif mode == "auto":
+        runner = AutoRunner(sidecar, real, placeholder)
+    elif mode == "external":  # a ComfyUI someone else runs, at COMFYUI_BASE_URL (development)
+        client = ComfyClient(ws.comfyui_base_url)
+        runner = ComfyRunner(client, ws.job_timeout_s)
+    else:
+        raise RuntimeError(
+            f"DESKTOP_IMAGE_ENGINE must be stub, comfyui, auto or external: {mode!r}"
+        )
+
+    # one big model in memory at a time; the image engine unloads through ComfyUI's /free
+    slot = SlotManager({"image": sidecar.unload_models}, idle_unload_s=s.desktop_idle_unload_s)
     processor = JobProcessor(
-        ws, d.event_log, d.local_files, d.usage, runner, LocalGpuLock(), InMemoryJobState(), http
+        ws,
+        d.event_log,
+        d.local_files,
+        d.usage,
+        runner,
+        slot.lock_for("image"),
+        InMemoryJobState(),
+        http,
     )
 
     async def cleanup() -> None:
-        await comfy.aclose()
+        await sidecar.stop()
         await http.aclose()
 
-    return LocalWorker(d.queue, processor), cleanup
+    return LocalWorker(d.queue, processor), cleanup, slot
 
 
 # ---- files ----------------------------------------------------------------------------------

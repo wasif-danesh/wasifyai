@@ -153,8 +153,28 @@ Python environment and the hashed lock the engine bundle carries for this platfo
 Repair and logs (`provision.log`) as the engine's installer. It is supported on Apple-silicon Macs only in this
 version; elsewhere the window says so and the placeholder engine keeps working.
 
-State: installed ComfyUI 0.40.0 and verified (`--quick-test-for-ci`); the engine does not use it yet. Starting
-the process, the slot manager and models are the next steps (A2, A3 in `docs/phase2-stage-a-plan.md`).
+### Using it (stage A2)
+
+`DESKTOP_IMAGE_ENGINE` chooses the runner: `stub` (placeholder pictures), `comfyui` (the real engine; a job fails
+with "not set up yet" until the component is installed), `auto` (the real engine once installed, placeholders
+until then; the shell's default), `external` (a ComfyUI someone else runs, at `COMFYUI_BASE_URL`; development).
+
+The engine starts ComfyUI on the first real job (`ComfySidecar` in the media worker package): loopback only, a
+random free port, its own working folder `<app data>/comfyui-data` (`models`, `input`, `output`, `temp`, `user`,
+`custom_nodes`), model folders from a generated `extra_model_paths.yaml`, output in `logs/comfyui.log`. It
+checks that the workflow's model files exist first and says so plainly if not. The model stays loaded
+between jobs; the **slot manager** (`SlotManager`, SDK) unloads it through ComfyUI's `/free` after
+`DESKTOP_IDLE_UNLOAD_S` seconds of no jobs (default 600) or when another owner needs the slot, and the process
+exits with the engine.
+
+| Variable | Meaning |
+|---|---|
+| `DESKTOP_MODELS_DIR` | where downloaded models go (default `<app data>/models`) |
+| `DESKTOP_EXTRA_MODEL_DIRS` | read-only model roots with the usual folder layout (`diffusion_models/`, `text_encoders/`, `vae/`, ...), separated by `:` (`;` on Windows); the app never writes there |
+| `DESKTOP_IDLE_UNLOAD_S` | idle time before the model is unloaded |
+| `DESKTOP_COMFYUI_ARGS` | extra ComfyUI arguments, for tuning |
+
+Models are not downloaded by the app yet: that is A3 (`docs/phase2-stage-a-plan.md`).
 
 ## Updates of the app
 

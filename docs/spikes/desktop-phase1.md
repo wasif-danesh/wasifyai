@@ -214,3 +214,29 @@ engine must create `models`, `input`, `output`, `temp`, `user` and `custom_nodes
 The GitHub archive of the tag was downloaded twice and had the same SHA-256 both times, which the pin relies on;
 GitHub does not promise archives are byte-stable for ever, so a changed archive fails the install with a
 checksum message and the pin has to be refreshed.
+
+## Phase 2, stage A2: real images through the engine (2026-10-15)
+
+ComfyUI started and supervised by the engine, the model kept loaded between jobs, a slot manager unloading it
+when idle. Mac M5 Pro, 64 GB, ComfyUI 0.40.0 and torch 2.11.0 from the A1 install, FLUX.2 klein 4B bf16 read
+read-only from `~/ComfyUI-Shared/models` (no model was copied or downloaded), 1024x1024, 4 steps.
+
+| Measure | Result |
+|---|---|
+| Real image made by the window's self-test (`WASIFYAI_SMOKE=1 WASIFYAI_IMAGE_ENGINE=comfyui`) | **passed**, 1024x1024, a recognisable red teapot on a wooden table; app start to quit 38.8 s including starting ComfyUI and loading the model |
+| First job in an engine (starts ComfyUI, loads the models) | **29.8 s** |
+| Next jobs, a new prompt each time (model kept loaded) | **13.3 to 13.6 s** end to end; ComfyUI itself reports 13.0 to 13.1 s, so the app's own cost is about 0.3 s |
+| Same prompt, new seed | 9.3 to 10.2 s |
+| ComfyUI resident memory, model loaded | about **7.9 to 9.2 GB** by `ps` (the process peak seen in Phase 0 was 17.6 GB) |
+| After the idle unload (25 s in this test, 10 min by default) | **764 MB**: the slot manager released the models; the process stays |
+| First job after an idle unload | 17.7 s (models read back from disk) |
+| ComfyUI process after the engine exits | none left |
+
+Correction to Phase 0: its **9 s warm** figure was a run with the same prompt and a new seed, where ComfyUI
+reuses the text encoding. With a **new prompt every time, warm is about 13 s**: the Qwen text encoder runs on the
+**CPU** (ComfyUI's log: "CLIP/text encoder model load device: cpu") and takes about 4 s. `--gpu-only` and
+`--highvram` do not change that and the time is the same on torch 2.9.1. Moving the encoder to the GPU, or using
+the 3.85 GB fp4 encoder, is the obvious next speed-up and is not done.
+
+Findings: ComfyUI stops at start-up if its base directory has no `custom_nodes` folder (the sidecar creates the
+folders); an identical graph is answered from ComfyUI's cache in 0 s, which a benchmark has to avoid.

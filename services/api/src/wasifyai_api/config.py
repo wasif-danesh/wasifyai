@@ -17,7 +17,16 @@ class Settings(BaseSettings):
     desktop_data_dir: str = ""  # database and files live here (the app data directory)
     desktop_public_url: str = ""  # this engine's own URL, as the window reaches it (file links)
     desktop_allowed_origins: str = "tauri://localhost,http://tauri.localhost,http://localhost:1420"
-    desktop_image_engine: str = "stub"  # stub (placeholder files) | comfyui
+    # stub: placeholder files | comfyui: the real engine (fails until it is set up) | auto: the real
+    # engine once it is installed, placeholders until then (the desktop's default)
+    desktop_image_engine: str = "stub"
+    desktop_models_dir: str = ""  # where downloaded models go; empty: <data dir>/models
+    # more model roots ComfyUI may read (never written), separated by the platform's path separator:
+    # for example an existing ComfyUI models folder, so 16 GB are not copied
+    desktop_extra_model_dirs: str = ""
+    desktop_idle_unload_s: int = 600  # unload the model after this long without a job
+    # extra ComfyUI arguments, space separated (for example `--gpu-only`): memory modes, for tuning
+    desktop_comfyui_args: str = ""
     products_enabled: str = ""  # comma-separated product ids; empty: all (desktop: wasifyai-image)
 
     database_url: str = "postgresql+asyncpg://wasifyai:wasifyai@localhost:5432/wasifyai"
@@ -73,6 +82,21 @@ class Settings(BaseSettings):
     @property
     def desktop_dir(self) -> Path:
         return Path(self.desktop_data_dir).expanduser()
+
+    @property
+    def models_dir(self) -> Path:
+        return (
+            Path(self.desktop_models_dir).expanduser()
+            if self.desktop_models_dir
+            else (self.desktop_dir / "models")
+        )
+
+    @property
+    def extra_model_dirs(self) -> tuple[Path, ...]:
+        import os
+
+        parts = [p for p in self.desktop_extra_model_dirs.split(os.pathsep) if p.strip()]
+        return tuple(Path(p).expanduser() for p in parts)
 
     @property
     def enabled_product_set(self) -> frozenset[str]:

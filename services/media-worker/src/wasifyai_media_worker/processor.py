@@ -80,9 +80,12 @@ class ComfyRunner:
     backend = "comfyui-local"
     local_gpu = True
 
-    def __init__(self, client: ComfyClient, timeout_s: float):
+    def __init__(self, client: ComfyClient, timeout_s: float, free_after_job: bool = True):
         self._client = client
         self._timeout = timeout_s
+        # The web profile frees the GPU after every job (it is shared with other models). The
+        # desktop keeps the model loaded for the next one; the slot manager unloads it when idle.
+        self._free_after_job = free_after_job
 
     async def run(
         self, job: JobRequest, on_progress: ProgressFn, files: InputFiles | None = None
@@ -98,7 +101,8 @@ class ComfyRunner:
             ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "bin"
             ctype = mimetypes.guess_type(f.filename)[0] or "application/octet-stream"
             produced[name] = (await self._client.fetch(f), ctype, ext)
-        await self._client.free()
+        if self._free_after_job:
+            await self._client.free()
         return produced
 
 

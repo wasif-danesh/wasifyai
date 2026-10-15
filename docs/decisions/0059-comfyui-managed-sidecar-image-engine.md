@@ -39,6 +39,15 @@ these constraints:
    can be added without touching products. The decision to add one is data-driven: size, start time, or memory
    on the target machines.
 
+## Amendment (2026-10-15, stage A of Phase 2)
+
+Point 3 asked for "a per-launch token injected by the shell". **ComfyUI cannot enforce a token**, so the
+boundary is: loopback only, a random free port, the process started and owned by the engine (never by the
+window), and the window never talks to it. The residual risk, that another program of the same user can reach
+the port, is the same as for any local server such as Ollama, and was accepted by the owner. A proxy that
+enforces a token stays possible if that changes. Also: custom nodes are none at all (the shipped workflows
+use core nodes only), and the sidecar is installed on demand, not at first run.
+
 ## Pros and cons (from the research and from our own runs)
 
 | Pros | Cons |

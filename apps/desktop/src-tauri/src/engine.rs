@@ -300,7 +300,7 @@ fn plan(input: &Input, repair: bool) -> Result<Plan, String> {
     let data_dir = &input.data_dir;
     let repo = dev_repo();
     let cwd = data_dir.clone(); // never the checkout: its `.env` must not reach the engine
-    let image_engine = std::env::var("WASIFYAI_IMAGE_ENGINE").unwrap_or_else(|_| "stub".into());
+    let image_engine = std::env::var("WASIFYAI_IMAGE_ENGINE").unwrap_or_else(|_| "auto".into());
     let products_env = std::env::var_os("WASIFYAI_PRODUCTS_DIR").map(PathBuf::from);
 
     let launch = |python: PathBuf, products_dir: PathBuf| LaunchConfig {

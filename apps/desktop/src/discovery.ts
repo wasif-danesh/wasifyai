@@ -3,6 +3,7 @@
 // ADR-0063): the models other tools left on this computer, and what the app can do with each.
 import type { Transport } from "@wasifyai/client";
 import { HttpError } from "@wasifyai/client";
+import type { Fit } from "./models";
 
 export type FoundKind =
   | "language"
@@ -37,6 +38,8 @@ export type FoundModel = {
   reason: string;
   use_root: string | null;
   needs_gb: number;
+  /** null for parts that are not run alone (LoRAs, VAEs, text encoders) */
+  fit: Fit | null;
 };
 
 export type DiscoveryState = {

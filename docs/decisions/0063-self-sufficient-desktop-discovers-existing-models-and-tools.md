@@ -99,3 +99,4 @@ the state changes from `later` to `can_use` when that stage ships.
 | 7 running tools detected | detected and shown; selecting one as a provider is not built |
 | 8 private and bounded | done: local settings store, budgets, switch and extra folders in Settings, permission-gated folders offered |
 | 9 licences shown | done where the file says one |
+| (added) does it fit | done: `desktop_fit.py`; a model that cannot fit is not offered and is refused before it runs (see `docs/desktop-profile.md`) |

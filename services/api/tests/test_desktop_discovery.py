@@ -275,7 +275,7 @@ def test_states_say_what_can_be_done(tmp_path):
 
     items = [found(unet), found(other, "lora"), found(pickle), found(llm, "language")]
     cat = [entry("diffusion_models", "demo.safetensors", unet.stat().st_size)]
-    assess(items, cat, [], memory_bytes=None)
+    assess(items, cat, [], machine=None)
     states = {i.id: i.state for i in items}
     assert states == {"demo.safetensors": "can_use", "x.safetensors": "later",
                       "old.ckpt": "unsupported", "m.gguf": "later"}  # fmt: skip
@@ -283,15 +283,25 @@ def test_states_say_what_can_be_done(tmp_path):
     assert "assistant" in items[3].reason
 
     # once the folder is one the app uses, it is ready
-    assess(items, cat, [models], memory_bytes=None)
+    assess(items, cat, [models], machine=None)
     assert items[0].state == "ready" and items[0].use_root is None
 
 
-def test_a_model_larger_than_memory_says_so(tmp_path):
+def test_a_model_that_cannot_fit_is_not_offered(tmp_path):
+    from wasifyai_api.desktop_fit import Machine
+
     llm = gguf(tmp_path / "m.gguf", pad_to=4 * MB)
     item = found(llm, "language")
-    assess([item], [], [], memory_bytes=1 * MB)
-    assert "larger than this computer's memory" in item.reason
+    assess([item], [], [], Machine("cpu", 1 * MB, 1 * MB))
+    assert item.state == "unsupported" and item.fit and item.fit["verdict"] == "too_big"
+    assert "will not run here" in item.reason
+
+    # an image file that matches the catalogue is not offered either when it will not fit
+    unet = safetensors(tmp_path / "models" / "diffusion_models" / "demo.safetensors", FLUX)
+    cat = [entry("diffusion_models", "demo.safetensors", unet.stat().st_size)]
+    image = found(unet)
+    assess([image], cat, [], Machine("cpu", 4_000_000_000, 4_000_000_000))
+    assert image.state == "unsupported" and image.use_root is None
 
 
 # ---- running tools ----------------------------------------------------------------------------

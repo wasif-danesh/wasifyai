@@ -207,3 +207,21 @@ describe("ImageLibrary", () => {
     expect(await screen.findByText(/no favourites yet/i)).toBeInTheDocument();
   });
 });
+
+describe("ImageStudio when the model cannot run", () => {
+  it("keeps Generate off and says why", async () => {
+    const user = userEvent.setup();
+    render(
+      <ImageStudio
+        mode="text"
+        runs={runs}
+        images={fakeApi([])}
+        blockedReason="The model will not fit. It needs about 24 GB."
+      />,
+    );
+    await user.type(screen.getByRole("textbox"), "a lighthouse");
+    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent("will not fit");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

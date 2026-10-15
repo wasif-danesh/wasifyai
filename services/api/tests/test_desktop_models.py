@@ -13,6 +13,7 @@ import yaml
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from wasifyai_api import desktop_models as dm
+from wasifyai_api.desktop_fit import Machine
 from wasifyai_api.desktop_models import (
     DownloadError,
     ModelEntry,
@@ -186,11 +187,13 @@ def test_state_says_what_is_there_and_where_and_what_may_be_removed(tmp_path, or
     put(svc.models_dir, e.files[2])
     assert svc.entry_state(e)["status"] == "ready"
 
-    monkeypatch.setattr(dm, "physical_memory_bytes", lambda: 16_000_000_000)
-    warning = svc.entry_state(e)["memory_warning"]
-    assert warning and "24 GB" in warning and "16 GB" in warning
-    monkeypatch.setattr(dm, "physical_memory_bytes", lambda: 64_000_000_000)
-    assert svc.entry_state(e)["memory_warning"] is None
+    small = Machine("cpu", 16_000_000_000, 16_000_000_000)
+    state = svc.entry_state(e, small)
+    assert state["fit"]["verdict"] == "too_big"
+    assert state["memory_warning"] and "24 GB" in state["memory_warning"]
+    big = Machine("cpu", 64_000_000_000, 60_000_000_000)
+    state = svc.entry_state(e, big)
+    assert state["fit"]["verdict"] == "fits" and state["memory_warning"] is None
 
 
 def test_remove_deletes_only_from_the_apps_own_folder(tmp_path, origin):
@@ -379,3 +382,22 @@ def test_the_folders_can_be_changed_and_are_remembered(tmp_path, origin):
 def test_the_catalogue_file_loads_as_yaml_the_way_the_app_reads_it():
     raw = yaml.safe_load((PRODUCTS / "wasifyai-image" / "models.yaml").read_text())
     assert raw["models"][0]["id"] == "flux2-klein-4b"
+
+
+def test_a_model_that_will_not_fit_is_not_fetched_unless_the_person_insists(tmp_path, origin):
+    svc = service(tmp_path, origin)
+
+    async def small():
+        return Machine("cpu", 8_000_000_000, 8_000_000_000)
+
+    svc.machine = small  # type: ignore[method-assign]
+    names = ["clip.safetensors", "unet.safetensors", "vae.safetensors"]
+    body = {"files": names, "bytes": 550_000}
+    with app_for(svc) as c:
+        refused = c.post("/desktop/models/demo/download", json=body)
+        assert refused.status_code == 409
+        assert "will not fit" in refused.json()["detail"] and "24 GB" in refused.json()["detail"]
+        assert origin.requests == []
+
+        insisted = c.post("/desktop/models/demo/download", json={**body, "accept_memory": True})
+        assert insisted.status_code == 200

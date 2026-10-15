@@ -30,6 +30,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from wasifyai_platform_sdk import Identity
 
+from wasifyai_api.desktop_fit import (
+    Machine,
+    Need,
+    assess_fit,
+    need_declared,
+    need_of_image,
+    need_of_language,
+)
 from wasifyai_api.desktop_models import ModelEntry, ModelsService
 from wasifyai_api.identity import get_identity
 from wasifyai_api.safeguards import SettingsStore
@@ -93,6 +101,9 @@ class Header:
     licence: str = ""
     context: int = 0
     tensors: int = -1  # GGUF only: 0 means a vocabulary file, not a model
+    layers: int = 0
+    kv_heads: int = 0
+    head_dim: int = 0
 
 
 _SCALAR = {0: "<B", 1: "<b", 2: "<H", 3: "<h", 4: "<I", 5: "<i", 6: "<f", 7: "<?", 10: "<Q",
@@ -127,6 +138,21 @@ def _gguf_value(f: BinaryIO, vtype: int) -> Any:
     raise ValueError(f"unknown value type {vtype}")
 
 
+def _kv_heads(meta: dict[str, Any], arch: str) -> int:
+    heads = meta.get(f"{arch}.attention.head_count_kv") or meta.get(f"{arch}.attention.head_count")
+    return int(heads) if isinstance(heads, int) else 0
+
+
+def _head_dim(meta: dict[str, Any], arch: str) -> int:
+    key = meta.get(f"{arch}.attention.key_length")
+    if isinstance(key, int) and key > 0:
+        return key
+    embed, heads = meta.get(f"{arch}.embedding_length"), meta.get(f"{arch}.attention.head_count")
+    if isinstance(embed, int) and isinstance(heads, int) and heads > 0:
+        return embed // heads
+    return 0
+
+
 def read_gguf(path: Path) -> Header | None:
     """Architecture, name, quantisation and licence from a GGUF header; None when it is not one."""
     try:
@@ -159,6 +185,9 @@ def read_gguf(path: Path) -> Header | None:
         licence=str(meta.get("general.license") or ""),
         context=int(meta.get(f"{arch}.context_length") or 0) if arch else 0,
         tensors=int(n_tensors),
+        layers=int(meta.get(f"{arch}.block_count") or 0) if arch else 0,
+        kv_heads=_kv_heads(meta, arch),
+        head_dim=_head_dim(meta, arch),
     )
 
 
@@ -274,6 +303,12 @@ class Found:
     reason: str = ""
     use_root: str | None = None  # the folder `can_use` would add
     needs_gb: float = 0.0
+    fit: dict[str, Any] | None = None
+    # what a language model's memory need is worked out from (GGUF header; 0 when unknown)
+    layers: int = 0
+    kv_heads: int = 0
+    head_dim: int = 0
+    context: int = 0
 
     def public(self) -> dict[str, Any]:
         return asdict(self)
@@ -410,6 +445,7 @@ def _file_item(
         family=h.family,
         format=fmt, quant=h.quant, size=size, path=str(first), tool=tool.id,
         tool_title=tool.title, licence=h.licence, needs_gb=round(size * 1.15 / 1e9, 1),
+        layers=h.layers, kv_heads=h.kv_heads, head_dim=h.head_dim, context=h.context,
     )  # fmt: skip
 
 
@@ -456,6 +492,7 @@ def _scan_ollama(root: Path, tool: Tool, budget: Budget) -> list[Found]:
                 family=h.family, format="gguf", quant=h.quant, size=size, path=str(blob),
                 tool=tool.id, tool_title=tool.title, licence=h.licence,
                 needs_gb=round(size * 1.15 / 1e9, 1),
+                layers=h.layers, kv_heads=h.kv_heads, head_dim=h.head_dim, context=h.context,
             )
         )  # fmt: skip
     return out
@@ -610,10 +647,25 @@ LATER = {
 }  # fmt: skip
 
 
+PARTS = frozenset(
+    {"lora", "vae", "text_encoder", "controlnet", "upscaler", "vision_encoder", "other", "unknown"}
+)
+
+
+def need_of(item: Found) -> Need | None:
+    """What running this model asks of the computer; None for parts that are not run alone."""
+    if item.kind in PARTS:
+        return None
+    if item.kind in ("language", "embedding"):
+        return need_of_language(item.size, item.layers, item.kv_heads, item.head_dim, item.context)
+    return need_of_image(item.size, video=item.kind == "video")
+
+
 def assess(
-    items: list[Found], catalogue: list[ModelEntry], roots: list[Path], memory_bytes: int | None
+    items: list[Found], catalogue: list[ModelEntry], roots: list[Path], machine: Machine | None
 ) -> None:
-    """Set each item's state and reason: used already, usable in place, planned, or not usable."""
+    """Set each item's state and reason (used already, usable in place, planned, or not usable) and
+    whether it fits this computer. A model that cannot fit is never offered for use."""
     wanted: dict[tuple[str, int], tuple[str, str, ModelEntry]] = {}
     for e in catalogue:
         for f in e.files:
@@ -627,7 +679,10 @@ def assess(
     for it in items:
         p = Path(it.path)
         match = wanted.get((p.name, it.size))
+        need = need_of(it)
         if match and p.parent.name == match[0]:
+            if match[2].approx_ram_gb:
+                need = need_declared(match[2].approx_ram_gb)  # the whole pipeline, measured
             root = p.parent.parent
             used = any(root.resolve() == r for r in resolved_roots if root.exists())
             it.state = "ready" if used else "can_use"
@@ -645,8 +700,17 @@ def assess(
         else:
             it.state = "unsupported"
             it.reason = f"The app does not recognise this {KIND_WORDS.get(it.kind, 'file')} yet."
-        if it.kind == "language" and memory_bytes and it.size * 1.15 > memory_bytes:
-            it.reason += " It is larger than this computer's memory, so it would be very slow."
+        it.fit = None
+        if need is not None and machine is not None and it.state != "unsupported":
+            fit = assess_fit(need, machine)
+            it.fit = fit.public()
+            it.needs_gb = round(fit.needed_bytes / 1e9, 1)
+            if fit.verdict == "too_big":
+                it.state = "unsupported"
+                it.use_root = None
+                it.reason = fit.reason
+            elif fit.verdict == "tight":
+                it.reason = f"{it.reason} {fit.reason}"
 
 
 # ---- running tools ----------------------------------------------------------------------------
@@ -747,9 +811,8 @@ class DiscoveryService:
             result = await asyncio.to_thread(scan_folders, self.tools, list(self.folders))
             roots = self.models.roots() if self.models else []
             catalogue = list(self.models.catalogue.values()) if self.models else []
-            from wasifyai_api.desktop_models import physical_memory_bytes
-
-            assess(result.items, catalogue, roots, physical_memory_bytes())
+            machine = await self.models.machine() if self.models else None
+            assess(result.items, catalogue, roots, machine)
             self.items, self.scanned, self.truncated = (
                 result.items,
                 result.scanned,

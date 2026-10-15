@@ -2,6 +2,7 @@
 // Create and Edit: the shared two-panel screen with this window's model chip and setup notices.
 import { ImageStudio, Notice, type StudioPreset, cn } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
+import { FitBadge } from "../FitBadge";
 import { client, modelsApi } from "../api";
 import { COMFYUI, type ComponentStatus, componentStatus, onComponentStatus } from "../engine";
 import { images } from "../images";
@@ -68,11 +69,22 @@ export function CreatePage({
           {model.status === "ready" ? "ready" : "not downloaded"}
         </span>
       ) : null}
+      {model?.fit ? <FitBadge fit={model.fit} /> : null}
     </>
   );
 
+  // only a real model can be too big: the placeholder engine runs anywhere
+  const real = engine?.state === "installed";
+  const tooBig = real && model?.fit?.verdict === "too_big";
+  const tight = real && model?.fit?.verdict === "tight";
+
   const notices = (
     <>
+      {tight && model?.fit ? (
+        <Notice tone="warn" title="This computer is tight on memory">
+          {model.fit.reason}
+        </Notice>
+      ) : null}
       {engine?.state === "not_installed" ? (
         <Notice tone="info" title="Placeholder pictures">
           Real images need the image engine set up once.{" "}
@@ -112,6 +124,9 @@ export function CreatePage({
       preset={preset}
       onOpenLibrary={() => go("library")}
       canSave
+      blockedReason={
+        tooBig && model?.fit ? `${model.title} will not fit. ${model.fit.reason}` : null
+      }
     />
   );
 }

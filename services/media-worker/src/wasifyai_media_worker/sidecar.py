@@ -111,6 +111,12 @@ class ComfySidecar:
         return self._root / str(state["comfyui"]) if state and "comfyui" in state else None
 
     @property
+    def pid(self) -> int | None:
+        """The model server's process id while it runs (its memory is what an unload gives back)."""
+        proc = self._proc
+        return proc.pid if proc is not None and proc.returncode is None else None
+
+    @property
     def installed(self) -> bool:
         src = self.src_dir
         return bool(src and (src / "main.py").is_file() and self.venv_python.is_file())

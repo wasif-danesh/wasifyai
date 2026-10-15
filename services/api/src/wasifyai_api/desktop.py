@@ -36,6 +36,7 @@ from wasifyai_platform_sdk.sqlite import (
 from wasifyai_api.config import Settings
 from wasifyai_api.creation_index import IndexStore
 from wasifyai_api.desktop_discovery import DiscoveryService
+from wasifyai_api.desktop_fit import assess_fit, need_declared
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
 from wasifyai_api.runs import RunManager
@@ -135,11 +136,44 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     )
 
 
+class FitGuardRunner:
+    """Refuses a real image job when the model cannot fit this computer, before anything is loaded:
+    the person gets the reason in plain words instead of a stalled or crashed engine. The
+    placeholder engine is never blocked, and `tight` is allowed (the window asked first)."""
+
+    local_gpu = True
+
+    def __init__(self, inner: Any, sidecar: Any, models: Any, error: type[Exception]):
+        self._inner, self._sidecar, self._models, self._error = inner, sidecar, models, error
+
+    @property
+    def backend(self) -> str:
+        return self._inner.backend
+
+    async def run(self, job: Any, on_progress: Any, files: Any = None) -> Any:
+        if self._sidecar.installed:
+            reason = await self._too_big()
+            if reason:
+                raise self._error("model_too_big", reason)  # type: ignore[call-arg]
+        if files:
+            return await self._inner.run(job, on_progress, files=files)
+        return await self._inner.run(job, on_progress)
+
+    async def _too_big(self) -> str | None:
+        machine = await self._models.machine()
+        for entry in self._models.catalogue.values():
+            if entry.approx_ram_gb and entry.product_id == "wasifyai-image":
+                fit = assess_fit(need_declared(entry.approx_ram_gb), machine)
+                if fit.verdict == "too_big":
+                    return f"{entry.title} will not fit on this computer. {fit.reason}"
+        return None
+
+
 def _build_worker(d: DesktopBackends):
     """The media worker of this process. Imported here, not at the top: the web API image does not
     carry the worker package, and the desktop engine does (`wasifyai-api[desktop]`)."""
     import httpx
-    from wasifyai_media_worker.comfy import ComfyClient
+    from wasifyai_media_worker.comfy import ComfyClient, ComfyError
     from wasifyai_media_worker.local import LocalWorker
     from wasifyai_media_worker.processor import ComfyRunner, JobProcessor, StubRunner
     from wasifyai_media_worker.settings import WorkerSettings
@@ -181,6 +215,9 @@ def _build_worker(d: DesktopBackends):
         raise RuntimeError(
             f"DESKTOP_IMAGE_ENGINE must be stub, comfyui, auto or external: {mode!r}"
         )
+
+    if mode != "stub" and models is not None:
+        runner = FitGuardRunner(runner, sidecar, models, ComfyError)
 
     # one big model in memory at a time; the image engine unloads through ComfyUI's /free
     slot = SlotManager({"image": sidecar.unload_models}, idle_unload_s=s.desktop_idle_unload_s)

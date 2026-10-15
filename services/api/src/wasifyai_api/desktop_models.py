@@ -16,7 +16,6 @@ import hashlib
 import logging
 import os
 import shutil
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -30,6 +29,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from wasifyai_platform_sdk import Identity
 
+from wasifyai_api.desktop_fit import (
+    Machine,
+    assess_fit,
+    need_declared,
+    physical_memory_bytes,
+    process_rss_bytes,
+    read_machine,
+)
 from wasifyai_api.identity import get_identity
 from wasifyai_api.safeguards import SettingsStore
 
@@ -110,29 +117,6 @@ def load_catalogue(products_dir: Path, product_ids: list[str]) -> list[ModelEntr
 
 
 # ---- the computer -----------------------------------------------------------------------------
-
-
-def physical_memory_bytes() -> int | None:
-    try:
-        if sys.platform == "win32":
-            import ctypes
-
-            class Status(ctypes.Structure):
-                _fields_ = [  # noqa: RUF012
-                    ("length", ctypes.c_ulong), ("load", ctypes.c_ulong),
-                    ("total_phys", ctypes.c_ulonglong), ("avail_phys", ctypes.c_ulonglong),
-                    ("total_page", ctypes.c_ulonglong), ("avail_page", ctypes.c_ulonglong),
-                    ("total_virt", ctypes.c_ulonglong), ("avail_virt", ctypes.c_ulonglong),
-                    ("avail_ext", ctypes.c_ulonglong),
-                ]  # fmt: skip
-
-            st = Status()
-            st.length = ctypes.sizeof(Status)
-            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st))  # type: ignore[attr-defined]
-            return int(st.total_phys)
-        return os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
-    except (OSError, ValueError, AttributeError):
-        return None
 
 
 def free_disk_bytes(path: Path) -> int:
@@ -365,7 +349,18 @@ class ModelsService:
                 return p
         return None
 
-    def entry_state(self, e: ModelEntry) -> dict[str, Any]:
+    def reclaimable_bytes(self) -> int:
+        """Memory the app's own resident model holds: free to whatever is loaded next."""
+        slot, side = self.slot, self.sidecar
+        if slot is not None and slot.resident_owner and side is not None:
+            return process_rss_bytes(getattr(side, "pid", None))
+        return 0
+
+    async def machine(self) -> Machine:
+        """The computer's memory now (a few commands are run: not on the event loop)."""
+        return await asyncio.to_thread(lambda: read_machine(self.reclaimable_bytes()))
+
+    def entry_state(self, e: ModelEntry, machine: Machine | None = None) -> dict[str, Any]:
         files = []
         for f in e.files:
             found = self.locate(f)
@@ -380,13 +375,10 @@ class ModelsService:
             )  # fmt: skip
         missing = [f for f in files if not f["present"]]
         status = "ready" if not missing else ("partial" if len(missing) < len(files) else "missing")
-        ram = physical_memory_bytes()
-        gate = None
-        if ram and e.approx_ram_gb and ram < e.approx_ram_gb * 1_000_000_000:
-            gate = (
-                f"This model needs about {e.approx_ram_gb} GB of memory and this computer has "
-                f"{ram / 1e9:.0f} GB. It may not run, or may be very slow."
-            )
+        fit = None
+        if e.approx_ram_gb:
+            fit = assess_fit(need_declared(e.approx_ram_gb), machine or read_machine())
+        gate = fit.reason if fit and fit.verdict != "fits" else None
         return {
             "id": e.id, "product_id": e.product_id, "title": e.title, "licence": e.licence,
             "source": e.source, "note": e.note, "approx_ram_gb": e.approx_ram_gb,
@@ -394,6 +386,7 @@ class ModelsService:
             "files": files, "bytes_total": e.total_bytes,
             "bytes_missing": sum(f["size"] for f in missing),
             "memory_warning": gate,
+            "fit": fit.public() if fit else None,
         }  # fmt: skip
 
     def remove(self, e: ModelEntry) -> int:
@@ -433,6 +426,8 @@ class Confirm(BaseModel):
 
     files: list[str]
     bytes: int
+    # the person was told the model will not fit and still wants the files (for another machine)
+    accept_memory: bool = False
 
 
 class Folders(BaseModel):
@@ -444,9 +439,11 @@ class Folders(BaseModel):
 async def list_models(request: Request, _: Identity = Depends(get_identity)) -> dict[str, Any]:
     svc = _svc(request)
     ram = physical_memory_bytes()
+    machine = await svc.machine()
     active = svc.downloads.active or svc.downloads.latest()
     return {
-        "models": [svc.entry_state(e) for e in svc.catalogue.values()],
+        "models": [svc.entry_state(e, machine) for e in svc.catalogue.values()],
+        "machine": machine.public(),
         "folders": {
             "models_dir": str(svc.models_dir),
             "extra_dirs": [str(p) for p in svc.extra_dirs],
@@ -470,6 +467,10 @@ async def start_download(
         f.size for f in missing
     ):
         raise HTTPException(409, "The list of files changed. Review it and confirm again.")
+    if e.approx_ram_gb and not body.accept_memory:
+        fit = assess_fit(need_declared(e.approx_ram_gb), await svc.machine())
+        if fit.verdict == "too_big":
+            raise HTTPException(409, f"This model will not fit on this computer. {fit.reason}")
     try:
         d = svc.downloads.start(e, missing, svc.models_dir)
     except DownloadError as exc:

@@ -292,6 +292,31 @@ Measured on the owner's Mac (Ollama, the Hugging Face cache, Comfy Desktop's sha
 found in 0.1 s: 4 language, 6 image, 2 video, 3 embedding, 1 LoRA, 9 parts and files of image models; three
 FLUX.2 klein files are `can_use`.
 
+## Will it fit? (ADR-0063)
+
+`desktop_fit.py` answers `fits`, `tight` or `too_big` for a model, with a reason in plain words, from what the
+computer has now.
+
+| Device | Capacity (more cannot work) | Budget (free to use now) |
+|---|---|---|
+| Apple silicon (unified memory) | 90% of the memory | 75% of it, or what is available if less |
+| NVIDIA card | the card's memory; a language model may spill into 50% of the RAM | the card's free memory (the same spill rule) |
+| Processor only | 85% of the memory | what is available |
+
+- **Free memory** is read from `vm_stat` (macOS), `/proc/meminfo` (Linux) or `GlobalMemoryStatusEx` (Windows);
+  the card from `nvidia-smi`. Memory held by the app's own resident model counts as free, because the next model
+  is loaded into it.
+- **What a model asks for:** the catalogue's declared (measured) figure where it has one, otherwise an estimate:
+  language models are weights plus the KV cache for 8192 tokens (from the GGUF header) plus 0.6 GB; image and
+  video files are weights x 1.15 plus 3 GB (6 GB for video). Estimates are labelled "about".
+- **Where it is used:** the Models list and found models (a badge and the reason); the download confirmation
+  (`too_big` needs "get the files anyway", the engine refuses a request without `accept_memory`); the Create
+  screen (a notice for `tight`, Generate off for `too_big` with the reason); and the engine itself, which
+  refuses a real image job that cannot fit before anything is loaded (`FitGuardRunner`, error `model_too_big`).
+  A found model that cannot fit is never offered with "Use it".
+- **Tune with measurements.** The 0.9 / 0.75 / 0.85 limits and the +3 GB working memory are starting values;
+  record real peaks per model family and adjust.
+
 ## The self-test
 
 `WASIFYAI_SMOKE=1 cargo run` (in `apps/desktop/src-tauri`) starts the shell as usual; once the engine is ready

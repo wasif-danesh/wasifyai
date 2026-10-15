@@ -20,6 +20,7 @@ const entry = (present: boolean[]): ModelEntry => ({
   bytes_total: 300,
   bytes_missing: 0,
   memory_warning: null,
+  fit: null,
   files: present.map((p, i) => ({
     folder: "vae",
     name: `f${i}.safetensors`,
@@ -98,5 +99,13 @@ describe("the models api", () => {
       models_dir: "/Volumes/Big/models",
       extra_dirs: ["/Users/me/ComfyUI-Shared/models"],
     });
+  });
+});
+
+describe("accepting a model that will not fit", () => {
+  it("sends the flag only when the person chose it", () => {
+    const e = entry([false, false]);
+    expect(confirmationFor(e)).not.toHaveProperty("accept_memory");
+    expect(confirmationFor(e, true).accept_memory).toBe(true);
   });
 });

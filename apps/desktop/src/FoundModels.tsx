@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { Button, Notice, cn } from "@wasifyai/ui";
 import { useCallback, useEffect, useState } from "react";
+import { FitBadge } from "./FitBadge";
 import { discoveryApi } from "./api";
 import {
   type DiscoveryState,
@@ -209,6 +210,7 @@ export function FoundModels({ onChanged }: { onChanged?: () => void }) {
                   {detailOf(m) ? ` · ${detailOf(m)}` : ""}
                   {m.licence ? ` · ${m.licence}` : ""}
                 </p>
+                {m.fit ? <FitBadge fit={m.fit} /> : null}
                 {m.reason ? <p className="text-sm">{m.reason}</p> : null}
               </li>
             ))}

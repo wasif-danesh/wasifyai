@@ -14,6 +14,17 @@ export type ModelFile = {
   partial_bytes: number;
 };
 
+/** Whether a model fits this computer: `tight` may be slow or fail, `too_big` will not run. */
+export type Fit = {
+  verdict: "fits" | "tight" | "too_big";
+  reason: string;
+  needed_bytes: number;
+  budget_bytes: number | null;
+  capacity_bytes: number | null;
+  estimate: boolean;
+  partly_on_cpu: boolean;
+};
+
 export type ModelEntry = {
   id: string;
   title: string;
@@ -26,6 +37,7 @@ export type ModelEntry = {
   bytes_total: number;
   bytes_missing: number;
   memory_warning: string | null;
+  fit: Fit | null;
 };
 
 export type DownloadState = {
@@ -41,6 +53,7 @@ export type DownloadState = {
 
 export type ModelsOverview = {
   models: ModelEntry[];
+  machine?: { device: string; total_bytes: number | null; available_bytes: number | null };
   folders: { models_dir: string; extra_dirs: string[] };
   memory_bytes: number | null;
   disk_free_bytes: number;
@@ -61,9 +74,16 @@ export function missingFiles(e: ModelEntry): { files: ModelFile[]; bytes: number
 }
 
 /** What the engine requires back with a download request. */
-export function confirmationFor(e: ModelEntry): { files: string[]; bytes: number } {
+export function confirmationFor(
+  e: ModelEntry,
+  acceptMemory = false,
+): { files: string[]; bytes: number; accept_memory?: boolean } {
   const { files, bytes } = missingFiles(e);
-  return { files: files.map((f) => f.name), bytes };
+  return {
+    files: files.map((f) => f.name),
+    bytes,
+    ...(acceptMemory ? { accept_memory: true } : {}),
+  };
 }
 
 /** 0 to 1 */
@@ -92,11 +112,11 @@ export function createModelsApi(transport: Transport) {
   return {
     overview: () => json<ModelsOverview>(transport, "/desktop/models"),
     download: (id: string) => json<DownloadState>(transport, `/desktop/downloads/${id}`),
-    start: (entry: ModelEntry) =>
+    start: (entry: ModelEntry, acceptMemory = false) =>
       json<DownloadState>(transport, `/desktop/models/${entry.id}/download`, {
         method: "POST",
         headers: JSON_HEADERS,
-        body: JSON.stringify(confirmationFor(entry)),
+        body: JSON.stringify(confirmationFor(entry, acceptMemory)),
       }),
     cancel: (id: string) =>
       json<{ cancelled: boolean }>(transport, `/desktop/downloads/${id}/cancel`, {

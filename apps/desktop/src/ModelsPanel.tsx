@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { Button, JobMeter, Notice } from "@wasifyai/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FitBadge } from "./FitBadge";
 import { modelsApi } from "./api";
 import { humanBytes } from "./engine";
 import {
@@ -24,6 +25,8 @@ export function ModelsPanel() {
   const [overview, setOverview] = useState<ModelsOverview | null>(null);
   const [engine, setEngine] = useState<EngineInfo | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  // the person was told a model will not fit and chose to get its files anyway
+  const [insist, setInsist] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modelsDir, setModelsDir] = useState("");
   const [extraDirs, setExtraDirs] = useState("");
@@ -99,9 +102,13 @@ export function ModelsPanel() {
               </span>
             </div>
             {m.note ? <p className="text-muted-foreground text-sm">{m.note}</p> : null}
-            {m.memory_warning ? (
-              <Notice tone="warn" title="This computer may be too small">
-                {m.memory_warning}
+            {m.fit ? <FitBadge fit={m.fit} /> : null}
+            {m.fit && m.fit.verdict !== "fits" ? (
+              <Notice
+                tone={m.fit.verdict === "too_big" ? "error" : "warn"}
+                title={m.fit.verdict === "too_big" ? "This will not fit" : "This computer is tight"}
+              >
+                {m.fit.reason}
               </Notice>
             ) : null}
 
@@ -146,17 +153,39 @@ export function ModelsPanel() {
                   drive: {humanBytes(overview.disk_free_bytes)}. The files are checked against their
                   published checksums.
                 </p>
+                {m.fit?.verdict === "too_big" ? (
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={insist}
+                      onChange={(e) => setInsist(e.target.checked)}
+                    />
+                    <span>
+                      I know it will not run on this computer. Get the files anyway (for another
+                      computer, or this one after an upgrade).
+                    </span>
+                  </label>
+                ) : null}
                 <div className="flex gap-2">
                   <Button
                     type="button"
+                    disabled={m.fit?.verdict === "too_big" && !insist}
                     onClick={() => {
                       setConfirming(null);
-                      void act(() => modelsApi.start(m));
+                      void act(() => modelsApi.start(m, insist));
+                      setInsist(false);
                     }}
                   >
                     Get {humanBytes(bytes)}
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => setConfirming(null)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setConfirming(null);
+                      setInsist(false);
+                    }}
+                  >
                     Not now
                   </Button>
                 </div>

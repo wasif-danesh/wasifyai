@@ -60,6 +60,8 @@ export type ImageStudioProps = {
   onOpenLibrary?: () => void;
   /** Whether "Save a copy" (the engine exports to a folder) is on offer. */
   canSave?: boolean;
+  /** Why making an image is not possible right now (for example: the model cannot fit). */
+  blockedReason?: string | null;
 };
 
 function useRecent(refreshOn: string | undefined, api: ImagesApi) {
@@ -104,6 +106,7 @@ export function ImageStudio({
   preset,
   onOpenLibrary,
   canSave = false,
+  blockedReason = null,
 }: ImageStudioProps) {
   const id = useId();
   const flow = useImageFlow(runs);
@@ -145,7 +148,8 @@ export function ImageStudio({
   const valid =
     trimmed.length > 0 &&
     prompt.length <= MAX_PROMPT &&
-    (mode === "text" || (pic.picture !== null && pic.status !== "uploading"));
+    (mode === "text" || (pic.picture !== null && pic.status !== "uploading")) &&
+    !blockedReason;
 
   const begin = useCallback(
     (text: string, sizeId: string, withSeed: number | null) => {
@@ -341,6 +345,11 @@ export function ImageStudio({
               {working ? <Spinner /> : null}
               Generate
             </Button>
+            {blockedReason ? (
+              <p className="mt-2 text-destructive text-sm" role="alert">
+                {blockedReason}
+              </p>
+            ) : null}
           </div>
         </section>
 

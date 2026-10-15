@@ -170,6 +170,7 @@ def test_models_already_on_the_computer_are_found_and_used_in_place(data_dir):
         # the first scan runs by itself shortly after start; ask for it now and wait
         assert c.get("/desktop/discovery").status_code == 401  # a token is needed like anywhere
         c.post("/desktop/discovery/scan", headers=auth())
+        state: dict = {}
         for _ in range(100):
             state = c.get("/desktop/discovery", headers=auth()).json()
             if state["scanned_at"] and not state["running"]:

@@ -1,6 +1,6 @@
 # ADR-0059: ComfyUI as the managed image engine of the desktop app
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-15)
 - **Date:** 2026-10-14
 - **Depends on:** ADR-0010, ADR-0017, ADR-0024, ADR-0051 (variants, `lora_chain`), ADR-0056 (profiles, slot
   manager, provisioning). Uses the provider interfaces of ADR-0032.

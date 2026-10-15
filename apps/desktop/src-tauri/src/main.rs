@@ -7,6 +7,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod comfyui;
 mod disk;
 mod download;
 mod engine;
@@ -49,6 +50,30 @@ async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn component_status(
+    id: String,
+    components: State<'_, comfyui::Components>,
+) -> Result<comfyui::ComponentStatus, String> {
+    if id != comfyui::COMPONENT {
+        return Err(format!("unknown component {id}"));
+    }
+    Ok(components.status())
+}
+
+#[tauri::command]
+fn component_install(
+    id: String,
+    repair: bool,
+    app: tauri::AppHandle,
+    components: State<'_, comfyui::Components>,
+) -> Result<(), String> {
+    if id != comfyui::COMPONENT {
+        return Err(format!("unknown component {id}"));
+    }
+    components.start(app, repair)
+}
+
+#[tauri::command]
 fn engine_repair(engine: State<'_, Engine>) {
     engine.repair();
 }
@@ -64,6 +89,17 @@ fn smoke_requested() -> bool {
 #[tauri::command]
 fn smoke_enabled() -> bool {
     smoke_requested()
+}
+
+/// With the self-test on, the optional component it should set up instead of making an image.
+#[tauri::command]
+fn smoke_component() -> Option<String> {
+    if !smoke_requested() {
+        return None;
+    }
+    std::env::var("WASIFYAI_SMOKE_COMPONENT")
+        .ok()
+        .filter(|c| !c.is_empty())
 }
 
 /// The self-test's verdict: print it and quit with 0 (passed) or 1. Does nothing in a normal run.
@@ -147,9 +183,12 @@ fn main() {
             engine_session,
             engine_restart,
             engine_repair,
+            component_status,
+            component_install,
             update_check,
             update_install,
             smoke_enabled,
+            smoke_component,
             smoke_report
         ])
         .setup(move |app| {
@@ -160,13 +199,12 @@ fn main() {
                 None => app.path().app_data_dir()?,
             };
             std::fs::create_dir_all(&data_dir)?;
-            engine.start(
-                app.handle().clone(),
-                engine::Input {
-                    data_dir,
-                    resource_dir: app.path().resource_dir().ok(),
-                },
-            );
+            let input = engine::Input {
+                data_dir,
+                resource_dir: app.path().resource_dir().ok(),
+            };
+            app.manage(comfyui::Components::new(input.clone()));
+            engine.start(app.handle().clone(), input);
             quit_on_signals(app.handle().clone());
             Ok(())
         });

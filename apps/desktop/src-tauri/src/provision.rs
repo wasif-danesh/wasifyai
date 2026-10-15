@@ -44,6 +44,8 @@ pub const STEPS: [(&str, &str); 6] = [
 /// What the window shows while the engine is being installed.
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct Progress {
+    /// "engine" (uv, Python, the engine) or an optional component such as "comfyui"
+    pub component: String,
     pub step: String,
     pub label: String,
     /// 1-based position of this step, out of `count`.
@@ -136,6 +138,14 @@ pub struct FileEntry {
     pub size: u64,
 }
 
+/// The optional ComfyUI component's files in the bundle: a hashed lock per platform it supports.
+#[derive(Debug, Deserialize)]
+pub struct ComfyBundle {
+    pub version: String,
+    /// keyed by Rust target triple
+    pub locks: std::collections::BTreeMap<String, FileEntry>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Bundle {
     pub schema: u32,
@@ -143,6 +153,8 @@ pub struct Bundle {
     pub wheels: Vec<FileEntry>,
     #[serde(default)]
     pub product_files: Vec<FileEntry>,
+    #[serde(default)]
+    pub comfyui: Option<ComfyBundle>,
 }
 
 /// Read `bundle.json`; returns it with the checksum of the file itself (the version of the bundle).
@@ -164,7 +176,7 @@ pub fn load_bundle(dir: &Path) -> Result<(Bundle, String), String> {
 }
 
 /// A path from `bundle.json` must stay inside the bundle.
-fn inside(dir: &Path, rel: &str) -> Result<PathBuf, String> {
+pub(crate) fn inside(dir: &Path, rel: &str) -> Result<PathBuf, String> {
     let p = Path::new(rel);
     if p.is_absolute() || p.components().any(|c| matches!(c, Component::ParentDir)) {
         return Err(format!("{rel}: a path outside the bundle"));
@@ -176,7 +188,8 @@ fn inside(dir: &Path, rel: &str) -> Result<PathBuf, String> {
 pub fn verify_bundle(dir: &Path, bundle: &Bundle) -> Result<(), String> {
     let files = std::iter::once(&bundle.requirements)
         .chain(bundle.wheels.iter())
-        .chain(bundle.product_files.iter());
+        .chain(bundle.product_files.iter())
+        .chain(bundle.comfyui.iter().flat_map(|c| c.locks.values()));
     for entry in files {
         let path = inside(dir, &entry.file)?;
         let wrong_size = entry.size != 0
@@ -239,6 +252,7 @@ impl Reporter {
     fn at(&self, step: usize, detail: Option<String>, bytes: Option<(u64, u64)>) {
         let (id, label) = STEPS[step];
         (self.on)(Progress {
+            component: "engine".to_string(),
             step: id.to_string(),
             label: label.to_string(),
             index: step as u32 + 1,
@@ -332,7 +346,7 @@ async fn run_steps(
 
     // 2. uv ------------------------------------------------------------------------------------
     r.at(1, None, None);
-    let uv = ensure_uv(cfg, layout, mode, r, log)
+    let uv = ensure_uv(cfg, layout, mode, &|d, t| r.at(1, None, Some((d, t))), log)
         .await
         .map_err(|m| fail(1, m))?;
 
@@ -460,11 +474,11 @@ async fn run_steps(
 
 /// The path of a working uv: the one already unpacked (if its checksum still matches what was
 /// recorded when it was unpacked), or a fresh verified download.
-async fn ensure_uv(
+pub(crate) async fn ensure_uv(
     cfg: &ProvisionConfig,
     layout: &Layout,
     mode: Mode,
-    r: &Reporter,
+    on_bytes: &(dyn Fn(u64, u64) + Sync),
     log: &LogSink,
 ) -> Result<PathBuf, String> {
     let asset = cfg.manifest.uv_asset()?;
@@ -501,7 +515,7 @@ async fn ensure_uv(
         &asset.sha256,
         asset.size,
         cfg.allow_http,
-        |done, total| r.at(1, None, Some((done, total))),
+        |done, total| on_bytes(done, total),
     )
     .await
     .map_err(|e: DownloadError| e.to_string())?;
@@ -518,7 +532,7 @@ async fn ensure_uv(
 }
 
 /// The environment uv runs with: everything under the engine folder, no user configuration.
-fn uv_env(layout: &Layout) -> Vec<(OsString, OsString)> {
+pub(crate) fn uv_env(layout: &Layout) -> Vec<(OsString, OsString)> {
     let pairs: [(&str, OsString); 7] = [
         (
             "UV_PYTHON_INSTALL_DIR",
@@ -535,7 +549,7 @@ fn uv_env(layout: &Layout) -> Vec<(OsString, OsString)> {
 }
 
 /// Run a program, passing its output lines to `on_line`; on failure the error carries its last lines.
-async fn run(
+pub(crate) async fn run(
     program: &Path,
     args: &[&str],
     env: &[(OsString, OsString)],
@@ -604,7 +618,7 @@ async fn run(
     }
 }
 
-fn dir_size(path: &Path) -> u64 {
+pub(crate) fn dir_size(path: &Path) -> u64 {
     let mut total = 0;
     let mut stack = vec![path.to_path_buf()];
     while let Some(p) = stack.pop() {

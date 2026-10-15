@@ -1,6 +1,6 @@
 # ADR-0057: An AI assistant, ChatGPT-style, on desktop and web
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-15)
 - **Date:** 2026-10-14
 - **Depends on:** ADR-0003 (graphs), ADR-0010 (capabilities), ADR-0021 (event log), ADR-0040/0041 (library and
   search), ADR-0046 (side panel), ADR-0047 (safeguards). Related: ADR-0056, ADR-0058.

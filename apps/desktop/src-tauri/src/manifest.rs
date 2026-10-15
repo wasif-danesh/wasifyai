@@ -14,6 +14,19 @@ pub struct Manifest {
     pub uv: Uv,
     pub python: Python,
     pub disk: Disk,
+    /// The optional image-engine component (ADR-0059). Absent: no component on this build.
+    #[serde(default)]
+    pub comfyui: Option<ComfyUi>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ComfyUi {
+    pub version: String,
+    /// the source archive of the tagged release
+    pub source: Asset,
+    /// target triples the component is installed on
+    pub platforms: Vec<String>,
+    pub disk: Disk,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -72,6 +85,20 @@ impl Manifest {
             .assets
             .get(target)
             .ok_or_else(|| format!("the manifest has no uv build for {target}"))
+    }
+
+    /// Why the ComfyUI component cannot be installed here, or None when it can.
+    pub fn comfyui_unsupported(&self) -> Option<String> {
+        let Some(c) = &self.comfyui else {
+            return Some("This build has no image engine.".into());
+        };
+        match host_target() {
+            Some(t) if c.platforms.iter().any(|p| p == t) => None,
+            _ => Some(
+                "Real images need an Apple-silicon Mac in this version. The placeholder engine still works."
+                    .into(),
+            ),
+        }
     }
 
     pub fn uv_binary_name(&self) -> &str {
@@ -145,6 +172,33 @@ mod tests {
             assert_eq!(parts.len(), 3, "{v} is not an exact version");
             assert!(parts.iter().all(|p| p.chars().all(|c| c.is_ascii_digit())));
         }
+    }
+
+    #[test]
+    fn comfyui_is_pinned_exactly_and_only_where_it_is_supported() {
+        let m = Manifest::load().unwrap();
+        let c = m
+            .comfyui
+            .as_ref()
+            .expect("the manifest carries the component");
+        assert!(is_sha256(&c.source.sha256));
+        assert_eq!(c.source.archive, "tar.gz");
+        assert!(
+            c.source.url.contains(&format!("v{}", c.version)),
+            "url is for another version"
+        );
+        assert!(c
+            .source
+            .url
+            .starts_with("https://github.com/comfyanonymous/ComfyUI/"));
+        assert_eq!(c.version.split('.').count(), 3);
+        assert_eq!(c.platforms, ["aarch64-apple-darwin"]);
+        assert!(c.disk.min_free_bytes > 1_000_000_000);
+        // the reason is a sentence for a person, and is given exactly when this machine is outside the list
+        assert_eq!(
+            m.comfyui_unsupported().is_none(),
+            host_target() == Some("aarch64-apple-darwin")
+        );
     }
 
     #[test]

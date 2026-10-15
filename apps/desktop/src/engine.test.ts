@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { type InstallProgress, installFraction } from "./engine";
+import { type InstallProgress, humanBytes, installFraction } from "./engine";
 
 const at = (
   index: number,
   done: number | null = null,
   total: number | null = null,
 ): InstallProgress => ({
+  component: "comfyui",
   step: "x",
   label: "x",
   index,
@@ -28,5 +29,13 @@ describe("installFraction", () => {
   it("never goes past the end or below the start", () => {
     expect(installFraction(at(6, 99, 10))).toBeLessThanOrEqual(1);
     expect(installFraction(at(1, null, 0))).toBe(0);
+  });
+});
+
+describe("humanBytes", () => {
+  it("writes sizes the way the rest of the app does", () => {
+    expect(humanBytes(4_294_967_296)).toBe("4.3 GB");
+    expect(humanBytes(620_000_000)).toBe("620 MB");
+    expect(humanBytes(10)).toBe("1 MB");
   });
 });

@@ -180,6 +180,61 @@ pub fn extract_file(archive: &Path, kind: &str, wanted: &str, dest: &Path) -> Re
     std::fs::rename(&part, dest).map_err(|e| e.to_string())
 }
 
+/// Unpack a `.tar.gz` into `dest`, dropping the first `strip` path components (the archive's top folder).
+/// Only regular files and folders are written; a link, an absolute path or a `..` is an error, so an
+/// archive cannot write outside `dest`.
+pub fn extract_tree(archive: &Path, strip: usize, dest: &Path) -> Result<u64, String> {
+    use std::path::Component;
+    let f = File::open(archive).map_err(|e| e.to_string())?;
+    let mut tar = tar::Archive::new(flate2::read::GzDecoder::new(f));
+    std::fs::create_dir_all(dest).map_err(|e| e.to_string())?;
+    let mut files = 0u64;
+    for entry in tar.entries().map_err(|e| e.to_string())? {
+        let mut entry = entry.map_err(|e| e.to_string())?;
+        let kind = entry.header().entry_type();
+        let path = entry.path().map_err(|e| e.to_string())?.into_owned();
+        if path.is_absolute() || path.components().any(|c| matches!(c, Component::ParentDir)) {
+            return Err(format!(
+                "the archive names a path outside itself: {}",
+                path.display()
+            ));
+        }
+        let rel: PathBuf = path.components().skip(strip).collect();
+        if rel.as_os_str().is_empty() {
+            continue; // the top folder itself
+        }
+        let target = dest.join(&rel);
+        if kind.is_dir() {
+            std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
+        } else if kind.is_file() {
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            let mut out = File::create(&target).map_err(|e| e.to_string())?;
+            std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if let Ok(mode) = entry.header().mode() {
+                    let _ = std::fs::set_permissions(
+                        &target,
+                        std::fs::Permissions::from_mode(mode & 0o755 | 0o600),
+                    );
+                }
+            }
+            files += 1;
+        } else if kind.is_pax_global_extensions() || kind.is_pax_local_extensions() {
+            continue; // archive metadata (GitHub writes one)
+        } else {
+            return Err(format!(
+                "the archive holds a link or special file: {}",
+                path.display()
+            ));
+        }
+    }
+    Ok(files)
+}
+
 fn file_name_is(path: &Path, wanted: &str) -> bool {
     path.file_name().map(|n| n == wanted).unwrap_or(false)
 }
@@ -368,6 +423,68 @@ mod tests {
         let dest = dir.join("uv.exe");
         extract_file(&archive, "zip", "uv.exe", &dest).unwrap();
         assert_eq!(std::fs::read(&dest).unwrap(), b"BINARY");
+    }
+
+    fn make_tree_archive(dir: &Path, entries: &[(&str, &[u8])]) -> PathBuf {
+        let archive = dir.join("tree.tar.gz");
+        let gz = flate2::write::GzEncoder::new(
+            File::create(&archive).unwrap(),
+            flate2::Compression::fast(),
+        );
+        let mut tar = tar::Builder::new(gz);
+        for (name, data) in entries {
+            let mut h = tar::Header::new_gnu();
+            h.set_size(data.len() as u64);
+            h.set_mode(0o644);
+            h.set_cksum();
+            tar.append_data(&mut h, name, *data).unwrap();
+        }
+        tar.into_inner().unwrap().finish().unwrap();
+        archive
+    }
+
+    #[test]
+    fn a_tree_is_unpacked_without_its_top_folder() {
+        let dir = temp("tree");
+        let archive = make_tree_archive(
+            &dir,
+            &[
+                ("App-1.0/main.py", b"print(1)"),
+                ("App-1.0/pkg/mod.py", b"x = 1"),
+            ],
+        );
+        let dest = dir.join("out");
+        assert_eq!(extract_tree(&archive, 1, &dest).unwrap(), 2);
+        assert_eq!(std::fs::read(dest.join("main.py")).unwrap(), b"print(1)");
+        assert_eq!(std::fs::read(dest.join("pkg/mod.py")).unwrap(), b"x = 1");
+    }
+
+    #[test]
+    fn a_tree_that_climbs_out_is_refused() {
+        let dir = temp("climb");
+        // tar::Builder refuses `..` itself, so write the header bytes by hand
+        let archive = dir.join("bad.tar.gz");
+        {
+            let gz = flate2::write::GzEncoder::new(
+                File::create(&archive).unwrap(),
+                flate2::Compression::fast(),
+            );
+            let mut tar = tar::Builder::new(gz);
+            let mut h = tar::Header::new_gnu();
+            h.set_size(1);
+            h.set_mode(0o644);
+            {
+                let name = b"App-1.0/../../evil.txt";
+                let raw = h.as_old_mut();
+                raw.name[..name.len()].copy_from_slice(name);
+            }
+            h.set_cksum();
+            tar.append(&h, &b"x"[..]).unwrap();
+            tar.into_inner().unwrap().finish().unwrap();
+        }
+        let err = extract_tree(&archive, 1, &dir.join("out")).unwrap_err();
+        assert!(err.contains("outside"), "{err}");
+        assert!(!dir.join("evil.txt").exists());
     }
 
     #[test]

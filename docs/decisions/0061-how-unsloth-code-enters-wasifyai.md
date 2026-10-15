@@ -1,6 +1,6 @@
 # ADR-0061: How Unsloth code enters wasifyai: a reference clone and selective import, not a repo move
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-15)
 - **Date:** 2026-10-14
 - **Depends on:** ADR-0056 (one engine, two shells), ADR-0059 (image engine), ADR-0002 (monorepo).
 

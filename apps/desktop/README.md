@@ -10,8 +10,9 @@ apps/desktop/
 ├─ src/                 the window (Vite + React): the shared create screen, or the engine's state
 │                       transport.ts (loopback + token), smoke.ts (the self-test)
 ├─ src-tauri/           the shell (Rust)
-│  ├─ engine-manifest.json   exact uv and Python pins and checksums
+│  ├─ engine-manifest.json   exact uv, Python and ComfyUI pins and checksums
 │  └─ src/              engine.rs (supervision), provision.rs + manifest.rs + download.rs (the installer),
+│                       comfyui.rs (the optional image-engine component),
 │                       updater.rs (off until a key and feed are set), session.rs, main.rs
 │                       windows_job.rs, loopback_http.rs: imported, see PROVENANCE.md
 └─ LICENSE-AGPL

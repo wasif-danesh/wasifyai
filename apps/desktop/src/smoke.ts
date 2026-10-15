@@ -7,13 +7,20 @@ import { invoke } from "@tauri-apps/api/core";
 
 const PROMPT = "a red ceramic teapot on a wooden table";
 const TIMEOUT_MS = 90_000;
+const INSTALL_TIMEOUT_MS = 30 * 60_000;
 
 export const smokeEnabled = () => invoke<boolean>("smoke_enabled");
+/** The optional component the self-test should set up instead of making an image, if any. */
+export const smokeComponent = () => invoke<string | null>("smoke_component");
 
 const report = (ok: boolean, detail: string) => invoke<void>("smoke_report", { ok, detail });
 
-async function until<T>(what: string, find: () => T | null | undefined | false): Promise<T> {
-  const deadline = Date.now() + TIMEOUT_MS;
+async function until<T>(
+  what: string,
+  find: () => T | null | undefined | false,
+  timeoutMs = TIMEOUT_MS,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
   for (;;) {
     const found = find();
     if (found) return found;
@@ -54,6 +61,42 @@ export async function runSmoke(): Promise<void> {
       true,
       `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}`,
     );
+  } catch (e) {
+    await report(false, e instanceof Error ? e.message : String(e)).catch(() => {});
+  }
+}
+
+/** Set up the image engine the way a person does: press the button, wait until it says it is installed. */
+export async function runComponentSmoke(): Promise<void> {
+  const started = Date.now();
+  try {
+    const go = await until("the Set up image generation button", () =>
+      [...document.querySelectorAll("button")].find(
+        (b) => b.textContent?.includes("Set up image generation") && !b.disabled,
+      ),
+    );
+    go.click();
+    const verdict = await until(
+      "the image engine to be installed",
+      () => {
+        const text = document.body.textContent ?? "";
+        if (text.includes("Image engine installed")) return "installed";
+        if (text.includes("could not be set up")) return "failed";
+        return null;
+      },
+      INSTALL_TIMEOUT_MS,
+    );
+    const secs = Math.round((Date.now() - started) / 1000);
+    if (verdict === "failed") {
+      const notice = document.querySelector('[role="alert"]')?.textContent ?? "no message";
+      await report(false, `setup failed after ${secs}s: ${notice}`);
+      return;
+    }
+    const line =
+      [...document.querySelectorAll("p")].find((p) =>
+        p.textContent?.startsWith("Image engine installed"),
+      )?.textContent ?? "";
+    await report(true, `image engine installed in ${secs}s: ${line}`);
   } catch (e) {
     await report(false, e instanceof Error ? e.message : String(e)).catch(() => {});
   }

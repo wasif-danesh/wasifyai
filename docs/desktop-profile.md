@@ -1,6 +1,6 @@
 # The desktop profile
 
-Status: **Proposed**, with ADR-0056 (the desktop app and the web product share one engine). Built in Phase 1:
+Status: **Accepted** with ADR-0056 (the desktop app and the web product share one engine). Built in Phase 1:
 the engine runs in a desktop profile, a Tauri shell starts it, and one window shows its state. Commands and
 numbers below were run on a MacBook Pro M5 Pro (macOS). Windows and Linux are exercised by CI
 (`.github/workflows/desktop.yml`): the shell builds, the engine tests pass, and a clean install followed by the
@@ -142,6 +142,19 @@ are in `docs/spikes/desktop-phase1.md`.
 
 Not done here: ComfyUI and the models are Phase 2 (ADR-0059). The window needs an internet connection for
 steps 2 and 5; an offline install would need a wheelhouse in the bundle.
+
+## Optional components: the image engine
+
+ComfyUI (ADR-0059) is not part of the first-run install. The window's "Set up image generation" action (the
+Tauri command `component_install`, with `component_status` and the `component://status` event) installs it on
+demand into `<app data>/engine/comfyui`: the pinned release source (`engine-manifest.json`, `comfyui`), its own
+Python environment and the hashed lock the engine bundle carries for this platform
+(`comfyui/requirements-<target>.lock`, made by `scripts/build-engine-bundle.sh`). Same steps, progress,
+Repair and logs (`provision.log`) as the engine's installer. It is supported on Apple-silicon Macs only in this
+version; elsewhere the window says so and the placeholder engine keeps working.
+
+State: installed ComfyUI 0.40.0 and verified (`--quick-test-for-ci`); the engine does not use it yet. Starting
+the process, the slot manager and models are the next steps (A2, A3 in `docs/phase2-stage-a-plan.md`).
 
 ## Updates of the app
 

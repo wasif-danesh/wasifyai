@@ -1,6 +1,6 @@
 # ADR-0056: The desktop app and the web product share one engine; image first
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-15)
 - **Date:** 2026-10-14
 - **Depends on:** ADR-0002 (monorepo), ADR-0003 (FastAPI + LangGraph), ADR-0010/0017 (capabilities), ADR-0011
   (tenancy seams), ADR-0021 (event log and queue), ADR-0032 (media backends). Related: ADR-0057 (assistant),
@@ -141,5 +141,8 @@ Windows installer shows SmartScreen's "More info" > "Run anyway".
 ## Open questions
 
 1. Meaning of "documents" for the second vertical.
-2. Memory budget and the utility-model class.
-3. Whether the SPA is Vite plus TanStack Router (as Unsloth) or Next.js static export.
+2. ~~Memory budget and the utility-model class.~~ Resolved in Phase 1: the engine idles at 149 to 171 MB on the
+   three systems (`docs/spikes/desktop-phase1.md`), under the 300 MB suggestion. The utility-model class is
+   still to be defined with the assistant and documents.
+3. ~~Whether the SPA is Vite plus TanStack Router or Next.js static export.~~ Resolved: Vite and React, no
+   router yet (one screen); the router choice waits for the second screen.

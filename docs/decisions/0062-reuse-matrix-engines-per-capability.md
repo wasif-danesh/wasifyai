@@ -1,6 +1,6 @@
 # ADR-0062: Reuse matrix: which engine and which Unsloth parts, per capability
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-15)
 - **Date:** 2026-10-15
 - **Depends on:** ADR-0056 (one engine, two shells), ADR-0059 (image engine), ADR-0060 (documents), ADR-0061
   (how Unsloth code enters). Evidence: `docs/spikes/unsloth-phase0.md`.

@@ -1,6 +1,6 @@
 # ADR-0058: Linking the web product to a user's desktop: a runner, and an optional remote UI
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-15)
 - **Date:** 2026-10-14
 - **Depends on:** ADR-0021 (event log, queue), ADR-0030 (authentication), ADR-0032 (media backends; its limit
   "per tenant and product, not per user" is lifted here), ADR-0056. Pattern from the withdrawn ADR-0054

@@ -5,6 +5,8 @@ import { listen } from "@tauri-apps/api/event";
 
 /** One marker from the installer: which of its steps is running, and how far it is. */
 export type InstallProgress = {
+  /** "engine" (the first-run install) or an optional component such as "comfyui" */
+  component: string;
   step: string;
   label: string;
   /** 1-based, out of `count` */
@@ -53,3 +55,33 @@ export type UpdateStatus =
 
 export const updateCheck = () => invoke<UpdateStatus>("update_check");
 export const updateInstall = () => invoke<void>("update_install");
+
+/** An optional part the person can add: today the image engine ("comfyui"). */
+export type ComponentStatus =
+  | { state: "unsupported"; reason: string }
+  | { state: "not_installed"; needs_bytes: number }
+  | { state: "installing"; progress: InstallProgress }
+  /** `accelerator`: what the engine found to run on: "mps" (Apple GPU), "cuda" or "cpu" */
+  | { state: "installed"; version: string; accelerator: string }
+  | { state: "failed"; message: string; step: string | null };
+
+export const COMFYUI = "comfyui";
+const COMPONENT_EVENT = "component://status";
+
+export const componentStatus = (id: string) => invoke<ComponentStatus>("component_status", { id });
+export const componentInstall = (id: string, repair = false) =>
+  invoke<void>("component_install", { id, repair });
+
+export async function onComponentStatus(
+  fn: (id: string, s: ComponentStatus) => void,
+): Promise<() => void> {
+  return listen<{ id: string; status: ComponentStatus }>(COMPONENT_EVENT, (e) =>
+    fn(e.payload.id, e.payload.status),
+  );
+}
+
+/** "4.3 GB", "620 MB": sizes in sentences, in decimal units like the rest of the app. */
+export function humanBytes(bytes: number): string {
+  if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(1)} GB`;
+  return `${Math.max(1, Math.round(bytes / 1_000_000))} MB`;
+}

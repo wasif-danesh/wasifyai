@@ -191,3 +191,26 @@ like (the self-test checks the DOM), and anything about a packaged, signed app.
 - **The updater** against a real feed and a signed archive.
 - **Offline install.** Step 2 and step 5 need the network.
 - **Image generation on a real engine.** The stub image engine makes placeholder files.
+
+## Phase 2, stage A1: the image engine component (2026-10-15)
+
+`docs/phase2-stage-a-plan.md`, step A1, run for real on the M5 Pro (macOS, network on) through the window's
+self-test (`WASIFYAI_SMOKE=1 WASIFYAI_SMOKE_COMPONENT=comfyui`: the window presses "Set up image generation" and
+waits until it says it is installed). No model was downloaded.
+
+| Measure | Result |
+|---|---|
+| Install from nothing (uv, Python, ComfyUI 0.40.0 source, 84 hashed packages including torch 2.11.0) | **311 s** |
+| On disk afterwards | **1.4 GB** (ComfyUI's environment about 1.35 GB, source 49 MB) plus the engine's 102 MB of uv and Python |
+| Accelerator torch found | `mps` (the Apple GPU) |
+| ComfyUI server started by hand from the installed environment | up after **6.8 s**; reports ComfyUI 0.40.0, torch 2.11.0, device `mps` |
+| ComfyUI server idle, no model loaded | **558 MB** resident |
+| Requirement for the free-disk check | 4 GiB (peak is the environment plus uv's download cache, which is removed at the end) |
+
+Found on the way (for A2): ComfyUI refuses to start if its base directory has no `custom_nodes` folder, so the
+engine must create `models`, `input`, `output`, `temp`, `user` and `custom_nodes` before it starts the process
+(the container recipe does the same with `mkdir -p`).
+
+The GitHub archive of the tag was downloaded twice and had the same SHA-256 both times, which the pin relies on;
+GitHub does not promise archives are byte-stable for ever, so a changed archive fails the install with a
+checksum message and the pin has to be refreshed.

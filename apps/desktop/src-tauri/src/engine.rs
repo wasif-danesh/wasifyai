@@ -270,6 +270,21 @@ fn dev_repo() -> Option<PathBuf> {
         .filter(|p| p.join("services/api").is_dir())
 }
 
+/// The engine bundle to install from: `WASIFYAI_ENGINE_BUNDLE`, the app's resources, or a checkout's
+/// `apps/desktop/engine-bundle`, whichever has a `bundle.json` first.
+pub(crate) fn find_bundle_dir(input: &Input) -> Option<PathBuf> {
+    let repo = dev_repo();
+    std::env::var_os("WASIFYAI_ENGINE_BUNDLE")
+        .map(PathBuf::from)
+        .or_else(|| input.resource_dir.as_ref().map(|r| r.join("engine-bundle")))
+        .filter(|p| p.join("bundle.json").is_file())
+        .or_else(|| {
+            repo.as_ref()
+                .map(|r| r.join("apps/desktop/engine-bundle"))
+                .filter(|p| p.join("bundle.json").is_file())
+        })
+}
+
 fn env_flag(name: &str) -> bool {
     std::env::var(name).map(|v| v == "1").unwrap_or(false)
 }
@@ -314,15 +329,7 @@ fn plan(input: &Input, repair: bool) -> Result<Plan, String> {
     let layout = provision::Layout::new(data_dir, &manifest);
     let managed_python = venv_python_in(&layout.venv_dir());
 
-    let bundle_dir = std::env::var_os("WASIFYAI_ENGINE_BUNDLE")
-        .map(PathBuf::from)
-        .or_else(|| input.resource_dir.as_ref().map(|r| r.join("engine-bundle")))
-        .filter(|p| p.join("bundle.json").is_file())
-        .or_else(|| {
-            repo.as_ref()
-                .map(|r| r.join("apps/desktop/engine-bundle"))
-                .filter(|p| p.join("bundle.json").is_file())
-        });
+    let bundle_dir = find_bundle_dir(input);
 
     let dev_python = repo.as_ref().map(|r| venv_python_in(&r.join(".venv")));
     if !env_flag("WASIFYAI_PROVISION") {

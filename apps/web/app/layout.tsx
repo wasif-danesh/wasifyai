@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import "./tailwind.css";
 
 export const metadata: Metadata = {
-  title: { default: "WasifyAI Studio", template: "%s · WasifyAI Studio" },
+  title: { default: "Wasify AI", template: "%s · Wasify AI" },
   description: "Turn your ideas into music, images and video.",
 };
 

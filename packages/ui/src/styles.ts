@@ -1,6 +1,6 @@
 // Class strings shared by many screens (Tailwind utilities, our design tokens). Not CSS: just names that go in className.
 
-/** The raised surface the studio puts forms and results on. It slides in when it first appears. */
+/** The raised surface the app puts forms and results on. It slides in when it first appears. */
 export const panel =
   "grid gap-[1.1rem] rounded-lg border bg-surface p-[clamp(1.1rem,2.5vw,1.75rem)] shadow-card transition-[opacity,translate] duration-[450ms] ease-out-soft starting:translate-y-3.5 starting:opacity-0";
 

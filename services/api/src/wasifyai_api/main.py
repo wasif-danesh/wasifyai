@@ -65,6 +65,7 @@ from wasifyai_api.creation_index import (
 from wasifyai_api.creations import router as creations_router
 from wasifyai_api.desktop import files_router, open_desktop
 from wasifyai_api.desktop_discovery import router as desktop_discovery_router
+from wasifyai_api.desktop_hub import router as desktop_hub_router
 from wasifyai_api.desktop_language import LocalTextProvider
 from wasifyai_api.desktop_llm import router as desktop_llm_router
 from wasifyai_api.desktop_models import router as desktop_models_router
@@ -344,6 +345,7 @@ def create_app(
             app.state.desktop_discovery = desktop.discovery
             app.state.llama_server = desktop.llama
             app.state.desktop_language = desktop.language
+            app.state.desktop_hub = desktop.hub
             # "Save" in the window copies a picture here (the product's export route)
             app.state.export_dir = Path(
                 os.environ.get("WASIFYAI_EXPORT_DIR") or Path.home() / "Downloads"
@@ -439,6 +441,7 @@ def create_app(
         app.include_router(desktop_models_router)
         app.include_router(desktop_discovery_router)
         app.include_router(desktop_llm_router)
+        app.include_router(desktop_hub_router)
 
     # Product-provided routes (ADR-0023): mounted now so the OpenAPI schema (and the TypeScript
     # types generated from it) include them; the database and storage they use are read from

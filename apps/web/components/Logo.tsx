@@ -45,10 +45,10 @@ export function Logo() {
     <Link
       href="/"
       className="inline-flex items-center gap-[0.65rem] text-[1.15rem] font-bold tracking-[-0.02em] whitespace-nowrap text-foreground no-underline hover:text-foreground"
-      aria-label="WasifyAI Studio, home"
+      aria-label="Wasify AI, home"
     >
       <Equaliser still mark />
-      <span>WasifyAI Studio</span>
+      <span>Wasify AI</span>
     </Link>
   );
 }

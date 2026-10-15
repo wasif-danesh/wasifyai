@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { Button } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
-import { discoveryApi } from "../api";
+import { discoveryApi, hubApi } from "../api";
 import { engineRepair, engineRestart } from "../engine";
 import { ImageEngineCard, LanguageEngineCard, UpdateBanner } from "../parts";
 
@@ -85,6 +85,45 @@ function FindingModels() {
   );
 }
 
+/** Whether the app may contact huggingface.co to list models (ADR-0064): off until the person agrees. */
+function HubSwitch() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    hubApi
+      .state()
+      .then((s) => setEnabled(s.enabled))
+      .catch(() => {});
+  }, []);
+  if (enabled === null) return null;
+  return (
+    <section className="grid gap-3" aria-label="Browsing models">
+      <h2 className="font-semibold text-lg">Browsing models</h2>
+      <p className="text-muted-foreground text-sm">
+        Discover (under Models) asks huggingface.co for lists of open models. It sends the words you
+        search for and the names of the models you open, with no account. Nothing is requested while
+        this is off.
+      </p>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => {
+            const next = e.target.checked;
+            setError(null);
+            hubApi
+              .setEnabled(next)
+              .then((r) => setEnabled(r.enabled))
+              .catch((err) => setError(err instanceof Error ? err.message : "That did not work."));
+          }}
+        />
+        Let the app contact Hugging Face to browse models
+      </label>
+      {error ? <p className="text-destructive text-sm">{error}</p> : null}
+    </section>
+  );
+}
+
 export function SettingsPage() {
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-8 px-8 pt-16 pb-12">
@@ -101,6 +140,8 @@ export function SettingsPage() {
       </section>
 
       <FindingModels />
+
+      <HubSwitch />
 
       <section className="grid gap-3" aria-label="Updates">
         <h2 className="font-semibold text-lg">Updates</h2>

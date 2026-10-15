@@ -3,7 +3,7 @@ import { PRODUCTS } from "@/lib/products";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: { absolute: "WasifyAI Studio" },
+  title: { absolute: "Wasify AI" },
   description: "Turn your ideas into music, images and video.",
 };
 

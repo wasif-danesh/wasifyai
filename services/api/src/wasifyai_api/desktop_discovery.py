@@ -903,7 +903,11 @@ class DiscoveryService:
             return
         self.running = True
         try:
-            result = await asyncio.to_thread(scan_folders, self.tools, list(self.folders))
+            tools = list(self.tools)
+            if self.models is not None:  # what this app downloaded itself (the model hub)
+                app_dir = self.models.models_dir / "language"
+                tools.append(Tool("app", "Wasify AI", "files", [app_dir]))
+            result = await asyncio.to_thread(scan_folders, tools, list(self.folders))
             roots = self.models.roots() if self.models else []
             catalogue = list(self.models.catalogue.values()) if self.models else []
             machine = await self.models.machine() if self.models else None

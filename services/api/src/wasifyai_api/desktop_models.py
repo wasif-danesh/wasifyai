@@ -159,13 +159,14 @@ class DownloadManager:
     `<name>.part` and renamed when the size and checksum match; a partial file is continued with a
     Range request."""
 
-    def __init__(self, client_factory=None, chunk: int = 1 << 20):
+    def __init__(self, client_factory=None, chunk: int = 1 << 20, token: str | None = None):
         self._client_factory = client_factory or (
             lambda: httpx.AsyncClient(
                 follow_redirects=True, timeout=httpx.Timeout(30, read=60), http2=False
             )
         )
         self._chunk = chunk
+        self._token = token  # a Hugging Face token, sent only to huggingface.co
         self._downloads: dict[str, Download] = {}
         self._active: Download | None = None
 
@@ -246,6 +247,8 @@ class DownloadManager:
         if have:
             digest = await asyncio.to_thread(_hash_prefix, part, digest)
         headers = {"Range": f"bytes={have}-"} if have else {}
+        if self._token and urlparse(f.url).hostname == "huggingface.co":
+            headers["Authorization"] = f"Bearer {self._token}"
         async with client.stream("GET", f.url, headers=headers) as r:
             if r.status_code == 416 and have == f.size:
                 pass  # the whole file is already here

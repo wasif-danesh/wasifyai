@@ -2,7 +2,7 @@
 import { Button, Notice, cn } from "@wasifyai/ui";
 import { useCallback, useEffect, useState } from "react";
 import { FitBadge } from "./FitBadge";
-import { discoveryApi } from "./api";
+import { discoveryApi, hubApi } from "./api";
 import {
   type DiscoveryState,
   type FoundModel,
@@ -76,6 +76,23 @@ export function FoundModels({ onChanged }: { onChanged?: () => void }) {
     setError(null);
     try {
       await discoveryApi.use(m.id);
+      onChanged?.();
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That did not work.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function remove(m: FoundModel) {
+    if (!window.confirm(`Delete ${m.name} from this computer? It was downloaded by Wasify AI.`)) {
+      return;
+    }
+    setBusy(m.id);
+    setError(null);
+    try {
+      await hubApi.remove(m.id);
       onChanged?.();
       await refresh();
     } catch (e) {
@@ -194,6 +211,17 @@ export function FoundModels({ onChanged }: { onChanged?: () => void }) {
                   <span className={cn("rounded-full border px-2 py-0.5 text-xs", TONE[m.state])}>
                     {STATE_LABEL[m.state]}
                   </span>
+                  {m.tool === "app" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={busy === m.id}
+                      onClick={() => void remove(m)}
+                    >
+                      Delete
+                    </Button>
+                  ) : null}
                   {m.state === "can_use" && m.use === "folder" ? (
                     <Button
                       type="button"

@@ -37,6 +37,7 @@ from wasifyai_api.config import Settings
 from wasifyai_api.creation_index import IndexStore
 from wasifyai_api.desktop_discovery import DiscoveryService
 from wasifyai_api.desktop_fit import assess_fit, need_declared
+from wasifyai_api.desktop_hub import HubService
 from wasifyai_api.desktop_language import LanguageService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
@@ -73,12 +74,15 @@ class DesktopBackends:
     discovery: DiscoveryService | None = None
     llama: LlamaServer | None = None
     language: LanguageService | None = None
+    hub: HubService | None = None
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
     async def start(self, runs: RunManager) -> None:
         """Start the in-process worker and the consumer that resumes graphs from its results."""
         if self.models is not None:
             await self.models.load()  # folders a person chose earlier
+        if self.hub is not None:
+            await self.hub.load()  # whether the person agreed to browse
         if self.language is not None:
             await self.language.load()  # the model chosen earlier, if any
         if self.discovery is not None:
@@ -131,11 +135,15 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     discovery = DiscoveryService(SqliteSettingsStore(engine), models)
     language = LanguageService(SqliteSettingsStore(engine), llama, models, discovery)
     discovery.language = language
+    hub = HubService(SqliteSettingsStore(engine))
+    hub.models, hub.language = models, language
+    models.downloads._token = hub.client.token  # noqa: SLF001 - one place for the token
     return DesktopBackends(
         models=models,
         discovery=discovery,
         llama=llama,
         language=language,
+        hub=hub,
         engine=engine,
         event_log=log_,
         run_store=SqliteRunStore(engine),

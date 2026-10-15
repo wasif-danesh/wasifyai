@@ -37,15 +37,15 @@ const EXAMPLES = {
 } as const;
 
 /** A recipe loaded into the form: what "make it again" starts from. */
-export type StudioPreset = { prompt: string; size: string | null; seed: number };
+export type WorkspacePreset = { prompt: string; size: string | null; seed: number };
 
-export function presetOf(image: ImageSummary): StudioPreset | null {
+export function presetOf(image: ImageSummary): WorkspacePreset | null {
   const r = image.recipe;
   if (!canRunAgain(image) || r === null) return null;
   return { prompt: r.prompt, size: r.size, seed: r.seed };
 }
 
-export type ImageStudioProps = {
+export type ImageWorkspaceProps = {
   mode: "text" | "image";
   /** The client the screen talks to the engine with (packages/client). */
   runs: RunClient;
@@ -55,7 +55,7 @@ export type ImageStudioProps = {
   /** Above the form: setup notices for this app. */
   notices?: ReactNode;
   /** Load this recipe into the form once (see `presetOf`). */
-  preset?: StudioPreset | null;
+  preset?: WorkspacePreset | null;
   /** Show the library: the top bar offers it when given. */
   onOpenLibrary?: () => void;
   /** Whether "Save a copy" (the engine exports to a folder) is on offer. */
@@ -97,7 +97,7 @@ function jobText(job: { status: string; position?: number; progress?: number }) 
  * Create and Edit in two panels: the controls on the left, the picture, its recipe and the recent
  * images on the right. Shared by the web app and the desktop window.
  */
-export function ImageStudio({
+export function ImageWorkspace({
   mode,
   runs,
   images,
@@ -107,7 +107,7 @@ export function ImageStudio({
   onOpenLibrary,
   canSave = false,
   blockedReason = null,
-}: ImageStudioProps) {
+}: ImageWorkspaceProps) {
   const id = useId();
   const flow = useImageFlow(runs);
   const pic = usePicture(IMAGE_PRODUCT, runs);

@@ -9,7 +9,7 @@ product the user navigates with a **side panel** (ADR-0046), and the home page k
 
 | Page | What it is |
 |---|---|
-| `/` | The studio home, "WasifyAI Studio": a card per product (public) |
+| `/` | The home page, "Wasify AI": a card per product (public) |
 | `/music`, `/image`, `/video`, `/text-to-speech` | Create a song, an image, a video or speech (sign-in required). A video is made in the background: the top bar shows "Making your video…" and a notice says when it is ready |
 | `/music/songs/[id]`, `/image/creations/[id]`, `/video/creations/[id]`, `/text-to-speech/creations/[id]` | One saved result: the media, its words, downloads, delete (links are signed fresh on every visit) |
 | `/creations` | My creations: one library of everything the user made, newest first, as cards or a sortable table, with filters (`?show=songs\|images\|videos\|speeches`), "Load more" and a search that finds things by meaning or exact words in any language (sign-in required) |

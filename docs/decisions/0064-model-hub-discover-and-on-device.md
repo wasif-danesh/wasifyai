@@ -92,3 +92,19 @@ formats, ModelScope and other hubs, and automatic updates.
 3. **Default filter "runs on this computer"** is on; "Show everything" is one click.
 4. **README images blocked** until the person asks, per card.
 5. **Hugging Face token** for gated models is supported, kept in the operating system's keychain.
+
+## Implementation status (2026-10-16)
+
+| Decision | State |
+|---|---|
+| 1 two tabs, On device and Discover, in Models | done |
+| 2 the engine browses, the window never does | done: `/desktop/hub/...` |
+| 3 Hugging Face only, with a curated shelf | done: `hub-shelf.yaml` (6 models, each checked) |
+| 4 opt-in network | done: a notice before the first request; a switch in Settings; the engine refuses (403) until agreed |
+| 5 only what the app can run by default | done for language and embedding (GGUF); image and video are listed as view-only |
+| 6 fit on every variant | done, at the chat context; estimates labelled |
+| 7 downloads reuse the confirm-first manager | done: the engine rebuilds the entry from the repository at its current commit and refuses a list that differs |
+| 8 licence first; gated models and a token | licence shown on the card and in the confirmation; **a gated model is refused**: the token reaches the engine through `HF_TOKEN` only, and the keychain and its sign-in are not built |
+| 9 model cards as text, no remote images | done: front matter, HTML and pictures removed in the engine |
+| 10 header with this computer | not done: the memory and disk figures appear in the confirmation and in the fit badges, not in a header |
+| 11 no automatic updates | done: nothing is fetched without a confirmation |

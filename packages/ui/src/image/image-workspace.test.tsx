@@ -5,7 +5,7 @@ import { type ImageSummary, type ImagesApi, createRunClient } from "@wasifyai/cl
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { done, node, sse } from "../test-utils";
 import { ImageLibrary } from "./ImageLibrary";
-import { ImageStudio, presetOf } from "./ImageStudio";
+import { ImageWorkspace, presetOf } from "./ImageWorkspace";
 
 const fetchMock = vi.fn();
 const runs = createRunClient({ fetch: (path, init) => fetchMock(path, init) });
@@ -80,7 +80,7 @@ describe("presetOf", () => {
   });
 });
 
-describe("ImageStudio", () => {
+describe("ImageWorkspace", () => {
   it("makes an image, then favourites it and saves a copy", async () => {
     const api = fakeApi([summary()]);
     fetchMock.mockResolvedValueOnce(
@@ -99,7 +99,7 @@ describe("ImageStudio", () => {
       ]),
     );
     const user = userEvent.setup();
-    render(<ImageStudio mode="text" runs={runs} images={api} canSave />);
+    render(<ImageWorkspace mode="text" runs={runs} images={api} canSave />);
     await user.type(screen.getByRole("textbox"), "a lighthouse");
     await user.click(screen.getByRole("button", { name: "Generate" }));
 
@@ -122,7 +122,7 @@ describe("ImageStudio", () => {
     const api = fakeApi([summary()]);
     fetchMock.mockResolvedValueOnce(sse([node("check_request")]));
     const user = userEvent.setup();
-    render(<ImageStudio mode="text" runs={runs} images={api} />);
+    render(<ImageWorkspace mode="text" runs={runs} images={api} />);
 
     await user.click(await screen.findByRole("button", { name: "Open: a lighthouse" }));
     await user.click(screen.getByRole("button", { name: /make it again/i }));
@@ -142,7 +142,7 @@ describe("ImageStudio", () => {
     fetchMock.mockResolvedValue(sse([node("check_request")]));
     const user = userEvent.setup();
     render(
-      <ImageStudio
+      <ImageWorkspace
         mode="text"
         runs={runs}
         images={fakeApi([])}
@@ -208,11 +208,11 @@ describe("ImageLibrary", () => {
   });
 });
 
-describe("ImageStudio when the model cannot run", () => {
+describe("ImageWorkspace when the model cannot run", () => {
   it("keeps Generate off and says why", async () => {
     const user = userEvent.setup();
     render(
-      <ImageStudio
+      <ImageWorkspace
         mode="text"
         runs={runs}
         images={fakeApi([])}

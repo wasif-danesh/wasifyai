@@ -215,7 +215,7 @@ The image create screen is one piece of code that the web app and the desktop wi
 | Package | What | Knows about |
 |---|---|---|
 | `packages/client` (`@wasifyai/client`) | `createRunClient(transport)`: start, watch and resume runs (SSE), upload a picture, enhance a prompt; `createImagesApi(transport)`: list, search, open, favourite, save a copy, delete; `HttpError`; the SSE parser; the image flow reducer | engine paths only (`/products/{id}/runs`, `/products/{id}/images`); no React, no browser globals |
-| `packages/ui` (`@wasifyai/ui`) | `CreateImage`, `ImageForm`, **`ImageStudio`** (the two-panel Create/Edit screen), **`ImageLibrary`**, `useImageFlow`, `usePicture`, the primitives (button, notice, ...) and the design tokens (`tailwind.css`) | a `RunClient` and an `ImagesApi` passed in as props; no Next.js, no Tauri |
+| `packages/ui` (`@wasifyai/ui`) | `CreateImage`, `ImageForm`, **`ImageWorkspace`** (the two-panel Create/Edit screen), **`ImageLibrary`**, `useImageFlow`, `usePicture`, the primitives (button, notice, ...) and the design tokens (`tailwind.css`) | a `RunClient` and an `ImagesApi` passed in as props; no Next.js, no Tauri |
 
 A **transport** is `fetch(path, init)` plus `onUnauthorized`. The web app's sends `/api` + path to its BFF with the
 session cookie (`apps/web/lib/run-client.ts`). The window's (`apps/desktop/src/transport.ts`) sends path to
@@ -240,7 +240,7 @@ to `@wasifyai/ui` when it is migrated; delete the shim when nothing uses it.
 | Shell | `Shell.tsx` | side menu + the screen; the menu collapses (remembered in `localStorage`) |
 | Side menu | `Sidebar.tsx` | New chat (home), Models, Library, Images (expands: Create, Edit; Transform, Inpaint, Extend, Upscale, Reference marked "Soon"), Train ("Soon"), Projects, Recents, You + settings |
 | Home | `pages/Home.tsx` | greeting and the "Ask anything" box (the assistant, ADR-0057, is not built: the box says so) |
-| Create / Edit | `pages/Create.tsx` | wraps the shared `ImageStudio` with this window's model chip and setup notices |
+| Create / Edit | `pages/Create.tsx` | wraps the shared `ImageWorkspace` with this window's model chip and setup notices |
 | Library | `pages/Library.tsx` | wraps the shared `ImageLibrary`; "Make it again" sends the recipe to Create (`Shell.tsx` holds it until the route changes) |
 | Models, Settings | `pages/Models.tsx`, `pages/Settings.tsx` | the model panel; the image engine card, updates, restart and repair |
 
@@ -301,6 +301,15 @@ engine reads. The engine (`llama_server.py`) runs one `llama-server` at a time o
 stops it to free the memory. Only the Apple-silicon build uses a GPU; the other builds run on the processor.
 `GET /desktop/language-engine` and `POST /desktop/language-engine/stop` are the routes; choosing a model and the
 chat provider are D2 (`docs/phase2-stage-d-plan.md`).
+
+## The model hub (ADR-0064, stage D2b)
+
+Models has two tabs. **On device** is the app's models, the chat model and what other tools left here.
+**Discover** finds open models on Hugging Face and fetches one. The window never contacts the internet: the
+engine does (`desktop_hub.py`, `/desktop/hub/...`), only after the person agrees (Settings has the switch), and a
+download is only started from the exact files and size the person confirmed, re-checked against the repository at
+its current commit and its published SHA-256. Pickle formats are never offered; a gated model is refused until
+account sign-in exists. The recommended list (`hub-shelf.yaml`) works without the network.
 
 ## The chat model (stage D, D2)
 

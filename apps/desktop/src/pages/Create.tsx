@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Create and Edit: the shared two-panel screen with this window's model chip and setup notices.
-import { ImageStudio, Notice, type StudioPreset, cn } from "@wasifyai/ui";
+import { ImageWorkspace, Notice, type WorkspacePreset, cn } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
 import { FitBadge } from "../FitBadge";
 import { client, modelsApi } from "../api";
@@ -51,7 +51,7 @@ export function CreatePage({
 }: {
   mode: "text" | "image";
   go: (r: Route) => void;
-  preset?: StudioPreset | null;
+  preset?: WorkspacePreset | null;
 }) {
   const model = useModel();
   const engine = useImageEngine();
@@ -115,7 +115,7 @@ export function CreatePage({
   );
 
   return (
-    <ImageStudio
+    <ImageWorkspace
       mode={mode}
       runs={client}
       images={images}

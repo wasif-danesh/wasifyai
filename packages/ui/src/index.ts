@@ -35,10 +35,10 @@ export {
 export { CreateImage, type ResultActions } from "./image/CreateImage";
 export { ImageForm, type ImageFormValue, MAX_PROMPT, SIZES } from "./image/ImageForm";
 export {
-  ImageStudio,
+  ImageWorkspace,
   presetOf,
   RecipeList,
-  type ImageStudioProps,
-  type StudioPreset,
-} from "./image/ImageStudio";
+  type ImageWorkspaceProps,
+  type WorkspacePreset,
+} from "./image/ImageWorkspace";
 export { ImageLibrary, type ImageLibraryProps } from "./image/ImageLibrary";

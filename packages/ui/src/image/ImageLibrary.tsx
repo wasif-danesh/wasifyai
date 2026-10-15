@@ -6,7 +6,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Notice } from "../components/notice";
-import { RecipeList } from "./ImageStudio";
+import { RecipeList } from "./ImageWorkspace";
 
 export type ImageLibraryProps = {
   images: ImagesApi;

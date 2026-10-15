@@ -1,4 +1,4 @@
-// The products shown on the home page: one entry per card. Adding a product to the studio is one
+// The products shown on the home page: one entry per card. Adding a product to the app is one
 // entry here plus its own area under /<id>. `soon` cards show a "Coming soon" tag and link to a
 // plain "Coming soon" page until the product is built (each has an ADR that designs it).
 export type Product = {

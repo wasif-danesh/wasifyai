@@ -280,7 +280,7 @@ export function UpdateBanner() {
   if (update?.state !== "available") return null;
   return (
     <Notice
-      title={`wasifyai ${update.version} is available`}
+      title={`Wasify AI ${update.version} is available`}
       actions={
         <Button
           type="button"

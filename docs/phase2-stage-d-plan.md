@@ -1,7 +1,7 @@
 # Phase 2, stage D: the assistant on desktop (plan)
 
-Status: **Approved 2026-10-15** with all five recommended answers below (owner: "all recommended"). **D1 and D2 done**
-(see the evidence sections at the end); D2b to D6 not started. Implements
+Status: **Approved 2026-10-15** with all five recommended answers below (owner: "all recommended"). **D1, D2 and D2b done**
+(see the evidence sections at the end); D3 to D6 not started. Implements
 ADR-0057 (the assistant product) on the desktop with a managed local language model (ADR-0062: llama.cpp), the
 slot manager (ADR-0056) and the model discovery and fit checks that exist today (ADR-0063).
 
@@ -164,3 +164,25 @@ shadcn) is a short spike with the ADR-0057 criteria before D5.
   2. **Reasoning models need their template to separate the thinking from the answer.** With the right template
      llama-server returns the thinking apart from the content; without it Enhance would paste the thinking
      into a prompt. D4 should add an output guard for Enhance (reject an answer that starts like a plan).
+
+## D2b evidence (2026-10-16): the model hub
+
+- **Engine** (`desktop_hub.py`): a Hugging Face client with a ten-minute cache and a stale answer when
+  offline; search (`filter=gguf` for language and embedding, a pipeline for image and video); one repository
+  with its variants (quantisation from the file name, shards grouped, vision projectors left out, a file with
+  no published SHA-256 never offered), its licence, architecture, context length and whether it carries a chat
+  template; the model card as plain text; and the download, rebuilt from a fresh look at the repository
+  (commit-pinned URLs, the repository's own sizes and checksums) and refused if the confirmed list differs.
+- **Files** go to `<models>/language/<publisher>--<repo>/`; discovery scans that folder as "Wasify AI", so a
+  downloaded model appears in On device with its fit and can be chosen for chat or deleted (only files under
+  that folder can be deleted).
+- **Window**: Models has On device and Discover tabs. Discover shows the recommended list without any
+  network, asks before the first request, then searches with a kind and a sort, shows a result list and a
+  detail panel with variants, fit badges and a confirmation. Settings has the browsing switch.
+- **On the owner's Mac, against the real Hugging Face:** search 0.4 s; the repository 0.3 s; Qwen3 0.6B at
+  Q4_K_M (397 MB) downloaded and verified in 43 s; it appeared in On device as fits; chosen for chat with no
+  template note; try-it 1.1 s; Enhance through the product route 2.1 s, returning a clean prompt (the same
+  route returned reasoning text with the Ollama file that had no template: D2 finding 1 is fixed by getting a
+  file that has its template).
+- **Not done:** the keychain token and sign-in for gated models; the memory and disk header; image and video
+  models are view-only until stage C and the video stage have workflows to run them.

@@ -87,7 +87,7 @@ export function Sidebar({
         >
           w
         </span>
-        <span className="font-semibold text-xl tracking-tight">wasifyai</span>
+        <span className="font-semibold text-xl tracking-tight">Wasify AI</span>
         <button
           type="button"
           aria-label="Search My creations"

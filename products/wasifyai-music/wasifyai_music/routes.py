@@ -21,7 +21,7 @@ from wasifyai_music.songs import PostgresSongStore, SongRecord, SongStore
 from wasifyai_music.video import VideoError, VideoUnavailable, encode_video
 
 PRODUCT_ID = "wasifyai-music"
-ARTIST = "WasifyAI Studio"  # the artist in a downloaded MP3's tag
+ARTIST = "Wasify AI"  # the artist in a downloaded MP3's tag
 MAX_PARALLEL_ENCODES = 2
 
 log = logging.getLogger(__name__)

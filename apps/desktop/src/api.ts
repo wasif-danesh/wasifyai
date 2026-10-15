@@ -4,6 +4,7 @@
 import { createRunClient } from "@wasifyai/client";
 import { createDiscoveryApi } from "./discovery";
 import { engineSession } from "./engine";
+import { createHubApi } from "./hub";
 import { createLanguageApi } from "./language";
 import { createModelsApi } from "./models";
 import { createEngineTransport } from "./transport";
@@ -13,3 +14,4 @@ export const client = createRunClient(transport);
 export const modelsApi = createModelsApi(transport);
 export const discoveryApi = createDiscoveryApi(transport);
 export const languageApi = createLanguageApi(transport);
+export const hubApi = createHubApi(transport);

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "wasifyai",
+  "productName": "Wasify AI",
   "identifier": "ai.wasifyai.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -16,7 +16,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "wasifyai",
+        "title": "Wasify AI",
         "width": 1100,
         "height": 760,
         "minWidth": 720,

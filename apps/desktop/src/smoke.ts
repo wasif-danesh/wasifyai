@@ -94,6 +94,19 @@ export async function runSmoke(): Promise<void> {
         ? text
         : null;
     });
+    // Discover asks before it contacts anyone (ADR-0064), and the recommended list needs no network
+    const discover = await until("the Discover tab", () =>
+      [...document.querySelectorAll('[role="tab"]')].find((b) => b.textContent === "Discover"),
+    );
+    (discover as HTMLElement).click();
+    await until("the recommended models", () =>
+      document.body.textContent?.includes("Recommended to start with"),
+    );
+    (
+      [...document.querySelectorAll('[role="tab"]')].find((b) => b.textContent === "On device") as
+        | HTMLElement
+        | undefined
+    )?.click();
     await until("the result of the look", () => {
       const text = document.body.textContent ?? "";
       return /Looked (just now|\d+ minutes? ago)|No models from other tools|Looking is turned off/.test(

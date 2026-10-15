@@ -116,7 +116,7 @@ export function CreateLipSync({ catalog }: { catalog: VoiceCatalog }) {
                   <Link href="/creations?show=lipsyncs">Go to My creations</Link>
                 </Button>
                 <Button asChild variant="outline">
-                  <Link href="/">Explore the studio</Link>
+                  <Link href="/">Explore Wasify AI</Link>
                 </Button>
               </div>
             </section>

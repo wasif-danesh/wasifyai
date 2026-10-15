@@ -38,16 +38,16 @@ def test_the_tag_holds_the_song_and_the_audio_is_untouched():
     tagged = tag_mp3(
         FAKE_FRAMES,
         title="Neon Rain Walk",
-        artist="WasifyAI Studio",
+        artist="Wasify AI",
         lyrics="[verse]\nrain",
         cover_jpeg=JPEG,
-        comment="Made with WasifyAI Studio",
+        comment="Made with Wasify AI",
     )
     f = frames_of(tagged)
     assert list(f) == ["TIT2", "TPE1", "TALB", "USLT", "COMM", "APIC"]
     assert (text_of(f["TIT2"]), text_of(f["TPE1"]), text_of(f["TALB"])) == (
         "Neon Rain Walk",
-        "WasifyAI Studio",
+        "Wasify AI",
         "Neon Rain Walk",
     )
     # lyrics: encoding, language, an empty description, then the text
@@ -107,13 +107,13 @@ def test_ffmpeg_reads_the_tag_and_sees_the_cover():
     tagged = tag_mp3(
         audio,
         title="Neon Rain Walk",
-        artist="WasifyAI Studio",
+        artist="Wasify AI",
         lyrics="[verse]\nrain falls",
         cover_jpeg=small_cover_jpeg(png(1200, 900)),
-        comment="Made with WasifyAI Studio",
+        comment="Made with Wasify AI",
     )
     info = probe(tagged, ".mp3")
-    assert info["tags"]["title"] == "Neon Rain Walk" and info["tags"]["artist"] == "WasifyAI Studio"
+    assert info["tags"]["title"] == "Neon Rain Walk" and info["tags"]["artist"] == "Wasify AI"
     assert info["tags"]["album"] == "Neon Rain Walk"
     assert "rain falls" in info["report"]  # the lyrics tag
     audio_stream = next(s for s in info["streams"] if s["kind"] == "audio")

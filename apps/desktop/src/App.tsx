@@ -46,7 +46,7 @@ export function App() {
   if (status.state === "ready") return <Shell />;
   return (
     <main id="main" className={page}>
-      <PageHero title="wasifyai" />
+      <PageHero title="Wasify AI" />
       <EngineState status={status} />
     </main>
   );

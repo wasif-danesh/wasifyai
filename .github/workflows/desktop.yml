@@ -33,6 +33,14 @@ env:
   UV_PYTHON: "3.12"
 
 jobs:
+  workflows:
+    # A workflow file GitHub cannot parse fails with no jobs and no log; this catches it before a push.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uvx --from actionlint-py actionlint
+
   engine:
     strategy:
       fail-fast: false
@@ -177,14 +185,18 @@ jobs:
           - { os: windows-latest, bundles: nsis }
     runs-on: ${{ matrix.os }}
     env:
-      WASIFYAI_REPO: ${{ runner.temp }}/no-checkout
       WASIFYAI_SMOKE: "1"
-      WASIFYAI_DATA_DIR: ${{ runner.temp }}/wasifyai-data
-      WASIFYAI_SMOKE_OUT: ${{ runner.temp }}/smoke.txt
       WEBKIT_DISABLE_COMPOSITING_MODE: "1"
       LIBGL_ALWAYS_SOFTWARE: "1"
     steps:
       - uses: actions/checkout@v4
+      # (the `runner` context is not available in a job's `env`, so these are set here)
+      - name: Paths for the run
+        shell: bash
+        run: |
+          echo "WASIFYAI_REPO=$RUNNER_TEMP/no-checkout" >> "$GITHUB_ENV"
+          echo "WASIFYAI_DATA_DIR=$RUNNER_TEMP/wasifyai-data" >> "$GITHUB_ENV"
+          echo "WASIFYAI_SMOKE_OUT=$RUNNER_TEMP/smoke.txt" >> "$GITHUB_ENV"
       - uses: astral-sh/setup-uv@v5
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4

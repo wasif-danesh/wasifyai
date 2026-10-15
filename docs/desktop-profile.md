@@ -2,8 +2,9 @@
 
 Status: **Proposed**, with ADR-0056 (the desktop app and the web product share one engine). Built in Phase 1:
 the engine runs in a desktop profile, a Tauri shell starts it, and one window shows its state. Commands and
-numbers below were run on a MacBook Pro M5 Pro (macOS); Windows and Linux are built by CI only
-(`.github/workflows/desktop.yml`) and have not been run by hand.
+numbers below were run on a MacBook Pro M5 Pro (macOS). Windows and Linux are exercised by CI
+(`.github/workflows/desktop.yml`): the shell builds, the engine tests pass, and a clean install followed by the
+window's self-test passes on both; nobody has run them by hand, and no numbers were taken there.
 
 ## What a profile is
 

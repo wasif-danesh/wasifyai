@@ -203,7 +203,9 @@ def test_the_launcher_starts_serves_and_exits_when_the_shell_goes(tmp_path):
     try:
         assert proc.stdout is not None
         ready = json.loads(proc.stdout.readline())
-        assert ready["event"] == "wasifyai.engine.ready" and ready["pid"] == proc.pid
+        assert ready["event"] == "wasifyai.engine.ready"
+        # not `proc.pid`: on Windows a venv's python.exe is a launcher that starts the real one
+        assert isinstance(ready["pid"], int) and ready["pid"] > 0
         base = f"http://127.0.0.1:{ready['port']}"
         assert httpx.get(f"{base}/health", timeout=5).json() == {"status": "ok"}
 

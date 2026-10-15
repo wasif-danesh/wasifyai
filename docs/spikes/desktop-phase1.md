@@ -2,8 +2,9 @@
 
 Date: 2026-10-15. Machine: MacBook Pro M5 Pro, 64 GB, macOS. Scope done: ADR-0056 steps 1 to 5
 (engine desktop profile, Tauri shell with installer and updater skeleton, shared image screen in `packages/ui` +
-`packages/client`, end to end on the Mac). The CI run (step 6) has not happened; see "Not verified" below. Everything is a **debug build against the repository's `.venv`**, not a
-packaged app.
+`packages/client`, end to end on the Mac). Step 6 (three-OS CI) ran twice and is green on all
+three systems apart from one test assumption that is fixed (see "CI on three systems"). The measured numbers
+below are from the Mac and are a **debug build against the repository's `.venv`**, not a packaged app.
 
 ## Measured
 
@@ -74,6 +75,24 @@ its connection; the connection was already closed and never answered, so the tas
 shutdown, waited forever. The lifespan now waits for the cancelled tasks before it closes anything: 40
 consecutive clean runs afterwards. This affects the web profile's shutdown in the same way.
 
+## CI on three systems (step 6): the second run, commit 2db73f6
+
+Every job of the `desktop` workflow on GitHub's hosted runners (macOS arm64, Windows x64, Ubuntu x64):
+
+| Job | macOS | Windows | Linux |
+|---|---|---|---|
+| shell: `cargo test --locked` and `cargo build --release --locked` (webview libraries on Linux) | pass | pass | pass |
+| engine: desktop-profile tests (SQLite adapters, local files, stores, the real launcher) | pass | **35 of 36**; the launcher test compared the engine's pid with the pid of the process the test started, which a venv's `python.exe` launcher on Windows makes different (a test assumption, fixed) | pass |
+| smoke: the window, driven like a person, against the checkout's `.venv` | **PASS** | **PASS** | **PASS** (xvfb, software rendering) |
+| install: build the engine bundle, install uv, Python and the 77 packages into an empty folder, then the same self-test | **PASS** (159 s for the step, which also compiles the shell) | **PASS** (240 s) | **PASS** (176 s) |
+
+Also green in the same run: `ci` / python (760 tests with real Postgres and Redis, including the Redis contract
+tests), web, setup, helm-kind. The step times above include compiling the shell, so they are not install times;
+the installer's own log is the "Installer log" step of each `install` job.
+
+What CI did **not** tell us: memory and cold start on Windows and Linux (not measured), what the window looks
+like (the self-test checks the DOM), and anything about a packaged, signed app.
+
 ## Tests that exist now
 
 | Where | What | Result here |
@@ -92,17 +111,16 @@ consecutive clean runs afterwards. This affects the web profile's shutdown in th
 
 ## Not verified
 
-- **Windows and Linux.** Nothing was run. `windows_job.rs` is Windows-only code that was never compiled here.
-  `.github/workflows/desktop.yml` builds and tests on all three and has not run.
-- **Redis contract tests** (event log and run store) skip locally; the existing `ci.yml` has a Redis service and
-  will run them. If they fail there, the SQLite adapters are the reference only by test, not by proof.
+- **Memory and cold start on Windows and Linux.** CI proves the shell builds, the engine runs and the window
+  makes an image there; it does not record numbers. Only the Mac was measured.
 - **What the window looks like.** The self-test drives and checks the DOM, not pixels; no screenshot was
   taken, and the web app's own pages were not compared before and after the move (the built CSS does contain
   the shared package's classes, and the web test suite and `next build` pass).
 - **A packaged app** (`.app`, `.dmg`, signing): not built. The engine bundle is found next to the checkout, not
   inside an app's resources, and `cargo tauri build` was not run.
-- **The installer on Windows and Linux**, and the Intel Mac build of uv: the manifest has the checksums, nothing
-  was run. The Unix-only installer tests do not run on Windows.
+- **The Intel Mac build of uv and the Linux arm64 build**: the manifest has their checksums; no runner of
+  those kinds was used. The Unix-only installer tests (fake uv) do not run on Windows; the real install does
+  (the `install` job).
 - **The updater** against a real feed and a signed archive.
 - **Offline install.** Step 2 and step 5 need the network.
 - **Image generation on a real engine.** The stub image engine makes placeholder files.

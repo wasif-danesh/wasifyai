@@ -13,6 +13,7 @@ set -euo pipefail
 ENGINE="${CONTAINER_ENGINE:-podman}"
 OLD="wd-ai"; NEW="wasifyai"
 WITH_MODELS=0; [ "${1:-}" = "--models" ] && WITH_MODELS=1
+PG_COPIED=0
 PG_IMAGE="${PG_IMAGE:-docker.io/pgvector/pgvector:pg16}"
 
 say() { printf '==> %s\n' "$*"; }
@@ -22,6 +23,7 @@ copy_volume() {  # old new
   if ! exists "$1"; then say "skip $1 (not found)"; return; fi
   if exists "$2"; then say "skip $2 (already exists; refusing to overwrite)"; return; fi
   say "copy $1 -> $2"
+  [ "$2" = "${NEW}_pgdata" ] && PG_COPIED=1
   "$ENGINE" volume create "$2" >/dev/null
   "$ENGINE" volume export "$1" | "$ENGINE" volume import "$2" -
 }
@@ -38,7 +40,11 @@ else
   say "model caches not copied (add --models, or they are downloaded again on first use)"
 fi
 
-if ! exists "${NEW}_pgdata"; then echo "no ${NEW}_pgdata to migrate" >&2; exit 1; fi
+if [ "$PG_COPIED" != 1 ]; then
+  say "database volume was not copied in this run: leaving it as it is (already migrated)"
+  say "done."
+  exit 0
+fi
 say "renaming the Postgres role and database, rewriting product ids (on the copy)"
 read -r -d '' SQL <<'SQL' || true
 CREATE ROLE tmp_admin SUPERUSER LOGIN;

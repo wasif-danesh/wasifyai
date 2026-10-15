@@ -101,41 +101,46 @@ for the WebKit helpers, which are other processes the shell does not own (those 
 was built and the folder created; the machine was not rebooted, so the engine's Python files and Python itself
 were not cold in the operating system's file cache on the relaunches.
 
-### The same packaged app on the three CI systems (run 38703782545, commit f56bb08)
+### The same packaged app on the three CI systems
 
 The `package` job builds the app for each system, then runs the packaged result on a machine with no
 checkout: macOS runs `wasifyai.app`; Linux unpacks the `.deb` and runs `usr/bin/wasifyai-desktop` under xvfb;
 Windows installs the NSIS setup silently and runs the installed `wasifyai-desktop.exe`. Each runs twice: the
-first launch installs the engine, the second finds it installed. All six runs **passed** the self-test (a picture
-was made in the window).
+first launch installs the engine, the second finds it installed. Two CI runs; every one of the twelve
+launches **passed** the self-test (a picture was made in the window). Numbers below are from run 38705240476
+(commit 2d3fba7), which has the corrected measurement; the earlier run 38703782545 is quoted where it differs.
 
-| | macOS (hosted runner, arm64) | Ubuntu (hosted runner, x64) | Windows (hosted runner, x64) |
+"Shell" is the time from the shell's start to its setup hook (the window is being created); "engine" is from
+the hook to the engine answering `/health` and `/me`; their sum is the time to ready.
+
+| | macOS (hosted, arm64) | Ubuntu (hosted, x64) | Windows (hosted, x64) |
 |---|---|---|---|
-| Packaged size | `.app` 18.1 MiB | `.deb` 7.8 MiB | NSIS setup 4.4 MB |
-| First launch, shell start to engine answering (install included) | 29.7 s | 47.4 s | 18.0 s |
-| Relaunch, shell start to engine answering | 3.1 s | **31.9 s** (see below) | 2.3 s |
-| Engine resident memory at ready, first and second launch | 167 MB, 155 MB | 169 MB, 159 MB | **not valid** (see below) |
-| Engine memory after one image | 171 MB, 161 MB | 177 MB, 168 MB | not valid |
-| Shell process memory | 101 to 104 MB | 184 to 196 MB | 33 to 42 MB |
+| Packaged size | `.app` 18.1 MiB | `.deb` 7.8 MiB | NSIS setup 4.3 MiB |
+| **First launch**, to ready (the engine installs) | 15.6 s = 1.7 shell + 13.9 engine (29.7 s in the earlier run) | 48.3 s = **35.0 shell** + 13.3 engine | 20.7 s = 2.9 shell + 17.8 engine |
+| **Relaunch**, to ready | **1.9 s** = 0.6 + 1.3 | 31.6 s = **30.1 shell** + **1.5 engine** | **2.9 s** = 0.5 + 2.4 |
+| **Engine memory** at ready, first and second launch | 167, 155 MB | 168, 160 MB | 155, 149 MB |
+| Engine memory after one image | 171, 161 MB | 176, 168 MB | 160, 154 MB |
+| Shell process memory | 98 to 100 MB | 187 to 200 MB | 33 to 42 MB |
 
-Hosted runners are shared virtual machines: they are for comparing systems against the Mac numbers above, not
-for a promise to users. Shell memory does not include the web view's own processes on any system (the Mac's
-96 MB of WebKit helpers were counted separately above; the numbers for Linux's WebKitGTK helpers and Windows'
-WebView2 were not taken).
+What this says:
 
-Two results are not clean, and the next CI run is set up to explain them:
+- **Engine memory is 149 to 168 MB at ready on all three systems** (resident set; Windows: working set), under
+  the 300 MB budget, and within 20 MB of the M5 Pro's 171 MB. Windows is valid now: the first CI run had measured
+  Windows' venv launcher (4 MB) instead of the interpreter.
+- **The engine starts in 1.3 to 2.4 s when installed, on every system, including Linux.** First-launch times
+  vary with the network (macOS 15.6 s in one run, 29.7 s in the other).
+- **Linux's slow relaunch is not the engine.** 30 to 35 s pass before the shell's own setup hook runs, i.e. in
+  the shell's startup and window creation on that runner. `NO_AT_BRIDGE=1` (a hypothesis about a missing
+  accessibility bus) did **not** remove it. A likelier cause is the single-instance plugin waiting for a D-Bus
+  session bus that a bare runner does not have; this is a guess, not a finding. An experiment (the same run
+  under `dbus-run-session`, which cannot fail the job) is in the workflow; until it has run, the cause is
+  open, and nobody has timed the app on a real Linux desktop.
+- Shell memory excludes the web view's own processes on every system (the Mac's 96 MB of WebKit helpers were
+  counted separately above; WebKitGTK and WebView2 were not measured). Linux's shell is larger because GTK and
+  WebKitGTK load into it.
 
-- **Windows engine memory (4 MB) is a measurement bug, not the engine's footprint.** The shell read the memory of
-  the process it started, and on Windows a venv's `python.exe` is a small launcher that starts the real
-  interpreter. The shell now reads the pid the engine itself reports.
-- **Linux relaunch 31.9 s** against 3.1 s (macOS) and 2.3 s (Windows) for an engine that is already
-  installed. The time is measured from the shell's start, so it also holds the time the window took to appear;
-  GTK on a runner with no accessibility bus is known to wait around 25 s. The shell now reports separately when
-  its setup hook ran (`shell_setup_ms`) and the engine's own part (`engine_ms`), and the job sets
-  `NO_AT_BRIDGE=1`. Until that run, the 31.9 s is **not** attributed to the engine.
-
-The macOS runner numbers are close to the M5 Pro's (24.8 s first launch, 2.1 s relaunch, 171 MB engine), which
-is the expected order for a smaller machine; engine memory is within 20 MB across Linux and macOS.
+Hosted runners are shared virtual machines: use them to compare systems with the Mac numbers above, not as a
+promise to users.
 
 ## CI on three systems (step 6): the second run, commit 2db73f6
 
@@ -173,8 +178,8 @@ like (the self-test checks the DOM), and anything about a packaged, signed app.
 
 ## Not verified
 
-- **Windows engine memory and the cause of Linux's 31.9 s relaunch**: see "The same packaged app on the three CI
-  systems"; they need one more CI run with the fixed measurement.
+- **Why Linux takes 30 s before the shell's setup hook on a bare runner** (the engine is fast there), and how
+  long a real Linux desktop takes; **WebKitGTK and WebView2 helper-process memory**.
 - **What the window looks like.** The self-test drives and checks the DOM, not pixels; no screenshot was
   taken, and the web app's own pages were not compared before and after the move (the built CSS does contain
   the shared package's classes, and the web test suite and `next build` pass).

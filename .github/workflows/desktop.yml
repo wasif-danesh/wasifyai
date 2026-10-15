@@ -246,6 +246,22 @@ jobs:
           xvfb-run -a "$exe"
           echo "--- second run, already installed"
           xvfb-run -a "$exe"
+      - if: runner.os == 'Linux'
+        # Experiment: is the 30 s before the shell's setup hook the single-instance plugin waiting for a
+        # D-Bus session bus that a bare runner lacks? Same app, same data, under a session bus. It cannot
+        # fail the job; the numbers are in the self-test lines.
+        name: Relaunch under a session bus (experiment)
+        continue-on-error: true
+        shell: bash
+        run: |
+          debs=(apps/desktop/src-tauri/target/release/bundle/deb/*.deb)
+          exe="$RUNNER_TEMP/deb-root/usr/bin/wasifyai-desktop"
+          if command -v dbus-run-session >/dev/null; then
+            xvfb-run -a dbus-run-session -- "$exe"
+          else
+            echo "dbus-run-session is not installed on this runner: no result"
+          fi
+          echo "(package: ${debs[0]})"
       - if: runner.os == 'Windows'
         name: Install and run the packaged app (first run installs the engine)
         shell: pwsh

@@ -18,7 +18,7 @@ documents and retrieval (stage E), voice, fine-tuning, image editing tools beyon
 | The home "Ask anything" box says the assistant arrives later | it sends the message to the `wasifyai-assistant` product and streams the answer |
 | Graphs call text capabilities through `LiteLLMTextProvider` (an OpenAI-compatible client). The desktop has no gateway (`LITELLM_BASE_URL` empty), so Enhance and moderation wait | the desktop engine points the same provider at a local `llama-server`, or at the person's cloud endpoint. **No LiteLLM on desktop** |
 | The slot manager has one owner, `image` | a second owner, `chat`: loading one unloads the other, and the window says so |
-| Found language models are listed as "Not used yet" (ADR-0063) | they can be selected, subject to the fit check; the catalogue offers a recommended model to download |
+| Found language models are listed as "Not used yet" (ADR-0063) | they can be selected, subject to the fit check; the model hub (ADR-0064) lets the person find and download others |
 | Fit is checked for image models and downloads | it is checked for language models too, including the context length the person picks |
 | No conversations | `conversations` and `messages` tables, indexed for search (ADR-0041), a sidebar list of Recents |
 
@@ -41,8 +41,8 @@ engine owns the process and sets the provider's base URL; the assistant graph ke
 
 ### 3. Choosing the model
 
-One selected model per capability, chosen from: found models (discovery, GGUF only), the app's catalogue (with
-download and checksums, as for klein) and a running Ollama or LM Studio (detected by discovery, used through
+One selected model per capability, chosen from: the model hub's On device list (found models, GGUF only, and
+what the app downloaded), the hub's Discover tab (ADR-0064, with download and checksums) and a running Ollama or LM Studio (detected by discovery, used through
 their OpenAI endpoint). A model that is `too_big` cannot be selected. A `tight` one needs a confirmation. The
 context length is a setting with a default of 8192; the fit check uses it, so the KV cache shows in the number.
 
@@ -73,6 +73,7 @@ shadcn) is a short spike with the ADR-0057 criteria before D5.
 |---|---|---|
 | D1 | llama.cpp component: pin, install, start, stop, repair, in Settings | install and start on the Mac and in a CI job like `comfyui`; memory and start time recorded |
 | D2 | Text provider on desktop, `chat` slot owner, fit for language models, model selection (found, catalogue, running server) | unit tests with a fake llama-server; a real answer from a found model on the Mac; the slot switch measured |
+| D2b | Model hub (ADR-0064): Discover and On device tabs, the Hub client in the engine, downloads of Hub models, the curated shelf | Hub client tests against a fake Hub (search, files, checksums, gated, offline, rate limit); a real search and a confirmed download of a small model on the Mac; the fit badge per variant |
 | D3 | Conversations and messages tables, migration, search indexing, graph without tools, `token` streaming | store contract on SQLite and Postgres; graph tests; an end-to-end chat on the desktop profile with the fake provider |
 | D4 | Tools: `image.generate`, search my creations; `tool_call` and `tool_result` events; evaluation cases | tool-choice cases kept in the repository; a message that makes a real image on the Mac |
 | D5 | Shared chat UI and the desktop home | component tests; the window self-test sends a message and reads the answer |

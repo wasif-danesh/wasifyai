@@ -65,5 +65,6 @@
 | [0061](0061-how-unsloth-code-enters-wasifyai.md) | How Unsloth code enters wasifyai: a reference clone and selective import, not a repo move | Accepted |
 | [0062](0062-reuse-matrix-engines-per-capability.md) | Reuse matrix: which engine and which Unsloth parts, per capability | Accepted |
 | [0063](0063-self-sufficient-desktop-discovers-existing-models-and-tools.md) | A self-sufficient desktop app that finds the models and tools already on the computer | Accepted |
+| [0064](0064-model-hub-discover-and-on-device.md) | A model hub: discover open-weight models and see what is on the device | Proposed |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

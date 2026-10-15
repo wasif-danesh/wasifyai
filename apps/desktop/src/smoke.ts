@@ -38,11 +38,13 @@ function type(el: HTMLTextAreaElement, text: string) {
 
 export async function runSmoke(): Promise<void> {
   try {
+    window.location.hash = "/images/create"; // the create screen
+    await new Promise((r) => setTimeout(r, 100));
     const box = await until("the prompt box", () => document.querySelector("textarea"));
     type(box, PROMPT);
-    const go = await until("the Make my image button", () =>
+    const go = await until("the Generate button", () =>
       [...document.querySelectorAll("button")].find(
-        (b) => b.textContent?.includes("Make my image") && !b.disabled,
+        (b) => b.textContent?.trim() === "Generate" && !b.disabled,
       ),
     );
     go.click();
@@ -70,6 +72,8 @@ export async function runSmoke(): Promise<void> {
 export async function runComponentSmoke(): Promise<void> {
   const started = Date.now();
   try {
+    window.location.hash = "/settings"; // where the image engine is set up
+    await new Promise((r) => setTimeout(r, 100));
     const go = await until("the Set up image generation button", () =>
       [...document.querySelectorAll("button")].find(
         (b) => b.textContent?.includes("Set up image generation") && !b.disabled,

@@ -22,7 +22,13 @@
         "minWidth": 720,
         "minHeight": 520,
         "center": true,
-        "dragDropEnabled": false
+        "dragDropEnabled": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 18,
+          "y": 22
+        }
       }
     ]
   },

@@ -230,18 +230,39 @@ Files that moved out of `apps/web` left a one-line re-export at the old path (`c
 `lib/styles.ts`, `components/Notice.tsx`, ...), so the other screens did not change. Switch a screen's imports
 to `@wasifyai/ui` when it is migrated; delete the shim when nothing uses it.
 
+## The window: side menu and screens
+
+`apps/desktop/src` owns the window's layout (the shared packages own the image form and flow).
+
+| Piece | File | What |
+|---|---|---|
+| Router | `router.ts` | URL hash, six routes: `/`, `/images/create`, `/images/edit`, `/library`, `/models`, `/settings`. No library. |
+| Shell | `Shell.tsx` | side menu + the screen; the menu collapses (remembered in `localStorage`) |
+| Side menu | `Sidebar.tsx` | New chat (home), Models, Library, Images (expands: Create, Edit; Transform, Inpaint, Extend, Upscale, Reference marked "Soon"), Train ("Soon"), Projects, Recents, You + settings |
+| Home | `pages/Home.tsx` | greeting and the "Ask anything" box (the assistant, ADR-0057, is not built: the box says so) |
+| Create / Edit | `pages/Create.tsx` | controls on the left, the picture, Recipe and a strip of recent images on the right; Generate stays at the bottom of the controls |
+| Library | `pages/Library.tsx` | grid, search (My creations, ADR-0041), open, delete |
+| Models, Settings | `pages/Models.tsx`, `pages/Settings.tsx` | the model panel; the image engine card, updates, restart and repair |
+
+On macOS the title bar is an overlay (`titleBarStyle: Overlay`, traffic lights at 18,22) and the menu leaves
+room for them; elsewhere the native title bar stays. Dragging uses `data-tauri-drag-region` with the
+`core:window:allow-start-dragging` capability. Items that are not built yet are shown disabled and labelled,
+not hidden, so the menu keeps its final shape.
+
 ## The self-test
 
 `WASIFYAI_SMOKE=1 cargo run` (in `apps/desktop/src-tauri`) starts the shell as usual; once the engine is ready
-the window types a prompt into the create form, presses the button, waits for the picture to load from the
+the window opens the Create screen (`#/images/create`), types a prompt, presses Generate, waits for the picture to load from the
 engine's signed link, and the shell prints `SMOKE PASS ...` and exits 0 (`SMOKE FAIL ...` and 1 otherwise).
 It drives the real DOM in the real webview, so CORS, the content security policy and the file link are all
 exercised. It needs the engine environment (`.venv`).
 
 ## What is not done
 
-- **Result actions on desktop.** The window shows the picture and "Make another"; download and a library
-  screen come with the gallery (Phase 2). There is no router yet.
+- **Result actions on desktop.** The window shows the picture, its recipe and a library with search and
+  delete. Download/export, favourites, collections and re-run from a recipe come with the gallery (stage B).
+- **Menu entries marked "Soon"**: Transform, Inpaint, Extend, Upscale, Reference, Train; Projects and
+  Recents (they need the assistant and projects, ADR-0057). The home "Ask anything" box does not answer.
 - **Other screens** (music, video, speech, ...) still live in `apps/web`; only the image screen is shared.
 - **Schema changes.** Each adapter creates its tables on first use (`CREATE TABLE IF NOT EXISTS`). There is no
   migration runner, so changes must be additive until one is written.

@@ -1,6 +1,6 @@
 # ADR-0064: A model hub: discover open-weight models and see what is on the device
 
-- **Status:** Proposed (2026-10-15), to be accepted with the owner's answers to the questions at the end
+- **Status:** Accepted (2026-10-15), with the owner's answers recorded at the end (all recommended)
 - **Date:** 2026-10-15
 - **Depends on:** ADR-0056 (profiles, provisioning), ADR-0059 (models folder, downloads), ADR-0062 (engine per
   capability), ADR-0063 (found models, fit check), ADR-0057 (assistant; its model picker uses this hub)
@@ -85,10 +85,10 @@ fit check (`fits`, `tight`, `too_big`). There is no way to find a model we have 
 Uploading or publishing, comparing models side by side, ratings of our own, model merging, conversion between
 formats, ModelScope and other hubs, and automatic updates.
 
-## Questions for the owner (recommended answer first)
+## Owner's answers (2026-10-15: all recommended)
 
-1. **Opt-in notice before the first request** (recommended), or a switch that is on from the start?
-2. **Hugging Face only in v1** with a curated shelf (recommended), or also a second hub?
-3. **Default filter "runs on this computer"** on (recommended), or show everything by default like Unsloth?
-4. **README images** blocked until the person asks (recommended), or loaded as in a browser?
-5. **Hugging Face token** for gated models in the keychain (recommended), or not supported in v1?
+1. **Opt-in notice** before the first request; nothing is contacted before the person agrees.
+2. **Hugging Face only** in v1, plus the curated shelf.
+3. **Default filter "runs on this computer"** is on; "Show everything" is one click.
+4. **README images blocked** until the person asks, per card.
+5. **Hugging Face token** for gated models is supported, kept in the operating system's keychain.

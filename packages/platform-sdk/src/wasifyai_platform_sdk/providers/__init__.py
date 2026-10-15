@@ -30,6 +30,9 @@ class ProviderDeps:
     db: AsyncEngine | None = None
     embedding_dims: int = 768
     safeguards: Callable[[], Awaitable[bool]] | None = None  # ADR-0047
+    # The desktop profile has no gateway: it supplies the text provider (its chosen local model)
+    # and every `litellm` text binding of a product uses it.
+    text_provider: Any | None = None
 
 
 # (provider, family) -> factory(deps, config) -> provider instance
@@ -44,7 +47,9 @@ def register_provider(provider: str, family: str, factory: Factory) -> None:
 register_provider(
     "litellm",
     "text",
-    lambda d, c: LiteLLMTextProvider(d.litellm_base_url, d.litellm_api_key, d.usage),
+    lambda d, c: (
+        d.text_provider or LiteLLMTextProvider(d.litellm_base_url, d.litellm_api_key, d.usage)
+    ),
 )
 register_provider("fake", "text", lambda d, c: FakeTextProvider(d.usage, d.embedding_dims))
 for _family in ("image", "music", "video"):

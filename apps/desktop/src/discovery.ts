@@ -37,6 +37,8 @@ export type FoundModel = {
   state: FoundState;
   reason: string;
   use_root: string | null;
+  /** what "Can be used" does: add its folder, or choose it as the chat model */
+  use: "" | "folder" | "chat";
   needs_gb: number;
   /** null for parts that are not run alone (LoRAs, VAEs, text encoders) */
   fit: Fit | null;
@@ -50,7 +52,7 @@ export type DiscoveryState = {
   truncated: boolean;
   items: FoundModel[];
   scanned: { tool: string; folder: string; found: number }[];
-  servers: { tool: string; title: string; url: string; kind: string }[];
+  servers: { tool: string; title: string; url: string; kind: string; models?: string[] }[];
   folders: string[];
   suggested: { tool: string; folder: string }[];
 };

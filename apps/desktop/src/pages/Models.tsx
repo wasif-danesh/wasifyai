@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useState } from "react";
+import { ChatModel } from "../ChatModel";
 import { FoundModels } from "../FoundModels";
 import { ModelsPanel } from "../ModelsPanel";
 
@@ -15,6 +16,7 @@ export function ModelsPage() {
         </p>
       </div>
       <ModelsPanel key={version} />
+      <ChatModel key={`chat-${version}`} />
       <FoundModels onChanged={() => setVersion((v) => v + 1)} />
     </div>
   );

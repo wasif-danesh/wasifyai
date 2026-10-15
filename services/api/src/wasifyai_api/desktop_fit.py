@@ -191,9 +191,16 @@ def kv_cache_bytes(layers: int, kv_heads: int, head_dim: int, context: int) -> i
 
 
 def need_of_language(
-    weights: int, layers: int = 0, kv_heads: int = 0, head_dim: int = 0, context: int = 0
+    weights: int,
+    layers: int = 0,
+    kv_heads: int = 0,
+    head_dim: int = 0,
+    context: int = 0,
+    chosen: int | None = None,
 ) -> Need:
-    ctx = min(context, DEFAULT_CONTEXT) if context else 4096
+    """`context` is what the model supports (judged at the chat default); `chosen` is the
+    context the person set, used as it is."""
+    ctx = chosen or (min(context, DEFAULT_CONTEXT) if context else 4096)
     kv = (
         kv_cache_bytes(layers, kv_heads, head_dim, ctx)
         if layers and kv_heads and head_dim

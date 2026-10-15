@@ -191,6 +191,31 @@ def read_gguf(path: Path) -> Header | None:
     )
 
 
+def gguf_has_chat_template(path: Path) -> bool | None:
+    """Does this GGUF carry its own chat template? None when the header cannot be read.
+
+    The template sits after the tokenizer's big lists, so this walks the whole key list (lists are
+    skipped, not loaded). Ollama keeps templates outside the file, so its blobs often have none: the
+    engine then falls back to a generic template and a model may answer oddly."""
+    try:
+        with path.open("rb") as f:
+            if f.read(4) != b"GGUF":
+                return None
+            (version,) = struct.unpack("<I", f.read(4))
+            if version not in (2, 3):
+                return None
+            _tensors, count = struct.unpack("<QQ", f.read(16))
+            for _ in range(min(count, 100_000)):
+                key = _gguf_string(f)
+                (vtype,) = struct.unpack("<I", f.read(4))
+                value = _gguf_value(f, vtype)
+                if key == "tokenizer.chat_template":
+                    return bool(value)
+    except (OSError, struct.error, ValueError):
+        return None
+    return False
+
+
 def read_safetensors_header(path: Path) -> dict[str, Any] | None:
     try:
         with path.open("rb") as f:
@@ -302,6 +327,7 @@ class Found:
     state: str = "later"  # ready, can_use, later, unsupported
     reason: str = ""
     use_root: str | None = None  # the folder `can_use` would add
+    use: str = ""  # what `can_use` does: "folder" (add its models folder) or "chat" (choose it)
     needs_gb: float = 0.0
     fit: dict[str, Any] | None = None
     # what a language model's memory need is worked out from (GGUF header; 0 when unknown)
@@ -668,8 +694,22 @@ def need_of(item: Found) -> Need | None:
     return need_of_image(item.size, video=item.kind == "video")
 
 
+@dataclass(frozen=True)
+class LanguageHint:
+    """What assess needs to know about the language engine."""
+
+    ready: bool  # the engine is installed
+    selected_path: str | None  # the file chosen for chat, if any
+    context: int  # the context the person chose
+    machine: Machine | None  # the computer as the engine sees it (its backend decides the device)
+
+
 def assess(
-    items: list[Found], catalogue: list[ModelEntry], roots: list[Path], machine: Machine | None
+    items: list[Found],
+    catalogue: list[ModelEntry],
+    roots: list[Path],
+    machine: Machine | None,
+    language: LanguageHint | None = None,
 ) -> None:
     """Set each item's state and reason (used already, usable in place, planned, or not usable) and
     whether it fits this computer. A model that cannot fit is never offered for use."""
@@ -704,6 +744,23 @@ def assess(
         elif it.format == "ckpt":
             it.state = "unsupported"
             it.reason = "Old .ckpt files can run code when opened, so the app does not open them."
+        elif it.kind == "language" and it.format != "gguf":
+            it.state = "unsupported"
+            it.reason = (
+                "The language engine reads GGUF files. This is a transformers folder: download "
+                "a GGUF version of the model instead."
+            )
+        elif it.kind == "language":
+            if language is not None and language.selected_path == it.path:
+                it.state, it.reason = "ready", "Chosen for chat."
+            elif language is not None and language.ready:
+                it.state, it.use = "can_use", "chat"
+                it.reason = "The language engine can run this. Choose it to chat with it."
+            else:
+                it.state = "later"
+                it.reason = (
+                    "Set up the language engine in Settings, then this can be chosen for chat."
+                )
         elif it.kind in LATER:
             it.state = "later"
             it.reason = LATER[it.kind]
@@ -711,19 +768,43 @@ def assess(
             it.state = "unsupported"
             it.reason = f"The app does not recognise this {KIND_WORDS.get(it.kind, 'file')} yet."
         it.fit = None
-        if need is not None and machine is not None and it.state != "unsupported":
-            fit = assess_fit(need, machine)
+        if match and p.parent.name == match[0] and it.state == "can_use":
+            it.use = "folder"
+        machine_for_fit = machine
+        if it.kind == "language" and language is not None and it.format == "gguf":
+            need = need_of_language(
+                it.size, it.layers, it.kv_heads, it.head_dim, it.context, chosen=language.context
+            )
+            machine_for_fit = language.machine
+        if need is not None and machine_for_fit is not None and it.state != "unsupported":
+            fit = assess_fit(need, machine_for_fit)
             it.fit = fit.public()
             it.needs_gb = round(fit.needed_bytes / 1e9, 1)
             if fit.verdict == "too_big":
                 it.state = "unsupported"
                 it.use_root = None
+                it.use = ""
                 it.reason = fit.reason
             elif fit.verdict == "tight":
                 it.reason = f"{it.reason} {fit.reason}"
 
 
 # ---- running tools ----------------------------------------------------------------------------
+
+
+def _server_models(kind: str, response: httpx.Response) -> list[str]:
+    """The model names a running tool offers, from its listing (best effort; none is fine)."""
+    try:
+        body = response.json()
+        if kind == "ollama":
+            names = [m.get("name") for m in body.get("models", [])]
+        elif kind == "openai":
+            names = [m.get("id") for m in body.get("data", [])]
+        else:
+            names = []
+    except (ValueError, AttributeError, TypeError):
+        return []
+    return [n for n in names if isinstance(n, str)][:100]
 
 
 async def probe_servers(
@@ -744,8 +825,11 @@ async def probe_servers(
                     continue
                 if r.status_code == 200:
                     found.append(
-                        {"tool": tool.id, "title": tool.title, "url": url, "kind": s["kind"]}
-                    )
+                        {
+                            "tool": tool.id, "title": tool.title, "url": url, "kind": s["kind"],
+                            "models": _server_models(s["kind"], r),
+                        }
+                    )  # fmt: skip
     finally:
         if client is None:
             await own.aclose()
@@ -767,6 +851,7 @@ class DiscoveryService:
         self.models = models
         self.tools = tools if tools is not None else resolve_tools(load_config())
         self._client_factory = client_factory
+        self.language: Any = None  # the LanguageService: what is chosen, the engine's machine
         self.enabled = True
         self.folders: list[Path] = []
         self.items: list[Found] = []
@@ -822,7 +907,16 @@ class DiscoveryService:
             roots = self.models.roots() if self.models else []
             catalogue = list(self.models.catalogue.values()) if self.models else []
             machine = await self.models.machine() if self.models else None
-            assess(result.items, catalogue, roots, machine)
+            hint = None
+            if self.language is not None:
+                chosen = self.language.selected
+                hint = LanguageHint(
+                    ready=self.language.llama.installed,
+                    selected_path=chosen.path if chosen and chosen.kind == "file" else None,
+                    context=chosen.context if chosen else 8192,
+                    machine=await self.language.machine(),
+                )
+            assess(result.items, catalogue, roots, machine, hint)
             self.items, self.scanned, self.truncated = (
                 result.items,
                 result.scanned,

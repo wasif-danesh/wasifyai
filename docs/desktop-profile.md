@@ -302,6 +302,24 @@ stops it to free the memory. Only the Apple-silicon build uses a GPU; the other 
 `GET /desktop/language-engine` and `POST /desktop/language-engine/stop` are the routes; choosing a model and the
 chat provider are D2 (`docs/phase2-stage-d-plan.md`).
 
+## The chat model (stage D, D2)
+
+The model that answers when the app needs words: improving a prompt now, the assistant next. It is chosen in
+Models ("Chat model"): a found GGUF file run by the app's own `llama-server` (the language engine must be set
+up), or a model of a running Ollama or LM Studio, used where it is.
+
+| What | Where |
+|---|---|
+| The choice and the session that makes it ready (holds the `chat` slot for a file) | `desktop_language.py` `LanguageService` |
+| The text provider every product's text capabilities use on the desktop | `LocalTextProvider`, supplied as `ProviderDeps.text_provider` in `main.py` |
+| `GET /desktop/language`, `PUT /desktop/language` `{item_id, context}` or `{server}` or `{clear}`, `POST /desktop/language/try` | `desktop_llm.py` |
+| Fit at the chosen context, with the engine's own backend | `language_machine()` and `desktop_fit.need_of_language(chosen=...)` |
+| Window | `ChatModel.tsx`, `language.ts` |
+
+A file is refused when the engine cannot read it (`unsupported`) or the computer cannot hold it (`too_big`); a
+server is only one the engine found itself on `127.0.0.1`. Choosing never starts anything: the first request
+does, so a person who only browses Models costs no memory.
+
 ## Will it fit? (ADR-0063)
 
 `desktop_fit.py` answers `fits`, `tight` or `too_big` for a model, with a reason in plain words, from what the

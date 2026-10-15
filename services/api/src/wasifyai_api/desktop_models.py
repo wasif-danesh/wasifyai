@@ -307,6 +307,7 @@ class ModelsService:
         self.models_dir = default_models_dir
         self.extra_dirs = default_extra_dirs
         self.sidecar: Any = None  # set when the worker is built; told about folder changes
+        self.llama: Any = None  # the LlamaServer, when the language engine is there
         self.slot: Any = None
 
     async def load(self) -> None:
@@ -351,10 +352,11 @@ class ModelsService:
 
     def reclaimable_bytes(self) -> int:
         """Memory the app's own resident model holds: free to whatever is loaded next."""
-        slot, side = self.slot, self.sidecar
-        if slot is not None and slot.resident_owner and side is not None:
-            return process_rss_bytes(getattr(side, "pid", None))
-        return 0
+        slot = self.slot
+        if slot is None or not slot.resident_owner:
+            return 0
+        owner = {"image": self.sidecar, "chat": self.llama}.get(slot.resident_owner)
+        return process_rss_bytes(getattr(owner, "pid", None)) if owner is not None else 0
 
     async def machine(self) -> Machine:
         """The computer's memory now (a few commands are run: not on the event loop)."""

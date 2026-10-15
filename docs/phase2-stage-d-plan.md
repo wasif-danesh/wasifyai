@@ -1,7 +1,7 @@
 # Phase 2, stage D: the assistant on desktop (plan)
 
-Status: **Approved 2026-10-15** with all five recommended answers below (owner: "all recommended"). **D1 done**
-(see "D1 evidence" at the end); D2 to D6 not started. Implements
+Status: **Approved 2026-10-15** with all five recommended answers below (owner: "all recommended"). **D1 and D2 done**
+(see the evidence sections at the end); D2b to D6 not started. Implements
 ADR-0057 (the assistant product) on the desktop with a managed local language model (ADR-0062: llama.cpp), the
 slot manager (ADR-0056) and the model discovery and fit checks that exist today (ADR-0063).
 
@@ -133,3 +133,34 @@ shadcn) is a short spike with the ADR-0057 criteria before D5.
      are a separate pin to choose later. D2 passes the backend into the fit check.
 - **CI:** a `llamacpp` job installs the component through the window's self-test on macOS, downloads a 1.2 MB
   model pinned by commit and SHA-256, starts the installed server on it and asks for an answer.
+
+## D2 evidence (2026-10-16): the chat model, the provider and the slot
+
+- **Provider.** On the desktop every `litellm` text binding of a product resolves to `LocalTextProvider`
+  (`ProviderDeps.text_provider`), so Enhance and the other text capabilities of the products need no change.
+  It streams from the chosen model through the OpenAI chat API, records token usage, refuses a prompt that
+  carries a picture (a text model), and when nothing is chosen answers with a plain sentence that points to
+  Models. Embeddings from a local model wait for the documents stage.
+- **Choosing** (`LanguageService`, `/desktop/language`): a found GGUF file that the engine can run and the
+  computer can hold (the fit check, at the chosen context length, with the engine's own backend: a processor
+  build ignores a graphics card), or a model of a running Ollama or LM Studio (only a server the engine itself
+  found on loopback, and only a model it listed). The choice is kept across restarts. A file with no chat
+  template of its own is chosen with a note.
+- **The slot.** `chat` is a second owner next to `image`. A file runs in the app's own `llama-server` while the
+  `chat` slot is held: an image model is unloaded first, and an image job started afterwards stops the chat
+  model, giving its memory back. A model of an external tool never takes the slot (its memory is its own).
+- **Window.** Models has a "Chat model" card: the chosen model with a context-length choice, a try-it, and the
+  list of files and running models with their fit badge and "Use for chat".
+- **On the owner's Mac** (llama.cpp b11655, Metal, a 13.8 GB gpt-oss 20B file from the Ollama folder):
+  choose, then try: 3.5 s including the load; Enhance through the product route: 5 s; the model stays loaded
+  after a chat (`running: true`); an image job unloaded it in under a second; the next chat reloaded it in 3.4 s.
+- **Findings.**
+  1. **Ollama's files often carry no chat template** (it keeps templates beside the file, in its own syntax).
+     The engine then falls back to a generic template, and a reasoning model like gpt-oss shows its working in
+     the answer. The file chosen here had none (checked in 0.05 s from the header), and the answers read
+     accordingly. The window now says so when such a file is chosen. The fix is a model file that has its
+     template (Hugging Face, LM Studio, Unsloth), or the same model through a running Ollama; the model hub
+     (D2b) is how people get such files.
+  2. **Reasoning models need their template to separate the thinking from the answer.** With the right template
+     llama-server returns the thinking apart from the content; without it Enhance would paste the thinking
+     into a prompt. D4 should add an output guard for Enhance (reject an answer that starts like a plan).

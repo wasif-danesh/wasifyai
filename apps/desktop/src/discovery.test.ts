@@ -18,6 +18,7 @@ const model = (over: Partial<FoundModel>): FoundModel => ({
   state: "later",
   reason: "",
   use_root: null,
+  use: "",
   needs_gb: 0,
   fit: null,
   ...over,

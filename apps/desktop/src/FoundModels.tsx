@@ -194,7 +194,7 @@ export function FoundModels({ onChanged }: { onChanged?: () => void }) {
                   <span className={cn("rounded-full border px-2 py-0.5 text-xs", TONE[m.state])}>
                     {STATE_LABEL[m.state]}
                   </span>
-                  {m.state === "can_use" ? (
+                  {m.state === "can_use" && m.use === "folder" ? (
                     <Button
                       type="button"
                       size="sm"

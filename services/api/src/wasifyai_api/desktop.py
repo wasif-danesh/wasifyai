@@ -37,6 +37,7 @@ from wasifyai_api.config import Settings
 from wasifyai_api.creation_index import IndexStore
 from wasifyai_api.desktop_discovery import DiscoveryService
 from wasifyai_api.desktop_fit import assess_fit, need_declared
+from wasifyai_api.desktop_language import LanguageService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
 from wasifyai_api.llama_server import LlamaServer
@@ -71,12 +72,15 @@ class DesktopBackends:
     models: ModelsService | None = None
     discovery: DiscoveryService | None = None
     llama: LlamaServer | None = None
+    language: LanguageService | None = None
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
     async def start(self, runs: RunManager) -> None:
         """Start the in-process worker and the consumer that resumes graphs from its results."""
         if self.models is not None:
             await self.models.load()  # folders a person chose earlier
+        if self.language is not None:
+            await self.language.load()  # the model chosen earlier, if any
         if self.discovery is not None:
             await self.discovery.load()
             self.discovery.start()  # a background scan of the known folders (ADR-0063)
@@ -122,10 +126,16 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         settings.extra_model_dirs,
         SqliteSettingsStore(engine),
     )
+    llama = LlamaServer(settings.desktop_dir)
+    models.llama = llama
+    discovery = DiscoveryService(SqliteSettingsStore(engine), models)
+    language = LanguageService(SqliteSettingsStore(engine), llama, models, discovery)
+    discovery.language = language
     return DesktopBackends(
         models=models,
-        discovery=DiscoveryService(SqliteSettingsStore(engine), models),
-        llama=LlamaServer(settings.desktop_dir),
+        discovery=discovery,
+        llama=llama,
+        language=language,
         engine=engine,
         event_log=log_,
         run_store=SqliteRunStore(engine),
@@ -225,9 +235,19 @@ def _build_worker(d: DesktopBackends):
         runner = FitGuardRunner(runner, sidecar, models, ComfyError)
 
     # one big model in memory at a time; the image engine unloads through ComfyUI's /free
-    slot = SlotManager({"image": sidecar.unload_models}, idle_unload_s=s.desktop_idle_unload_s)
+    owners: dict[str, Any] = {"image": sidecar.unload_models}
+    if d.llama is not None:
+        llama = d.llama
+
+        async def unload_chat() -> None:
+            await llama.stop()
+
+        owners["chat"] = unload_chat
+    slot = SlotManager(owners, idle_unload_s=s.desktop_idle_unload_s)
     if models is not None:
         models.sidecar, models.slot = sidecar, slot
+    if d.language is not None:
+        d.language.slot = slot
     processor = JobProcessor(
         ws,
         d.event_log,

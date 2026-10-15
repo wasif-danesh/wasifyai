@@ -280,7 +280,7 @@ def test_states_say_what_can_be_done(tmp_path):
     assert states == {"demo.safetensors": "can_use", "x.safetensors": "later",
                       "old.ckpt": "unsupported", "m.gguf": "later"}  # fmt: skip
     assert items[0].use_root == str(models)
-    assert "assistant" in items[3].reason
+    assert "language engine" in items[3].reason
 
     # once the folder is one the app uses, it is ready
     assess(items, cat, [models], machine=None)
@@ -367,3 +367,13 @@ def test_a_tools_own_format_that_llama_cpp_cannot_read_is_said_so(tmp_path):
     item.family, item.format = "gptoss", "gguf"
     assess([item], [], [], machine=None)
     assert item.state == "unsupported" and "own format" in item.reason
+
+
+def test_a_missing_chat_template_is_detected_without_loading_the_tokenizer(tmp_path):
+    from wasifyai_api.desktop_discovery import gguf_has_chat_template
+
+    plain = gguf(tmp_path / "plain.gguf")  # the helper writes no template
+    assert gguf_has_chat_template(plain) is False
+    junk = tmp_path / "junk.gguf"
+    junk.write_bytes(b"not a model")
+    assert gguf_has_chat_template(junk) is None

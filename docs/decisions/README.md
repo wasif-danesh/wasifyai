@@ -57,5 +57,12 @@
 | [0053](0053-ai-tools-product.md) | AI Tools: a manifest-driven product, and Change Clothes | Withdrawn (moved to wasifyai-art) |
 | [0054](0054-lora-training-product.md) | LoRA training: dataset, captions, trainer service, publish (Mac first) | Withdrawn (moved to wasifyai-art) |
 | [0055](0055-rename-to-wasifyai.md) | Rename the project and every product from `wd-*` to `wasifyai` | Proposed |
+| [0056](0056-desktop-app-and-web-share-one-engine.md) | The desktop app and the web product share one engine; image first | Proposed |
+| [0057](0057-ai-assistant-chat-first-shell.md) | An AI assistant, ChatGPT-style, on desktop and web | Proposed |
+| [0058](0058-desktop-link-runner-and-remote-ui.md) | Linking the web product to a user's desktop: a runner, and an optional remote UI | Proposed |
+| [0059](0059-comfyui-managed-sidecar-image-engine.md) | ComfyUI as the managed image engine of the desktop app | Proposed |
+| [0060](0060-documents-local-first-rag.md) | Documents: a local-first RAG product (ingest, search, grounded chat, generate) | Proposed |
+| [0061](0061-how-unsloth-code-enters-wasifyai.md) | How Unsloth code enters wasifyai: a reference clone and selective import, not a repo move | Proposed |
+| [0062](0062-reuse-matrix-engines-per-capability.md) | Reuse matrix: which engine and which Unsloth parts, per capability | Proposed |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

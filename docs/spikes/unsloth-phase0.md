@@ -253,3 +253,12 @@ Findings:
 
 The two remaining VAE-option runs (`--vae-conv-direct`, and both flags) were stopped by the owner's request to
 free memory; they are not recorded here.
+
+## Erratum (2026-10-15, Phase 2 stage A2)
+
+The "9 s warm" figure for ComfyUI quoted in the tables above came from runs with the same prompt and a new seed,
+where ComfyUI reuses the text encoding. With a **new prompt every time, warm is about 13 s** for FLUX.2 klein 4B
+at 1024x1024 on the M5 Pro (the text encoder runs on the CPU); cold is 14 s direct, about 30 s through the
+engine including starting ComfyUI. The comparison with the other engines in this record still holds in kind
+(they were also measured with the same prompt), but the absolute number to plan with is 13 s. Evidence:
+`docs/spikes/desktop-phase1.md`, stage A2.

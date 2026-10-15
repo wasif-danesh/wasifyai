@@ -282,3 +282,46 @@ jobs:
         run: |
           echo "--- self-test lines"; cat "$WASIFYAI_SMOKE_OUT" || true
           echo "--- installer log"; cat "$WASIFYAI_DATA_DIR/logs/provision.log" || true
+
+  comfyui:
+    # The optional image engine, as a person gets it: press "Set up image generation" (the window's
+    # self-test does), then start the installed ComfyUI and ask it what device it found. No model is
+    # downloaded. Apple-silicon macOS only: that is where the component is supported (stage A of phase 2).
+    runs-on: macos-latest
+    env:
+      WASIFYAI_SMOKE: "1"
+      WASIFYAI_SMOKE_COMPONENT: comfyui
+      WASIFYAI_PROVISION: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Paths for the run
+        shell: bash
+        run: |
+          {
+            echo "WASIFYAI_DATA_DIR=$RUNNER_TEMP/wasifyai-data"
+            echo "WASIFYAI_COMFYUI_DATA_DIR=$RUNNER_TEMP/wasifyai-data"
+            echo "WASIFYAI_SMOKE_OUT=$RUNNER_TEMP/smoke.txt"
+          } >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install
+      - run: pnpm --filter @wasifyai/desktop build
+      - name: Engine bundle (with the ComfyUI lock)
+        run: ./scripts/build-engine-bundle.sh
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: apps/desktop/src-tauri }
+      - name: Set up image generation in the window
+        working-directory: apps/desktop/src-tauri
+        run: cargo run --locked
+      - name: Start the installed ComfyUI and ask what it found
+        run: |
+          uv sync --all-packages
+          uv run pytest -s services/media-worker/tests/integration/test_comfyui_installed.py
+      - if: always()
+        name: Verdict and installer log
+        run: |
+          echo "--- self-test"; cat "$WASIFYAI_SMOKE_OUT" || true
+          echo "--- installer log"; tail -n 60 "$WASIFYAI_DATA_DIR/logs/provision.log" || true

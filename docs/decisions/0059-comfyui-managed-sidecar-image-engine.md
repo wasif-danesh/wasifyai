@@ -66,6 +66,18 @@ use core nodes only), and the sidecar is installed on demand, not at first run.
 - A smaller "lite" tier (one binary, GGUF, no Python, for example stable-diffusion.cpp) can be added later
   behind the same interface if size or start time hurts adoption.
 
+## Implementation status (2026-10-15)
+
+| Decision | State |
+|---|---|
+| 1 own environment, pinned, checksums | done: ComfyUI 0.40.0 source and a hash-locked environment, installed on demand (macOS arm64) |
+| 2 pinned version, integration suite before an upgrade | pin done; the every-workflow suite is not built yet |
+| 3 loopback, per-launch token | loopback and a random port done; the token is replaced by the amendment above |
+| 4 custom nodes allowlist, workflows from our repository | no custom nodes; workflows from the product folder |
+| 5 models from the configured folder, read-only to the sidecar | done: app folder plus read-only extra folders through `extra_model_paths` |
+| 6 slot-managed, idle unload | done: `SlotManager`, `/free` after an idle time, explicit unload |
+| 7 provider interface open | unchanged: the runner choice is `stub`, `comfyui`, `auto` or `external` |
+
 ## Alternatives considered
 
 - **In-process diffusers engine (Unsloth's approach):** measured at about half ComfyUI's speed on this Mac, and
@@ -78,3 +90,12 @@ use core nodes only), and the sidecar is installed on demand, not at first run.
   Kept for training and as a possible Mac image provider.
 - **Use the user's installed ComfyUI:** unpredictable versions and nodes; supported later as an "external
   ComfyUI" backend address (already possible, ADR-0032).
+
+## Erratum (2026-10-15, Phase 2 stage A2)
+
+The "9 s warm" figure for ComfyUI quoted in this record came from runs with the same prompt and a new seed,
+where ComfyUI reuses the text encoding. With a **new prompt every time, warm is about 13 s** for FLUX.2 klein 4B
+at 1024x1024 on the M5 Pro (the text encoder runs on the CPU); cold is 14 s direct, about 30 s through the
+engine including starting ComfyUI. The comparison with the other engines in this record still holds in kind
+(they were also measured with the same prompt), but the absolute number to plan with is 13 s. Evidence:
+`docs/spikes/desktop-phase1.md`, stage A2.

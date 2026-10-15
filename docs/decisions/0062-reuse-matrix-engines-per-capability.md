@@ -62,3 +62,12 @@ ones in ADR-0061: **A** engine behind a provider adapter, **B** import and own, 
 Unsloth's own video families (MiniMax H3, LTX-2, Wan 2.1/2.2, HunyuanVideo) through its API; the whisper.cpp engine
 through the OpenAI route; RAG with scanned PDFs (needs Tesseract) and with languages other than English;
 peak memory for each engine (the numbers available were process peaks or Unsloth's estimates).
+
+## Erratum (2026-10-15, Phase 2 stage A2)
+
+The "9 s warm" figure for ComfyUI quoted in this record came from runs with the same prompt and a new seed,
+where ComfyUI reuses the text encoding. With a **new prompt every time, warm is about 13 s** for FLUX.2 klein 4B
+at 1024x1024 on the M5 Pro (the text encoder runs on the CPU); cold is 14 s direct, about 30 s through the
+engine including starting ComfyUI. The comparison with the other engines in this record still holds in kind
+(they were also measured with the same prompt), but the absolute number to plan with is 13 s. Evidence:
+`docs/spikes/desktop-phase1.md`, stage A2.

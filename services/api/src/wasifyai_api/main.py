@@ -358,12 +358,14 @@ def create_app(
                     await desktop.start(app.state.runs)
                 yield
         finally:
-            if seeder:
-                seeder.cancel()
-            if sweeper:
-                sweeper.cancel()
-            if reconciler:
-                reconciler.cancel()
+            # Stop the background tasks and wait for them before the database goes: a task that is
+            # cancelled in the middle of a query rolls back through its connection, and a connection
+            # that is already closed never answers, which left the task (and the event loop's own
+            # shutdown) waiting forever.
+            background = [t for t in (seeder, sweeper, reconciler) if t]
+            for t in background:
+                t.cancel()
+            await asyncio.gather(*background, return_exceptions=True)
             if consumer:
                 await consumer.stop()
             if desktop:

@@ -9,7 +9,6 @@ streamed through a pipe). Only the audio comes out: the video track, subtitles, 
 every tag are dropped, and the original bytes are not kept."""
 
 import os
-import resource
 import subprocess
 import sys
 import tempfile
@@ -63,6 +62,8 @@ def sniff(data: bytes) -> str | None:
 
 
 def _limits() -> None:  # pragma: no cover - runs in the child before ffmpeg starts
+    import resource  # Unix only, so imported here: this module must load on Windows (desktop app)
+
     try:
         resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT, MEMORY_LIMIT))
         resource.setrlimit(resource.RLIMIT_CPU, (DECODE_TIMEOUT_S, DECODE_TIMEOUT_S))

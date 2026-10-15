@@ -52,6 +52,28 @@ Mac, over the network (uv 17 MB from GitHub; Python and 77 packages through uv):
 Disk afterwards: venv 195 MB, Python 66 MB, uv 34 MB: **294 MB**. Before the cache is removed at the end of
 install the folder held 218 MB more, so the free-space requirement is set at 1 GiB.
 
+## First CI run (step 6), 2026-10-15
+
+The first push of the desktop work ran `ci` and `desktop` on GitHub's hosted runners. Facts from those runs,
+and what each one led to:
+
+| Job | Result | Finding |
+|---|---|---|
+| `ci` / python (Ubuntu, with Postgres and Redis) | pass | The **Redis contract tests passed** (`test_event_log_redis`, `test_run_store_redis`): the SQLite adapters and the Redis ones follow the same rules. All desktop-profile tests passed here too. |
+| `desktop` / shell (macOS, Windows, Linux) | **pass on all three** | `cargo test` and `cargo build --release --locked` pass, so `windows_job.rs` compiles on Windows and the shell builds with the webview libraries on Linux. |
+| `desktop` / engine (Ubuntu) | pass on the first push; **hung on the second** | A shutdown race (below). |
+| `desktop` / engine (Windows) | **fail** | `import resource`: the SDK imported a Unix-only module at load, so the engine could not even be imported on Windows. Fixed: imported inside the Linux-only child setup. |
+| `desktop` / engine (macOS) | **fail, both pushes** | `uv sync` chose Python 3.15 on the runner, and `ormsgpack` has no wheel for it and does not build. Fixed: `.python-version` is `3.12` (the containers and the installer's pin), and the desktop workflow sets `UV_PYTHON`. |
+| `ci` / setup (macOS) | failed on the first push with the same error, **passed on the second** | The same cause; which interpreter `uv` picks depends on the runner image, so it is not deterministic. `.python-version` makes it so. |
+| `desktop` / smoke, install | skipped | They were chained behind the engine job. Now independent, so one failure does not hide the rest. |
+
+**The hang** was a bug in the engine's shutdown, found by repeating the test locally (1 hang in 10 runs, then
+a thread dump): the lifespan cancelled its background tasks (index reconciler, upload sweeper) without
+waiting for them and then closed the database. A task cancelled in the middle of a query rolls back through
+its connection; the connection was already closed and never answered, so the task, and the event loop's own
+shutdown, waited forever. The lifespan now waits for the cancelled tasks before it closes anything: 40
+consecutive clean runs afterwards. This affects the web profile's shutdown in the same way.
+
 ## Tests that exist now
 
 | Where | What | Result here |

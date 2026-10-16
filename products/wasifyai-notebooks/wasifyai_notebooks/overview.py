@@ -149,7 +149,7 @@ class Voicer:
                 )
                 job.done = i + 1
             wav = await asyncio.to_thread(join_wavs, pieces)
-            out_dir.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(out_dir.mkdir, parents=True, exist_ok=True)
             tmp = out_dir / (AUDIO_FILE + ".part")
             await asyncio.to_thread(tmp.write_bytes, wav)
             tmp.replace(out_dir / AUDIO_FILE)

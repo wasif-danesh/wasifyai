@@ -218,7 +218,8 @@ def test_styles_the_image_engine_can_apply_are_listed_and_one_click_away(data_di
         assert one["name"] == "ink.safetensors" and one["use"] == "folder"
 
         used = c.post("/desktop/discovery/use", json={"id": one["id"]}, headers=auth())
-        assert used.status_code == 200 and used.json()["folder"].endswith("ComfyUI-Shared/models")
+        assert used.status_code == 200
+        assert Path(used.json()["folder"]).parts[-2:] == ("ComfyUI-Shared", "models")  # any OS
         ready: list[dict] = []
         for _ in range(100):
             ready = c.get("/desktop/loras", headers=auth()).json()["ready"]

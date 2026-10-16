@@ -20,6 +20,10 @@ from wasifyai_platform_sdk import (
 PRODUCT = Path(__file__).parents[1]
 
 
+def _is_file(path: Path | str) -> bool:
+    return Path(path).is_file()
+
+
 def catalogue() -> dict[str, VoiceModel]:
     raw = yaml.safe_load((PRODUCT / "models.yaml").read_text())
     return {
@@ -82,7 +86,7 @@ class FakeEngine:
     async def clone(self, model, text, reference, reference_text, options) -> SpeechResult:
         if self.fail_with:
             raise self.fail_with
-        assert Path(reference).is_file(), "the runtime reads the recording from a file"
+        assert _is_file(reference), "the runtime reads the recording from a file"
         self.cloned.append((model.id, text, Path(reference).name, reference_text, dict(options)))
         return SpeechResult(wav(1.0), model.sample_rate, 1.0, model.id, None, 0.3, 0.7)
 

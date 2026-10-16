@@ -123,6 +123,47 @@ describe("ImageWorkspace", () => {
     expect(screen.getByText("4242")).toBeInTheDocument();
   });
 
+  it("keeps the heart when the full record arrives after it was pressed", async () => {
+    // a slow computer: the picture is shown from the run's result, and the full record (read on the
+    // side) comes back only after the person pressed the heart. It was made before the press, so it
+    // says "not a favourite", and must not undo it.
+    const items = [summary()];
+    const api = fakeApi(items);
+    let release: () => void = () => undefined;
+    const late = new Promise<void>((r) => {
+      release = r;
+    });
+    api.get = async (id) => {
+      const before = { ...(items.find((i) => i.id === id) as ImageSummary) };
+      await late;
+      return before;
+    };
+    fetchMock.mockResolvedValueOnce(
+      sse([
+        done({
+          status: "done",
+          image_id: "i1",
+          image_url: "http://127.0.0.1:1/files/i1.png",
+          thumb_url: "http://127.0.0.1:1/files/t1.jpg",
+          width: 1024,
+          height: 1024,
+          prompt: "a lighthouse",
+          mode: "text",
+        }),
+      ]),
+    );
+    const user = userEvent.setup();
+    render(<ImageWorkspace mode="text" runs={runs} images={api} />);
+    await user.type(screen.getByRole("textbox"), "a lighthouse");
+    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(await screen.findByRole("button", { name: /add to favourites/i }));
+    await waitFor(() => expect(api.calls).toContain("favourite:i1:true"));
+    expect(await screen.findByRole("button", { name: "Favourite" })).toBeInTheDocument();
+    release();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByRole("button", { name: "Favourite" })).toBeInTheDocument();
+  });
+
   it("makes it again with the same prompt, size and seed", async () => {
     const api = fakeApi([summary()]);
     fetchMock.mockResolvedValueOnce(sse([node("check_request")]));

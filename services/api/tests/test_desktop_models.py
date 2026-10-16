@@ -333,7 +333,12 @@ def test_a_download_needs_the_exact_list_the_person_confirmed(tmp_path, origin):
             == 404
         )
 
-        ok = c.post("/desktop/models/demo/download", json={"files": names, "bytes": 550_000})
+        # the demo model declares 24 GB: the memory gate is not what this test is about, and a
+        # smaller computer (a CI runner) would refuse it
+        ok = c.post(
+            "/desktop/models/demo/download",
+            json={"files": names, "bytes": 550_000, "accept_memory": True},
+        )
         assert ok.status_code == 200
         did = ok.json()["id"]
         state: dict = {}

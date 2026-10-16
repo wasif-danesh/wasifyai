@@ -164,7 +164,9 @@ export function ImageWorkspace({
     let gone = false;
     images
       .get(resultId)
-      .then((i) => !gone && setMade(i))
+      // a record already held for this picture is newer than one read before it was changed
+      // (the heart pressed while this was on its way)
+      .then((i) => !gone && setMade((held) => (held?.id === i.id ? held : i)))
       .catch(() => {});
     return () => {
       gone = true;
@@ -278,7 +280,7 @@ export function ImageWorkspace({
       const next = await images.setFavourite(image.id, !image.favourite);
       setRecent((list) => list.map((i) => (i.id === next.id ? next : i)));
       if (picked?.id === next.id) setPicked(next);
-      if (made?.id === next.id) setMade(next);
+      if (made?.id === next.id || resultId === next.id) setMade(next);
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "That did not work.");
     }

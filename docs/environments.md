@@ -73,7 +73,7 @@ environment. Differences live in env vars and Helm values overlays.
 ## Delivery pipeline
 
 ```
-push / PR ─► GitHub Actions: lint, test, buildah multi-arch build ─► GHCR
+push / PR ─► GitHub Actions: lint, test, helm and kind ──► (release tag or manual run only) buildah multi-arch build ─► GHCR
 main      ─► Argo CD auto-sync ─► staging (home lab)
 release   ─► tag or promotion PR ─► Argo CD ─► prod
 ```

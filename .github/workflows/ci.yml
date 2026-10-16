@@ -1,5 +1,11 @@
 name: ci
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
+
+# One run per branch: a newer push (or a duplicate delivery of the same one) replaces the older run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   python:
     runs-on: ubuntu-latest
@@ -76,9 +82,16 @@ jobs:
           kubectl -n wasifyai describe pods | tail -80
           for d in api litellm web; do echo "--- $d"; kubectl -n wasifyai logs deploy/wasifyai-$d --tail=40 || true; done
   images:
-    if: github.ref == 'refs/heads/main'
+    # Switched off for ordinary pushes while the app is built (the multi-arch build is the slowest job by
+    # far). It runs for a release tag (`git tag v0.1.0 && git push origin v0.1.0`) or by hand (Actions >
+    # ci > Run workflow, on main). To build on every push to main again, use
+    # `github.ref == 'refs/heads/main' || ...` here.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: [python, web, helm-kind]
     runs-on: ubuntu-latest
+    # Seven services, two architectures, the arm64 half under QEMU: this is the slowest job by far. The
+    # limit keeps a stuck build from holding the run open for GitHub's six hours.
+    timeout-minutes: 120
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4

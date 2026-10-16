@@ -27,6 +27,11 @@ on:
       - pnpm-lock.yaml
       - .github/workflows/desktop.yml
 
+# One run per branch: a newer push (or a duplicate delivery of the same one) replaces the older run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 # The runners carry several Pythons (macOS: a 3.15 pre-release some wheels do not exist for); the engine
 # is 3.12, like the installer's pin. Only uv's own builds are used: the macOS runner's 3.12 cannot load
 # SQLite extensions (the notebooks' vector index needs them), and the packaged app runs on uv's build too.

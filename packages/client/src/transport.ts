@@ -24,6 +24,8 @@ export async function errorMessage(res: Response): Promise<string> {
   try {
     const body = await res.json();
     if (typeof body?.detail === "string") return body.detail;
+    // a product's own refusal: `{code, message}`
+    if (typeof body?.detail?.message === "string") return body.detail.message;
   } catch {
     // not JSON
   }

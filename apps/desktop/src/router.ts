@@ -3,7 +3,15 @@
 // hash (which a webview keeps across reloads and needs no server for).
 import { useCallback, useEffect, useState } from "react";
 
-export type Route = "home" | "create" | "edit" | "library" | "models" | "settings";
+export type Route =
+  | "home"
+  | "create"
+  | "edit"
+  | "library"
+  | "models"
+  | "settings"
+  | "notebooks"
+  | "notebook";
 
 const PATHS: Record<Route, string> = {
   home: "/",
@@ -12,7 +20,23 @@ const PATHS: Record<Route, string> = {
   library: "/library",
   models: "/models",
   settings: "/settings",
+  notebooks: "/notebooks",
+  notebook: "/notebooks/new", // the draft; a saved notebook is `/notebooks/<id>`
 };
+
+/** The id in the draft address: a notebook that is not saved yet. */
+export const NEW_NOTEBOOK = "new";
+
+/** The notebook a hash opens (`#/notebooks/<id>`, or `new` for a draft), or null. */
+export function parseNotebook(hash: string): string | null {
+  const path = hash.replace(/^#/, "").split("?")[0] ?? "";
+  const m = /^\/notebooks\/([A-Za-z0-9-]{1,64})$/.exec(path);
+  return m?.[1] ?? null;
+}
+
+export function notebookPath(id: string | null): string {
+  return id ? `/notebooks/${id}` : "/notebooks";
+}
 
 export function routePath(route: Route): string {
   return PATHS[route];
@@ -34,34 +58,38 @@ export function chatPath(id: string | null): string {
 export function parseHash(hash: string): Route {
   const path = hash.replace(/^#/, "").split("?")[0] || "/";
   if (parseConversation(hash)) return "home";
+  if (parseNotebook(hash)) return "notebook";
   const found = (Object.keys(PATHS) as Route[]).find((r) => PATHS[r] === path);
   return found ?? "home";
 }
 
-/**
- * The current route, a way to go to one, the open conversation, a key that changes only when the person
- * navigates (not when a new chat gets its id), and `adopt`, which gives the open chat its address without
- * reloading it.
- */
-export function useRoute(): [
-  Route,
-  (r: Route) => void,
-  string | null,
-  number,
-  (id: string) => void,
-] {
-  const [state, setState] = useState(() => ({
+export type RouteState = {
+  route: Route;
+  go: (r: Route) => void;
+  /** the saved conversation open on the home screen */
+  conversation: string | null;
+  /** a key that changes only when the person navigates (not when a new chat or notebook gets its id) */
+  key: number;
+  /** give the open chat its address without reloading it */
+  adopt: (id: string) => void;
+  /** the notebook open (`new` for a draft) */
+  notebook: string | null;
+  /** give a draft notebook its address without reloading it */
+  adoptNotebook: (id: string) => void;
+};
+
+function readHash() {
+  return {
     route: parseHash(window.location.hash),
     conversation: parseConversation(window.location.hash),
-    key: 0,
-  }));
+    notebook: parseNotebook(window.location.hash),
+  };
+}
+
+export function useRoute(): RouteState {
+  const [state, setState] = useState(() => ({ ...readHash(), key: 0 }));
   useEffect(() => {
-    const onChange = () =>
-      setState((s) => ({
-        route: parseHash(window.location.hash),
-        conversation: parseConversation(window.location.hash),
-        key: s.key + 1,
-      }));
+    const onChange = () => setState((s) => ({ ...readHash(), key: s.key + 1 }));
     window.addEventListener("hashchange", onChange);
     return () => window.removeEventListener("hashchange", onChange);
   }, []);
@@ -72,10 +100,32 @@ export function useRoute(): [
     window.history.replaceState(null, "", `#${chatPath(id)}`); // no hashchange: the chat stays as it is
     setState((s) => ({ ...s, conversation: id }));
   }, []);
-  return [state.route, go, state.conversation, state.key, adopt];
+  const adoptNotebook = useCallback((id: string) => {
+    window.history.replaceState(null, "", `#${notebookPath(id)}`);
+    setState((s) => ({ ...s, notebook: id }));
+  }, []);
+  return {
+    route: state.route,
+    go,
+    conversation: state.conversation,
+    key: state.key,
+    adopt,
+    notebook: state.notebook,
+    adoptNotebook,
+  };
 }
 
 /** Open a saved conversation, or start a new chat with null. */
 export function openChat(id: string | null): void {
   window.location.hash = chatPath(id);
+}
+
+/** Open a notebook, a new draft with null... */
+export function openNotebook(id: string | null): void {
+  window.location.hash = id ? notebookPath(id) : routePath("notebooks");
+}
+
+/** A new notebook: a draft that is saved when its first source is added. */
+export function newNotebook(): void {
+  window.location.hash = notebookPath(NEW_NOTEBOOK);
 }

@@ -280,6 +280,6 @@ model hub and checked against its published SHA-256. One run per model, so the s
 
 ## What stage D left for later
 
-Image tools beyond `generate_image` (edit, remix: stage C), documents and retrieval in chat (stage E), voice,
+Image tools beyond `generate_image` (edit, remix: stage C), notebooks, documents and retrieval (stage E, `docs/phase2-stage-e-plan.md`, ADR-0065), voice,
 sign-in for gated models (the keychain), the models header, CUDA and Vulkan builds of the language engine, a
 moderation check for `text.chat` on the hosted product, and the conversation card in the web's My creations.

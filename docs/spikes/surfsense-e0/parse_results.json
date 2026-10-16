@@ -1,0 +1,132 @@
+[
+ {
+  "file": "AWS-Certified-DevOps-Engineer-Professional_Exam-Guide.pdf",
+  "kb": 183,
+  "pages": 19,
+  "seconds": 6.1,
+  "chars": 24116,
+  "per_page": 0.32,
+  "peak_mb": 2204,
+  "err": null
+ },
+ {
+  "file": "AWS-Certified-Developer-Associate_Exam-Guide.pdf",
+  "kb": 160,
+  "pages": 16,
+  "seconds": 2.4,
+  "chars": 20093,
+  "per_page": 0.15,
+  "peak_mb": 2278,
+  "err": null
+ },
+ {
+  "file": "AWS_certification_paths.pdf",
+  "kb": 1451,
+  "pages": 1,
+  "seconds": 6.8,
+  "chars": 7934,
+  "per_page": 6.76,
+  "peak_mb": 3229,
+  "err": null
+ },
+ {
+  "file": "UoM-Cyber-Security-course-guide.pdf",
+  "kb": 1934,
+  "pages": 21,
+  "seconds": 3.2,
+  "chars": 36924,
+  "per_page": 0.15,
+  "peak_mb": 3229,
+  "err": null
+ },
+ {
+  "file": "cell-based-architecture-for-amazon-eks.pdf",
+  "kb": 199,
+  "pages": 2,
+  "seconds": 1.3,
+  "chars": 2914,
+  "per_page": 0.64,
+  "peak_mb": 3580,
+  "err": null
+ },
+ {
+  "file": "keyboard-shortcuts-macos.pdf",
+  "kb": 202,
+  "pages": 1,
+  "seconds": 3.8,
+  "chars": 6926,
+  "per_page": 3.75,
+  "peak_mb": 3599,
+  "err": null
+ },
+ {
+  "file": "modernize-applications-with-microservices-using-amazon-eks.pdf",
+  "kb": 292,
+  "pages": 6,
+  "seconds": 1.4,
+  "chars": 5655,
+  "per_page": 0.24,
+  "peak_mb": 3752,
+  "err": null
+ },
+ {
+  "file": "faq.html",
+  "kb": 0,
+  "pages": null,
+  "seconds": 0.0,
+  "chars": 157,
+  "per_page": null,
+  "peak_mb": 3752,
+  "err": null
+ },
+ {
+  "file": "headcount.xlsx",
+  "kb": 5,
+  "pages": null,
+  "seconds": 0.0,
+  "chars": 335,
+  "per_page": null,
+  "peak_mb": 3752,
+  "err": null
+ },
+ {
+  "file": "launch-plan.pptx",
+  "kb": 52,
+  "pages": null,
+  "seconds": 0.1,
+  "chars": 2121,
+  "per_page": null,
+  "peak_mb": 3752,
+  "err": null
+ },
+ {
+  "file": "q3-board-report.docx",
+  "kb": 36,
+  "pages": null,
+  "seconds": 0.0,
+  "chars": 701,
+  "per_page": null,
+  "peak_mb": 3752,
+  "err": null
+ },
+ {
+  "file": "tickets.csv",
+  "kb": 0,
+  "pages": null,
+  "seconds": 0.0,
+  "chars": 319,
+  "per_page": null,
+  "peak_mb": 3752,
+  "err": null
+ },
+ {
+  "file": "warranty-scan.pdf",
+  "kb": 57,
+  "pages": 2,
+  "seconds": 0.5,
+  "chars": 272,
+  "per_page": 0.24,
+  "peak_mb": 3752,
+  "err": null
+ }
+]

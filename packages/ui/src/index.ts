@@ -47,3 +47,18 @@ export { ChatScreen, type ChatScreenProps } from "./chat/ChatScreen";
 export { ToolCard, type ToolCardProps } from "./chat/ToolCard";
 export { Markdown, inline, parseBlocks } from "./chat/markdown";
 export { type UseAssistantChatOptions, useAssistantChat } from "./chat/use-assistant-chat";
+export { AddSources, SOURCE_ACCEPT, SOURCE_TYPES } from "./notebook/AddSources";
+export { NotebookChat, CitationPill, type NotebookChatProps } from "./notebook/NotebookChat";
+export { NotebookList, type NotebookListProps } from "./notebook/NotebookList";
+export {
+  NotebookWorkspace,
+  type NotebookWorkspaceProps,
+} from "./notebook/NotebookWorkspace";
+export { SetupCard, type SetupItem } from "./notebook/SetupCard";
+export { SourceViewer, splitAt } from "./notebook/SourceViewer";
+export { SourcesPane } from "./notebook/SourcesPane";
+export { StudioPane } from "./notebook/StudioPane";
+export { formatBytes } from "./notebook/format";
+export { scopeIds, scopeLabel } from "./notebook/scope";
+export { useNotebookChat } from "./notebook/use-notebook-chat";
+export { useNotebookSources } from "./notebook/use-notebook-sources";

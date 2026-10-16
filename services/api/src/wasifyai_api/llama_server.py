@@ -30,6 +30,8 @@ import httpx
 log = logging.getLogger(__name__)
 
 STATE = "state.json"
+# MiB of host memory for llama-server's prompt cache (its default is 8192; see `_start`)
+PROMPT_CACHE_MIB = 512
 
 
 class LlamaError(Exception):
@@ -197,6 +199,10 @@ class LlamaServer:
         args = [
             str(found.server), "-m", str(model), "--host", "127.0.0.1", "--port", str(port),
             "-c", str(context), "-np", "1", "--jinja", "--no-webui",
+            # llama.cpp keeps old prompts in a host-memory cache of up to 8 GiB by default.
+            # Measured on a Mac (E0): 58 long prompts took Qwen3 4B from 1.3 GB to 10.4 GB.
+            # A small cache keeps the reuse.
+            "--cache-ram", str(PROMPT_CACHE_MIB),
             *(["--embedding"] if embedding else []), *extra,
         ]  # fmt: skip
         try:

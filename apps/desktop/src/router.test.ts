@@ -1,10 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { describe, expect, it } from "vitest";
-import { chatPath, parseConversation, parseHash, routePath } from "./router";
+import {
+  NEW_NOTEBOOK,
+  chatPath,
+  notebookPath,
+  parseConversation,
+  parseHash,
+  parseNotebook,
+  routePath,
+} from "./router";
 
 describe("router", () => {
   it("reads every route back from its own path", () => {
-    for (const r of ["home", "create", "edit", "library", "models", "settings"] as const) {
+    for (const r of [
+      "home",
+      "create",
+      "edit",
+      "library",
+      "models",
+      "settings",
+      "notebooks",
+    ] as const) {
       expect(parseHash(`#${routePath(r)}`)).toBe(r);
     }
   });
@@ -26,5 +42,15 @@ describe("router", () => {
     expect(parseConversation(`#${chatPath("abc")}`)).toBe("abc");
     expect(chatPath(null)).toBe("/");
     expect(parseHash("#/chat/abc")).toBe("home");
+  });
+
+  it("opens a notebook, or a draft, from its own path", () => {
+    expect(parseNotebook("#/notebooks/9f3c-12ab")).toBe("9f3c-12ab");
+    expect(parseNotebook(`#${notebookPath(NEW_NOTEBOOK)}`)).toBe("new");
+    expect(parseNotebook("#/notebooks")).toBeNull();
+    expect(parseNotebook("#/notebooks/../x")).toBeNull();
+    expect(parseHash("#/notebooks/9f3c")).toBe("notebook");
+    expect(parseHash("#/notebooks")).toBe("notebooks");
+    expect(notebookPath(null)).toBe("/notebooks");
   });
 });

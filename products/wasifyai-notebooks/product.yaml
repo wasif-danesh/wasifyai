@@ -1,0 +1,5 @@
+id: wasifyai-notebooks
+# A notebook answers from its own sources (ADR-0065). The chat model is the assistant's: on the desktop the
+# person's chosen local model serves every text binding.
+capabilities:
+  text.chat: { provider: litellm, model: default-chat }

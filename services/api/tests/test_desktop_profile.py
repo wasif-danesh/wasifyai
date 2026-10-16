@@ -382,3 +382,33 @@ def test_the_launcher_starts_serves_and_exits_when_the_shell_goes(tmp_path):
         if proc.poll() is None:
             proc.kill()
         proc.wait(timeout=5)
+
+
+def test_notebooks_work_on_the_desktop_profile_and_wait_for_the_search_model(data_dir):
+    nb = "/products/wasifyai-notebooks"
+    with TestClient(create_app()) as c:
+        s = c.get(f"{nb}/status", headers=auth()).json()
+        assert s["embedder"]["ready"] is False and s["reader"]["ready"] is False
+        assert s["index"]["chunks"] == 0
+
+        made = c.post(f"{nb}/notebooks", json={"title": "Plans"}, headers=auth()).json()
+        up = c.post(
+            f"{nb}/notebooks/{made['id']}/documents/upload",
+            files=[("files", ("plan.md", b"# Plan\n\nLaunch in March with a small beta.\n"))],
+            headers=auth(),
+        )
+        assert up.status_code == 201 and up.json()["created"][0]["status"] == "pending"
+        time.sleep(1.5)  # the worker is up, but nothing is read before the search model is here
+        docs = c.get(f"{nb}/notebooks/{made['id']}/documents", headers=auth()).json()
+        assert [d["status"] for d in docs] == ["pending"]
+        # the search needs the model too, and says which piece is missing
+        r = c.post(f"{nb}/notebooks/{made['id']}/search", json={"query": "launch"}, headers=auth())
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "embedder_missing"
+        # the model is listed in the Models panel like the others, with its files and sizes
+        models = c.get("/desktop/models", headers=auth()).json()["models"]
+        bge = next(m for m in models if m["id"] == "bge-small-en-v1.5")
+        assert bge["product_id"] == "wasifyai-notebooks" and bge["bytes_total"] == 67_176_520
+        # another person cannot see the notebook
+        other = auth(sub="desktop:other")
+        assert c.get(f"{nb}/notebooks/{made['id']}", headers=other).status_code == 404
+        assert c.get(f"{nb}/notebooks", headers=other).json() == []

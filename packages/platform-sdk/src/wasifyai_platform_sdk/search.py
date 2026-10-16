@@ -12,7 +12,9 @@ from typing import Literal, Protocol
 
 log = logging.getLogger(__name__)
 
-CreationKind = Literal["song", "image", "video", "speech", "transcript", "lipsync", "conversation"]
+CreationKind = Literal[
+    "song", "image", "video", "speech", "transcript", "lipsync", "conversation", "notebook"
+]
 KINDS: tuple[str, ...] = (
     "song",
     "image",
@@ -21,6 +23,7 @@ KINDS: tuple[str, ...] = (
     "transcript",
     "lipsync",
     "conversation",
+    "notebook",
 )
 MAX_TEXT_CHARS = 6000  # what is embedded: more adds cost, not meaning
 

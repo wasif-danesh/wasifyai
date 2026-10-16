@@ -1,6 +1,6 @@
 # ADR-0060: Documents: a local-first RAG product (ingest, search, grounded chat, generate)
 
-- **Status:** Accepted (2026-10-15)
+- **Status:** Superseded by [ADR-0065](0065-notebooks-source-grounded-workspace.md) (proposed 2026-10-16: the requirement became a NotebookLM-style notebook, built on SurfSense's local code). Kept for its reasoning; nothing here was built.
 - **Date:** 2026-10-14
 - **Depends on:** ADR-0017 (storage, `rag_chunks`), ADR-0035 (upload hardening), ADR-0041 (semantic search, the
   `creation-embedder`), ADR-0043 (media upload, long jobs), ADR-0056 (profiles, slot manager, utility models),

@@ -88,6 +88,8 @@ async def test_it_starts_for_a_model_answers_and_stops(tmp_path):
         assert "-m" in seen and str(model(tmp_path)) in seen
         assert seen[seen.index("-c") + 1] == "4096"
         assert "--jinja" in seen and "--embedding" not in seen
+        # a bounded prompt cache: the default (8 GiB) grew a 4B model to 10 GB on a long chat
+        assert seen[seen.index("--cache-ram") + 1] == "512"
         assert seen[seen.index("--host") + 1] == "127.0.0.1"  # loopback only
 
         # the same request keeps the same server; another context restarts it

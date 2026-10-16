@@ -77,7 +77,7 @@ class Settings(BaseSettings):
             if "default_tenant_id" not in self.model_fields_set:
                 self.default_tenant_id = "local"  # one person, one tenant
             if not self.products_enabled:
-                self.products_enabled = "wasifyai-image,wasifyai-assistant"
+                self.products_enabled = "wasifyai-image,wasifyai-assistant,wasifyai-notebooks"
         return self
 
     @property

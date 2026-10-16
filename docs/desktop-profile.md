@@ -236,11 +236,12 @@ to `@wasifyai/ui` when it is migrated; delete the shim when nothing uses it.
 
 | Piece | File | What |
 |---|---|---|
-| Router | `router.ts` | URL hash, six routes: `/`, `/images/create`, `/images/edit`, `/library`, `/models`, `/settings`. No library. |
+| Router | `router.ts` | URL hash, eight routes: `/`, `/images/create`, `/images/edit`, `/library`, `/models`, `/settings`, `/notebooks` and `/notebooks/<id>` (`new` is a draft). No library. `useRoute` answers an object; a chat or a draft notebook gets its address without a reload (`adopt`, `adoptNotebook`) |
 | Shell | `Shell.tsx` | side menu + the screen; the menu collapses (remembered in `localStorage`) |
-| Side menu | `Sidebar.tsx` | New chat (home), Models, Library, Images (expands: Create, Edit; Transform, Inpaint, Extend, Upscale, Reference marked "Soon"), Train ("Soon"), Projects, Recents, You + settings |
+| Side menu | `Sidebar.tsx` | New chat; groups **Notebook** (Create, View Notebooks), **Images** (Create, Edit, and Transform, Inpaint, Extend, Upscale, Reference marked "Soon", Your images), **Video**, **Voice**, **Music** (all items "Soon"); Library, Models, Train ("Soon"); Recents; You and settings. One group is open at a time and the one holding the current page stays open |
 | Home | `pages/Home.tsx` | greeting and the "Ask anything" box (the assistant, ADR-0057, is not built: the box says so) |
 | Create / Edit | `pages/Create.tsx` | wraps the shared `ImageWorkspace` with this window's model chip and setup notices |
+| Notebooks | `pages/Notebooks.tsx`, `pages/Notebook.tsx`, `notebook-setup.ts` | View Notebooks (cards, search by title and by what is inside, rename, delete, the setup card) and one notebook (the shared `NotebookWorkspace`) |
 | Library | `pages/Library.tsx` | wraps the shared `ImageLibrary`; "Make it again" sends the recipe to Create (`Shell.tsx` holds it until the route changes) |
 | Models, Settings | `pages/Models.tsx`, `pages/Settings.tsx` | the model panel; the image engine card, updates, restart and repair |
 
@@ -248,6 +249,33 @@ On macOS the title bar is an overlay (`titleBarStyle: Overlay`, traffic lights a
 room for them; elsewhere the native title bar stays. Dragging uses `data-tauri-drag-region` with the
 `core:window:allow-start-dragging` capability. Items that are not built yet are shown disabled and labelled,
 not hidden, so the menu keeps its final shape.
+
+### The side menu's final shape (decided 2026-10-16; built in stage E3, with Video, Voice and Music shown as Soon)
+
+Every product is one expandable group, the pattern *Images* already uses: clicking the group only opens or
+closes it, and the items inside are the tools. Items whose product is not built on the desktop yet are shown
+disabled with the **Soon** pill, so the menu keeps its final shape (as above).
+
+| Group | Items | Engine today (ADR-0062) | Built on the desktop |
+|---|---|---|---|
+| *New chat* | (single item) | assistant (ADR-0057) | yes |
+| **Notebook** | Create, View Notebooks | `wasifyai-notebooks` (ADR-0065) | stage E |
+| **Images** | Create, Edit, Transform, Inpaint, Extend, Upscale, Reference, Your images | ComfyUI | Create, Edit |
+| **Video** | Create, Animate an image, Extend video, Your videos | `wasifyai-video` on ComfyUI (`video.generate`, `video.animate`) | Soon |
+| **Voice** | Text to speech, Speech to text, Lip sync, Voices | `wasifyai-tts`, `wasifyai-stt`, `wasifyai-lipsync` (audio.cpp, MuseTalk) | Soon |
+| **Music** | Create, Your music, Lyrics | `wasifyai-music` on ComfyUI (`music.generate`, `text.lyrics`) | Soon |
+| *Library* | (single item) all creations, searchable (ADR-0041) | | yes |
+| *Models*, *Train* (Soon) | single items | | Models yes |
+
+Rules:
+- **"Your ..." items open the Library filtered to that kind** (the per-kind filter ADR-0041 already requires), not
+  a second store. *Library* stays the place for everything.
+- **One group open at a time** (an accordion): opening one closes the others; the group holding the current
+  page stays open. Eight groups would not fit otherwise.
+- The owner approved the whole list, including *Your images*, *Voices* and *Lyrics* (2026-10-16).
+- *Create* in **Notebook** opens a draft stored after the first source (plan, open question 2).
+- The *Recents* list stays at the foot and scrolls.
+- The same group and item definitions feed the web product's side panel later (`lib/products.ts`, ADR-0046).
 
 ## Recipes, favourites and saving a copy (stage B)
 
@@ -382,6 +410,82 @@ computer has now.
   A found model that cannot fit is never offered with "Use it".
 - **Tune with measurements.** The 0.9 / 0.75 / 0.85 limits and the +3 GB working memory are starting values;
   record real peaks per model family and adjust.
+
+## Notebooks (ADR-0065, stage E1: the engine)
+
+`products/wasifyai-notebooks` is a library of sources per notebook: read, cut into passages, indexed on this
+computer, and searched. The window and the grounded chat arrive in E3 and E2; this is the engine.
+
+| Piece | File | What |
+|---|---|---|
+| Store | `wasifyai_notebooks/store.py` | `<data>/notebooks/notebooks.db`: notebooks, folders (8 deep), documents, passages; FTS5 by trigger, vectors in sqlite-vec; dedup by SHA-256 per folder; every read scoped by tenant and user |
+| Hardening | `hardening.py` | extension list, bytes must match the extension, OOXML entry and unpacked-size limits, 100 MB, one safe path part for the stored name |
+| Reading | `reading.py`, `docling_worker.py` | text, Markdown, CSV and HTML are read in the engine; the rest by Docling in its own process (`--serve`: one process per batch, gone after 60 s idle), 15 minutes per file at most |
+| Cutting | `chunking.py` | SurfSense's recursive rules at 480 tokens of the search model's tokenizer; every passage keeps its Markdown line span |
+| Search model | `embedding.py`, `models.yaml` | bge-small-en-v1.5 (quantised ONNX, 67 MB) through the Models panel like any model; the index records it and refuses another |
+| Retrieval | `retrieval.py` | SurfSense's blend of BM25 and cosine (0.65), per notebook or per ticked sources; `mode` dense, lexical, hybrid for evaluation |
+| Ingest | `ingest.py` | one source at a time, highest priority first; cancel checked between steps; nothing is read until the search model is present (sources wait, they do not fail); a file with almost no text fails in words (`No text could be read...`); work in progress at quit is failed at start with Retry |
+| Reader setup | `reader_install.py`, `reader/` | `POST /setup/reader` with the size shown: environment from the engine's own Python, hashed lock per platform, nine weight files by SHA-256, a check that reads a test picture. Lock compiled by `scripts/build-engine-bundle.sh` |
+| Search index | `index.py` | notebooks are a creation kind (`notebook`) in My creations search (ADR-0041) |
+
+Routes, under `/products/wasifyai-notebooks` (loopback token; another person's notebook is a 404):
+
+| Route | Does |
+|---|---|
+| `GET /status` | what is set up: search model, reader (with setup progress), passage count |
+| `POST /setup/reader` | start the reader setup; `{confirm_bytes}` must equal the size offered |
+| `GET/POST /notebooks`, `GET/PATCH/DELETE /notebooks/{id}` | list (newest opened first), create, read (marks it opened), rename, delete |
+| `GET/POST /notebooks/{id}/folders`, `PATCH/DELETE .../folders/{fid}` | folders; deleting one removes its sources |
+| `GET /notebooks/{id}/documents` | sources, with `status` and `folder_id` filters; polled while any is reading |
+| `POST .../documents` | a note |
+| `POST .../documents/upload` | multipart `files`, optional `folder_id`; answers `created`, `duplicates`, `rejected` (each with its reason) |
+| `GET/PATCH/DELETE .../documents/{did}` | read with its Markdown, rename or edit a note, delete (409 while being read) |
+| `POST .../documents/{did}/retry`, `.../cancel`, `.../documents/move` | requeue, stop, file into a folder |
+| `GET .../documents/{did}/original` | the stored file, always as an attachment |
+| `GET .../passages/{chunk_id}` | a passage and its neighbours, for opening a citation |
+| `POST .../search` | `{query, top_k, document_ids?, mode?}`: passages with scores and line spans; 409 `embedder_missing` |
+
+Measured on the owner's Mac (14 files, 66 pages, 7 real PDFs and 7 generated files; details in
+`docs/phase2-stage-e-plan.md`): 30 s from upload to all searchable with the reader running as one process
+(72 s when each file started its own), 69 passages, retrieval 22 of 24 answerable questions at rank 1 and 24 of 24
+in the top 3, 10 ms per question over HTTP; a clean setup of the reader 70 s (packages from the cache,
+weights downloaded).
+
+**Asking a notebook (stage E2).** A question is a run of the product's graph, not a new route:
+`POST /products/wasifyai-notebooks/runs` with `{text, notebook_id, conversation_id?, document_ids?}`.
+The graph (`graph.py`) searches the ticked sources (a `search_sources` step), puts the best five passages in the
+user message with the question (`grounding.py`, SurfSense's prompts), streams the answer, then checks the
+labels (`[n]`): numbers that are not passages go, a sentence that says the sources do not hold the answer
+carries none, and a label must share a word with its passage. The answer, its cited passages (text as it
+was) and the conversation are saved in `notebooks.db`. The prompt is the shorter `compact` one for a chosen
+model file under 1.5 GB and `capable` otherwise; the history is trimmed to the model's window
+(`context - 1024 answer - 450 system - 2400 passages - question`). Routes added:
+`GET/GET/PATCH/DELETE /notebooks/{id}/conversations[/{cid}]`. Measured with Qwen3 4B: 24 of 24 answers right,
+refusals said in words, no labels on them, a median of 4 s (`docs/phase2-stage-e-plan.md`, "E2 evidence").
+
+The notebooks are served on the desktop profile only (the routes answer 503 without an app data folder); the
+web profile needs a Postgres and pgvector adapter of the store (not built).
+
+## Notebooks in the window (stage E3)
+
+The shared screens are in `packages/ui/src/notebook/`, the client and the reducer of a question in
+`packages/client/src/notebooks.ts`; the app only supplies the clients, the setup logic and the menu.
+
+| Piece | What |
+|---|---|
+| `NotebookList` | cards with the counts (sources, being read, could not be read) and when it was opened; search by title and, through My creations search (`kind=notebook`), by the names of the sources |
+| `SetupCard` | "Set up reading documents": the search model (through the Models panel's download) and the document reader (`POST /setup/reader`); each says its size and goes ahead only on a click; progress and a failure's sentence are shown |
+| `NotebookWorkspace` | header (name, "12 of 14 sources, 2 being read"), three panes, tabs under 1,024 px; a new notebook opens on the add-sources screen and is saved when its first source is added or its name is set |
+| `AddSources` | upload (picker or drop), copied text, Websites shown as Soon; files the engine will not take are named before sending |
+| `SourcesPane` | tree with tri-state ticks (everything is ticked until something is unticked, so a source added later counts), folders, status per source with Retry and Stop, rename, move, remove |
+| `SourceViewer` | the source's text as the notebook reads it, the cited passage marked; a removed source still shows the passage an answer used; a note can be edited; the original can be saved |
+| `NotebookChat` | the thread, the search shown as one line, answers with `[n]` pills that open the passage, Copy, the scope and model chips, "Add a source first" and the other reasons the box is blocked |
+| `StudioPane` | the formats as tiles, all "Soon" until stage E4 |
+
+The scope sent with a question is `document_ids` of the ticked, ready sources, or nothing when nothing is
+unticked. The menu steps aside on a window narrower than 1,280 px while a notebook is open and comes back when
+the person leaves it (a menu the person closed stays closed). The self-test creates a draft notebook, adds a file
+through the real file input, sees it listed, and finds the notebook's card.
 
 ## The self-test
 

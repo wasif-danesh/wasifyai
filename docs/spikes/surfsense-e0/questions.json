@@ -1,0 +1,147 @@
+[
+ {
+  "q": "What was Acme Orbital's Q3 revenue?",
+  "expect": "4.2 million",
+  "source": "q3-board-report.docx"
+ },
+ {
+  "q": "Which region had the highest revenue?",
+  "expect": "APAC",
+  "source": "q3-board-report.docx"
+ },
+ {
+  "q": "Who is the chief executive?",
+  "expect": "Priya Raman",
+  "source": "q3-board-report.docx"
+ },
+ {
+  "q": "Where is the company headquartered?",
+  "expect": "Lisbon",
+  "source": "q3-board-report.docx"
+ },
+ {
+  "q": "Who supplies the star trackers and what is the lead time?",
+  "expect": "Helios",
+  "source": "q3-board-report.docx"
+ },
+ {
+  "q": "What is the name of the product and when does it launch?",
+  "expect": "14 March 2027",
+  "source": "launch-plan.pptx"
+ },
+ {
+  "q": "What is the marketing budget for the launch?",
+  "expect": "350,000",
+  "source": "launch-plan.pptx"
+ },
+ {
+  "q": "How many customers are in the beta programme?",
+  "expect": "25",
+  "source": "launch-plan.pptx"
+ },
+ {
+  "q": "How many people work in Engineering?",
+  "expect": "48",
+  "source": "headcount.xlsx"
+ },
+ {
+  "q": "How many open roles does Sales have?",
+  "expect": "3",
+  "source": "headcount.xlsx"
+ },
+ {
+  "q": "What are the support hours?",
+  "expect": "8am to 6pm",
+  "source": "faq.html"
+ },
+ {
+  "q": "What is the refund window for hardware?",
+  "expect": "30 days",
+  "source": "faq.html"
+ },
+ {
+  "q": "Who is the pilot customer?",
+  "expect": "Northwind Dairy",
+  "source": "notes.md"
+ },
+ {
+  "q": "How long is the hardware warranty?",
+  "expect": "18 months",
+  "source": "warranty-scan.pdf"
+ },
+ {
+  "q": "Which service centre does repairs?",
+  "expect": "Lisbon",
+  "source": "warranty-scan.pdf"
+ },
+ {
+  "q": "What is the minimum passing score for the AWS Developer Associate exam?",
+  "expect": "720",
+  "source": "AWS-Certified-Developer-Associate_Exam-Guide.pdf"
+ },
+ {
+  "q": "How many scored questions are on the Developer Associate exam?",
+  "expect": "50 questions that affect your score",
+  "source": "AWS-Certified-Developer-Associate_Exam-Guide.pdf"
+ },
+ {
+  "q": "What share of the Developer Associate exam is the Security domain?",
+  "expect": "26%",
+  "source": "AWS-Certified-Developer-Associate_Exam-Guide.pdf"
+ },
+ {
+  "q": "What does a cell consist of in a cell-based architecture on Amazon EKS?",
+  "expect": "worker nodes",
+  "source": "cell-based-architecture-for-amazon-eks.pdf"
+ },
+ {
+  "q": "Which service gives readiness checks and routing control for the cell-routing layer?",
+  "expect": "Application Recovery Controller",
+  "source": "cell-based-architecture-for-amazon-eks.pdf"
+ },
+ {
+  "q": "How long does the Graduate Certificate in cyber security take to complete?",
+  "expect": "8 months",
+  "source": "UoM-Cyber-Security-course-guide.pdf"
+ },
+ {
+  "q": "How many credit points is the Master of Cyber Security?",
+  "expect": "150 credit points",
+  "source": "UoM-Cyber-Security-course-guide.pdf"
+ },
+ {
+  "q": "What is the shortcut to show the Command Palette?",
+  "expect": "\u21e7\u2318P",
+  "source": "keyboard-shortcuts-macos.pdf"
+ },
+ {
+  "q": "What is the shortcut for Quick Open?",
+  "expect": "\u2318P",
+  "source": "keyboard-shortcuts-macos.pdf"
+ },
+ {
+  "q": "What is the capital of Australia?",
+  "expect": null,
+  "source": null
+ },
+ {
+  "q": "What is Acme Orbital's stock price?",
+  "expect": null,
+  "source": null
+ },
+ {
+  "q": "Who is the chief financial officer?",
+  "expect": null,
+  "source": null
+ },
+ {
+  "q": "How many satellites has Acme launched?",
+  "expect": null,
+  "source": null
+ },
+ {
+  "q": "What is the warranty on software licences?",
+  "expect": null,
+  "source": null
+ }
+]

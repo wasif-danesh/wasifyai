@@ -1,0 +1,22 @@
+{
+ "compact": {
+  "answerable": 24,
+  "correct": 23,
+  "correct_with_supported_citation": 23,
+  "unanswerable": 5,
+  "refused": 5,
+  "cited_an_unanswerable": 0,
+  "median_s": 1.1,
+  "max_s": 1.5
+ },
+ "capable": {
+  "answerable": 24,
+  "correct": 23,
+  "correct_with_supported_citation": 23,
+  "unanswerable": 5,
+  "refused": 4,
+  "cited_an_unanswerable": 2,
+  "median_s": 1.2,
+  "max_s": 1.6
+ }
+}

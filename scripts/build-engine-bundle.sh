@@ -14,8 +14,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${1:-$ROOT/apps/desktop/engine-bundle}"
-PACKAGES="wasifyai-contracts wasifyai-platform-sdk wasifyai-api wasifyai-media-worker wasifyai-image wasifyai-assistant"
-PRODUCTS="wasifyai-image wasifyai-assistant"
+PACKAGES="wasifyai-contracts wasifyai-platform-sdk wasifyai-api wasifyai-media-worker wasifyai-image wasifyai-assistant wasifyai-notebooks"
+PRODUCTS="wasifyai-image wasifyai-assistant wasifyai-notebooks"
 
 cd "$ROOT"
 rm -rf "$OUT"
@@ -47,6 +47,26 @@ for target in $COMFY_PLATFORMS; do
     --generate-hashes --no-header --quiet -o "$OUT/comfyui/requirements-$target.lock"
 done
 rm -f "$COMFY_REQ"
+
+# The notebooks' document reader (ADR-0065 decision 7): Docling in an environment of its own, set up on
+# request. A hashed lock per platform, compiled from products/wasifyai-notebooks/reader/requirements.in;
+# the engine installs it with --require-hashes. Intel Macs are left out (torch no longer ships for them).
+READER_PLATFORMS="aarch64-apple-darwin x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-pc-windows-msvc"
+mkdir -p "$OUT/products/wasifyai-notebooks/reader"
+cp products/wasifyai-notebooks/reader/models.yaml "$OUT/products/wasifyai-notebooks/reader/"
+for target in $READER_PLATFORMS; do
+  echo "locking the document reader for $target"
+  # PyPI's Linux torch brings about 3 GB of CUDA wheels; the CPU build comes from PyTorch's own index
+  # (the installer passes the same index, see reader_install.py)
+  EXTRA=""
+  case "$target" in
+    *linux*) EXTRA="--extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match" ;;
+  esac
+  # shellcheck disable=SC2086
+  uv pip compile products/wasifyai-notebooks/reader/requirements.in --python-version "${PY_VERSION%.*}" \
+    --python-platform "$target" --generate-hashes --no-header --quiet $EXTRA \
+    -o "$OUT/products/wasifyai-notebooks/reader/requirements-$target.lock"
+done
 
 for p in $PRODUCTS; do
   mkdir -p "$OUT/products/$p"

@@ -1,0 +1,176 @@
+[
+ {
+  "q": "What was Acme Orbital's Q3 revenue?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "Acme Orbital's Q3 revenue was $4.2 million [1]."
+ },
+ {
+  "q": "Which region had the highest revenue?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The region with the highest revenue is APAC, with $1.7 million, representing an 18% increase [1]."
+ },
+ {
+  "q": "Who is the chief executive?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The chief executive is Priya Raman [1]."
+ },
+ {
+  "q": "Where is the company headquartered?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The company is headquartered in Lisbon [1]."
+ },
+ {
+  "q": "Who supplies the star trackers and what is the lead time?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The star trackers are supplied by Helios Optics, and the lead time is 14 weeks [1]."
+ },
+ {
+  "q": "What is the name of the product and when does it launch?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The name of the product is Kestrel and it is planned to launch on 14 March 2027 [1]."
+ },
+ {
+  "q": "What is the marketing budget for the launch?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The marketing budget for the launch is $350,000 [1]."
+ },
+ {
+  "q": "How many customers are in the beta programme?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The beta programme will start with 25 customers in the first week of January [1]."
+ },
+ {
+  "q": "How many people work in Engineering?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The number of people working in Engineering is 48 [2]."
+ },
+ {
+  "q": "How many open roles does Sales have?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The Sales team has 3 open roles [1]."
+ },
+ {
+  "q": "What are the support hours?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The support hours are from 8am to 6pm UTC on weekdays [1]."
+ },
+ {
+  "q": "What is the refund window for hardware?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The refund window for hardware is within 30 days of delivery [1]."
+ },
+ {
+  "q": "Who is the pilot customer?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The pilot customer is Northwind Dairy [1]."
+ },
+ {
+  "q": "How long is the hardware warranty?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The hardware warranty is 18 months [1]."
+ },
+ {
+  "q": "Which service centre does repairs?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "Repairs are performed at the Lisbon service centre [1]."
+ },
+ {
+  "q": "What is the minimum passing score for the AWS Developer Associate exam?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The minimum passing score for the AWS Developer Associate exam is 720 [1]."
+ },
+ {
+  "q": "How many scored questions are on the Developer Associate exam?",
+  "right": false,
+  "supported_cite": true,
+  "ans": "The Developer Associate exam includes 50 scored questions that affect your score [3]."
+ },
+ {
+  "q": "What share of the Developer Associate exam is the Security domain?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The Security domain makes up 26% of the scored content for the AWS Certified Developer - Associate (DVA-C02) exam [1]."
+ },
+ {
+  "q": "What does a cell consist of in a cell-based architecture on Amazon EKS?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "A cell consists of an Amazon Elastic Kubernetes Service (Amazon EKS) cluster having its worker nodes (workloads) deployed within a single Availability Zone (AZ) [1]."
+ },
+ {
+  "q": "Which service gives readiness checks and routing control for the cell-routing layer?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The cell-routing layer uses Amazon Route 53 routing records and Amazon Route 53 Application Recovery Controller to provide readiness checks, routing control, and zonal shifts capability [1][2]."
+ },
+ {
+  "q": "How long does the Graduate Certificate in cyber security take to complete?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The Graduate Certificate in cyber security takes 8 months to complete [1]."
+ },
+ {
+  "q": "How many credit points is the Master of Cyber Security?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The Master of Cyber Security is 150 credit points [2]."
+ },
+ {
+  "q": "What is the shortcut to show the Command Palette?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The shortcut to show the Command Palette is ⇧⌘P, F1 [1]."
+ },
+ {
+  "q": "What is the shortcut for Quick Open?",
+  "right": true,
+  "supported_cite": true,
+  "ans": "The shortcut for Quick Open is ⌘P [1]."
+ },
+ {
+  "q": "What is the capital of Australia?",
+  "refused": false,
+  "cited_anyway": true,
+  "ans": "The capital of Australia is Canberra [1]."
+ },
+ {
+  "q": "What is Acme Orbital's stock price?",
+  "refused": true,
+  "cited_anyway": false,
+  "ans": "The provided documents do not mention Acme Orbital's stock price."
+ },
+ {
+  "q": "Who is the chief financial officer?",
+  "refused": true,
+  "cited_anyway": true,
+  "ans": "The document does not mention the chief financial officer [1][2][3][4][5]."
+ },
+ {
+  "q": "How many satellites has Acme launched?",
+  "refused": true,
+  "cited_anyway": false,
+  "ans": "The number of satellites Acme has launched is not mentioned in the provided documents."
+ },
+ {
+  "q": "What is the warranty on software licences?",
+  "refused": true,
+  "cited_anyway": false,
+  "ans": "The warranty on software licences is not mentioned in the provided sources."
+ }
+]

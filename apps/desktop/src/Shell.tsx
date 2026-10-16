@@ -2,12 +2,14 @@
 import type { ImageSummary } from "@wasifyai/client";
 import { presetOf } from "@wasifyai/ui";
 import { PanelLeft } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { CreatePage } from "./pages/Create";
 import { HomePage } from "./pages/Home";
 import { LibraryPage } from "./pages/Library";
 import { ModelsPage } from "./pages/Models";
+import { NotebookPage } from "./pages/Notebook";
+import { NotebooksPage } from "./pages/Notebooks";
 import { SettingsPage } from "./pages/Settings";
 import { useRoute } from "./router";
 
@@ -23,7 +25,15 @@ function readCollapsed(): boolean {
 
 /** The window once the engine is ready: the side menu and the screen it points at. */
 export function Shell() {
-  const [route, go, conversationId, chatKey, adopt] = useRoute();
+  const {
+    route,
+    go,
+    conversation: conversationId,
+    key: chatKey,
+    adopt,
+    notebook,
+    adoptNotebook,
+  } = useRoute();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   // an image whose recipe was sent to Create ("make it again"); used once, then forgotten
   const [again, setAgain] = useState<ImageSummary | null>(null);
@@ -32,6 +42,20 @@ export function Shell() {
   useEffect(() => {
     if (route !== "create") setAgain(null);
     if (route !== "edit") setEditSource(null);
+  }, [route]);
+  // a notebook has three panes: on a window too narrow for them and the menu, the menu steps aside
+  // (until the person opens it; this is not remembered)
+  const stepped = useRef(false);
+  useEffect(() => {
+    if (route === "notebook" && window.innerWidth < 1280) {
+      setCollapsed((was) => {
+        stepped.current = !was; // only a menu this effect closed is opened again on leaving
+        return true;
+      });
+    } else if (stepped.current) {
+      stepped.current = false;
+      setCollapsed(false);
+    }
   }, [route]);
   const set = (v: boolean) => {
     setCollapsed(v);
@@ -43,13 +67,17 @@ export function Shell() {
   };
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-background text-foreground">
+    <div
+      data-menu-collapsed={collapsed}
+      className="flex h-dvh overflow-hidden bg-background text-foreground"
+    >
       {collapsed ? null : (
         <Sidebar
           route={route}
           go={go}
           onCollapse={() => set(true)}
           conversationId={conversationId}
+          notebook={notebook}
         />
       )}
       <div className="relative flex min-w-0 flex-1 flex-col">
@@ -95,6 +123,15 @@ export function Shell() {
                 setAgain(image);
                 go("create");
               }}
+            />
+          ) : null}
+          {route === "notebooks" ? <NotebooksPage /> : null}
+          {route === "notebook" && notebook ? (
+            <NotebookPage
+              key={`notebook-${chatKey}`}
+              notebook={notebook}
+              onAdopt={adoptNotebook}
+              goModels={() => go("models")}
             />
           ) : null}
           {route === "models" ? <ModelsPage /> : null}

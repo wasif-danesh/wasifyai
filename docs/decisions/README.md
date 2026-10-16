@@ -61,10 +61,11 @@
 | [0057](0057-ai-assistant-chat-first-shell.md) | An AI assistant, ChatGPT-style, on desktop and web | Accepted |
 | [0058](0058-desktop-link-runner-and-remote-ui.md) | Linking the web product to a user's desktop: a runner, and an optional remote UI | Accepted |
 | [0059](0059-comfyui-managed-sidecar-image-engine.md) | ComfyUI as the managed image engine of the desktop app | Accepted |
-| [0060](0060-documents-local-first-rag.md) | Documents: a local-first RAG product (ingest, search, grounded chat, generate) | Accepted |
+| [0060](0060-documents-local-first-rag.md) | Documents: a local-first RAG product (ingest, search, grounded chat, generate) | Superseded by 0065 |
 | [0061](0061-how-unsloth-code-enters-wasifyai.md) | How Unsloth code enters wasifyai: a reference clone and selective import, not a repo move | Accepted |
 | [0062](0062-reuse-matrix-engines-per-capability.md) | Reuse matrix: which engine and which Unsloth parts, per capability | Accepted |
 | [0063](0063-self-sufficient-desktop-discovers-existing-models-and-tools.md) | A self-sufficient desktop app that finds the models and tools already on the computer | Accepted |
 | [0064](0064-model-hub-discover-and-on-device.md) | A model hub: discover open-weight models and see what is on the device | Accepted |
+| [0065](0065-notebooks-source-grounded-workspace.md) | Notebooks: a NotebookLM-style, source-grounded workspace built on SurfSense's local code | Accepted (E0 gate) |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

@@ -3,10 +3,11 @@
 import { Button, ChatScreen, Notice } from "@wasifyai/ui";
 import { Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { assistantApi, client, languageApi } from "../api";
+import { assistantApi, client } from "../api";
 import { conversationsChanged } from "../conversations";
 import { images } from "../images";
 import { type Route, openChat } from "../router";
+import { useChatModel } from "../useChatModel";
 
 export function greeting(hour: number): string {
   if (hour < 5) return "Good night";
@@ -20,25 +21,6 @@ const EXAMPLES = [
   "What did I make last week?",
   "Explain how a transistor works",
 ];
-
-/** Whether a chat model is chosen (null while it is not known): without one the box says so. */
-function useChatModel(): { chosen: boolean | null; name: string } {
-  const [state, setState] = useState<{ chosen: boolean | null; name: string }>({
-    chosen: null,
-    name: "",
-  });
-  useEffect(() => {
-    let gone = false;
-    languageApi
-      .state()
-      .then((s) => !gone && setState({ chosen: s.selected !== null, name: s.selected?.name ?? "" }))
-      .catch(() => {});
-    return () => {
-      gone = true;
-    };
-  }, []);
-  return state;
-}
 
 export function HomePage({
   go,

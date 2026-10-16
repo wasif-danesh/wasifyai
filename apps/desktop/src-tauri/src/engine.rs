@@ -289,6 +289,21 @@ fn env_flag(name: &str) -> bool {
     std::env::var(name).map(|v| v == "1").unwrap_or(false)
 }
 
+/// The `uv` the provisioner downloaded, if there is one: `<data>/engine/tools/uv-<version>/uv`. The
+/// engine uses it to set up the optional document reader (ADR-0065); without one it looks on `PATH`.
+pub(crate) fn managed_uv(data_dir: &Path) -> Option<PathBuf> {
+    let name = if cfg!(windows) { "uv.exe" } else { "uv" };
+    let tools = data_dir.join("engine").join("tools");
+    let mut found: Vec<PathBuf> = std::fs::read_dir(tools)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path().join(name))
+        .filter(|p| p.is_file())
+        .collect();
+    found.sort();
+    found.pop()
+}
+
 /// The engine's Python, in order:
 ///
 /// 1. `WASIFYAI_ENGINE_PYTHON`, an explicit path (development, tests);
@@ -522,6 +537,9 @@ async fn run_once(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true);
+    if let Some(uv) = managed_uv(&cfg.data_dir) {
+        cmd.env("WASIFYAI_UV", uv);
+    }
     #[cfg(unix)]
     cmd.process_group(0); // its own group, so the whole tree can be signalled
     #[cfg(windows)]
@@ -731,6 +749,19 @@ mod tests {
             parse_ready(r#"{"event": "wasifyai.engine.ready", "port": 70000, "pid": 2}"#),
             None
         );
+    }
+
+    #[test]
+    fn the_provisioned_uv_is_found_for_the_engine() {
+        let dir = std::env::temp_dir().join(format!("wasifyai-uv-{}", std::process::id()));
+        let name = if cfg!(windows) { "uv.exe" } else { "uv" };
+        assert_eq!(managed_uv(&dir), None); // nothing provisioned yet
+        let tools = dir.join("engine").join("tools");
+        std::fs::create_dir_all(tools.join("uv-0.12.23")).unwrap();
+        std::fs::create_dir_all(tools.join("uv-0.12.4")).unwrap(); // a folder without the binary
+        std::fs::write(tools.join("uv-0.12.23").join(name), b"").unwrap();
+        assert_eq!(managed_uv(&dir), Some(tools.join("uv-0.12.23").join(name)));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

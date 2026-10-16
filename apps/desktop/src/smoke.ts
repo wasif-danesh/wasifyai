@@ -4,6 +4,7 @@
 // to load from the engine, and tells the shell how it went (the shell exits 0 or 1). It drives the same
 // DOM a person would, so CORS, the content security policy and the signed file link are all exercised.
 import { invoke } from "@tauri-apps/api/core";
+import { notebooksApi } from "./api";
 
 const PROMPT = "a red ceramic teapot on a wooden table";
 const TIMEOUT_MS = 90_000;
@@ -134,15 +135,62 @@ export async function runSmoke(): Promise<void> {
         text,
       );
     });
+    // Notebooks (ADR-0065): the menu, a new notebook's add-sources screen, a first file that saves the
+    // notebook and is listed (it waits there when the search model is not on this computer), and
+    // the notebook in the list. Nothing here needs a model.
+    window.location.hash = "/notebooks";
+    await until("the notebooks list", () =>
+      document.body.textContent?.includes("Notebooks") &&
+      document.body.textContent?.includes("New notebook")
+        ? true
+        : null,
+    );
+    const menu = document.querySelector('nav[aria-label="Main"]')?.textContent ?? "";
+    for (const word of ["Notebook", "View Notebooks", "Video", "Voice", "Music"]) {
+      if (!menu.includes(word)) throw new Error(`the side menu has no ${word}`);
+    }
+    window.location.hash = "/notebooks/new";
+    await until("the add-sources screen", () =>
+      document.body.textContent?.includes("Let’s start your notebook") ? true : null,
+    );
+    const chooser = await until("the file chooser", () =>
+      document.querySelector<HTMLInputElement>('input[type="file"][aria-label="Choose files"]'),
+    );
+    const transfer = new DataTransfer();
+    transfer.items.add(
+      new File(["# Plan\n\nLaunch is planned for March, with a small beta first.\n"], "plan.md", {
+        type: "text/markdown",
+      }),
+    );
+    chooser.files = transfer.files;
+    chooser.dispatchEvent(new Event("change", { bubbles: true }));
+    await until("the source in the list", () =>
+      document.querySelector('section[aria-label="Sources"]')?.textContent?.includes("plan.md")
+        ? true
+        : null,
+    );
+    const saved = /^#\/notebooks\/([0-9a-f-]{32,36})$/.exec(window.location.hash);
+    if (!saved) throw new Error(`the new notebook has no address: ${window.location.hash}`);
+    window.location.hash = "/notebooks";
+    await until("the notebook card", () =>
+      document.body.textContent?.includes("Untitled notebook") &&
+      document.body.textContent?.includes("1 source")
+        ? true
+        : null,
+    );
+    await notebooksApi.remove(saved[1] ?? "");
+
     await report(
       true,
-      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}`,
+      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}; a notebook saved with its first source`,
     );
   } catch (e) {
     // what the window was saying when it gave up makes a CI log readable
     const notice = document.querySelector('[role="alert"]')?.textContent?.trim().slice(0, 200);
     const message = e instanceof Error ? e.message : String(e);
-    await report(false, notice ? `${message} (the window said: ${notice})` : message).catch(() => {});
+    await report(false, notice ? `${message} (the window said: ${notice})` : message).catch(
+      () => {},
+    );
   }
 }
 

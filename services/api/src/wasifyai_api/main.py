@@ -277,6 +277,7 @@ def create_app(
                     caps.rag = RagService(db, lambda texts, c=caps: c.text.embed("embed", texts))
                 caps.indexer = ContextIndexer(app.state.creation_index)
                 caps.extras["tool_host"] = tool_host  # the assistant's tools (ADR-0057)
+                caps.extras["app_state"] = app.state  # notebooks reach their library through it
                 app.state.caps[product_id] = caps
                 graphs[product_id] = reg.build(product_id, caps, saver)
             return graphs
@@ -361,6 +362,9 @@ def create_app(
             app.state.llama_server = desktop.llama
             app.state.desktop_language = desktop.language
             app.state.desktop_hub = desktop.hub
+            # notebooks keep their library under the app's data folder
+            app.state.desktop_dir = desktop.settings.desktop_dir
+            app.state.products_dir = Path(desktop.settings.products_dir)
             # "Save" in the window copies a picture here (the product's export route)
             app.state.export_dir = Path(
                 os.environ.get("WASIFYAI_EXPORT_DIR") or Path.home() / "Downloads"

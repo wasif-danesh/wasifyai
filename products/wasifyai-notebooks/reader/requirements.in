@@ -1,0 +1,7 @@
+# The document reader's environment (ADR-0065 decision 7): Docling and what the worker script needs.
+# Locked with hashes per platform by scripts/build-engine-bundle.sh; the app installs the lock with
+# --require-hashes, so the packages are exactly the ones the E0 spike measured.
+docling==2.139.0
+psutil>=7
+# RapidOCR (Docling's text recognition) needs it and does not declare it; the install check found out
+onnxruntime>=1.20

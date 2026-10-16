@@ -1,0 +1,26 @@
+{
+ "dense": {
+  "n": 24,
+  "top1": 17,
+  "top3": 23,
+  "top5": 24,
+  "miss": [],
+  "ms_per_query": 3.2
+ },
+ "lexical": {
+  "n": 24,
+  "top1": 19,
+  "top3": 20,
+  "top5": 22,
+  "miss": [],
+  "ms_per_query": 3.0
+ },
+ "hybrid": {
+  "n": 24,
+  "top1": 22,
+  "top3": 24,
+  "top5": 24,
+  "miss": [],
+  "ms_per_query": 3.0
+ }
+}

@@ -9,7 +9,26 @@ import { Fragment, type ReactNode } from "react";
 const INLINE =
   /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(__[^_\n]+__)|(\*[^*\n]+\*)|(\b_[^_\n]+_\b)|(\[[^\]\n]+\]\(https?:\/\/[^\s)]+\))/g;
 
-export function inline(text: string): ReactNode[] {
+/** `[1]`-style source labels, not a Markdown link `[1](https://...)`. */
+const LABEL = /\[(\d{1,3})\](?!\()/g;
+
+/** Inline Markdown. With `renderLabel`, `[n]` labels become that node (a citation the person can open). */
+export function inline(text: string, renderLabel?: (n: number) => ReactNode): ReactNode[] {
+  if (!renderLabel) return plainInline(text);
+  const out: ReactNode[] = [];
+  let last = 0;
+  let k = 0;
+  for (const m of text.matchAll(LABEL)) {
+    const at = m.index ?? 0;
+    if (at > last) out.push(...plainInline(text.slice(last, at)));
+    out.push(<Fragment key={`l${k++}`}>{renderLabel(Number(m[1]))}</Fragment>);
+    last = at + m[0].length;
+  }
+  if (last < text.length) out.push(...plainInline(text.slice(last)));
+  return out;
+}
+
+function plainInline(text: string): ReactNode[] {
   const out: ReactNode[] = [];
   let last = 0;
   let n = 0;
@@ -52,6 +71,7 @@ type Block =
   | { kind: "code"; lang: string; text: string }
   | { kind: "heading"; level: number; text: string }
   | { kind: "ul" | "ol"; items: string[] }
+  | { kind: "table"; head: string[]; rows: string[][] }
   | { kind: "p"; text: string };
 
 export function parseBlocks(src: string): Block[] {
@@ -80,6 +100,22 @@ export function parseBlocks(src: string): Block[] {
       flush();
       blocks.push({ kind: "heading", level: (heading[1] ?? "#").length, text: heading[2] ?? "" });
       i++;
+      continue;
+    }
+    if (/^\s*\|.*\|\s*$/.test(line) && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1] ?? "")) {
+      flush();
+      const cells = (row: string) =>
+        row
+          .trim()
+          .replace(/^\||\|$/g, "")
+          .split(/(?<!\\)\|/)
+          .map((c) => c.replace(/\\\|/g, "|").trim());
+      const head = cells(line);
+      const rows: string[][] = [];
+      i += 2;
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i] ?? ""))
+        rows.push(cells(lines[i++] ?? ""));
+      blocks.push({ kind: "table", head, rows });
       continue;
     }
     const bullet = /^\s*[-*+]\s+(.*)$/.exec(line);
@@ -111,7 +147,14 @@ export function parseBlocks(src: string): Block[] {
   return blocks;
 }
 
-export function Markdown({ text }: { text: string }) {
+export function Markdown({
+  text,
+  renderLabel,
+}: {
+  text: string;
+  /** Turns a `[n]` label into a node (a citation); without it labels stay text. */
+  renderLabel?: (n: number) => ReactNode;
+}) {
   const blocks = parseBlocks(text);
   return (
     <div className="grid gap-3 break-words leading-relaxed">
@@ -128,10 +171,40 @@ export function Markdown({ text }: { text: string }) {
                 <code>{b.text}</code>
               </pre>
             );
+          case "table":
+            return (
+              <div key={key} className="overflow-auto rounded-lg border">
+                <table className="w-full border-collapse text-left text-[0.9rem]">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      {b.head.map((h, j) => (
+                        // biome-ignore lint/suspicious/noArrayIndexKey: parsed from text, never reordered
+                        <th key={`${key}-h${j}`} className="border-b px-3 py-1.5 font-semibold">
+                          {inline(h, renderLabel)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {b.rows.map((row, r) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: parsed from text, never reordered
+                      <tr key={`${key}-r${r}`} className="border-b last:border-0">
+                        {row.map((c, j) => (
+                          // biome-ignore lint/suspicious/noArrayIndexKey: parsed from text, never reordered
+                          <td key={`${key}-${r}-${j}`} className="px-3 py-1.5 align-top">
+                            {inline(c, renderLabel)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
           case "heading":
             return (
               <p key={key} className="font-semibold text-[1.05rem]">
-                {inline(b.text)}
+                {inline(b.text, renderLabel)}
               </p>
             );
           case "ul":
@@ -139,7 +212,7 @@ export function Markdown({ text }: { text: string }) {
               <ul key={key} className="list-disc ps-6">
                 {b.items.map((it, j) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: parsed from text, never reordered
-                  <li key={`${key}-${j}`}>{inline(it)}</li>
+                  <li key={`${key}-${j}`}>{inline(it, renderLabel)}</li>
                 ))}
               </ul>
             );
@@ -148,7 +221,7 @@ export function Markdown({ text }: { text: string }) {
               <ol key={key} className="list-decimal ps-6">
                 {b.items.map((it, j) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: parsed from text, never reordered
-                  <li key={`${key}-${j}`}>{inline(it)}</li>
+                  <li key={`${key}-${j}`}>{inline(it, renderLabel)}</li>
                 ))}
               </ol>
             );
@@ -159,7 +232,7 @@ export function Markdown({ text }: { text: string }) {
                   // biome-ignore lint/suspicious/noArrayIndexKey: lines of one paragraph, never reordered
                   <Fragment key={`${key}-${j}`}>
                     {j > 0 ? <br /> : null}
-                    {inline(l)}
+                    {inline(l, renderLabel)}
                   </Fragment>
                 ))}
               </p>

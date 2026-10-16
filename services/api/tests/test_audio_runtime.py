@@ -14,7 +14,7 @@ import httpx
 import pytest
 from wasifyai_api import audio_runtime as ar
 from wasifyai_api.desktop_models import load_catalogue
-from wasifyai_platform_sdk import VoiceEngineError
+from wasifyai_platform_sdk import VoiceEngineError, check_music
 
 from tests.fake_audiocpp import wav_bytes
 
@@ -179,6 +179,8 @@ class Models:
 ALL = {
     "kokoro-82m-q8_0.gguf", "parakeet-tdt-0.6b-v3-q8_0.gguf", "voxcpm2-q8_0.gguf",
     "qwen3-tts-12hz-0.6b-base-q8_0.gguf", "qwen3-tts-12hz-1.7b-voicedesign-q8_0.gguf",
+    "ace-step-1.5-turbo-q8_0.gguf", "stable-audio-3-small-music-q8_0.gguf",
+    "stable-audio-3-small-sfx-q8_0.gguf",
 }  # fmt: skip
 
 
@@ -381,3 +383,65 @@ async def test_clone_sends_the_recording_and_the_words_it_says(engine, tmp_path)
     vox = engine.resolve("clone", "voxcpm2")
     await engine.clone(vox, "Optional words", ref, None, {})
     assert "reference_text" not in await last_request(engine)
+
+
+async def test_music_is_asked_for_the_way_each_family_takes_it(engine):
+    ace = engine.resolve("music", None)
+    assert ace.id == "ace-step-1.5-turbo"
+    req = check_music(ace, "song", "pop, upbeat", "la la la", False, 20, None, 5)
+    out = await engine.music(ace, req)
+    assert out.seconds > 0.5 and out.seed == 5 and out.sample_rate == 24000
+    sent = (await last_request(engine))["request"]
+    assert sent == {
+        "text": "pop, upbeat",
+        "duration_seconds": 20.0,
+        "seed": "5",
+        "options": {"lyrics": "la la la"},
+    }
+    instrumental = check_music(ace, "song", "calm piano", None, True, None, None, None)
+    out = await engine.music(ace, instrumental)
+    sent = (await last_request(engine))["request"]
+    assert sent["options"] == {"lyrics": "[Instrumental]"} and sent["duration_seconds"] == 30.0
+    assert out.seed is not None and sent["seed"] == str(
+        out.seed
+    )  # chosen, because the default is fixed
+    stable = engine.resolve("music", "stable-audio-3-small-music")
+    await engine.music(stable, check_music(stable, "song", "ambient pad", None, False, 12, None, 1))
+    sent = (await last_request(engine))["request"]
+    assert "options" not in sent and sent["duration_seconds"] == 12.0
+    sfx = engine.resolve("music", "stable-audio-3-small-sfx")
+    await engine.music(
+        sfx, check_music(sfx, "sfx", "rain on a tin roof", None, False, None, None, 2)
+    )
+    assert (await last_request(engine))["request"]["duration_seconds"] == 8.0
+
+
+async def test_music_can_come_back_as_raw_audio_and_failures_are_friendly(engine):
+    ace = engine.resolve("music", None)
+    out = await engine.music(ace, check_music(ace, "song", "RAW sound", None, False, 5, None, 1))
+    assert out.wav[:4] == b"RIFF"
+    with pytest.raises(VoiceEngineError) as e:
+        await engine.music(ace, check_music(ace, "song", "BOOM now", None, False, 5, None, 1))
+    assert e.value.code == "out_of_memory"
+    with pytest.raises(VoiceEngineError) as e:
+        await engine.music(
+            engine.resolve("speak", "kokoro-82m"),
+            check_music(ace, "song", "x y z", None, False, 5, None, 1),
+        )
+    assert e.value.code == "wrong_task"
+
+
+def test_the_music_models_are_listed_with_their_licence(tmp_path, monkeypatch):
+    eng, _ = make_engine(tmp_path, monkeypatch, present={"ace-step-1.5-turbo-q8_0.gguf"})
+    got = {m["id"]: m for m in eng.models("music")}
+    assert set(got) == {
+        "ace-step-1.5-turbo",
+        "stable-audio-3-small-music",
+        "stable-audio-3-small-sfx",
+    }
+    assert got["ace-step-1.5-turbo"]["state"] == "ready" and got["ace-step-1.5-turbo"][
+        "recommended"
+    ] == ["music"]
+    assert got["stable-audio-3-small-music"]["commercial_use"] == "conditional"
+    assert got["stable-audio-3-small-music"]["recommended"] == []
+    assert got["stable-audio-3-small-sfx"]["state"] == "can_install"

@@ -23,6 +23,8 @@ describe("router", () => {
       "speak",
       "transcribe",
       "voices",
+      "music",
+      "tracks",
     ] as const) {
       expect(parseHash(`#${routePath(r)}`)).toBe(r);
     }

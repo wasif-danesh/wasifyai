@@ -201,3 +201,92 @@ def test_a_design_request_is_checked_before_it_is_placed_in_front_of_the_text():
         assert e.value.code == code
     with pytest.raises(VoiceRequestError, match="cannot make a voice"):
         check_design(model(), "Hello", "a calm man", None)
+
+
+def musician(**over):
+    music = {
+        "modes": {
+            "song": {"lyrics": "optional", "instrumental": "toggle", "duration": [10, 60, 240]},
+            "sfx": {"duration": [1, 8, 30]},
+        },
+        "request": {
+            "duration": "top", "lyrics_option": "lyrics", "instrumental_lyrics": "[Instrumental]",
+        },
+    }  # fmt: skip
+    return model(
+        tasks=["music"], recommended=["music"], voices=[], default_voice=None, options=[],
+        music={**music, **over},
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "over, message",
+    [
+        ({"modes": {}}, "music.modes"),
+        ({"modes": {"jingle": {"duration": [1, 2, 3]}}}, "music.modes"),
+        ({"modes": {"sfx": {"duration": [5, 2, 30]}}}, "duration must be"),
+        (
+            {
+                "modes": {
+                    "song": {"lyrics": "maybe", "instrumental": "toggle", "duration": [1, 2, 3]}
+                }
+            },
+            "song needs",
+        ),
+        ({"request": {"duration": "sideways"}}, "music.request.duration"),
+        ({"request": {"duration": "top"}}, "names the option"),
+    ],
+)
+def test_music_rules_are_declared_and_checked(over, message):
+    with pytest.raises(ValueError, match=message):
+        musician(**over)
+    with pytest.raises(ValueError, match="declares `music`"):
+        model(music={"modes": {"sfx": {"duration": [1, 2, 3]}}, "request": {"duration": "top"}})
+
+
+def test_a_music_request_is_brought_into_the_models_range_and_cleaned():
+    from wasifyai_platform_sdk import check_music
+
+    m = musician()
+    r = check_music(m, "song", "  pop,  upbeat ", " la la\r\nla ", False, 900, None, 7)
+    assert (r.description, r.lyrics, r.duration, r.seed) == ("pop, upbeat", "la la\nla", 240.0, 7)
+    assert check_music(m, "song", "calm piano", None, True, 1, None, None).duration == 10.0
+    assert check_music(m, "sfx", "rain on a roof", None, False, None, None, None).duration == 8.0
+    assert check_music(m, "sfx", "rain on a roof", None, False, None, None, None).instrumental
+
+
+@pytest.mark.parametrize(
+    "mode, lyrics, instrumental, code",
+    [
+        ("song", "words", True, "lyrics_and_instrumental"),
+        ("sfx", "words", False, "no_lyrics"),
+        ("jingle", "", False, "wrong_mode"),
+    ],
+)
+def test_a_music_request_the_model_cannot_take_is_refused_in_words(
+    mode, lyrics, instrumental, code
+):
+    from wasifyai_platform_sdk import check_music
+
+    with pytest.raises(VoiceRequestError) as e:
+        check_music(musician(), mode, "something nice", lyrics, instrumental, None, None, None)
+    assert e.value.code == code
+
+
+def test_a_model_that_always_sings_or_needs_lyrics_says_so():
+    from wasifyai_platform_sdk import check_music
+
+    singer = musician(
+        modes={"song": {"lyrics": "required", "instrumental": "never", "duration": [10, 30, 120]}}
+    )
+    with pytest.raises(VoiceRequestError) as e:
+        check_music(singer, "song", "folk song", "", False, None, None, None)
+    assert e.value.code == "lyrics_required"
+    with pytest.raises(VoiceRequestError) as e:
+        check_music(singer, "song", "folk song", "", True, None, None, None)
+    assert e.value.code == "no_instrumental"
+    with pytest.raises(VoiceRequestError, match="description"):
+        check_music(singer, "song", "", "la", False, None, None, None)
+    with pytest.raises(VoiceRequestError) as e:
+        check_music(model(), "song", "folk song", "", False, None, None, None)
+    assert e.value.code == "wrong_task"

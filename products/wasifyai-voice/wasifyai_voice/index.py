@@ -25,7 +25,7 @@ def voice_db(engine: AsyncEngine) -> Path | None:
 
 class VoiceIndexSource:
     product_id = PRODUCT_ID
-    kind = "speech"  # and "transcript", "voice": items carry their own kind
+    kind = "speech"  # and "transcript", "voice", "track": items carry their own kind
 
     def __init__(self, engine: AsyncEngine):
         self._engine = engine
@@ -48,8 +48,23 @@ class VoiceIndexSource:
                 "name || '. ' || CASE WHEN description = '' THEN 'cloned voice' "
                 "ELSE description END "
                 "FROM voices WHERE (? IS NULL OR id > ?) "
+                "UNION ALL SELECT id, tenant_id, user_id, 'track', "
+                "title || '. ' || description || CASE WHEN lyrics = '' THEN '' ELSE '. ' || "
+                "substr(lyrics, 1, ?) END FROM tracks WHERE (? IS NULL OR id > ?) "
                 "ORDER BY id LIMIT ?",
-                (after, after, TRANSCRIPT_CHARS, after, after, after, after, limit),
+                (
+                    after,
+                    after,
+                    TRANSCRIPT_CHARS,
+                    after,
+                    after,
+                    after,
+                    after,
+                    TRANSCRIPT_CHARS,
+                    after,
+                    after,
+                    limit,
+                ),
             ).fetchall()
             return [IndexItem(t, PRODUCT_ID, u, k, i, search_text(x)) for i, t, u, k, x in rows]
         finally:
@@ -66,8 +81,9 @@ class VoiceIndexSource:
                 for r in db.execute(
                     f"SELECT id FROM speeches WHERE id IN ({marks}) "
                     f"UNION SELECT id FROM transcripts WHERE id IN ({marks}) "
-                    f"UNION SELECT id FROM voices WHERE id IN ({marks})",
-                    [*ids, *ids, *ids],
+                    f"UNION SELECT id FROM voices WHERE id IN ({marks}) "
+                    f"UNION SELECT id FROM tracks WHERE id IN ({marks})",
+                    [*ids, *ids, *ids, *ids],
                 )
             }
         finally:

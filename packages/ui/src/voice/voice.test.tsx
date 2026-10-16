@@ -11,6 +11,7 @@ import type {
   VoiceModelInfo,
 } from "@wasifyai/client";
 import { describe, expect, it, vi } from "vitest";
+import { MusicWorkspace } from "./MusicWorkspace";
 import { SpeakWorkspace } from "./SpeakWorkspace";
 import { TranscribeWorkspace } from "./TranscribeWorkspace";
 import { VoicesWorkspace } from "./VoicesWorkspace";
@@ -38,6 +39,7 @@ const model = (over: Partial<VoiceModelInfo> = {}): VoiceModelInfo => ({
     { id: "bm_george", label: "George", language: "en-gb", gender: "male" },
   ],
   default_voice: "af_heart",
+  music: {},
   options: [
     {
       name: "speed",
@@ -109,6 +111,10 @@ function api(over: Partial<Record<keyof VoiceApi, unknown>> = {}): VoiceApi {
     speeches: vi.fn(async () => []),
     speech: vi.fn(),
     removeSpeech: vi.fn(async () => undefined),
+    tracks: vi.fn(async () => []),
+    renameTrack: vi.fn(),
+    removeTrack: vi.fn(async () => undefined),
+    downloadTrack: vi.fn(async () => new Blob(["x"])),
     downloadSpeech: vi.fn(async () => new Blob(["x"])),
     transcripts: vi.fn(async () => []),
     transcript: vi.fn(),
@@ -465,5 +471,153 @@ describe("text to speech with a saved voice", () => {
       model: "qwen3-tts-1.7b-voicedesign",
       saved_voice: "v1",
     });
+  });
+});
+
+const track = (over: Record<string, unknown> = {}) => ({
+  id: "t1",
+  title: "Summer",
+  mode: "song" as const,
+  description: "pop, upbeat",
+  lyrics: "la la",
+  instrumental: false,
+  model_id: "ace-step-1.5-turbo",
+  options: {},
+  seed: 3,
+  seconds: 31,
+  sample_rate: 48000,
+  load_s: 0,
+  elapsed_s: 20,
+  created_at: "2026-10-16T10:00:00Z",
+  updated_at: "2026-10-16T10:00:00Z",
+  audio_url: "http://x/t.wav",
+  ...over,
+});
+
+const ace = () =>
+  model({
+    id: "ace-step-1.5-turbo",
+    title: "ACE-Step 1.5 Turbo",
+    tasks: ["music"],
+    recommended: ["music"],
+    voices: [],
+    default_voice: null,
+    options: [],
+    measured: { platform: "darwin-arm64", speed_x: 2, memory_gb: 7, load_s: 5 },
+    music: {
+      modes: { song: { lyrics: "optional", instrumental: "toggle", duration: [5, 30, 240] } },
+    },
+  });
+const stable = () =>
+  model({
+    id: "stable-audio-3-small-music",
+    title: "Stable Audio 3 Small (music)",
+    tasks: ["music"],
+    recommended: [],
+    commercial_use: "conditional",
+    voices: [],
+    default_voice: null,
+    options: [],
+    music: {
+      modes: { song: { lyrics: "unused", instrumental: "always", duration: [1, 30, 120] } },
+    },
+  });
+
+describe("music", () => {
+  const doneTrack = ev("done", {
+    outputs: {
+      status: "done",
+      track_id: "t2",
+      title: "Summer",
+      seconds: 30,
+      audio_url: "http://x",
+    },
+  });
+
+  it("asks only what the chosen model takes, and makes music with it", async () => {
+    const models = vi.fn(async () => [ace(), stable()]);
+    const tracks = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([track()]);
+    const runs = runsThat([ev("node", { label: "Making the music" }), doneTrack]);
+    const user = userEvent.setup();
+    render(<MusicWorkspace api={api({ models, tracks })} runs={runs} />);
+    expect(await screen.findByLabelText("Model")).toHaveValue("ace-step-1.5-turbo");
+    expect(screen.getByLabelText(/Lyrics \(optional\)/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/No singing/)).toBeInTheDocument();
+    expect(screen.getByText(/About 15 seconds of work/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Describe the music"), "upbeat pop, summer");
+    await user.type(screen.getByLabelText(/Lyrics/), "la la la");
+    fireEvent.change(screen.getByLabelText(/Length/), { target: { value: "45" } });
+    await user.click(screen.getByRole("button", { name: "Make" }));
+    await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
+    expect(runs.startRun.mock.calls[0]?.[1]).toEqual({
+      task: "music",
+      text: "upbeat pop, summer",
+      model: "ace-step-1.5-turbo",
+      music_mode: "song",
+      lyrics: "la la la",
+      duration: 45,
+    });
+    expect(await screen.findByText("Summer")).toBeInTheDocument();
+  });
+
+  it("hides the lyrics for a model that does not sing, and says what the model is", async () => {
+    const models = vi.fn(async () => [ace(), stable()]);
+    const user = userEvent.setup();
+    render(<MusicWorkspace api={api({ models })} runs={runsThat([])} />);
+    await user.selectOptions(await screen.findByLabelText("Model"), "stable-audio-3-small-music");
+    expect(screen.queryByLabelText(/Lyrics/)).not.toBeInTheDocument();
+    expect(screen.getByText("This model makes music without singing.")).toBeInTheDocument();
+    expect(screen.getByText("Commercial use with conditions")).toBeInTheDocument();
+  });
+
+  it("leaves the singing out on request", async () => {
+    const runs = runsThat([doneTrack]);
+    const user = userEvent.setup();
+    render(<MusicWorkspace api={api({ models: vi.fn(async () => [ace()]) })} runs={runs} />);
+    await user.type(await screen.findByLabelText("Describe the music"), "calm piano");
+    await user.click(screen.getByLabelText(/No singing/));
+    expect(screen.queryByLabelText(/Lyrics/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Make" }));
+    await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
+    expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({ instrumental: true });
+    expect(runs.startRun.mock.calls[0]?.[1]).not.toHaveProperty("lyrics");
+  });
+
+  it("says why the music was not made", async () => {
+    const runs = runsThat([
+      ev("done", {
+        outputs: { status: "refused", refusal: { code: "x", message: "ACE-Step needs lyrics." } },
+      }),
+    ]);
+    const user = userEvent.setup();
+    render(<MusicWorkspace api={api({ models: vi.fn(async () => [ace()]) })} runs={runs} />);
+    await user.type(await screen.findByLabelText("Describe the music"), "calm piano");
+    await user.click(screen.getByRole("button", { name: "Make" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("ACE-Step needs lyrics.");
+  });
+
+  it("lists the music made, renames and deletes it", async () => {
+    const renameTrack = vi.fn(async () => track({ title: "Winter" }));
+    const removeTrack = vi.fn(async () => undefined);
+    window.prompt = vi.fn(() => "Winter");
+    const user = userEvent.setup();
+    render(
+      <MusicWorkspace
+        api={api({
+          models: vi.fn(async () => [ace()]),
+          tracks: vi.fn(async () => [track()]),
+          renameTrack,
+          removeTrack,
+        })}
+        runs={runsThat([])}
+      />,
+    );
+    expect(await screen.findByText("Summer")).toBeInTheDocument();
+    expect(screen.getByText(/song · 0:31 · ACE-Step 1.5 Turbo/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Rename" }));
+    expect(renameTrack).toHaveBeenCalledWith("t1", "Winter");
+    expect(await screen.findByText("Winter")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(removeTrack).toHaveBeenCalledWith("t1");
   });
 });

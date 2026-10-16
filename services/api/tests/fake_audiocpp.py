@@ -98,6 +98,34 @@ def main() -> None:
                     state["loaded"] = req["model"]
                     state["speech"] += 1
                     return self.send(200, wav_bytes(max(0.2, len(req["input"]) / 20)), "audio/wav")
+                if self.path == "/v1/tasks/run":
+                    req = json.loads(body)
+                    m = models.get(req.get("model"))
+                    if m is None or m["task"] != "gen":
+                        return self.fail("unknown model id or not a music model")
+                    r = req.get("request") or {}
+                    state["last"] = req
+                    if not r.get("text"):
+                        return self.fail("text is required")
+                    seconds = float(
+                        r.get("duration_seconds")
+                        or (r.get("options") or {}).get("duration_sec")
+                        or 0
+                    )
+                    if not seconds:
+                        return self.fail("duration is required")
+                    if r["text"].startswith("BOOM"):
+                        return self.fail("failed to allocate buffer")
+                    state["loaded"] = req["model"]
+                    data = wav_bytes(min(seconds, 3.0))
+                    if r["text"].startswith("RAW"):
+                        return self.send(200, data, "audio/wav")
+                    import base64
+
+                    return self.send(
+                        200,
+                        {"outputs": [{"id": "audio", "audio": base64.b64encode(data).decode()}]},
+                    )
                 if self.path == "/v1/audio/transcriptions/details":
                     if b"RIFF" not in body:
                         return self.fail("invalid WAV RIFF header")

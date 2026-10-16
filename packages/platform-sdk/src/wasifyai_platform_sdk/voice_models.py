@@ -128,6 +128,8 @@ class VoiceModel:
     # how clone and design are delivered (V2); declared now so the schema is proven
     clone: dict[str, Any] = field(default_factory=dict, hash=False)
     design: dict[str, Any] = field(default_factory=dict, hash=False)
+    # music: the modes it offers and how a request is put to the runtime (V3)
+    music: dict[str, Any] = field(default_factory=dict, hash=False)
 
     def public(self) -> dict[str, Any]:
         return {
@@ -139,7 +141,7 @@ class VoiceModel:
             "measured": self.measured.public(),
             "voices": [v.public() for v in self.voices], "default_voice": self.default_voice,
             "options": [o.public() for o in self.options],
-            "clone": self.clone, "design": self.design,
+            "clone": self.clone, "design": self.design, "music": self.music,
         }  # fmt: skip
 
     def option(self, name: str) -> OptionSpec | None:
@@ -210,7 +212,9 @@ def parse_voice_model(entry_id: str, title: str, licence: str, raw: dict[str, An
         raise ValueError(f"{entry_id}: duplicate option name")
     clone = dict(raw.get("clone") or {})
     design = dict(raw.get("design") or {})
+    music = dict(raw.get("music") or {})
     _check_rules(entry_id, tasks, clone, design)
+    _check_music_rules(entry_id, tasks, music)
     return VoiceModel(
         id=entry_id, title=title, licence=licence, engine=engine, family=str(raw["family"]),
         package=str(raw["package"]), server_task=str(raw.get("server_task", "tts")),
@@ -222,7 +226,7 @@ def parse_voice_model(entry_id: str, title: str, licence: str, raw: dict[str, An
             str(m.get("platform", "")), m.get("speed_x"), m.get("memory_gb"), m.get("load_s")
         ),
         voices=voices, default_voice=str(default_voice) if default_voice else None,
-        options=options, clone=clone, design=design,
+        options=options, clone=clone, design=design, music=music,
     )  # fmt: skip
 
 
@@ -250,6 +254,45 @@ def _check_rules(entry_id: str, tasks: tuple[str, ...], clone: dict, design: dic
             raise ValueError(f"{entry_id}: design.via must be one of {DESIGN_VIA}")
         if not 20 <= int(design.get("max_chars", 0)) <= 1000:
             raise ValueError(f"{entry_id}: design.max_chars must be 20 to 1000")
+
+
+LYRICS = ("optional", "required", "unused")
+INSTRUMENTAL = ("toggle", "always", "never")
+MUSIC_MODES = ("song", "sfx")
+MAX_MUSIC_DESCRIPTION = 500
+MAX_LYRICS_CHARS = 5000
+
+
+def _check_music_rules(entry_id: str, tasks: tuple[str, ...], music: dict) -> None:
+    """The modes of a music model and how the runtime takes each part of a request. The shapes
+    differ between families (a duration may be a field of the request or an option; lyrics are an
+    option; one family sings only when lyrics say so), so the descriptor states them and nothing
+    is guessed."""
+    if ("music" in tasks) != bool(music):
+        raise ValueError(f"{entry_id}: a music model declares `music` rules, and only it does")
+    if not music:
+        return
+    modes = music.get("modes") or {}
+    if not modes or set(modes) - set(MUSIC_MODES):
+        raise ValueError(f"{entry_id}: music.modes must be among {MUSIC_MODES}")
+    for name, mode in modes.items():
+        lo, default, hi = mode.get("duration") or [0, 0, 0]
+        if not 0 < lo <= default <= hi <= 600:
+            raise ValueError(f"{entry_id}: {name} duration must be [min, default, max] seconds")
+        if name == "song":
+            if mode.get("lyrics") not in LYRICS or mode.get("instrumental") not in INSTRUMENTAL:
+                raise ValueError(
+                    f"{entry_id}: song needs lyrics {LYRICS} and instrumental {INSTRUMENTAL}"
+                )
+    request = music.get("request") or {}
+    if request.get("duration") not in ("top",) and not str(request.get("duration", "")).startswith(
+        "option:"
+    ):
+        raise ValueError(f"{entry_id}: music.request.duration must be 'top' or 'option:<name>'")
+    if any(m.get("lyrics", "unused") != "unused" for m in modes.values()) and not request.get(
+        "lyrics_option"
+    ):
+        raise ValueError(f"{entry_id}: a model that takes lyrics names the option (lyrics_option)")
 
 
 # ---- validating a request ----------------------------------------------------------------------
@@ -368,6 +411,68 @@ def check_clone(
     return spoken, said or None, check_options(model, options)
 
 
+@dataclass(frozen=True)
+class MusicRequest:
+    """A music request that passed the checks: what the runtime is asked for."""
+
+    mode: str
+    description: str
+    lyrics: str
+    instrumental: bool
+    duration: float
+    options: dict[str, Any]
+    seed: int | None
+
+
+def check_music(
+    model: VoiceModel,
+    mode: str,
+    description: str,
+    lyrics: str | None,
+    instrumental: bool,
+    duration: float | None,
+    options: dict[str, Any] | None,
+    seed: int | None,
+) -> MusicRequest:
+    """A music request checked against the model's modes. Lyrics that a mode does not sing, and
+    vocals in a model that makes none, are refused in words, never dropped quietly; a duration
+    outside the model's range is brought into it."""
+    if "music" not in model.tasks:
+        raise VoiceRequestError("wrong_task", f"{model.title} does not make music.")
+    rules = model.music["modes"].get(mode)
+    if rules is None:
+        raise VoiceRequestError("wrong_mode", f"{model.title} does not make {mode}.")
+    described = " ".join(_clean_text(description, "The description", MAX_MUSIC_DESCRIPTION).split())
+    if len(described) < 3:
+        raise VoiceRequestError("description_too_short", "Describe the music in a few words.")
+    words = str(lyrics or "").replace("\r\n", "\n").strip()
+    sung = rules.get("lyrics", "unused")
+    if words and sung == "unused":
+        raise VoiceRequestError("no_lyrics", f"{model.title} does not sing lyrics. Leave them out.")
+    if len(words) > MAX_LYRICS_CHARS:
+        raise VoiceRequestError(
+            "text_too_long", f"Lyrics are longer than {MAX_LYRICS_CHARS} characters."
+        )
+    vocals = rules.get("instrumental", "always")
+    if instrumental and vocals == "never":
+        raise VoiceRequestError(
+            "no_instrumental", f"{model.title} always sings. Add lyrics instead."
+        )
+    if instrumental and words:
+        raise VoiceRequestError("lyrics_and_instrumental", "A piece without singing has no lyrics.")
+    if sung == "required" and not words and not instrumental:
+        raise VoiceRequestError("lyrics_required", f"{model.title} needs lyrics to sing.")
+    lo, default, hi = rules["duration"]
+    asked = default if duration is None else float(duration)
+    if asked != asked:
+        raise VoiceRequestError("bad_option", "The length is not a number.")
+    return MusicRequest(
+        mode=mode, description=described, lyrics=words,
+        instrumental=bool(instrumental) or vocals == "always", duration=max(lo, min(hi, asked)),
+        options=check_options(model, options), seed=None if seed is None else int(seed),
+    )  # fmt: skip
+
+
 def check_transcribe(model: VoiceModel, options: dict[str, Any] | None) -> dict[str, Any]:
     if "transcribe" not in model.tasks:
         raise VoiceRequestError("wrong_task", f"{model.title} does not transcribe speech.")
@@ -387,6 +492,17 @@ class SpeechResult:
     model_id: str
     voice: str | None
     load_s: float  # time spent before the model answered (0 when it was already loaded)
+    elapsed_s: float
+
+
+@dataclass(frozen=True)
+class MusicResult:
+    wav: bytes
+    sample_rate: int
+    seconds: float
+    model_id: str
+    seed: int | None
+    load_s: float
     elapsed_s: float
 
 
@@ -437,6 +553,10 @@ class SpeechEngine(Protocol):
         options: dict[str, Any],
     ) -> SpeechResult:
         """Speak `text` in the voice of the recording at `reference` (a file on this computer)."""
+        ...
+
+    async def music(self, model: VoiceModel, request: MusicRequest) -> MusicResult:
+        """Make music (a song or a sound effect) from a checked request."""
         ...
 
     async def transcribe(

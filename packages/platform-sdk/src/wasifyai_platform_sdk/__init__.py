@@ -103,6 +103,8 @@ from wasifyai_platform_sdk.usage import InMemoryUsageRecorder, UsageEvent, Usage
 from wasifyai_platform_sdk.usage_postgres import PostgresUsageRecorder
 from wasifyai_platform_sdk.usage_queries import start_of_day_utc, sum_usage
 from wasifyai_platform_sdk.voice_models import (
+    MusicRequest,
+    MusicResult,
     SpeechEngine,
     SpeechResult,
     TranscriptResult,
@@ -112,6 +114,7 @@ from wasifyai_platform_sdk.voice_models import (
     VoiceRequestError,
     check_clone,
     check_design,
+    check_music,
     check_options,
     check_speak,
     check_transcribe,
@@ -207,6 +210,8 @@ __all__ = [
     "ToolCall",
     "ToolHost",
     "ToolUnavailable",
+    "MusicRequest",
+    "MusicResult",
     "SpeechEngine",
     "SpeechResult",
     "TranscriptResult",
@@ -216,6 +221,7 @@ __all__ = [
     "VoiceRequestError",
     "check_clone",
     "check_design",
+    "check_music",
     "check_options",
     "check_speak",
     "check_transcribe",

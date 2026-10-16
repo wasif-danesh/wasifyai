@@ -89,3 +89,37 @@ not about a person's voice; each output was read back by Parakeet):
   design or clone for languages other than English (the models list more; v1 is English only), voices for the
   assistant.
 
+## V3: music
+
+Built 2026-10-16 (see "Music" in `docs/desktop-profile.md`). New models: ACE-Step 1.5 Turbo Q8_0 (6.19 GB, MIT,
+downloaded with the owner's yes and checked against Hugging Face's SHA-256), Stable Audio 3 Small music and sound
+effects (catalogued, **not downloaded or run**: the owner chose to skip them; their request shape follows the
+spec and the shared code, but it is untested against the real model).
+
+**Tests.** SDK 52 (music rules and checks), engine 22 on the stand-in server (how the request is built for each
+family; raw and JSON answers; friendly failures), voice product 69 (music graph, `/tracks`, the store's upgrade
+to version 3, search), client 49, UI 104. Python 1223 passed, ruff, pyright, typecheck, `pnpm build`, the
+real-window self-test (the Music screen too).
+
+**Real run** (real audio.cpp on Metal, ACE-Step 1.5 Turbo Q8_0, through the engine's routes):
+
+| Step | Result |
+|---|---|
+| 20 s song with lyrics, first request | 20.9 s, 48 kHz stereo WAV of exactly 20.0 s; about 4 s of it loading the model |
+| The same request again (same seed) | 16.6 s, **byte-identical** audio |
+| 60 s song, first request | 37.5 s (about 1.6 times faster than real time) |
+| 20 s instrumental ("No singing") | 11.3 s |
+| Memory while loaded | 3.0 to 3.1 GB for a 6.2 GB file |
+| Refusals | description too short; "sfx" on a song-only model; both in words, before anything loaded |
+| Comparison | the web product's note for the ComfyUI workflow says about 77 s for a 60 s song on this Mac: audio.cpp took 37.5 s (different days, not a controlled comparison) |
+
+**Found.**
+- Whether the lyrics are sung in order cannot be checked by machine: Parakeet heard "Nine shy fun someone
+  watching" from a sung verse. A listening check is the only test, and it was not done.
+- The runtime's default seed is fixed, so without a chosen seed every request would repeat; the engine now picks
+  one and stores it with the track, which is also what makes "make it again" possible.
+- The server's spec files for ACE-Step and Stable Audio list no request options, so the request shape comes from
+  our descriptor, not from the runtime.
+- Not done in V3: clip editing, the ComfyUI engine for music, lyrics writing, a longer-than-4-minute song, Stable
+  Audio's real run.
+

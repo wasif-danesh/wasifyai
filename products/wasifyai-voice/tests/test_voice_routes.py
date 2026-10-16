@@ -265,3 +265,50 @@ def test_another_person_cannot_see_or_change_a_voice(api):
     assert c.get(f"voices/{v['id']}", headers=other).status_code == 404
     assert c.patch(f"voices/{v['id']}", json={"name": "x"}, headers=other).status_code == 404
     assert c.delete(f"voices/{v['id']}", headers=other).status_code == 404
+
+
+def seed_track(state, title="Summer", description="pop, upbeat", lyrics="la la"):
+    token = set_context(RunContext("t1", "wasifyai-voice", "u1"))
+    try:
+        asyncio.run(state.storage.put("music/t1.wav", wav(1.0), "audio/wav"))
+    finally:
+        reset_context(token)
+    return store_for(state).add_track(
+        "t1", "u1", title=title, mode="song", description=description, lyrics=lyrics,
+        instrumental=False, model_id="ace-step-1.5-turbo", options={}, seed=3, seconds=1.0,
+        sample_rate=24000, audio_key="music/t1.wav", load_s=0, elapsed_s=2, track_id="t1",
+    )  # fmt: skip
+
+
+def test_tracks_are_listed_played_downloaded_renamed_and_deleted(api):
+    c, _, state = api
+    seed_track(state)
+    items = c.get("tracks").json()["items"]
+    assert [t["id"] for t in items] == ["t1"] and items[0]["audio_url"].startswith("http://")
+    assert "audio_key" not in items[0] and items[0]["instrumental"] is False
+    assert c.get("tracks/t1").json()["lyrics"] == "la la"
+    d = c.get("tracks/t1/download")
+    assert (
+        d.status_code == 200
+        and d.content[:4] == b"RIFF"
+        and "Summer.wav" in d.headers["content-disposition"]
+    )
+    renamed = c.patch("tracks/t1", json={"title": "  Winter "}).json()
+    assert renamed["title"] == "Winter" and "Winter" in state.creation_index.items["t1"][1]
+    assert c.patch("tracks/t1", json={"title": ""}).status_code == 422
+    assert c.delete("tracks/t1").status_code == 204
+    assert c.get("tracks/t1").status_code == 404 and "t1" not in state.creation_index.items
+
+
+def test_another_person_cannot_see_a_track(api):
+    c, _, state = api
+    seed_track(state)
+    other = {"x-user": "u2"}
+    assert c.get("tracks", headers=other).json()["items"] == []
+    for method, path in [
+        ("get", "tracks/t1"),
+        ("get", "tracks/t1/download"),
+        ("delete", "tracks/t1"),
+    ]:
+        assert getattr(c, method)(path, headers=other).status_code == 404
+    assert c.patch("tracks/t1", json={"title": "x"}, headers=other).status_code == 404

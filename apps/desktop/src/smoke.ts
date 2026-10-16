@@ -186,6 +186,7 @@ export async function runSmoke(): Promise<void> {
       ["/voice/speak", "Kokoro 82M", "Text to speech"],
       ["/voice/transcribe", "Parakeet TDT 0.6B v3", "Speech to text"],
       ["/voice/voices", "", "Voices"],
+      ["/music/create", "ACE-Step 1.5 Turbo", "Music"],
     ] as const) {
       window.location.hash = path;
       await until(`the ${label} screen`, () =>
@@ -208,7 +209,7 @@ export async function runSmoke(): Promise<void> {
 
     await report(
       true,
-      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}; a notebook saved with its first source; the speech screens listing their models`,
+      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}; a notebook saved with its first source; the speech and music screens listing their models`,
     );
   } catch (e) {
     // what the window was saying when it gave up makes a CI log readable

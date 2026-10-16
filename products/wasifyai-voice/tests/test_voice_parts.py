@@ -170,3 +170,37 @@ async def test_a_recording_is_cut_at_thirty_seconds_and_refused_under_two(monkey
         await reference.prepare(bytes(float_wav), "f.wav")
     assert e.value.code in ("unsupported_audio", "needs_converter")
     assert len(long) < len(wav(45.0, 8000))
+
+
+def test_a_version_two_file_gains_tracks_and_the_index_pages_them(tmp_path):
+    root = tmp_path / "voice"
+    s = VoiceStore(root)
+    with sqlite3.connect(s.path) as db:
+        db.execute("DROP TABLE tracks")
+        db.execute("UPDATE meta SET value = '2' WHERE key = 'schema'")
+    s = VoiceStore(root)
+    t = s.add_track(
+        "t", "u", title="Song", mode="song", description="pop", lyrics="", instrumental=True,
+        model_id="m", options={}, seed=None, seconds=1, sample_rate=24000, audio_key="k",
+        load_s=0, elapsed_s=0, track_id="tr1",
+    )  # fmt: skip
+    assert t["instrumental"] is True and t["seed"] is None
+    with pytest.raises(NotFound):
+        s.get_track("t", "other", "tr1")
+
+
+async def test_the_index_source_also_pages_tracks(tmp_path):
+    s = VoiceStore(tmp_path / "voice")
+    s.add_track(
+        "t", "u", title="Summer", mode="song", description="pop upbeat", lyrics="la la",
+        instrumental=False, model_id="m", options={}, seed=1, seconds=1, sample_rate=1,
+        audio_key="k", load_s=0, elapsed_s=0, track_id="tr1",
+    )  # fmt: skip
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'wasifyai.db'}")
+    src = VoiceIndexSource(engine)
+    items = await src.page(None, 10)
+    assert [(i.item_id, i.kind, i.text) for i in items] == [
+        ("tr1", "track", "Summer. pop upbeat. la la")
+    ]
+    assert await src.present(["tr1", "zz"]) == {"tr1"}
+    await engine.dispose()

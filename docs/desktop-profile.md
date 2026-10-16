@@ -238,7 +238,7 @@ to `@wasifyai/ui` when it is migrated; delete the shim when nothing uses it.
 |---|---|---|
 | Router | `router.ts` | URL hash, eight routes: `/`, `/images/create`, `/images/edit`, `/library`, `/models`, `/settings`, `/notebooks` and `/notebooks/<id>` (`new` is a draft). No library. `useRoute` answers an object; a chat or a draft notebook gets its address without a reload (`adopt`, `adoptNotebook`) |
 | Shell | `Shell.tsx` | side menu + the screen; the menu collapses (remembered in `localStorage`) |
-| Side menu | `Sidebar.tsx` | New chat; groups **Notebook** (Create, View Notebooks), **Images** (Create, Edit, and Transform, Inpaint, Extend, Upscale, Reference marked "Soon", Your images), **Video**, **Voice** (Text to speech and Speech to text work; Lip sync and Voices are "Soon"), **Music** (all items "Soon"); Library, Models, Train ("Soon"); Recents; You and settings. One group is open at a time and the one holding the current page stays open |
+| Side menu | `Sidebar.tsx` | New chat; groups **Notebook** (Create, View Notebooks), **Images** (Create, Edit, and Transform, Inpaint, Extend, Upscale, Reference marked "Soon", Your images), **Video**, **Voice** (Text to speech and Speech to text work; Lip sync and Voices are "Soon"), **Music** (Create and Your music work; Lyrics is "Soon"); Library, Models, Train ("Soon"); Recents; You and settings. One group is open at a time and the one holding the current page stays open |
 | Home | `pages/Home.tsx` | greeting and the "Ask anything" box (the assistant, ADR-0057, is not built: the box says so) |
 | Create / Edit | `pages/Create.tsx` | wraps the shared `ImageWorkspace` with this window's model chip and setup notices |
 | Notebooks | `pages/Notebooks.tsx`, `pages/Notebook.tsx`, `notebook-setup.ts` | View Notebooks (cards, search by title and by what is inside, rename, delete, the setup card) and one notebook (the shared `NotebookWorkspace`) |
@@ -263,7 +263,7 @@ disabled with the **Soon** pill, so the menu keeps its final shape (as above).
 | **Images** | Create, Edit, Transform, Inpaint, Extend, Upscale, Reference, Your images | ComfyUI | Create, Edit |
 | **Video** | Create, Animate an image, Extend video, Your videos | `wasifyai-video` on ComfyUI (`video.generate`, `video.animate`) | Soon |
 | **Voice** | Text to speech, Speech to text, Lip sync, Voices | `wasifyai-voice` on audio.cpp (ADR-0066); lip sync MuseTalk later | Speak and Transcribe built (V1); the rest Soon |
-| **Music** | Create, Your music, Lyrics | `wasifyai-music` on ComfyUI (`music.generate`, `text.lyrics`) | Soon |
+| **Music** | Create, Your music, Lyrics | `wasifyai-voice` on audio.cpp (ADR-0066, V3); the ComfyUI ACE-Step workflow and `text.lyrics` later | Create and Your music built; Lyrics Soon |
 | *Library* | (single item) all creations, searchable (ADR-0041) | | yes |
 | *Models*, *Train* (Soon) | single items | | Models yes |
 
@@ -540,6 +540,22 @@ question for the owner (licence and size).
 | Audio overview | `POST /notebooks/{id}/artifacts/{aid}/voices`: the script's turns are spoken one by one by a speech model with built-in voices (Kokoro: a woman and a man by default, or `voices: {"1": id, "2": id}`), joined with pauses, kept as `overview.wav`, and the output's data gains `audio: true`; `GET .../voices` says how far it has got, `GET .../audio` is the sound. In the Studio viewer: "Speak it", progress, a player |
 
 Saved voices and recordings are in My creations search (kind `voice`). Voices stay on this computer.
+
+### Music (stage V3)
+
+Music is another task of the same product and the same runtime, picked from the same kind of list.
+
+| Piece | What it does |
+|---|---|
+| Descriptors | a `music` block: the modes a model makes (`song`, `sfx`), per mode whether it takes lyrics (`optional`, `required`, `unused`), whether it can leave the singing out (`toggle`, `always`, `never`) and its lengths as [shortest, usual, longest] seconds; and `request`, how the runtime takes the parts: the duration as a field of the request (`top`) or an option (`option:<name>`), the option that carries lyrics, what an instrumental is called (`[Instrumental]`). Catalogue: ACE-Step 1.5 Turbo (MIT, recommended), Stable Audio 3 Small music and sound effects (Stability Community Licence: **conditional**, never recommended) |
+| Checks | `check_music`: a description of 3 or more characters; lyrics for a model that does not sing, or with "no singing", or singing that is required but missing, are refused in words (never dropped); a length outside the model's range is brought into it |
+| Engine | `AudioEngine.music`: builds the request from the descriptor, chooses a random seed when none is given (the runtime's default is fixed, so every run would repeat), waits up to 40 s per second of music (at most two hours), reads the answer as raw audio or as JSON with base64 audio |
+| Product | the Speak graph with `task: "music"`; `/tracks` (list, get, download, rename, delete); `voice.db` table `tracks`; My creations search (kind `track`) |
+| Window | Music > Create (model list, Music or Sound effect when the model has both, description, lyrics only if it sings, "No singing" only if it can, length, seed, an estimate from the measured speed, elapsed time while it works, Cancel) and Your music (play, save as WAV, rename, delete) |
+
+Not in V3: editing a clip (repaint, extend, cover, inpaint: the runtime has them for ACE-Step and Stable Audio), the
+ComfyUI ACE-Step workflow as a second engine for the same list, lyrics writing (`text.lyrics`), and a listening
+check of the quality.
 
 ## The self-test
 

@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _SPEECHES = """
 CREATE TABLE speeches(
@@ -42,14 +42,27 @@ CREATE TABLE voices(
   consent TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX voices_owner ON voices(tenant_id, user_id, created_at DESC);
 """
+_TRACKS = """
+CREATE TABLE tracks(
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
+  title TEXT NOT NULL, mode TEXT NOT NULL, description TEXT NOT NULL,
+  lyrics TEXT NOT NULL DEFAULT '', instrumental INTEGER NOT NULL DEFAULT 0,
+  model_id TEXT NOT NULL, options TEXT NOT NULL DEFAULT '{}',
+  seed INTEGER, seconds REAL NOT NULL, sample_rate INTEGER NOT NULL, audio_key TEXT NOT NULL,
+  load_s REAL NOT NULL DEFAULT 0, elapsed_s REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL);
+CREATE INDEX tracks_owner ON tracks(tenant_id, user_id, created_at DESC);
+"""
 _SCHEMA = "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);" + (
-    _SPEECHES + _TRANSCRIPTS + _VOICES
+    _SPEECHES + _TRANSCRIPTS + _VOICES + _TRACKS
 )
 # what version 2 adds to a version 1 file: how a speech was made, and saved voices
 _V2_UPGRADE = (
     "ALTER TABLE speeches ADD COLUMN mode TEXT NOT NULL DEFAULT 'speak';"
     "ALTER TABLE speeches ADD COLUMN saved_voice_id TEXT;" + _VOICES
 )
+# what version 3 adds: music
+_V3_UPGRADE = _TRACKS
 
 
 class NotFound(Exception):
@@ -83,7 +96,11 @@ class VoiceStore:
                     raise RuntimeError("voice.db was made by a newer version of this app")
                 if version == 1:
                     db.executescript("BEGIN;" + _V2_UPGRADE + "COMMIT;")
-                    db.execute("UPDATE meta SET value = '2' WHERE key = 'schema'")
+                if version <= 2:
+                    db.executescript("BEGIN;" + _V3_UPGRADE + "COMMIT;")
+                    db.execute(
+                        "UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),)
+                    )
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -286,4 +303,66 @@ class VoiceStore:
         with self._connect() as db:
             db.execute("DELETE FROM voices WHERE id = ?", (vid,))
         self.reference_path(vid).unlink(missing_ok=True)
+        return gone
+
+    # ---- tracks (music) ---------------------------------------------------------------------
+
+    @staticmethod
+    def _track(r: sqlite3.Row) -> dict[str, Any]:
+        d = dict(r)
+        d["options"] = json.loads(d["options"])
+        d["instrumental"] = bool(d["instrumental"])
+        return d
+
+    def add_track(
+        self, tenant: str, user: str, *, title: str, mode: str, description: str, lyrics: str,
+        instrumental: bool, model_id: str, options: dict[str, Any], seed: int | None,
+        seconds: float, sample_rate: int, audio_key: str, load_s: float, elapsed_s: float,
+        track_id: str | None = None,
+    ) -> dict[str, Any]:  # fmt: skip
+        tid, stamp = track_id or new_id(), now()
+        with self._connect() as db:
+            db.execute(
+                "INSERT INTO tracks(id, tenant_id, user_id, title, mode, description, lyrics, "
+                "instrumental, model_id, options, seed, seconds, sample_rate, audio_key, load_s, "
+                "elapsed_s, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (tid, tenant, user, title, mode, description, lyrics, int(instrumental), model_id,
+                 json.dumps(options), seed, seconds, sample_rate, audio_key, load_s, elapsed_s,
+                 stamp, stamp),
+            )  # fmt: skip
+        return self.get_track(tenant, user, tid)
+
+    def get_track(self, tenant: str, user: str, tid: str) -> dict[str, Any]:
+        with self._connect() as db:
+            r = db.execute(
+                "SELECT * FROM tracks WHERE id = ? AND tenant_id = ? AND user_id = ?",
+                (tid, tenant, user),
+            ).fetchone()
+        if r is None:
+            raise NotFound("track not found")
+        return self._track(r)
+
+    def list_tracks(
+        self, tenant: str, user: str, ids: list[str] | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT * FROM tracks WHERE tenant_id = ? AND user_id = ? "
+                "ORDER BY created_at DESC, id LIMIT ?",
+                (tenant, user, max(1, min(limit, 500))),
+            ).fetchall()
+        return [self._track(r) for r in rows if ids is None or r["id"] in ids]
+
+    def rename_track(self, tenant: str, user: str, tid: str, title: str) -> dict[str, Any]:
+        self.get_track(tenant, user, tid)
+        with self._connect() as db:
+            db.execute(
+                "UPDATE tracks SET title = ?, updated_at = ? WHERE id = ?", (title, now(), tid)
+            )
+        return self.get_track(tenant, user, tid)
+
+    def delete_track(self, tenant: str, user: str, tid: str) -> dict[str, Any]:
+        gone = self.get_track(tenant, user, tid)
+        with self._connect() as db:
+            db.execute("DELETE FROM tracks WHERE id = ?", (tid,))
         return gone

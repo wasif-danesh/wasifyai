@@ -114,8 +114,8 @@ export const GROUPS: Group[] = [
     label: "Music",
     icon: Music,
     items: [
-      { label: "Create", icon: Sparkles, soon: true },
-      { label: "Your music", icon: Library, soon: true },
+      { label: "Create", icon: Sparkles, route: "music" },
+      { label: "Your music", icon: Library, route: "tracks" },
       { label: "Lyrics", icon: FileText, soon: true },
     ],
   },
@@ -126,6 +126,7 @@ export function groupOf(route: Route): GroupId | null {
   if (route === "notebook" || route === "notebooks") return "notebook";
   if (route === "create" || route === "edit" || route === "library") return "images";
   if (route === "speak" || route === "transcribe" || route === "voices") return "voice";
+  if (route === "music" || route === "tracks") return "music";
   return null;
 }
 

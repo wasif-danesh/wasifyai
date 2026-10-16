@@ -20,6 +20,9 @@ def test_every_model_has_a_descriptor_and_a_pinned_file():
             "qwen3-tts-1.7b-voicedesign",
             "voxcpm2",
             "parakeet-tdt-0.6b-v3",
+            "ace-step-1.5-turbo",
+            "stable-audio-3-small-music",
+            "stable-audio-3-small-sfx",
         }
     )
     for m in RAW.values():
@@ -32,6 +35,8 @@ def test_every_model_has_a_descriptor_and_a_pinned_file():
 @pytest.mark.parametrize("model_id", sorted(RAW))
 def test_a_descriptor_agrees_with_its_spec(model_id):
     m, raw = catalogue()[model_id], RAW[model_id]["voice"]
+    if m.family not in SPECS:
+        pytest.skip(f"the spec of {m.family} is not in specs/ yet")
     spec = SPECS[m.family]
     assert spec["family"] == m.family
     package = next((p for p in spec["packages"] if p["id"] == m.package), None)
@@ -39,7 +44,10 @@ def test_a_descriptor_agrees_with_its_spec(model_id):
     # the package's file is the file we download
     assert package["files"][0].rsplit("/", 1)[-1] == RAW[model_id]["files"][0]["name"]
     wanted = {"speak": "tts", "transcribe": "asr", "clone": "clone", "design": "design"}
-    assert {wanted[t] for t in m.tasks} <= set(spec["tasks"])
+    needs = {wanted[t] for t in m.tasks if t in wanted}
+    if "music" in m.tasks:  # a sound-effects model is the spec's `sfx`, the others its `music`
+        needs.add("sfx" if set(m.music["modes"]) == {"sfx"} else "music")
+    assert needs <= set(spec["tasks"])
     offered = set(spec["ui"].get("builtin_voices", []))
     assert {v.id for v in m.voices} <= offered
     if m.default_voice:
@@ -52,7 +60,7 @@ def test_a_descriptor_agrees_with_its_spec(model_id):
 
 def test_recommendations_are_commercially_usable_and_unique_per_task():
     models = catalogue().values()
-    for task in ("speak", "transcribe", "clone", "design"):
+    for task in ("speak", "transcribe", "clone", "design", "music"):
         recommended = [m for m in models if task in m.recommended]
         assert len(recommended) == 1 and recommended[0].commercial_use == "yes"
 

@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # pyright: reportTypedDictNotRequiredAccess=false
-"""The Speak graph (ADR-0066, stages V1 and V2): one run makes one speech, in a built-in voice, in a
-voice described in words, or in a voice cloned from a recording the person saved.
+"""The audio graph (ADR-0066, stages V1 to V3): one run makes one speech (in a built-in voice, in a
+voice described in words, or in a voice cloned from a recording the person saved) or one piece of
+music (a song or a sound effect).
 
     check_request -> speak -> finalise
         |
@@ -24,6 +25,7 @@ from wasifyai_platform_sdk import (
     VoiceRequestError,
     check_clone,
     check_design,
+    check_music,
     check_speak,
     require_context,
 )
@@ -35,6 +37,7 @@ log = logging.getLogger(__name__)
 
 Status = Literal["working", "done", "refused"]
 SPEECH_CREATED = "voice.speech"
+MUSIC_CREATED = "voice.track"
 
 
 class SpeakState(TypedDict, total=False):
@@ -44,6 +47,15 @@ class SpeakState(TypedDict, total=False):
     voice: str
     options: dict[str, Any]
     saved_voice: str  # the id of a saved voice (described or cloned); `voice` is for built-in ones
+    # music (`task: "music"`)
+    task: str  # "speak" (the default) or "music"
+    music_mode: str  # song | sfx
+    lyrics: str
+    instrumental: bool
+    duration: float
+    seed: int
+    title: str
+    track_id: str
     # resolved
     mode: str  # speak | design | clone
     description: str
@@ -59,6 +71,13 @@ class SpeakState(TypedDict, total=False):
     elapsed_s: float
     status: Status
     refusal: dict[str, str]
+
+
+def _title(description: str) -> str:
+    """A name for a new track: the first words of what it was asked to be."""
+    words = description.split()
+    text = " ".join(words[:6])
+    return (text[:60].rstrip(" ,.;") or "Untitled").capitalize()
 
 
 def build_speak(caps: Capabilities, checkpointer: Any):
@@ -185,10 +204,98 @@ def build_speak(caps: Capabilities, checkpointer: Any):
             "status": "done",
         }  # fmt: skip
 
+    # ---- music ---------------------------------------------------------------------------
+
+    async def check_music_request(state: SpeakState) -> SpeakState:
+        get_stream_writer()(
+            {"type": "node", "node": "check_request", "status": "started", "label": "Checking"}
+        )
+        eng = engine()
+        try:
+            model = eng.resolve("music", state.get("model") or None)
+        except VoiceEngineError as e:
+            raise RunError(e.code, e.message) from None
+        try:
+            req = check_music(
+                model, state.get("music_mode") or "song", state.get("text", ""),
+                state.get("lyrics"), bool(state.get("instrumental")), state.get("duration"),
+                state.get("options"), state.get("seed"),
+            )  # fmt: skip
+        except VoiceRequestError as e:
+            return refuse_with(e.code, e.message)
+        out: SpeakState = {
+            "model_id": model.id, "music_mode": req.mode, "text": req.description,
+            "lyrics": req.lyrics, "instrumental": req.instrumental, "duration": req.duration,
+            "options": req.options, "status": "working",
+        }  # fmt: skip
+        if req.seed is not None:
+            out["seed"] = req.seed
+        return out
+
+    def after_music_check(state: SpeakState) -> str:
+        return "refuse" if state.get("status") == "refused" else "make_music"
+
+    async def make_music(state: SpeakState) -> SpeakState:
+        eng = engine()
+        get_stream_writer()(
+            {"type": "node", "node": "make_music", "status": "started", "label": "Making the music"}
+        )
+        model = eng.resolve("music", state["model_id"])
+        req = check_music(
+            model, state["music_mode"], state["text"], state.get("lyrics"),
+            bool(state.get("instrumental")), state.get("duration"), state.get("options"),
+            state.get("seed"),
+        )  # fmt: skip
+        try:
+            result = await eng.music(model, req)
+        except VoiceEngineError as e:
+            raise RunError(
+                e.code, e.message, retryable=e.code in ("busy", "engine_stopped")
+            ) from None
+        assert caps.storage is not None, "storage is required"
+        track_id = new_id()
+        key = f"music/{track_id}.wav"
+        await caps.storage.put(key, result.wav, "audio/wav")
+        ctx = require_context()
+        title = (state.get("title") or "").strip()[:120] or _title(req.description)
+        store_for(app_state).add_track(
+            ctx.tenant_id, ctx.user_id, title=title, mode=req.mode, description=req.description,
+            lyrics=req.lyrics, instrumental=req.instrumental, model_id=model.id,
+            options=req.options, seed=result.seed, seconds=round(result.seconds, 2),
+            sample_rate=result.sample_rate, audio_key=key, load_s=round(result.load_s, 2),
+            elapsed_s=round(result.elapsed_s, 2), track_id=track_id,
+        )  # fmt: skip
+        await caps.index_creation("track", track_id, f"{title}. {req.description}. {req.lyrics}")
+        await caps.record_usage(
+            MUSIC_CREATED, 1, "tracks", track_id=track_id, model=model.id, mode=req.mode,
+            seconds=round(result.seconds, 2),
+        )  # fmt: skip
+        return {
+            "track_id": track_id, "audio_url": await caps.storage.url(key), "title": title,
+            "seconds": round(result.seconds, 2), "sample_rate": result.sample_rate,
+            "seed": result.seed or 0, "load_s": round(result.load_s, 2),
+            "elapsed_s": round(result.elapsed_s, 2), "status": "done",
+        }  # fmt: skip
+
+    def route(state: SpeakState) -> str:
+        return "check_music" if state.get("task") == "music" else "check_request"
+
     g = StateGraph(SpeakState)
-    for name, fn in [("check_request", check_request), ("refuse", refuse), ("speak", speak)]:
+    for name, fn in [
+        ("check_request", check_request),
+        ("check_music", check_music_request),
+        ("refuse", refuse),
+        ("speak", speak),
+        ("make_music", make_music),
+    ]:
         g.add_node(name, cast(Any, fn))
-    g.add_edge(START, "check_request")
+    g.add_conditional_edges(
+        START, route, {"check_music": "check_music", "check_request": "check_request"}
+    )
+    g.add_conditional_edges(
+        "check_music", after_music_check, {"refuse": "refuse", "make_music": "make_music"}
+    )
+    g.add_edge("make_music", END)
     g.add_conditional_edges("check_request", after_check, {"refuse": "refuse", "speak": "speak"})
     g.add_edge("refuse", END)
     g.add_edge("speak", END)

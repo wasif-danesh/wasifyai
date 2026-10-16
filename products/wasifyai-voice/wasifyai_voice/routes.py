@@ -130,6 +130,98 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         await deps.unindex(identity, PRODUCT_ID, sid)
         return Response(status_code=204)
 
+    # ---- tracks (music) --------------------------------------------------------------------
+
+    async def track_out(t: dict[str, Any], identity: Identity) -> dict[str, Any]:
+        assert deps.storage is not None, "object storage is not configured"
+        with deps.acting_as(identity, PRODUCT_ID):
+            url = await deps.storage.url(t["audio_key"])
+        return {k: v for k, v in t.items() if k not in ("tenant_id", "user_id", "audio_key")} | {
+            "audio_url": url
+        }
+
+    async def reindex_track(identity: Identity, t: dict[str, Any]) -> None:
+        index = getattr(deps.state, "creation_index", None)
+        if index is None:
+            return
+        try:
+            text = search_text(t["title"], t["description"], t["lyrics"][:TRANSCRIPT_INDEX_CHARS])
+            await index.index(
+                identity.tenant_id, PRODUCT_ID, identity.user_id, "track", t["id"], text
+            )
+        except Exception:
+            log.warning("the track could not be added to search", exc_info=True)
+
+    @router.get("/tracks")
+    async def list_tracks(
+        ids: str | None = Query(None, max_length=2000),
+        limit: int = Query(100, ge=1, le=500),
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        wanted = [i for i in (ids or "").split(",") if i] or None
+        rows = await asyncio.to_thread(
+            vstore().list_tracks, identity.tenant_id, identity.user_id, wanted, limit
+        )
+        return {"items": [await track_out(t, identity) for t in rows]}
+
+    @router.get("/tracks/{tid}")
+    async def get_track(tid: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        try:
+            t = await asyncio.to_thread(
+                vstore().get_track, identity.tenant_id, identity.user_id, tid
+            )
+        except NotFound:
+            raise HTTPException(404, "track not found") from None
+        return await track_out(t, identity)
+
+    @router.get("/tracks/{tid}/download")
+    async def download_track(tid: str, identity: Identity = Depends(deps.identity)) -> Response:
+        assert deps.storage is not None
+        try:
+            t = await asyncio.to_thread(
+                vstore().get_track, identity.tenant_id, identity.user_id, tid
+            )
+            with deps.acting_as(identity, PRODUCT_ID):
+                data = await deps.storage.get(t["audio_key"])
+        except (NotFound, FileNotFoundError):
+            raise HTTPException(404, "track not found") from None
+        name = export.file_name(t["title"], "wav")
+        return Response(
+            data, media_type="audio/wav",
+            headers={"Content-Disposition": f'attachment; filename="{name}"',
+                     "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+        )  # fmt: skip
+
+    @router.patch("/tracks/{tid}")
+    async def rename_track(
+        tid: str, body: Title, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        try:
+            t = await asyncio.to_thread(
+                vstore().rename_track, identity.tenant_id, identity.user_id, tid, body.title.strip()
+            )
+        except NotFound:
+            raise HTTPException(404, "track not found") from None
+        await reindex_track(identity, t)
+        return await track_out(t, identity)
+
+    @router.delete("/tracks/{tid}", status_code=204)
+    async def delete_track(tid: str, identity: Identity = Depends(deps.identity)) -> Response:
+        assert deps.storage is not None
+        try:
+            t = await asyncio.to_thread(
+                vstore().delete_track, identity.tenant_id, identity.user_id, tid
+            )
+        except NotFound:
+            raise HTTPException(404, "track not found") from None
+        with deps.acting_as(identity, PRODUCT_ID):
+            try:
+                await deps.storage.delete(t["audio_key"])
+            except FileNotFoundError:
+                pass
+        await deps.unindex(identity, PRODUCT_ID, tid)
+        return Response(status_code=204)
+
     # ---- saved voices ----------------------------------------------------------------------
 
     async def voice_out(v: dict[str, Any], identity: Identity) -> dict[str, Any]:

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ParsedEvent } from "./sse";
 import type { Transport } from "./transport";
-import { createVoiceApi, makeSpeech } from "./voice";
+import { createVoiceApi, makeSpeech, makeTrack } from "./voice";
 
 const ev = (event: string, data: Record<string, unknown>): ParsedEvent =>
   ({ event, data: { run_id: "r1", seq: 1, ...data } }) as ParsedEvent;
@@ -151,5 +151,63 @@ describe("saved voices", () => {
     ]);
     await api.voices("clone");
     expect(calls[2]?.path).toBe("/products/wasifyai-voice/voices?kind=clone");
+  });
+});
+
+describe("music", () => {
+  it("sends only what was chosen, with the music task", async () => {
+    const r = runs([
+      ev("done", {
+        outputs: { status: "done", track_id: "t1", title: "Summer", seconds: 30, audio_url: "u" },
+      }),
+    ]);
+    const out = await makeTrack(
+      r,
+      {
+        description: "pop, upbeat",
+        model: "m",
+        lyrics: "la la",
+        duration: 45,
+        seed: 3,
+        instrumental: false,
+      },
+      new AbortController().signal,
+    );
+    expect(r.seen.input).toEqual({
+      task: "music",
+      text: "pop, upbeat",
+      model: "m",
+      lyrics: "la la",
+      duration: 45,
+      seed: 3,
+    });
+    expect(out).toEqual({
+      ok: true,
+      track: { id: "t1", title: "Summer", seconds: 30, audio_url: "u" },
+    });
+    const refused = await makeTrack(
+      runs([
+        ev("done", {
+          outputs: {
+            status: "refused",
+            refusal: { code: "no_lyrics", message: "No lyrics here." },
+          },
+        }),
+      ]),
+      { description: "calm", mode: "sfx", lyrics: "words" },
+      new AbortController().signal,
+    );
+    expect(refused).toEqual({ ok: false, code: "no_lyrics", message: "No lyrics here." });
+  });
+
+  it("lists, renames, deletes and downloads tracks", async () => {
+    const { t, calls } = transport(() => jsonRes({ items: [{ id: "t1" }] }));
+    const api = createVoiceApi(t);
+    expect((await api.tracks()).map((x) => x.id)).toEqual(["t1"]);
+    await api.renameTrack("t1", "Winter");
+    expect(calls[1]?.path).toBe("/products/wasifyai-voice/tracks/t1");
+    expect(calls[1]?.init?.body).toBe(JSON.stringify({ title: "Winter" }));
+    await api.removeTrack("t1");
+    expect(calls[2]?.init?.method).toBe("DELETE");
   });
 });

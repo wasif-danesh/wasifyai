@@ -34,6 +34,16 @@ export type VoiceOption = {
 
 export type VoiceInfo = { id: string; label: string; language: string; gender: string };
 
+export type MusicMode = "song" | "sfx";
+
+/** What a music model offers in one mode: whether it sings lyrics, whether it can leave the singing
+ * out, and the lengths it makes, as [shortest, usual, longest] seconds. */
+export type MusicModeRules = {
+  lyrics?: "optional" | "required" | "unused";
+  instrumental?: "toggle" | "always" | "never";
+  duration: [number, number, number];
+};
+
 export type VoiceModelInfo = {
   id: string;
   title: string;
@@ -56,6 +66,7 @@ export type VoiceModelInfo = {
   voices: VoiceInfo[];
   default_voice: string | null;
   options: VoiceOption[];
+  music: { modes?: Partial<Record<MusicMode, MusicModeRules>> };
   state: ModelState;
   files_ready: boolean;
   runtime_ready: boolean;
@@ -108,6 +119,25 @@ export type SavedVoice = {
   consent: { basis?: ConsentBasis; statement?: string; accepted_at?: string };
   created_at: string;
   updated_at: string;
+};
+
+export type Track = {
+  id: string;
+  title: string;
+  mode: MusicMode;
+  description: string;
+  lyrics: string;
+  instrumental: boolean;
+  model_id: string;
+  options: Record<string, unknown>;
+  seed: number | null;
+  seconds: number;
+  sample_rate: number;
+  load_s: number;
+  elapsed_s: number;
+  created_at: string;
+  updated_at: string;
+  audio_url: string;
 };
 
 export type Speech = {
@@ -190,6 +220,22 @@ export function createVoiceApi(transport: Transport) {
     /** The WAV as bytes, for saving (the audio link in `Speech` is for playing). */
     async downloadSpeech(id: string): Promise<Blob> {
       const res = await request(`${base}/speeches/${encodeURIComponent(id)}/download`);
+      if (!res.ok) throw new HttpError(res.status, await errorMessage(res));
+      return res.blob();
+    },
+
+    tracks: async (limit = 100) =>
+      (await json<{ items: Track[] }>(`${base}/tracks?limit=${limit}`)).items,
+    renameTrack: (id: string, title: string) =>
+      json<Track>(`${base}/tracks/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ title }),
+      }),
+    removeTrack: (id: string) =>
+      none(`${base}/tracks/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    async downloadTrack(id: string): Promise<Blob> {
+      const res = await request(`${base}/tracks/${encodeURIComponent(id)}/download`);
       if (!res.ok) throw new HttpError(res.status, await errorMessage(res));
       return res.blob();
     },
@@ -308,6 +354,84 @@ export async function makeSpeech(
             seconds: Number(out.seconds ?? 0),
             audio_url: String(out.audio_url ?? ""),
             sample_rate: Number(out.sample_rate ?? 0),
+          },
+        };
+      }
+    }
+  });
+  return result;
+}
+
+export type MusicRequest = {
+  description: string;
+  model?: string;
+  mode?: MusicMode;
+  lyrics?: string;
+  instrumental?: boolean;
+  /** seconds; the model's usual length when left out */
+  duration?: number;
+  seed?: number;
+  title?: string;
+  /** the model's own options (its descriptor lists them) */
+  options?: Record<string, unknown>;
+};
+
+export type MusicResult =
+  | { ok: true; track: Pick<Track, "id" | "title" | "seconds" | "audio_url"> }
+  | { ok: false; code: string; message: string };
+
+/** Make one piece of music and follow the run to its end. It can take minutes; the track is saved by
+ * the engine, so the caller reads the list again afterwards. */
+export async function makeTrack(
+  runs: {
+    startRun(p: string, input: object, s: AbortSignal, on: (e: ParsedEvent) => void): Promise<void>;
+  },
+  request: MusicRequest,
+  signal: AbortSignal,
+  onStep?: (label: string) => void,
+): Promise<MusicResult> {
+  let result: MusicResult = {
+    ok: false,
+    code: "lost",
+    message:
+      "We lost the connection while it was being made. It may still finish: look in the list.",
+  };
+  const input: Record<string, unknown> = { task: "music", text: request.description };
+  if (request.model) input.model = request.model;
+  if (request.mode) input.music_mode = request.mode;
+  if (request.lyrics?.trim()) input.lyrics = request.lyrics;
+  if (request.instrumental) input.instrumental = true;
+  if (request.duration !== undefined) input.duration = request.duration;
+  if (request.seed !== undefined) input.seed = request.seed;
+  if (request.title?.trim()) input.title = request.title;
+  if (request.options && Object.keys(request.options).length) input.options = request.options;
+  await runs.startRun(VOICE_PRODUCT, input, signal, (e) => {
+    const data = e.data as unknown as Record<string, unknown>;
+    if (e.event === "node" && typeof data.label === "string") onStep?.(data.label);
+    if (e.event === "error") {
+      result = {
+        ok: false,
+        code: String(data.code ?? "failed"),
+        message: String(data.message ?? "Something went wrong."),
+      };
+    }
+    if (e.event === "done") {
+      const out = (data.outputs as Record<string, unknown>) ?? {};
+      if (out.status === "refused") {
+        const refusal = (out.refusal as Record<string, string>) ?? {};
+        result = {
+          ok: false,
+          code: refusal.code ?? "refused",
+          message: refusal.message ?? "That could not be made.",
+        };
+      } else if (typeof out.track_id === "string") {
+        result = {
+          ok: true,
+          track: {
+            id: out.track_id,
+            title: String(out.title ?? ""),
+            seconds: Number(out.seconds ?? 0),
+            audio_url: String(out.audio_url ?? ""),
           },
         };
       }

@@ -238,3 +238,76 @@ async def test_another_persons_saved_voice_is_not_found(tmp_path, ctx):
     )
     final, _ = await rig.run(text="Hi", saved_voice=other["id"])
     assert final["refusal"]["code"] == "unknown_voice"
+
+
+async def test_a_song_is_made_kept_titled_indexed_and_counted(tmp_path, ctx):
+    rig = Rig(tmp_path)
+    final, events = await rig.run(
+        task="music",
+        text="Pop, upbeat, female vocals, summer",
+        lyrics="la la la",
+        duration=45,
+        seed=11,
+    )
+    assert final["status"] == "done" and final["title"] == "Pop, upbeat, female vocals, summer"
+    model_id, req = rig.engine.made[0]
+    assert model_id == "ace-step-1.5-turbo" and (req.mode, req.duration, req.seed) == (
+        "song",
+        45.0,
+        11,
+    )
+    assert req.lyrics == "la la la" and not req.instrumental
+    saved = store_for(rig.state).get_track("t1", "u1", final["track_id"])
+    assert saved["seed"] == 11 and saved["audio_key"] == f"music/{final['track_id']}.wav"
+    assert rig.indexed[-1][0] == "track" and "la la la" in rig.indexed[-1][2]
+    assert [e["node"] for e in events if e["type"] == "node"] == ["check_request", "make_music"]
+    assert [(u.kind, u.unit) for u in rig.usage.events][-1] == ("voice.track", "tracks")
+    key = object_key("t1", "wasifyai-voice", "u1", saved["audio_key"])
+    assert await rig.files.exists(key)
+
+
+async def test_the_named_music_model_and_mode_are_used(tmp_path, ctx):
+    rig = Rig(tmp_path)
+    await rig.run(
+        task="music", text="rain on a tin roof", music_mode="sfx", model="stable-audio-3-small-sfx"
+    )
+    model_id, req = rig.engine.made[0]
+    assert model_id == "stable-audio-3-small-sfx" and req.mode == "sfx" and req.duration == 8.0
+
+
+@pytest.mark.parametrize(
+    "graph_input, code",
+    [
+        ({"text": "po", "lyrics": "x"}, "description_too_short"),
+        (
+            {"text": "a calm piece", "model": "stable-audio-3-small-music", "lyrics": "words"},
+            "no_lyrics",
+        ),
+        ({"text": "a calm piece", "music_mode": "sfx"}, "wrong_mode"),
+        (
+            {"text": "a calm piece", "lyrics": "words", "instrumental": True},
+            "lyrics_and_instrumental",
+        ),
+    ],
+)
+async def test_a_music_request_the_model_cannot_take_is_refused_before_it_is_loaded(
+    tmp_path, ctx, graph_input, code
+):
+    rig = Rig(tmp_path)
+    final, _ = await rig.run(task="music", **graph_input)
+    assert final["status"] == "refused" and final["refusal"]["code"] == code
+    assert rig.engine.made == [] and store_for(rig.state).list_tracks("t1", "u1") == []
+
+
+async def test_music_errors_end_the_run_with_a_code(tmp_path, ctx):
+    from wasifyai_platform_sdk import VoiceEngineError
+
+    rig = Rig(tmp_path, FakeEngine(set()))
+    with pytest.raises(RunError) as e:
+        await rig.run(task="music", text="a calm piece")
+    assert e.value.code == "model_missing"
+    rig2 = Rig(tmp_path / "b")
+    rig2.engine.fail_with = VoiceEngineError("out_of_memory", "No memory.")
+    with pytest.raises(RunError) as e:
+        await rig2.run(task="music", text="a calm piece")
+    assert e.value.code == "out_of_memory"

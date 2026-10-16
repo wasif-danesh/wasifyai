@@ -88,3 +88,5 @@ export {
 export { COMMERCIAL_TEXT, STATE_TEXT, clock, modelOption, pickModel } from "./voice/format";
 export { useVoiceModels } from "./voice/use-voice-models";
 export { CONSENT_TEXT, VoicesWorkspace, type VoicesWorkspaceProps } from "./voice/VoicesWorkspace";
+export { MusicWorkspace, type MusicWorkspaceProps } from "./voice/MusicWorkspace";
+export { TrackList } from "./voice/TrackList";

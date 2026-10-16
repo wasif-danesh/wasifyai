@@ -140,4 +140,9 @@ deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's
   before sending and never relies on the server's status codes (it answers user errors with 500); (e) the Metal
   backend is "for portability and testing" by the engine's own warning, so each family is marked per platform from a
   measurement; (f) a test must show each design path changes the audio.
+- **V3 (2026-10-16, `docs/phase2-voice-plan.md`):** a music descriptor states per mode what the form asks for
+  (lyrics, leaving the singing out, lengths) and how the runtime takes each part of a request (the duration as a
+  request field or an option; the option that carries lyrics), because the families differ; a request a model
+  cannot take is refused in words. The ComfyUI adapter for the same list, and clip editing, are the next music
+  steps (V3b).
 

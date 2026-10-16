@@ -14,12 +14,14 @@ it ignores (docs/spikes/voice-v0.md), so every request is validated against the 
 (`wasifyai_platform_sdk.voice_models`) before it is sent, and nothing here trusts a status code."""
 
 import asyncio
+import base64
 import contextlib
 import hashlib
 import json
 import logging
 import os
 import platform
+import secrets
 import shutil
 import socket
 import sys
@@ -33,6 +35,8 @@ from typing import Any
 
 import httpx
 from wasifyai_platform_sdk import (
+    MusicRequest,
+    MusicResult,
     SpeechResult,
     TranscriptResult,
     TranscriptSegment,
@@ -483,9 +487,11 @@ class AudioServer:
         await self.stop()
         await self._http.aclose()
 
-    async def post(self, path: str, **kw: Any) -> httpx.Response:
+    async def post(
+        self, path: str, limit_s: float = REQUEST_TIMEOUT_S, **kw: Any
+    ) -> httpx.Response:
         assert self._url, "ensure() first"
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_S) as http:
+        async with httpx.AsyncClient(timeout=limit_s) as http:
             return await http.post(f"{self._url}{path}", **kw)
 
 
@@ -677,6 +683,40 @@ class AudioEngine:
             body["options"] = options
         return await self._synthesize(model, body, None)
 
+    async def music(self, model: VoiceModel, req: MusicRequest) -> MusicResult:
+        """Make music. The shape of the request is the descriptor's (`music.request`): where the
+        duration goes, which option carries the lyrics, what an instrumental is called. The
+        runtime's default seed is fixed, so one is chosen here when none was asked for."""
+        if "music" not in model.tasks:
+            raise VoiceEngineError("wrong_task", f"{model.title} does not make music.")
+        rules = model.music["request"]
+        options = dict(req.options)
+        request: dict[str, Any] = {"text": req.description}
+        if rules["duration"] == "top":
+            request["duration_seconds"] = req.duration
+        else:
+            options[rules["duration"].split(":", 1)[1]] = req.duration
+        lyrics = req.lyrics
+        if req.instrumental and rules.get("instrumental_lyrics"):
+            lyrics = rules["instrumental_lyrics"]
+        if lyrics and rules.get("lyrics_option"):
+            options[rules["lyrics_option"]] = lyrics
+        seed = req.seed if req.seed is not None else secrets.randbelow(2**31 - 1)
+        request["seed"] = str(seed)
+        if options:
+            request["options"] = options
+        t0 = time.monotonic()
+        wait = max(300.0, min(7200.0, req.duration * 40))  # Metal runs music far slower than CUDA
+        r, load_s = await self._call(
+            model, "/v1/tasks/run", limit_s=wait, json={"model": model.id, "request": request}
+        )
+        wav = _audio_of_task(r.headers.get("content-type", ""), r.content)
+        seconds = _wav_seconds(wav)
+        if seconds <= 0:
+            raise VoiceEngineError("engine_failed", "The music model returned no audio.")
+        rate = _wav_rate(wav) or model.sample_rate
+        return MusicResult(wav, rate, seconds, model.id, seed, load_s, time.monotonic() - t0)
+
     async def transcribe(
         self, model: VoiceModel, wav: bytes, options: dict[str, Any]
     ) -> TranscriptResult:
@@ -701,6 +741,40 @@ class AudioEngine:
 
     async def stop(self) -> bool:
         return await self.server.stop()
+
+
+def _audio_candidates(node: Any):
+    if isinstance(node, dict):
+        for key in ("audio", "wav", "data", "b64_json", "audio_base64"):
+            value = node.get(key)
+            if isinstance(value, str):
+                yield value.split(",", 1)[-1]
+        for value in node.values():
+            if isinstance(value, dict | list):
+                yield from _audio_candidates(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _audio_candidates(item)
+
+
+def _audio_of_task(content_type: str, data: bytes) -> bytes:
+    """WAV bytes from `/v1/tasks/run`: raw audio, or JSON that carries it as base64."""
+    if data[:4] == b"RIFF" or content_type.startswith("audio/"):
+        return data
+    try:
+        payload = json.loads(data.decode("utf-8"))
+    except ValueError:
+        raise VoiceEngineError(
+            "engine_failed", "The music model's answer could not be read."
+        ) from None
+    for candidate in _audio_candidates(payload):
+        try:
+            decoded = base64.b64decode(candidate, validate=False)
+        except ValueError:
+            continue
+        if decoded[:4] == b"RIFF":
+            return decoded
+    raise VoiceEngineError("engine_failed", "The music model returned no audio.")
 
 
 def _wav_rate(wav: bytes) -> int:

@@ -8,6 +8,7 @@ from typing import Any
 
 import yaml
 from wasifyai_platform_sdk import (
+    MusicResult,
     SpeechResult,
     TranscriptResult,
     TranscriptSegment,
@@ -47,6 +48,7 @@ class FakeEngine:
         self.spoken: list[tuple[str, str, str | None, dict[str, Any]]] = []
         self.transcribed: list[tuple[str, int, dict[str, Any]]] = []
         self.designed: list[tuple[str, str, str, dict[str, Any]]] = []
+        self.made: list[tuple[str, Any]] = []
         self.cloned: list[tuple[str, str, str, str | None, dict[str, Any]]] = []
         self.fail_with: VoiceEngineError | None = None
 
@@ -83,6 +85,12 @@ class FakeEngine:
         assert Path(reference).is_file(), "the runtime reads the recording from a file"
         self.cloned.append((model.id, text, Path(reference).name, reference_text, dict(options)))
         return SpeechResult(wav(1.0), model.sample_rate, 1.0, model.id, None, 0.3, 0.7)
+
+    async def music(self, model, request) -> MusicResult:
+        if self.fail_with:
+            raise self.fail_with
+        self.made.append((model.id, request))
+        return MusicResult(wav(2.0), model.sample_rate, 2.0, model.id, request.seed or 99, 1.0, 3.0)
 
     async def transcribe(self, model, data, options) -> TranscriptResult:
         if self.fail_with:

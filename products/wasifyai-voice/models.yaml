@@ -3,7 +3,7 @@
 # after a click that has shown its name, size, source and licence) plus a `voice:` block, the model's descriptor.
 # Figures under `measured` are from the owner's Mac (docs/spikes/voice-v0.md); voices, languages and options agree
 # with specs/ (a test checks it). `commercial_use` is read from the model card (`licence_evidence`); only `yes` can
-# be recommended. `clone` and `design` say how a model takes a reference recording or a voice description. The URLs name a commit of the repository, so they cannot change under the pin.
+# be recommended. `clone`, `design` and `music` say how a model takes a recording, a voice description, or a music request. The URLs name a commit of the repository, so they cannot change under the pin.
 models:
 - id: kokoro-82m
   title: Kokoro 82M
@@ -285,6 +285,129 @@ models:
     design:
       via: text_prefix
       max_chars: 300
+- id: ace-step-1.5-turbo
+  title: ACE-Step 1.5 Turbo
+  licence: MIT
+  source: https://huggingface.co/ACE-Step/Ace-Step1.5
+  note: Songs with singing from a style description and lyrics, or instrumentals, in 50+ languages, up to four minutes here.
+    About one and a half times faster than real time on an Apple M5 Pro.
+  approx_ram_gb: 4
+  files:
+  - folder: audio
+    name: ace-step-1.5-turbo-q8_0.gguf
+    url: https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5/ACE-Step1.5-GGUF/turbo/ace-step-1.5-turbo-q8_0.gguf
+    size: 6185460032
+    sha256: cd7bf272588f548d4a253f57483132ef0f8f54a549f26471b09caa72c654270b
+  voice:
+    engine: audiocpp
+    family: ace_step
+    package: ace_step_turbo_q8_0
+    server_task: gen
+    tasks:
+    - music
+    recommended:
+    - music
+    languages:
+    - multi
+    sample_rate: 48000
+    commercial_use: 'yes'
+    licence_evidence: https://huggingface.co/ACE-Step/Ace-Step1.5
+    reviewed: '2026-10-16'
+    measured:
+      platform: darwin-arm64
+      speed_x: 1.6
+      memory_gb: 3.1
+      load_s: 4.3
+    music:
+      modes:
+        song:
+          lyrics: optional
+          instrumental: toggle
+          duration:
+          - 5
+          - 30
+          - 240
+      request:
+        duration: top
+        lyrics_option: lyrics
+        instrumental_lyrics: '[Instrumental]'
+- id: stable-audio-3-small-music
+  title: Stable Audio 3 Small (music)
+  licence: Stability AI Community Licence
+  source: https://huggingface.co/stabilityai/stable-audio-3-small
+  note: Instrumental music and loops from a description, up to two minutes. Free for commercial use under a yearly revenue
+    limit; needs registration and a credit.
+  approx_ram_gb: 4
+  files:
+  - folder: audio
+    name: stable-audio-3-small-music-q8_0.gguf
+    url: https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5/Stable-Audio-3-Small-Music-GGUF/stable-audio-3-small-music-q8_0.gguf
+    size: 1683570752
+    sha256: 89bb22db5fa68ab8f1d90af0a9f88121977c945bdb99a57c96b1e88fa34bf1c8
+  voice:
+    engine: audiocpp
+    family: stable_audio
+    package: stable_audio_3_small_music_q8_0
+    server_task: gen
+    tasks:
+    - music
+    recommended: []
+    languages:
+    - en
+    sample_rate: 44100
+    commercial_use: conditional
+    licence_evidence: https://huggingface.co/stabilityai/stable-audio-3-small
+    reviewed: '2026-10-16'
+    measured:
+      platform: darwin-arm64
+    music:
+      modes:
+        song:
+          lyrics: unused
+          instrumental: always
+          duration:
+          - 1
+          - 30
+          - 120
+      request:
+        duration: top
+- id: stable-audio-3-small-sfx
+  title: Stable Audio 3 Small (sound effects)
+  licence: Stability AI Community Licence
+  source: https://huggingface.co/stabilityai/stable-audio-3-small
+  note: Sound effects and ambience from a description, up to two minutes. Same licence terms as the music model.
+  approx_ram_gb: 4
+  files:
+  - folder: audio
+    name: stable-audio-3-small-sfx-q8_0.gguf
+    url: https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5/Stable-Audio-3-Small-SFX-GGUF/stable-audio-3-small-sfx-q8_0.gguf
+    size: 1683570688
+    sha256: 5bb1ec653134e63dac46264e336ae198a2590195fc996fcd0605021215e9b26f
+  voice:
+    engine: audiocpp
+    family: stable_audio
+    package: stable_audio_3_small_sfx_q8_0
+    server_task: gen
+    tasks:
+    - music
+    recommended: []
+    languages:
+    - en
+    sample_rate: 44100
+    commercial_use: conditional
+    licence_evidence: https://huggingface.co/stabilityai/stable-audio-3-small
+    reviewed: '2026-10-16'
+    measured:
+      platform: darwin-arm64
+    music:
+      modes:
+        sfx:
+          duration:
+          - 1
+          - 8
+          - 120
+      request:
+        duration: top
 - id: parakeet-tdt-0.6b-v3
   title: Parakeet TDT 0.6B v3
   licence: CC-BY-4.0

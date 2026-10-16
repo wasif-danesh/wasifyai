@@ -53,6 +53,7 @@ class FakeEngine:
         self.transcribed: list[tuple[str, int, dict[str, Any]]] = []
         self.designed: list[tuple[str, str, str, dict[str, Any]]] = []
         self.made: list[tuple[str, Any]] = []
+        self.edited: list[tuple[str, Any, str]] = []
         self.cloned: list[tuple[str, str, str, str | None, dict[str, Any]]] = []
         self.fail_with: VoiceEngineError | None = None
 
@@ -95,6 +96,13 @@ class FakeEngine:
             raise self.fail_with
         self.made.append((model.id, request))
         return MusicResult(wav(2.0), model.sample_rate, 2.0, model.id, request.seed or 99, 1.0, 3.0)
+
+    async def music_edit(self, model, request, source) -> MusicResult:
+        if self.fail_with:
+            raise self.fail_with
+        assert _is_file(source), "the runtime reads the clip from a file"
+        self.edited.append((model.id, request, Path(source).name))
+        return MusicResult(wav(2.0), model.sample_rate, 2.0, model.id, request.seed or 77, 1.0, 3.0)
 
     async def transcribe(self, model, data, options) -> TranscriptResult:
         if self.fail_with:

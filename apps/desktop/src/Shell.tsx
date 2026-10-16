@@ -8,7 +8,7 @@ import { CreatePage } from "./pages/Create";
 import { HomePage } from "./pages/Home";
 import { LibraryPage } from "./pages/Library";
 import { ModelsPage } from "./pages/Models";
-import { MusicPage, TracksPage } from "./pages/Music";
+import { LyricsPage, MusicPage, TracksPage } from "./pages/Music";
 import { NotebookPage } from "./pages/Notebook";
 import { NotebooksPage } from "./pages/Notebooks";
 import { SettingsPage } from "./pages/Settings";
@@ -143,6 +143,7 @@ export function Shell() {
           {route === "voices" ? <VoicesPage go={go} /> : null}
           {route === "music" ? <MusicPage goModels={() => go("models")} /> : null}
           {route === "tracks" ? <TracksPage go={go} /> : null}
+          {route === "lyrics" ? <LyricsPage go={go} /> : null}
           {route === "models" ? <ModelsPage /> : null}
           {route === "settings" ? <SettingsPage /> : null}
         </main>

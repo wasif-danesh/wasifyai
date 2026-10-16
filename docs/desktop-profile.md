@@ -550,12 +550,15 @@ Music is another task of the same product and the same runtime, picked from the 
 | Descriptors | a `music` block: the modes a model makes (`song`, `sfx`), per mode whether it takes lyrics (`optional`, `required`, `unused`), whether it can leave the singing out (`toggle`, `always`, `never`) and its lengths as [shortest, usual, longest] seconds; and `request`, how the runtime takes the parts: the duration as a field of the request (`top`) or an option (`option:<name>`), the option that carries lyrics, what an instrumental is called (`[Instrumental]`). Catalogue: ACE-Step 1.5 Turbo (MIT, recommended), Stable Audio 3 Small music and sound effects (Stability Community Licence: **conditional**, never recommended) |
 | Checks | `check_music`: a description of 3 or more characters; lyrics for a model that does not sing, or with "no singing", or singing that is required but missing, are refused in words (never dropped); a length outside the model's range is brought into it |
 | Engine | `AudioEngine.music`: builds the request from the descriptor, chooses a random seed when none is given (the runtime's default is fixed, so every run would repeat), waits up to 40 s per second of music (at most two hours), reads the answer as raw audio or as JSON with base64 audio |
-| Product | the Speak graph with `task: "music"`; `/tracks` (list, get, download, rename, delete); `voice.db` table `tracks`; My creations search (kind `track`) |
-| Window | Music > Create (model list, Music or Sound effect when the model has both, description, lyrics only if it sings, "No singing" only if it can, length, seed, an estimate from the measured speed, elapsed time while it works, Cancel) and Your music (play, save as WAV, rename, delete) |
+| Product | the Speak graph with `task: "music"`, `music_edit` and `lyrics`; `/tracks` (list with `?favourites=`, get, download as WAV, MP3 or M4A, rename, favourite, delete), `/formats`; `voice.db` table `tracks` (schema 4: favourite, parent track, edit recipe); My creations search (kind `track`) |
+| Window | Music > Create (model list, Music or Sound effect when the model has both, description, lyrics only if it sings, "No singing" only if it can, length, seed, the model's own options such as BPM and key, 1 to 4 takes, an estimate from the measured speed, elapsed time while it works, Cancel), Your music (play, search, Favourites only, save as WAV / MP3 / M4A, rename, favourite, delete, "Make it again", "Another take", "Change it") and Lyrics (describe a song, get words written by the chat model, send them to Create) |
+| Edits | `music` descriptors list an `edit` block per model. ACE-Step: **repaint** a time range, **extend** past the end, **cover** in another style. Stable Audio: **inpaint** a masked range, **restyle**. `check_music_edit` refuses a part an action does not use; ranges are clamped and merged; the result is a new track that points at its parent, never an overwrite |
+| Assistant | the `make_music` tool (child run of the music product); the chat shows a player and opens the track in Your music |
+| Options | `bpm` and `keyscale` change ACE-Step's output and are sent; the runtime silently ignores anything it does not know (`language`, invented names), so every option is checked against the descriptor first |
 
-Not in V3: editing a clip (repaint, extend, cover, inpaint: the runtime has them for ACE-Step and Stable Audio), the
-ComfyUI ACE-Step workflow as a second engine for the same list, lyrics writing (`text.lyrics`), and a listening
-check of the quality.
+Not built: the ComfyUI ACE-Step workflow as a second engine for the same list, models beyond these (HeartMuLa and
+others), a watermark decision for generated audio, a song longer than 4 minutes, and a listening check of the
+quality (sung lyrics in order cannot be tested by machine).
 
 ## The self-test
 

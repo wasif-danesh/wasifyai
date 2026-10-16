@@ -93,8 +93,7 @@ not about a person's voice; each output was read back by Parakeet):
 
 Built 2026-10-16 (see "Music" in `docs/desktop-profile.md`). New models: ACE-Step 1.5 Turbo Q8_0 (6.19 GB, MIT,
 downloaded with the owner's yes and checked against Hugging Face's SHA-256), Stable Audio 3 Small music and sound
-effects (catalogued, **not downloaded or run**: the owner chose to skip them; their request shape follows the
-spec and the shared code, but it is untested against the real model).
+effects (catalogued here; downloaded and run in "V3 finish" below).
 
 **Tests.** SDK 52 (music rules and checks), engine 22 on the stand-in server (how the request is built for each
 family; raw and JSON answers; friendly failures), voice product 69 (music graph, `/tracks`, the store's upgrade
@@ -120,6 +119,32 @@ real-window self-test (the Music screen too).
   one and stores it with the track, which is also what makes "make it again" possible.
 - The server's spec files for ACE-Step and Stable Audio list no request options, so the request shape comes from
   our descriptor, not from the runtime.
-- Not done in V3: clip editing, the ComfyUI engine for music, lyrics writing, a longer-than-4-minute song, Stable
-  Audio's real run.
+- Not done in V3 (clip editing, lyrics writing and Stable Audio's real run were done in "V3 finish"): the ComfyUI
+  engine for music, a longer-than-4-minute song.
+
+## V3 finish: edits, lyrics, takes, favourites, formats, assistant, Stable Audio
+
+Built 2026-10-16 with the owner's yes for the Stable Audio downloads (3.4 GB: music and sound effects, through the
+app's own download route, sizes exact and SHA-256 checked by the download manager).
+
+**Real runs** (audio.cpp on Metal, M5 Pro):
+
+| Step | Result |
+|---|---|
+| Stable Audio 3 Small, 20 s clip | 7.5 s cold, 0.8 s warm (about 20 times real time); same seed gives identical audio |
+| Stable Audio sound effect, 6 s | 2.8 s |
+| ACE-Step edits | repaint 8 s, extend 13.7 s, cover 8.1 s |
+| Stable Audio edits | inpaint 3.5 s, restyle 1.0 s; unmasked audio stayed about 10 times closer to the source than masked audio |
+| Wrong action for a model | refused in words before anything loaded |
+| Lyrics through Qwen3 4B (the chat model) | 6.3 s; a 30 s song made from those lyrics |
+| ACE-Step options | `bpm` and `keyscale` change the output; `language` and invented options are silently ignored by the runtime, so the descriptor decides what is sent |
+
+**Tests.** SDK, engine (stand-in server records the last request, checks the audio file), voice product (graph
+edit/lyrics, store upgrade to version 4, routes), client 52, UI 114, desktop 44, web 280, Python 1259 passed;
+ruff 0.16.10 via `uv run`, pyright 0 errors, `make contracts`, `pnpm build`, the real-window self-test (Your music
+and Lyrics screens too). Search eval corpus: three more concepts for the kinds `track`, `voice` and `notebook`.
+
+**Still open.** A listening check by the owner (sung lyrics in order; whether a cloned voice sounds like its
+person); the Stable Audio licence card is gated, so its `conditional` rating rests on audio.cpp's summary; the
+ComfyUI ACE-Step engine (V3b); more music models; a watermark decision.
 

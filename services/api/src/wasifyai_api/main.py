@@ -262,6 +262,23 @@ def create_app(
             found = await image_store(db).get(tenant, user, item_id)
             return found.prompt if found else ""
 
+        async def describe_voice_item(tenant: str, user: str, item_id: str) -> str:
+            # the title of a track (or the words of a speech, a transcript or a voice's name)
+            from wasifyai_voice.runtime import store_for
+
+            store = store_for(app.state)
+            for get, field in (
+                (store.get_track, "title"),
+                (store.get_speech, "text"),
+                (store.get_transcript, "title"),
+                (store.get_voice, "name"),
+            ):
+                try:
+                    return str(get(tenant, user, item_id)[field])
+                except Exception:  # not this table
+                    continue
+            return ""
+
         async def describe_notebook(tenant: str, user: str, item_id: str) -> str:
             # the title of a notebook, so a search of My creations names it rather than its id
             from wasifyai_notebooks.runtime import runtime_for
@@ -286,7 +303,14 @@ def create_app(
         tool_host = ApiToolHost(
             lambda: app.state.runs,
             lambda: app.state.creation_index,
-            {"image": describe_image, "notebook": describe_notebook},
+            {
+                "image": describe_image,
+                "notebook": describe_notebook,
+                "track": describe_voice_item,
+                "speech": describe_voice_item,
+                "transcript": describe_voice_item,
+                "voice": describe_voice_item,
+            },
             search_notebooks,
         )
 

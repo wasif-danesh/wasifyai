@@ -52,8 +52,12 @@ def test_a_descriptor_agrees_with_its_spec(model_id):
     assert {v.id for v in m.voices} <= offered
     if m.default_voice:
         assert m.default_voice == spec["ui"]["default_voice"]
+    declared = {r["name"] for r in spec.get("options", {}).get("request", [])}
     for o in m.options:
-        declared = {r["name"] for r in spec.get("options", {}).get("request", [])}
+        if "options" not in spec:
+            # a spec with no option list (ACE-Step's): its options were found by running the
+            # runtime, which accepts and silently ignores unknown ones (docs/phase2-voice-plan.md)
+            continue
         assert o.name in declared, f"{o.name} is not an option of {m.family}"
     assert raw["languages"], "languages are declared"
 

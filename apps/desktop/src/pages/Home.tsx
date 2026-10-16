@@ -3,7 +3,7 @@
 import { Button, ChatScreen, Notice } from "@wasifyai/ui";
 import { Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { assistantApi, client } from "../api";
+import { assistantApi, client, voiceApi } from "../api";
 import { conversationsChanged } from "../conversations";
 import { images } from "../images";
 import { type Route, openChat, openNotebook } from "../router";
@@ -117,6 +117,7 @@ export function HomePage({
       runs={client}
       assistant={assistantApi}
       images={images}
+      tracks={(id) => voiceApi.track(id)}
       conversationId={conversationId}
       onConversation={(id) => {
         conversationsChanged();
@@ -129,6 +130,7 @@ export function HomePage({
       onOpenCreation={(kind, id) => {
         if (kind === "image") go("library");
         else if (kind === "notebook") openNotebook(id);
+        else if (kind === "track") go("tracks");
       }}
       title={conversationId ? title || "Chat" : undefined}
       actions={

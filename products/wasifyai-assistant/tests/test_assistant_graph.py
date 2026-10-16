@@ -170,6 +170,59 @@ async def test_notebook_search_reports_a_missing_search_model(tmp_path, ctx):
     assert state["status"] == "done"
 
 
+async def test_music_is_made_through_the_voice_product_and_the_answer_names_it(tmp_path, ctx):
+    host = FakeHost()
+    host.child_events = [
+        {"event": "node", "label": "Making the music"},
+        {"event": "done", "outputs": {"status": "done", "track_id": "tr-1", "title": "Summer pop",
+                                      "seconds": 30.0, "audio_url": "http://x"}},
+    ]  # fmt: skip
+    rig = Rig(
+        tmp_path,
+        [{"tool_calls": [{"name": "make_music", "arguments": {
+            "description": "upbeat pop", "lyrics": "la la la", "seconds": 500}}]},
+         {"text": "Here is your song."}],
+        host,
+    )  # fmt: skip
+    state, events = await rig.turn("make me a happy song")
+    assert host.runs == [
+        (
+            "wasifyai-voice",
+            {"task": "music", "text": "upbeat pop", "lyrics": "la la la", "duration": 120.0},
+        )
+    ]
+    result = next(e for e in events if e["type"] == "tool_result")
+    assert result["status"] == "ok" and result["output"]["track_id"] == "tr-1"
+    assert "Summer pop" in rig.model.chats[1]["messages"][-1]["content"]
+    assert state["reply"] == "Here is your song."
+
+
+async def test_music_that_was_refused_or_failed_is_told_in_words(tmp_path, ctx):
+    host = FakeHost()
+    host.child_events = [
+        {
+            "event": "done",
+            "outputs": {"status": "refused", "refusal": {"message": "Describe the music."}},
+        }
+    ]
+    call = {"tool_calls": [{"name": "make_music", "arguments": {"description": "x"}}]}
+    rig = Rig(tmp_path, [call, {"text": "Sorry."}], host)
+    _, events = await rig.turn("music")
+    result = next(e for e in events if e["type"] == "tool_result")
+    assert result["status"] == "refused" and result["output"] == {"message": "Describe the music."}
+    host2 = FakeHost()
+    host2.child_events = [{"event": "error", "message": "The speech runtime is not set up yet."}]
+    (tmp_path / "b").mkdir()
+    (tmp_path / "c").mkdir()
+    rig2 = Rig(tmp_path / "b", [call, {"text": "Sorry."}], host2)
+    _, events2 = await rig2.turn("music")
+    assert next(e for e in events2 if e["type"] == "tool_result")["status"] == "error"
+    empty = {"tool_calls": [{"name": "make_music", "arguments": {}}]}
+    rig3 = Rig(tmp_path / "c", [empty, {"text": "Sorry."}], FakeHost())
+    _, events3 = await rig3.turn("music")
+    assert next(e for e in events3 if e["type"] == "tool_result")["status"] == "error"
+
+
 async def test_an_unknown_tool_and_bad_arguments_do_not_break_the_turn(tmp_path, ctx):
     rig = Rig(
         tmp_path,

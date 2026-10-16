@@ -3,7 +3,9 @@
 import {
   type MusicMode,
   type MusicModeRules,
+  type MusicRequest,
   type ParsedEvent,
+  type Track,
   type VoiceApi,
   makeTrack,
 } from "@wasifyai/client";
@@ -12,6 +14,8 @@ import { Button } from "../components/button";
 import { Label } from "../components/label";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
+import { EditTrack } from "./EditTrack";
+import { LyricsWriter } from "./LyricsWriter";
 import { ModelPicker } from "./ModelPicker";
 import { OptionFields } from "./OptionFields";
 import { RuntimeCard } from "./RuntimeCard";
@@ -27,6 +31,10 @@ export type MusicWorkspaceProps = {
   onGetModel?: (id: string) => void;
   initialModel?: string | null;
   onModelChosen?: (id: string) => void;
+  /** lyrics written elsewhere (the Lyrics screen) */
+  initialLyrics?: string | null;
+  /** something to do with a track as the screen opens: it was chosen on Your music */
+  initialAction?: { kind: "edit" | "again" | "take"; trackId: string } | null;
 };
 
 const MODE_TEXT: Record<MusicMode, { label: string; ask: string; hint: string }> = {
@@ -53,15 +61,21 @@ export function MusicWorkspace({
   onGetModel,
   initialModel,
   onModelChosen,
+  initialLyrics,
+  initialAction,
 }: MusicWorkspaceProps) {
   const { models, runtime, error, loading, reload } = useVoiceModels(api, "music");
   const [modelId, setModelId] = useState<string | null>(initialModel ?? null);
   const [modeChoice, setModeChoice] = useState<MusicMode | null>(null);
   const [description, setDescription] = useState("");
-  const [lyrics, setLyrics] = useState("");
+  const [lyrics, setLyrics] = useState(initialLyrics ?? "");
   const [instrumental, setInstrumental] = useState(false);
   const [seconds, setSeconds] = useState<number | null>(null);
   const [seed, setSeed] = useState("");
+  const [takes, setTakes] = useState(1);
+  const [writing, setWriting] = useState(false);
+  const [editing, setEditing] = useState<Track | null>(null);
+  const [take, setTake] = useState<[number, number] | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [step, setStep] = useState<string | null>(null);
   const [waited, setWaited] = useState(0);
@@ -70,7 +84,9 @@ export function MusicWorkspace({
   const abort = useRef<AbortController | null>(null);
 
   const chosen = models.find((m) => m.id === modelId) ?? pickModel(models, "music", modelId);
-  const modes = Object.keys(chosen?.music.modes ?? {}) as MusicMode[];
+  const modes = (Object.keys(chosen?.music.modes ?? {}) as string[]).filter(
+    (m): m is MusicMode => m === "song" || m === "sfx",
+  ); // "edit" is not something to make: it changes a track (EditTrack)
   const mode: MusicMode | null =
     modeChoice && modes.includes(modeChoice) ? modeChoice : (modes[0] ?? null);
   const rules: MusicModeRules | null = (mode && chosen?.music.modes?.[mode]) || null;
@@ -82,6 +98,20 @@ export function MusicWorkspace({
   const ready = chosen?.state === "ready";
 
   useEffect(() => () => abort.current?.abort(), []);
+  // an action chosen on Your music runs once, when the models are known
+  const acted = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once, when the models have loaded
+  useEffect(() => {
+    if (!initialAction || acted.current || loading) return;
+    acted.current = true;
+    api
+      .track(initialAction.trackId)
+      .then((t) => {
+        if (initialAction.kind === "edit") setEditing(t);
+        else again(t, initialAction.kind === "again");
+      })
+      .catch(() => setProblem("That piece of music is no longer there."));
+  }, [loading]);
   useEffect(() => {
     if (!working) return;
     setWaited(0);
@@ -89,42 +119,88 @@ export function MusicWorkspace({
     return () => clearInterval(id);
   }, [working]);
 
-  async function make() {
-    if (!chosen || !mode || working) return;
+  /** Make `count` pieces from one request. With a seed, the takes use that seed and the ones after it;
+   * without, each gets its own. */
+  async function begin(request: MusicRequest, count: number) {
     setProblem(null);
     setStep("Starting");
     abort.current = new AbortController();
-    const options = Object.fromEntries(
-      Object.entries(values).filter(
-        ([k, v]) => v !== undefined && chosen.options.some((o) => o.name === k),
-      ),
-    );
     try {
-      const r = await makeTrack(
-        runs,
-        {
-          description,
-          model: chosen.id,
-          mode,
-          lyrics: sings && !instrumental ? lyrics : undefined,
-          instrumental: canSkipSinging && instrumental,
-          duration: length,
-          seed: seed.trim() === "" ? undefined : Number(seed),
-          options,
-        },
-        abort.current.signal,
-        setStep,
-      );
-      if (!r.ok) setProblem(r.message);
-      else setMade((n) => n + 1);
+      for (let i = 0; i < count; i++) {
+        setTake([i + 1, count]);
+        const seeded =
+          request.seed !== undefined ? { ...request, seed: request.seed + i } : request;
+        const r = await makeTrack(runs, seeded, abort.current.signal, setStep);
+        if (!r.ok) {
+          setProblem(r.message);
+          break;
+        }
+        setMade((n) => n + 1);
+      }
     } catch (e) {
       if (!abort.current.signal.aborted) {
         setProblem(e instanceof Error ? e.message : "That could not be made.");
       }
     } finally {
       setStep(null);
+      setTake(null);
       void reload();
     }
+  }
+
+  function make() {
+    if (!chosen || !mode || working) return;
+    const options = Object.fromEntries(
+      Object.entries(values).filter(
+        ([k, v]) => v !== undefined && v !== "" && chosen.options.some((o) => o.name === k),
+      ),
+    );
+    void begin(
+      {
+        description,
+        model: chosen.id,
+        mode,
+        lyrics: sings && !instrumental ? lyrics : undefined,
+        instrumental: canSkipSinging && instrumental,
+        duration: length,
+        seed: seed.trim() === "" ? undefined : Number(seed),
+        options,
+      },
+      takes,
+    );
+  }
+
+  /** Make a piece again from a track's own settings: the same seed gives the same music, a new one
+   * another take. The form shows what was used. */
+  function again(t: Track, sameSeed: boolean) {
+    if (working || t.mode === "edit") return;
+    const m = models.find((x) => x.id === t.model_id);
+    if (!m || m.state !== "ready") {
+      setProblem(`${m?.title ?? "That model"} is not ready: get it in Models first.`);
+      return;
+    }
+    setModelId(m.id);
+    setModeChoice(t.mode);
+    setDescription(t.description);
+    setLyrics(t.lyrics);
+    setInstrumental(t.instrumental);
+    setSeconds(t.seconds);
+    setSeed(sameSeed && t.seed !== null ? String(t.seed) : "");
+    setValues(t.options);
+    setEditing(null);
+    void begin(
+      {
+        description: t.description,
+        model: m.id,
+        mode: t.mode,
+        lyrics: t.lyrics || undefined,
+        instrumental: t.instrumental,
+        duration: t.seconds,
+        seed: sameSeed && t.seed !== null ? t.seed : undefined,
+        options: t.options,
+      },
+      1,
+    );
   }
 
   if (error) {
@@ -187,9 +263,34 @@ export function MusicWorkspace({
           </div>
           {sings && !instrumental ? (
             <div className="grid gap-2">
-              <Label htmlFor="music-lyrics">
-                Lyrics {rules?.lyrics === "required" ? "(needed)" : "(optional)"}
-              </Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="music-lyrics">
+                  Lyrics {rules?.lyrics === "required" ? "(needed)" : "(optional)"}
+                </Label>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="ms-auto"
+                  disabled={working}
+                  onClick={() => setWriting((w) => !w)}
+                >
+                  {writing ? "Close the writer" : "Write lyrics for me"}
+                </Button>
+              </div>
+              {writing ? (
+                <div className="rounded-lg border p-3">
+                  <LyricsWriter
+                    runs={runs}
+                    style={description || undefined}
+                    duration={length}
+                    initial={lyrics}
+                    onUse={(words) => {
+                      setLyrics(words);
+                      setWriting(false);
+                    }}
+                  />
+                </div>
+              ) : null}
               <Textarea
                 id="music-lyrics"
                 rows={6}
@@ -251,22 +352,37 @@ export function MusicWorkspace({
               onChange={(e) => setSeed(e.target.value)}
             />
             <p className="text-muted-foreground text-xs">
-              The same seed and words give the same music.
+              The same seed and words give the same music. With several takes, each uses the next
+              seed.
             </p>
           </div>
         </>
       ) : null}
       <div className="flex flex-wrap items-center gap-3">
-        <Button
-          onClick={() => void make()}
-          disabled={!ready || working || description.trim().length < 3}
-        >
-          {working ? "Making it…" : "Make"}
+        <Button onClick={make} disabled={!ready || working || description.trim().length < 3}>
+          {working ? "Making it…" : takes > 1 ? `Make ${takes}` : "Make"}
         </Button>
+        {!working ? (
+          <label className="flex items-center gap-1.5 text-sm">
+            Takes
+            <select
+              className="h-9 rounded-md border border-input bg-transparent px-2"
+              value={takes}
+              onChange={(e) => setTakes(Number(e.target.value))}
+            >
+              {[1, 2, 3, 4].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         {working ? (
           <>
             <output className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Spinner /> {step} · {clock(waited)}
+              <Spinner /> {take && take[1] > 1 ? `Take ${take[0]} of ${take[1]}: ` : ""}
+              {step} · {clock(waited)}
             </output>
             <Button variant="ghost" onClick={() => abort.current?.abort()}>
               Cancel
@@ -290,10 +406,27 @@ export function MusicWorkspace({
           {problem}
         </p>
       ) : null}
+      {editing ? (
+        <EditTrack
+          api={api}
+          runs={runs}
+          track={editing}
+          models={models}
+          onGetModel={onGetModel}
+          onDone={() => {
+            setEditing(null);
+            setMade((n) => n + 1);
+          }}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
       <TrackList
         api={api}
         refreshKey={made}
         modelTitle={(id) => models.find((m) => m.id === id)?.title ?? id}
+        onAgain={(t) => again(t, true)}
+        onTake={(t) => again(t, false)}
+        onEdit={(t) => setEditing(t)}
       />
     </div>
   );

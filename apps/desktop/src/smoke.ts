@@ -207,9 +207,20 @@ export async function runSmoke(): Promise<void> {
       }
     }
 
+    // Your music and Lyrics open without a model and say what they are for.
+    for (const [path, heading] of [
+      ["/music/library", "Your music"],
+      ["/music/lyrics", "Lyrics"],
+    ] as const) {
+      window.location.hash = path;
+      await until(`the ${heading} screen`, () =>
+        [...document.querySelectorAll("h1")].some((h) => h.textContent === heading) ? true : null,
+      );
+    }
+
     await report(
       true,
-      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}; a notebook saved with its first source; the speech and music screens listing their models`,
+      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}; a notebook saved with its first source; the speech and music screens listing their models; Your music and Lyrics opening`,
     );
   } catch (e) {
     // what the window was saying when it gave up makes a CI log readable

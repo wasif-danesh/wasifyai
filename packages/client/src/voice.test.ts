@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ParsedEvent } from "./sse";
 import type { Transport } from "./transport";
-import { createVoiceApi, makeSpeech, makeTrack } from "./voice";
+import { createVoiceApi, makeEdit, makeLyrics, makeSpeech, makeTrack } from "./voice";
 
 const ev = (event: string, data: Record<string, unknown>): ParsedEvent =>
   ({ event, data: { run_id: "r1", seq: 1, ...data } }) as ParsedEvent;
@@ -209,5 +209,104 @@ describe("music", () => {
     expect(calls[1]?.init?.body).toBe(JSON.stringify({ title: "Winter" }));
     await api.removeTrack("t1");
     expect(calls[2]?.init?.method).toBe("DELETE");
+  });
+});
+
+describe("changing music and writing lyrics", () => {
+  it("sends an edit with only the parts that were given", async () => {
+    const r = runs([
+      ev("done", {
+        outputs: {
+          status: "done",
+          track_id: "t2",
+          title: "Summer (repaint)",
+          seconds: 20,
+          audio_url: "u",
+        },
+      }),
+    ]);
+    const out = await makeEdit(
+      r,
+      {
+        source: "t1",
+        action: "repaint",
+        description: "a drum fill",
+        ranges: [[5, 10]],
+        strength: 0.7,
+        seed: 3,
+      },
+      new AbortController().signal,
+    );
+    expect(r.seen.input).toEqual({
+      task: "music_edit",
+      source_track: "t1",
+      edit_action: "repaint",
+      text: "a drum fill",
+      edit_ranges: [[5, 10]],
+      strength: 0.7,
+      seed: 3,
+    });
+    expect(out.ok && out.track.id).toBe("t2");
+    const ext = runs([
+      ev("done", {
+        outputs: { status: "refused", refusal: { code: "x", message: "Say how many seconds." } },
+      }),
+    ]);
+    const refused = await makeEdit(
+      ext,
+      { source: "t1", action: "extend", description: "go on", extend: 10 },
+      new AbortController().signal,
+    );
+    expect(ext.seen.input).toMatchObject({ extend_s: 10 });
+    expect(refused).toEqual({ ok: false, code: "x", message: "Say how many seconds." });
+  });
+
+  it("streams lyrics as they are written and returns the cleaned words", async () => {
+    const r = runs([
+      ev("token", { text: "[verse]\n" }),
+      ev("token", { text: "la la" }),
+      ev("done", { outputs: { status: "done", lyrics: "[verse]\nla la la la" } }),
+    ]);
+    const seen: string[] = [];
+    const out = await makeLyrics(
+      r,
+      { idea: "a summer day", style: "pop", duration: 60 },
+      new AbortController().signal,
+      (t) => seen.push(t),
+    );
+    expect(r.seen.input).toEqual({
+      task: "lyrics",
+      text: "a summer day",
+      style: "pop",
+      duration: 60,
+    });
+    expect(seen).toEqual(["[verse]\n", "[verse]\nla la"]);
+    expect(out).toEqual({ ok: true, lyrics: "[verse]\nla la la la" });
+    const failed = await makeLyrics(
+      runs([ev("error", { code: "no_language_model", message: "Choose a chat model." })]),
+      { idea: "x y z" },
+      new AbortController().signal,
+    );
+    expect(failed).toEqual({
+      ok: false,
+      code: "no_language_model",
+      message: "Choose a chat model.",
+    });
+  });
+
+  it("marks favourites, lists them, and asks for the formats and the format of a download", async () => {
+    const { t, calls } = transport((p) =>
+      p.endsWith("/formats")
+        ? jsonRes({ formats: ["wav", "m4a"] })
+        : jsonRes({ items: [], id: "t1" }),
+    );
+    const api = createVoiceApi(t);
+    await api.updateTrack("t1", { favourite: true });
+    expect(calls[0]?.init?.body).toBe(JSON.stringify({ favourite: true }));
+    await api.tracks({ favourites: true, limit: 10 });
+    expect(calls[1]?.path).toBe("/products/wasifyai-voice/tracks?limit=10&favourites=true");
+    expect(await api.formats()).toEqual(["wav", "m4a"]);
+    await api.downloadTrack("t1", "m4a").catch(() => undefined);
+    expect(calls[3]?.path).toBe("/products/wasifyai-voice/tracks/t1/download?format=m4a");
   });
 });

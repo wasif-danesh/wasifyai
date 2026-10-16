@@ -258,7 +258,9 @@ def _check_rules(entry_id: str, tasks: tuple[str, ...], clone: dict, design: dic
 
 LYRICS = ("optional", "required", "unused")
 INSTRUMENTAL = ("toggle", "always", "never")
-MUSIC_MODES = ("song", "sfx")
+MUSIC_MODES = ("song", "sfx", "edit")
+EDIT_ACTIONS = ("repaint", "extend", "cover", "inpaint", "restyle")
+EDIT_RECIPES = ("ace_step", "stable_audio")  # how the runtime of each family takes an edit
 MAX_MUSIC_DESCRIPTION = 500
 MAX_LYRICS_CHARS = 5000
 
@@ -276,6 +278,17 @@ def _check_music_rules(entry_id: str, tasks: tuple[str, ...], music: dict) -> No
     if not modes or set(modes) - set(MUSIC_MODES):
         raise ValueError(f"{entry_id}: music.modes must be among {MUSIC_MODES}")
     for name, mode in modes.items():
+        if name == "edit":
+            actions = tuple(mode.get("actions") or ())
+            if not actions or set(actions) - set(EDIT_ACTIONS):
+                raise ValueError(f"{entry_id}: edit.actions must be among {EDIT_ACTIONS}")
+            if not 1 <= int(mode.get("max_ranges", 0)) <= 16 or not (
+                5 <= float(mode.get("max_source_s", 0)) <= 600
+            ):
+                raise ValueError(f"{entry_id}: edit needs max_ranges (1 to 16) and max_source_s")
+            if (music.get("request") or {}).get("edit") not in EDIT_RECIPES:
+                raise ValueError(f"{entry_id}: edit needs request.edit, one of {EDIT_RECIPES}")
+            continue
         lo, default, hi = mode.get("duration") or [0, 0, 0]
         if not 0 < lo <= default <= hi <= 600:
             raise ValueError(f"{entry_id}: {name} duration must be [min, default, max] seconds")
@@ -439,7 +452,7 @@ def check_music(
     outside the model's range is brought into it."""
     if "music" not in model.tasks:
         raise VoiceRequestError("wrong_task", f"{model.title} does not make music.")
-    rules = model.music["modes"].get(mode)
+    rules = model.music["modes"].get(mode) if mode != "edit" else None
     if rules is None:
         raise VoiceRequestError("wrong_mode", f"{model.title} does not make {mode}.")
     described = " ".join(_clean_text(description, "The description", MAX_MUSIC_DESCRIPTION).split())
@@ -469,6 +482,105 @@ def check_music(
     return MusicRequest(
         mode=mode, description=described, lyrics=words,
         instrumental=bool(instrumental) or vocals == "always", duration=max(lo, min(hi, asked)),
+        options=check_options(model, options), seed=None if seed is None else int(seed),
+    )  # fmt: skip
+
+
+@dataclass(frozen=True)
+class MusicEditRequest:
+    """A change to a clip that passed the checks."""
+
+    action: str
+    description: str
+    source_seconds: float
+    ranges: tuple[tuple[float, float], ...]
+    strength: float | None
+    extend_s: float | None
+    options: dict[str, Any]
+    seed: int | None
+
+
+# which of the optional parts each action takes; any other part given is refused, not ignored
+_EDIT_USES = {
+    "repaint": {"ranges", "strength"},
+    "extend": {"extend_s"},
+    "cover": {"strength"},
+    "inpaint": {"ranges"},
+    "restyle": {"strength"},
+}
+MAX_EXTEND_S = 120.0
+
+
+def check_music_edit(
+    model: VoiceModel,
+    action: str,
+    description: str,
+    source_seconds: float,
+    ranges: list[tuple[float, float]] | None,
+    strength: float | None,
+    extend_s: float | None,
+    options: dict[str, Any] | None,
+    seed: int | None,
+) -> MusicEditRequest:
+    """An edit of a clip checked against what the model can do to one. The parts an action does not
+    take are refused; ranges are brought into the clip and joined where they touch."""
+    if "music" not in model.tasks:
+        raise VoiceRequestError("wrong_task", f"{model.title} does not make music.")
+    rules = model.music["modes"].get("edit")
+    if rules is None:
+        raise VoiceRequestError("wrong_mode", f"{model.title} cannot change a clip.")
+    if action not in rules["actions"]:
+        raise VoiceRequestError("wrong_action", f"{model.title} cannot {action} a clip.")
+    described = " ".join(_clean_text(description, "The description", MAX_MUSIC_DESCRIPTION).split())
+    if len(described) < 3:
+        raise VoiceRequestError("description_too_short", "Describe the change in a few words.")
+    limit = float(rules["max_source_s"])
+    if not 0 < source_seconds <= limit:
+        raise VoiceRequestError(
+            "clip_length", f"{model.title} changes clips of up to {limit:g} seconds."
+        )
+    uses = _EDIT_USES[action]
+    if "ranges" not in uses and ranges:
+        raise VoiceRequestError("no_ranges", f"To {action} a clip, leave the parts out.")
+    if "strength" not in uses and strength is not None:
+        raise VoiceRequestError("no_strength", f"To {action} a clip, leave the strength out.")
+    if "extend_s" not in uses and extend_s is not None:
+        raise VoiceRequestError("no_extend", f"To {action} a clip, leave the extra length out.")
+    merged: list[tuple[float, float]] = []
+    if "ranges" in uses:
+        clamped = sorted(
+            (max(0.0, float(a)), min(source_seconds, float(b))) for a, b in (ranges or [])
+        )
+        for a, b in clamped:
+            if b - a < 0.2:
+                continue
+            if merged and a <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], b))
+            else:
+                merged.append((a, b))
+        if not merged:
+            raise VoiceRequestError("ranges_required", f"Pick the part of the clip to {action}.")
+        if len(merged) > int(rules["max_ranges"]):
+            raise VoiceRequestError(
+                "too_many_ranges",
+                f"{model.title} changes up to {rules['max_ranges']} part(s) at once.",
+            )
+    if strength is not None and not 0.0 <= float(strength) <= 1.0:
+        raise VoiceRequestError("bad_option", "The strength is between 0 and 1.")
+    if "extend_s" in uses:
+        if extend_s is None or not 1.0 <= float(extend_s) <= MAX_EXTEND_S:
+            raise VoiceRequestError(
+                "extend_required", f"Say how many seconds to add (1 to {MAX_EXTEND_S:g})."
+            )
+        if source_seconds + float(extend_s) > limit:
+            raise VoiceRequestError(
+                "clip_length",
+                f"The result would pass {limit:g} seconds, the most {model.title} makes.",
+            )
+    return MusicEditRequest(
+        action=action, description=described, source_seconds=float(source_seconds),
+        ranges=tuple(merged), strength=None if strength is None else float(strength),
+        extend_s=None if extend_s is None else float(extend_s),
         options=check_options(model, options), seed=None if seed is None else int(seed),
     )  # fmt: skip
 
@@ -557,6 +669,12 @@ class SpeechEngine(Protocol):
 
     async def music(self, model: VoiceModel, request: MusicRequest) -> MusicResult:
         """Make music (a song or a sound effect) from a checked request."""
+        ...
+
+    async def music_edit(
+        self, model: VoiceModel, request: MusicEditRequest, source: Path
+    ) -> MusicResult:
+        """Change a clip that is a file on this computer."""
         ...
 
     async def transcribe(

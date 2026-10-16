@@ -445,3 +445,57 @@ def test_the_music_models_are_listed_with_their_licence(tmp_path, monkeypatch):
     assert got["stable-audio-3-small-music"]["commercial_use"] == "conditional"
     assert got["stable-audio-3-small-music"]["recommended"] == []
     assert got["stable-audio-3-small-sfx"]["state"] == "can_install"
+
+
+async def test_a_clip_is_changed_the_way_each_family_takes_it(engine, tmp_path):
+    from wasifyai_platform_sdk import check_music_edit
+
+    clip = tmp_path / "clip.wav"
+    clip.write_bytes(wav_bytes(3.0))
+    ace = engine.resolve("music", "ace-step-1.5-turbo")
+    cases = [
+        ("repaint", [(10.0, 20.0)], 0.4, None, {"route": "repaint", "repainting_start": 10.0,
+                                                  "repainting_end": 20.0, "repaint_strength": 0.4}),
+        ("extend", None, None, 30.0,
+         {"route": "repaint", "repainting_start": 60.0, "repainting_end": 90.0}),
+        ("cover", None, 0.7, None, {"route": "cover", "audio_cover_strength": 0.30000000000000004}),
+    ]  # fmt: skip
+    for action, ranges, strength, extend, want in cases:
+        req = check_music_edit(ace, action, "make it better", 60, ranges, strength, extend, None, 4)
+        out = await engine.music_edit(ace, req, clip)
+        sent = (await last_request(engine))["request"]
+        assert out.seed == 4 and sent["audio"] == str(clip) and sent["text"] == "make it better"
+        assert sent["options"] == want, action
+    stable = engine.resolve("music", "stable-audio-3-small-music")
+    req = check_music_edit(
+        stable, "inpaint", "a drum fill", 40, [(5, 10), (20, 22.5)], None, None, None, 1
+    )
+    await engine.music_edit(stable, req, clip)
+    sent = (await last_request(engine))["request"]
+    assert (
+        sent["options"]
+        == {
+            "audio_input_kind": "inpaint_audio",
+            "inpaint_mask_start_seconds": "5,20",
+            "inpaint_mask_end_seconds": "10,22.5",
+        }
+        and sent["duration_seconds"] == 40.0
+    )
+    req = check_music_edit(stable, "restyle", "as lofi", 40, None, 0.6, None, None, 1)
+    await engine.music_edit(stable, req, clip)
+    sent = (await last_request(engine))["request"]
+    assert sent["options"] == {"audio_input_kind": "init_audio", "init_noise_level": 0.6}
+
+
+async def test_a_clip_that_is_gone_and_a_model_that_cannot_edit_are_told_apart(engine, tmp_path):
+    from wasifyai_platform_sdk import check_music_edit
+
+    ace = engine.resolve("music", "ace-step-1.5-turbo")
+    req = check_music_edit(ace, "cover", "as jazz", 20, None, None, None, None, 1)
+    with pytest.raises(VoiceEngineError) as e:
+        await engine.music_edit(ace, req, tmp_path / "missing.wav")
+    assert e.value.code == "engine_failed"
+    sfx = engine.resolve("music", "stable-audio-3-small-sfx")
+    with pytest.raises(VoiceEngineError) as e:
+        await engine.music_edit(sfx, req, tmp_path / "x.wav")
+    assert e.value.code == "wrong_task"

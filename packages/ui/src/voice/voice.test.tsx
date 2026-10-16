@@ -13,6 +13,7 @@ import type {
 import { describe, expect, it, vi } from "vitest";
 import { MusicWorkspace } from "./MusicWorkspace";
 import { SpeakWorkspace } from "./SpeakWorkspace";
+import { TrackList } from "./TrackList";
 import { TranscribeWorkspace } from "./TranscribeWorkspace";
 import { VoicesWorkspace } from "./VoicesWorkspace";
 import { modelOption, pickModel } from "./format";
@@ -112,6 +113,9 @@ function api(over: Partial<Record<keyof VoiceApi, unknown>> = {}): VoiceApi {
     speech: vi.fn(),
     removeSpeech: vi.fn(async () => undefined),
     tracks: vi.fn(async () => []),
+    track: vi.fn(),
+    updateTrack: vi.fn(),
+    formats: vi.fn(async () => ["wav"]),
     renameTrack: vi.fn(),
     removeTrack: vi.fn(async () => undefined),
     downloadTrack: vi.fn(async () => new Blob(["x"])),
@@ -477,7 +481,10 @@ describe("text to speech with a saved voice", () => {
 const track = (over: Record<string, unknown> = {}) => ({
   id: "t1",
   title: "Summer",
-  mode: "song" as const,
+  mode: "song" as "song" | "sfx" | "edit",
+  favourite: false,
+  parent_id: null,
+  edit: {},
   description: "pop, upbeat",
   lyrics: "la la",
   instrumental: false,
@@ -597,7 +604,7 @@ describe("music", () => {
   });
 
   it("lists the music made, renames and deletes it", async () => {
-    const renameTrack = vi.fn(async () => track({ title: "Winter" }));
+    const updateTrack = vi.fn(async () => track({ title: "Winter" }));
     const removeTrack = vi.fn(async () => undefined);
     window.prompt = vi.fn(() => "Winter");
     const user = userEvent.setup();
@@ -606,7 +613,7 @@ describe("music", () => {
         api={api({
           models: vi.fn(async () => [ace()]),
           tracks: vi.fn(async () => [track()]),
-          renameTrack,
+          updateTrack,
           removeTrack,
         })}
         runs={runsThat([])}
@@ -615,9 +622,215 @@ describe("music", () => {
     expect(await screen.findByText("Summer")).toBeInTheDocument();
     expect(screen.getByText(/song · 0:31 · ACE-Step 1.5 Turbo/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Rename" }));
-    expect(renameTrack).toHaveBeenCalledWith("t1", "Winter");
+    expect(updateTrack).toHaveBeenCalledWith("t1", { title: "Winter" });
     expect(await screen.findByText("Winter")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(removeTrack).toHaveBeenCalledWith("t1");
+  });
+});
+
+const aceEdit = () =>
+  model({
+    ...ace(),
+    options: [
+      {
+        name: "bpm",
+        type: "int",
+        label: "Tempo",
+        description: "",
+        default: null,
+        min: 30,
+        max: 300,
+        values: [],
+      },
+    ],
+    music: {
+      modes: {
+        song: { lyrics: "optional", instrumental: "toggle", duration: [5, 30, 240] },
+        edit: { actions: ["repaint", "extend", "cover"], max_ranges: 1, max_source_s: 240 },
+      },
+    },
+  });
+
+describe("more music", () => {
+  it("makes several takes with the next seeds, and passes the model's own options", async () => {
+    const runs = runsThat([
+      ev("done", {
+        outputs: { status: "done", track_id: "t", title: "x", seconds: 30, audio_url: "u" },
+      }),
+    ]);
+    const user = userEvent.setup();
+    render(<MusicWorkspace api={api({ models: vi.fn(async () => [aceEdit()]) })} runs={runs} />);
+    await user.type(await screen.findByLabelText("Describe the music"), "upbeat pop");
+    fireEvent.change(screen.getByLabelText(/Tempo/), { target: { value: "96" } });
+    await user.type(screen.getByLabelText(/Seed/), "10");
+    await user.selectOptions(screen.getByLabelText("Takes"), "3");
+    await user.click(screen.getByRole("button", { name: "Make 3" }));
+    await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(3));
+    const inputs = runs.startRun.mock.calls.map((c) => c[1] as Record<string, unknown>);
+    expect(inputs.map((i) => i.seed)).toEqual([10, 11, 12]);
+    expect(inputs[0]).toMatchObject({ options: { bpm: 96 }, task: "music" });
+  });
+
+  it("makes a track again with its own seed, or another take with a new one", async () => {
+    const runs = runsThat([
+      ev("done", {
+        outputs: { status: "done", track_id: "t", title: "x", seconds: 31, audio_url: "u" },
+      }),
+    ]);
+    const user = userEvent.setup();
+    render(
+      <MusicWorkspace
+        api={api({
+          models: vi.fn(async () => [aceEdit()]),
+          tracks: vi.fn(async () => [track()]),
+        })}
+        runs={runs}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: "Make it again" }));
+    await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(1));
+    expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({
+      text: "pop, upbeat",
+      lyrics: "la la",
+      seed: 3,
+      duration: 31,
+      model: "ace-step-1.5-turbo",
+    });
+    await user.click(await screen.findByRole("button", { name: "Another take" }));
+    await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(2));
+    expect(runs.startRun.mock.calls[1]?.[1]).not.toHaveProperty("seed");
+  });
+
+  it("writes lyrics with the chat model and puts them in the form", async () => {
+    const runs = runsThat([
+      ev("token", { text: "[verse]\nsun" }),
+      ev("done", { outputs: { status: "done", lyrics: "[verse]\nsun on the sea\nla la" } }),
+    ]);
+    const user = userEvent.setup();
+    render(<MusicWorkspace api={api({ models: vi.fn(async () => [aceEdit()]) })} runs={runs} />);
+    await user.type(await screen.findByLabelText("Describe the music"), "upbeat pop");
+    await user.click(screen.getByRole("button", { name: "Write lyrics for me" }));
+    await user.type(screen.getByLabelText("What is the song about?"), "a summer day");
+    await user.click(screen.getByRole("button", { name: "Write the lyrics" }));
+    expect(await screen.findByLabelText(/The lyrics \(you can change them\)/)).toHaveValue(
+      "[verse]\nsun on the sea\nla la",
+    );
+    expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({
+      task: "lyrics",
+      text: "a summer day",
+      style: "upbeat pop",
+      duration: 30,
+    });
+    await user.click(screen.getByRole("button", { name: "Use these lyrics" }));
+    expect(screen.getByLabelText(/Lyrics \(optional\)/)).toHaveValue(
+      "[verse]\nsun on the sea\nla la",
+    );
+  });
+
+  it("says why lyrics could not be written", async () => {
+    const runs = runsThat([
+      ev("error", { code: "no_language_model", message: "Choose a chat model in Models." }),
+    ]);
+    const user = userEvent.setup();
+    render(<MusicWorkspace api={api({ models: vi.fn(async () => [aceEdit()]) })} runs={runs} />);
+    await user.click(await screen.findByRole("button", { name: "Write lyrics for me" }));
+    await user.type(screen.getByLabelText("What is the song about?"), "a summer day");
+    await user.click(screen.getByRole("button", { name: "Write the lyrics" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Choose a chat model in Models.");
+  });
+
+  it("changes a part of a track with the model that can, and adds the result to the list", async () => {
+    const runs = runsThat([
+      ev("done", {
+        outputs: {
+          status: "done",
+          track_id: "t2",
+          title: "Summer (repaint)",
+          seconds: 31,
+          audio_url: "u",
+        },
+      }),
+    ]);
+    const tracks = vi
+      .fn()
+      .mockResolvedValueOnce([track()])
+      .mockResolvedValue([
+        track(),
+        track({ id: "t2", title: "Summer (repaint)", mode: "edit", edit: { action: "repaint" } }),
+      ]);
+    const user = userEvent.setup();
+    render(
+      <MusicWorkspace api={api({ models: vi.fn(async () => [aceEdit()]), tracks })} runs={runs} />,
+    );
+    await user.click(await screen.findByRole("button", { name: "Change it" }));
+    const panel = await screen.findByRole("region", { name: "Change this music" });
+    await user.type(within(panel).getByLabelText("What should it become?"), "a drum fill");
+    fireEvent.change(within(panel).getByLabelText("Part 1 from"), { target: { value: "5" } });
+    fireEvent.change(within(panel).getByLabelText("Part 1 to"), { target: { value: "10" } });
+    await user.click(within(panel).getByRole("button", { name: "Change it" }));
+    await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
+    expect(runs.startRun.mock.calls[0]?.[1]).toEqual({
+      task: "music_edit",
+      source_track: "t1",
+      edit_action: "repaint",
+      text: "a drum fill",
+      model: "ace-step-1.5-turbo",
+      edit_ranges: [[5, 10]],
+      strength: 0.6,
+    });
+    expect(await screen.findByText(/changed \(repaint\)/)).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Change this music" })).not.toBeInTheDocument();
+  });
+
+  it("offers an edit only the actions the model has, and says when no model can change a clip", async () => {
+    const user = userEvent.setup();
+    render(
+      <MusicWorkspace
+        api={api({ models: vi.fn(async () => [ace()]), tracks: vi.fn(async () => [track()]) })}
+        runs={runsThat([])}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: "Change it" }));
+    expect(
+      await screen.findByText(/None of the music models on this computer can change a clip yet/),
+    ).toBeInTheDocument();
+  });
+
+  it("hearts a track, finds music by its words, and saves in the formats this computer has", async () => {
+    const updateTrack = vi.fn(async () => track({ favourite: true }));
+    const downloadTrack = vi.fn(async () => new Blob(["x"]));
+    URL.createObjectURL = vi.fn(() => "blob:x");
+    URL.revokeObjectURL = vi.fn();
+    const list = [
+      track(),
+      track({ id: "t2", title: "Rain", description: "rain on a roof", lyrics: "" }),
+    ];
+    const user = userEvent.setup();
+    render(
+      <TrackList
+        api={api({
+          tracks: vi.fn(async () => list),
+          updateTrack,
+          formats: vi.fn(async () => ["wav", "m4a"]),
+          downloadTrack,
+        })}
+        searchable
+      />,
+    );
+    await screen.findByText("Summer");
+    await user.type(screen.getByLabelText("Search your music"), "roof");
+    expect(screen.queryByText("Summer")).not.toBeInTheDocument();
+    expect(screen.getByText("Rain")).toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Search your music"));
+    await user.click(
+      screen.getAllByRole("button", { name: "Add to favourites" })[0] as HTMLElement,
+    );
+    expect(updateTrack).toHaveBeenCalledWith("t1", { favourite: true });
+    await user.click(screen.getByLabelText("Favourites only"));
+    expect(screen.queryByText("Rain")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save M4A" }));
+    expect(downloadTrack).toHaveBeenCalledWith("t1", "m4a");
+    expect(screen.queryByRole("button", { name: "Save MP3" })).not.toBeInTheDocument();
   });
 });

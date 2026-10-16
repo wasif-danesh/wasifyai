@@ -14,6 +14,8 @@ from wasifyai_platform_sdk import ToolHost, ToolUnavailable
 
 SIZES = ("square", "landscape", "portrait", "wide", "tall")
 IMAGE_PRODUCT = "wasifyai-image"
+VOICE_PRODUCT = "wasifyai-voice"  # music (stage V3)
+MAX_MUSIC_SECONDS = 120
 MAX_PROMPT = 500
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
@@ -53,6 +55,31 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "type": "object",
                 "properties": {"query": {"type": "string", "description": "What to look for."}},
                 "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "make_music",
+            "description": (
+                "Make a piece of music or a song and save it to the person's library. Use it when "
+                "the person asks you to compose, make or write music, a song or a tune. Describe "
+                "the style in a few words in English (genre, mood, instruments). Add lyrics only "
+                "if the person gave them or asked for a song with words."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "description": {"type": "string", "description": "The style and mood."},
+                    "lyrics": {"type": "string", "description": "The words to sing, if any."},
+                    "instrumental": {"type": "boolean", "description": "No singing."},
+                    "seconds": {
+                        "type": "number",
+                        "description": "Length in seconds. Default 30, at most 120.",
+                    },
+                },
+                "required": ["description"],
             },
         },
     },
@@ -99,6 +126,8 @@ async def run_tool(
 ) -> ToolOutcome:
     if name == "generate_image":
         return await _generate_image(arguments, host, write)
+    if name == "make_music":
+        return await _make_music(arguments, host, write)
     if name == "search_creations":
         return await _search(arguments, host)
     if name == "search_notebooks":
@@ -204,3 +233,47 @@ async def _search_notebooks(arguments: dict[str, Any], host: ToolHost) -> ToolOu
         "question; use only those that are, and name the notebook and source:\n\n"
         + "\n\n".join(blocks),
     )
+
+
+async def _make_music(arguments: dict[str, Any], host: ToolHost, write: Writer) -> ToolOutcome:
+    description = str(arguments.get("description", "")).strip()[:500]
+    if not description:
+        return ToolOutcome("error", text="The description was empty, so no music was made.")
+    graph_input: dict[str, Any] = {"task": "music", "text": description}
+    lyrics = str(arguments.get("lyrics") or "").strip()[:5000]
+    if lyrics:
+        graph_input["lyrics"] = lyrics
+    elif arguments.get("instrumental"):
+        graph_input["instrumental"] = True
+    try:
+        seconds = float(arguments.get("seconds") or 30)
+    except (TypeError, ValueError):
+        seconds = 30.0
+    graph_input["duration"] = max(5.0, min(float(MAX_MUSIC_SECONDS), seconds))
+    async for ev in host.run_product(VOICE_PRODUCT, graph_input):
+        kind = ev.get("event")
+        if kind == "error":
+            return ToolOutcome(
+                "error", text=f"The music could not be made: {ev.get('message', 'it failed')}."
+            )
+        if kind == "done":
+            out = ev.get("outputs") or {}
+            if out.get("status") == "refused":
+                reason = (out.get("refusal") or {}).get("message", "it was not allowed")
+                return ToolOutcome(
+                    "refused", {"message": reason}, f"The music was not made: {reason}"
+                )
+            if out.get("status") != "done" or not out.get("track_id"):
+                return ToolOutcome("error", text="The music could not be made.")
+            title, secs = str(out.get("title", "")), float(out.get("seconds", 0))
+            return ToolOutcome(
+                "ok",
+                {
+                    "track_id": out["track_id"], "product_id": VOICE_PRODUCT, "title": title,
+                    "seconds": secs,
+                },
+                f'The music "{title}" was made ({secs:.0f} seconds) and saved to the library. '
+                "The person can play it in the chat.",
+            )  # fmt: skip
+    del write
+    return ToolOutcome("error", text="The music could not be made.")

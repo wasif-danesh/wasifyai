@@ -107,7 +107,7 @@ every product keeps its own table (`songs`, `images`, `videos`), so a cross-prod
 ## Evaluation
 
 Run with `uv run python services/api/evals/search/run_search_eval.py` (the stack running, both models pulled). The
-corpus (`services/api/evals/search/corpus.yaml`) is synthetic and small: 60 library items (20 concepts, each as a
+corpus (`services/api/evals/search/corpus.yaml`) is synthetic and small: 60 library items (20 concepts; 2026-10-16 added three more for tracks, voices and notebooks, not yet re-measured, each as a
 song, an image prompt and a video prompt in three different languages, across ten languages: English, Spanish,
 French, German, Portuguese, Arabic, Chinese, Hindi, Japanese, Russian), 60 queries (40 in a language other than
 the matching items', 20 in the same language, all paraphrases), 8 queries with nothing to find, and 17 single

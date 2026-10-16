@@ -16,7 +16,8 @@ export type Route =
   | "transcribe"
   | "voices"
   | "music"
-  | "tracks";
+  | "tracks"
+  | "lyrics";
 
 const PATHS: Record<Route, string> = {
   home: "/",
@@ -32,6 +33,7 @@ const PATHS: Record<Route, string> = {
   voices: "/voice/voices",
   music: "/music/create",
   tracks: "/music/library",
+  lyrics: "/music/lyrics",
 };
 
 /** The id in the draft address: a notebook that is not saved yet. */

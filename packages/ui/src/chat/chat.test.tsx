@@ -232,6 +232,50 @@ describe("ChatScreen", () => {
     ).toBeInTheDocument();
   });
 
+  it("plays the music the assistant made, in the chat, with a way to open it", async () => {
+    const runs = runsThat([
+      ev("tool_call", { id: "t1", name: "make_music", arguments: { description: "upbeat pop" } }),
+      ev("tool_result", {
+        id: "t1",
+        name: "make_music",
+        status: "ok",
+        output: { track_id: "tr1", title: "Summer pop", seconds: 30 },
+      }),
+      ev("token", { text: "Here is your song." }),
+      ev("done", { outputs: { status: "done", conversation_id: "c1", title: "Song" } }),
+    ]);
+    const tracks = vi.fn(async () => ({ title: "Summer pop", audio_url: "http://x/a.wav" }));
+    const onOpen = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ChatScreen
+        runs={runs}
+        assistant={assistant}
+        images={images}
+        tracks={tracks}
+        onOpenCreation={onOpen}
+      />,
+    );
+    await user.type(screen.getByRole("textbox", { name: "Message" }), "make a song{Enter}");
+    const player = await screen.findByLabelText("Summer pop");
+    expect(player).toHaveAttribute("src", "http://x/a.wav");
+    expect(tracks).toHaveBeenCalledWith("tr1");
+    await user.click(screen.getByRole("button", { name: "Open in Your music" }));
+    expect(onOpen).toHaveBeenCalledWith("track", "tr1");
+  });
+
+  it("says when the music could not be made", async () => {
+    const runs = runsThat([
+      ev("tool_call", { id: "t1", name: "make_music", arguments: { description: "x" } }),
+      ev("tool_result", { id: "t1", name: "make_music", status: "error", output: {} }),
+      ev("done", { outputs: { status: "done", conversation_id: "c1", title: "Song" } }),
+    ]);
+    const user = userEvent.setup();
+    render(<ChatScreen runs={runs} assistant={assistant} images={images} />);
+    await user.type(screen.getByRole("textbox", { name: "Message" }), "make a song{Enter}");
+    expect(await screen.findByText("The music could not be made.")).toBeInTheDocument();
+  });
+
   it("says what is missing when no model is chosen, and offers the way there", async () => {
     const runs = runsThat([
       ev("error", {

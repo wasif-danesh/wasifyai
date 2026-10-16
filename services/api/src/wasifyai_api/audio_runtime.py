@@ -35,6 +35,7 @@ from typing import Any
 
 import httpx
 from wasifyai_platform_sdk import (
+    MusicEditRequest,
     MusicRequest,
     MusicResult,
     SpeechResult,
@@ -717,6 +718,36 @@ class AudioEngine:
         rate = _wav_rate(wav) or model.sample_rate
         return MusicResult(wav, rate, seconds, model.id, seed, load_s, time.monotonic() - t0)
 
+    async def music_edit(
+        self, model: VoiceModel, req: MusicEditRequest, source: Path
+    ) -> MusicResult:
+        """Change a clip that is a file on this computer. How a family takes an edit is named by the
+        descriptor (`music.request.edit`); the option names are the runtime's (V3 real runs)."""
+        recipe = (model.music.get("request") or {}).get("edit")
+        if recipe is None:
+            raise VoiceEngineError("wrong_task", f"{model.title} cannot change a clip.")
+        request: dict[str, Any] = {"text": req.description, "audio": str(source)}
+        options = dict(req.options)
+        if recipe == "ace_step":
+            _ace_edit(req, options)
+        else:
+            _stable_edit(req, options, request)
+        seed = req.seed if req.seed is not None else secrets.randbelow(2**31 - 1)
+        request["seed"] = str(seed)
+        if options:
+            request["options"] = options
+        t0 = time.monotonic()
+        wait = max(300.0, min(7200.0, (req.source_seconds + (req.extend_s or 0)) * 40))
+        r, load_s = await self._call(
+            model, "/v1/tasks/run", limit_s=wait, json={"model": model.id, "request": request}
+        )
+        wav = _audio_of_task(r.headers.get("content-type", ""), r.content)
+        seconds = _wav_seconds(wav)
+        if seconds <= 0:
+            raise VoiceEngineError("engine_failed", "The music model returned no audio.")
+        rate = _wav_rate(wav) or model.sample_rate
+        return MusicResult(wav, rate, seconds, model.id, seed, load_s, time.monotonic() - t0)
+
     async def transcribe(
         self, model: VoiceModel, wav: bytes, options: dict[str, Any]
     ) -> TranscriptResult:
@@ -741,6 +772,44 @@ class AudioEngine:
 
     async def stop(self) -> bool:
         return await self.server.stop()
+
+
+def _ace_edit(req: MusicEditRequest, options: dict[str, Any]) -> None:
+    """ACE-Step: repaint a part, extend past the end (a repaint that starts at the end), or cover
+    (restyle the whole clip). A cover's strength is how much to change; the runtime's share is the
+    part of the steps that stay conditioned on the source, so it is the other way round."""
+    if req.action == "repaint":
+        start, end = req.ranges[0]
+        options.update({"route": "repaint", "repainting_start": start, "repainting_end": end})
+        if req.strength is not None:
+            options["repaint_strength"] = req.strength
+    elif req.action == "extend":
+        end = req.source_seconds + float(req.extend_s or 0)
+        options.update(
+            {"route": "repaint", "repainting_start": req.source_seconds, "repainting_end": end}
+        )
+    else:  # cover
+        options["route"] = "cover"
+        if req.strength is not None:
+            options["audio_cover_strength"] = 1.0 - req.strength
+
+
+def _seconds_text(value: float) -> str:
+    return f"{value:.3f}".rstrip("0").rstrip(".")
+
+
+def _stable_edit(req: MusicEditRequest, options: dict[str, Any], request: dict[str, Any]) -> None:
+    """Stable Audio: inpaint the parts (the runtime takes the starts and ends as two lists), or
+    restyle the whole clip from a noisy copy of it. The length of the result is the clip's."""
+    if req.action == "inpaint":
+        options["audio_input_kind"] = "inpaint_audio"
+        options["inpaint_mask_start_seconds"] = ",".join(_seconds_text(a) for a, _ in req.ranges)
+        options["inpaint_mask_end_seconds"] = ",".join(_seconds_text(b) for _, b in req.ranges)
+    else:  # restyle
+        options["audio_input_kind"] = "init_audio"
+        if req.strength is not None:
+            options["init_noise_level"] = req.strength
+    request["duration_seconds"] = req.source_seconds
 
 
 def _audio_candidates(node: Any):

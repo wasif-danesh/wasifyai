@@ -1,16 +1,21 @@
 "use client";
 
 import type { ChatPart, ImageSummary, ImagesApi } from "@wasifyai/client";
-import { BookOpen, ImageIcon, Search } from "lucide-react";
+import { BookOpen, ImageIcon, Music, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../components/button";
 import { Spinner } from "../components/spinner";
 
 type Tool = Extract<ChatPart, { type: "tool" }>;
 
+/** A piece of music the assistant made, as the card needs it. */
+export type TrackLookup = (id: string) => Promise<{ title: string; audio_url: string }>;
+
 export type ToolCardProps = {
   tool: Tool;
   images: ImagesApi;
+  /** Reads a track made by `make_music` so it can be played in the chat. */
+  tracks?: TrackLookup;
   /** Open a creation in its own screen (the library for an image). */
   onOpenCreation?: (kind: string, id: string) => void;
 };
@@ -60,9 +65,51 @@ function Picture({
   );
 }
 
+function MusicPlayer({
+  trackId,
+  tracks,
+  onOpen,
+}: {
+  trackId: string;
+  tracks?: TrackLookup;
+  onOpen?: () => void;
+}) {
+  const [track, setTrack] = useState<{ title: string; audio_url: string } | null>(null);
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    if (!tracks) return;
+    let gone = false;
+    tracks(trackId)
+      .then((t) => !gone && setTrack(t))
+      .catch(() => !gone && setMissing(true));
+    return () => {
+      gone = true;
+    };
+  }, [trackId, tracks]);
+  if (missing)
+    return <p className="text-muted-foreground text-sm">This music is no longer there.</p>;
+  if (!tracks) return <p className="text-muted-foreground text-sm">Saved to Your music.</p>;
+  if (!track) return <div className="h-14 w-72 animate-pulse rounded-lg bg-muted" />;
+  return (
+    <figure className="m-0 grid w-full max-w-md gap-2 rounded-lg border p-3">
+      <figcaption className="flex items-center gap-2 text-sm">
+        <Music className="size-4 shrink-0" aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate font-medium">{track.title}</span>
+        {onOpen ? (
+          <Button type="button" size="sm" variant="outline" onClick={onOpen}>
+            Open in Your music
+          </Button>
+        ) : null}
+      </figcaption>
+      {/* biome-ignore lint/a11y/useMediaCaption: music */}
+      <audio controls src={track.audio_url} className="h-10 w-full" aria-label={track.title} />
+    </figure>
+  );
+}
+
 /** A tool the assistant used, as part of its answer: a picture being made and then shown, or what a
  * search found. */
-export function ToolCard({ tool, images, onOpenCreation }: ToolCardProps) {
+export function ToolCard({ tool, images, tracks, onOpenCreation }: ToolCardProps) {
   if (tool.name === "generate_image") {
     if (tool.status === "running") {
       const queued = tool.jobStatus === "queued";
@@ -98,6 +145,33 @@ export function ToolCard({ tool, images, onOpenCreation }: ToolCardProps) {
         {tool.status === "refused"
           ? String(tool.output?.message ?? "That picture was not made.")
           : "The picture could not be made."}
+      </p>
+    );
+  }
+  if (tool.name === "make_music") {
+    if (tool.status === "running") {
+      return (
+        <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
+          <Spinner /> Making your music
+        </output>
+      );
+    }
+    if (tool.status === "ok" && typeof tool.output?.track_id === "string") {
+      const id = tool.output.track_id;
+      return (
+        <MusicPlayer
+          trackId={id}
+          tracks={tracks}
+          onOpen={onOpenCreation ? () => onOpenCreation("track", id) : undefined}
+        />
+      );
+    }
+    return (
+      <p className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+        <Music className="size-4 shrink-0" aria-hidden="true" />
+        {tool.status === "refused"
+          ? String(tool.output?.message ?? "That music was not made.")
+          : "The music could not be made."}
       </p>
     );
   }

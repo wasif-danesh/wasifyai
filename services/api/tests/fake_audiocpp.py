@@ -107,13 +107,16 @@ def main() -> None:
                     state["last"] = req
                     if not r.get("text"):
                         return self.fail("text is required")
+                    if "audio" in r and not __import__("os").path.isfile(r["audio"]):
+                        return self.fail("source audio file not found")
                     seconds = float(
                         r.get("duration_seconds")
                         or (r.get("options") or {}).get("duration_sec")
                         or 0
                     )
-                    if not seconds:
+                    if not seconds and "audio" not in r:
                         return self.fail("duration is required")
+                    seconds = seconds or 3.0
                     if r["text"].startswith("BOOM"):
                         return self.fail("failed to allocate buffer")
                     state["loaded"] = req["model"]

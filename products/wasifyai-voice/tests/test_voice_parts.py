@@ -204,3 +204,31 @@ async def test_the_index_source_also_pages_tracks(tmp_path):
     ]
     assert await src.present(["tr1", "zz"]) == {"tr1"}
     await engine.dispose()
+
+
+def test_a_version_three_file_gains_favourites_and_the_source_of_an_edit(tmp_path):
+    root = tmp_path / "voice"
+    s = VoiceStore(root)
+    with sqlite3.connect(s.path) as db:
+        db.execute("DROP TABLE tracks")
+        db.execute(
+            "CREATE TABLE tracks(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, "
+            "user_id TEXT NOT NULL, "
+            "title TEXT NOT NULL, mode TEXT NOT NULL, description TEXT NOT NULL, "
+            "lyrics TEXT NOT NULL DEFAULT '', instrumental INTEGER NOT NULL DEFAULT 0, "
+            "model_id TEXT NOT NULL, options TEXT NOT NULL DEFAULT '{}', seed INTEGER, "
+            "seconds REAL NOT NULL, sample_rate INTEGER NOT NULL, audio_key TEXT NOT NULL, "
+            "load_s REAL NOT NULL DEFAULT 0, elapsed_s REAL NOT NULL DEFAULT 0, "
+            "created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
+        )
+        db.execute(
+            "INSERT INTO tracks VALUES ('old','t','u','Old','song','pop','',0,'m','{}',1,5,24000,"
+            "'k',0,0,'x','x')"
+        )
+        db.execute("UPDATE meta SET value = '3' WHERE key = 'schema'")
+    s = VoiceStore(root)
+    old = s.get_track("t", "u", "old")
+    assert (old["favourite"], old["edit"]) == (False, {})
+    assert s.update_track("t", "u", "old", favourite=True)["favourite"] is True
+    assert [t["id"] for t in s.list_tracks("t", "u", favourites=True)] == ["old"]
+    VoiceStore(root)  # opening it again is fine

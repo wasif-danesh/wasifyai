@@ -18,6 +18,7 @@ describe("the side menu", () => {
     expect(music.filter((i) => !i.soon).map((i) => [i.label, i.route])).toEqual([
       ["Create", "music"],
       ["Your music", "tracks"],
+      ["Lyrics", "lyrics"],
     ]);
     const voice = GROUPS.find((g) => g.id === "voice")?.items ?? [];
     expect(voice.filter((i) => !i.soon).map((i) => [i.label, i.route])).toEqual([
@@ -45,6 +46,7 @@ describe("the side menu", () => {
     expect(groupOf("voices")).toBe("voice");
     expect(groupOf("music")).toBe("music");
     expect(groupOf("tracks")).toBe("music");
+    expect(groupOf("lyrics")).toBe("music");
     expect(groupOf("home")).toBeNull();
     expect(groupOf("models")).toBeNull();
   });

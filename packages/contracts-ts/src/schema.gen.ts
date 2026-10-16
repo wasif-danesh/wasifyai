@@ -1210,6 +1210,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-voice/formats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Formats
+         * @description The formats a track or a speech can be saved in: WAV always, and what the tools on this
+         *     computer can make.
+         */
+        get: operations["formats_products_wasifyai_voice_formats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-voice/speeches": {
         parameters: {
             query?: never;
@@ -1294,8 +1315,8 @@ export interface paths {
         delete: operations["delete_track_products_wasifyai_voice_tracks__tid__delete"];
         options?: never;
         head?: never;
-        /** Rename Track */
-        patch: operations["rename_track_products_wasifyai_voice_tracks__tid__patch"];
+        /** Update Track */
+        patch: operations["update_track_products_wasifyai_voice_tracks__tid__patch"];
         trace?: never;
     };
     "/products/wasifyai-voice/tracks/{tid}/download": {
@@ -2591,6 +2612,13 @@ export interface components {
             thread_id: string;
             /** Ts */
             ts?: string;
+        };
+        /** TrackPatch */
+        TrackPatch: {
+            /** Favourite */
+            favourite?: boolean | null;
+            /** Title */
+            title?: string | null;
         };
         /** TranscriptDetail */
         TranscriptDetail: {
@@ -5558,6 +5586,28 @@ export interface operations {
             };
         };
     };
+    formats_products_wasifyai_voice_formats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string[];
+                    };
+                };
+            };
+        };
+    };
     list_speeches_products_wasifyai_voice_speeches_get: {
         parameters: {
             query?: {
@@ -5690,6 +5740,7 @@ export interface operations {
             query?: {
                 ids?: string | null;
                 limit?: number;
+                favourites?: boolean;
             };
             header?: never;
             path?: never;
@@ -5781,7 +5832,7 @@ export interface operations {
             };
         };
     };
-    rename_track_products_wasifyai_voice_tracks__tid__patch: {
+    update_track_products_wasifyai_voice_tracks__tid__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -5792,7 +5843,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Title"];
+                "application/json": components["schemas"]["TrackPatch"];
             };
         };
         responses: {
@@ -5820,7 +5871,9 @@ export interface operations {
     };
     download_track_products_wasifyai_voice_tracks__tid__download_get: {
         parameters: {
-            query?: never;
+            query?: {
+                format?: string;
+            };
             header?: never;
             path: {
                 tid: string;

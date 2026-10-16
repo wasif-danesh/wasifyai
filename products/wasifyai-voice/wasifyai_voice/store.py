@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _SPEECHES = """
 CREATE TABLE speeches(
@@ -50,7 +50,8 @@ CREATE TABLE tracks(
   model_id TEXT NOT NULL, options TEXT NOT NULL DEFAULT '{}',
   seed INTEGER, seconds REAL NOT NULL, sample_rate INTEGER NOT NULL, audio_key TEXT NOT NULL,
   load_s REAL NOT NULL DEFAULT 0, elapsed_s REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL);
+  updated_at TEXT NOT NULL, favourite INTEGER NOT NULL DEFAULT 0, parent_id TEXT,
+  edit TEXT NOT NULL DEFAULT '{}');
 CREATE INDEX tracks_owner ON tracks(tenant_id, user_id, created_at DESC);
 """
 _SCHEMA = "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);" + (
@@ -61,8 +62,13 @@ _V2_UPGRADE = (
     "ALTER TABLE speeches ADD COLUMN mode TEXT NOT NULL DEFAULT 'speak';"
     "ALTER TABLE speeches ADD COLUMN saved_voice_id TEXT;" + _VOICES
 )
-# what version 3 adds: music
+# what version 3 adds: music; version 4: favourites, and what a track was edited from
 _V3_UPGRADE = _TRACKS
+_V4_UPGRADE = (
+    "ALTER TABLE tracks ADD COLUMN favourite INTEGER NOT NULL DEFAULT 0;"
+    "ALTER TABLE tracks ADD COLUMN parent_id TEXT;"
+    "ALTER TABLE tracks ADD COLUMN edit TEXT NOT NULL DEFAULT '{}';"
+)
 
 
 class NotFound(Exception):
@@ -96,8 +102,11 @@ class VoiceStore:
                     raise RuntimeError("voice.db was made by a newer version of this app")
                 if version == 1:
                     db.executescript("BEGIN;" + _V2_UPGRADE + "COMMIT;")
-                if version <= 2:
+                if version <= 2:  # the tracks table is made with its version 4 columns
                     db.executescript("BEGIN;" + _V3_UPGRADE + "COMMIT;")
+                elif version == 3:
+                    db.executescript("BEGIN;" + _V4_UPGRADE + "COMMIT;")
+                if version < SCHEMA_VERSION:
                     db.execute(
                         "UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),)
                     )
@@ -312,23 +321,27 @@ class VoiceStore:
         d = dict(r)
         d["options"] = json.loads(d["options"])
         d["instrumental"] = bool(d["instrumental"])
+        d["favourite"] = bool(d["favourite"])
+        d["edit"] = json.loads(d["edit"])
         return d
 
     def add_track(
         self, tenant: str, user: str, *, title: str, mode: str, description: str, lyrics: str,
         instrumental: bool, model_id: str, options: dict[str, Any], seed: int | None,
         seconds: float, sample_rate: int, audio_key: str, load_s: float, elapsed_s: float,
-        track_id: str | None = None,
+        track_id: str | None = None, parent_id: str | None = None,
+        edit: dict[str, Any] | None = None,
     ) -> dict[str, Any]:  # fmt: skip
         tid, stamp = track_id or new_id(), now()
         with self._connect() as db:
             db.execute(
                 "INSERT INTO tracks(id, tenant_id, user_id, title, mode, description, lyrics, "
                 "instrumental, model_id, options, seed, seconds, sample_rate, audio_key, load_s, "
-                "elapsed_s, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "elapsed_s, created_at, updated_at, parent_id, edit) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (tid, tenant, user, title, mode, description, lyrics, int(instrumental), model_id,
                  json.dumps(options), seed, seconds, sample_rate, audio_key, load_s, elapsed_s,
-                 stamp, stamp),
+                 stamp, stamp, parent_id, json.dumps(edit or {})),
             )  # fmt: skip
         return self.get_track(tenant, user, tid)
 
@@ -343,23 +356,32 @@ class VoiceStore:
         return self._track(r)
 
     def list_tracks(
-        self, tenant: str, user: str, ids: list[str] | None = None, limit: int = 100
-    ) -> list[dict[str, Any]]:
+        self, tenant: str, user: str, ids: list[str] | None = None, limit: int = 100,
+        favourites: bool = False,
+    ) -> list[dict[str, Any]]:  # fmt: skip
         with self._connect() as db:
             rows = db.execute(
                 "SELECT * FROM tracks WHERE tenant_id = ? AND user_id = ? "
-                "ORDER BY created_at DESC, id LIMIT ?",
-                (tenant, user, max(1, min(limit, 500))),
+                "AND (? = 0 OR favourite = 1) ORDER BY created_at DESC, id LIMIT ?",
+                (tenant, user, int(favourites), max(1, min(limit, 500))),
             ).fetchall()
         return [self._track(r) for r in rows if ids is None or r["id"] in ids]
 
-    def rename_track(self, tenant: str, user: str, tid: str, title: str) -> dict[str, Any]:
-        self.get_track(tenant, user, tid)
+    def update_track(
+        self, tenant: str, user: str, tid: str, *, title: str | None = None,
+        favourite: bool | None = None,
+    ) -> dict[str, Any]:  # fmt: skip
+        t = self.get_track(tenant, user, tid)
         with self._connect() as db:
             db.execute(
-                "UPDATE tracks SET title = ?, updated_at = ? WHERE id = ?", (title, now(), tid)
-            )
+                "UPDATE tracks SET title = ?, favourite = ?, updated_at = ? WHERE id = ?",
+                (title if title is not None else t["title"],
+                 int(favourite if favourite is not None else t["favourite"]), now(), tid),
+            )  # fmt: skip
         return self.get_track(tenant, user, tid)
+
+    def rename_track(self, tenant: str, user: str, tid: str, title: str) -> dict[str, Any]:
+        return self.update_track(tenant, user, tid, title=title)
 
     def delete_track(self, tenant: str, user: str, tid: str) -> dict[str, Any]:
         gone = self.get_track(tenant, user, tid)

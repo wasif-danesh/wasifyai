@@ -90,3 +90,5 @@ export { useVoiceModels } from "./voice/use-voice-models";
 export { CONSENT_TEXT, VoicesWorkspace, type VoicesWorkspaceProps } from "./voice/VoicesWorkspace";
 export { MusicWorkspace, type MusicWorkspaceProps } from "./voice/MusicWorkspace";
 export { TrackList } from "./voice/TrackList";
+export { EditTrack, type EditTrackProps } from "./voice/EditTrack";
+export { LyricsWriter, type LyricsWriterProps } from "./voice/LyricsWriter";

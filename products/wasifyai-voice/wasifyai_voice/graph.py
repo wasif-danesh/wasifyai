@@ -13,7 +13,9 @@ The graph names a task and, optionally, a model id; the engine's descriptors dec
 (`wasifyai_platform_sdk.voice_models`). A request the model cannot take is refused in words before
 anything is loaded; the engine's own failures end the run with a typed error."""
 
+import asyncio
 import logging
+import re
 from typing import Any, Literal, TypedDict, cast
 
 from langgraph.config import get_stream_writer
@@ -26,6 +28,7 @@ from wasifyai_platform_sdk import (
     check_clone,
     check_design,
     check_music,
+    check_music_edit,
     check_speak,
     require_context,
 )
@@ -47,8 +50,15 @@ class SpeakState(TypedDict, total=False):
     voice: str
     options: dict[str, Any]
     saved_voice: str  # the id of a saved voice (described or cloned); `voice` is for built-in ones
-    # music (`task: "music"`)
-    task: str  # "speak" (the default) or "music"
+    # music (`task: "music"`), changing a clip (`"music_edit"`), writing lyrics (`"lyrics"`)
+    task: str  # "speak" (the default), "music", "music_edit" or "lyrics"
+    source_track: str  # music_edit: the track to change
+    edit_action: str
+    edit_ranges: list[list[float]]
+    strength: float
+    extend_s: float
+    style: str  # lyrics: the kind of music the words are for
+    language: str  # lyrics: the language to write in
     music_mode: str  # song | sfx
     lyrics: str
     instrumental: bool
@@ -71,6 +81,28 @@ class SpeakState(TypedDict, total=False):
     elapsed_s: float
     status: Status
     refusal: dict[str, str]
+
+
+LYRICS_SYSTEM = (
+    "You write song lyrics. Write about {lines} lines in {language}, in sections marked on "
+    "their own line with [verse], [chorus] or [bridge] (lower case, in square brackets), "
+    "starting with a verse. Short singable lines, no more than about eight words each, with a "
+    "repeated chorus. Answer with the lyrics only: no title, no notes, no explanation."
+)
+
+
+def clean_lyrics(text: str) -> str:
+    """The lyrics as the music models want them: no code fences, no thinking, no preamble, section
+    tags in lower case on their own lines."""
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.S)
+    text = re.sub(r"^```[a-z]*\n|\n```$", "", text.strip())
+    lines = [ln.rstrip() for ln in text.replace("\r\n", "\n").split("\n")]
+    for i, ln in enumerate(lines):  # drop a line of preamble before the first section
+        if ln.strip().startswith("["):
+            lines = lines[i:]
+            break
+    out = [ln.lower() if re.fullmatch(r"\s*\[[A-Za-z0-9 ]+\]\s*", ln) else ln for ln in lines]
+    return "\n".join(out).strip()[:5000]
 
 
 def _title(description: str) -> str:
@@ -277,8 +309,132 @@ def build_speak(caps: Capabilities, checkpointer: Any):
             "elapsed_s": round(result.elapsed_s, 2), "status": "done",
         }  # fmt: skip
 
+    # ---- changing a clip -------------------------------------------------------------------
+
+    async def edit_music(state: SpeakState) -> SpeakState:
+        eng = engine()
+        get_stream_writer()(
+            {
+                "type": "node",
+                "node": "edit_music",
+                "status": "started",
+                "label": "Changing the music",
+            }
+        )
+        ctx = require_context()
+        store = store_for(app_state)
+        try:
+            source = store.get_track(ctx.tenant_id, ctx.user_id, str(state.get("source_track")))
+        except NotFound:
+            return refuse_with("unknown_track", "The music to change is no longer there.")
+        try:
+            model = eng.resolve("music", state.get("model") or None)
+        except VoiceEngineError as e:
+            raise RunError(e.code, e.message) from None
+        try:
+            req = check_music_edit(
+                model, state.get("edit_action", ""), state.get("text", ""), source["seconds"],
+                [(float(a), float(b)) for a, b in state.get("edit_ranges") or []],
+                state.get("strength"), state.get("extend_s"), state.get("options"),
+                state.get("seed"),
+            )  # fmt: skip
+        except VoiceRequestError as e:
+            return refuse_with(e.code, e.message)
+        assert caps.storage is not None, "storage is required"
+        try:
+            wav = await caps.storage.get(source["audio_key"])
+        except FileNotFoundError:
+            return refuse_with("unknown_track", "The sound of that music is no longer there.")
+        scratch = store.root / "tmp"
+        await asyncio.to_thread(scratch.mkdir, parents=True, exist_ok=True)
+        clip = scratch / f"{new_id()}.wav"
+        await asyncio.to_thread(clip.write_bytes, wav)
+        try:
+            result = await eng.music_edit(model, req, clip)
+        except VoiceEngineError as e:
+            raise RunError(
+                e.code, e.message, retryable=e.code in ("busy", "engine_stopped")
+            ) from None
+        finally:
+            await asyncio.to_thread(clip.unlink, missing_ok=True)
+        track_id = new_id()
+        key = f"music/{track_id}.wav"
+        await caps.storage.put(key, result.wav, "audio/wav")
+        title = (state.get("title") or "").strip()[:120] or f"{source['title']} ({req.action})"[
+            :120
+        ]
+        edit = {
+            "action": req.action, "ranges": [list(r) for r in req.ranges],
+            "strength": req.strength, "extend_s": req.extend_s,
+        }  # fmt: skip
+        store.add_track(
+            ctx.tenant_id, ctx.user_id, title=title, mode="edit", description=req.description,
+            lyrics=source["lyrics"], instrumental=source["instrumental"], model_id=model.id,
+            options=req.options, seed=result.seed, seconds=round(result.seconds, 2),
+            sample_rate=result.sample_rate, audio_key=key, load_s=round(result.load_s, 2),
+            elapsed_s=round(result.elapsed_s, 2), track_id=track_id, parent_id=source["id"],
+            edit=edit,
+        )  # fmt: skip
+        await caps.index_creation("track", track_id, f"{title}. {req.description}")
+        await caps.record_usage(
+            MUSIC_CREATED, 1, "tracks", track_id=track_id, model=model.id, mode="edit",
+            seconds=round(result.seconds, 2),
+        )  # fmt: skip
+        return {
+            "track_id": track_id, "audio_url": await caps.storage.url(key), "title": title,
+            "seconds": round(result.seconds, 2), "sample_rate": result.sample_rate,
+            "seed": result.seed or 0, "load_s": round(result.load_s, 2),
+            "elapsed_s": round(result.elapsed_s, 2), "status": "done",
+        }  # fmt: skip
+
+    # ---- writing lyrics ------------------------------------------------------------------
+
+    async def write_lyrics(state: SpeakState) -> SpeakState:
+        write = get_stream_writer()
+        write({"type": "node", "node": "write_lyrics", "status": "started", "label": "Writing"})
+        idea = " ".join(str(state.get("text", "")).split())[:500]
+        if len(idea) < 3:
+            return refuse_with("description_too_short", "Say what the song is about.")
+        seconds = float(state.get("duration") or 60)
+        lines = int(max(8, min(40, round(seconds / 4))))
+        style = " ".join(str(state.get("style", "")).split())[:200]
+        language = " ".join(str(state.get("language", "") or "English").split())[:40]
+        system = LYRICS_SYSTEM.format(lines=lines, language=language)
+        user = f"What the song is about: {idea}" + (f"\nThe music: {style}" if style else "")
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        text = ""
+        for _ in range(2):
+            text = ""
+            try:
+                async for chunk in caps.text.chat("chat", messages, None):
+                    if chunk.text:
+                        text += chunk.text
+                        write({"type": "token", "node": "write_lyrics", "text": chunk.text})
+            except RunError:
+                raise
+            except Exception:
+                log.exception("the language model failed")
+                raise RunError(
+                    "language_failed",
+                    "The language model did not answer. Check it in Models and try again.",
+                    retryable=True,
+                ) from None
+            text = clean_lyrics(text)
+            if len([x for x in text.splitlines() if x.strip() and not x.startswith("[")]) >= 4:
+                return {"lyrics": text, "status": "done"}
+            messages = [
+                *messages,
+                {"role": "assistant", "content": text or "(nothing)"},
+                {"role": "user", "content": "That was too short. Write the full lyrics now."},
+            ]
+        raise RunError(
+            "lyrics_failed", "The words could not be written. Try again.", retryable=True
+        )
+
     def route(state: SpeakState) -> str:
-        return "check_music" if state.get("task") == "music" else "check_request"
+        return {"music": "check_music", "music_edit": "edit_music", "lyrics": "write_lyrics"}.get(
+            state.get("task", ""), "check_request"
+        )
 
     g = StateGraph(SpeakState)
     for name, fn in [
@@ -287,11 +443,22 @@ def build_speak(caps: Capabilities, checkpointer: Any):
         ("refuse", refuse),
         ("speak", speak),
         ("make_music", make_music),
+        ("edit_music", edit_music),
+        ("write_lyrics", write_lyrics),
     ]:
         g.add_node(name, cast(Any, fn))
     g.add_conditional_edges(
-        START, route, {"check_music": "check_music", "check_request": "check_request"}
+        START,
+        route,
+        {
+            "check_music": "check_music",
+            "check_request": "check_request",
+            "edit_music": "edit_music",
+            "write_lyrics": "write_lyrics",
+        },
     )
+    g.add_edge("edit_music", END)
+    g.add_edge("write_lyrics", END)
     g.add_conditional_edges(
         "check_music", after_music_check, {"refuse": "refuse", "make_music": "make_music"}
     )

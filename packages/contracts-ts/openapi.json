@@ -2658,6 +2658,37 @@
         "title": "ToolResultEvent",
         "type": "object"
       },
+      "TrackPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "favourite": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Favourite"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "TrackPatch",
+        "type": "object"
+      },
       "TranscriptDetail": {
         "properties": {
           "created_at": {
@@ -7476,6 +7507,35 @@
         ]
       }
     },
+    "/products/wasifyai-voice/formats": {
+      "get": {
+        "description": "The formats a track or a speech can be saved in: WAV always, and what the tools on this\ncomputer can make.",
+        "operationId": "formats_products_wasifyai_voice_formats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "title": "Response Formats Products Wasifyai Voice Formats Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Formats",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
     "/products/wasifyai-voice/speeches": {
       "get": {
         "operationId": "list_speeches_products_wasifyai_voice_speeches_get",
@@ -7689,6 +7749,16 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "favourites",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Favourites",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -7798,7 +7868,7 @@
         ]
       },
       "patch": {
-        "operationId": "rename_track_products_wasifyai_voice_tracks__tid__patch",
+        "operationId": "update_track_products_wasifyai_voice_tracks__tid__patch",
         "parameters": [
           {
             "in": "path",
@@ -7814,7 +7884,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Title"
+                "$ref": "#/components/schemas/TrackPatch"
               }
             }
           },
@@ -7826,7 +7896,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Rename Track Products Wasifyai Voice Tracks  Tid  Patch",
+                  "title": "Response Update Track Products Wasifyai Voice Tracks  Tid  Patch",
                   "type": "object"
                 }
               }
@@ -7844,7 +7914,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Rename Track",
+        "summary": "Update Track",
         "tags": [
           "wasifyai-voice"
         ]
@@ -7860,6 +7930,17 @@
             "required": true,
             "schema": {
               "title": "Tid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "wav",
+              "pattern": "^(wav|mp3|m4a)$",
+              "title": "Format",
               "type": "string"
             }
           }

@@ -1,4 +1,6 @@
 id: wasifyai-voice
-# Speech to text and text to speech on this computer (ADR-0066). The models and the runtime belong to
-# the engine; this product asks it for them, so no capability is bound here.
-capabilities: {}
+# Speech, transcripts and music on this computer (ADR-0066). The speech and music models and their
+# runtime belong to the engine; this product asks it for them.
+capabilities:
+  # writes lyrics (the Music > Lyrics screen); on the desktop it is the person's chosen chat model
+  text.chat: { provider: litellm, model: default-chat }

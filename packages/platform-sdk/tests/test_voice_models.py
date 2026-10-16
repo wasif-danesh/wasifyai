@@ -5,6 +5,7 @@ from wasifyai_platform_sdk import (
     VoiceRequestError,
     check_clone,
     check_design,
+    check_music_edit,
     check_options,
     check_speak,
     check_transcribe,
@@ -290,3 +291,80 @@ def test_a_model_that_always_sings_or_needs_lyrics_says_so():
     with pytest.raises(VoiceRequestError) as e:
         check_music(model(), "song", "folk song", "", False, None, None, None)
     assert e.value.code == "wrong_task"
+
+
+def editor(**over):
+    modes = {
+        "song": {"lyrics": "optional", "instrumental": "toggle", "duration": [5, 30, 240]},
+        "edit": {"actions": ["repaint", "extend", "cover"], "max_ranges": 1, "max_source_s": 240},
+    }
+    request = {"duration": "top", "lyrics_option": "lyrics", "edit": "ace_step"}
+    return model(
+        tasks=["music"], recommended=["music"], voices=[], default_voice=None, options=[],
+        music={"modes": modes, "request": request, **over},
+    )  # fmt: skip
+
+
+def test_an_edit_is_declared_with_actions_a_recipe_and_limits():
+    assert editor().music["modes"]["edit"]["actions"] == ["repaint", "extend", "cover"]
+    bad_actions = {"modes": {"edit": {"actions": ["melt"], "max_ranges": 1, "max_source_s": 60}}}
+    with pytest.raises(ValueError, match="edit.actions"):
+        editor(**bad_actions)
+    no_recipe = {"duration": "top", "lyrics_option": "lyrics"}
+    with pytest.raises(ValueError, match="request.edit"):
+        editor(request=no_recipe)
+
+
+def test_the_parts_of_an_edit_are_brought_into_the_clip_and_checked_per_action():
+    m = editor()
+    r = check_music_edit(
+        m, "repaint", " fix the chorus ", 60, [(50, 90), (-3, 10), (8, 52)], 0.4, None, None, 9
+    )
+    assert r.ranges == ((0.0, 60.0),) and r.strength == 0.4  # clamped, then joined where they touch
+    assert (r.description, r.seed) == ("fix the chorus", 9)
+    spaced = check_music_edit(m, "repaint", "x y z", 60, [(5, 10)], None, None, None, None)
+    assert spaced.ranges == ((5.0, 10.0),)
+    joined = check_music_edit(m, "repaint", "x y z", 60, [(5, 10), (8, 20)], None, None, None, None)
+    assert joined.ranges == ((5.0, 20.0),)
+    ext = check_music_edit(m, "extend", "keep going", 100, None, None, 30, None, None)
+    assert ext.extend_s == 30.0 and ext.ranges == ()
+    assert check_music_edit(m, "cover", "as jazz", 100, None, 0.7, None, None, None).strength == 0.7
+
+
+@pytest.mark.parametrize(
+    "args, code",
+    [
+        (("rewind", "fix it", 60, [(1, 5)], None, None), "wrong_action"),
+        (("repaint", "", 60, [(1, 5)], None, None), "empty_text"),
+        (("repaint", "fix it", 60, None, None, None), "ranges_required"),
+        (("repaint", "fix it", 60, [(1, 1.1)], None, None), "ranges_required"),
+        (("repaint", "fix it", 60, [(1, 5), (10, 20)], None, None), "too_many_ranges"),
+        (("repaint", "fix it", 300, [(1, 5)], None, None), "clip_length"),
+        (("repaint", "fix it", 60, [(1, 5)], 1.5, None), "bad_option"),
+        (("extend", "go on", 60, [(1, 5)], None, 10), "no_ranges"),
+        (("extend", "go on", 60, None, 0.5, 10), "no_strength"),
+        (("extend", "go on", 60, None, None, None), "extend_required"),
+        (("extend", "go on", 60, None, None, 500), "extend_required"),
+        (("extend", "go on", 230, None, None, 20), "clip_length"),
+        (("cover", "as jazz", 60, None, None, 10), "no_extend"),
+        (("cover", "as jazz", 60, [(1, 5)], 0.5, None), "no_ranges"),
+    ],
+)
+def test_an_edit_the_model_cannot_do_is_refused_in_words(args, code):
+    action, description, seconds, ranges, strength, extend = args
+    with pytest.raises(VoiceRequestError) as e:
+        check_music_edit(
+            editor(), action, description, seconds, ranges, strength, extend, None, None
+        )
+    assert e.value.code == code
+
+
+def test_a_model_without_an_edit_mode_says_so_and_a_song_request_never_means_an_edit():
+    from wasifyai_platform_sdk import check_music
+
+    with pytest.raises(VoiceRequestError) as e:
+        check_music_edit(musician(), "repaint", "fix it", 60, [(1, 5)], None, None, None, None)
+    assert e.value.code == "wrong_mode"
+    with pytest.raises(VoiceRequestError) as e:
+        check_music(editor(), "edit", "fix it", None, False, None, None, None)
+    assert e.value.code == "wrong_mode"

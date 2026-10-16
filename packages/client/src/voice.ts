@@ -35,6 +35,7 @@ export type VoiceOption = {
 export type VoiceInfo = { id: string; label: string; language: string; gender: string };
 
 export type MusicMode = "song" | "sfx";
+export type EditAction = "repaint" | "extend" | "cover" | "inpaint" | "restyle";
 
 /** What a music model offers in one mode: whether it sings lyrics, whether it can leave the singing
  * out, and the lengths it makes, as [shortest, usual, longest] seconds. */
@@ -43,6 +44,9 @@ export type MusicModeRules = {
   instrumental?: "toggle" | "always" | "never";
   duration: [number, number, number];
 };
+
+/** What a model can do to a clip: the actions, how many parts at once, how long a clip. */
+export type MusicEditRules = { actions: EditAction[]; max_ranges: number; max_source_s: number };
 
 export type VoiceModelInfo = {
   id: string;
@@ -66,7 +70,7 @@ export type VoiceModelInfo = {
   voices: VoiceInfo[];
   default_voice: string | null;
   options: VoiceOption[];
-  music: { modes?: Partial<Record<MusicMode, MusicModeRules>> };
+  music: { modes?: Partial<Record<MusicMode, MusicModeRules>> & { edit?: MusicEditRules } };
   state: ModelState;
   files_ready: boolean;
   runtime_ready: boolean;
@@ -124,7 +128,16 @@ export type SavedVoice = {
 export type Track = {
   id: string;
   title: string;
-  mode: MusicMode;
+  mode: MusicMode | "edit";
+  favourite: boolean;
+  /** the track this was made from, when it is an edit */
+  parent_id: string | null;
+  edit: {
+    action?: EditAction;
+    ranges?: [number, number][];
+    strength?: number | null;
+    extend_s?: number | null;
+  };
   description: string;
   lyrics: string;
   instrumental: boolean;
@@ -224,18 +237,33 @@ export function createVoiceApi(transport: Transport) {
       return res.blob();
     },
 
-    tracks: async (limit = 100) =>
-      (await json<{ items: Track[] }>(`${base}/tracks?limit=${limit}`)).items,
+    tracks: async (opts: { limit?: number; favourites?: boolean } = {}) =>
+      (
+        await json<{ items: Track[] }>(
+          `${base}/tracks?limit=${opts.limit ?? 100}${opts.favourites ? "&favourites=true" : ""}`,
+        )
+      ).items,
+    track: (id: string) => json<Track>(`${base}/tracks/${encodeURIComponent(id)}`),
+    updateTrack: (id: string, change: { title?: string; favourite?: boolean }) =>
+      json<Track>(`${base}/tracks/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify(change),
+      }),
     renameTrack: (id: string, title: string) =>
       json<Track>(`${base}/tracks/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: JSON_HEADERS,
         body: JSON.stringify({ title }),
       }),
+    /** The formats a track can be saved in on this computer: WAV always, MP3 and M4A where a tool is. */
+    formats: async () => (await json<{ formats: string[] }>(`${base}/formats`)).formats,
     removeTrack: (id: string) =>
       none(`${base}/tracks/${encodeURIComponent(id)}`, { method: "DELETE" }),
-    async downloadTrack(id: string): Promise<Blob> {
-      const res = await request(`${base}/tracks/${encodeURIComponent(id)}/download`);
+    async downloadTrack(id: string, format: "wav" | "mp3" | "m4a" = "wav"): Promise<Blob> {
+      const res = await request(
+        `${base}/tracks/${encodeURIComponent(id)}/download?format=${format}`,
+      );
       if (!res.ok) throw new HttpError(res.status, await errorMessage(res));
       return res.blob();
     },
@@ -382,7 +410,7 @@ export type MusicResult =
 
 /** Make one piece of music and follow the run to its end. It can take minutes; the track is saved by
  * the engine, so the caller reads the list again afterwards. */
-export async function makeTrack(
+export function makeTrack(
   runs: {
     startRun(p: string, input: object, s: AbortSignal, on: (e: ParsedEvent) => void): Promise<void>;
   },
@@ -390,12 +418,6 @@ export async function makeTrack(
   signal: AbortSignal,
   onStep?: (label: string) => void,
 ): Promise<MusicResult> {
-  let result: MusicResult = {
-    ok: false,
-    code: "lost",
-    message:
-      "We lost the connection while it was being made. It may still finish: look in the list.",
-  };
   const input: Record<string, unknown> = { task: "music", text: request.description };
   if (request.model) input.model = request.model;
   if (request.mode) input.music_mode = request.mode;
@@ -405,6 +427,23 @@ export async function makeTrack(
   if (request.seed !== undefined) input.seed = request.seed;
   if (request.title?.trim()) input.title = request.title;
   if (request.options && Object.keys(request.options).length) input.options = request.options;
+  return followMusic(runs, input, signal, onStep);
+}
+
+async function followMusic(
+  runs: {
+    startRun(p: string, input: object, s: AbortSignal, on: (e: ParsedEvent) => void): Promise<void>;
+  },
+  input: Record<string, unknown>,
+  signal: AbortSignal,
+  onStep?: (label: string) => void,
+): Promise<MusicResult> {
+  let result: MusicResult = {
+    ok: false,
+    code: "lost",
+    message:
+      "We lost the connection while it was being made. It may still finish: look in the list.",
+  };
   await runs.startRun(VOICE_PRODUCT, input, signal, (e) => {
     const data = e.data as unknown as Record<string, unknown>;
     if (e.event === "node" && typeof data.label === "string") onStep?.(data.label);
@@ -434,6 +473,103 @@ export async function makeTrack(
             audio_url: String(out.audio_url ?? ""),
           },
         };
+      }
+    }
+  });
+  return result;
+}
+
+export type EditRequest = {
+  /** the track to change */
+  source: string;
+  action: EditAction;
+  description: string;
+  model?: string;
+  /** parts of the clip, as [start, end] seconds */
+  ranges?: [number, number][];
+  strength?: number;
+  extend?: number;
+  seed?: number;
+  title?: string;
+  options?: Record<string, unknown>;
+};
+
+/** Change a track and follow the run to its end; the result is a new track that remembers its source. */
+export function makeEdit(
+  runs: Parameters<typeof makeTrack>[0],
+  request: EditRequest,
+  signal: AbortSignal,
+  onStep?: (label: string) => void,
+): Promise<MusicResult> {
+  const input: Record<string, unknown> = {
+    task: "music_edit",
+    source_track: request.source,
+    edit_action: request.action,
+    text: request.description,
+  };
+  if (request.model) input.model = request.model;
+  if (request.ranges?.length) input.edit_ranges = request.ranges;
+  if (request.strength !== undefined) input.strength = request.strength;
+  if (request.extend !== undefined) input.extend_s = request.extend;
+  if (request.seed !== undefined) input.seed = request.seed;
+  if (request.title?.trim()) input.title = request.title;
+  if (request.options && Object.keys(request.options).length) input.options = request.options;
+  return followMusic(runs, input, signal, onStep);
+}
+
+export type LyricsRequest = {
+  idea: string;
+  style?: string;
+  /** the length of the music, which sets how many lines are written */
+  duration?: number;
+  language?: string;
+};
+
+export type LyricsResult =
+  | { ok: true; lyrics: string }
+  | { ok: false; code: string; message: string };
+
+/** Ask the chat model for lyrics. `onText` gets the words as they arrive. */
+export async function makeLyrics(
+  runs: Parameters<typeof makeTrack>[0],
+  request: LyricsRequest,
+  signal: AbortSignal,
+  onText?: (soFar: string) => void,
+): Promise<LyricsResult> {
+  let result: LyricsResult = {
+    ok: false,
+    code: "lost",
+    message: "We lost the connection while the words were being written.",
+  };
+  let streamed = "";
+  const input: Record<string, unknown> = { task: "lyrics", text: request.idea };
+  if (request.style) input.style = request.style;
+  if (request.duration !== undefined) input.duration = request.duration;
+  if (request.language) input.language = request.language;
+  await runs.startRun(VOICE_PRODUCT, input, signal, (e) => {
+    const data = e.data as unknown as Record<string, unknown>;
+    if (e.event === "token" && typeof data.text === "string") {
+      streamed += data.text;
+      onText?.(streamed);
+    }
+    if (e.event === "error") {
+      result = {
+        ok: false,
+        code: String(data.code ?? "failed"),
+        message: String(data.message ?? "Something went wrong."),
+      };
+    }
+    if (e.event === "done") {
+      const out = (data.outputs as Record<string, unknown>) ?? {};
+      if (out.status === "refused") {
+        const refusal = (out.refusal as Record<string, string>) ?? {};
+        result = {
+          ok: false,
+          code: refusal.code ?? "refused",
+          message: refusal.message ?? "That could not be written.",
+        };
+      } else if (typeof out.lyrics === "string") {
+        result = { ok: true, lyrics: out.lyrics };
       }
     }
   });

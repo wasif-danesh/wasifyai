@@ -1,4 +1,4 @@
-# A synthetic library for measuring search (ADR-0041): 20 concepts, each as three items in three
+# A synthetic library for measuring search (ADR-0041): 23 concepts, each as three items in three
 # different languages (a song, an image prompt and a video prompt), so a good search must find them across
 # languages. `queries` are phrased differently from the items, in a language that is sometimes the same
 # as one of the items and sometimes not. `nomatch` queries have nothing in the library to find.
@@ -194,6 +194,33 @@ concepts:
       - { lang: de, text: "Waldweg im Herbst mit fallendem Laub" }
       - { lang: en, text: "walking down a path covered in autumn leaves" }
       - { lang: ru, text: "лесная тропинка осенью с опавшими листьями" }
+  - id: rooftop-lofi
+    items:
+      - { kind: track, lang: en, text: "Rooftop Study Beats. Lo-fi instrumental, 80 bpm, warm piano and soft vinyl crackle, calm night in the city" }
+      - { kind: speech, lang: pt, text: "Boa noite. Hoje vamos estudar no terraço, com música tranquila e uma xícara de chá." }
+      - { kind: image, lang: ja, text: "夜のビルの屋上で勉強する学生、暖かいランプの光と遠くの街の明かり" }
+    queries:
+      - { lang: es, text: "música tranquila para estudiar de noche" }
+      - { lang: de, text: "entspannte Hintergrundmusik zum Lernen" }
+      - { lang: en, text: "chill beats to focus while studying" }
+  - id: narrator-voice
+    items:
+      - { kind: voice, lang: en, text: "Old storyteller. A warm, slow, gravelly male voice, like a grandfather reading a bedtime story by the fire" }
+      - { kind: voice, lang: fr, text: "Voix de présentatrice. Une femme jeune, claire et énergique, ton enjoué pour les annonces" }
+      - { kind: transcript, lang: es, text: "Entrevista con un narrador de cuentos. Habla despacio con voz grave y cálida, y cuenta historias para dormir a los niños." }
+    queries:
+      - { lang: de, text: "tiefe ruhige Stimme eines alten Geschichtenerzählers" }
+      - { lang: zh, text: "温暖低沉的老爷爷讲睡前故事的声音" }
+      - { lang: en, text: "slow deep voice for reading bedtime stories" }
+  - id: tide-notes
+    items:
+      - { kind: notebook, lang: en, text: "Coastal erosion research. Notes on how storm surges and rising seas wear away sandy cliffs along the north coast" }
+      - { kind: notebook, lang: de, text: "Küstenschutz. Wie Deiche und Sandvorspülungen das Land vor Sturmfluten bewahren" }
+      - { kind: image, lang: ru, text: "Штормовые волны разбиваются о высокий песчаный обрыв, пена и мокрые камни" }
+    queries:
+      - { lang: fr, text: "la mer qui ronge les falaises après les tempêtes" }
+      - { lang: en, text: "protecting shorelines from flooding" }
+      - { lang: es, text: "erosión de la costa por el aumento del nivel del mar" }
 nomatch:
   - { lang: en, text: "a submarine exploring a deep sea trench" }
   - { lang: es, text: "una panadera amasando pan en la cocina" }

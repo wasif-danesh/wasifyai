@@ -327,10 +327,29 @@ models:
           - 5
           - 30
           - 240
+        edit:
+          actions:
+          - repaint
+          - extend
+          - cover
+          max_ranges: 1
+          max_source_s: 240
       request:
         duration: top
         lyrics_option: lyrics
         instrumental_lyrics: '[Instrumental]'
+        edit: ace_step
+    options:
+    - name: bpm
+      type: int
+      label: Tempo
+      description: Beats per minute (30 to 300). Leave empty to let the model choose.
+      min: 30
+      max: 300
+    - name: keyscale
+      type: string
+      label: Key
+      description: For example C major or A minor. Leave empty to let the model choose.
 - id: stable-audio-3-small-music
   title: Stable Audio 3 Small (music)
   licence: Stability AI Community Licence
@@ -360,6 +379,8 @@ models:
     reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
+      speed_x: 20
+      load_s: 3.3
     music:
       modes:
         song:
@@ -369,8 +390,15 @@ models:
           - 1
           - 30
           - 120
+        edit:
+          actions:
+          - inpaint
+          - restyle
+          max_ranges: 8
+          max_source_s: 120
       request:
         duration: top
+        edit: stable_audio
 - id: stable-audio-3-small-sfx
   title: Stable Audio 3 Small (sound effects)
   licence: Stability AI Community Licence
@@ -399,6 +427,7 @@ models:
     reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
+      load_s: 2.0
     music:
       modes:
         sfx:

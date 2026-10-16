@@ -6,7 +6,7 @@ import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Notice } from "../components/notice";
-import { ToolCard } from "./ToolCard";
+import { ToolCard, type TrackLookup } from "./ToolCard";
 import { Markdown } from "./markdown";
 import { useAssistantChat } from "./use-assistant-chat";
 
@@ -16,6 +16,8 @@ export type ChatScreenProps = {
   runs: Pick<RunClient, "startRun" | "watchRun">;
   assistant: AssistantApi;
   images: ImagesApi;
+  /** Reads a track the assistant made, to play it in the chat. */
+  tracks?: TrackLookup;
   /** A saved conversation to open; null starts a new chat. */
   conversationId?: string | null;
   /** The turn finished and the conversation has an id and a title. */
@@ -40,10 +42,12 @@ export type ChatScreenProps = {
 function Bubble({
   message,
   images,
+  tracks,
   onOpenCreation,
 }: {
   message: ChatMessage;
   images: ImagesApi;
+  tracks?: TrackLookup;
   onOpenCreation?: (kind: string, id: string) => void;
 }) {
   if (message.role === "user") {
@@ -64,7 +68,13 @@ function Bubble({
           // biome-ignore lint/suspicious/noArrayIndexKey: the parts of a message only ever grow at the end
           <Markdown key={`t${n}`} text={p.text} />
         ) : (
-          <ToolCard key={p.id} tool={p} images={images} onOpenCreation={onOpenCreation} />
+          <ToolCard
+            key={p.id}
+            tool={p}
+            images={images}
+            tracks={tracks}
+            onOpenCreation={onOpenCreation}
+          />
         ),
       )}
     </div>
@@ -79,6 +89,7 @@ export function ChatScreen({
   runs,
   assistant,
   images,
+  tracks,
   conversationId,
   onConversation,
   hero,
@@ -200,7 +211,13 @@ export function ChatScreen({
         >
           <div className={cn("mx-auto grid w-full max-w-3xl gap-6")} aria-live="polite">
             {state.messages.map((m) => (
-              <Bubble key={m.id} message={m} images={images} onOpenCreation={onOpenCreation} />
+              <Bubble
+                key={m.id}
+                message={m}
+                images={images}
+                tracks={tracks}
+                onOpenCreation={onOpenCreation}
+              />
             ))}
             {state.error ? (
               <Notice

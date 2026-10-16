@@ -2,6 +2,7 @@
 
 import asyncio
 import io
+import shutil
 
 import pytest
 from fastapi import FastAPI, Header
@@ -312,3 +313,51 @@ def test_another_person_cannot_see_a_track(api):
     ]:
         assert getattr(c, method)(path, headers=other).status_code == 404
     assert c.patch("tracks/t1", json={"title": "x"}, headers=other).status_code == 404
+
+
+def test_a_track_can_be_a_favourite_and_the_list_can_show_only_those(api):
+    c, _, state = api
+    seed_track(state)
+    assert c.get("tracks/t1").json()["favourite"] is False
+    hearted = c.patch("tracks/t1", json={"favourite": True}).json()
+    assert hearted["favourite"] is True and hearted["title"] == "Summer"
+    assert [t["id"] for t in c.get("tracks", params={"favourites": "true"}).json()["items"]] == [
+        "t1"
+    ]
+    c.patch("tracks/t1", json={"favourite": False})
+    assert c.get("tracks", params={"favourites": "true"}).json()["items"] == []
+    assert c.patch("tracks/t1", json={"favourite": "yes"}).status_code == 422
+    assert c.patch("tracks/t1", json={"nonsense": 1}).status_code == 422
+
+
+def test_the_formats_offered_follow_the_tools_on_the_computer(api, monkeypatch):
+    c, *_ = api
+    monkeypatch.setattr(audio_input, "find_converter", lambda: None)
+    assert c.get("formats").json() == {"formats": ["wav"]}
+    monkeypatch.setattr(audio_input, "find_converter", lambda: ("afconvert", "/usr/bin/afconvert"))
+    assert c.get("formats").json() == {"formats": ["wav", "m4a"]}
+    monkeypatch.setattr(audio_input, "find_converter", lambda: ("ffmpeg", "/usr/bin/ffmpeg"))
+    assert c.get("formats").json() == {"formats": ["wav", "mp3", "m4a"]}
+
+
+def test_saving_in_a_format_the_computer_cannot_make_says_what_is_missing(api, monkeypatch):
+    c, _, state = api
+    seed_track(state)
+    monkeypatch.setattr(audio_input, "find_converter", lambda: None)
+    r = c.get("tracks/t1/download", params={"format": "mp3"})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "needs_converter"
+    assert "ffmpeg" in r.json()["detail"]["message"]
+    assert c.get("tracks/t1/download", params={"format": "ogg"}).status_code == 422
+    assert c.get("tracks/t1/download").status_code == 200  # WAV always works
+
+
+@pytest.mark.skipif(
+    not (shutil.which("afconvert") or shutil.which("ffmpeg")),
+    reason="neither afconvert nor ffmpeg is on this computer",
+)
+def test_a_track_is_saved_as_a_real_m4a_when_a_tool_is_there(api):
+    c, _, state = api
+    seed_track(state)
+    r = c.get("tracks/t1/download", params={"format": "m4a"})
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/mp4"
+    assert b"ftyp" in r.content[:16] and "Summer.m4a" in r.headers["content-disposition"]

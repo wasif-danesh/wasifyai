@@ -14,7 +14,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from wasifyai_platform_sdk import (
     Identity,
     RouteDeps,
@@ -37,6 +37,12 @@ TRANSCRIPT_INDEX_CHARS = 2000
 class Title(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: str = Field(min_length=1, max_length=200)
+
+
+class TrackPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    favourite: StrictBool | None = None
 
 
 class NewDesign(BaseModel):
@@ -152,15 +158,22 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         except Exception:
             log.warning("the track could not be added to search", exc_info=True)
 
+    @router.get("/formats")
+    async def formats() -> dict[str, list[str]]:
+        """The formats a track or a speech can be saved in: WAV always, and what the tools on this
+        computer can make."""
+        return {"formats": ["wav", *audio_input.available_encodings()]}
+
     @router.get("/tracks")
     async def list_tracks(
         ids: str | None = Query(None, max_length=2000),
         limit: int = Query(100, ge=1, le=500),
+        favourites: bool = False,
         identity: Identity = Depends(deps.identity),
     ) -> dict[str, Any]:
         wanted = [i for i in (ids or "").split(",") if i] or None
         rows = await asyncio.to_thread(
-            vstore().list_tracks, identity.tenant_id, identity.user_id, wanted, limit
+            vstore().list_tracks, identity.tenant_id, identity.user_id, wanted, limit, favourites
         )
         return {"items": [await track_out(t, identity) for t in rows]}
 
@@ -175,7 +188,11 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         return await track_out(t, identity)
 
     @router.get("/tracks/{tid}/download")
-    async def download_track(tid: str, identity: Identity = Depends(deps.identity)) -> Response:
+    async def download_track(
+        tid: str,
+        format: str = Query("wav", pattern="^(wav|mp3|m4a)$"),
+        identity: Identity = Depends(deps.identity),
+    ) -> Response:
         assert deps.storage is not None
         try:
             t = await asyncio.to_thread(
@@ -185,21 +202,29 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
                 data = await deps.storage.get(t["audio_key"])
         except (NotFound, FileNotFoundError):
             raise HTTPException(404, "track not found") from None
-        name = export.file_name(t["title"], "wav")
+        media = "audio/wav"
+        if format != "wav":
+            try:
+                data = await audio_input.encode(data, format)
+            except audio_input.AudioInputError as e:
+                raise HTTPException(422, {"code": e.code, "message": str(e)}) from None
+            media = audio_input.ENCODINGS[format][0]
+        name = export.file_name(t["title"], format)
         return Response(
-            data, media_type="audio/wav",
+            data, media_type=media,
             headers={"Content-Disposition": f'attachment; filename="{name}"',
                      "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
         )  # fmt: skip
 
     @router.patch("/tracks/{tid}")
-    async def rename_track(
-        tid: str, body: Title, identity: Identity = Depends(deps.identity)
+    async def update_track(
+        tid: str, body: TrackPatch, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
         try:
             t = await asyncio.to_thread(
-                vstore().rename_track, identity.tenant_id, identity.user_id, tid, body.title.strip()
-            )
+                vstore().update_track, identity.tenant_id, identity.user_id, tid,
+                title=body.title.strip() if body.title else None, favourite=body.favourite,
+            )  # fmt: skip
         except NotFound:
             raise HTTPException(404, "track not found") from None
         await reindex_track(identity, t)

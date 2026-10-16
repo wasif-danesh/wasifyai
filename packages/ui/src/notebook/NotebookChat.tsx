@@ -2,7 +2,7 @@
 
 import type { AskState, AskedMessage, NotebookCitation } from "@wasifyai/client";
 import { isWorking } from "@wasifyai/client";
-import { ArrowUp, Copy, Search, Square } from "lucide-react";
+import { ArrowUp, Copy, NotebookPen, Search, Square } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { Markdown } from "../chat/markdown";
 import { cn } from "../cn";
@@ -42,9 +42,11 @@ export function CitationPill({
 function Message({
   message,
   onOpenCitation,
+  onSaveNote,
 }: {
   message: AskedMessage;
   onOpenCitation: (c: NotebookCitation) => void;
+  onSaveNote?: (message: AskedMessage) => void;
 }) {
   if (message.role === "user") {
     return (
@@ -84,6 +86,11 @@ function Message({
           >
             <Copy /> Copy
           </Button>
+          {onSaveNote ? (
+            <Button type="button" variant="ghost" size="xs" onClick={() => onSaveNote(message)}>
+              <NotebookPen /> Save as note
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -110,6 +117,12 @@ export type NotebookChatProps = {
   onNeedModel?: () => void;
   /** A conversation switcher and "new chat". */
   header?: ReactNode;
+  /** Shown above an empty thread: the guide to the notebook. */
+  guide?: ReactNode;
+  /** Keep an answer as a note, which is a source like the others. */
+  onSaveNote?: (message: AskedMessage) => void;
+  /** Fill the box with this text (a question from the guide) when it changes. */
+  draftSeed?: { text: string; id: number } | null;
 };
 
 /** The conversation with a notebook: questions, answers with citations, and the box. */
@@ -126,8 +139,15 @@ export function NotebookChat({
   chip,
   onNeedModel,
   header,
+  guide,
+  onSaveNote,
+  draftSeed,
 }: NotebookChatProps) {
   const [draft, setDraft] = useState("");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new seed (its id) is the trigger
+  useEffect(() => {
+    if (draftSeed) setDraft(draftSeed.text);
+  }, [draftSeed?.id]);
   const boxId = useId();
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -166,12 +186,20 @@ export function NotebookChat({
         >
           <div className="mx-auto grid w-full max-w-3xl gap-6" aria-live="polite">
             {none ? (
-              <p className="text-center text-muted-foreground">
-                Ask a question about your sources. Answers cite the passages they came from.
-              </p>
+              <>
+                {guide}
+                <p className="text-center text-muted-foreground">
+                  Ask a question about your sources. Answers cite the passages they came from.
+                </p>
+              </>
             ) : null}
             {state.messages.map((m) => (
-              <Message key={m.id} message={m} onOpenCitation={onOpenCitation} />
+              <Message
+                key={m.id}
+                message={m}
+                onOpenCitation={onOpenCitation}
+                onSaveNote={onSaveNote}
+              />
             ))}
             {state.error ? (
               <Notice

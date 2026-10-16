@@ -1,5 +1,7 @@
+"use client";
+
 import type { ChatPart, ImageSummary, ImagesApi } from "@wasifyai/client";
-import { ImageIcon, Search } from "lucide-react";
+import { BookOpen, ImageIcon, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../components/button";
 import { Spinner } from "../components/spinner";
@@ -130,6 +132,67 @@ export function ToolCard({ tool, images, onOpenCreation }: ToolCardProps) {
                   >
                     Open
                   </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    );
+  }
+  if (tool.name === "search_notebooks") {
+    if (tool.status === "running") {
+      return (
+        <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
+          <Spinner /> Looking through your notebooks
+        </output>
+      );
+    }
+    if (tool.status !== "ok") {
+      return (
+        <p className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+          <BookOpen className="size-4 shrink-0" aria-hidden="true" />
+          {String(tool.output?.message ?? "Your notebooks could not be searched.")}
+        </p>
+      );
+    }
+    const results = Array.isArray(tool.output?.results)
+      ? (tool.output.results as {
+          notebook_id: string;
+          notebook: string;
+          document_id: string;
+          title: string;
+          snippet?: string;
+        }[])
+      : [];
+    return (
+      <div className="grid gap-2 rounded-lg border p-3 text-sm">
+        <p className="flex items-center gap-2 font-medium">
+          <BookOpen className="size-4" aria-hidden="true" />
+          {results.length ? "From your notebooks" : "Nothing in your notebooks matched"}
+        </p>
+        {results.length ? (
+          <ul className="grid gap-2">
+            {results.map((r) => (
+              <li
+                key={`${r.notebook_id}-${r.document_id}-${r.snippet ?? ""}`}
+                className="grid gap-0.5"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="min-w-0 truncate">{r.title}</span>
+                  <span className="truncate text-muted-foreground text-xs">{r.notebook}</span>
+                  {onOpenCreation ? (
+                    <button
+                      type="button"
+                      className="ms-auto shrink-0 text-xs underline underline-offset-4"
+                      onClick={() => onOpenCreation("notebook", r.notebook_id)}
+                    >
+                      Open notebook
+                    </button>
+                  ) : null}
+                </span>
+                {r.snippet ? (
+                  <span className="line-clamp-2 text-muted-foreground text-xs">{r.snippet}</span>
                 ) : null}
               </li>
             ))}

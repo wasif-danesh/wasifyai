@@ -588,6 +588,111 @@ export interface paths {
         patch: operations["rename_notebook_products_wasifyai_notebooks_notebooks__nid__patch"];
         trace?: never;
     };
+    "/products/wasifyai-notebooks/notebooks/{nid}/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Artifacts */
+        get: operations["list_artifacts_products_wasifyai_notebooks_notebooks__nid__artifacts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-notebooks/notebooks/{nid}/artifacts/{aid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Artifact */
+        get: operations["get_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__get"];
+        put?: never;
+        post?: never;
+        /** Delete Artifact */
+        delete: operations["delete_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Artifact */
+        patch: operations["rename_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__patch"];
+        trace?: never;
+    };
+    "/products/wasifyai-notebooks/notebooks/{nid}/artifacts/{aid}/audio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Overview Audio */
+        get: operations["overview_audio_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__audio_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-notebooks/notebooks/{nid}/artifacts/{aid}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Artifact */
+        post: operations["cancel_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-notebooks/notebooks/{nid}/artifacts/{aid}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Artifact File */
+        get: operations["artifact_file_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-notebooks/notebooks/{nid}/artifacts/{aid}/voices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Overview State */
+        get: operations["overview_state_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__voices_get"];
+        put?: never;
+        /** Speak Overview */
+        post: operations["speak_overview_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__voices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-notebooks/notebooks/{nid}/conversations": {
         parameters: {
             query?: never;
@@ -780,6 +885,27 @@ export interface paths {
         head?: never;
         /** Rename Folder */
         patch: operations["rename_folder_products_wasifyai_notebooks_notebooks__nid__folders__fid__patch"];
+        trace?: never;
+    };
+    "/products/wasifyai-notebooks/notebooks/{nid}/guide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Guide
+         * @description The guide to the notebook (summary, topics, questions to start with), `stale` once its
+         *     sources have changed. Made by a run with `studio: {format: "guide"}`.
+         */
+        get: operations["guide_products_wasifyai_notebooks_notebooks__nid__guide_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/products/wasifyai-notebooks/notebooks/{nid}/passages/{chunk_id}": {
@@ -1084,6 +1210,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-voice/speeches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Speeches */
+        get: operations["list_speeches_products_wasifyai_voice_speeches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/speeches/{sid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Speech */
+        get: operations["get_speech_products_wasifyai_voice_speeches__sid__get"];
+        put?: never;
+        post?: never;
+        /** Delete Speech */
+        delete: operations["delete_speech_products_wasifyai_voice_speeches__sid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/speeches/{sid}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Speech */
+        get: operations["download_speech_products_wasifyai_voice_speeches__sid__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/transcripts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Transcripts */
+        get: operations["list_transcripts_products_wasifyai_voice_transcripts_get"];
+        put?: never;
+        /** Create Transcript */
+        post: operations["create_transcript_products_wasifyai_voice_transcripts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/transcripts/{tid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Transcript */
+        get: operations["get_transcript_products_wasifyai_voice_transcripts__tid__get"];
+        put?: never;
+        post?: never;
+        /** Delete Transcript */
+        delete: operations["delete_transcript_products_wasifyai_voice_transcripts__tid__delete"];
+        options?: never;
+        head?: never;
+        /** Rename Transcript */
+        patch: operations["rename_transcript_products_wasifyai_voice_transcripts__tid__patch"];
+        trace?: never;
+    };
+    "/products/wasifyai-voice/transcripts/{tid}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Transcript */
+        get: operations["export_transcript_products_wasifyai_voice_transcripts__tid__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/voices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Voices */
+        get: operations["list_voices_products_wasifyai_voice_voices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/voices/clone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Clone */
+        post: operations["create_clone_products_wasifyai_voice_voices_clone_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/voices/design": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Design */
+        post: operations["create_design_products_wasifyai_voice_voices_design_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/voices/{vid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Voice */
+        get: operations["get_voice_products_wasifyai_voice_voices__vid__get"];
+        put?: never;
+        post?: never;
+        /** Delete Voice */
+        delete: operations["delete_voice_products_wasifyai_voice_voices__vid__delete"];
+        options?: never;
+        head?: never;
+        /** Update Voice */
+        patch: operations["update_voice_products_wasifyai_voice_voices__vid__patch"];
+        trace?: never;
+    };
     "/products/{product_id}/runs": {
         parameters: {
             query?: never;
@@ -1319,6 +1621,32 @@ export interface components {
             model: string;
             /** Provider */
             provider: string;
+        };
+        /** Body_create_clone_products_wasifyai_voice_voices_clone_post */
+        Body_create_clone_products_wasifyai_voice_voices_clone_post: {
+            /**
+             * Consent
+             * @default
+             */
+            consent: string;
+            /** File */
+            file: string;
+            /** Name */
+            name: string;
+            /**
+             * Reference Text
+             * @default
+             */
+            reference_text: string;
+        };
+        /** Body_create_transcript_products_wasifyai_voice_transcripts_post */
+        Body_create_transcript_products_wasifyai_voice_transcripts_post: {
+            /** File */
+            file: string;
+            /** Model */
+            model?: string | null;
+            /** Title */
+            title?: string | null;
         };
         /** Body_upload_products_wasifyai_notebooks_notebooks__nid__documents_upload_post */
         Body_upload_products_wasifyai_notebooks_notebooks__nid__documents_upload_post: {
@@ -1799,6 +2127,13 @@ export interface components {
             /** Folder Id */
             folder_id?: string | null;
         };
+        /** NewDesign */
+        NewDesign: {
+            /** Description */
+            description: string;
+            /** Name */
+            name: string;
+        };
         /** NewFolder */
         NewFolder: {
             /** Name */
@@ -1877,6 +2212,18 @@ export interface components {
             title: string;
             /** Updated At */
             updated_at: string;
+        };
+        /**
+         * OverviewVoices
+         * @description Which model speaks the overview and which built-in voice each host has (both optional).
+         */
+        OverviewVoices: {
+            /** Model */
+            model?: string | null;
+            /** Voices */
+            voices?: {
+                [key: string]: string;
+            } | null;
         };
         /** ProviderView */
         ProviderView: {
@@ -2368,6 +2715,15 @@ export interface components {
             label: string;
             /** Quality */
             quality: string;
+        };
+        /** VoicePatch */
+        VoicePatch: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Reference Text */
+            reference_text?: string | null;
         };
     };
     responses: never;
@@ -3630,6 +3986,305 @@ export interface operations {
             };
         };
     };
+    list_artifacts_products_wasifyai_notebooks_notebooks__nid__artifacts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nid: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nid: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nid: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Title"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    overview_audio_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__audio_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nid: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nid: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    artifact_file_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nid: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    overview_state_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__voices_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nid: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    speak_overview_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__voices_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nid: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverviewVoices"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_conversations_products_wasifyai_notebooks_notebooks__nid__conversations_get: {
         parameters: {
             query?: never;
@@ -4240,6 +4895,39 @@ export interface operations {
             };
         };
     };
+    guide_products_wasifyai_notebooks_notebooks__nid__guide_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     passage_products_wasifyai_notebooks_notebooks__nid__passages__chunk_id__get: {
         parameters: {
             query?: never;
@@ -4804,6 +5492,536 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_speeches_products_wasifyai_voice_speeches_get: {
+        parameters: {
+            query?: {
+                ids?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_speech_products_wasifyai_voice_speeches__sid__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_speech_products_wasifyai_voice_speeches__sid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_speech_products_wasifyai_voice_speeches__sid__download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_transcripts_products_wasifyai_voice_transcripts_get: {
+        parameters: {
+            query?: {
+                ids?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_transcript_products_wasifyai_voice_transcripts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_transcript_products_wasifyai_voice_transcripts_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_transcript_products_wasifyai_voice_transcripts__tid__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_transcript_products_wasifyai_voice_transcripts__tid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_transcript_products_wasifyai_voice_transcripts__tid__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Title"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_transcript_products_wasifyai_voice_transcripts__tid__export_get: {
+        parameters: {
+            query?: {
+                format?: string;
+            };
+            header?: never;
+            path: {
+                tid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_voices_products_wasifyai_voice_voices_get: {
+        parameters: {
+            query?: {
+                kind?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_clone_products_wasifyai_voice_voices_clone_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_clone_products_wasifyai_voice_voices_clone_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_design_products_wasifyai_voice_voices_design_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewDesign"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_voice_products_wasifyai_voice_voices__vid__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_voice_products_wasifyai_voice_voices__vid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_voice_products_wasifyai_voice_voices__vid__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoicePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

@@ -231,7 +231,7 @@ describe("answers with citations", () => {
     );
     await userEvent.type(screen.getByLabelText("Ask about your sources"), "x{Enter}");
     expect(onSend).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Add a source first.")).toBeTruthy();
+    expect(screen.getAllByText("Add a source first.").length).toBeGreaterThan(0); // chat and Studio
     expect(screen.getByRole("button", { name: "Send" })).toHaveProperty("disabled", true);
   });
 
@@ -465,6 +465,11 @@ describe("a notebook", () => {
       sources: vi.fn(async () => [...sources]),
       folders: vi.fn(async () => []),
       conversations: vi.fn(async () => []),
+      outputs: vi.fn(async () => []),
+      guide: vi.fn(async () => ({ guide: null, stale: false, ready: false })),
+      addNote: vi.fn(async (_n: string, title: string) =>
+        source(`n${title.length}`, { title, kind: "note" }),
+      ),
       conversation: vi.fn(async (): Promise<NotebookConversation> => {
         throw new Error("none");
       }),
@@ -533,14 +538,14 @@ describe("a notebook", () => {
     render(<Harness />);
     // a draft: the add-sources screen, and nothing to ask yet
     expect(screen.getByText("Let’s start your notebook")).toBeTruthy();
-    expect(screen.getByText("Add a source first.")).toBeTruthy();
+    expect(screen.getAllByText("Add a source first.").length).toBeGreaterThan(0); // chat and Studio
     fireEvent.change(screen.getByLabelText("Choose files"), {
       target: { files: [new File(["x"], "budget.pdf")] },
     });
     await waitFor(() => expect(ensure).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByText("budget.pdf")).toBeTruthy());
     // Studio is there and not yet available
-    expect(screen.getAllByText("Soon").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Report" })).toBeTruthy();
 
     await userEvent.type(
       screen.getByLabelText("Ask about your sources"),
@@ -549,6 +554,14 @@ describe("a notebook", () => {
     await waitFor(() => expect(inputs).toHaveLength(1));
     expect(inputs[0]).toMatchObject({ text: "What is the budget?", notebook_id: "n1" });
     expect(inputs[0]).not.toHaveProperty("document_ids"); // nothing unticked: every source
+    // an answer can be kept as a note: a source like the others, with the sources it cited
+    await userEvent.click(await screen.findByRole("button", { name: "Save as note" }));
+    const addNote = api.addNote as unknown as ReturnType<typeof vi.fn>;
+    await waitFor(() => expect(addNote).toHaveBeenCalledTimes(1));
+    const call = addNote.mock.calls[0] ?? [];
+    expect(call[1]).toBe("What is the budget?");
+    expect(call[2]).toBe("It is $350,000 [1].\n\nSources:\n[1] budget.pdf");
+    expect(await screen.findByText("Saved as a note in your sources.")).toBeTruthy();
     const pill = await screen.findByRole("button", { name: /Source 1: budget.pdf/ });
     await userEvent.click(pill);
     await waitFor(() => expect(screen.getByLabelText("Back to sources")).toBeTruthy());

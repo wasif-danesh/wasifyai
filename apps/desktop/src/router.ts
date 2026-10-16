@@ -11,7 +11,10 @@ export type Route =
   | "models"
   | "settings"
   | "notebooks"
-  | "notebook";
+  | "notebook"
+  | "speak"
+  | "transcribe"
+  | "voices";
 
 const PATHS: Record<Route, string> = {
   home: "/",
@@ -22,6 +25,9 @@ const PATHS: Record<Route, string> = {
   settings: "/settings",
   notebooks: "/notebooks",
   notebook: "/notebooks/new", // the draft; a saved notebook is `/notebooks/<id>`
+  speak: "/voice/speak",
+  transcribe: "/voice/transcribe",
+  voices: "/voice/voices",
 };
 
 /** The id in the draft address: a notebook that is not saved yet. */

@@ -38,6 +38,8 @@ export type ModelEntry = {
   bytes_missing: number;
   memory_warning: string | null;
   fit: Fit | null;
+  /** the descriptor of a speech model (ADR-0066); null for other models */
+  voice?: { tasks: string[]; commercial_use: string } | null;
 };
 
 export type DownloadState = {

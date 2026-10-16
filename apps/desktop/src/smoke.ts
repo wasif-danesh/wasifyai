@@ -180,9 +180,35 @@ export async function runSmoke(): Promise<void> {
     );
     await notebooksApi.remove(saved[1] ?? "");
 
+    // Voice (ADR-0066): both screens list their models from the engine's descriptors and say what
+    // they need. Nothing here needs the speech runtime or a model.
+    for (const [path, model, label] of [
+      ["/voice/speak", "Kokoro 82M", "Text to speech"],
+      ["/voice/transcribe", "Parakeet TDT 0.6B v3", "Speech to text"],
+      ["/voice/voices", "", "Voices"],
+    ] as const) {
+      window.location.hash = path;
+      await until(`the ${label} screen`, () =>
+        model
+          ? [...document.querySelectorAll("select option")].some((o) =>
+              o.textContent?.startsWith(model),
+            )
+            ? true
+            : null
+          : document.body.textContent?.includes("Describe a voice")
+            ? true
+            : null,
+      );
+      if (!model) continue;
+      const needs = document.body.textContent ?? "";
+      if (!needs.includes("Set up speech") && !needs.includes("Licence")) {
+        throw new Error(`the ${label} screen shows neither the runtime setup nor the licence`);
+      }
+    }
+
     await report(
       true,
-      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}; a notebook saved with its first source`,
+      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}; a notebook saved with its first source; the speech screens listing their models`,
     );
   } catch (e) {
     // what the window was saying when it gave up makes a CI log readable

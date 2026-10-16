@@ -13,9 +13,15 @@ describe("the side menu", () => {
   });
 
   it("marks what is not built yet, and nothing in Notebook or Images' working tools", () => {
-    for (const id of ["video", "voice", "music"]) {
+    for (const id of ["video", "music"]) {
       expect(GROUPS.find((g) => g.id === id)?.items.every((i) => i.soon)).toBe(true);
     }
+    const voice = GROUPS.find((g) => g.id === "voice")?.items ?? [];
+    expect(voice.filter((i) => !i.soon).map((i) => [i.label, i.route])).toEqual([
+      ["Text to speech", "speak"],
+      ["Speech to text", "transcribe"],
+      ["Voices", "voices"],
+    ]);
     const notebook = GROUPS.find((g) => g.id === "notebook");
     expect(notebook?.items.some((i) => i.soon)).toBe(false);
     const images = GROUPS.find((g) => g.id === "images")?.items ?? [];
@@ -31,6 +37,9 @@ describe("the side menu", () => {
     expect(groupOf("notebooks")).toBe("notebook");
     expect(groupOf("create")).toBe("images");
     expect(groupOf("library")).toBe("images");
+    expect(groupOf("speak")).toBe("voice");
+    expect(groupOf("transcribe")).toBe("voice");
+    expect(groupOf("voices")).toBe("voice");
     expect(groupOf("home")).toBeNull();
     expect(groupOf("models")).toBeNull();
   });

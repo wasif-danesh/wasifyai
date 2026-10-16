@@ -355,9 +355,165 @@ def test_a_notebook_is_in_search_at_once_with_its_sources_and_leaves_with_it(tmp
             assert "budget.md" in index.items[nb["id"]]
             c.patch(f"notebooks/{nb['id']}", json={"title": "Plans"})
             assert index.items[nb["id"]].startswith("Plans")
+            wait_ready(c, nb["id"], 1)  # a source being read cannot be deleted under the worker
             assert c.delete(f"notebooks/{nb['id']}").status_code == 204
             assert nb["id"] not in index.items
             assert c.portal is not None
             c.portal.call(runtime.worker.stop)
     finally:
         State.creation_index = None
+
+
+def test_outputs_are_listed_read_downloaded_renamed_stopped_and_deleted(api):
+    c, runtime, *_ = api
+    nb = c.post("notebooks", json={}).json()
+    nid = nb["id"]
+    art = runtime.store.create_artifact("t1", "u1", nid, fmt="report", prompt="", source_ids=[])
+    listed = c.get(f"notebooks/{nid}/artifacts").json()
+    assert [a["id"] for a in listed] == [art["id"]] and listed[0]["status"] == "processing"
+    assert "body" not in listed[0]
+    # stopping a running output
+    assert c.post(f"notebooks/{nid}/artifacts/{art['id']}/cancel").status_code == 202
+    assert c.post(f"notebooks/{nid}/artifacts/{art['id']}/cancel").status_code == 409
+    made = runtime.store.create_artifact("t1", "u1", nid, fmt="word", prompt="", source_ids=[])
+    folder = runtime.artifacts_dir / nid / made["id"]
+    folder.mkdir(parents=True)
+    (folder / "plan.docx").write_bytes(b"PK-not-really")
+    runtime.store.finish_artifact(
+        "t1", "u1", nid, made["id"], title="Plan", body="# Plan\n\nBody.", data=None,
+        file_name="plan.docx",
+        file_mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )  # fmt: skip
+    got = c.get(f"notebooks/{nid}/artifacts/{made['id']}").json()
+    assert got["body"].startswith("# Plan") and got["has_file"] is True
+    dl = c.get(f"notebooks/{nid}/artifacts/{made['id']}/file")
+    assert dl.status_code == 200 and dl.content == b"PK-not-really"
+    assert 'filename="plan.docx"' in dl.headers["content-disposition"]
+    assert (
+        c.patch(f"notebooks/{nid}/artifacts/{made['id']}", json={"title": "Q3 plan"}).status_code
+        == 204
+    )
+    assert c.get(f"notebooks/{nid}/artifacts/{made['id']}").json()["title"] == "Q3 plan"
+    # another person sees nothing of it
+    other = {"x-user": "u2"}
+    for path in (
+        f"notebooks/{nid}/artifacts",
+        f"notebooks/{nid}/artifacts/{made['id']}",
+        f"notebooks/{nid}/artifacts/{made['id']}/file",
+    ):
+        assert c.get(path, headers=other).status_code == 404
+    assert c.delete(f"notebooks/{nid}/artifacts/{made['id']}").status_code == 204
+    assert not folder.exists()
+    assert c.get(f"notebooks/{nid}/artifacts/{made['id']}").status_code == 404
+
+
+def test_the_guide_route_reads_what_the_graph_saved_and_says_when_it_is_stale(api):
+    c, runtime, *_ = api
+    nb = c.post("notebooks", json={}).json()
+    nid = nb["id"]
+    assert c.get(f"notebooks/{nid}/guide").json() == {"guide": None, "stale": False, "ready": False}
+    upload(c, nid, "a.md", b"# A\n\nThe budget is a round number and the launch is in March.\n")
+    wait_ready(c, nid, 1)
+    assert c.get(f"notebooks/{nid}/guide").json()["ready"] is True
+    key = runtime.store.sources_key("t1", "u1", nid)
+    runtime.store.save_guide(
+        "t1", "u1", nid, {"summary": "S.", "topics": ["T"], "questions": ["Q?"]}, key
+    )
+    got = c.get(f"notebooks/{nid}/guide").json()
+    assert got["guide"]["questions"] == ["Q?"] and got["stale"] is False
+    upload(c, nid, "b.md", b"# B\n\nAnother document with enough words to be read properly.\n")
+    wait_ready(c, nid, 2)
+    assert c.get(f"notebooks/{nid}/guide").json()["stale"] is True
+    assert c.get(f"notebooks/{nid}/guide", headers={"x-user": "u2"}).status_code == 404
+
+
+def _every_notebook_route(c, nid):
+    """One call for every route that is under a notebook: (method, template, path, kwargs).
+    Written out so that a route added later has to be added here (the test below checks it)."""
+    upload_files = {"files": [("files", ("a.txt", io.BytesIO(b"hello there"), "text/plain"))]}
+    return [
+        ("get", "/notebooks/{nid}", f"notebooks/{nid}", {}),
+        ("patch", "/notebooks/{nid}", f"notebooks/{nid}", {"json": {"title": "x"}}),
+        ("delete", "/notebooks/{nid}", f"notebooks/{nid}", {}),
+        ("get", "/notebooks/{nid}/folders", f"notebooks/{nid}/folders", {}),
+        ("post", "/notebooks/{nid}/folders", f"notebooks/{nid}/folders", {"json": {"name": "f"}}),
+        ("patch", "/notebooks/{nid}/folders/{fid}", f"notebooks/{nid}/folders/nope",
+         {"json": {"name": "g"}}),
+        ("delete", "/notebooks/{nid}/folders/{fid}", f"notebooks/{nid}/folders/nope", {}),
+        ("get", "/notebooks/{nid}/documents", f"notebooks/{nid}/documents", {}),
+        ("post", "/notebooks/{nid}/documents", f"notebooks/{nid}/documents",
+         {"json": {"title": "n", "content": "text"}}),
+        ("post", "/notebooks/{nid}/documents/upload", f"notebooks/{nid}/documents/upload",
+         upload_files),
+        ("get", "/notebooks/{nid}/documents/{did}", f"notebooks/{nid}/documents/nope", {}),
+        ("patch", "/notebooks/{nid}/documents/{did}", f"notebooks/{nid}/documents/nope",
+         {"json": {"title": "x"}}),
+        ("delete", "/notebooks/{nid}/documents/{did}", f"notebooks/{nid}/documents/nope", {}),
+        ("post", "/notebooks/{nid}/documents/{did}/retry", f"notebooks/{nid}/documents/nope/retry",
+         {}),
+        ("post", "/notebooks/{nid}/documents/{did}/cancel",
+         f"notebooks/{nid}/documents/nope/cancel", {}),
+        ("post", "/notebooks/{nid}/documents/move", f"notebooks/{nid}/documents/move",
+         {"json": {"document_ids": ["nope"]}}),
+        ("get", "/notebooks/{nid}/documents/{did}/original",
+         f"notebooks/{nid}/documents/nope/original", {}),
+        ("get", "/notebooks/{nid}/passages/{chunk_id}", f"notebooks/{nid}/passages/1", {}),
+        ("get", "/notebooks/{nid}/guide", f"notebooks/{nid}/guide", {}),
+        ("get", "/notebooks/{nid}/artifacts", f"notebooks/{nid}/artifacts", {}),
+        ("get", "/notebooks/{nid}/artifacts/{aid}", f"notebooks/{nid}/artifacts/nope", {}),
+        ("patch", "/notebooks/{nid}/artifacts/{aid}", f"notebooks/{nid}/artifacts/nope",
+         {"json": {"title": "x"}}),
+        ("post", "/notebooks/{nid}/artifacts/{aid}/cancel",
+         f"notebooks/{nid}/artifacts/nope/cancel", {}),
+        ("delete", "/notebooks/{nid}/artifacts/{aid}", f"notebooks/{nid}/artifacts/nope", {}),
+        ("get", "/notebooks/{nid}/artifacts/{aid}/file", f"notebooks/{nid}/artifacts/nope/file",
+         {}),
+        ("post", "/notebooks/{nid}/artifacts/{aid}/voices",
+         f"notebooks/{nid}/artifacts/nope/voices", {"json": {}}),
+        ("get", "/notebooks/{nid}/artifacts/{aid}/voices", f"notebooks/{nid}/artifacts/nope/voices",
+         {}),
+        ("get", "/notebooks/{nid}/artifacts/{aid}/audio", f"notebooks/{nid}/artifacts/nope/audio",
+         {}),
+        ("get", "/notebooks/{nid}/conversations", f"notebooks/{nid}/conversations", {}),
+        ("get", "/notebooks/{nid}/conversations/{cid}", f"notebooks/{nid}/conversations/nope", {}),
+        ("patch", "/notebooks/{nid}/conversations/{cid}", f"notebooks/{nid}/conversations/nope",
+         {"json": {"title": "x"}}),
+        ("delete", "/notebooks/{nid}/conversations/{cid}", f"notebooks/{nid}/conversations/nope",
+         {}),
+        ("post", "/notebooks/{nid}/search", f"notebooks/{nid}/search", {"json": {"query": "x"}}),
+    ]  # fmt: skip
+
+
+def test_every_route_under_a_notebook_is_swept_for_ownership_and_unknown_ids(api):
+    c, runtime, *_ = api
+    app = c.app
+    declared = {  # from the OpenAPI document: the router's own routes are not a flat list
+        (method, path.removeprefix("/products/wasifyai-notebooks"))
+        for path, methods in app.openapi()["paths"].items()
+        if "{nid}" in path
+        for method in methods
+    }
+    nb = c.post("notebooks", json={"title": "Mine"}).json()
+    swept = _every_notebook_route(c, nb["id"])
+    assert {(m, t) for m, t, *_ in swept} == declared, "a route under a notebook is not swept"
+
+    other = {"x-user": "u2"}
+    for method, template, path, kw in swept:
+        if method == "delete" and template == "/notebooks/{nid}":
+            continue  # the owner's pass below would end the sweep; the stranger's is checked first
+        mine = _every_notebook_route(c, nb["id"])  # fresh file objects for every call
+        kw = next(k for m, t, p, k in mine if (m, t) == (method, template))
+        r = getattr(c, method)(path, headers=other, **kw)
+        assert r.status_code == 404, ("a stranger", method, path, r.status_code)
+
+    for method, template, path, _ in swept:
+        if method == "delete" and template == "/notebooks/{nid}":
+            continue
+        mine = _every_notebook_route(c, nb["id"])
+        kw = next(k for m, t, p, k in mine if (m, t) == (method, template))
+        r = getattr(c, method)(path, **kw)
+        assert r.status_code < 500, ("the owner, unknown id", method, path, r.status_code)
+        if any(f"{{{p}}}" in template for p in ("fid", "did", "aid", "cid")):
+            assert r.status_code == 404, ("the owner, unknown id", method, path, r.status_code)
+    assert c.get(f"notebooks/{nb['id']}").status_code == 200
+    assert c.delete(f"notebooks/{nb['id']}", headers=other).status_code == 404

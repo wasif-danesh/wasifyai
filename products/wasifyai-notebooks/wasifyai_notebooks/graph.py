@@ -19,6 +19,7 @@ and `citations` carrying each cited passage as it was when the answer was writte
 
 import logging
 import re
+import shutil
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -44,6 +45,15 @@ from wasifyai_notebooks.grounding import (
 from wasifyai_notebooks.retrieval import retrieve
 from wasifyai_notebooks.runtime import NotAvailable, Runtime, runtime_for
 from wasifyai_notebooks.store import NotFound
+from wasifyai_notebooks.studio.context import budget_chars, gather, grounding
+from wasifyai_notebooks.studio.formats import (
+    FORMATS,
+    BadReply,
+    build,
+    infographic_prompt,
+    prompt_for,
+    slug,
+)
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +79,10 @@ class ChatState(TypedDict, total=False):
     citations: list[dict[str, Any]]
     labels_removed: int
     searched: int  # how many sources were searched
+    # a Studio output instead of an answer: {"format": ..., "prompt": ...} (document_ids as above)
+    studio: dict[str, Any]
+    artifact_id: str
+    format: str
 
 
 def _clean(value: object) -> str:
@@ -127,6 +141,8 @@ def build_notebook_chat_graph(
 
     async def check_request(state: ChatState) -> ChatState:
         ctx = require_context()
+        if state.get("studio") is not None:
+            return await check_studio(state, ctx)
         text = _clean(state.get("text"))
         if not text:
             return refuse_with("invalid_request", "Please type a question.")
@@ -175,8 +191,57 @@ def build_notebook_chat_graph(
             out["document_ids"] = scope
         return out
 
+    async def check_studio(state: ChatState, ctx: Any) -> ChatState:
+        """The same refusals as a question, then the output is recorded as being made."""
+        spec = state.get("studio") or {}
+        fmt = FORMATS.get(str(spec.get("format", "")))
+        if fmt is None:
+            return refuse_with("invalid_request", "That kind of output is not available.")
+        nid = str(state.get("notebook_id") or "")
+        rt = runtime()
+        t, u = ctx.tenant_id, ctx.user_id
+        try:
+            counts = await asyncio.to_thread(rt.store.source_counts, t, u, nid)
+        except NotFound:
+            return refuse_with("not_found", "That notebook is not there any more.")
+        if not counts:
+            return refuse_with("no_sources", "Add a source to this notebook first.")
+        if not counts.get("ready"):
+            return refuse_with(
+                "sources_reading", "Your sources are still being read. Try again in a moment."
+            )
+        ready = await asyncio.to_thread(rt.store.ready_document_ids, nid)
+        scope = ready
+        if state.get("document_ids") is not None:
+            wanted = set(state["document_ids"])
+            scope = [d for d in ready if d in wanted]
+            if not scope:
+                return refuse_with("no_scope", "None of the ticked sources can be used yet.")
+        prompt = " ".join(str(spec.get("prompt", "")).split())[:1000]
+        if fmt.key == "guide":  # kept with the notebook, not listed as an output
+            return {
+                "status": "working",
+                "notebook_id": nid,
+                "format": "guide",
+                "document_ids": scope,
+                "studio": {"format": "guide", "prompt": ""},
+            }
+        art = await asyncio.to_thread(
+            rt.store.create_artifact, t, u, nid, fmt=fmt.key, prompt=prompt, source_ids=scope
+        )
+        return {
+            "status": "working",
+            "notebook_id": nid,
+            "artifact_id": art["id"],
+            "format": fmt.key,
+            "document_ids": scope,
+            "studio": {"format": fmt.key, "prompt": prompt},
+        }
+
     def after_check(state: ChatState) -> str:
-        return "refuse" if state.get("status") == "refused" else "run_turn"
+        if state.get("status") == "refused":
+            return "refuse"
+        return "studio_turn" if state.get("studio") is not None else "run_turn"
 
     async def refuse(state: ChatState) -> ChatState:
         return {}
@@ -263,6 +328,168 @@ def build_notebook_chat_graph(
             "labels_removed": checked.removed, "searched": searched,
         }  # fmt: skip
 
+    async def paint(built: Any, write: Any, fail: Any) -> dict[str, Any] | None:
+        """Ask the image product for the infographic's picture, as a run of its own (the same tool
+        the assistant draws with). Returns the picture's reference, or None after saying why not."""
+        host = caps.extras.get("tool_host")
+        if host is None:
+            await fail("Making pictures is not available here.")
+            return None
+        write(
+            {"type": "node", "node": "paint", "status": "started", "label": "Drawing the picture"}
+        )
+        message = "The picture could not be made."
+        async for ev in host.run_product(
+            "wasifyai-image",
+            {"mode": "text", "prompt": infographic_prompt(built.data), "size": "portrait"},
+        ):
+            kind = ev.get("event")
+            if kind == "error":
+                message = f"The picture could not be made: {ev.get('message', 'it failed')}"
+                break
+            if kind == "done":
+                out = ev.get("outputs") or {}
+                if out.get("status") == "refused":
+                    reason = (out.get("refusal") or {}).get("message", "it was not allowed")
+                    message = f"The picture was not made: {reason}"
+                    break
+                if out.get("status") == "done" and out.get("image_id"):
+                    return {
+                        "image_id": out["image_id"],
+                        "width": int(out.get("width", 0)),
+                        "height": int(out.get("height", 0)),
+                    }
+                break
+        await fail(message)
+        return None
+
+    async def studio_turn(state: ChatState) -> ChatState:
+        ctx = require_context()
+        write = get_stream_writer()
+        rt = runtime()
+        t, u = ctx.tenant_id, ctx.user_id
+        nid, aid = state["notebook_id"], state.get("artifact_id", "")
+        fmt = FORMATS[state["format"]]
+        spec = state.get("studio") or {}
+        prompt = str(spec.get("prompt", ""))
+
+        async def fail(message: str, error: RunError | None = None) -> None:
+            if aid:
+                await asyncio.to_thread(rt.store.fail_artifact, t, u, nid, aid, message)
+            if error is not None:
+                raise error
+
+        try:
+            write(
+                {
+                    "type": "node",
+                    "node": "read",
+                    "status": "started",
+                    "label": "Reading your sources",
+                }
+            )
+            context, tier = facts()
+            try:
+                embedder = rt.components.embedder()
+            except Unavailable:
+                embedder = None
+
+            def collect() -> list[Any]:
+                def embed(text: str) -> list[float]:
+                    assert embedder is not None
+                    return embedder.embed([text], Purpose.QUERY)[0]
+
+                with rt.store.connect() as db:
+                    return gather(
+                        db, nid, state.get("document_ids") or [], budget=budget_chars(context),
+                        query=prompt or None, embed=embed if embedder else None,
+                        weight=embedder.spec.semantic_weight if embedder else 0.65,
+                    )  # fmt: skip
+
+            sources = await asyncio.to_thread(collect)
+            if not sources:
+                await fail("The ticked sources have no text to work from.")
+                return {
+                    "status": "refused",
+                    "refusal": {"code": "no_text", "message": "The ticked sources have no text."},
+                }
+            system = prompt_for(fmt, tier, prompt)
+            material = grounding(sources)
+            write({"type": "node", "node": "write", "status": "started",
+                   "label": f"Writing the {fmt.label.lower()}"})  # fmt: skip
+            built = None
+            problem = ""
+            for attempt in range(2):
+                user_text = material
+                if problem:
+                    user_text += (
+                        f"\n\nYour previous reply could not be used: {problem}. "
+                        "Write it again, following the format exactly."
+                    )
+                try:
+                    reply = await caps.text.complete("chat", system, user_text, fmt.schema)
+                except RunError as e:
+                    await fail(e.message, e)
+                    raise
+                except Exception:
+                    log.exception("the language model failed")
+                    await fail(
+                        "The language model did not answer.",
+                        RunError(
+                            "language_failed",
+                            "The language model did not answer. Check it in Models and try again.",
+                            retryable=True,
+                        ),
+                    )
+                    raise
+                try:
+                    built = await asyncio.to_thread(build, fmt, reply)
+                    break
+                except BadReply as e:
+                    problem = str(e)
+                    log.info("studio reply refused (attempt %d): %s", attempt + 1, problem)
+            if built is None:
+                await fail(
+                    f"The model's reply could not be used ({problem}). Try again, or choose a "
+                    "larger model."
+                )
+                return {"status": "done", "format": fmt.key, "artifact_id": aid, "title": ""}
+
+            if fmt.key == "guide":
+                key = await asyncio.to_thread(rt.store.sources_key, t, u, nid)
+                await asyncio.to_thread(rt.store.save_guide, t, u, nid, built.data or {}, key)
+                return {"status": "done", "format": "guide", "title": ""}
+
+            if fmt.key == "infographic":
+                painted = await paint(built, write, fail)
+                if painted is None:
+                    return {"status": "done", "format": fmt.key, "artifact_id": aid, "title": ""}
+                built.data = {**(built.data or {}), **painted}
+
+            file_name = file_mime = None
+            if built.file is not None and built.file_ext:
+                file_name = f"{slug(built.title, fmt.key)}.{built.file_ext}"
+                file_mime = built.file_mime
+                folder = rt.artifacts_dir / nid / aid
+                await asyncio.to_thread(folder.mkdir, parents=True, exist_ok=True)
+                await asyncio.to_thread((folder / file_name).write_bytes, built.file)
+            kept = await asyncio.to_thread(
+                rt.store.finish_artifact, t, u, nid, aid, title=built.title, body=built.markdown,
+                data=built.data, file_name=file_name, file_mime=file_mime,
+            )  # fmt: skip
+            if not kept and file_name:  # stopped or deleted while it was being made
+                await asyncio.to_thread(shutil.rmtree, rt.artifacts_dir / nid / aid, True)
+            await caps.record_usage("notebooks.artifact", 1, "outputs", format=fmt.key)
+            return {"status": "done", "format": fmt.key, "artifact_id": aid, "title": built.title}
+        except RunError:
+            raise
+        except Exception:
+            log.exception("making an output failed")
+            await fail("Something went wrong making this.")
+            raise RunError(
+                "run_failed", "Something went wrong making this.", retryable=True
+            ) from None
+
     async def finalise(state: ChatState) -> ChatState:
         await caps.record_usage(
             "notebooks.message", 1, "messages", notebook_id=state.get("notebook_id", "")
@@ -274,15 +501,19 @@ def build_notebook_chat_graph(
         ("check_request", check_request),
         ("refuse", refuse),
         ("run_turn", run_turn),
+        ("studio_turn", studio_turn),
         ("finalise", finalise),
     ]:
         g.add_node(name, cast(Any, fn))
     g.add_edge(START, "check_request")
     g.add_conditional_edges(
-        "check_request", after_check, {"refuse": "refuse", "run_turn": "run_turn"}
+        "check_request",
+        after_check,
+        {"refuse": "refuse", "run_turn": "run_turn", "studio_turn": "studio_turn"},
     )
     g.add_edge("refuse", END)
     g.add_edge("run_turn", "finalise")
+    g.add_edge("studio_turn", END)
     g.add_edge("finalise", END)
     return g.compile(checkpointer=checkpointer)
 

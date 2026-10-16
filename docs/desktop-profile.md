@@ -238,7 +238,7 @@ to `@wasifyai/ui` when it is migrated; delete the shim when nothing uses it.
 |---|---|---|
 | Router | `router.ts` | URL hash, eight routes: `/`, `/images/create`, `/images/edit`, `/library`, `/models`, `/settings`, `/notebooks` and `/notebooks/<id>` (`new` is a draft). No library. `useRoute` answers an object; a chat or a draft notebook gets its address without a reload (`adopt`, `adoptNotebook`) |
 | Shell | `Shell.tsx` | side menu + the screen; the menu collapses (remembered in `localStorage`) |
-| Side menu | `Sidebar.tsx` | New chat; groups **Notebook** (Create, View Notebooks), **Images** (Create, Edit, and Transform, Inpaint, Extend, Upscale, Reference marked "Soon", Your images), **Video**, **Voice**, **Music** (all items "Soon"); Library, Models, Train ("Soon"); Recents; You and settings. One group is open at a time and the one holding the current page stays open |
+| Side menu | `Sidebar.tsx` | New chat; groups **Notebook** (Create, View Notebooks), **Images** (Create, Edit, and Transform, Inpaint, Extend, Upscale, Reference marked "Soon", Your images), **Video**, **Voice** (Text to speech and Speech to text work; Lip sync and Voices are "Soon"), **Music** (all items "Soon"); Library, Models, Train ("Soon"); Recents; You and settings. One group is open at a time and the one holding the current page stays open |
 | Home | `pages/Home.tsx` | greeting and the "Ask anything" box (the assistant, ADR-0057, is not built: the box says so) |
 | Create / Edit | `pages/Create.tsx` | wraps the shared `ImageWorkspace` with this window's model chip and setup notices |
 | Notebooks | `pages/Notebooks.tsx`, `pages/Notebook.tsx`, `notebook-setup.ts` | View Notebooks (cards, search by title and by what is inside, rename, delete, the setup card) and one notebook (the shared `NotebookWorkspace`) |
@@ -262,7 +262,7 @@ disabled with the **Soon** pill, so the menu keeps its final shape (as above).
 | **Notebook** | Create, View Notebooks | `wasifyai-notebooks` (ADR-0065) | stage E |
 | **Images** | Create, Edit, Transform, Inpaint, Extend, Upscale, Reference, Your images | ComfyUI | Create, Edit |
 | **Video** | Create, Animate an image, Extend video, Your videos | `wasifyai-video` on ComfyUI (`video.generate`, `video.animate`) | Soon |
-| **Voice** | Text to speech, Speech to text, Lip sync, Voices | `wasifyai-tts`, `wasifyai-stt`, `wasifyai-lipsync` (audio.cpp, MuseTalk) | Soon |
+| **Voice** | Text to speech, Speech to text, Lip sync, Voices | `wasifyai-voice` on audio.cpp (ADR-0066); lip sync MuseTalk later | Speak and Transcribe built (V1); the rest Soon |
 | **Music** | Create, Your music, Lyrics | `wasifyai-music` on ComfyUI (`music.generate`, `text.lyrics`) | Soon |
 | *Library* | (single item) all creations, searchable (ADR-0041) | | yes |
 | *Models*, *Train* (Soon) | single items | | Models yes |
@@ -350,7 +350,14 @@ answers with the model chosen in Models; with none chosen the run ends with an e
 
 Tools are an explicit list in `wasifyai_assistant/tools.py`. `generate_image` runs the image product as a child
 run, so the picture is saved, indexed and has its recipe like any other; `search_creations` looks in the person's
-own library. The model never sees a file or a link, only a sentence and ids.
+own library and names what it finds (notebooks by title) but does not read inside documents.
+`search_notebooks` (stage E6) looks inside the person's notebooks: the engine embeds the question once, runs the
+notebooks' hybrid retrieval over up to 40 notebooks that have a ready source (the most recently used), keeps 3
+passages per notebook, merges by score, and returns the best 5 with at most 2 per source. The model gets each
+passage (up to 700 characters) with its notebook and source, told that it is quoted material and not
+instructions; the window shows the source, the notebook and a snippet, with "Open notebook". If the search model
+is not installed or notebooks are not part of the build the tool answers that in words. The model never sees a
+file or a link, only a sentence, passages and ids.
 
 ### Evaluating a model for the assistant
 
@@ -463,6 +470,17 @@ model file under 1.5 GB and `capable` otherwise; the history is trimmed to the m
 `GET/GET/PATCH/DELETE /notebooks/{id}/conversations[/{cid}]`. Measured with Qwen3 4B: 24 of 24 answers right,
 refusals said in words, no labels on them, a median of 4 s (`docs/phase2-stage-e-plan.md`, "E2 evidence").
 
+**Studio (stage E4).** `studio/` makes a notebook's outputs. Formats: `report`, `study_guide`, `flashcards`,
+`quiz`, `mindmap`, `word`, `pdf`. A run of the notebooks graph with `studio: {format, prompt}` and the ticked
+`document_ids` (formats: also `slides`, `datatable`, `audio`, `infographic`; `guide` is saved with the notebook, not as an output) saves an `artifacts` row (status `processing`), reads the sources cut to the model's window
+(`studio/context.py`: whole, an even share each, or the best passages), asks the model for Markdown or JSON under
+the prompt for its tier (`studio/prompts/`, SurfSense's), builds and checks it (`studio/formats.py`; one second
+try with the reason), renders Word and PDF with `studio/word.py` and `studio/pdf.py`, and saves the body, the
+data and the file under `<data>/notebooks/artifacts/<notebook>/<id>/`. Routes: `GET .../artifacts`,
+`GET/PATCH/DELETE .../artifacts/{id}`, `POST .../artifacts/{id}/cancel`, `GET .../artifacts/{id}/file` (always an
+attachment). `GET /notebooks/{id}/guide` answers the source guide (`guide`, `stale`, `ready`). An infographic's picture is made by a child run of the image product (the assistant's tool host), so it needs image generation set up; a deck is `.pptx` (python-pptx), a table `.xlsx` (openpyxl, values only), an audio overview a script, spoken on request (see "Speech" below). The window's Studio pane has a tile per format, a short brief (a focus and "made from 12 sources"),
+the list of outputs (polled while one is being made), and viewers for each format.
+
 The notebooks are served on the desktop profile only (the routes answer 503 without an app data folder); the
 web profile needs a Postgres and pgvector adapter of the store (not built).
 
@@ -480,12 +498,48 @@ The shared screens are in `packages/ui/src/notebook/`, the client and the reduce
 | `SourcesPane` | tree with tri-state ticks (everything is ticked until something is unticked, so a source added later counts), folders, status per source with Retry and Stop, rename, move, remove |
 | `SourceViewer` | the source's text as the notebook reads it, the cited passage marked; a removed source still shows the passage an answer used; a note can be edited; the original can be saved |
 | `NotebookChat` | the thread, the search shown as one line, answers with `[n]` pills that open the passage, Copy, the scope and model chips, "Add a source first" and the other reasons the box is blocked |
-| `StudioPane` | the formats as tiles, all "Soon" until stage E4 |
+| `StudioPane`, `OutputViewers` | the eleven formats as tiles, a brief, the outputs list, and viewers: Markdown, flashcards that turn over, a quiz that scores, a mind map as a tree, slides, a table, the audio script, an infographic with its exact facts; save the file |
 
 The scope sent with a question is `document_ids` of the ticked, ready sources, or nothing when nothing is
 unticked. The menu steps aside on a window narrower than 1,280 px while a notebook is open and comes back when
 the person leaves it (a menu the person closed stays closed). The self-test creates a draft notebook, adds a file
 through the real file input, sees it listed, and finds the notebook's card.
+
+## Speech: speak and transcribe (ADR-0066, stage V1)
+
+One native program, audio.cpp (Apache-2.0), serves every speech model on this computer, and the person picks the
+model from a list. Evidence: `docs/spikes/voice-v0.md`, `docs/phase2-voice-plan.md`.
+
+| Piece | Where | What it does |
+|---|---|---|
+| Model descriptors | `products/wasifyai-voice/models.yaml` (`voice:` block of an entry) | tasks, languages, voices, options, sample rate, measured speed and memory, and the weights' licence with `commercial_use` (yes, conditional, no, unreviewed) and its evidence. Only `yes` can be recommended. Types and request checks: `platform-sdk/voice_models.py` |
+| Spec data | `products/wasifyai-voice/specs/` | audio.cpp `v0.9.0` spec files; a test checks that voices, options and the package file agree |
+| Runtime | `wasifyai_api/audio_runtime.py`, pins in `audio_pins.json` | installer (size and SHA-256 shown first, confirm to download, unpacked safely, checked by running `--version`), or "use the copy already on this computer" (same tag, same hash); one `audiocpp_server` with every model that is present, lazy loading, one model in memory, loopback; the `audio` owner of the one slot (starting it stops a resident chat model, and the reverse) |
+| Routes | `GET /desktop/audio`, `GET /desktop/audio/models?task=`, `POST /desktop/audio/install` (`confirm_bytes`), `/use-found`, `/stop`; `GET /desktop/models?task=` filters the catalogue | model states: ready, needs the runtime, not on this computer, not available |
+| Product | `wasifyai-voice`: graph `speak` (a run), `/speeches`, `/transcripts` (upload, list, get, rename, delete, export txt, srt, vtt) | `voice.db` and files in the app's storage; speeches and transcripts are in My creations search (kinds `speech`, `transcript`) |
+| Window | Voice menu: Text to speech, Speech to text | model list with licence badge, cost line, state and "Get it in Models"; voice list; options made from the descriptor; setup card for the runtime; a made-before list; a transcript with times and Save as text or subtitles |
+
+Rules in the code: a request is checked against the descriptor before it is sent (an unknown option or voice is
+refused in words, because the runtime answers a mistake with HTTP 500 and may ignore an option silently); the
+runtime's own messages are not shown; a cancelled request restarts the runtime; no model is chosen for the person
+silently (the recommended one is only the starting choice).
+
+Recordings: the runtime reads WAV only. Other formats are converted with ffmpeg when it is on the computer, else with
+macOS's `afconvert`; with neither the person is told to install ffmpeg or save a WAV. Bundling ffmpeg is an open
+question for the owner (licence and size).
+
+### Your voices and the audio overview (stage V2)
+
+| Piece | What it does |
+|---|---|
+| Descriptors | `design` and `clone` rules in `models.yaml` say how a model takes a description (`instruct_option` for Qwen3-TTS, `text_prefix` for VoxCPM2, which ignores the option) and a recording (reference words required or optional, 2 to 30 seconds). Checks: `check_design`, `check_clone` in the SDK |
+| Saved voices | `/products/wasifyai-voice/voices`: `POST /voices/design` (name, description), `POST /voices/clone` (recording, name, **consent** `own` or `permission`, optional words), `PATCH` (name, description, the words), `DELETE`, `GET /voices?kind=`. A voice is not tied to a model: any ready model that can design or clone speaks it. A clone without a consent answer is refused (422 `consent_required`); the answer, its sentence and the time are kept with the voice |
+| Recording | converted if needed, kept as WAV of at most 30 seconds (cut at the start), refused under 2 seconds; stored for playback and as a file under `<data>/voice/voices/` that the runtime reads |
+| Speaking | a run of the Speak graph with `saved_voice` (and optionally `model`); the engine picks the recommended design or clone model otherwise; refused in words before loading when the voice cannot be used with the model (words missing, recording length) |
+| Window | Voice > Voices: describe or clone, hear a sample, change the words, delete, "Use in Text to speech"; Text to speech lists "Your voices" and then offers the models that can do what that voice is |
+| Audio overview | `POST /notebooks/{id}/artifacts/{aid}/voices`: the script's turns are spoken one by one by a speech model with built-in voices (Kokoro: a woman and a man by default, or `voices: {"1": id, "2": id}`), joined with pauses, kept as `overview.wav`, and the output's data gains `audio: true`; `GET .../voices` says how far it has got, `GET .../audio` is the sound. In the Studio viewer: "Speak it", progress, a player |
+
+Saved voices and recordings are in My creations search (kind `voice`). Voices stay on this computer.
 
 ## The self-test
 

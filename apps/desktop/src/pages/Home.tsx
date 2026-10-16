@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { assistantApi, client } from "../api";
 import { conversationsChanged } from "../conversations";
 import { images } from "../images";
-import { type Route, openChat } from "../router";
+import { type Route, openChat, openNotebook } from "../router";
 import { useChatModel } from "../useChatModel";
 
 export function greeting(hour: number): string {
@@ -126,8 +126,9 @@ export function HomePage({
       examples={conversationId ? [] : EXAMPLES}
       notices={notices}
       onNeedModel={() => go("models")}
-      onOpenCreation={(kind) => {
+      onOpenCreation={(kind, id) => {
         if (kind === "image") go("library");
+        else if (kind === "notebook") openNotebook(id);
       }}
       title={conversationId ? title || "Chat" : undefined}
       actions={

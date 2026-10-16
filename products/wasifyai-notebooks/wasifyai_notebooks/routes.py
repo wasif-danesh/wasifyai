@@ -16,12 +16,13 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
-from wasifyai_platform_sdk import Identity, RouteDeps
+from wasifyai_platform_sdk import Identity, RouteDeps, VoiceEngineError
 from wasifyai_platform_sdk.search import search_text
 
 from wasifyai_notebooks import hardening
 from wasifyai_notebooks.components import Unavailable
 from wasifyai_notebooks.ingest import original_path
+from wasifyai_notebooks.overview import AUDIO_FILE, NotPossible, Voicer, choose_voices
 from wasifyai_notebooks.reader_install import InstallError
 from wasifyai_notebooks.retrieval import retrieve
 from wasifyai_notebooks.runtime import NotAvailable, Runtime, runtime_for
@@ -92,6 +93,14 @@ class Search(BaseModel):
     mode: Literal["hybrid", "dense", "lexical"] = "hybrid"
 
 
+class OverviewVoices(BaseModel):
+    """Which model speaks the overview and which built-in voice each host has (both optional)."""
+
+    model_config = ConfigDict(extra="forbid")
+    model: str | None = Field(default=None, max_length=100)
+    voices: dict[str, str] | None = None
+
+
 class ConfirmReader(BaseModel):
     model_config = ConfigDict(extra="forbid")
     confirm_bytes: int
@@ -128,7 +137,11 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
             docs = await asyncio.to_thread(
                 r.store.list_documents, identity.tenant_id, identity.user_id, nid
             )
-            text = search_text(nb["title"], *[d["title"] for d in docs[:40]])
+            arts = await asyncio.to_thread(
+                r.store.list_artifacts, identity.tenant_id, identity.user_id, nid
+            )
+            names = [d["title"] for d in docs[:40]] + [a["title"] for a in arts[:20] if a["title"]]
+            text = search_text(nb["title"], *names)
             await index.index(
                 identity.tenant_id, PRODUCT_ID, identity.user_id, "notebook", nid, text
             )
@@ -204,6 +217,7 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
         r = rt()
         await call(r.store.delete_notebook, identity.tenant_id, identity.user_id, nid)
         await asyncio.to_thread(shutil.rmtree, r.files_dir / nid, True)
+        await asyncio.to_thread(shutil.rmtree, r.artifacts_dir / nid, True)
         await deps.unindex(identity, PRODUCT_ID, nid)  # out of search too (ADR-0041)
         return Response(status_code=204)
 
@@ -409,6 +423,141 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
         nid: str, chunk_id: int, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
         return await call(rt().store.get_chunk, identity.tenant_id, identity.user_id, nid, chunk_id)
+
+    @router.get("/notebooks/{nid}/guide")
+    async def guide(nid: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """The guide to the notebook (summary, topics, questions to start with), `stale` once its
+        sources have changed. Made by a run with `studio: {format: "guide"}`."""
+        return await call(rt().store.get_guide, identity.tenant_id, identity.user_id, nid)
+
+    # ---- outputs (Studio) --------------------------------------------------------------------
+    # An output is made by a run of the product's graph (`{notebook_id, studio: {format, prompt},
+    # document_ids?}`); these routes list and read what it saved.
+
+    @router.get("/notebooks/{nid}/artifacts")
+    async def list_artifacts(
+        nid: str, identity: Identity = Depends(deps.identity)
+    ) -> list[dict[str, Any]]:
+        return await call(rt().store.list_artifacts, identity.tenant_id, identity.user_id, nid)
+
+    @router.get("/notebooks/{nid}/artifacts/{aid}")
+    async def get_artifact(
+        nid: str, aid: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        return await call(
+            rt().store.get_artifact, identity.tenant_id, identity.user_id, nid, aid, content=True
+        )
+
+    @router.patch("/notebooks/{nid}/artifacts/{aid}", status_code=204)
+    async def rename_artifact(
+        nid: str, aid: str, body: Title, identity: Identity = Depends(deps.identity)
+    ) -> Response:
+        await call(
+            rt().store.rename_artifact, identity.tenant_id, identity.user_id, nid, aid,
+            body.title.strip(),
+        )  # fmt: skip
+        return Response(status_code=204)
+
+    @router.post("/notebooks/{nid}/artifacts/{aid}/cancel", status_code=202)
+    async def cancel_artifact(
+        nid: str, aid: str, identity: Identity = Depends(deps.identity)
+    ) -> Response:
+        await call(rt().store.cancel_artifact, identity.tenant_id, identity.user_id, nid, aid)
+        return Response(status_code=202)
+
+    @router.delete("/notebooks/{nid}/artifacts/{aid}", status_code=204)
+    async def delete_artifact(
+        nid: str, aid: str, identity: Identity = Depends(deps.identity)
+    ) -> Response:
+        r = rt()
+        await call(r.store.delete_artifact, identity.tenant_id, identity.user_id, nid, aid)
+        await asyncio.to_thread(shutil.rmtree, r.artifacts_dir / nid / aid, True)
+        return Response(status_code=204)
+
+    @router.get("/notebooks/{nid}/artifacts/{aid}/file")
+    async def artifact_file(
+        nid: str, aid: str, identity: Identity = Depends(deps.identity)
+    ) -> FileResponse:
+        r = rt()
+        art = await call(r.store.get_artifact, identity.tenant_id, identity.user_id, nid, aid)
+        if not art["file_name"]:
+            raise HTTPException(404, "this output has no file")
+        path = r.artifacts_dir / nid / aid / Path(art["file_name"]).name
+        if not path.is_file():
+            raise HTTPException(404, "the file is no longer on this computer")
+        # always an attachment, like a source's original
+        return FileResponse(
+            path, media_type=art["file_mime"] or "application/octet-stream",
+            filename=art["file_name"],
+        )  # fmt: skip
+
+    # ---- the audio overview's voices (ADR-0066, V2) ------------------------------------------
+
+    voicer = Voicer()
+
+    async def overview_art(identity: Identity, nid: str, aid: str) -> dict[str, Any]:
+        art = await call(
+            rt().store.get_artifact, identity.tenant_id, identity.user_id, nid, aid, content=True
+        )
+        if art["format"] != "audio" or art["status"] != "ready" or not art.get("data"):
+            raise HTTPException(409, "This output is not a finished audio overview.")
+        return art
+
+    @router.post("/notebooks/{nid}/artifacts/{aid}/voices", status_code=202)
+    async def speak_overview(
+        nid: str,
+        aid: str,
+        body: OverviewVoices,
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        r = rt()
+        art = await overview_art(identity, nid, aid)
+        engine = getattr(deps.state, "audio", None)
+        if engine is None:
+            raise HTTPException(503, "Speech is not available in this deployment yet.")
+        try:
+            model = engine.resolve("speak", body.model)
+            voices = choose_voices(model, body.voices)
+        except VoiceEngineError as e:
+            raise HTTPException(409, {"code": e.code, "message": e.message}) from None
+        except NotPossible as e:
+            raise HTTPException(409, str(e)) from None
+        data = art["data"]
+
+        async def finished(model_id: str, chosen: dict[int, str]) -> None:
+            await call(
+                r.store.set_artifact_data, identity.tenant_id, identity.user_id, nid, aid,
+                {**data, "audio": True, "audio_file": AUDIO_FILE, "audio_model": model_id,
+                 "audio_voices": {str(k): v for k, v in chosen.items()}},
+            )  # fmt: skip
+
+        try:
+            job = voicer.start(
+                engine=engine, model=model, voices=voices, turns=data["turns"],
+                out_dir=r.artifacts_dir / nid / aid, key=(nid, aid), on_done=finished,
+            )  # fmt: skip
+        except NotPossible as e:
+            raise HTTPException(409, str(e)) from None
+        return job.public()
+
+    @router.get("/notebooks/{nid}/artifacts/{aid}/voices")
+    async def overview_state(
+        nid: str, aid: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        await call(rt().store.get_artifact, identity.tenant_id, identity.user_id, nid, aid)
+        job = voicer.job(nid, aid)
+        return job.public() if job else {"state": "idle", "done": 0, "total": 0, "message": ""}
+
+    @router.get("/notebooks/{nid}/artifacts/{aid}/audio")
+    async def overview_audio(
+        nid: str, aid: str, identity: Identity = Depends(deps.identity)
+    ) -> FileResponse:
+        r = rt()
+        await call(r.store.get_artifact, identity.tenant_id, identity.user_id, nid, aid)
+        path = r.artifacts_dir / nid / aid / AUDIO_FILE
+        if not path.is_file():
+            raise HTTPException(404, "this overview has no voices yet")
+        return FileResponse(path, media_type="audio/wav", filename="audio-overview.wav")
 
     # ---- conversations ---------------------------------------------------------------------
     # A question is a run of this product's graph (`POST /products/wasifyai-notebooks/runs` with

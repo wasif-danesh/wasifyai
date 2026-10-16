@@ -207,3 +207,61 @@ describe("the notebooks api", () => {
     expect(calls[0]?.path).toContain("q=budget+plan");
   });
 });
+
+describe("making an output", () => {
+  const runs = (events: ParsedEvent[], seen: object[] = []) => ({
+    startRun: async (_p: string, input: object, _s: AbortSignal, on: (e: ParsedEvent) => void) => {
+      seen.push(input);
+      for (const e of events) on(e);
+    },
+  });
+
+  it("sends the format, the focus and the ticked sources, and returns the saved output", async () => {
+    const seen: object[] = [];
+    const steps: string[] = [];
+    const { makeOutput } = await import("./notebooks");
+    const out = await makeOutput(
+      runs(
+        [
+          ev("node", { node: "read", status: "started", label: "Reading your sources" }, 1),
+          ev("done", { outputs: { status: "done", artifact_id: "a1", title: "Launch plan" } }, 2),
+        ],
+        seen,
+      ),
+      { notebookId: "n1", format: "report", prompt: "the launch", documentIds: ["d1"] },
+      new AbortController().signal,
+      (s) => steps.push(s),
+    );
+    expect(out).toEqual({ ok: true, outputId: "a1", title: "Launch plan" });
+    expect(steps).toEqual(["Reading your sources"]);
+    expect(seen[0]).toEqual({
+      notebook_id: "n1",
+      studio: { format: "report", prompt: "the launch" },
+      document_ids: ["d1"],
+    });
+  });
+
+  it("says why it was not made, from a refusal or an error", async () => {
+    const { makeOutput } = await import("./notebooks");
+    const ask = { notebookId: "n1", format: "quiz" as const, prompt: "" };
+    const signal = new AbortController().signal;
+    const refused = await makeOutput(
+      runs([
+        ev("done", {
+          outputs: { status: "refused", refusal: { code: "no_scope", message: "None ticked." } },
+        }),
+      ]),
+      ask,
+      signal,
+    );
+    expect(refused).toEqual({ ok: false, code: "no_scope", message: "None ticked." });
+    const failed = await makeOutput(
+      runs([ev("error", { code: "language_failed", message: "The model did not answer." })]),
+      ask,
+      signal,
+    );
+    expect(failed).toMatchObject({ ok: false, code: "language_failed" });
+    const none = await makeOutput(runs([]), ask, signal);
+    expect(none).toMatchObject({ ok: false, code: "lost" });
+  });
+});

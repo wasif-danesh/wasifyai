@@ -83,7 +83,7 @@ from wasifyai_platform_sdk.storage import (
     object_key,
     s3_storage,
 )
-from wasifyai_platform_sdk.tools import ToolHost
+from wasifyai_platform_sdk.tools import ToolHost, ToolUnavailable
 from wasifyai_platform_sdk.uploads import (
     UPLOAD_CREATED,
     InMemoryUploadLimiter,
@@ -102,6 +102,21 @@ from wasifyai_platform_sdk.uploads import (
 from wasifyai_platform_sdk.usage import InMemoryUsageRecorder, UsageEvent, UsageRecorder
 from wasifyai_platform_sdk.usage_postgres import PostgresUsageRecorder
 from wasifyai_platform_sdk.usage_queries import start_of_day_utc, sum_usage
+from wasifyai_platform_sdk.voice_models import (
+    SpeechEngine,
+    SpeechResult,
+    TranscriptResult,
+    TranscriptSegment,
+    VoiceEngineError,
+    VoiceModel,
+    VoiceRequestError,
+    check_clone,
+    check_design,
+    check_options,
+    check_speak,
+    check_transcribe,
+    parse_voice_model,
+)
 
 __all__ = [
     "input_image_name",
@@ -191,6 +206,20 @@ __all__ = [
     "TextCapabilities",
     "ToolCall",
     "ToolHost",
+    "ToolUnavailable",
+    "SpeechEngine",
+    "SpeechResult",
+    "TranscriptResult",
+    "TranscriptSegment",
+    "VoiceEngineError",
+    "VoiceModel",
+    "VoiceRequestError",
+    "check_clone",
+    "check_design",
+    "check_options",
+    "check_speak",
+    "check_transcribe",
+    "parse_voice_model",
     "ChatChunk",
     "UnsupportedInput",
     "UsageEvent",

@@ -18,7 +18,7 @@ plugins and MCP, sharing, the web profile, Bengali and Hindi, video overview.
 |---|---|
 | Side menu: New chat, Models, Library, Images, Train (Soon), an empty **Projects** block, Recents | an expandable **Notebook** entry (*Create*, *View Notebooks*); the empty *Projects* block goes |
 | Routes: `home`, `create`, `edit`, `library`, `models`, `settings` | adds `notebooks` (the list), `notebooks/new` (a draft) and `notebooks/<id>` (a notebook) |
-| The assistant searches My creations only | a notebook answers from its sources; later the assistant gets `search_notebooks` |
+| The assistant searches My creations only | a notebook answers from its sources; the assistant gets `search_notebooks` (E6, done) |
 | No document parsing, chunking, embedding or vector store in the engine | `wasifyai-notebooks` product, `notebooks.db`, a reader and an embedder component |
 | Library shows images, songs, videos | and notebook outputs (reports, quizzes, decks, audio), searchable (ADR-0041) |
 
@@ -209,9 +209,9 @@ the web adapter.
 | **E1** | **Done 2026-10-16.** Engine: `notebooks.db`, hardening, ingest, reader and search-model components, retrieval, routes; PROVENANCE for what was copied (evidence below) | route and pipeline tests, a real 14-file corpus through the app, retrieval eval |
 | **E2** | **Done 2026-10-16.** Grounded chat: scope, prompt tiers, budget, stream with citations, stored passages, refusal; the eval set (evidence below) | grounding eval on Qwen3 4B (cited, supported, refused) |
 | **E3** | **Done 2026-10-16.** Window: side menu change, notebooks list, notebook page (Sources, Chat, source viewer, Studio tiles as Soon), setup card, router parameters, self-test extended (evidence below) | component tests, real-window self-test, screenshots |
-| **E4** | Studio text formats: report, study guide, flashcards, quiz, mind map, Word, PDF; outputs as creations and searchable (ADR-0041 checklist) | builder and route tests, a real run of each |
-| **E5** | Studio second wave and extras: source guide and suggested questions, save as note, slides and spreadsheet from specs, audio overview (our TTS), infographic and image | real runs, listening check |
-| **E6** | Assistant tool `search_notebooks`; hardening pass; docs | tool test, `docs/desktop-profile.md` |
+| **E4** | **Done 2026-10-16.** Studio text formats: report, study guide, flashcards, quiz, mind map, Word, PDF; outputs saved with the notebook and searchable through it (evidence below) | builder and route tests, a real run of each |
+| **E5** | **Done 2026-10-16, with one change:** source guide and suggested questions, save as note, slides and data table from specs, infographic through the image engine, audio overview as a **script** (no voice engine exists on the desktop yet) (evidence below) | real runs |
+| **E6** | **Done 2026-10-16.** Assistant tool `search_notebooks`; hardening pass; docs (evidence below) | tool tests, real runs, `docs/desktop-profile.md` |
 
 Each step ends with the repo's usual gate: tests, lint, typecheck, the window self-test where the window changed,
 `git add`, and a one-line commit message for the owner.
@@ -348,3 +348,159 @@ pills opening the passage with the cited lines marked, the add-sources screen, t
 dropping a folder (the engine takes folder ids, the window has no relative-path upload yet); a Library card for
 notebooks (the desktop Library is images only; notebooks are found from View Notebooks, and the creation kind is
 in the API for the day Library lists every kind); Studio formats (E4); source guide and "save as note" (E5).
+
+## E4 evidence (2026-10-16, the owner's Mac)
+
+**What was built.** Seven formats made from a notebook's ticked sources by the chosen chat model:
+Report and Study guide (Markdown), Flashcards and Quiz (validated JSON, with a viewer that turns cards over and
+scores a quiz), Mind map (an outline shown as a tree), Word (`.docx`) and PDF, both rendered from the same
+Markdown by committed builders. The model writes Markdown or JSON only; nothing it writes is run (ADR-0010).
+Details in `docs/desktop-profile.md` ("Studio").
+
+**How an output is made.** A run of the notebooks graph with `{notebook_id, studio: {format, prompt}, document_ids?}`
+(no new event type; the same refusals as a question). The output row is saved at once as "making"; the sources
+are cut to the model's window (`studio/context.py`); the reply is built and checked; a reply that cannot be used
+is asked for once more with the reason; the result, its file and its data are saved. A stop or delete while it
+runs wins: nothing is written over it.
+
+**Tests.** 19 new engine tests (every builder, the Word and PDF files opened and checked, links and raw HTML kept
+safe, the cut to the window, the run with a scripted model, the retry, the refusals, a stop mid-way, ownership,
+the file route), 12 new UI tests (viewers, the Studio pane), 2 in the client; the Python suite passes (1049, 40
+skipped), the UI suites 41, 71, 44 and 280, ruff, pyright, typecheck and the real-window self-test.
+
+**Real run** (Qwen3 4B Q4_K_M, the app's llama.cpp, context 8192; the E0 corpus of 14 files; the seven generated
+sources ticked for the first seven rows):
+
+| Format | Time | Result |
+|---|---|---|
+| Report | 16.3 s | 574 characters, every figure from the sources (launch date, $350,000, headcount) |
+| Study guide | 18.4 s | 1,635 characters with key terms and review questions |
+| Flashcards | 14.1 s | 12 cards (the model made 12; none dropped) |
+| Quiz | 36.0 s | 7 questions kept of 8 asked: one had no answer among its four options |
+| Mind map | 26.1 s | three levels, 4 branches, labels with the figures |
+| Word | 19.4 s | a `.docx` of 37 KB that python-docx opens, 16 paragraphs |
+| PDF | 13.4 s | a 2.7 KB PDF (`%PDF-`) |
+| Report from all 14 files (66 pages, far over the window) | 18.7 s | built from the best passages |
+
+**Found while building.**
+- **The engine bundle would have lacked the notebooks' packages** (found by reading the hashed lock): its lock is
+  made from the API's dependencies and the notebooks product was not among them, so a packaged app would have
+  failed to import the chunker, the search model runtime and the writers; it only worked from a development
+  checkout. The API's `desktop` extra now names the product, and the lock contains chonkie, onnxruntime,
+  tokenizers, python-docx, reportlab and the rest.
+- The notebook search source read a notebooks file made before outputs existed and failed on the missing table
+  (found by the real run); it now treats a missing table as no outputs.
+- A new dependency was added with the owner's approval: **reportlab** (BSD) for PDF; `python-docx`,
+  `markdown-it-py` and `pillow` were already on the approved list or are its requirements.
+
+**Searchable.** Outputs are not separate creations: a notebook is found by its title, its sources' names and now
+its outputs' titles, and an output opens from its notebook.
+
+**Not done in E4.** Slides, spreadsheet, audio overview, infographic and data table (E5); Refine and versions of an
+output; stopping the model mid-way when an output is stopped (the result is discarded instead); Bengali and Hindi
+text in PDFs (Helvetica; other letters become `?`).
+
+## E5 evidence (2026-10-16, the owner's Mac)
+
+**What was built.**
+- **Source guide.** A summary, up to eight topics and three questions, written once from the sources and
+  saved with the notebook. The window makes it by itself the first time a chat model is chosen and there is
+  none, shows it above an empty thread (a question fills the box), and offers "Sources changed, update" when
+  a source was added, removed or read again (`GET /notebooks/{id}/guide` says `stale`).
+- **Save as note.** Under an answer: it becomes a note in the sources (titled with the question, ending with
+  the list of sources it cited), so Studio and later questions can use it.
+- **Slide deck.** The model writes validated JSON (title, slides with up to six bullets, notes) and
+  `python-pptx` renders a `.pptx`; a viewer steps through the slides.
+- **Data table.** JSON columns and rows (at most 8 by 40) become an `.xlsx` of values with numbers as numbers;
+  a cell that starts with `=` is stored as text, never a formula, so nothing the model wrote is calculated.
+- **Infographic.** The model writes a factual brief; the image product draws a picture from a 500-character
+  description (a child run, as the assistant's picture tool does); the viewer shows the picture **and the exact
+  facts under it**.
+- **Audio overview.** The model writes a two-host script (Alex and Sam, about two dozen turns). **The voices are
+  not made:** the desktop has no speech engine (the TTS product runs in the web stack; ADR-0062's audio.cpp
+  engine is the Voice stage). The viewer says so; the script is saved as Markdown.
+
+**Tests.** 9 new engine tests (the five builders, the guide's saving and going stale, the infographic with a
+scripted image run and without one, the guide route), 8 new UI tests (the new viewers, the guide, saving a note);
+the Python suite passes (1058, 40 skipped), the UI suites 41, 77, 44 and 280, ruff, pyright, typecheck, the
+real-window self-test.
+
+**Real run** (Qwen3 4B, the app's llama.cpp, the 7 generated sources ticked; ComfyUI with FLUX.2 klein 4B):
+
+| Output | Time | Result |
+|---|---|---|
+| Source guide | 14.5 s | summary, topics and questions from all the sources |
+| Slide deck | 46.2 s | a 47 KB `.pptx` of 9 slides (title and 8), every figure from the sources |
+| Data table | 15.8 s | headcount by team with open roles: 5 rows, 3 columns, an `.xlsx` that openpyxl opens |
+| Audio overview script | 19.3 s | 1,607 characters of question and answer between the hosts, facts from the sources |
+| Infographic | 84.7 s | the brief (5 sections) and an 864 x 1152 sketchnote picture; includes switching from the language model to the image model |
+
+**Found while building.**
+- **The picture's text is unreliable.** The 4B image model drew the sketchnote look well and the layout
+  sensibly, but misspelled words and garbled numbers ("14 MANCH DATE", "$3550,2027"). A factual infographic with
+  wrong numbers misleads, so the viewer always shows the exact facts beside it and says why. A larger image
+  model or drawing the text ourselves over an illustration are the later options.
+- **The audio script is a question-and-answer list, not yet a conversation.** Qwen3 4B follows the format and the
+  facts, and writes short alternating turns; livelier dialogue needs the outline-then-segments method SurfSense
+  uses, which is not worth building before there is a voice to play it.
+- **The slide deck takes the longest of the text formats** (46 s): the JSON is long. A shorter default (six
+  slides) would halve it; left at eight until slow machines are measured.
+
+**Not done in E5.** Voices for the audio overview (needs the Voice stage), a picture style picker, editing a
+deck or table in place, and Refine and versions of an output.
+
+## E6 evidence (2026-10-16, the owner's Mac)
+
+**What was built.**
+- **`search_notebooks`, the assistant's third tool.** `ToolHost.search_notebooks` (platform SDK) is answered by
+  `wasifyai_notebooks/across.py`: one query embedding, `retrieve` per notebook (up to 40 with a ready source, most
+  recently used first), 3 passages each, merged by the blended score (`Hit.blended`, new), at most 2 per source,
+  5 returned. The tool gives the model each passage with its notebook and source, marked as quotation and not
+  instruction. `ToolUnavailable` carries "no search model" or "no notebooks here" back as words.
+- **The window.** The assistant's tool card for `search_notebooks`: source, notebook, snippet and "Open notebook"
+  (home opens `#/notebooks/<id>`); a failed search says why.
+- **`search_creations` now names notebooks** by title (it returned bare ids, which the model then listed), and its
+  description tells the model it does not read inside documents.
+
+**Hardening pass.** Four things found and fixed, each with a test:
+1. **Unknown output on cancel gave 409, not 404.** `POST .../artifacts/{aid}/cancel` for an id that does not exist
+   said "not being made". Found by the new sweep below.
+2. **A query with no direction crashed retrieval.** `vec_distance_cosine` is NULL when the query vector is all
+   zeros (a query of only symbols, `*`), and the blend subtracted from `None`. NULL now counts as no evidence (distance 1).
+3. **Passages are data for the assistant too.** The tool's text says they are facts to use, never instructions to
+   follow, so a document that says "ignore your rules" is quoted, not obeyed (a test checks the wording is in what the model sees).
+4. **Web build.** `ToolCard.tsx` uses hooks and is exported from the UI package's index, which the web app's
+   server-rendered `not-found` page imports; it lacked `"use client"` and the web build failed. Added.
+
+**The route sweep.** `test_every_route_under_a_notebook_is_swept_for_ownership_and_unknown_ids` calls every one of the
+30 routes under `/notebooks/{nid}` twice: as another person (all 404) and as the owner with an unknown folder,
+source, output or conversation id (404, never 500). It reads the route list from the OpenAPI document and fails if a
+route is added and not listed, so a new route cannot skip the ownership check unnoticed. Also new: eight hostile
+query strings (quotes, `NEAR(`, `OR`, `*`, column filters, a NUL, SQL) through the cross-notebook search.
+
+**Tests.** 14 new engine tests for the search (order and location, ownership and empty notebooks, limits and
+length, one source not filling the slots, no search model, hostile queries), 3 assistant tool tests, 2 tool-host
+tests, the route sweep, 2 window tests. Python 1078 passed (40 skipped); client 41, UI 79, desktop 44, web 280;
+ruff, pyright, typecheck, `pnpm build`, the real-window self-test (`SMOKE PASS`).
+
+**Real run** (Qwen3 4B, the app's llama.cpp, the search model; two notebooks of generated files; the assistant product):
+
+| Question | Tool the model chose | Time | Answer |
+|---|---|---|---|
+| "What is the marketing budget for the launch in my notebooks?" | `search_notebooks` | 5.5 s | $350,000, from launch-plan.pptx |
+| "Search my notebooks: how many open roles does engineering have?" | `search_notebooks` | 5.9 s | 5, from headcount.xlsx |
+| "What did the warranty scan say?" | `search_notebooks` (after the description fix) | 7.9 s | 18-month hardware warranty, 6-month batteries, lightning excluded, Lisbon service centre |
+| "Which notebooks do I have about support?" | `search_notebooks` | 7.1 s | the FAQ's support hours and refund rule, by notebook |
+| "Write me a haiku about autumn." / "What is the capital of France?" | none | 10.0 s / 1.4 s | answered directly, no search |
+
+**Found.** Before the two description changes the 4B model picked `search_creations` for "What did the warranty
+scan say?", which returned five notebook ids with no text, and it listed the ids. With notebooks named by title and
+the description saying where to read documents, it chose `search_notebooks` and answered. A larger set of
+tool-choice questions for notebooks (as for images in D6) has not been run.
+The same document in two notebooks (my scratch library had a copy) shows up twice, once per notebook; that is
+right, as they are two sources.
+
+**Not done in E6.** Conversations of notebooks are not indexed in My creations (the notebook itself is); a cited
+answer in the assistant (it quotes the notebook and source in words only); searching only some notebooks by name
+("in my Budget notebook"); the tool-choice evaluation for notebooks.
+

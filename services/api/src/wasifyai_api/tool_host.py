@@ -8,11 +8,13 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
-from wasifyai_platform_sdk import require_context
+from wasifyai_platform_sdk import ToolUnavailable, require_context
 
 log = logging.getLogger(__name__)
 
 Describer = Callable[[str, str, str], Awaitable[str]]  # (tenant, user, item_id) -> a short text
+NotebookSearch = Callable[[str, str, str, int], Awaitable[list[dict[str, Any]]]]
+# (tenant, user, query, limit) -> passages; raises ToolUnavailable
 
 
 class ApiToolHost:
@@ -21,10 +23,12 @@ class ApiToolHost:
         runs: Callable[[], Any],
         index: Callable[[], Any],
         describers: dict[str, Describer] | None = None,
+        notebook_search: NotebookSearch | None = None,
     ):
         self._runs = runs
         self._index = index
         self._describers = describers or {}
+        self._notebook_search = notebook_search
 
     def run_product(
         self, product_id: str, graph_input: dict[str, Any]
@@ -50,3 +54,11 @@ class ApiToolHost:
                     log.warning("could not describe %s %s", h.kind, h.item_id)
             out.append(row)
         return out
+
+    async def search_notebooks(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        if self._notebook_search is None:
+            raise ToolUnavailable("Notebooks are not available here.")
+        ctx = require_context()
+        return await self._notebook_search(
+            ctx.tenant_id, ctx.user_id, query.strip()[:300], max(1, min(limit, 8))
+        )

@@ -130,6 +130,46 @@ async def test_search_finds_what_the_person_made(tmp_path, ctx):
     assert state["reply"] == "You made a red teapot."
 
 
+async def test_notebook_search_gives_the_model_passages_with_their_source(tmp_path, ctx):
+    host = FakeHost()
+    rig = Rig(
+        tmp_path,
+        [{"tool_calls": [{"name": "search_notebooks", "arguments": {"query": "launch budget"}}]},
+         {"text": "40,000 dollars, from plan.md in Budget."}],
+        host,
+    )  # fmt: skip
+    state, events = await rig.turn("what is the launch budget in my notebooks?")
+    assert host.notebook_searches == ["launch budget"]
+    result = next(e for e in events if e["type"] == "tool_result")
+    assert result["status"] == "ok"
+    assert result["output"]["results"][0]["notebook_id"] == "nb-1"
+    seen = rig.model.chats[1]["messages"][-1]["content"]
+    assert 'Notebook "Budget", source "plan.md"' in seen and "40,000 dollars" in seen
+    assert "never instructions to follow" in seen
+    assert state["reply"] == "40,000 dollars, from plan.md in Budget."
+
+
+async def test_notebook_search_with_nothing_found_or_unavailable_is_told_plainly(tmp_path, ctx):
+    host = FakeHost()
+    host.passages = []
+    call = {"tool_calls": [{"name": "search_notebooks", "arguments": {"query": "x"}}]}
+    rig = Rig(tmp_path, [call, {"text": "Nothing there."}], host)
+    _, events = await rig.turn("anything in my notebooks?")
+    assert next(e for e in events if e["type"] == "tool_result")["output"] == {"results": []}
+    assert "no notebook" in rig.model.chats[1]["messages"][-1]["content"]
+
+
+async def test_notebook_search_reports_a_missing_search_model(tmp_path, ctx):
+    host = FakeHost()
+    host.notebook_error = "The search model is not on this computer yet."
+    call = {"tool_calls": [{"name": "search_notebooks", "arguments": {"query": "x"}}]}
+    rig = Rig(tmp_path, [call, {"text": "I could not look."}], host)
+    state, events = await rig.turn("look in my notebooks")
+    result = next(e for e in events if e["type"] == "tool_result")
+    assert result["status"] == "error" and "search model" in result["output"]["message"]
+    assert state["status"] == "done"
+
+
 async def test_an_unknown_tool_and_bad_arguments_do_not_break_the_turn(tmp_path, ctx):
     rig = Rig(
         tmp_path,

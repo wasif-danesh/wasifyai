@@ -60,8 +60,21 @@ class NotebookIndexSource:
                         (nid, MAX_SOURCE_NAMES),
                     )
                 ]
+                try:
+                    outputs = [
+                        r[0]
+                        for r in db.execute(
+                            "SELECT title FROM artifacts WHERE notebook_id = ? AND title != '' "
+                            "AND status = 'ready' ORDER BY created_at LIMIT 20",
+                            (nid,),
+                        )
+                    ]
+                except sqlite3.OperationalError:  # a file from before outputs existed
+                    outputs = []
                 items.append(
-                    IndexItem(tenant, PRODUCT_ID, user, KIND, nid, search_text(title, *names))
+                    IndexItem(
+                        tenant, PRODUCT_ID, user, KIND, nid, search_text(title, *names, *outputs)
+                    )
                 )
             return items
         finally:

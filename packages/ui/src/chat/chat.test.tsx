@@ -178,6 +178,60 @@ describe("ChatScreen", () => {
     expect(onOpen).toHaveBeenCalledWith("image", "img-1");
   });
 
+  it("shows what the assistant found in the notebooks, with a way to open the notebook", async () => {
+    const runs = runsThat([
+      ev("tool_call", { id: "t1", name: "search_notebooks", arguments: { query: "budget" } }),
+      ev("tool_result", {
+        id: "t1",
+        name: "search_notebooks",
+        status: "ok",
+        output: {
+          results: [
+            {
+              notebook_id: "nb-1",
+              notebook: "Launch",
+              document_id: "d-1",
+              title: "plan.md",
+              snippet: "The launch budget is 40,000 dollars.",
+            },
+          ],
+        },
+      }),
+      ev("token", { text: "It is 40,000 dollars." }),
+      ev("done", { outputs: { status: "done", conversation_id: "c1", title: "Budget" } }),
+    ]);
+    const onOpen = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ChatScreen runs={runs} assistant={assistant} images={images} onOpenCreation={onOpen} />,
+    );
+    await user.type(screen.getByRole("textbox", { name: "Message" }), "my budget?{Enter}");
+    expect(await screen.findByText("From your notebooks")).toBeInTheDocument();
+    expect(screen.getByText("plan.md")).toBeInTheDocument();
+    expect(screen.getByText(/40,000 dollars\.$/, { selector: "span" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open notebook" }));
+    expect(onOpen).toHaveBeenCalledWith("notebook", "nb-1");
+  });
+
+  it("says plainly when the notebooks could not be searched", async () => {
+    const runs = runsThat([
+      ev("tool_call", { id: "t1", name: "search_notebooks", arguments: { query: "x" } }),
+      ev("tool_result", {
+        id: "t1",
+        name: "search_notebooks",
+        status: "error",
+        output: { message: "The search model is not on this computer yet." },
+      }),
+      ev("done", { outputs: { status: "done", conversation_id: "c1", title: "x" } }),
+    ]);
+    const user = userEvent.setup();
+    render(<ChatScreen runs={runs} assistant={assistant} images={images} />);
+    await user.type(screen.getByRole("textbox", { name: "Message" }), "look{Enter}");
+    expect(
+      await screen.findByText("The search model is not on this computer yet."),
+    ).toBeInTheDocument();
+  });
+
   it("says what is missing when no model is chosen, and offers the way there", async () => {
     const runs = runsThat([
       ev("error", {

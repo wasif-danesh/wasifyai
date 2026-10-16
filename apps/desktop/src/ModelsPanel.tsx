@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { Button, JobMeter, Notice } from "@wasifyai/ui";
+import { Button, COMMERCIAL_TEXT, JobMeter, Notice } from "@wasifyai/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FitBadge } from "./FitBadge";
 import { modelsApi } from "./api";
@@ -102,6 +102,12 @@ export function ModelsPanel() {
               </span>
             </div>
             {m.note ? <p className="text-muted-foreground text-sm">{m.note}</p> : null}
+            <p className="text-muted-foreground text-sm">
+              {m.licence}
+              {m.voice
+                ? ` · ${COMMERCIAL_TEXT[m.voice.commercial_use as keyof typeof COMMERCIAL_TEXT] ?? ""}`
+                : ""}
+            </p>
             {m.fit ? <FitBadge fit={m.fit} /> : null}
             {m.fit && m.fit.verdict !== "fits" ? (
               <Notice

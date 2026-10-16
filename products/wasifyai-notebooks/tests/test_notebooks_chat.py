@@ -32,7 +32,7 @@ def ctx():
 
 
 class Rig:
-    def __init__(self, tmp_path, turns, *, embedder_ready=True, facts=None):
+    def __init__(self, tmp_path, turns, *, embedder_ready=True, facts=None, replies=None):
         d = tmp_path / "products" / "wasifyai-notebooks"
         d.mkdir(parents=True)
         (d / "product.yaml").write_text(
@@ -40,7 +40,13 @@ class Rig:
                 {
                     "id": "wasifyai-notebooks",
                     "capabilities": {
-                        "text.chat": {"provider": "fake", "defaults": {"turns": turns}}
+                        "text.chat": {
+                            "provider": "fake",
+                            "defaults": {
+                                "turns": turns,
+                                **({"replies": replies} if replies else {}),
+                            },
+                        }
                     },
                 }
             )

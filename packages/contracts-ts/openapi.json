@@ -324,6 +324,74 @@
         "title": "Binding",
         "type": "object"
       },
+      "Body_create_clone_products_wasifyai_voice_voices_clone_post": {
+        "properties": {
+          "consent": {
+            "default": "",
+            "title": "Consent",
+            "type": "string"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "reference_text": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Reference Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "name"
+        ],
+        "title": "Body_create_clone_products_wasifyai_voice_voices_clone_post",
+        "type": "object"
+      },
+      "Body_create_transcript_products_wasifyai_voice_transcripts_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_create_transcript_products_wasifyai_voice_transcripts_post",
+        "type": "object"
+      },
       "Body_upload_products_wasifyai_notebooks_notebooks__nid__documents_upload_post": {
         "properties": {
           "files": {
@@ -1588,6 +1656,29 @@
         "title": "Move",
         "type": "object"
       },
+      "NewDesign": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "maxLength": 300,
+            "minLength": 3,
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description"
+        ],
+        "title": "NewDesign",
+        "type": "object"
+      },
       "NewFolder": {
         "additionalProperties": false,
         "properties": {
@@ -1775,6 +1866,40 @@
           "failed"
         ],
         "title": "NotebookOut",
+        "type": "object"
+      },
+      "OverviewVoices": {
+        "additionalProperties": false,
+        "description": "Which model speaks the overview and which built-in voice each host has (both optional).",
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "voices": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voices"
+          }
+        },
+        "title": "OverviewVoices",
         "type": "object"
       },
       "ProviderView": {
@@ -3029,6 +3154,51 @@
           "quality"
         ],
         "title": "VoiceChoice",
+        "type": "object"
+      },
+      "VoicePatch": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "minLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "reference_text": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Text"
+          }
+        },
+        "title": "VoicePatch",
         "type": "object"
       }
     }
@@ -4965,6 +5135,461 @@
         ]
       }
     },
+    "/products/wasifyai-notebooks/notebooks/{nid}/artifacts": {
+      "get": {
+        "operationId": "list_artifacts_products_wasifyai_notebooks_notebooks__nid__artifacts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nid",
+            "required": true,
+            "schema": {
+              "title": "Nid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Artifacts Products Wasifyai Notebooks Notebooks  Nid  Artifacts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Artifacts",
+        "tags": [
+          "wasifyai-notebooks"
+        ]
+      }
+    },
+    "/products/wasifyai-notebooks/notebooks/{nid}/artifacts/{aid}": {
+      "delete": {
+        "operationId": "delete_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nid",
+            "required": true,
+            "schema": {
+              "title": "Nid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "aid",
+            "required": true,
+            "schema": {
+              "title": "Aid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Artifact",
+        "tags": [
+          "wasifyai-notebooks"
+        ]
+      },
+      "get": {
+        "operationId": "get_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nid",
+            "required": true,
+            "schema": {
+              "title": "Nid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "aid",
+            "required": true,
+            "schema": {
+              "title": "Aid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Artifact Products Wasifyai Notebooks Notebooks  Nid  Artifacts  Aid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Artifact",
+        "tags": [
+          "wasifyai-notebooks"
+        ]
+      },
+      "patch": {
+        "operationId": "rename_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nid",
+            "required": true,
+            "schema": {
+              "title": "Nid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "aid",
+            "required": true,
+            "schema": {
+              "title": "Aid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Title"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename Artifact",
+        "tags": [
+          "wasifyai-notebooks"
+        ]
+      }
+    },
+    "/products/wasifyai-notebooks/notebooks/{nid}/artifacts/{aid}/audio": {
+      "get": {
+        "operationId": "overview_audio_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__audio_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nid",
+            "required": true,
+            "schema": {
+              "title": "Nid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "aid",
+            "required": true,
+            "schema": {
+              "title": "Aid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Overview Audio",
+        "tags": [
+          "wasifyai-notebooks"
+        ]
+      }
+    },
+    "/products/wasifyai-notebooks/notebooks/{nid}/artifacts/{aid}/cancel": {
+      "post": {
+        "operationId": "cancel_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nid",
+            "required": true,
+            "schema": {
+              "title": "Nid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "aid",
+            "required": true,
+            "schema": {
+              "title": "Aid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Artifact",
+        "tags": [
+          "wasifyai-notebooks"
+        ]
+      }
+    },
+    "/products/wasifyai-notebooks/notebooks/{nid}/artifacts/{aid}/file": {
+      "get": {
+        "operationId": "artifact_file_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nid",
+            "required": true,
+            "schema": {
+              "title": "Nid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "aid",
+            "required": true,
+            "schema": {
+              "title": "Aid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Artifact File",
+        "tags": [
+          "wasifyai-notebooks"
+        ]
+      }
+    },
+    "/products/wasifyai-notebooks/notebooks/{nid}/artifacts/{aid}/voices": {
+      "get": {
+        "operationId": "overview_state_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__voices_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nid",
+            "required": true,
+            "schema": {
+              "title": "Nid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "aid",
+            "required": true,
+            "schema": {
+              "title": "Aid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Overview State Products Wasifyai Notebooks Notebooks  Nid  Artifacts  Aid  Voices Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Overview State",
+        "tags": [
+          "wasifyai-notebooks"
+        ]
+      },
+      "post": {
+        "operationId": "speak_overview_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__voices_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nid",
+            "required": true,
+            "schema": {
+              "title": "Nid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "aid",
+            "required": true,
+            "schema": {
+              "title": "Aid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverviewVoices"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Speak Overview Products Wasifyai Notebooks Notebooks  Nid  Artifacts  Aid  Voices Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Speak Overview",
+        "tags": [
+          "wasifyai-notebooks"
+        ]
+      }
+    },
     "/products/wasifyai-notebooks/notebooks/{nid}/conversations": {
       "get": {
         "operationId": "list_conversations_products_wasifyai_notebooks_notebooks__nid__conversations_get",
@@ -5901,6 +6526,51 @@
         ]
       }
     },
+    "/products/wasifyai-notebooks/notebooks/{nid}/guide": {
+      "get": {
+        "description": "The guide to the notebook (summary, topics, questions to start with), `stale` once its\nsources have changed. Made by a run with `studio: {format: \"guide\"}`.",
+        "operationId": "guide_products_wasifyai_notebooks_notebooks__nid__guide_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nid",
+            "required": true,
+            "schema": {
+              "title": "Nid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Guide Products Wasifyai Notebooks Notebooks  Nid  Guide Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Guide",
+        "tags": [
+          "wasifyai-notebooks"
+        ]
+      }
+    },
     "/products/wasifyai-notebooks/notebooks/{nid}/passages/{chunk_id}": {
       "get": {
         "operationId": "passage_products_wasifyai_notebooks_notebooks__nid__passages__chunk_id__get",
@@ -6803,6 +7473,738 @@
         "summary": "Download",
         "tags": [
           "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/speeches": {
+      "get": {
+        "operationId": "list_speeches_products_wasifyai_voice_speeches_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Speeches Products Wasifyai Voice Speeches Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Speeches",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/speeches/{sid}": {
+      "delete": {
+        "operationId": "delete_speech_products_wasifyai_voice_speeches__sid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "title": "Sid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Speech",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      },
+      "get": {
+        "operationId": "get_speech_products_wasifyai_voice_speeches__sid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "title": "Sid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Speech Products Wasifyai Voice Speeches  Sid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Speech",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/speeches/{sid}/download": {
+      "get": {
+        "operationId": "download_speech_products_wasifyai_voice_speeches__sid__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "title": "Sid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Speech",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/transcripts": {
+      "get": {
+        "operationId": "list_transcripts_products_wasifyai_voice_transcripts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Transcripts Products Wasifyai Voice Transcripts Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Transcripts",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      },
+      "post": {
+        "operationId": "create_transcript_products_wasifyai_voice_transcripts_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_transcript_products_wasifyai_voice_transcripts_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Transcript Products Wasifyai Voice Transcripts Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Transcript",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/transcripts/{tid}": {
+      "delete": {
+        "operationId": "delete_transcript_products_wasifyai_voice_transcripts__tid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tid",
+            "required": true,
+            "schema": {
+              "title": "Tid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Transcript",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      },
+      "get": {
+        "operationId": "get_transcript_products_wasifyai_voice_transcripts__tid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tid",
+            "required": true,
+            "schema": {
+              "title": "Tid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Transcript Products Wasifyai Voice Transcripts  Tid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Transcript",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      },
+      "patch": {
+        "operationId": "rename_transcript_products_wasifyai_voice_transcripts__tid__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tid",
+            "required": true,
+            "schema": {
+              "title": "Tid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Title"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rename Transcript Products Wasifyai Voice Transcripts  Tid  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename Transcript",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/transcripts/{tid}/export": {
+      "get": {
+        "operationId": "export_transcript_products_wasifyai_voice_transcripts__tid__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tid",
+            "required": true,
+            "schema": {
+              "title": "Tid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "txt",
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Transcript",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/voices": {
+      "get": {
+        "operationId": "list_voices_products_wasifyai_voice_voices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(design|clone)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Voices Products Wasifyai Voice Voices Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Voices",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/voices/clone": {
+      "post": {
+        "operationId": "create_clone_products_wasifyai_voice_voices_clone_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_clone_products_wasifyai_voice_voices_clone_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Clone Products Wasifyai Voice Voices Clone Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Clone",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/voices/design": {
+      "post": {
+        "operationId": "create_design_products_wasifyai_voice_voices_design_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewDesign"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Design Products Wasifyai Voice Voices Design Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Design",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/voices/{vid}": {
+      "delete": {
+        "operationId": "delete_voice_products_wasifyai_voice_voices__vid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vid",
+            "required": true,
+            "schema": {
+              "title": "Vid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Voice",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      },
+      "get": {
+        "operationId": "get_voice_products_wasifyai_voice_voices__vid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vid",
+            "required": true,
+            "schema": {
+              "title": "Vid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Voice Products Wasifyai Voice Voices  Vid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Voice",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      },
+      "patch": {
+        "operationId": "update_voice_products_wasifyai_voice_voices__vid__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vid",
+            "required": true,
+            "schema": {
+              "title": "Vid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoicePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Voice Products Wasifyai Voice Voices  Vid  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Voice",
+        "tags": [
+          "wasifyai-voice"
         ]
       }
     },

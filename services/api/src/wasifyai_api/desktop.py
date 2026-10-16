@@ -33,6 +33,7 @@ from wasifyai_platform_sdk.sqlite import (
     create_sqlite_engine,
 )
 
+from wasifyai_api.audio_runtime import AudioEngine, AudioInstaller, AudioServer
 from wasifyai_api.config import Settings
 from wasifyai_api.creation_index import IndexStore
 from wasifyai_api.desktop_discovery import DiscoveryService
@@ -75,6 +76,7 @@ class DesktopBackends:
     llama: LlamaServer | None = None
     language: LanguageService | None = None
     hub: HubService | None = None
+    audio: AudioEngine | None = None
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
     async def start(self, runs: RunManager) -> None:
@@ -97,6 +99,8 @@ class DesktopBackends:
     async def stop(self) -> None:
         if self.discovery is not None:
             await self.discovery.stop()
+        if self.audio is not None:
+            await self.audio.server.close()  # the speech models' memory goes back with the process
         if self.llama is not None:
             await self.llama.close()  # the language model's memory goes back with its process
         if self._consumer:
@@ -132,6 +136,13 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     )
     llama = LlamaServer(settings.desktop_dir)
     models.llama = llama
+    audio = AudioEngine(
+        settings.desktop_dir,
+        models,
+        AudioInstaller(settings.desktop_dir),
+        AudioServer(settings.desktop_dir),
+    )
+    models.audio = audio
     discovery = DiscoveryService(SqliteSettingsStore(engine), models)
     language = LanguageService(SqliteSettingsStore(engine), llama, models, discovery)
     discovery.language = language
@@ -142,6 +153,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         models=models,
         discovery=discovery,
         llama=llama,
+        audio=audio,
         language=language,
         hub=hub,
         engine=engine,
@@ -251,11 +263,15 @@ def _build_worker(d: DesktopBackends):
             await llama.stop()
 
         owners["chat"] = unload_chat
+    if d.audio is not None:
+        owners["audio"] = d.audio.stop  # the speech runtime is another owner of the one slot
     slot = SlotManager(owners, idle_unload_s=s.desktop_idle_unload_s)
     if models is not None:
         models.sidecar, models.slot = sidecar, slot
     if d.language is not None:
         d.language.slot = slot
+    if d.audio is not None:
+        d.audio.slot = slot
     processor = JobProcessor(
         ws,
         d.event_log,

@@ -55,10 +55,36 @@ export {
   type NotebookWorkspaceProps,
 } from "./notebook/NotebookWorkspace";
 export { SetupCard, type SetupItem } from "./notebook/SetupCard";
+export { SourceGuide, type SourceGuideProps } from "./notebook/SourceGuide";
 export { SourceViewer, splitAt } from "./notebook/SourceViewer";
+export { useGuide } from "./notebook/use-guide";
 export { SourcesPane } from "./notebook/SourcesPane";
-export { StudioPane } from "./notebook/StudioPane";
+export { StudioPane, type StudioPaneProps } from "./notebook/StudioPane";
+export {
+  AudioScriptViewer,
+  FlashcardsViewer,
+  InfographicViewer,
+  MindMapViewer,
+  OutputViewer,
+  QuizViewer,
+  SlidesViewer,
+  TableViewer,
+} from "./notebook/OutputViewers";
+export { STUDIO_TILES, parseOutline } from "./notebook/outputs";
+export { useOutputs } from "./notebook/use-outputs";
 export { formatBytes } from "./notebook/format";
 export { scopeIds, scopeLabel } from "./notebook/scope";
 export { useNotebookChat } from "./notebook/use-notebook-chat";
 export { useNotebookSources } from "./notebook/use-notebook-sources";
+export { ModelPicker } from "./voice/ModelPicker";
+export { OptionFields } from "./voice/OptionFields";
+export { RuntimeCard } from "./voice/RuntimeCard";
+export { SpeakWorkspace, type SpeakWorkspaceProps } from "./voice/SpeakWorkspace";
+export {
+  AUDIO_ACCEPT,
+  TranscribeWorkspace,
+  type TranscribeWorkspaceProps,
+} from "./voice/TranscribeWorkspace";
+export { COMMERCIAL_TEXT, STATE_TEXT, clock, modelOption, pickModel } from "./voice/format";
+export { useVoiceModels } from "./voice/use-voice-models";
+export { CONSENT_TEXT, VoicesWorkspace, type VoicesWorkspaceProps } from "./voice/VoicesWorkspace";

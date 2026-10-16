@@ -37,6 +37,7 @@ class Hit:
     start_line: int | None
     end_line: int | None
     score: float  # cosine similarity: how close the passage is, not where it ranks
+    blended: float = 0.0  # the ranking score (0..1), comparable across notebooks
 
 
 def retrieve(
@@ -149,7 +150,7 @@ def _best(
     chunk outside them is unmeasured, not unrelated."""
     rows = db.execute(
         "SELECT c.id, c.document_id, d.title, c.content, c.start_line, c.end_line, "
-        "vec_distance_cosine(v.embedding, ?) AS distance "
+        "COALESCE(vec_distance_cosine(v.embedding, ?), 1.0) AS distance "  # NULL: no direction
         "FROM chunks c JOIN chunk_vectors v ON v.rowid = c.id "
         "JOIN documents d ON d.id = c.document_id "
         "WHERE c.id IN (SELECT value FROM json_each(?))",
@@ -166,4 +167,6 @@ def _best(
         return weight * cosine + (1.0 - weight) * lexical
 
     ordered = sorted(rows, key=lambda r: (-blended(r), r[6]))
-    return [Hit(r[0], r[1], r[2], r[3], r[4], r[5], 1.0 - r[6]) for r in ordered[:top_k]]
+    return [
+        Hit(r[0], r[1], r[2], r[3], r[4], r[5], 1.0 - r[6], blended(r)) for r in ordered[:top_k]
+    ]

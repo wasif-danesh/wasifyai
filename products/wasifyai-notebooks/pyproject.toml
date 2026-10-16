@@ -13,6 +13,13 @@ dependencies = [
   "onnxruntime>=1.20",
   "tokenizers>=0.20",
   "numpy>=2",
+  # Studio (E4): Word and PDF built from Markdown; reportlab approved by the owner 2026-10-16
+  "markdown-it-py>=3",
+  "python-pptx>=1.0",
+  "openpyxl>=3.1",
+  "python-docx>=1.1",
+  "reportlab>=4.2",
+  "pillow>=10",
 ]
 
 # The API discovers installed products through this entry point (GraphRegistry.load_entry_points).

@@ -4,6 +4,7 @@
 import { Button, NotebookWorkspace, Notice, SetupCard } from "@wasifyai/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { client, notebooksApi } from "../api";
+import { images } from "../images";
 import { useNotebookSetup } from "../notebook-setup";
 import { NEW_NOTEBOOK, openNotebook } from "../router";
 import { useChatModel } from "../useChatModel";
@@ -127,6 +128,7 @@ export function NotebookPage({
           </span>
         ) : undefined
       }
+      imageUrl={async (id) => (await images.get(id)).image_url}
       onNeedModel={goModels}
       onBack={() => openNotebook(null)}
     />

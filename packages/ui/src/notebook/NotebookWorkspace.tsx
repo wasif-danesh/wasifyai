@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  AskedMessage,
   NotebookCitation,
   NotebookConversationSummary,
   NotebookSource,
@@ -14,10 +15,12 @@ import { cn } from "../cn";
 import { Button } from "../components/button";
 import { AddSources } from "./AddSources";
 import { NotebookChat } from "./NotebookChat";
+import { SourceGuide } from "./SourceGuide";
 import { type Highlight, SourceViewer } from "./SourceViewer";
 import { SourcesPane } from "./SourcesPane";
 import { StudioPane } from "./StudioPane";
 import { scopeIds, scopeLabel } from "./scope";
+import { useGuide } from "./use-guide";
 import { useNotebookChat } from "./use-notebook-chat";
 import { useNotebookSources } from "./use-notebook-sources";
 
@@ -43,6 +46,8 @@ export type NotebookWorkspaceProps = {
   onNeedModel?: () => void;
   /** A note about the first source of a draft (set by the page when it saves). */
   onBack?: () => void;
+  /** A fresh link to a picture of the image product (an infographic). */
+  imageUrl?: (id: string) => Promise<string>;
 };
 
 /**
@@ -56,6 +61,8 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
   const [pane, setPane] = useState<PaneName>("chat");
   const [adding, setAdding] = useState(false);
   const [viewing, setViewing] = useState<{ id: string; highlight: Highlight | null } | null>(null);
+  const [seed, setSeed] = useState<{ text: string; id: number } | null>(null);
+  const [kept, setKept] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<NotebookConversationSummary[]>([]);
   const [draftTitle, setDraftTitle] = useState(title);
@@ -113,6 +120,44 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
           : everyTickedOff
             ? "Tick at least one source."
             : null;
+
+  // outputs need what questions need, except that no search model is needed (a long selection is
+  // then cut to its starts) and a source being read is simply left out
+  const studioBlocked =
+    props.chatModelChosen === false
+      ? "Choose a chat model to make things from your sources."
+      : notebookId === null || none
+        ? "Add a source first."
+        : ready === 0
+          ? "Your sources are still being read."
+          : everyTickedOff
+            ? "Tick at least one source."
+            : null;
+
+  const guide = useGuide(api, runs, notebookId, {
+    canMake: studioBlocked === null && props.chatModelChosen !== false,
+    readyCount: ready,
+  });
+
+  const saveNote = useCallback(
+    async (m: AskedMessage) => {
+      const at = chat.state.messages.findIndex((x) => x.id === m.id);
+      const question =
+        chat.state.messages
+          .slice(0, Math.max(at, 0))
+          .reverse()
+          .find((x) => x.role === "user")?.text ?? "";
+      const title = (question || "Answer").replace(/\s+/g, " ").trim().slice(0, 80);
+      const cites = m.citations.map((c) => `[${c.n}] ${c.title}`).join("\n");
+      const content = cites ? `${m.text}\n\nSources:\n${cites}` : m.text;
+      const made = await src.addNote(title, content);
+      if (made) {
+        setKept("Saved as a note in your sources.");
+        setTimeout(() => setKept(null), 3500);
+      }
+    },
+    [chat.state.messages, src],
+  );
 
   const open = useCallback((source: NotebookSource) => {
     setViewing({ id: source.id, highlight: null });
@@ -238,6 +283,7 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
         </div>
 
         <div className={cn("relative min-h-0", pane !== "chat" && "hidden lg:block")}>
+          {kept ? <output className="block px-5 pt-3 text-ok text-sm">{kept}</output> : null}
           {src.problem || src.rejected.length ? (
             <div className="px-5 pt-3">
               {src.problem ? (
@@ -263,6 +309,17 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
             notices={showAdder ? undefined : props.notices}
             chip={props.chip}
             onNeedModel={props.onNeedModel}
+            onSaveNote={(m) => void saveNote(m)}
+            draftSeed={seed}
+            guide={
+              <SourceGuide
+                state={guide.state}
+                making={guide.making}
+                problem={guide.problem}
+                onMake={() => void guide.make()}
+                onAsk={(q) => setSeed({ text: q, id: Date.now() })}
+              />
+            }
             empty={
               showAdder ? (
                 <div className="grid w-full max-w-xl gap-4">
@@ -315,7 +372,15 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
         </div>
 
         <div className={cn("min-h-0 border-s", pane !== "studio" && "hidden lg:block")}>
-          <StudioPane />
+          <StudioPane
+            api={api}
+            runs={runs}
+            notebookId={notebookId}
+            documentIds={scope}
+            scopeLabel={label}
+            blockedReason={studioBlocked}
+            imageUrl={props.imageUrl}
+          />
         </div>
       </div>
     </div>

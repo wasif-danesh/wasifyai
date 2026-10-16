@@ -63,7 +63,7 @@ its own security decision first. Voice input waits for the audio vertical.
 | Decision | State |
 |---|---|
 | 1 a product `wasifyai-assistant`, one graph with a tool loop | done; it is the desktop's home screen |
-| 2 tools are capabilities, explicitly allowed | done: `generate_image` and `search_creations`; the image tool is a child run of the image product |
+| 2 tools are capabilities, explicitly allowed | done: `generate_image`, `search_creations` and `search_notebooks` (ADR-0065, stage E6); the image tool is a child run of the image product |
 | 3 conversations are creations, tables, searchable | done: migration 0018, SQLite on desktop, kind `conversation` indexed and removed on delete |
 | 4 events: `tool_call`, `tool_result` | done in the contract and the run manager; `interrupt` for costly actions is not used yet |
 | 5 the model rule, one slot | done for the desktop (D2): chat and image take turns |

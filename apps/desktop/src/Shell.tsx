@@ -11,6 +11,9 @@ import { ModelsPage } from "./pages/Models";
 import { NotebookPage } from "./pages/Notebook";
 import { NotebooksPage } from "./pages/Notebooks";
 import { SettingsPage } from "./pages/Settings";
+import { SpeakPage } from "./pages/Speak";
+import { TranscribePage } from "./pages/Transcribe";
+import { VoicesPage } from "./pages/Voices";
 import { useRoute } from "./router";
 
 const COLLAPSED_KEY = "wasifyai:sidebar-collapsed";
@@ -134,6 +137,9 @@ export function Shell() {
               goModels={() => go("models")}
             />
           ) : null}
+          {route === "speak" ? <SpeakPage goModels={() => go("models")} /> : null}
+          {route === "transcribe" ? <TranscribePage goModels={() => go("models")} /> : null}
+          {route === "voices" ? <VoicesPage go={go} /> : null}
           {route === "models" ? <ModelsPage /> : null}
           {route === "settings" ? <SettingsPage /> : null}
         </main>

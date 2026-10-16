@@ -1,0 +1,21 @@
+[project]
+name = "wasifyai-voice"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+  "wasifyai-platform-sdk",
+  "pydantic>=2.9",
+  "pyyaml>=6",
+  "python-multipart>=0.0.9",
+]
+
+# The API discovers installed products through this entry point (GraphRegistry.load_entry_points).
+[project.entry-points."wasifyai.products"]
+wasifyai-voice = "wasifyai_voice:register"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["wasifyai_voice"]

@@ -22,7 +22,7 @@ import sqlite_vec
 from wasifyai_notebooks.chunking import Passage
 from wasifyai_notebooks.tokenizer import TOKENIZER
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
 MAX_FOLDER_DEPTH = 8
 
 PENDING, PROCESSING, READY, FAILED, CANCELLED = (
@@ -126,6 +126,28 @@ CREATE TABLE IF NOT EXISTS messages(
 """
 
 
+_STUDIO_SCHEMA = """
+CREATE TABLE IF NOT EXISTS artifacts(
+  id TEXT PRIMARY KEY,
+  notebook_id TEXT NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
+  format TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL,
+  error TEXT,
+  prompt TEXT NOT NULL DEFAULT '',
+  source_ids TEXT NOT NULL DEFAULT '[]',
+  body TEXT,
+  data TEXT,
+  file_name TEXT,
+  file_mime TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS artifacts_notebook ON artifacts(notebook_id, created_at);
+"""
+
+
+_GUIDE_COLUMNS = ("guide", "guide_key")  # added to `notebooks` in schema 4
+
+
 class NotebookStore:
     def __init__(self, root: Path, *, dimension: int, embedder_id: str):
         """`root` holds `notebooks.db`; `dimension` and `embedder_id` are what the index was built
@@ -178,6 +200,7 @@ class NotebookStore:
                     "BEGIN;"
                     + _SCHEMA
                     + _CHAT_SCHEMA
+                    + _STUDIO_SCHEMA
                     + "CREATE VIRTUAL TABLE chunk_vectors USING vec0("
                     + f"embedding float[{self.dimension}]);"
                     "CREATE TRIGGER chunks_ad AFTER DELETE ON chunks BEGIN "
@@ -186,6 +209,7 @@ class NotebookStore:
                     "DELETE FROM chunk_vectors WHERE rowid = old.id; END;"
                     "COMMIT;"
                 )
+                self._add_guide_columns(db)
                 db.execute(
                     "INSERT INTO meta(key, value) "
                     "VALUES ('schema', ?), ('embedder', ?), ('dimension', ?)",
@@ -193,15 +217,23 @@ class NotebookStore:
                 )
                 return
             meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
+            self._add_guide_columns(db)
             if meta.get("schema") != str(SCHEMA_VERSION):
                 # a file made by an earlier version: add what is new, then record the version
-                db.executescript("BEGIN;" + _CHAT_SCHEMA + "COMMIT;")
+                db.executescript("BEGIN;" + _CHAT_SCHEMA + _STUDIO_SCHEMA + "COMMIT;")
                 db.execute("UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),))
         if meta.get("embedder") != self.embedder_id or meta.get("dimension") != str(self.dimension):
             raise Conflict(
                 f"This library was indexed with {meta.get('embedder')}; "
                 f"{self.embedder_id} needs the documents read again first."
             )
+
+    @staticmethod
+    def _add_guide_columns(db: sqlite3.Connection) -> None:
+        have = {r[1] for r in db.execute("PRAGMA table_info(notebooks)")}
+        for column in _GUIDE_COLUMNS:
+            if column not in have:
+                db.execute(f"ALTER TABLE notebooks ADD COLUMN {column} TEXT")
 
     # ---- notebooks --------------------------------------------------------------------------
 
@@ -617,10 +649,15 @@ class NotebookStore:
     def reset_interrupted(self) -> int:
         """A source the app quit in the middle of reading is failed at start, so Retry offers it."""
         with self._tx() as db:
-            return db.execute(
+            n = db.execute(
                 "UPDATE documents SET status = ?, error = ?, updated_at = ? WHERE status = ?",
                 (FAILED, "Reading was interrupted when the app closed.", now(), PROCESSING),
             ).rowcount
+            db.execute(
+                "UPDATE artifacts SET status = ?, error = ?, updated_at = ? WHERE status = ?",
+                (FAILED, "Making this was interrupted when the app closed.", now(), PROCESSING),
+            )
+        return n
 
     def next_pending(self) -> dict[str, Any] | None:
         with self.connect() as db:
@@ -819,6 +856,203 @@ class NotebookStore:
                     (nid,),
                 ).fetchall()
             )
+
+    # ---- the guide to a notebook ---------------------------------------------------------------
+
+    def sources_key(self, tenant: str, user: str, nid: str) -> str:
+        """Names the set of sources a guide was written from: it changes when one is added, removed
+        or read again."""
+        import hashlib
+
+        with self.connect() as db:
+            self._notebook_row(db, tenant, user, nid)
+            rows = db.execute(
+                "SELECT id, updated_at FROM documents WHERE notebook_id = ? AND status = ? "
+                "ORDER BY id",
+                (nid, READY),
+            ).fetchall()
+        return hashlib.sha256(json.dumps(rows).encode()).hexdigest()[:16] if rows else ""
+
+    def get_guide(self, tenant: str, user: str, nid: str) -> dict[str, Any]:
+        """The saved guide (or None), and whether the sources have changed since it was written."""
+        key = self.sources_key(tenant, user, nid)
+        with self.connect() as db:
+            self._notebook_row(db, tenant, user, nid)
+            row = db.execute(
+                "SELECT guide, guide_key FROM notebooks WHERE id = ?", (nid,)
+            ).fetchone()
+        guide = json.loads(row[0]) if row and row[0] else None
+        return {"guide": guide, "stale": bool(guide) and row[1] != key, "ready": bool(key)}
+
+    def save_guide(self, tenant: str, user: str, nid: str, guide: dict[str, Any], key: str) -> None:
+        with self._tx() as db:
+            self._notebook_row(db, tenant, user, nid)
+            db.execute(
+                "UPDATE notebooks SET guide = ?, guide_key = ? WHERE id = ?",
+                (json.dumps(guide, ensure_ascii=False), key, nid),
+            )
+
+    # ---- studio outputs ----------------------------------------------------------------------
+
+    _ART_COLS = (
+        "id, notebook_id, format, title, status, error, prompt, source_ids, file_name, "
+        "file_mime, created_at, updated_at"
+    )
+
+    @staticmethod
+    def _art(row: Sequence[Any], body: str | None = None, data: Any = None) -> dict[str, Any]:
+        keys = (
+            "id notebook_id format title status error prompt source_ids file_name file_mime "
+            "created_at updated_at"
+        ).split()
+        out: dict[str, Any] = dict(zip(keys, row, strict=True))
+        out["source_ids"] = json.loads(out["source_ids"] or "[]")
+        out["has_file"] = bool(out["file_name"])
+        if body is not None:
+            out["body"] = body
+        if data is not None:
+            out["data"] = data
+        return out
+
+    def create_artifact(
+        self,
+        tenant: str,
+        user: str,
+        nid: str,
+        *,
+        fmt: str,
+        prompt: str,
+        source_ids: Sequence[str],
+        title: str = "",
+    ) -> dict[str, Any]:
+        aid, ts = new_id(), now()
+        with self._tx() as db:
+            self._notebook_row(db, tenant, user, nid)
+            db.execute(
+                "INSERT INTO artifacts(id, notebook_id, format, title, status, prompt, source_ids, "
+                "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                (aid, nid, fmt, title, PROCESSING, prompt, json.dumps(list(source_ids)), ts, ts),
+            )
+            db.execute("UPDATE notebooks SET updated_at = ? WHERE id = ?", (ts, nid))
+        return self.get_artifact(tenant, user, nid, aid)
+
+    def get_artifact(
+        self, tenant: str, user: str, nid: str, aid: str, *, content: bool = False
+    ) -> dict[str, Any]:
+        with self.connect() as db:
+            self._notebook_row(db, tenant, user, nid)
+            row = db.execute(
+                f"SELECT {self._ART_COLS}, body, data FROM artifacts "
+                "WHERE id = ? AND notebook_id = ?",
+                (aid, nid),
+            ).fetchone()
+        if row is None:
+            raise NotFound("output not found")
+        data = json.loads(row[-1]) if row[-1] else None
+        return self._art(row[:-2], row[-2] if content else None, data if content else None)
+
+    def list_artifacts(self, tenant: str, user: str, nid: str) -> list[dict[str, Any]]:
+        with self.connect() as db:
+            self._notebook_row(db, tenant, user, nid)
+            rows = db.execute(
+                f"SELECT {self._ART_COLS} FROM artifacts WHERE notebook_id = ? "
+                "ORDER BY created_at DESC, id",
+                (nid,),
+            ).fetchall()
+        return [self._art(r) for r in rows]
+
+    def finish_artifact(
+        self,
+        tenant: str,
+        user: str,
+        nid: str,
+        aid: str,
+        *,
+        title: str,
+        body: str,
+        data: dict[str, Any] | None,
+        file_name: str | None,
+        file_mime: str | None,
+    ) -> bool:
+        """processing -> ready, unless the output was deleted or stopped meanwhile."""
+        with self._tx() as db:
+            self._notebook_row(db, tenant, user, nid)
+            n = db.execute(
+                "UPDATE artifacts SET status = ?, error = NULL, title = ?, body = ?, data = ?, "
+                "file_name = ?, file_mime = ?, updated_at = ? "
+                "WHERE id = ? AND notebook_id = ? AND status = ?",
+                (
+                    READY, title, body, json.dumps(data) if data is not None else None,
+                    file_name, file_mime, now(), aid, nid, PROCESSING,
+                ),
+            ).rowcount  # fmt: skip
+        return bool(n)
+
+    def set_artifact_data(
+        self, tenant: str, user: str, nid: str, aid: str, data: dict[str, Any]
+    ) -> None:
+        """Replace the structured data of a ready output (the audio overview gains its voices)."""
+        with self._tx() as db:
+            self._notebook_row(db, tenant, user, nid)
+            n = db.execute(
+                "UPDATE artifacts SET data = ?, updated_at = ? WHERE id = ? AND notebook_id = ? "
+                "AND status = ?",
+                (json.dumps(data), now(), aid, nid, READY),
+            ).rowcount
+            if not n:
+                raise NotFound("output not found")
+
+    def fail_artifact(self, tenant: str, user: str, nid: str, aid: str, message: str) -> None:
+        with self._tx() as db:
+            self._notebook_row(db, tenant, user, nid)
+            db.execute(
+                "UPDATE artifacts SET status = ?, error = ?, updated_at = ? "
+                "WHERE id = ? AND notebook_id = ? AND status = ?",
+                (FAILED, message[:500], now(), aid, nid, PROCESSING),
+            )
+
+    def cancel_artifact(self, tenant: str, user: str, nid: str, aid: str) -> None:
+        with self._tx() as db:
+            self._notebook_row(db, tenant, user, nid)
+            found = db.execute(
+                "SELECT 1 FROM artifacts WHERE id = ? AND notebook_id = ?", (aid, nid)
+            ).fetchone()
+            if found is None:
+                raise NotFound("output not found")
+            n = db.execute(
+                "UPDATE artifacts SET status = ?, error = NULL, updated_at = ? "
+                "WHERE id = ? AND notebook_id = ? AND status = ?",
+                (CANCELLED, now(), aid, nid, PROCESSING),
+            ).rowcount
+            if not n:
+                raise Conflict("This output is not being made.")
+
+    def rename_artifact(self, tenant: str, user: str, nid: str, aid: str, title: str) -> None:
+        with self._tx() as db:
+            self._notebook_row(db, tenant, user, nid)
+            n = db.execute(
+                "UPDATE artifacts SET title = ?, updated_at = ? WHERE id = ? AND notebook_id = ?",
+                (title, now(), aid, nid),
+            ).rowcount
+            if not n:
+                raise NotFound("output not found")
+
+    def delete_artifact(self, tenant: str, user: str, nid: str, aid: str) -> None:
+        with self._tx() as db:
+            self._notebook_row(db, tenant, user, nid)
+            n = db.execute(
+                "DELETE FROM artifacts WHERE id = ? AND notebook_id = ?", (aid, nid)
+            ).rowcount
+            if not n:
+                raise NotFound("output not found")
+
+    def reset_interrupted_artifacts(self) -> int:
+        """An output being made when the app quit is failed at start, so it can be made again."""
+        with self._tx() as db:
+            return db.execute(
+                "UPDATE artifacts SET status = ?, error = ?, updated_at = ? WHERE status = ?",
+                (FAILED, "Making this was interrupted when the app closed.", now(), PROCESSING),
+            ).rowcount
 
     # ---- passages ---------------------------------------------------------------------------
 

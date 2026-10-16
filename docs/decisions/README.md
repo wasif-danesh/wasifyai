@@ -67,5 +67,6 @@
 | [0063](0063-self-sufficient-desktop-discovers-existing-models-and-tools.md) | A self-sufficient desktop app that finds the models and tools already on the computer | Accepted |
 | [0064](0064-model-hub-discover-and-on-device.md) | A model hub: discover open-weight models and see what is on the device | Accepted |
 | [0065](0065-notebooks-source-grounded-workspace.md) | Notebooks: a NotebookLM-style, source-grounded workspace built on SurfSense's local code | Accepted (E0 gate) |
+| [0066](0066-pluggable-speech-music-avatar-models.md) | Speech, music and lip sync run any model the person picks: descriptors, engine adapters and one dropdown | Accepted |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

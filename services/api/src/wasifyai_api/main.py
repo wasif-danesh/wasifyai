@@ -36,6 +36,7 @@ from wasifyai_platform_sdk import (
     RunStore,
     ScopedStorage,
     SecretBox,
+    ToolUnavailable,
     UploadLimiter,
     UploadStore,
     UsageRecorder,
@@ -64,6 +65,7 @@ from wasifyai_api.creation_index import (
 )
 from wasifyai_api.creations import router as creations_router
 from wasifyai_api.desktop import files_router, open_desktop
+from wasifyai_api.desktop_audio import router as desktop_audio_router
 from wasifyai_api.desktop_discovery import router as desktop_discovery_router
 from wasifyai_api.desktop_hub import router as desktop_hub_router
 from wasifyai_api.desktop_language import LocalTextProvider
@@ -260,10 +262,32 @@ def create_app(
             found = await image_store(db).get(tenant, user, item_id)
             return found.prompt if found else ""
 
+        async def describe_notebook(tenant: str, user: str, item_id: str) -> str:
+            # the title of a notebook, so a search of My creations names it rather than its id
+            from wasifyai_notebooks.runtime import runtime_for
+
+            return runtime_for(app.state).store.get_notebook(tenant, user, item_id)["title"]
+
+        async def search_notebooks(
+            tenant: str, user: str, query: str, limit: int
+        ) -> list[dict[str, Any]]:
+            # the passages of the person's notebooks (stage E6); only where notebooks are served
+            try:
+                from wasifyai_notebooks.across import search_across
+                from wasifyai_notebooks.runtime import NotAvailable, runtime_for
+            except ImportError:
+                raise ToolUnavailable("Notebooks are not part of this build.") from None
+            try:
+                rt = runtime_for(app.state)
+            except NotAvailable:
+                raise ToolUnavailable("Notebooks are not available here.") from None
+            return await search_across(rt, tenant, user, query, limit)
+
         tool_host = ApiToolHost(
             lambda: app.state.runs,
             lambda: app.state.creation_index,
-            {"image": describe_image},
+            {"image": describe_image, "notebook": describe_notebook},
+            search_notebooks,
         )
 
         def build_graphs(saver: Any) -> dict[str, Any]:
@@ -360,6 +384,7 @@ def create_app(
             app.state.desktop_models = desktop.models
             app.state.desktop_discovery = desktop.discovery
             app.state.llama_server = desktop.llama
+            app.state.audio = desktop.audio  # the speech runtime (ADR-0066); products reach it here
             app.state.desktop_language = desktop.language
             app.state.desktop_hub = desktop.hub
             # notebooks keep their library under the app's data folder
@@ -458,6 +483,7 @@ def create_app(
     if desktop_profile:
         app.include_router(files_router)
         app.include_router(desktop_models_router)
+        app.include_router(desktop_audio_router)
         app.include_router(desktop_discovery_router)
         app.include_router(desktop_llm_router)
         app.include_router(desktop_hub_router)

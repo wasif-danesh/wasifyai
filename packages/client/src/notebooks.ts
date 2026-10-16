@@ -70,6 +70,101 @@ export type NotebookMessage = {
   created_at: string;
 };
 
+/** What Studio can make from a notebook's sources (the engine's format keys). */
+export type StudioFormat =
+  | "report"
+  | "study_guide"
+  | "flashcards"
+  | "quiz"
+  | "mindmap"
+  | "word"
+  | "pdf"
+  | "slides"
+  | "datatable"
+  | "audio"
+  | "infographic";
+
+export type OutputStatus = "processing" | "ready" | "failed" | "cancelled";
+
+export type FlashcardsData = {
+  title: string;
+  cards: { front: string; back: string }[];
+};
+
+export type QuizData = {
+  title: string;
+  questions: { question: string; options: string[]; answer_index: number; explanation: string }[];
+};
+
+export type SlidesData = {
+  title: string;
+  slides: { title: string; bullets: string[]; notes: string }[];
+};
+
+export type TableData = { title: string; columns: string[]; rows: string[][] };
+
+export type AudioScriptData = {
+  title: string;
+  hosts: string[];
+  turns: { speaker: 1 | 2; host: string; text: string }[];
+  /** true once the voices exist (`overviewAudio` has the sound) */
+  audio: boolean;
+  audio_model?: string;
+  audio_voices?: Record<string, string>;
+};
+
+/** How far the voices of an audio overview have got. */
+export type OverviewState = {
+  state: "idle" | "working" | "ready" | "failed";
+  done: number;
+  total: number;
+  message: string;
+};
+
+export type InfographicData = {
+  title: string;
+  summary: string;
+  sections: { label: string; value: string; detail: string }[];
+  /** the picture, a creation of the image product */
+  image_id?: string;
+  width?: number;
+  height?: number;
+};
+
+export type OutputData =
+  | FlashcardsData
+  | QuizData
+  | SlidesData
+  | TableData
+  | AudioScriptData
+  | InfographicData;
+
+/** What a notebook's first look shows: a summary, the topics and questions to start with. */
+export type GuideData = { summary: string; topics: string[]; questions: string[] };
+
+export type GuideState = { guide: GuideData | null; stale: boolean; ready: boolean };
+
+/** One thing a notebook made: a report, a deck, a quiz, a map, a document. */
+export type NotebookOutput = {
+  id: string;
+  notebook_id: string;
+  format: StudioFormat;
+  title: string;
+  status: OutputStatus;
+  error: string | null;
+  prompt: string;
+  source_ids: string[];
+  has_file: boolean;
+  file_name: string | null;
+  file_mime: string | null;
+  created_at: string;
+  updated_at: string;
+  /** only when one output is read: the Markdown that is shown and searched */
+  body?: string;
+  /** the structured content, for the formats that have a viewer of their own */
+  data?: OutputData;
+};
+
 export type NotebookConversationSummary = {
   id: string;
   notebook_id: string;
@@ -198,6 +293,36 @@ export function createNotebooksApi(transport: Transport) {
       none(`${nb(id)}/conversations/${encodeURIComponent(cid)}`, send("PATCH", { title })),
     removeConversation: (id: string, cid: string) =>
       none(`${nb(id)}/conversations/${encodeURIComponent(cid)}`, { method: "DELETE" }),
+
+    guide: (id: string) => json<GuideState>(`${nb(id)}/guide`),
+    outputs: (id: string) => json<NotebookOutput[]>(`${nb(id)}/artifacts`),
+    output: (id: string, oid: string) =>
+      json<NotebookOutput>(`${nb(id)}/artifacts/${encodeURIComponent(oid)}`),
+    renameOutput: (id: string, oid: string, title: string) =>
+      none(`${nb(id)}/artifacts/${encodeURIComponent(oid)}`, send("PATCH", { title })),
+    cancelOutput: (id: string, oid: string) =>
+      none(`${nb(id)}/artifacts/${encodeURIComponent(oid)}/cancel`, { method: "POST" }),
+    removeOutput: (id: string, oid: string) =>
+      none(`${nb(id)}/artifacts/${encodeURIComponent(oid)}`, { method: "DELETE" }),
+    /** The output's file (Word, PDF, Markdown, JSON) as a blob. */
+    /** Speak the overview's script with a speech model (the engine's recommended one by default). */
+    overviewVoices: (id: string, oid: string, body: { model?: string } = {}) =>
+      json<OverviewState>(
+        `${nb(id)}/artifacts/${encodeURIComponent(oid)}/voices`,
+        send("POST", body),
+      ),
+    overviewState: (id: string, oid: string) =>
+      json<OverviewState>(`${nb(id)}/artifacts/${encodeURIComponent(oid)}/voices`),
+    async overviewAudio(id: string, oid: string): Promise<Blob> {
+      const res = await request(`${nb(id)}/artifacts/${encodeURIComponent(oid)}/audio`);
+      if (!res.ok) throw new HttpError(res.status, await errorMessage(res));
+      return res.blob();
+    },
+    async outputFile(id: string, oid: string): Promise<Blob> {
+      const res = await request(`${nb(id)}/artifacts/${encodeURIComponent(oid)}/file`);
+      if (!res.ok) throw new HttpError(res.status, await errorMessage(res));
+      return res.blob();
+    },
 
     /** Notebooks found by their title and the names of their sources (My creations search). */
     async find(query: string): Promise<string[]> {
@@ -406,4 +531,65 @@ function onEvent(state: AskState, e: ParsedEvent): AskState {
     default:
       return base;
   }
+}
+
+// ---- making an output ---------------------------------------------------------------------------
+
+export type MakeResult =
+  | { ok: true; outputId: string; title: string }
+  | { ok: false; code: string; message: string };
+
+/**
+ * Start a Studio run and follow it to its end: the output is saved by the engine whether or not
+ * this screen is still open, so the caller reads the outputs again afterwards.
+ */
+export async function makeOutput(
+  runs: {
+    startRun(p: string, input: object, s: AbortSignal, on: (e: ParsedEvent) => void): Promise<void>;
+  },
+  request: {
+    notebookId: string;
+    format: StudioFormat | "guide";
+    prompt: string;
+    documentIds?: string[];
+  },
+  signal: AbortSignal,
+  onStep?: (label: string) => void,
+): Promise<MakeResult> {
+  let result: MakeResult = {
+    ok: false,
+    code: "lost",
+    message:
+      "We lost the connection while it was being made. It may still finish: look in the list.",
+  };
+  const input: Record<string, unknown> = {
+    notebook_id: request.notebookId,
+    studio: { format: request.format, prompt: request.prompt },
+  };
+  if (request.documentIds !== undefined) input.document_ids = request.documentIds;
+  await runs.startRun(NOTEBOOKS_PRODUCT, input, signal, (e) => {
+    const data = e.data as unknown as Record<string, unknown>;
+    if (e.event === "node" && typeof data.label === "string") onStep?.(data.label);
+    if (e.event === "error") {
+      result = {
+        ok: false,
+        code: String(data.code ?? "failed"),
+        message: String(data.message ?? "Something went wrong."),
+      };
+    }
+    if (e.event === "done") {
+      const out = (data.outputs as Record<string, unknown>) ?? {};
+      if (out.status === "refused") {
+        const refusal = (out.refusal as Record<string, string>) ?? {};
+        result = {
+          ok: false,
+          code: refusal.code ?? "refused",
+          message: refusal.message ?? "That could not be made.",
+        };
+      } else if (typeof out.artifact_id === "string") {
+        result = { ok: true, outputId: out.artifact_id, title: String(out.title ?? "") };
+      }
+    }
+  });
+  return result;
 }

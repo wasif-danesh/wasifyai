@@ -27,7 +27,7 @@ import httpx
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from wasifyai_platform_sdk import Identity
+from wasifyai_platform_sdk import Identity, VoiceModel, parse_voice_model
 
 from wasifyai_api.desktop_fit import (
     Machine,
@@ -47,7 +47,7 @@ DISK_MARGIN = 1_000_000_000  # keep this much free after a download
 ALLOWED_FOLDERS = frozenset(
     {
         "checkpoints", "diffusion_models", "unet", "text_encoders", "clip", "vae", "loras",
-        "controlnet", "upscale_models", "embeddings",
+        "controlnet", "upscale_models", "embeddings", "audio",
     }
 )  # fmt: skip
 
@@ -74,6 +74,7 @@ class ModelEntry:
     note: str
     approx_ram_gb: int
     files: tuple[ModelFile, ...]
+    voice: VoiceModel | None = None  # the descriptor of a speech, music or avatar model (ADR-0066)
 
     @property
     def total_bytes(self) -> int:
@@ -102,6 +103,8 @@ def parse_catalogue(raw: dict[str, Any], product_id: str) -> list[ModelEntry]:
                 id=m["id"], product_id=product_id, title=m["title"], licence=m["licence"],
                 source=m["source"], note=m.get("note", ""),
                 approx_ram_gb=int(m.get("approx_ram_gb", 0)), files=tuple(files),
+                voice=parse_voice_model(m["id"], m["title"], m["licence"], m["voice"])
+                if m.get("voice") else None,
             )
         )  # fmt: skip
     return out
@@ -311,6 +314,7 @@ class ModelsService:
         self.extra_dirs = default_extra_dirs
         self.sidecar: Any = None  # set when the worker is built; told about folder changes
         self.llama: Any = None  # the LlamaServer, when the language engine is there
+        self.audio: Any = None  # the AudioEngine (ADR-0066)
         self.slot: Any = None
 
     async def load(self) -> None:
@@ -358,7 +362,11 @@ class ModelsService:
         slot = self.slot
         if slot is None or not slot.resident_owner:
             return 0
-        owner = {"image": self.sidecar, "chat": self.llama}.get(slot.resident_owner)
+        owner = {"image": self.sidecar, "chat": self.llama, "audio": self.audio}.get(
+            slot.resident_owner
+        )
+        if owner is self.audio and owner is not None:
+            owner = owner.server
         return process_rss_bytes(getattr(owner, "pid", None)) if owner is not None else 0
 
     async def machine(self) -> Machine:
@@ -392,6 +400,7 @@ class ModelsService:
             "bytes_missing": sum(f["size"] for f in missing),
             "memory_warning": gate,
             "fit": fit.public() if fit else None,
+            "voice": e.voice.public() if e.voice else None,
         }  # fmt: skip
 
     def remove(self, e: ModelEntry) -> int:
@@ -441,13 +450,19 @@ class Folders(BaseModel):
 
 
 @router.get("/models")
-async def list_models(request: Request, _: Identity = Depends(get_identity)) -> dict[str, Any]:
+async def list_models(
+    request: Request, task: str | None = None, _: Identity = Depends(get_identity)
+) -> dict[str, Any]:
     svc = _svc(request)
     ram = physical_memory_bytes()
     machine = await svc.machine()
     active = svc.downloads.active or svc.downloads.latest()
     return {
-        "models": [svc.entry_state(e, machine) for e in svc.catalogue.values()],
+        "models": [
+            svc.entry_state(e, machine)
+            for e in svc.catalogue.values()
+            if task is None or (e.voice is not None and task in e.voice.tasks)
+        ],
         "machine": machine.public(),
         "folders": {
             "models_dir": str(svc.models_dir),

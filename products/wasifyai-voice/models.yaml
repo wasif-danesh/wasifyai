@@ -1,0 +1,343 @@
+# The speech models this product can use, and where they come from (ADR-0066, docs/phase2-voice-plan.md).
+# Each entry is a download entry like the image models' (pinned by commit, size and SHA-256; a file is fetched only
+# after a click that has shown its name, size, source and licence) plus a `voice:` block, the model's descriptor.
+# Figures under `measured` are from the owner's Mac (docs/spikes/voice-v0.md); voices, languages and options agree
+# with specs/ (a test checks it). `commercial_use` is read from the model card (`licence_evidence`); only `yes` can
+# be recommended. `clone` and `design` say how a model takes a reference recording or a voice description. The URLs name a commit of the repository, so they cannot change under the pin.
+models:
+- id: kokoro-82m
+  title: Kokoro 82M
+  licence: Apache-2.0
+  source: https://huggingface.co/hexgrad/Kokoro-82M
+  note: Fast, light text to speech with 28 English voices. Made for audio.cpp from the Kokoro model.
+  approx_ram_gb: 1
+  files:
+  - folder: audio
+    name: kokoro-82m-q8_0.gguf
+    url: https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5/Kokoro-82M-GGUF/kokoro-82m-q8_0.gguf
+    size: 189549408
+    sha256: 5d800fd204029302c10313daeafdb31c875c7c29ae31974d0d156cc7f512d1d0
+  voice:
+    engine: audiocpp
+    family: kokoro_tts
+    package: kokoro_82m_q8_0
+    server_task: tts
+    tasks:
+    - speak
+    recommended:
+    - speak
+    languages:
+    - en-us
+    - en-gb
+    sample_rate: 24000
+    commercial_use: 'yes'
+    licence_evidence: https://huggingface.co/hexgrad/Kokoro-82M
+    reviewed: '2026-10-16'
+    measured:
+      platform: darwin-arm64
+      speed_x: 8.6
+      memory_gb: 0.9
+      load_s: 4.7
+    voices:
+    - id: af_alloy
+      label: Alloy
+      language: en-us
+      gender: female
+    - id: af_aoede
+      label: Aoede
+      language: en-us
+      gender: female
+    - id: af_bella
+      label: Bella
+      language: en-us
+      gender: female
+    - id: af_heart
+      label: Heart
+      language: en-us
+      gender: female
+    - id: af_jessica
+      label: Jessica
+      language: en-us
+      gender: female
+    - id: af_kore
+      label: Kore
+      language: en-us
+      gender: female
+    - id: af_nicole
+      label: Nicole
+      language: en-us
+      gender: female
+    - id: af_nova
+      label: Nova
+      language: en-us
+      gender: female
+    - id: af_river
+      label: River
+      language: en-us
+      gender: female
+    - id: af_sarah
+      label: Sarah
+      language: en-us
+      gender: female
+    - id: af_sky
+      label: Sky
+      language: en-us
+      gender: female
+    - id: am_adam
+      label: Adam
+      language: en-us
+      gender: male
+    - id: am_echo
+      label: Echo
+      language: en-us
+      gender: male
+    - id: am_eric
+      label: Eric
+      language: en-us
+      gender: male
+    - id: am_fenrir
+      label: Fenrir
+      language: en-us
+      gender: male
+    - id: am_liam
+      label: Liam
+      language: en-us
+      gender: male
+    - id: am_michael
+      label: Michael
+      language: en-us
+      gender: male
+    - id: am_onyx
+      label: Onyx
+      language: en-us
+      gender: male
+    - id: am_puck
+      label: Puck
+      language: en-us
+      gender: male
+    - id: am_santa
+      label: Santa
+      language: en-us
+      gender: male
+    - id: bf_alice
+      label: Alice
+      language: en-gb
+      gender: female
+    - id: bf_emma
+      label: Emma
+      language: en-gb
+      gender: female
+    - id: bf_isabella
+      label: Isabella
+      language: en-gb
+      gender: female
+    - id: bf_lily
+      label: Lily
+      language: en-gb
+      gender: female
+    - id: bm_daniel
+      label: Daniel
+      language: en-gb
+      gender: male
+    - id: bm_fable
+      label: Fable
+      language: en-gb
+      gender: male
+    - id: bm_george
+      label: George
+      language: en-gb
+      gender: male
+    - id: bm_lewis
+      label: Lewis
+      language: en-gb
+      gender: male
+    default_voice: af_heart
+    options:
+    - name: speed
+      type: float
+      label: Speed
+      description: How fast the voice speaks.
+      min: 0.5
+      max: 2.0
+      default: 1.0
+    - name: seed
+      type: int
+      label: Seed
+      description: The same seed gives the same speech; leave empty for a new take.
+      min: 0
+- id: qwen3-tts-0.6b-base
+  title: Qwen3-TTS 0.6B Base
+  licence: Apache-2.0
+  source: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base
+  note: Speaks in a voice cloned from a 3 to 30 second recording, in 10 languages. Needs the words spoken in the recording.
+  approx_ram_gb: 5
+  files:
+  - folder: audio
+    name: qwen3-tts-12hz-0.6b-base-q8_0.gguf
+    url: https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5/Qwen3-TTS-12Hz-0.6B-Base-GGUF/qwen3-tts-12hz-0.6b-base-q8_0.gguf
+    size: 1991211136
+    sha256: 771420bd20ff5f35407b4fa9cf9c5461e153800d3d772ef51c9febc0a520855d
+  voice:
+    engine: audiocpp
+    family: qwen3_tts
+    package: qwen3_tts_0_6b_base_q8_0
+    server_task: tts
+    tasks:
+    - clone
+    recommended:
+    - clone
+    languages: &id001
+    - zh
+    - en
+    - ja
+    - ko
+    - de
+    - fr
+    - ru
+    - pt
+    - es
+    - it
+    sample_rate: 24000
+    commercial_use: 'yes'
+    licence_evidence: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base
+    reviewed: '2026-10-16'
+    measured:
+      platform: darwin-arm64
+      speed_x: 3.5
+      memory_gb: 5.0
+      load_s: 2.8
+    clone:
+      reference_text: required
+      min_seconds: 2
+      max_seconds: 30
+- id: qwen3-tts-1.7b-voicedesign
+  title: Qwen3-TTS 1.7B VoiceDesign
+  licence: Apache-2.0
+  source: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
+  note: Speaks in a voice you describe in words ("a deep, calm, elderly man"), in 10 languages.
+  approx_ram_gb: 6
+  files:
+  - folder: audio
+    name: qwen3-tts-12hz-1.7b-voicedesign-q8_0.gguf
+    url: https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5/Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF/qwen3-tts-12hz-1.7b-voicedesign-q8_0.gguf
+    size: 2816988960
+    sha256: 1bcef9a8c021072fca40e00498e00af9091fbe6d3ae4f87567cfee885d6c7554
+  voice:
+    engine: audiocpp
+    family: qwen3_tts
+    package: qwen3_tts_1_7b_voicedesign_q8_0
+    server_task: vdes
+    tasks:
+    - design
+    recommended:
+    - design
+    languages: *id001
+    sample_rate: 24000
+    commercial_use: 'yes'
+    licence_evidence: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
+    reviewed: '2026-10-16'
+    measured:
+      platform: darwin-arm64
+      speed_x: 2.9
+      memory_gb: 6.2
+      load_s: 2.6
+    design:
+      via: instruct_option
+      max_chars: 300
+- id: voxcpm2
+  title: VoxCPM2
+  licence: Apache-2.0
+  source: https://huggingface.co/openbmb/VoxCPM2
+  note: Natural speech in 30 languages. Can speak in a voice cloned from a short recording, or in a voice described in words.
+    Larger and slower than Qwen3-TTS.
+  approx_ram_gb: 7
+  files:
+  - folder: audio
+    name: voxcpm2-q8_0.gguf
+    url: https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5/VoxCPM2-GGUF/voxcpm2-q8_0.gguf
+    size: 2955000480
+    sha256: c8e01ab4416011e12a28f24ede298a1aa5ce64b43f8e8aaad53b1e2fe7c96432
+  voice:
+    engine: audiocpp
+    family: voxcpm2
+    package: voxcpm2_q8_0
+    server_task: tts
+    tasks:
+    - speak
+    - clone
+    - design
+    recommended: []
+    languages:
+    - en
+    sample_rate: 48000
+    commercial_use: 'yes'
+    licence_evidence: https://huggingface.co/openbmb/VoxCPM2
+    reviewed: '2026-10-16'
+    measured:
+      platform: darwin-arm64
+      speed_x: 1.8
+      memory_gb: 6.5
+      load_s: 3.4
+    clone:
+      reference_text: optional
+      min_seconds: 2
+      max_seconds: 30
+    design:
+      via: text_prefix
+      max_chars: 300
+- id: parakeet-tdt-0.6b-v3
+  title: Parakeet TDT 0.6B v3
+  licence: CC-BY-4.0
+  source: https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+  note: 'Fast speech to text for 25 European languages, with word times. Credit: NVIDIA (CC-BY-4.0).'
+  approx_ram_gb: 3
+  files:
+  - folder: audio
+    name: parakeet-tdt-0.6b-v3-q8_0.gguf
+    url: https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5/Parakeet-TDT-0.6B-v3-GGUF/parakeet-tdt-0.6b-v3-q8_0.gguf
+    size: 915733744
+    sha256: 074e61ac1abd3d3efcfc10798d17bf9a975b31768b466fc2578364d206dde64c
+  voice:
+    engine: audiocpp
+    family: parakeet_tdt
+    package: parakeet_tdt_q8_0
+    server_task: asr
+    tasks:
+    - transcribe
+    recommended:
+    - transcribe
+    languages:
+    - bg
+    - cs
+    - da
+    - de
+    - el
+    - en
+    - es
+    - et
+    - fi
+    - fr
+    - hr
+    - hu
+    - it
+    - lt
+    - lv
+    - mt
+    - nl
+    - pl
+    - pt
+    - ro
+    - ru
+    - sk
+    - sl
+    - sv
+    - uk
+    sample_rate: 16000
+    commercial_use: 'yes'
+    licence_evidence: https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+    reviewed: '2026-10-16'
+    measured:
+      platform: darwin-arm64
+      speed_x: 130
+      memory_gb: 2.6
+      load_s: 1.5

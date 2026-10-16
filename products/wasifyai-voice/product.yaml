@@ -1,0 +1,4 @@
+id: wasifyai-voice
+# Speech to text and text to speech on this computer (ADR-0066). The models and the runtime belong to
+# the engine; this product asks it for them, so no capability is bound here.
+capabilities: {}

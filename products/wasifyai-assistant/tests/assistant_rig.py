@@ -11,6 +11,7 @@ from wasifyai_assistant.store import InMemoryConversationStore
 from wasifyai_platform_sdk import (
     InMemoryUsageRecorder,
     ProviderDeps,
+    ToolUnavailable,
     build_capabilities,
     load_product_config,
 )
@@ -22,6 +23,12 @@ class FakeHost:
     def __init__(self) -> None:
         self.runs: list[tuple[str, dict[str, Any]]] = []
         self.searches: list[str] = []
+        self.notebook_searches: list[str] = []
+        self.notebook_error: str | None = None
+        self.passages: list[dict[str, Any]] = [
+            {"notebook_id": "nb-1", "notebook": "Budget", "document_id": "d-1",
+             "title": "plan.md", "text": "The launch budget is 40,000 dollars."}
+        ]  # fmt: skip
         self.child_events: list[dict[str, Any]] = [
             {"event": "job_progress", "job_id": "j1", "capability": "image.generate",
              "status": "running", "progress": 0.5},
@@ -42,6 +49,12 @@ class FakeHost:
     async def search_creations(self, query: str, limit: int = 6) -> list[dict[str, Any]]:
         self.searches.append(query)
         return self.hits
+
+    async def search_notebooks(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        self.notebook_searches.append(query)
+        if self.notebook_error:
+            raise ToolUnavailable(self.notebook_error)
+        return self.passages
 
 
 class Rig:

@@ -103,10 +103,10 @@ export const GROUPS: Group[] = [
     label: "Voice",
     icon: Volume2,
     items: [
-      { label: "Text to speech", icon: Volume2, soon: true },
-      { label: "Speech to text", icon: Mic, soon: true },
+      { label: "Text to speech", icon: Volume2, route: "speak" },
+      { label: "Speech to text", icon: Mic, route: "transcribe" },
       { label: "Lip sync", icon: Film, soon: true },
-      { label: "Voices", icon: Users, soon: true },
+      { label: "Voices", icon: Users, route: "voices" },
     ],
   },
   {
@@ -125,6 +125,7 @@ export const GROUPS: Group[] = [
 export function groupOf(route: Route): GroupId | null {
   if (route === "notebook" || route === "notebooks") return "notebook";
   if (route === "create" || route === "edit" || route === "library") return "images";
+  if (route === "speak" || route === "transcribe" || route === "voices") return "voice";
   return null;
 }
 

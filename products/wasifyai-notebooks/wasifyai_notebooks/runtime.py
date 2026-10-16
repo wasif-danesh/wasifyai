@@ -37,6 +37,11 @@ class Runtime:
     installer: ReaderInstaller | None = None
     installer_problem: str = ""
 
+    @property
+    def artifacts_dir(self) -> Path:
+        """Where the files of a notebook's outputs (Word, PDF, JSON) are kept."""
+        return self.files_dir.parent / "artifacts"
+
     @classmethod
     def build(
         cls,

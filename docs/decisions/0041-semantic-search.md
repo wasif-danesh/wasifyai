@@ -207,6 +207,9 @@ product, or a new kind of creation in an existing product, is not finished until
    My creations (ADR-0040);
 6. a new `kind` added to the search API (`CreationKind`) and the web types, with tests for each of the above and a
    row in the evaluation corpus (`services/api/evals/search/corpus.yaml`) so the quality is measured.
+   (Checked on 2026-10-17: the voice product indexed `track` and `voice`, which `CreationKind` did not list, so a
+   search that found one answered with an error. Both are listed now and `/creations/search` is tested with each kind
+   a product can index: a kind that is indexed but not in `CreationKind` is a bug.)
 
 The text must be words in any language: the embedder is multilingual and the keyword check works in every script.
 If a creation has no words (a drawing from a sketch, an uploaded recording), index a caption the product

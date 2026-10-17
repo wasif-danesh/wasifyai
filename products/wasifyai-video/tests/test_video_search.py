@@ -9,7 +9,7 @@ from test_video_graph import Story
 from test_video_routes import identity, video
 from video_rig import make_rig
 from wasifyai_platform_sdk import RouteDeps, ScopedStorage, memory_storage
-from wasifyai_video.index import VideoIndexSource, index_text
+from wasifyai_video.index import VideoIndexSource, index_text, video_index_source
 from wasifyai_video.routes import build_routes
 from wasifyai_video.videos import InMemoryVideoStore
 
@@ -32,7 +32,7 @@ def test_the_product_registers_an_index_source():
 
     registry = GraphRegistry()
     register(registry)
-    assert registry.index_sources() == {"wasifyai-video": VideoIndexSource}
+    assert registry.index_sources() == {"wasifyai-video": video_index_source}
     assert (VideoIndexSource.product_id, VideoIndexSource.kind) == ("wasifyai-video", "video")
 
 

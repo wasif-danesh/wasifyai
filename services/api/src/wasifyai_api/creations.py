@@ -20,7 +20,16 @@ SEARCHED = "creation.searched"
 
 class SearchHit(BaseModel):
     kind: Literal[
-        "song", "image", "video", "speech", "transcript", "lipsync", "conversation", "notebook"
+        "song",
+        "image",
+        "video",
+        "speech",
+        "transcript",
+        "lipsync",
+        "conversation",
+        "notebook",
+        "track",
+        "voice",
     ]
     product_id: str
     id: str
@@ -39,7 +48,16 @@ async def search_creations(
     request: Request,
     q: str = Query(min_length=1, max_length=200),
     kind: Literal[
-        "song", "image", "video", "speech", "transcript", "lipsync", "conversation", "notebook"
+        "song",
+        "image",
+        "video",
+        "speech",
+        "transcript",
+        "lipsync",
+        "conversation",
+        "notebook",
+        "track",
+        "voice",
     ]
     | None = None,
     limit: int = Query(20, ge=1, le=50),

@@ -23,7 +23,10 @@ export type Route =
   | "speechedit"
   | "lipsync"
   | "dub"
-  | "audiobook";
+  | "audiobook"
+  | "video"
+  | "animate"
+  | "videos";
 
 const PATHS: Record<Route, string> = {
   home: "/",
@@ -46,6 +49,9 @@ const PATHS: Record<Route, string> = {
   lipsync: "/voice/lip-sync",
   dub: "/voice/dub",
   audiobook: "/voice/audiobook",
+  video: "/video/create",
+  animate: "/video/animate",
+  videos: "/video/library",
 };
 
 /** The id in the draft address: a notebook that is not saved yet. */

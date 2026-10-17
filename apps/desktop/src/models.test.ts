@@ -11,6 +11,7 @@ import {
 
 const entry = (present: boolean[]): ModelEntry => ({
   id: "flux2-klein-4b",
+  product_id: "wasifyai-image",
   title: "FLUX.2 klein 4B",
   licence: "Apache-2.0",
   source: "https://huggingface.co/Comfy-Org/flux2-klein-4B",

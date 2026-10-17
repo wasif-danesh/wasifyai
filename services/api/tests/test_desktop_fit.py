@@ -136,3 +136,36 @@ async def test_a_real_image_job_that_cannot_fit_is_refused_before_anything_loads
     )
     await placeholder.run(object(), None)
     assert Inner.ran == 2
+
+
+async def test_a_video_job_is_judged_by_the_video_models_and_an_image_job_by_the_image_models():
+    from types import SimpleNamespace
+
+    from wasifyai_api.desktop import FitGuardRunner
+
+    class Refused(Exception):
+        def __init__(self, code: str, message: str):
+            super().__init__(message)
+            self.code = code
+
+    class Inner:
+        backend = "comfyui"
+        ran = 0
+
+        async def run(self, job, on_progress, files=None):
+            Inner.ran += 1
+            return {}
+
+    image = SimpleNamespace(approx_ram_gb=24, product_id="wasifyai-image", title="Big image model")
+    video = SimpleNamespace(approx_ram_gb=14, product_id="wasifyai-video", title="Video model")
+
+    async def read() -> Machine:
+        return Machine("cpu", 20 * GB, 20 * GB)  # holds the video model, not the image one
+
+    models = SimpleNamespace(catalogue={"i": image, "v": video}, machine=read)
+    guard = FitGuardRunner(Inner(), SimpleNamespace(installed=True), models, Refused)
+    await guard.run(SimpleNamespace(capability="video.generate"), None)  # fits: runs
+    with pytest.raises(Refused) as e:
+        await guard.run(SimpleNamespace(capability="image.generate"), None)
+    assert "Big image model will not fit" in str(e.value)
+    assert Inner.ran == 1

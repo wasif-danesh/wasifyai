@@ -2569,6 +2569,7 @@ dependencies = [
 desktop = [
     { name = "wasifyai-media-worker" },
     { name = "wasifyai-notebooks" },
+    { name = "wasifyai-video" },
     { name = "wasifyai-voice" },
 ]
 
@@ -2593,6 +2594,7 @@ requires-dist = [
     { name = "wasifyai-media-worker", marker = "extra == 'desktop'", editable = "services/media-worker" },
     { name = "wasifyai-notebooks", marker = "extra == 'desktop'", editable = "products/wasifyai-notebooks" },
     { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
+    { name = "wasifyai-video", marker = "extra == 'desktop'", editable = "products/wasifyai-video" },
     { name = "wasifyai-voice", marker = "extra == 'desktop'", editable = "products/wasifyai-voice" },
 ]
 provides-extras = ["desktop"]

@@ -95,10 +95,10 @@ export const GROUPS: Group[] = [
     label: "Video",
     icon: Video,
     items: [
-      { label: "Create", icon: Sparkles, soon: true },
-      { label: "Animate an image", icon: Film, soon: true },
+      { label: "Create", icon: Sparkles, route: "video" },
+      { label: "Animate an image", icon: Film, route: "animate" },
       { label: "Extend video", icon: Maximize2, soon: true },
-      { label: "Your videos", icon: Library, soon: true },
+      { label: "Your videos", icon: Library, route: "videos" },
     ],
   },
   {
@@ -133,6 +133,7 @@ export const GROUPS: Group[] = [
 export function groupOf(route: Route): GroupId | null {
   if (route === "notebook" || route === "notebooks") return "notebook";
   if (route === "create" || route === "edit" || route === "library") return "images";
+  if (route === "video" || route === "animate" || route === "videos") return "video";
   if (
     route === "speak" ||
     route === "transcribe" ||

@@ -43,6 +43,21 @@ export {
   type WorkspacePreset,
 } from "./image/ImageWorkspace";
 export { ImageLibrary, type ImageLibraryProps } from "./image/ImageLibrary";
+export {
+  VIDEO_PRODUCT,
+  type VideoFlowApi,
+  type VideoRequest,
+  useVideoFlow,
+} from "./hooks/use-video-flow";
+export {
+  MAX_VIDEO_PROMPT,
+  VIDEO_LENGTHS,
+  VIDEO_SHAPES,
+  VideoWorkspace,
+  type VideoFormValue,
+  type VideoWorkspaceProps,
+} from "./video/VideoWorkspace";
+export { VideoLibrary, type VideoLibraryProps } from "./video/VideoLibrary";
 export { ChatScreen, type ChatScreenProps } from "./chat/ChatScreen";
 export { ToolCard, type ToolCardProps } from "./chat/ToolCard";
 export { Markdown, inline, parseBlocks } from "./chat/markdown";

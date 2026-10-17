@@ -17,6 +17,13 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import RunContext, start_of_day_utc, sum_usage
+from wasifyai_platform_sdk.sqlite import (
+    ensure_tables,
+    from_iso,
+    is_sqlite,
+    now_iso,
+    to_iso,
+)
 
 log = logging.getLogger(__name__)
 
@@ -224,6 +231,187 @@ class PostgresVideoStore:
                 )
             ).one()
             return int(row[0])
+
+
+_SQLITE_DDL = (
+    """
+    CREATE TABLE IF NOT EXISTS videos (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        thread_id TEXT,
+        run_id TEXT,
+        mode TEXT NOT NULL,
+        status TEXT NOT NULL,
+        prompt TEXT NOT NULL,
+        seconds INTEGER NOT NULL,
+        frames INTEGER NOT NULL,
+        fps INTEGER NOT NULL,
+        width INTEGER,
+        height INTEGER,
+        video_key TEXT,
+        poster_key TEXT,
+        error TEXT,
+        created_at TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_videos_user_created "
+    "ON videos (tenant_id, product_id, user_id, created_at)",
+)
+
+
+class SqliteVideoStore:
+    """The same records on the SQLite file of the desktop profile (ADR-0056)."""
+
+    def __init__(self, engine: AsyncEngine):
+        self._engine = engine
+
+    async def _ready(self) -> None:
+        await ensure_tables(self._engine, "videos", _SQLITE_DDL)
+
+    @staticmethod
+    def _record(r) -> VideoRecord:
+        return VideoRecord(
+            id=r[0], tenant_id=r[1], product_id=r[2], user_id=r[3], thread_id=r[4], run_id=r[5],
+            mode=r[6], status=r[7], prompt=r[8], seconds=r[9], frames=r[10], fps=r[11],
+            width=r[12], height=r[13], video_key=r[14], poster_key=r[15], error=r[16],
+            created_at=from_iso(r[17]),
+        )  # fmt: skip
+
+    async def _expire(self, conn) -> None:
+        await conn.execute(
+            text(
+                "UPDATE videos SET status = 'failed', error = :msg WHERE status = 'working' "
+                "AND product_id = 'wasifyai-video' AND created_at < :cutoff"
+            ),
+            {"msg": STALE_MESSAGE, "cutoff": to_iso(datetime.now(UTC) - STALE_AFTER)},
+        )
+
+    async def add(self, video: VideoRecord) -> None:
+        await self._ready()
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO videos (id, tenant_id, product_id, user_id, thread_id, run_id, mode,
+                                        status, prompt, seconds, frames, fps, created_at)
+                    VALUES (:id, :tenant_id, :product_id, :user_id, :thread_id, :run_id, :mode,
+                            :status, :prompt, :seconds, :frames, :fps, :created_at)
+                    """
+                ),
+                {
+                    "id": video.id, "tenant_id": video.tenant_id, "product_id": video.product_id,
+                    "user_id": video.user_id, "thread_id": video.thread_id,
+                    "run_id": video.run_id, "mode": video.mode, "status": video.status,
+                    "prompt": video.prompt, "seconds": video.seconds, "frames": video.frames,
+                    "fps": video.fps,
+                    "created_at": to_iso(video.created_at) if video.created_at else now_iso(),
+                },
+            )  # fmt: skip
+
+    async def finish(
+        self,
+        tenant_id: str,
+        video_id: str,
+        width: int,
+        height: int,
+        video_key: str,
+        poster_key: str,
+    ) -> None:
+        await self._ready()
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "UPDATE videos SET status = 'done', width = :w, height = :h, video_key = :v, "
+                    "poster_key = :p, error = NULL WHERE id = :id AND tenant_id = :t"
+                ),
+                {"w": width, "h": height, "v": video_key, "p": poster_key,
+                 "id": video_id, "t": tenant_id},
+            )  # fmt: skip
+
+    async def fail(self, tenant_id: str, video_id: str, message: str) -> None:
+        await self._ready()
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "UPDATE videos SET status = 'failed', error = :m "
+                    "WHERE id = :id AND tenant_id = :t AND status = 'working'"
+                ),
+                {"m": message, "id": video_id, "t": tenant_id},
+            )
+
+    async def list(
+        self,
+        tenant_id: str,
+        user_id: str,
+        limit: int,
+        before: datetime | None,
+        status: str | None = None,
+    ) -> list[VideoRecord]:
+        await self._ready()
+        async with self._engine.begin() as conn:
+            await self._expire(conn)
+            rows = await conn.execute(
+                text(
+                    f"""
+                    SELECT {_COLUMNS} FROM videos
+                    WHERE tenant_id = :t AND product_id = 'wasifyai-video' AND user_id = :u
+                      AND (:before IS NULL OR created_at < :before)
+                      AND (:status IS NULL OR status = :status)
+                    ORDER BY created_at DESC, id DESC LIMIT :limit
+                    """
+                ),
+                {
+                    "t": tenant_id, "u": user_id, "limit": limit, "status": status,
+                    "before": to_iso(before) if before else None,
+                },
+            )  # fmt: skip
+            return [self._record(r) for r in rows]
+
+    async def get(self, tenant_id: str, user_id: str, video_id: str) -> VideoRecord | None:
+        await self._ready()
+        async with self._engine.begin() as conn:
+            await self._expire(conn)
+            row = (
+                await conn.execute(
+                    text(
+                        f"SELECT {_COLUMNS} FROM videos WHERE id = :id AND tenant_id = :t "
+                        "AND user_id = :u AND product_id = 'wasifyai-video'"
+                    ),
+                    {"id": video_id, "t": tenant_id, "u": user_id},
+                )
+            ).first()
+            return self._record(row) if row else None
+
+    async def delete(self, tenant_id: str, user_id: str, video_id: str) -> None:
+        await self._ready()
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM videos WHERE id = :id AND tenant_id = :t AND user_id = :u"),
+                {"id": video_id, "t": tenant_id, "u": user_id},
+            )
+
+    async def working_count(self, tenant_id: str, user_id: str) -> int:
+        await self._ready()
+        async with self._engine.begin() as conn:
+            await self._expire(conn)
+            row = (
+                await conn.execute(
+                    text(
+                        "SELECT count(*) FROM videos WHERE tenant_id = :t AND user_id = :u "
+                        "AND product_id = 'wasifyai-video' AND status = 'working'"
+                    ),
+                    {"t": tenant_id, "u": user_id},
+                )
+            ).one()
+            return int(row[0])
+
+
+def video_store(engine: AsyncEngine) -> VideoStore:
+    """The store for the database the engine speaks to: Postgres in the web profile, SQLite in the
+    desktop profile (ADR-0056). Callers do not know which."""
+    return SqliteVideoStore(engine) if is_sqlite(engine) else PostgresVideoStore(engine)
 
 
 class InMemoryVideoStore:

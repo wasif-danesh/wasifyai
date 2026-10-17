@@ -4,47 +4,12 @@ import type { ImageSummary } from "@wasifyai/client";
 import { ImageWorkspace, Notice, type WorkspacePreset, cn } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
 import { FitBadge } from "../FitBadge";
-import { client, discoveryApi, lorasApi, modelsApi } from "../api";
-import { COMFYUI, type ComponentStatus, componentStatus, onComponentStatus } from "../engine";
+import { client, discoveryApi, lorasApi } from "../api";
+import { useImageEngine, useModelOf } from "../engine-hooks";
 import { images } from "../images";
 import type { LoraList } from "../loras";
 import type { ModelEntry } from "../models";
 import type { Route } from "../router";
-
-function useModel(): ModelEntry | null {
-  const [model, setModel] = useState<ModelEntry | null>(null);
-  useEffect(() => {
-    let gone = false;
-    modelsApi
-      .overview()
-      .then((o) => !gone && setModel(o.models[0] ?? null))
-      .catch(() => {});
-    return () => {
-      gone = true;
-    };
-  }, []);
-  return model;
-}
-
-function useImageEngine(): ComponentStatus | null {
-  const [status, setStatus] = useState<ComponentStatus | null>(null);
-  useEffect(() => {
-    let stop: (() => void) | undefined;
-    let gone = false;
-    componentStatus(COMFYUI)
-      .then((s) => !gone && setStatus(s))
-      .catch(() => {});
-    onComponentStatus((id, s) => id === COMFYUI && !gone && setStatus(s)).then((off) => {
-      stop = off;
-      if (gone) off();
-    });
-    return () => {
-      gone = true;
-      stop?.();
-    };
-  }, []);
-  return status;
-}
 
 function useLoras(): [LoraList, () => void] {
   const [list, setList] = useState<LoraList>({ ready: [], available: [] });
@@ -76,7 +41,7 @@ export function CreatePage({
   onEditThis?: (image: ImageSummary) => void;
   source?: { url: string; name: string } | null;
 }) {
-  const model = useModel();
+  const model = useModelOf("wasifyai-image");
   const engine = useImageEngine();
   const [loras, refreshLoras] = useLoras();
 

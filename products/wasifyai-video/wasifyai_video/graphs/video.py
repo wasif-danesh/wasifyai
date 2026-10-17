@@ -28,12 +28,12 @@ from wasifyai_platform_sdk import (
     Capabilities,
     InMemoryUploadStore,
     JobFailed,
-    PostgresUploadStore,
     RunError,
     UploadRecord,
     UploadStore,
     await_job,
     require_context,
+    upload_store,
 )
 
 from wasifyai_video import guardrail
@@ -50,12 +50,12 @@ from wasifyai_video.videos import (
     VIDEO_CREATED,
     InMemoryVideoStore,
     PosterError,
-    PostgresVideoStore,
     Quota,
     UsageQuota,
     VideoRecord,
     VideoStore,
     poster_of,
+    video_store,
 )
 
 log = logging.getLogger(__name__)
@@ -94,12 +94,8 @@ def _clean(value: object, limit: int) -> str:
 
 def build_video(caps: Capabilities, checkpointer: Any):
     """Registry entry point: wires the production stores from the capabilities."""
-    videos: VideoStore = (
-        PostgresVideoStore(caps.db) if caps.db is not None else InMemoryVideoStore()
-    )
-    uploads: UploadStore = (
-        PostgresUploadStore(caps.db) if caps.db is not None else InMemoryUploadStore()
-    )
+    videos: VideoStore = video_store(caps.db) if caps.db is not None else InMemoryVideoStore()
+    uploads: UploadStore = upload_store(caps.db) if caps.db is not None else InMemoryUploadStore()
     quota: Quota | None = UsageQuota(caps.db) if caps.db is not None else None
     return build_video_graph(caps, checkpointer, videos, uploads, quota)
 

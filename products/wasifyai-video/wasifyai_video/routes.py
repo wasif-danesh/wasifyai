@@ -4,8 +4,10 @@ Every query is scoped by tenant, product and user, and every link is signed fres
 opened any time (the links themselves expire after an hour). A clip still being made has a row but
 no files yet; the site polls `GET /videos?status=working` to show "being made" on any page."""
 
+import asyncio
 import re
 from datetime import datetime
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -14,7 +16,7 @@ from wasifyai_platform_sdk import Identity, RouteDeps, build_enhance_router, par
 
 from wasifyai_video import prompts
 from wasifyai_video.guardrail import enhance_guard
-from wasifyai_video.videos import PostgresVideoStore, VideoRecord, VideoStore
+from wasifyai_video.videos import VideoRecord, VideoStore, video_store
 
 PRODUCT_ID = "wasifyai-video"
 
@@ -33,6 +35,11 @@ class VideoSummary(BaseModel):
     poster_url: str | None = None
 
 
+class Exported(BaseModel):
+    name: str
+    path: str
+
+
 class VideoPage(BaseModel):
     videos: list[VideoSummary]
     next_before: datetime | None  # pass as `before` to get the next page; null at the end
@@ -44,13 +51,27 @@ def file_name(prompt: str, ext: str) -> str:
     return f"{slug}.{ext}" if ext else slug
 
 
+def save_copy(folder: Path, stem: str, ext: str, data: bytes) -> Path:
+    """Write `data` as `stem.ext` in `folder`, as `stem-2.ext` and so on when that name is taken."""
+    folder.mkdir(parents=True, exist_ok=True)
+    path, n = folder / f"{stem}.{ext}", 1
+    while True:
+        try:
+            with path.open("xb") as f:  # exclusive: never replaces a file
+                f.write(data)
+            return path
+        except FileExistsError:
+            n += 1
+            path = folder / f"{stem}-{n}.{ext}"
+
+
 def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
     """`store` is injectable for tests; production reads the shared database."""
     router = APIRouter(tags=[PRODUCT_ID])
     router.include_router(build_enhance_router(deps, PRODUCT_ID, prompts.load, enhance_guard))
 
     def videos() -> VideoStore:
-        return store or PostgresVideoStore(deps.engine)
+        return store or video_store(deps.engine)
 
     async def summary(video: VideoRecord) -> VideoSummary:
         assert deps.storage is not None, "object storage is not configured"
@@ -93,6 +114,26 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
             raise HTTPException(404, "video not found")
         with deps.acting_as(identity, PRODUCT_ID):
             return await summary(video)
+
+    @router.post("/videos/{video_id}/export", response_model=Exported)
+    async def export_video(video_id: str, identity: Identity = Depends(deps.identity)) -> Exported:
+        """Copy the clip into the person's export folder (the desktop app sets one; a webview
+        cannot save a file by itself). Never overwrites: a second copy gets a number."""
+        folder = getattr(deps.state, "export_dir", None)
+        if folder is None or deps.storage is None:
+            raise HTTPException(404, "saving to a folder is not available here")
+        video = await videos().get(identity.tenant_id, identity.user_id, video_id)
+        if video is None or video.status != "done" or not video.video_key:
+            raise HTTPException(404, "video not found")
+        try:
+            with deps.acting_as(identity, PRODUCT_ID):
+                data = await deps.storage.get(video.video_key)
+        except FileNotFoundError:
+            raise HTTPException(404, "video not found") from None
+        path = await asyncio.to_thread(
+            save_copy, Path(folder), file_name(video.prompt, ""), "mp4", data
+        )
+        return Exported(name=path.name, path=str(path))
 
     @router.get("/videos/{video_id}/download")
     async def download(video_id: str, identity: Identity = Depends(deps.identity)) -> Response:

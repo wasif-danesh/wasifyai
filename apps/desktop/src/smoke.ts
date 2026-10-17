@@ -217,6 +217,9 @@ export async function runSmoke(): Promise<void> {
       ["/voice/lip-sync", "Lip sync"],
       ["/voice/dub", "Dub a recording"],
       ["/voice/audiobook", "Audiobook"],
+      ["/video/create", "Make a video"],
+      ["/video/animate", "Animate a picture"],
+      ["/video/library", "Your videos"],
     ] as const) {
       window.location.hash = path;
       await until(`the ${heading} screen`, () =>
@@ -226,7 +229,7 @@ export async function runSmoke(): Promise<void> {
 
     await report(
       true,
-      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}; a notebook saved with its first source; the speech and music screens listing their models; Your music, Lyrics, Lip sync, Dub, Audiobook and the three audio tools opening`,
+      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}; a notebook saved with its first source; the speech and music screens listing their models; Your music, Lyrics, Lip sync, Dub, Audiobook, the three audio tools and the three video screens opening`,
     );
   } catch (e) {
     // what the window was saying when it gave up makes a CI log readable

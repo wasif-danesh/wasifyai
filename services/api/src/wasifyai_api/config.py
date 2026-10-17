@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     desktop_idle_unload_s: int = 600  # unload the model after this long without a job
     # extra ComfyUI arguments, space separated (for example `--gpu-only`): memory modes, for tuning
     desktop_comfyui_args: str = ""
-    # comma-separated product ids; empty: all (desktop: wasifyai-image and wasifyai-assistant)
+    # comma-separated product ids; empty: all (desktop: image, video, assistant, notebooks, voice)
     products_enabled: str = ""
 
     database_url: str = "postgresql+asyncpg://wasifyai:wasifyai@localhost:5432/wasifyai"
@@ -78,7 +78,8 @@ class Settings(BaseSettings):
                 self.default_tenant_id = "local"  # one person, one tenant
             if not self.products_enabled:
                 self.products_enabled = (
-                    "wasifyai-image,wasifyai-assistant,wasifyai-notebooks,wasifyai-voice"
+                    "wasifyai-image,wasifyai-video,wasifyai-assistant,wasifyai-notebooks,"
+                    "wasifyai-voice"
                 )
         return self
 

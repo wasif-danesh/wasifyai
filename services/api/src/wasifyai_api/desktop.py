@@ -178,8 +178,8 @@ def open_desktop(settings: Settings) -> DesktopBackends:
 
 
 class FitGuardRunner:
-    """Refuses a real image job when the model cannot fit this computer, before anything is loaded:
-    the person gets the reason in plain words instead of a stalled or crashed engine. The
+    """Refuses a real image or video job when its model cannot fit this computer, before anything
+    is loaded: the person gets the reason in plain words instead of a stalled or crashed engine. The
     placeholder engine is never blocked, and `tight` is allowed (the window asked first)."""
 
     local_gpu = True
@@ -193,17 +193,23 @@ class FitGuardRunner:
 
     async def run(self, job: Any, on_progress: Any, files: Any = None) -> Any:
         if self._sidecar.installed:
-            reason = await self._too_big()
+            reason = await self._too_big(job)
             if reason:
                 raise self._error("model_too_big", reason)  # type: ignore[call-arg]
         if files:
             return await self._inner.run(job, on_progress, files=files)
         return await self._inner.run(job, on_progress)
 
-    async def _too_big(self) -> str | None:
+    async def _too_big(self, job: Any) -> str | None:
         machine = await self._models.machine()
+        # a video job is judged by the video models, an image job by the image models
+        product = (
+            "wasifyai-video"
+            if str(getattr(job, "capability", "")).startswith("video.")
+            else "wasifyai-image"
+        )
         for entry in self._models.catalogue.values():
-            if entry.approx_ram_gb and entry.product_id == "wasifyai-image":
+            if entry.approx_ram_gb and entry.product_id == product:
                 fit = assess_fit(need_declared(entry.approx_ram_gb), machine)
                 if fit.verdict == "too_big":
                     return f"{entry.title} will not fit on this computer. {fit.reason}"

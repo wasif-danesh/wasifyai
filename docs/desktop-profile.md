@@ -23,7 +23,7 @@ interfaces that already existed.
 | Search index (ADR-0041) | pgvector | rows with JSON vectors, compared in Python |
 | Embedder when there is no gateway | LiteLLM `creation-embedder` | `local-hash/v1`, a word-hash embedder, replaced when a gateway exists |
 | Sign-in | the web app's BFF token (`google:`, `github:`, ...) | the shell's token, provider `desktop` |
-| Products served | all registered | `PRODUCTS_ENABLED` (default `wasifyai-image`) |
+| Products served | all registered | `PRODUCTS_ENABLED` (default: image, video, assistant, notebooks, voice) |
 | Metrics port | 9464 | none |
 
 Store adapters that depend on the database are chosen by the **engine's dialect**, not by the profile name:
@@ -74,7 +74,7 @@ this launch of the engine. An `<img>` can use it without a header.
 | `DESKTOP_PUBLIC_URL` | the engine's own URL, for signed links (the launcher sets it from the bound port) |
 | `DESKTOP_ALLOWED_ORIGINS` | window origins allowed by CORS |
 | `DESKTOP_IMAGE_ENGINE` | `stub` (placeholder files, no GPU) or `comfyui` (uses `COMFYUI_BASE_URL`) |
-| `PRODUCTS_ENABLED` | comma-separated product ids; empty means all (desktop: `wasifyai-image`) |
+| `PRODUCTS_ENABLED` | comma-separated product ids; empty means all (desktop: image, video, assistant, notebooks and voice) |
 | `WASIFYAI_PORT` | `0` (default): pick a free port |
 | `WASIFYAI_EXIT_ON_STDIN_EOF` | `1`: exit when the shell goes away |
 
@@ -238,7 +238,7 @@ to `@wasifyai/ui` when it is migrated; delete the shim when nothing uses it.
 |---|---|---|
 | Router | `router.ts` | URL hash, eight routes: `/`, `/images/create`, `/images/edit`, `/library`, `/models`, `/settings`, `/notebooks` and `/notebooks/<id>` (`new` is a draft). No library. `useRoute` answers an object; a chat or a draft notebook gets its address without a reload (`adopt`, `adoptNotebook`) |
 | Shell | `Shell.tsx` | side menu + the screen; the menu collapses (remembered in `localStorage`) |
-| Side menu | `Sidebar.tsx` | New chat; groups **Notebook** (Create, View Notebooks), **Images** (Create, Edit, and Transform, Inpaint, Extend, Upscale, Reference marked "Soon", Your images), **Video**, **Voice** (Text to speech, Speech to text, Lip sync, Voices, Change a voice, Edit speech, Dub a recording and Audiobook), **Music** (Create, Your music, Lyrics and Split into parts); Library, Models, Train ("Soon"); Recents; You and settings. One group is open at a time and the one holding the current page stays open |
+| Side menu | `Sidebar.tsx` | New chat; groups **Notebook** (Create, View Notebooks), **Images** (Create, Edit, and Transform, Inpaint, Extend, Upscale, Reference marked "Soon", Your images), **Video** (Create, Animate an image, Your videos, and Extend video marked "Soon"), **Voice** (Text to speech, Speech to text, Lip sync, Voices, Change a voice, Edit speech, Dub a recording and Audiobook), **Music** (Create, Your music, Lyrics and Split into parts); Library, Models, Train ("Soon"); Recents; You and settings. One group is open at a time and the one holding the current page stays open |
 | Home | `pages/Home.tsx` | greeting and the "Ask anything" box (the assistant, ADR-0057, is not built: the box says so) |
 | Create / Edit | `pages/Create.tsx` | wraps the shared `ImageWorkspace` with this window's model chip and setup notices |
 | Notebooks | `pages/Notebooks.tsx`, `pages/Notebook.tsx`, `notebook-setup.ts` | View Notebooks (cards, search by title and by what is inside, rename, delete, the setup card) and one notebook (the shared `NotebookWorkspace`) |
@@ -261,7 +261,7 @@ disabled with the **Soon** pill, so the menu keeps its final shape (as above).
 | *New chat* | (single item) | assistant (ADR-0057) | yes |
 | **Notebook** | Create, View Notebooks | `wasifyai-notebooks` (ADR-0065) | stage E |
 | **Images** | Create, Edit, Transform, Inpaint, Extend, Upscale, Reference, Your images | ComfyUI | Create, Edit |
-| **Video** | Create, Animate an image, Extend video, Your videos | `wasifyai-video` on ComfyUI (`video.generate`, `video.animate`) | Soon |
+| **Video** | Create, Animate an image, Extend video, Your videos | `wasifyai-video` on ComfyUI (`video.generate`, `video.animate`); LTX-Video 2B (V8) | Create, Animate an image, Your videos; Extend video Soon |
 | **Voice** | Text to speech, Speech to text, Lip sync, Voices | `wasifyai-voice` on audio.cpp (ADR-0066); lip sync is MuseTalk, an optional sidecar | all built (V1 to V5) |
 | **Music** | Create, Your music, Lyrics | `wasifyai-voice` on audio.cpp (ADR-0066, V3); the ComfyUI ACE-Step workflow and `text.lyrics` later | Create and Your music built; Lyrics Soon |
 | *Library* | (single item) all creations, searchable (ADR-0041) | | yes |
@@ -650,6 +650,30 @@ or a cloned one.
 Not built: chapter markers inside the whole-book file, MP3 or M4A in one go (save each track in Your music), reading
 from the notebooks' sources, several voices in one book, and pronunciation notes.
 
+## Video (stage V8)
+
+A short clip from words, or from a picture and what should move. The product already existed for the web
+(`products/wasifyai-video`, ADR-0037); the desktop serves it with a small, quick model, on the image engine's
+ComfyUI, with no new service.
+
+| Piece | What |
+|---|---|
+| The model | **LTX-Video 2B 0.9.5** (OpenRAIL-M; later LTX weights need a paid licence above USD 10M revenue, so this one stays pinned). Two files, 16.1 GB: the checkpoint (6.3 GB) and the T5-XXL text encoder (9.8 GB), listed in `products/wasifyai-video/models.yaml` with sizes and SHA-256 like every model, fetched from Models after the person has seen them |
+| Speed, measured on a 64 GB Apple-silicon Mac (ComfyUI 0.40, half precision) | 2 s clip (49 frames, 768x512, 30 steps) **72 s**; 5 s clip (121 frames) **252 s**; 25 frames at 512x320 and 15 steps 13 s. Through the app's engine, a 2 s clip from text took 86 s including loading the model and a 2 s clip from a picture 58 s. Peak memory about 13 GB (`approx_ram_gb: 14`), which is what the "will it fit" check uses (a video job is judged by the video models, an image job by the image models) |
+| Precision | half precision on the Mac's GPU now gives the same picture as the fp32 setting ADR-0037 needed (34 s against 13 s at the small size), so the engine starts ComfyUI with no extra arguments; the `scripts/comfyui-video.sh` second server is for the web only |
+| The engine | the product runs as on the web: the graph checks the request, starts a `video.generate` or `video.animate` job, the same in-process worker and ComfyUI sidecar as images run it, a still from the first frame is made with ffmpeg (`imageio-ffmpeg`), the clip is saved, indexed and counted. Clips live in the `videos` table of `wasifyai.db` (`SqliteVideoStore`, created on first use; a clip that stays "working" for 30 minutes is marked failed), and `video_index_source` serves My creations search. One clip at a time per person |
+| Routes | `/products/wasifyai-video/runs`, `GET /videos` (`status`, `ids`), `GET/DELETE /videos/{id}`, `/videos/{id}/download`, and `POST /videos/{id}/export` (copies the MP4 to `~/Downloads` or `WASIFYAI_EXPORT_DIR`, never overwrites, as for images) |
+| The window | Video > Create (`#/video/create`), Animate an image (`#/video/animate`), Your videos (`#/video/library`): `VideoWorkspace` and `VideoLibrary` in `packages/ui`, `createVideosApi` and `videoFlowReducer` in `packages/client`. The page shows the model and whether it is on the computer, the fit, and the same notices as Create (placeholder clips until the image engine is set up, the model missing, tight memory). The result is a player with Save a copy; a clip being made carries on if the person leaves the screen and shows as "Being made" in Your videos |
+
+Found while building this: My creations search failed (an error response) for any hit that was a music track or a
+saved voice, because the voice product indexes those two kinds and the search vocabulary did not list them. They are
+listed now (`track`, `voice`), and `/creations/search` is tested with each.
+
+Not built: Extend video (the product has no workflow for it), other video models (LTX's distilled 2B, Wan, CogVideoX:
+each needs its licence and a measurement first), a smaller text encoder (the 8-bit T5-XXL is about 5 GB and would cut the
+download by a third; its effect on the picture is not measured), sound for clips, clips longer than 5 seconds, and checking the
+finished clip (the known gap of images too).
+
 ## The self-test
 
 `WASIFYAI_SMOKE=1 cargo run` (in `apps/desktop/src-tauri`) starts the shell as usual; once the engine is ready
@@ -661,9 +685,9 @@ exercised. It needs the engine environment (`.venv`).
 ## What is not done
 
 - **Gallery extras.** Collections, tags and bulk actions are not built; the model id is not in the recipe yet.
-- **Menu entries marked "Soon"**: Transform, Inpaint, Extend, Upscale, Reference, Train; Projects and
+- **Menu entries marked "Soon"**: Transform, Inpaint, Extend, Upscale, Reference, Extend video, Train; Projects and
   Recents (they need the assistant and projects, ADR-0057). The home "Ask anything" box does not answer.
-- **Other screens** (music, video, speech, ...) still live in `apps/web`; only the image screen is shared.
+- **Other screens** (music, speech, ...) still live in `apps/web`; the image and video screens are shared (`packages/ui`).
 - **Schema changes.** Each adapter creates its tables on first use (`CREATE TABLE IF NOT EXISTS`). There is no
   migration runner, so changes must be additive until one is written.
 - **Admin routes** are mounted but the admin store is Postgres-only; on desktop they answer 403 (the desktop

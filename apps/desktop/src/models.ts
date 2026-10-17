@@ -27,6 +27,8 @@ export type Fit = {
 
 export type ModelEntry = {
   id: string;
+  /** the product the model belongs to (`wasifyai-image`, `wasifyai-video`, `wasifyai-voice`) */
+  product_id: string;
   title: string;
   licence: string;
   source: string;

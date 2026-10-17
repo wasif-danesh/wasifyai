@@ -23,6 +23,7 @@ wasifyai-tts = { workspace = true }
 wasifyai-lipsync = { workspace = true }
 wasifyai-notebooks = { workspace = true }
 wasifyai-voice = { workspace = true }
+wasifyai-video = { workspace = true }
 
 [tool.ruff]
 line-length = 100

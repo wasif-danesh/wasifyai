@@ -58,7 +58,7 @@ def put(client, user: str, rel: str, data: bytes):
 
 
 @pytest.fixture
-def client():
+def client(tmp_path):
     store = InMemoryVideoStore()
     making = video(3, status="working", created_at=datetime.now(UTC) - timedelta(minutes=1))
     store.videos = [
@@ -71,6 +71,7 @@ def client():
     ]
     app = FastAPI()
     app.state.storage = ScopedStorage(memory_storage())
+    app.state.export_dir = tmp_path / "Downloads"  # the desktop app sets one; the web does not
     app.include_router(
         build_routes(RouteDeps(app.state, identity), store), prefix="/products/wasifyai-video"
     )
@@ -127,6 +128,25 @@ def test_download_is_an_attachment_for_a_finished_clip_only(client):
     assert client.get(f"{BASE}/{uid(3)}/download").status_code == 404  # still being made
     assert client.get(f"{BASE}/{uid(5)}/download").status_code == 404
     assert client.get(f"{BASE}/{uid(2)}/download").status_code == 404  # file missing
+
+
+def test_export_copies_a_finished_clip_and_never_overwrites(client, tmp_path):
+    put(client, "u1", f"{uid(1)}/video.mp4", b"MP4DATA")
+    first = client.post(f"{BASE}/{uid(1)}/export")
+    assert first.status_code == 200 and first.json()["name"] == "clip-number-1.mp4"
+    saved = tmp_path / "Downloads" / "clip-number-1.mp4"
+    assert saved.read_bytes() == b"MP4DATA" and first.json()["path"] == str(saved)
+    second = client.post(f"{BASE}/{uid(1)}/export").json()
+    assert second["name"] == "clip-number-1-2.mp4" and saved.exists()
+
+
+def test_export_is_for_the_owner_a_finished_clip_and_only_where_a_folder_is_set(client):
+    put(client, "u1", f"{uid(1)}/video.mp4", b"x")
+    assert client.post(f"{BASE}/{uid(1)}/export", headers={"x-user": "other"}).status_code == 404
+    assert client.post(f"{BASE}/{uid(3)}/export").status_code == 404  # still being made
+    assert client.post(f"{BASE}/{uid(2)}/export").status_code == 404  # file missing
+    del client.app.state.export_dir  # the web profile never sets one
+    assert client.post(f"{BASE}/{uid(1)}/export").status_code == 404
 
 
 def test_delete_removes_the_files_then_the_row_and_a_working_clip_is_kept(client):

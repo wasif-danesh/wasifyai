@@ -18,6 +18,8 @@ import { SettingsPage } from "./pages/Settings";
 import { SpeakPage } from "./pages/Speak";
 import { ToolPage } from "./pages/Tools";
 import { TranscribePage } from "./pages/Transcribe";
+import { VideoPage } from "./pages/Video";
+import { VideosPage } from "./pages/Videos";
 import { VoicesPage } from "./pages/Voices";
 import { useRoute } from "./router";
 
@@ -154,6 +156,9 @@ export function Shell() {
           {route === "separate" ? <ToolPage tool="separate" go={go} /> : null}
           {route === "convert" ? <ToolPage tool="convert" go={go} /> : null}
           {route === "speechedit" ? <ToolPage tool="edit" go={go} /> : null}
+          {route === "video" ? <VideoPage mode="text" go={go} /> : null}
+          {route === "animate" ? <VideoPage mode="image" go={go} /> : null}
+          {route === "videos" ? <VideosPage go={go} /> : null}
           {route === "models" ? <ModelsPage /> : null}
           {route === "settings" ? <SettingsPage /> : null}
         </main>

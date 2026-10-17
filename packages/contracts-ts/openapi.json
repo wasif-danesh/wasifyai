@@ -2150,7 +2150,9 @@
               "transcript",
               "lipsync",
               "conversation",
-              "notebook"
+              "notebook",
+              "track",
+              "voice"
             ],
             "title": "Kind",
             "type": "string"
@@ -4017,7 +4019,9 @@
                     "transcript",
                     "lipsync",
                     "conversation",
-                    "notebook"
+                    "notebook",
+                    "track",
+                    "voice"
                   ],
                   "type": "string"
                 },

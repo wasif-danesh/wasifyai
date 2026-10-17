@@ -125,6 +125,20 @@ Findings that shape the decision:
 
 ## Not verified
 
-- LTX in half precision on this hardware, higher resolutions, longer clips, and Comfy Cloud or other backends.
+- Higher resolutions, longer clips than 5 seconds, and Comfy Cloud or other backends. (Half precision on this hardware was measured on 2026-10-17: see the amendment.)
 - The reason Wan 2.2 5B fails on MPS (image to video in fp32, and every mode in half precision).
 - The guardrail on unsafe pictures and the clip output, as for images.
+
+## Amendment 2026-10-17: the desktop, a small and quick model
+
+The desktop app serves this product with LTX-Video 2B 0.9.5 (`docs/desktop-profile.md`, "Video (stage V8)"). Measured
+on the 64 GB Apple-silicon Mac with ComfyUI 0.40 and the files already used above:
+
+- **Half precision now works.** The fp32 setting (`--fp32-unet`, ADR-0037 context) is no longer needed: the same prompt and seed gave
+  the same picture, 2.5 times faster (512x320, 25 frames, 15 steps: 13 s against 34 s). The desktop starts ComfyUI with no
+  extra arguments. The earlier finding was for the ComfyUI of that day; the web's second server keeps its flags until
+  it is measured again.
+- **Times (768x512, 30 steps, half precision):** 49 frames 72 s, 121 frames 252 s. Peak memory about 13 GB.
+- The same two workflows run unchanged; clips are kept in SQLite (`SqliteVideoStore`).
+- **Not chosen, on licence:** the distilled 2B (0.9.8) would need far fewer steps, but it comes under the later LTX
+  licence (paid above USD 10M revenue), which this ADR avoids. It stays an option for a later decision.

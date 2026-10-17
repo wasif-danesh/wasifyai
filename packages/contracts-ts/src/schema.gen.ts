@@ -2529,7 +2529,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "song" | "image" | "video" | "speech" | "transcript" | "lipsync" | "conversation" | "notebook";
+            kind: "song" | "image" | "video" | "speech" | "transcript" | "lipsync" | "conversation" | "notebook" | "track" | "voice";
             /**
              * Match
              * @enum {string}
@@ -3413,7 +3413,7 @@ export interface operations {
         parameters: {
             query: {
                 q: string;
-                kind?: ("song" | "image" | "video" | "speech" | "transcript" | "lipsync" | "conversation" | "notebook") | null;
+                kind?: ("song" | "image" | "video" | "speech" | "transcript" | "lipsync" | "conversation" | "notebook" | "track" | "voice") | null;
                 limit?: number;
             };
             header?: never;

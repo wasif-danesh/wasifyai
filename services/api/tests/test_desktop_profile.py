@@ -413,3 +413,43 @@ def test_notebooks_work_on_the_desktop_profile_and_wait_for_the_search_model(dat
         other = auth(sub="desktop:other")
         assert c.get(f"{nb}/notebooks/{made['id']}", headers=other).status_code == 404
         assert c.get(f"{nb}/notebooks", headers=other).json() == []
+
+
+def test_a_video_is_made_end_to_end_on_the_desktop_profile(data_dir):
+    """The video product is served by default and keeps its clips in the SQLite file."""
+    with TestClient(create_app()) as c:
+        r = c.post(
+            "/products/wasifyai-video/runs",
+            json={
+                "input": {"mode": "text", "prompt": "a red fox walks through snow", "seconds": 2}
+            },
+            headers=auth(),
+        )
+        assert r.status_code == 200, r.text
+        events = parse(r.text)
+        assert [e for e, _ in events][-1] == "done", events[-1]
+        done = events[-1][1]["outputs"]
+        assert done["status"] == "done" and done["seconds"] == 2
+
+        listing = c.get("/products/wasifyai-video/videos", headers=auth()).json()
+        assert [v["id"] for v in listing["videos"]] == [done["video_id"]]
+        assert listing["videos"][0]["status"] == "done"
+        link = urlparse(listing["videos"][0]["video_url"])
+        assert c.get(f"{link.path}?{link.query}").status_code == 200
+        dl = c.get(f"/products/wasifyai-video/videos/{done['video_id']}/download", headers=auth())
+        assert dl.status_code == 200 and dl.headers["content-type"] == "video/mp4"
+
+        # one clip at a time, and a clip can be deleted
+        assert c.delete(f"/products/wasifyai-video/videos/{done['video_id']}", headers=auth())
+        assert c.get("/products/wasifyai-video/videos", headers=auth()).json()["videos"] == []
+
+
+def test_the_video_model_is_in_the_catalogue_and_search_takes_every_kind(data_dir):
+    with TestClient(create_app()) as c:
+        models = c.get("/desktop/models", headers=auth()).json()["models"]
+        ltx = next(m for m in models if m["id"] == "ltx-video-2b")
+        assert ltx["product_id"] == "wasifyai-video" and ltx["approx_ram_gb"] == 14
+        # the voice product indexes tracks and voices: a search that finds one must not fail
+        for kind in ("track", "voice", "video"):
+            r = c.get("/creations/search", params={"q": "fox", "kind": kind}, headers=auth())
+            assert r.status_code == 200, (kind, r.text)

@@ -2,10 +2,11 @@
 // Music: make a song or a sound effect with the model chosen from the list, change what was made, write
 // lyrics, and the music made before.
 import { LyricsWriter, MusicWorkspace, TrackList } from "@wasifyai/ui";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { client, voiceApi } from "../api";
 import { remembered } from "../remember";
 import type { Route } from "../router";
+import { sendToTool } from "./Tools";
 
 const KEY = "wasifyai.music.model";
 const LYRICS_KEY = "wasifyai.music.lyrics";
@@ -53,6 +54,18 @@ export function MusicPage({ goModels }: { goModels: () => void }) {
 }
 
 export function TracksPage({ go }: { go: (r: Route) => void }) {
+  const [added, setAdded] = useState(0);
+  const [problem, setProblem] = useState<string | null>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  const add = async (file: File) => {
+    setProblem(null);
+    try {
+      await voiceApi.importTrack(file);
+      setAdded((n) => n + 1);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "That recording could not be added.");
+    }
+  };
   const open = (kind: "edit" | "again" | "take", id: string) => {
     remembered.set(OPEN_KEY, `${kind}:${id}`);
     go("music");
@@ -61,14 +74,40 @@ export function TracksPage({ go }: { go: (r: Route) => void }) {
     <div className="grid gap-6 px-6 pt-10 pb-16">
       <header className="mx-auto flex w-full max-w-3xl flex-wrap items-baseline justify-between gap-3">
         <h1 className="font-semibold text-2xl">Your music</h1>
-        <button
-          type="button"
-          className="text-sm underline underline-offset-4"
-          onClick={() => go("music")}
-        >
-          Make something new
-        </button>
+        <div className="flex items-baseline gap-4">
+          <input
+            ref={picker}
+            type="file"
+            accept="audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus,.caf,.aiff"
+            className="sr-only"
+            aria-label="Add a recording from this computer"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void add(f);
+            }}
+          />
+          <button
+            type="button"
+            className="text-sm underline underline-offset-4"
+            onClick={() => picker.current?.click()}
+          >
+            Add a recording
+          </button>
+          <button
+            type="button"
+            className="text-sm underline underline-offset-4"
+            onClick={() => go("music")}
+          >
+            Make something new
+          </button>
+        </div>
       </header>
+      {problem ? (
+        <p role="alert" className="mx-auto w-full max-w-3xl text-destructive text-sm">
+          {problem}
+        </p>
+      ) : null}
       <div className="mx-auto w-full max-w-3xl">
         <TrackList
           api={voiceApi}
@@ -77,6 +116,11 @@ export function TracksPage({ go }: { go: (r: Route) => void }) {
           onAgain={(t) => open("again", t.id)}
           onTake={(t) => open("take", t.id)}
           onEdit={(t) => open("edit", t.id)}
+          refreshKey={added}
+          onTool={(t, tool) => {
+            sendToTool({ kind: "track", id: t.id });
+            go(tool === "separate" ? "separate" : tool === "convert" ? "convert" : "speechedit");
+          }}
         />
       </div>
     </div>

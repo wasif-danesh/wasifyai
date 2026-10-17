@@ -441,3 +441,304 @@ async def test_lyrics_need_an_idea(tmp_path, ctx):
     final, _ = await rig.run(task="lyrics", text="hi")
     assert final["refusal"]["code"] == "description_too_short"
     assert rig.model.chats == []
+
+
+# ---- audio tools (V4) -----------------------------------------------------------------------
+
+
+async def library_track(rig, track_id="song", title="Summer", rate=44100, channels=2, seconds=2.0):
+    from voice_rig import wav
+
+    key = f"music/{track_id}.wav"
+    await rig.caps.storage.put(key, wav(seconds, rate, channels), "audio/wav")
+    return store_for(rig.state).add_track(
+        "t1", "u1", title=title, mode="song", description="pop", lyrics="", instrumental=False,
+        model_id="ace-step-1.5-turbo", options={}, seed=1, seconds=seconds, sample_rate=rate,
+        audio_key=key, load_s=0, elapsed_s=1, track_id=track_id,
+    )  # fmt: skip
+
+
+async def test_a_song_is_split_into_stems_that_are_kept_and_remember_their_source(tmp_path, ctx):
+    rig = Rig(tmp_path)
+    await library_track(rig)
+    final, events = await rig.run(task="separate", source_track="song")
+    assert final["status"] == "done"
+    names = [t["stem"] for t in final["tracks"]]
+    assert names == ["drums", "bass", "other", "vocals"]
+    model_id, req, seen = rig.engine.separated[0]
+    assert model_id == "htdemucs" and seen == (44100, 2) and req.source_seconds == 2.0
+    store = store_for(rig.state)
+    saved = store.get_track("t1", "u1", final["tracks"][3]["track_id"])
+    assert saved["mode"] == "stem" and saved["parent_id"] == "song"
+    assert saved["title"] == "Summer (vocals)" and saved["edit"]["stem"] == "vocals"
+    assert len(store.list_tracks("t1", "u1")) == 5 and len(rig.indexed) == 4
+    assert not list((store.root / "tmp").glob("*.wav"))  # the scratch copy is gone
+    assert [e["node"] for e in events if e["type"] == "node"] == ["check_request", "separate"]
+    assert [u.unit for u in rig.usage.events].count("tracks") == 4
+
+
+async def test_only_the_parts_asked_for_are_kept_and_an_unknown_part_is_refused(tmp_path, ctx):
+    rig = Rig(tmp_path)
+    await library_track(rig)
+    final, _ = await rig.run(task="separate", source_track="song", stems=["vocals"])
+    assert [t["stem"] for t in final["tracks"]] == ["vocals"]
+    assert len(store_for(rig.state).list_tracks("t1", "u1")) == 2
+    final, _ = await rig.run(task="separate", source_track="song", stems=["tuba"])
+    assert final["refusal"]["code"] == "unknown_stem" and "tuba" in final["refusal"]["message"]
+    final, _ = await rig.run(
+        task="separate", source_track="song", model="mel-band-roformer", stems=["drums"]
+    )
+    assert final["refusal"]["code"] == "unknown_stem"
+
+
+async def test_a_speech_can_be_a_source_and_a_missing_source_is_refused(tmp_path, ctx):
+    from voice_rig import wav
+
+    rig = Rig(tmp_path)
+    assert rig.caps.storage is not None
+    await rig.caps.storage.put("speech/s1.wav", wav(2.0, 44100, 2), "audio/wav")
+    store_for(rig.state).add_speech(
+        "t1", "u1", text="Hello world", model_id="kokoro-82m", voice=None, options={},
+        seconds=2.0, sample_rate=44100, audio_key="speech/s1.wav", load_s=0, elapsed_s=0.3,
+        speech_id="s1",
+    )  # fmt: skip
+    final, _ = await rig.run(task="separate", source_speech="s1", model="htdemucs-6stems")
+    assert final["status"] == "done" and len(final["tracks"]) == 6
+    saved = store_for(rig.state).get_track("t1", "u1", final["track_id"])
+    assert saved["parent_id"] is None and saved["title"] == "Hello world (drums)"
+    for graph_input in ({"source_track": "nope"}, {"source_speech": "nope"}, {}):
+        final, _ = await rig.run(task="separate", **graph_input)
+        assert final["refusal"]["code"] == "unknown_source"
+
+
+async def a_clone(rig, name="Ann", kind="clone"):
+    store = store_for(rig.state)
+    v = store.add_voice(
+        "t1", "u1", kind=kind, name=name, description="warm" if kind == "design" else "",
+        reference_key="voice/v1.wav" if kind == "clone" else None, reference_text="hi there",
+        reference_seconds=4.0, consent={"basis": "own", "statement": "mine"}, voice_id="v1",
+    )  # fmt: skip
+    if kind == "clone":
+        from voice_rig import wav
+
+        path = store.reference_path("v1")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(wav(4.0, 24000))
+    return v
+
+
+async def test_a_recording_is_changed_to_a_saved_voice_and_the_consent_travels(tmp_path, ctx):
+    rig = Rig(tmp_path)
+    await library_track(rig, rate=22050, channels=1)
+    await a_clone(rig)
+    final, _ = await rig.run(
+        task="convert", source_track="song", saved_voice="v1", model="tone-color-vc", seed=5
+    )
+    assert final["status"] == "done" and final["title"] == "Summer (as Ann)"
+    model_id, req, source_facts, ref_facts = rig.engine.converted[0]
+    assert model_id == "tone-color-vc" and req.seed == 5
+    assert source_facts == (22050, 1) and ref_facts == (22050, 1)
+    saved = store_for(rig.state).get_track("t1", "u1", final["track_id"])
+    assert saved["mode"] == "converted" and saved["parent_id"] == "song"
+    assert saved["edit"] == {
+        "action": "convert", "voice_id": "v1", "voice": "Ann", "consent": "own", "from": "track",
+    }  # fmt: skip
+    assert rig.indexed[-1][0] == "track" and "Ann" in rig.indexed[-1][2]
+
+
+async def test_a_voice_without_a_recording_or_a_missing_voice_cannot_be_the_target(tmp_path, ctx):
+    rig = Rig(tmp_path)
+    await library_track(rig, rate=22050, channels=1)
+    final, _ = await rig.run(task="convert", source_track="song", saved_voice="ghost")
+    assert final["refusal"]["code"] == "unknown_voice"
+    await a_clone(rig, kind="design")
+    final, _ = await rig.run(task="convert", source_track="song", saved_voice="v1")
+    assert final["refusal"]["code"] == "voice_needs_recording"
+    assert rig.engine.converted == []
+
+
+async def test_a_clone_whose_recording_is_gone_is_refused_in_a_convert(tmp_path, ctx):
+    rig = Rig(tmp_path)
+    await library_track(rig, rate=22050, channels=1)
+    await a_clone(rig)
+    store_for(rig.state).reference_path("v1").unlink()
+    final, _ = await rig.run(
+        task="convert", source_track="song", saved_voice="v1", model="tone-color-vc"
+    )
+    assert final["refusal"]["code"] == "reference_missing"
+
+
+async def test_words_in_a_recording_are_changed_and_the_result_is_kept(tmp_path, ctx):
+    rig = Rig(tmp_path)
+    await library_track(rig, rate=24000, channels=1)
+    final, events = await rig.run(
+        task="speech_edit", source_track="song", model="dots-tts-edit",
+        old_text="Hello brave world.", text="Hello small world.", seed=9,
+    )  # fmt: skip
+    assert final["status"] == "done" and final["title"] == "Summer (edited)"
+    model_id, req, seen = rig.engine.speech_edited[0]
+    assert model_id == "dots-tts-edit" and seen == (24000, 1) and req.seed == 9
+    assert req.instruction == 'Hello <sub targ="small">brave</sub> world.'
+    saved = store_for(rig.state).get_track("t1", "u1", final["track_id"])
+    assert saved["mode"] == "edited" and saved["description"] == "Hello small world."
+    assert saved["edit"]["instruction"] == req.instruction and saved["parent_id"] == "song"
+    assert [e["node"] for e in events if e["type"] == "node"] == ["check_request", "speech_edit"]
+
+
+async def test_an_edit_with_nothing_to_change_or_no_model_chosen_is_refused(tmp_path, ctx):
+    from wasifyai_platform_sdk import RunError
+
+    rig = Rig(tmp_path)
+    await library_track(rig, rate=24000, channels=1)
+    final, _ = await rig.run(
+        task="speech_edit", source_track="song", model="dots-tts-edit",
+        old_text="Same words", text="same words",
+    )  # fmt: skip
+    assert final["refusal"]["code"] == "no_change" and rig.engine.speech_edited == []
+    # the only editing model is not commercially clear, so it is never chosen for the person
+    with pytest.raises(RunError) as e:
+        await rig.run(task="speech_edit", source_track="song", old_text="a b", text="a c")
+    assert e.value.code == "no_model"
+
+
+async def test_engine_failures_in_the_tools_end_the_run_with_a_code(tmp_path, ctx):
+    from wasifyai_platform_sdk import RunError, VoiceEngineError
+
+    rig = Rig(tmp_path)
+    await library_track(rig)
+    rig.engine.fail_with = VoiceEngineError("busy", "The speech runtime is busy.")
+    with pytest.raises(RunError) as e:
+        await rig.run(task="separate", source_track="song")
+    assert e.value.code == "busy" and e.value.retryable
+    assert not list((store_for(rig.state).root / "tmp").glob("*.wav"))
+
+
+# ---- lip sync (V5) --------------------------------------------------------------------------
+
+
+def png_bytes() -> bytes:
+    import io
+
+    from PIL import Image
+
+    out = io.BytesIO()
+    Image.new("RGB", (64, 48), (200, 150, 120)).save(out, "PNG")
+    return out.getvalue()
+
+
+async def a_picture(rig, picture_id="pic1"):
+    key = f"lipsync/pictures/{picture_id}.png"
+    await rig.caps.storage.put(key, png_bytes(), "image/png")
+    return store_for(rig.state).add_picture(
+        "t1", "u1", key=key, width=64, height=48, picture_id=picture_id
+    )
+
+
+async def test_a_picture_and_a_recording_make_a_clip_that_remembers_what_was_agreed(tmp_path, ctx):
+    rig = Rig(tmp_path)
+    await library_track(rig, rate=16000, channels=1, seconds=3.0)
+    await a_picture(rig)
+    final, events = await rig.run(
+        task="lipsync", picture="pic1", source_track="song", picture_basis="drawn",
+        voice_basis="own", title="Hello",
+    )  # fmt: skip
+    assert final["status"] == "done" and final["title"] == "Hello" and final["seconds"] == 3.0
+    model_id, req, voice_facts, _ = rig.engine.lipsynced[0]
+    assert model_id == "musetalk-v15" and voice_facts == (16000, 1)
+    assert req.fps == 25 and req.mark == "AI-generated" and req.consent == {
+        "picture": "drawn", "voice": "own",
+    }  # fmt: skip
+    store = store_for(rig.state)
+    clip = store.get_clip("t1", "u1", final["clip_id"])
+    assert clip["consent"]["picture"] == "drawn" and clip["consent"]["mark"] == "AI-generated"
+    assert "drawing" in clip["consent"]["picture_statement"]
+    assert clip["voice"] == {"kind": "track", "id": "song"} and clip["picture_key"].endswith(
+        "pic1.png"
+    )
+    assert (clip["width"], clip["height"], clip["fps"]) == (640, 480, 25)
+    with pytest.raises(Exception, match="picture not found"):
+        store.get_picture("t1", "u1", "pic1")  # it belongs to the clip now
+    assert await rig.files.exists(object_key("t1", "wasifyai-voice", "u1", clip["video_key"]))
+    assert await rig.files.exists(object_key("t1", "wasifyai-voice", "u1", clip["picture_key"]))
+    assert [i[0] for i in rig.indexed] == ["lipsync"]
+    assert [e["node"] for e in events if e["type"] == "node"] == ["check_request", "lipsync"]
+    assert [(u.kind, u.unit) for u in rig.usage.events][-1] == ("voice.lipsync", "clips")
+    assert not list((store.root / "tmp").glob("*"))  # the scratch copies are gone
+
+
+async def test_a_script_is_spoken_here_so_the_voice_is_never_somebody_elses(tmp_path, ctx):
+    rig = Rig(tmp_path)
+    await a_picture(rig)
+    final, events = await rig.run(
+        task="lipsync", picture="pic1", text="Welcome to the show, everybody.",
+        picture_basis="own", voice_basis="permission",
+    )  # fmt: skip
+    assert final["status"] == "done"
+    assert rig.engine.spoken[0][1] == "Welcome to the show, everybody."
+    store = store_for(rig.state)
+    clip = store.get_clip("t1", "u1", final["clip_id"])
+    assert clip["consent"]["voice"] == "generated"  # whatever was ticked, words are made here
+    assert clip["script"] == "Welcome to the show, everybody."
+    assert clip["voice"]["kind"] == "speech"
+    assert store.get_speech("t1", "u1", clip["voice"]["id"])["text"].startswith("Welcome")
+    assert {i[0] for i in rig.indexed} == {"speech", "lipsync"}
+    assert [e["node"] for e in events if e["type"] == "node"] == [
+        "check_request", "speak", "lipsync",
+    ]  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "extra, code",
+    [
+        ({}, "consent_required"),
+        ({"picture_basis": "drawn"}, "consent_required"),
+        ({"picture_basis": "stolen", "voice_basis": "own"}, "consent_required"),
+        ({"picture_basis": "drawn", "voice_basis": "generated"}, "consent_required"),
+    ],
+)
+async def test_without_the_persons_word_about_the_picture_and_voice_nothing_is_made(
+    tmp_path, ctx, extra, code
+):
+    rig = Rig(tmp_path)
+    await library_track(rig, rate=16000, channels=1)
+    await a_picture(rig)
+    final, _ = await rig.run(task="lipsync", picture="pic1", source_track="song", **extra)
+    # a track was not made from words here, so "generated" is not something to claim for it
+    assert final["refusal"]["code"] == code and rig.engine.lipsynced == []
+
+
+async def test_a_missing_picture_or_voice_or_a_voice_that_is_too_long_is_refused(tmp_path, ctx):
+    rig = Rig(tmp_path)
+    final, _ = await rig.run(
+        task="lipsync", picture="nope", source_track="song", picture_basis="drawn",
+        voice_basis="own",
+    )  # fmt: skip
+    assert final["refusal"]["code"] == "unknown_picture"
+    await a_picture(rig)
+    final, _ = await rig.run(
+        task="lipsync", picture="pic1", source_track="nope", picture_basis="drawn",
+        voice_basis="own",
+    )  # fmt: skip
+    assert final["refusal"]["code"] == "unknown_source"
+    final, _ = await rig.run(
+        task="lipsync", picture="pic1", picture_basis="drawn", voice_basis="own"
+    )  # no voice at all
+    assert final["refusal"]["code"] == "unknown_source"
+    assert rig.engine.lipsynced == []
+
+
+async def test_the_engine_failing_ends_the_run_and_keeps_the_picture_for_another_try(tmp_path, ctx):
+    from wasifyai_platform_sdk import RunError, VoiceEngineError
+
+    rig = Rig(tmp_path)
+    await library_track(rig, rate=16000, channels=1)
+    await a_picture(rig)
+    rig.engine.fail_with = VoiceEngineError("no_face", "No clear face was found in the picture.")
+    with pytest.raises(RunError) as e:
+        await rig.run(
+            task="lipsync", picture="pic1", source_track="song", picture_basis="drawn",
+            voice_basis="own",
+        )  # fmt: skip
+    assert e.value.code == "no_face"
+    assert store_for(rig.state).get_picture("t1", "u1", "pic1")["id"] == "pic1"
+    assert not list((store_for(rig.state).root / "tmp").glob("*"))

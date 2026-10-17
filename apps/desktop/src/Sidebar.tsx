@@ -9,7 +9,9 @@ import {
   FileText,
   Film,
   FlaskConical,
+  Headphones,
   Image as ImageIcon,
+  Languages,
   Library,
   type LucideIcon,
   Maximize2,
@@ -18,6 +20,7 @@ import {
   Paintbrush,
   PanelLeft,
   Pencil,
+  Scissors,
   Search,
   Settings,
   Shuffle,
@@ -105,8 +108,12 @@ export const GROUPS: Group[] = [
     items: [
       { label: "Text to speech", icon: Volume2, route: "speak" },
       { label: "Speech to text", icon: Mic, route: "transcribe" },
-      { label: "Lip sync", icon: Film, soon: true },
+      { label: "Lip sync", icon: Film, route: "lipsync" },
       { label: "Voices", icon: Users, route: "voices" },
+      { label: "Change a voice", icon: Shuffle, route: "convert" },
+      { label: "Edit speech", icon: Pencil, route: "speechedit" },
+      { label: "Dub a recording", icon: Languages, route: "dub" },
+      { label: "Audiobook", icon: Headphones, route: "audiobook" },
     ],
   },
   {
@@ -117,6 +124,7 @@ export const GROUPS: Group[] = [
       { label: "Create", icon: Sparkles, route: "music" },
       { label: "Your music", icon: Library, route: "tracks" },
       { label: "Lyrics", icon: FileText, route: "lyrics" },
+      { label: "Split into parts", icon: Scissors, route: "separate" },
     ],
   },
 ];
@@ -125,8 +133,19 @@ export const GROUPS: Group[] = [
 export function groupOf(route: Route): GroupId | null {
   if (route === "notebook" || route === "notebooks") return "notebook";
   if (route === "create" || route === "edit" || route === "library") return "images";
-  if (route === "speak" || route === "transcribe" || route === "voices") return "voice";
-  if (route === "music" || route === "tracks" || route === "lyrics") return "music";
+  if (
+    route === "speak" ||
+    route === "transcribe" ||
+    route === "voices" ||
+    route === "convert" ||
+    route === "speechedit" ||
+    route === "lipsync" ||
+    route === "dub" ||
+    route === "audiobook"
+  )
+    return "voice";
+  if (route === "music" || route === "tracks" || route === "lyrics" || route === "separate")
+    return "music";
   return null;
 }
 

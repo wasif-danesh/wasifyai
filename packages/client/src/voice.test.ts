@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { ParsedEvent } from "./sse";
 import type { Transport } from "./transport";
-import { createVoiceApi, makeEdit, makeLyrics, makeSpeech, makeTrack } from "./voice";
+import {
+  convertVoice,
+  createVoiceApi,
+  dubScript,
+  editWords,
+  makeAudiobook,
+  makeClip,
+  makeDub,
+  makeEdit,
+  makeLyrics,
+  makeSpeech,
+  makeTrack,
+  separateAudio,
+} from "./voice";
 
 const ev = (event: string, data: Record<string, unknown>): ParsedEvent =>
   ({ event, data: { run_id: "r1", seq: 1, ...data } }) as ParsedEvent;
@@ -308,5 +321,501 @@ describe("changing music and writing lyrics", () => {
     expect(await api.formats()).toEqual(["wav", "m4a"]);
     await api.downloadTrack("t1", "m4a").catch(() => undefined);
     expect(calls[3]?.path).toBe("/products/wasifyai-voice/tracks/t1/download?format=m4a");
+  });
+});
+
+describe("the audio tools", () => {
+  const done = (tracks: Record<string, unknown>[]) =>
+    ev("done", { outputs: { status: "done", tracks } });
+
+  it("splits a recording and returns every part that was kept", async () => {
+    const r = runs([
+      ev("node", { label: "Splitting" }),
+      done([
+        {
+          track_id: "t1",
+          title: "Song (vocals)",
+          seconds: 20,
+          audio_url: "http://x/1.wav",
+          stem: "vocals",
+        },
+        {
+          track_id: "t2",
+          title: "Song (drums)",
+          seconds: 20,
+          audio_url: "http://x/2.wav",
+          stem: "drums",
+        },
+      ]),
+    ]);
+    const steps: string[] = [];
+    const out = await separateAudio(
+      r,
+      { source: { kind: "track", id: "src" }, model: "htdemucs", stems: ["vocals", "drums"] },
+      new AbortController().signal,
+      (l) => steps.push(l),
+    );
+    expect(r.seen.input).toEqual({
+      task: "separate",
+      source_track: "src",
+      model: "htdemucs",
+      stems: ["vocals", "drums"],
+    });
+    expect(steps).toEqual(["Splitting"]);
+    expect(out.ok && out.tracks.map((t) => t.stem)).toEqual(["vocals", "drums"]);
+  });
+
+  it("points a run at a speech or a track and sends only what was chosen", async () => {
+    const r = runs([done([{ track_id: "t1", title: "x", seconds: 1, audio_url: "u" }])]);
+    await separateAudio(r, { source: { kind: "speech", id: "sp" } }, new AbortController().signal);
+    expect(r.seen.input).toEqual({ task: "separate", source_speech: "sp" });
+    const c = runs([done([{ track_id: "t1", title: "x", seconds: 1, audio_url: "u" }])]);
+    await convertVoice(
+      c,
+      {
+        source: { kind: "track", id: "a" },
+        voice: "v1",
+        model: "meanvc2",
+        seed: 3,
+        title: " As Ann ",
+      },
+      new AbortController().signal,
+    );
+    expect(c.seen.input).toEqual({
+      task: "convert",
+      source_track: "a",
+      saved_voice: "v1",
+      model: "meanvc2",
+      seed: 3,
+      title: " As Ann ",
+    });
+    const e = runs([done([{ track_id: "t1", title: "x", seconds: 1, audio_url: "u" }])]);
+    await editWords(
+      e,
+      {
+        source: { kind: "track", id: "a" },
+        oldText: "Hello brave",
+        newText: "Hello small",
+        model: "dots-tts-edit",
+      },
+      new AbortController().signal,
+    );
+    expect(e.seen.input).toEqual({
+      task: "speech_edit",
+      source_track: "a",
+      old_text: "Hello brave",
+      text: "Hello small",
+      model: "dots-tts-edit",
+    });
+  });
+
+  it("says why in words when the engine refuses, fails, or the connection is lost", async () => {
+    const refused = await convertVoice(
+      runs([
+        ev("done", {
+          outputs: {
+            status: "refused",
+            refusal: { code: "voice_needs_recording", message: "Use a cloned voice." },
+          },
+        }),
+      ]),
+      { source: { kind: "track", id: "a" }, voice: "v" },
+      new AbortController().signal,
+    );
+    expect(refused).toEqual({
+      ok: false,
+      code: "voice_needs_recording",
+      message: "Use a cloned voice.",
+    });
+    const failed = await editWords(
+      runs([ev("error", { code: "model_missing", message: "Get it in Models." })]),
+      { source: { kind: "track", id: "a" }, oldText: "a", newText: "b" },
+      new AbortController().signal,
+    );
+    expect(failed).toEqual({ ok: false, code: "model_missing", message: "Get it in Models." });
+    const lost = await separateAudio(
+      runs([]),
+      { source: { kind: "track", id: "a" } },
+      new AbortController().signal,
+    );
+    expect(!lost.ok && lost.code).toBe("lost");
+  });
+
+  it("adds a recording from this computer and writes down what one says", async () => {
+    const { t, calls } = transport((path) =>
+      path.endsWith("/words")
+        ? jsonRes({ text: "Hello there", seconds: 2, model: "parakeet" })
+        : jsonRes({ id: "t9", title: "Dad", mode: "imported" }, 201),
+    );
+    const api = createVoiceApi(t);
+    const file = new File(["RIFF"], "dad.wav", { type: "audio/wav" });
+    const track = await api.importTrack(file, "Dad");
+    expect(track.mode).toBe("imported");
+    expect(calls[0]?.path).toBe("/products/wasifyai-voice/tracks/import");
+    expect(calls[0]?.init?.body).toBeInstanceOf(FormData);
+    const words = await api.words({ kind: "speech", id: "s1" });
+    expect(words.text).toBe("Hello there");
+    expect(JSON.parse(String(calls[1]?.init?.body))).toEqual({ kind: "speech", id: "s1" });
+  });
+});
+
+describe("lip sync", () => {
+  const made = ev("done", {
+    outputs: {
+      status: "done",
+      clip_id: "c1",
+      title: "Hello",
+      seconds: 5.4,
+      video_url: "http://x/c.mp4",
+    },
+  });
+
+  it("sends the picture, what the person said about it and the voice, and returns the clip", async () => {
+    const r = runs([ev("node", { label: "Making the video" }), made]);
+    const steps: string[] = [];
+    const out = await makeClip(
+      r,
+      {
+        picture: "p1",
+        pictureBasis: "drawn",
+        voiceBasis: "own",
+        source: { kind: "track", id: "t1" },
+        model: "musetalk-v15",
+        title: " Hi ",
+      },
+      new AbortController().signal,
+      (l) => steps.push(l),
+    );
+    expect(r.seen.input).toEqual({
+      task: "lipsync",
+      picture: "p1",
+      picture_basis: "drawn",
+      voice_basis: "own",
+      source_track: "t1",
+      model: "musetalk-v15",
+      title: " Hi ",
+    });
+    expect(steps).toEqual(["Making the video"]);
+    expect(out).toEqual({
+      ok: true,
+      clip: { id: "c1", title: "Hello", seconds: 5.4, video_url: "http://x/c.mp4" },
+    });
+  });
+
+  it("sends words instead of a recording, and never both", async () => {
+    const r = runs([made]);
+    await makeClip(
+      r,
+      {
+        picture: "p1",
+        pictureBasis: "own",
+        voiceBasis: "generated",
+        text: "Hello there",
+        voice: "af_heart",
+        source: { kind: "speech", id: "s1" },
+      },
+      new AbortController().signal,
+    );
+    expect(r.seen.input).toEqual({
+      task: "lipsync",
+      picture: "p1",
+      picture_basis: "own",
+      voice_basis: "generated",
+      text: "Hello there",
+      voice: "af_heart",
+    });
+  });
+
+  it("says why in words when it is refused, fails, or the connection is lost", async () => {
+    const base = {
+      picture: "p",
+      pictureBasis: "drawn",
+      voiceBasis: "own",
+      source: { kind: "track", id: "t" },
+    } as const;
+    const refused = await makeClip(
+      runs([
+        ev("done", {
+          outputs: {
+            status: "refused",
+            refusal: { code: "consent_required", message: "Say whose voice." },
+          },
+        }),
+      ]),
+      base,
+      new AbortController().signal,
+    );
+    expect(refused).toEqual({ ok: false, code: "consent_required", message: "Say whose voice." });
+    const failed = await makeClip(
+      runs([ev("error", { code: "no_face", message: "No clear face was found in the picture." })]),
+      base,
+      new AbortController().signal,
+    );
+    expect(failed).toEqual({
+      ok: false,
+      code: "no_face",
+      message: "No clear face was found in the picture.",
+    });
+    const lost = await makeClip(runs([]), base, new AbortController().signal);
+    expect(!lost.ok && lost.code).toBe("lost");
+  });
+
+  it("adds a picture, lists, renames, saves and removes clips, and sets the engine up", async () => {
+    const { t, calls } = transport((path) =>
+      path.endsWith("/pictures")
+        ? jsonRes({ id: "p1", width: 300, height: 447, url: "http://x/p.png" }, 201)
+        : path === "/desktop/lipsync"
+          ? jsonRes({
+              installed: false,
+              plan: { supported: true, bytes: 1 },
+              install: { state: "idle" },
+            })
+          : path.endsWith("/clips?limit=100")
+            ? jsonRes({ items: [{ id: "c1", title: "Hello" }] })
+            : jsonRes({ id: "c1", title: "Hi" }),
+    );
+    const api = createVoiceApi(t);
+    const file = new File(["x"], "face.png", { type: "image/png" });
+    expect((await api.addPicture(file)).id).toBe("p1");
+    expect(calls[0]?.path).toBe("/products/wasifyai-voice/pictures");
+    expect((await api.clips()).map((c) => c.id)).toEqual(["c1"]);
+    expect((await api.lipsyncEngine()).installed).toBe(false);
+    await api.updateClip("c1", { title: "Hi" });
+    expect(calls.at(-1)?.path).toBe("/products/wasifyai-voice/clips/c1");
+    expect(calls.at(-1)?.init?.method).toBe("PATCH");
+    await api.installLipsyncEngine(1_500_000_000);
+    expect(calls.at(-1)?.path).toBe("/desktop/lipsync/install");
+    expect(JSON.parse(String(calls.at(-1)?.init?.body))).toEqual({ confirm_bytes: 1_500_000_000 });
+  });
+});
+
+describe("dubbing", () => {
+  const written = ev("done", {
+    outputs: {
+      status: "done",
+      language: "es",
+      seconds: 10.3,
+      vocals_track: "v1",
+      background_track: "b1",
+      segments: [{ start: 0, end: 1.5, source: "Hello.", text: "Hola." }],
+    },
+  });
+
+  it("asks for the script and returns the lines with the tracks it kept", async () => {
+    const r = runs([ev("node", { label: "Translating" }), written]);
+    const steps: string[] = [];
+    const out = await dubScript(
+      r,
+      { source: { kind: "speech", id: "s1" }, language: "es", background: true },
+      new AbortController().signal,
+      (l) => steps.push(l),
+    );
+    expect(r.seen.input).toEqual({
+      task: "dub_script",
+      source_speech: "s1",
+      language: "es",
+      background: true,
+    });
+    expect(steps).toEqual(["Translating"]);
+    expect(out).toEqual({
+      ok: true,
+      script: {
+        segments: [{ start: 0, end: 1.5, source: "Hello.", text: "Hola." }],
+        language: "es",
+        seconds: 10.3,
+        vocalsTrack: "v1",
+        backgroundTrack: "b1",
+      },
+    });
+  });
+
+  it("sends the script as the person left it with the voice and what they said about it", async () => {
+    const r = runs([
+      ev("done", {
+        outputs: {
+          status: "done",
+          track_id: "d1",
+          title: "Hi (Spanish)",
+          seconds: 11.9,
+          audio_url: "http://x/d.wav",
+          fit: { lines: 1, sped_up: 0, max_overflow_s: 0, elapsed_s: 3 },
+        },
+      }),
+    ]);
+    const out = await makeDub(
+      r,
+      {
+        source: { kind: "track", id: "t1" },
+        language: "es",
+        segments: [{ start: 0, end: 1.5, source: "Hello.", text: "Hola, amigos." }],
+        voiceFrom: "speaker",
+        speakerBasis: "own",
+        vocalsTrack: "v1",
+        backgroundTrack: "b1",
+        model: "qwen3-tts-0.6b-base",
+      },
+      new AbortController().signal,
+    );
+    expect(r.seen.input).toEqual({
+      task: "dub",
+      source_track: "t1",
+      language: "es",
+      segments: [{ start: 0, end: 1.5, source: "Hello.", text: "Hola, amigos." }],
+      voice_from: "speaker",
+      speaker_basis: "own",
+      vocals_track: "v1",
+      background_track: "b1",
+      model: "qwen3-tts-0.6b-base",
+    });
+    expect(out.ok && out.track.id).toBe("d1");
+    expect(out.ok && out.fit.lines).toBe(1);
+  });
+
+  it("says why in words when it is refused, fails, or the connection is lost", async () => {
+    const asked = { source: { kind: "track", id: "t" }, language: "es" } as const;
+    const refused = await makeDub(
+      runs([
+        ev("done", {
+          outputs: {
+            status: "refused",
+            refusal: { code: "consent_required", message: "Say whose voice." },
+          },
+        }),
+      ]),
+      { ...asked, segments: [], voiceFrom: "speaker" },
+      new AbortController().signal,
+    );
+    expect(refused).toEqual({ ok: false, code: "consent_required", message: "Say whose voice." });
+    const failed = await dubScript(
+      runs([
+        ev("error", { code: "language_failed", message: "The language model did not answer." }),
+      ]),
+      asked,
+      new AbortController().signal,
+    );
+    expect(failed).toEqual({
+      ok: false,
+      code: "language_failed",
+      message: "The language model did not answer.",
+    });
+    const lost = await makeDub(
+      runs([]),
+      { ...asked, segments: [], voiceFrom: "builtin" },
+      new AbortController().signal,
+    );
+    expect(!lost.ok && lost.code).toBe("lost");
+  });
+});
+
+describe("audiobooks", () => {
+  it("plans the chapters of a text without keeping anything", async () => {
+    const { t, calls } = transport(() =>
+      jsonRes({
+        chapters: [{ title: "One", text: "Hi.", chars: 3, estimated_seconds: 1 }],
+        chars: 3,
+        estimated_seconds: 1,
+      }),
+    );
+    const plan = await createVoiceApi(t).planBook("# One\nHi.", 3000);
+    expect(plan.chapters[0]?.title).toBe("One");
+    expect(calls[0]?.path).toBe("/products/wasifyai-voice/audiobook/plan");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ text: "# One\nHi.", target: 3000 });
+  });
+
+  it("sends the chapters as the person left them with the voice, and returns each kept chapter", async () => {
+    const r = runs([
+      ev("node", { label: "Chapter 1 of 2, part 1 of 3" }),
+      ev("done", {
+        outputs: {
+          status: "done",
+          seconds: 31.5,
+          tracks: [
+            {
+              track_id: "c1",
+              title: "B - 1. One",
+              seconds: 19.6,
+              audio_url: "http://x/1.wav",
+              chapter: 1,
+            },
+            {
+              track_id: "c2",
+              title: "B - 2. Two",
+              seconds: 11.9,
+              audio_url: "http://x/2.wav",
+              chapter: 2,
+            },
+          ],
+          book: { track_id: "b", title: "B", seconds: 33, audio_url: "http://x/b.wav" },
+        },
+      }),
+    ]);
+    const steps: string[] = [];
+    const out = await makeAudiobook(
+      r,
+      {
+        title: "B",
+        chapters: [
+          { title: "One", text: "Hi." },
+          { title: "Two", text: "Bye." },
+        ],
+        voice: "af_heart",
+        model: "kokoro-82m",
+        options: { speed: 1.1 },
+        whole: true,
+        readTitles: false,
+      },
+      new AbortController().signal,
+      (l) => steps.push(l),
+    );
+    expect(r.seen.input).toEqual({
+      task: "audiobook",
+      title: "B",
+      chapters: [
+        { title: "One", text: "Hi." },
+        { title: "Two", text: "Bye." },
+      ],
+      voice: "af_heart",
+      model: "kokoro-82m",
+      options: { speed: 1.1 },
+      whole: true,
+      read_titles: false,
+    });
+    expect(steps).toEqual(["Chapter 1 of 2, part 1 of 3"]);
+    expect(out.ok && out.tracks.map((x) => x.chapter)).toEqual([1, 2]);
+    expect(out.ok && out.book?.id).toBe("b");
+  });
+
+  it("says why in words when it is refused or fails, and that the chapters done are kept", async () => {
+    const asked = { title: "B", chapters: [{ title: "One", text: "Hi." }] };
+    const refused = await makeAudiobook(
+      runs([
+        ev("done", {
+          outputs: {
+            status: "refused",
+            refusal: { code: "unknown_voice", message: "That saved voice is no longer there." },
+          },
+        }),
+      ]),
+      { ...asked, savedVoice: "x" },
+      new AbortController().signal,
+    );
+    expect(refused).toEqual({
+      ok: false,
+      code: "unknown_voice",
+      message: "That saved voice is no longer there.",
+    });
+    const failed = await makeAudiobook(
+      runs([
+        ev("error", {
+          code: "engine_stopped",
+          message: "The speech runtime stopped. Chapters 1 to 2 were kept in Your music.",
+        }),
+      ]),
+      asked,
+      new AbortController().signal,
+    );
+    expect(!failed.ok && failed.message).toContain("were kept in Your music");
+    const lost = await makeAudiobook(runs([]), asked, new AbortController().signal);
+    expect(!lost.ok && lost.code).toBe("lost");
   });
 });

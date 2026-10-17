@@ -20,12 +20,19 @@ export const COMMERCIAL_TEXT: Record<CommercialUse, string> = {
   unreviewed: "Licence not reviewed",
 };
 
+/** What a model's state means for this model: a model on the image engine needs that, not speech. */
+export function stateText(m: VoiceModelInfo): string {
+  if (m.state === "needs_runtime" && m.engine === "comfyui") return "Needs the image engine";
+  if (m.state === "needs_runtime" && m.engine === "sidecar") return "Needs the lip sync engine";
+  return STATE_TEXT[m.state];
+}
+
 /** The text of one choice in the model list. */
 export function modelOption(m: VoiceModelInfo, task: string): string {
   const tags = [m.recommended.includes(task as never) ? "recommended" : null];
   if (m.commercial_use === "no" || m.commercial_use === "unreviewed")
     tags.push("not for commercial use");
-  if (m.state !== "ready") tags.push(STATE_TEXT[m.state].toLowerCase());
+  if (m.state !== "ready") tags.push(stateText(m).toLowerCase());
   const shown = tags.filter(Boolean);
   return shown.length ? `${m.title} (${shown.join(", ")})` : m.title;
 }

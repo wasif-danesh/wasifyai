@@ -35,10 +35,17 @@ from typing import Any
 
 import httpx
 from wasifyai_platform_sdk import (
+    ConvertRequest,
+    LipSyncRequest,
+    LipSyncResult,
     MusicEditRequest,
     MusicRequest,
     MusicResult,
+    SeparateRequest,
+    SeparateResult,
+    SpeechEditRequest,
     SpeechResult,
+    Stem,
     TranscriptResult,
     TranscriptSegment,
     VoiceEngineError,
@@ -518,11 +525,21 @@ def _friendly(status: int, body: str) -> VoiceEngineError:
 class AudioEngine:
     """`SpeechEngine` over the catalogue (`ModelsService`), the installer and the server."""
 
-    def __init__(self, data_dir: Path, models: Any, installer: AudioInstaller, server: AudioServer):
+    def __init__(
+        self,
+        data_dir: Path,
+        models: Any,
+        installer: AudioInstaller,
+        server: AudioServer,
+        comfy: Any = None,
+        lipsync: Any = None,
+    ):
         self._data_dir = data_dir
         self._models = models  # ModelsService: catalogue, locate()
         self.installer = installer
         self.server = server
+        self.comfy = comfy  # ComfyMusic: the music models the image engine runs (V3b)
+        self.lipsync_sidecar = lipsync  # LipSyncSidecar: MuseTalk, an optional component (V5)
         self.slot: Any = None  # the SlotManager; set when the worker is built
 
     # ---- state ---------------------------------------------------------------------------
@@ -548,16 +565,29 @@ class AudioEngine:
             "install": self.installer.progress.public(),
         }  # fmt: skip
 
+    def _runtime_ready(self, model: VoiceModel) -> bool:
+        """Whether what runs this model is set up: audio.cpp, or the image engine (ComfyUI)."""
+        if model.engine == "comfyui":
+            return bool(self.comfy is not None and self.comfy.installed)
+        if model.engine == "sidecar":
+            return bool(self.lipsync_sidecar is not None and self.lipsync_sidecar.installed)
+        return self.install is not None
+
     def models(self, task: str | None = None) -> list[dict[str, Any]]:
         out = []
-        runtime = self.install is not None
         for e in self._entries():
             m: VoiceModel = e.voice
             if task and task not in m.tasks:
                 continue
             files = self._present(e) is not None
+            runtime = self._runtime_ready(m)
             state = "ready" if files and runtime else "needs_runtime" if files else "can_install"
-            if not files and not runtime and self.installer.pin() is None:
+            if (
+                not files
+                and not runtime
+                and m.engine == "audiocpp"
+                and self.installer.pin() is None
+            ):
                 state = "not_available"
             missing = 0 if files else e.total_bytes
             out.append(
@@ -580,7 +610,19 @@ class AudioEngine:
             e = (ready or wanted or [None])[0]
             if e is None:
                 raise VoiceEngineError("no_model", "There is no model for this yet.")
-        if self.install is None:
+        if not self._runtime_ready(e.voice):
+            if e.voice.engine == "sidecar":
+                raise VoiceEngineError(
+                    "runtime_missing",
+                    f"{e.voice.title} needs the lip sync engine, which is not set up yet. "
+                    "Set it up first.",
+                )
+            if e.voice.engine == "comfyui":
+                raise VoiceEngineError(
+                    "runtime_missing",
+                    f"{e.voice.title} runs on the image engine, which is not set up yet. "
+                    "Set up image generation first.",
+                )
             raise VoiceEngineError(
                 "runtime_missing", "The speech runtime is not set up yet. Set it up first."
             )
@@ -690,6 +732,12 @@ class AudioEngine:
         runtime's default seed is fixed, so one is chosen here when none was asked for."""
         if "music" not in model.tasks:
             raise VoiceEngineError("wrong_task", f"{model.title} does not make music.")
+        if model.engine == "comfyui":
+            if self.comfy is None:
+                raise VoiceEngineError("runtime_missing", "The image engine is not available.")
+            hold = self.slot.hold("image") if self.slot is not None else contextlib.nullcontext()
+            async with hold:  # ComfyUI's memory is the image engine's: one big model at a time
+                return await self.comfy.music(model, req)  # type: ignore[no-any-return]
         rules = model.music["request"]
         options = dict(req.options)
         request: dict[str, Any] = {"text": req.description}
@@ -747,6 +795,103 @@ class AudioEngine:
             raise VoiceEngineError("engine_failed", "The music model returned no audio.")
         rate = _wav_rate(wav) or model.sample_rate
         return MusicResult(wav, rate, seconds, model.id, seed, load_s, time.monotonic() - t0)
+
+    async def separate(
+        self, model: VoiceModel, req: SeparateRequest, source: Path
+    ) -> SeparateResult:
+        """Split a recording that is a file on this computer (at the model's rate) into stems. The
+        separation families refuse any request key but the audio; the stems come back named."""
+        if "separate" not in model.tasks:
+            raise VoiceEngineError("wrong_task", f"{model.title} does not split music.")
+        t0 = time.monotonic()
+        wait = max(300.0, min(7200.0, req.source_seconds * 30))
+        r, load_s = await self._call(
+            model, "/v1/tasks/run", limit_s=wait,
+            json={"model": model.id, "request": {"audio": str(source)}},
+        )  # fmt: skip
+        named = _named_wavs(r.content)
+        order = {name: i for i, name in enumerate(model.separate["stems"])}
+        stems = tuple(
+            Stem(name, wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav))
+            for name, wav in sorted(named, key=lambda x: order.get(x[0], len(order)))
+            if _wav_seconds(wav) > 0
+        )
+        if not stems:
+            raise VoiceEngineError("engine_failed", "The model returned no parts.")
+        return SeparateResult(stems, model.id, load_s, time.monotonic() - t0)
+
+    async def convert(
+        self, model: VoiceModel, req: ConvertRequest, source: Path, reference: Path
+    ) -> SpeechResult:
+        """Make the recording at `source` sound like the voice in `reference`. Both are files at the
+        rate the model reads (`convert.input_rate`); which request fields carry them is the
+        descriptor's."""
+        if "convert" not in model.tasks:
+            raise VoiceEngineError("wrong_task", f"{model.title} does not change a voice.")
+        fields = model.convert["request"]
+        request: dict[str, Any] = {
+            fields["source"]: str(source),
+            fields["reference"]: str(reference),
+        }
+        options = dict(req.options)
+        if req.seed is not None:
+            options["seed"] = req.seed
+        if options:
+            request["options"] = options
+        t0 = time.monotonic()
+        wait = max(300.0, min(7200.0, req.source_seconds * 30))
+        r, load_s = await self._call(
+            model, "/v1/tasks/run", limit_s=wait, json={"model": model.id, "request": request}
+        )
+        wav = _audio_of_task(r.headers.get("content-type", ""), r.content)
+        seconds = _wav_seconds(wav)
+        if seconds <= 0:
+            raise VoiceEngineError("engine_failed", "The voice model returned no audio.")
+        rate = _wav_rate(wav) or model.sample_rate
+        return SpeechResult(wav, rate, seconds, model.id, None, load_s, time.monotonic() - t0)
+
+    async def speech_edit(
+        self, model: VoiceModel, req: SpeechEditRequest, source: Path
+    ) -> SpeechResult:
+        """Change the words in the recording at `source` (a file at the model's rate). The editing
+        model takes the original words with the changes tagged as the text to speak, and the
+        recording as an option; it answers a speech request with the edited recording."""
+        if "edit" not in model.tasks:
+            raise VoiceEngineError("wrong_task", f"{model.title} does not edit speech.")
+        options = {**req.options, "template_name": "edit", "source_audio": str(source)}
+        if req.seed is not None:
+            options["seed"] = req.seed
+        t0 = time.monotonic()
+        r, load_s = await self._call(
+            model, "/v1/audio/speech",
+            limit_s=max(300.0, min(3600.0, req.source_seconds * 40)),
+            json={"model": model.id, "input": req.instruction, "options": options},
+        )  # fmt: skip
+        wav = r.content
+        seconds = _wav_seconds(wav)
+        if seconds <= 0:
+            raise VoiceEngineError("engine_failed", "The editing model returned no audio.")
+        rate = _wav_rate(wav) or model.sample_rate
+        return SpeechResult(wav, rate, seconds, model.id, None, load_s, time.monotonic() - t0)
+
+    async def lipsync(
+        self, model: VoiceModel, req: LipSyncRequest, picture: Path, voice: Path
+    ) -> LipSyncResult:
+        """A video of the face in the picture saying the voice. The sidecar draws the mark."""
+        if "lipsync" not in model.tasks:
+            raise VoiceEngineError("wrong_task", f"{model.title} does not make talking videos.")
+        sidecar = self.lipsync_sidecar
+        if sidecar is None or not sidecar.installed:
+            raise VoiceEngineError(
+                "runtime_missing", "The lip sync engine is not set up yet. Set it up first."
+            )
+        entry = next(e for e in self._entries() if e.id == model.id)
+        files = {f.name: self._models.locate(f) for f in entry.files}
+        hold = self.slot.hold("lipsync") if self.slot is not None else contextlib.nullcontext()
+        async with hold:  # MuseTalk takes about 12 GB: one big model at a time
+            return await sidecar.generate(  # type: ignore[no-any-return]
+                model, req, picture, voice, {k: v for k, v in files.items() if v is not None}
+            )
 
     async def transcribe(
         self, model: VoiceModel, wav: bytes, options: dict[str, Any]
@@ -810,6 +955,24 @@ def _stable_edit(req: MusicEditRequest, options: dict[str, Any], request: dict[s
         if req.strength is not None:
             options["init_noise_level"] = req.strength
     request["duration_seconds"] = req.source_seconds
+
+
+def _named_wavs(data: bytes) -> list[tuple[str, bytes]]:
+    """The named audio files a separation answers with: `named_audio_outputs`, each with an `id`
+    and its WAV as base64."""
+    try:
+        payload = json.loads(data.decode("utf-8"))
+    except ValueError:
+        raise VoiceEngineError("engine_failed", "The model's answer could not be read.") from None
+    out: list[tuple[str, bytes]] = []
+    for item in (payload.get("named_audio_outputs") if isinstance(payload, dict) else None) or []:
+        try:
+            wav = base64.b64decode(str(item.get("audio", "")), validate=False)
+        except ValueError:
+            continue
+        if wav[:4] == b"RIFF" and isinstance(item.get("id"), str):
+            out.append((item["id"], wav))
+    return out
 
 
 def _audio_candidates(node: Any):

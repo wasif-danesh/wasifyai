@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # pyright: reportTypedDictNotRequiredAccess=false
-"""The audio graph (ADR-0066, stages V1 to V3): one run makes one speech (in a built-in voice, in a
-voice described in words, or in a voice cloned from a recording the person saved) or one piece of
-music (a song or a sound effect).
+"""The audio graph (ADR-0066, stages V1 to V4): one run makes one speech (in a built-in voice, in a
+voice described in words, or in a voice cloned from a recording the person saved), one piece of
+music (a song or a sound effect), or works on a recording the person has (tools.py: split it into
+stems, change whose voice it is, change its words).
 
     check_request -> speak -> finalise
         |
@@ -33,8 +34,11 @@ from wasifyai_platform_sdk import (
     require_context,
 )
 
+from wasifyai_voice.book import build_book
+from wasifyai_voice.dub import build_dub
 from wasifyai_voice.runtime import NotAvailable, engine_for, store_for
 from wasifyai_voice.store import NotFound, new_id
+from wasifyai_voice.tools import build_tools
 
 log = logging.getLogger(__name__)
 
@@ -51,8 +55,34 @@ class SpeakState(TypedDict, total=False):
     options: dict[str, Any]
     saved_voice: str  # the id of a saved voice (described or cloned); `voice` is for built-in ones
     # music (`task: "music"`), changing a clip (`"music_edit"`), writing lyrics (`"lyrics"`)
-    task: str  # "speak" (the default), "music", "music_edit" or "lyrics"
-    source_track: str  # music_edit: the track to change
+    task: str  # "speak" (the default), "music", "music_edit", "lyrics", or an audio tool (V4)
+    source_track: str  # music_edit and the audio tools: the track to work on
+    source_speech: str  # the audio tools: a speech to work on instead of a track
+    stems: list[str]  # separate: the parts to keep (all when empty)
+    old_text: str  # speech_edit: what the recording says now; `text` is what it should say
+    tracks: list[dict[str, Any]]  # the audio tools: every track made
+    picture: str  # lipsync: the id of an added picture
+    picture_basis: str  # lipsync: what the person said the picture is
+    voice_basis: str  # lipsync: whose voice they said it is (a script is always `generated`)
+    clip_id: str
+    video_url: str
+    language: str  # dubbing: the language to dub into
+    segments: list[
+        dict[str, Any]
+    ]  # dubbing: the script, a line with its times, words and translation
+    background: bool  # dub_script: separate the voice from the background first
+    voice_from: str  # dub: speaker | saved | builtin
+    speaker_basis: str  # dub: the person's word about copying the speaker's voice
+    vocals_track: str
+    background_track: str
+    transcribe_model: str
+    separate_model: str
+    fit: dict[str, Any]
+    transcriber: str
+    chapters: list[dict[str, Any]]  # audiobook: the approved chapters, title and text
+    whole: bool  # audiobook: also one track of the whole book
+    read_titles: bool  # audiobook: speak each chapter's title first (the default)
+    book: dict[str, Any] | None
     edit_action: str
     edit_ranges: list[list[float]]
     strength: float
@@ -431,10 +461,17 @@ def build_speak(caps: Capabilities, checkpointer: Any):
             "lyrics_failed", "The words could not be written. Try again.", retryable=True
         )
 
+    tools = build_tools(caps, app_state, engine, refuse_with)
+    dubs = build_dub(caps, app_state, engine, refuse_with, tools["kit"])
+    books = build_book(caps, app_state, engine, refuse_with, tools["kit"])
+
     def route(state: SpeakState) -> str:
-        return {"music": "check_music", "music_edit": "edit_music", "lyrics": "write_lyrics"}.get(
-            state.get("task", ""), "check_request"
-        )
+        return {
+            "music": "check_music", "music_edit": "edit_music", "lyrics": "write_lyrics",
+            "separate": "separate", "convert": "convert", "speech_edit": "speech_edit",
+            "lipsync": "lipsync", "dub_script": "dub_script", "dub": "dub",
+            "audiobook": "audiobook",
+        }.get(state.get("task", ""), "check_request")  # fmt: skip
 
     g = StateGraph(SpeakState)
     for name, fn in [
@@ -445,6 +482,13 @@ def build_speak(caps: Capabilities, checkpointer: Any):
         ("make_music", make_music),
         ("edit_music", edit_music),
         ("write_lyrics", write_lyrics),
+        ("separate", tools["separate"]),
+        ("convert", tools["convert"]),
+        ("speech_edit", tools["speech_edit"]),
+        ("lipsync", tools["lipsync"]),
+        ("dub_script", dubs["dub_script"]),
+        ("dub", dubs["dub"]),
+        ("audiobook", books["audiobook"]),
     ]:
         g.add_node(name, cast(Any, fn))
     g.add_conditional_edges(
@@ -455,8 +499,25 @@ def build_speak(caps: Capabilities, checkpointer: Any):
             "check_request": "check_request",
             "edit_music": "edit_music",
             "write_lyrics": "write_lyrics",
+            "separate": "separate",
+            "convert": "convert",
+            "speech_edit": "speech_edit",
+            "lipsync": "lipsync",
+            "dub_script": "dub_script",
+            "dub": "dub",
+            "audiobook": "audiobook",
         },
     )
+    for tool in (
+        "separate",
+        "convert",
+        "speech_edit",
+        "lipsync",
+        "dub_script",
+        "dub",
+        "audiobook",
+    ):
+        g.add_edge(tool, END)
     g.add_edge("edit_music", END)
     g.add_edge("write_lyrics", END)
     g.add_conditional_edges(

@@ -1210,6 +1210,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-voice/audiobook/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Plan Book
+         * @description The chapters of a long text, for the person to read and change before anything is spoken.
+         *     Nothing is made or kept.
+         */
+        post: operations["plan_book_products_wasifyai_voice_audiobook_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/clips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Clips */
+        get: operations["list_clips_products_wasifyai_voice_clips_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/clips/{cid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Clip */
+        get: operations["get_clip_products_wasifyai_voice_clips__cid__get"];
+        put?: never;
+        post?: never;
+        /** Delete Clip */
+        delete: operations["delete_clip_products_wasifyai_voice_clips__cid__delete"];
+        options?: never;
+        head?: never;
+        /** Update Clip */
+        patch: operations["update_clip_products_wasifyai_voice_clips__cid__patch"];
+        trace?: never;
+    };
+    "/products/wasifyai-voice/clips/{cid}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Clip */
+        get: operations["download_clip_products_wasifyai_voice_clips__cid__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-voice/formats": {
         parameters: {
             query?: never;
@@ -1225,6 +1299,27 @@ export interface paths {
         get: operations["formats_products_wasifyai_voice_formats_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/pictures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Picture
+         * @description A picture to make a talking video from: checked, cleaned of everything but the pixels (no
+         *     location, no camera data), scaled down. It is kept until a clip uses it, or for a day.
+         */
+        post: operations["add_picture_products_wasifyai_voice_pictures_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1294,6 +1389,26 @@ export interface paths {
         get: operations["list_tracks_products_wasifyai_voice_tracks_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/tracks/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Track
+         * @description Add a recording from this computer to Your music, so the audio tools can work on it.
+         */
+        post: operations["import_track_products_wasifyai_voice_tracks_import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1458,6 +1573,27 @@ export interface paths {
         head?: never;
         /** Update Voice */
         patch: operations["update_voice_products_wasifyai_voice_voices__vid__patch"];
+        trace?: never;
+    };
+    "/products/wasifyai-voice/words": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Words
+         * @description What a recording of the library says, written down (for the person to change in the
+         *     speech editor). Nothing is saved.
+         */
+        post: operations["words_products_wasifyai_voice_words_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/products/{product_id}/runs": {
@@ -1696,6 +1832,11 @@ export interface components {
             /** Provider */
             provider: string;
         };
+        /** Body_add_picture_products_wasifyai_voice_pictures_post */
+        Body_add_picture_products_wasifyai_voice_pictures_post: {
+            /** File */
+            file: string;
+        };
         /** Body_create_clone_products_wasifyai_voice_voices_clone_post */
         Body_create_clone_products_wasifyai_voice_voices_clone_post: {
             /**
@@ -1719,6 +1860,13 @@ export interface components {
             file: string;
             /** Model */
             model?: string | null;
+            /** Title */
+            title?: string | null;
+        };
+        /** Body_import_track_products_wasifyai_voice_tracks_import_post */
+        Body_import_track_products_wasifyai_voice_tracks_import_post: {
+            /** File */
+            file: string;
             /** Title */
             title?: string | null;
         };
@@ -2299,6 +2447,16 @@ export interface components {
                 [key: string]: string;
             } | null;
         };
+        /** PlanBook */
+        PlanBook: {
+            /**
+             * Target
+             * @default 6000
+             */
+            target: number;
+            /** Text */
+            text: string;
+        };
         /** ProviderView */
         ProviderView: {
             /** Id */
@@ -2805,6 +2963,18 @@ export interface components {
             name?: string | null;
             /** Reference Text */
             reference_text?: string | null;
+        };
+        /**
+         * WordsRequest
+         * @description A recording of the library to write down: a track or a speech.
+         */
+        WordsRequest: {
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Model */
+            model?: string | null;
         };
     };
     responses: never;
@@ -5586,6 +5756,205 @@ export interface operations {
             };
         };
     };
+    plan_book_products_wasifyai_voice_audiobook_plan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanBook"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_clips_products_wasifyai_voice_clips_get: {
+        parameters: {
+            query?: {
+                ids?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_clip_products_wasifyai_voice_clips__cid__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_clip_products_wasifyai_voice_clips__cid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_clip_products_wasifyai_voice_clips__cid__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrackPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_clip_products_wasifyai_voice_clips__cid__download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     formats_products_wasifyai_voice_formats_get: {
         parameters: {
             query?: never;
@@ -5604,6 +5973,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: string[];
                     };
+                };
+            };
+        };
+    };
+    add_picture_products_wasifyai_voice_pictures_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_add_picture_products_wasifyai_voice_pictures_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5750,6 +6154,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_track_products_wasifyai_voice_tracks_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_track_products_wasifyai_voice_tracks_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6280,6 +6719,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["VoicePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    words_products_wasifyai_voice_words_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WordsRequest"];
             };
         };
         responses: {

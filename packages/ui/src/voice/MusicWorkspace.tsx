@@ -173,7 +173,7 @@ export function MusicWorkspace({
   /** Make a piece again from a track's own settings: the same seed gives the same music, a new one
    * another take. The form shows what was used. */
   function again(t: Track, sameSeed: boolean) {
-    if (working || t.mode === "edit") return;
+    if (working || (t.mode !== "song" && t.mode !== "sfx")) return;
     const m = models.find((x) => x.id === t.model_id);
     if (!m || m.state !== "ready") {
       setProblem(`${m?.title ?? "That model"} is not ready: get it in Models first.`);

@@ -3,6 +3,7 @@
 import asyncio
 import io
 import shutil
+import sqlite3
 
 import pytest
 from fastapi import FastAPI, Header
@@ -361,3 +362,189 @@ def test_a_track_is_saved_as_a_real_m4a_when_a_tool_is_there(api):
     r = c.get("tracks/t1/download", params={"format": "m4a"})
     assert r.status_code == 200 and r.headers["content-type"] == "audio/mp4"
     assert b"ftyp" in r.content[:16] and "Summer.m4a" in r.headers["content-disposition"]
+
+
+# ---- audio tools (V4): adding a recording and writing down its words ------------------------
+
+
+def import_file(c, name="song.wav", data=None, **form):
+    body = wav(2.0, 44100, 2) if data is None else data
+    return c.post("tracks/import", files={"file": (name, io.BytesIO(body), "audio/wav")}, data=form)
+
+
+def test_a_recording_from_this_computer_is_added_to_the_library_and_found_by_name(api):
+    c, _, state = api
+    r = import_file(c, "Dad's guitar.wav", title="Dad on guitar")
+    assert r.status_code == 201
+    t = r.json()
+    assert t["title"] == "Dad on guitar" and t["mode"] == "imported" and t["sample_rate"] == 44100
+    assert t["edit"] == {"action": "import", "file": "Dad's guitar.wav"} and t["seconds"] == 2.0
+    assert state.creation_index.items[t["id"]][0] == "track"
+    assert "Dad on guitar" in state.creation_index.items[t["id"]][1]
+    assert c.get("tracks").json()["items"][0]["id"] == t["id"]
+    assert import_file(c, "morning talk.wav").json()["title"] == "morning talk"
+
+
+def test_a_recording_that_cannot_be_read_or_is_not_there_is_refused_in_words(api):
+    c, *_ = api
+    r = import_file(c, "x.wav", data=b"")
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "empty"
+    r = import_file(c, "x.mp3", data=b"not audio at all")
+    assert r.status_code == 422 and r.json()["detail"]["code"] in (
+        "needs_converter",
+        "unsupported_audio",
+        "convert_failed",
+    )
+
+
+def test_what_a_recording_says_is_written_down_without_saving_anything(api):
+    c, engine, state = api
+    seed_speech(state)
+    r = c.post("words", json={"kind": "speech", "id": "abc"})
+    assert r.status_code == 200
+    assert r.json()["text"] == "Hello there. Second sentence." and r.json()["model"]
+    t = import_file(c).json()
+    r = c.post("words", json={"kind": "track", "id": t["id"]})
+    assert r.status_code == 200 and len(engine.transcribed) == 2
+    assert c.get("transcripts").json()["items"] == []  # nothing was saved
+    assert c.post("words", json={"kind": "track", "id": "nope"}).status_code == 404
+    assert c.post("words", json={"kind": "file", "id": "x"}).status_code == 422
+    r = c.post("words", json={"kind": "track", "id": t["id"], "model": "kokoro-82m"})
+    assert r.status_code == 422  # not a model that writes speech down
+
+
+def test_words_fail_with_a_status_that_says_what_to_do(api):
+    c, engine, state = api
+    seed_speech(state)
+    engine.ready.clear()
+    r = c.post("words", json={"kind": "speech", "id": "abc"})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "model_missing"
+    engine.ready.update(engine.models_by_id)
+    engine.fail_with = VoiceEngineError("engine_failed", "It stopped.")
+    r = c.post("words", json={"kind": "speech", "id": "abc"})
+    assert r.status_code == 502
+
+
+# ---- lip sync: pictures and clips (V5) ------------------------------------------------------
+
+
+def picture_file(size=(80, 60), fmt="PNG"):
+    import io as _io
+
+    from PIL import Image
+
+    out = _io.BytesIO()
+    Image.new("RGB", size, (180, 120, 90)).save(out, fmt)
+    return out.getvalue()
+
+
+def seed_clip(state, clip_id="c1", script="Welcome everybody"):
+    token = set_context(RunContext("t1", "wasifyai-voice", "u1"))
+    try:
+        asyncio.run(
+            state.storage.put(f"lipsync/{clip_id}.mp4", b"\x00\x00\x00\x18ftypmp42", "video/mp4")
+        )
+        asyncio.run(state.storage.put("lipsync/pictures/p.png", picture_file(), "image/png"))
+    finally:
+        reset_context(token)
+    return store_for(state).add_clip(
+        "t1", "u1", title="Greeting", model_id="musetalk-v15", picture_key="lipsync/pictures/p.png",
+        video_key=f"lipsync/{clip_id}.mp4", voice={"kind": "speech", "id": "s"}, script=script,
+        seconds=2, fps=25, width=80, height=60, consent={"picture": "own", "voice": "generated"},
+        load_s=0, elapsed_s=1, clip_id=clip_id,
+    )  # fmt: skip
+
+
+def test_a_picture_is_cleaned_scaled_and_kept_for_a_clip(api):
+    c, _, state = api
+    r = c.post(
+        "pictures",
+        files={"file": ("me.jpg", io.BytesIO(picture_file((3000, 2000), "JPEG")), "image/jpeg")},
+    )
+    assert r.status_code == 201
+    got = r.json()
+    assert max(got["width"], got["height"]) == 1024 and got["url"].startswith("http://")
+    assert store_for(state).get_picture("t1", "u1", got["id"])["key"].endswith(".png")
+
+
+def test_what_is_not_a_picture_or_is_too_big_is_refused_in_words(api):
+    c, *_ = api
+    r = c.post("pictures", files={"file": ("x.png", io.BytesIO(b"not a picture"), "image/png")})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "bad_picture"
+    big = io.BytesIO(b"0" * (10 * 1024 * 1024 + 5))
+    r = c.post("pictures", files={"file": ("x.png", big, "image/png")})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "too_large"
+
+
+def test_a_picture_nobody_used_goes_after_a_day(api):
+    c, _, state = api
+    old = c.post(
+        "pictures", files={"file": ("a.png", io.BytesIO(picture_file()), "image/png")}
+    ).json()
+    with sqlite3.connect(store_for(state).path) as db:
+        db.execute("UPDATE pictures SET created_at = '2020-01-01T00:00:00.000+00:00'")
+    new = c.post(
+        "pictures", files={"file": ("b.png", io.BytesIO(picture_file()), "image/png")}
+    ).json()
+    store = store_for(state)
+    with pytest.raises(Exception, match="picture not found"):
+        store.get_picture("t1", "u1", old["id"])
+    assert store.get_picture("t1", "u1", new["id"])["id"] == new["id"]
+
+
+def test_clips_are_listed_downloaded_renamed_found_and_deleted(api):
+    c, _, state = api
+    seed_clip(state)
+    listed = c.get("clips").json()["items"]
+    assert [x["id"] for x in listed] == ["c1"]
+    clip = listed[0]
+    assert clip["video_url"].startswith("http://") and clip["picture_url"].startswith("http://")
+    assert "video_key" not in clip and "user_id" not in clip
+    assert clip["consent"] == {"picture": "own", "voice": "generated"}
+    d = c.get("clips/c1/download")
+    assert d.status_code == 200 and d.headers["content-type"] == "video/mp4"
+    assert d.headers["content-disposition"].endswith('.mp4"')
+    r = c.patch("clips/c1", json={"title": "Hello again", "favourite": True})
+    assert r.json()["title"] == "Hello again" and r.json()["favourite"] is True
+    assert state.creation_index.items["c1"][0] == "lipsync"
+    assert "Welcome everybody" in state.creation_index.items["c1"][1]
+    assert c.get("clips", params={"ids": "zz"}).json()["items"] == []
+    assert c.delete("clips/c1").status_code == 204
+    assert c.get("clips/c1").status_code == 404 and c.delete("clips/c1").status_code == 404
+    assert "c1" not in state.creation_index.items
+
+
+def test_another_person_sees_no_clips(api):
+    c, _, state = api
+    seed_clip(state)
+    other = {"x-user": "u2"}
+    assert c.get("clips", headers=other).json()["items"] == []
+    assert c.get("clips/c1", headers=other).status_code == 404
+    assert c.get("clips/c1/download", headers=other).status_code == 404
+    assert c.patch("clips/c1", json={"title": "x"}, headers=other).status_code == 404
+
+
+# ---- audiobook: planning the chapters (V7) ----------------------------------------------------
+
+
+def test_the_chapters_of_a_long_text_are_planned_for_the_person_to_change(api):
+    c, *_ = api
+    text = "# One\nThe first chapter has some words.\n\n# Two\nThe second chapter has more of them."
+    r = c.post("audiobook/plan", json={"text": text})
+    assert r.status_code == 200
+    got = r.json()
+    assert [x["title"] for x in got["chapters"]] == ["One", "Two"]
+    assert got["chapters"][0]["text"] == "The first chapter has some words."
+    assert got["chars"] == sum(x["chars"] for x in got["chapters"]) and got["estimated_seconds"] > 0
+    # nothing was made or kept
+    assert c.get("tracks").json()["items"] == []
+
+
+def test_a_text_that_is_empty_or_too_big_is_refused_in_words(api):
+    c, *_ = api
+    r = c.post("audiobook/plan", json={"text": "   "})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "text_required"
+    r = c.post("audiobook/plan", json={"text": "word " * 100_000})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "text_too_long"
+    assert c.post("audiobook/plan", json={"text": "x", "target": 5}).status_code == 422
+    assert c.post("audiobook/plan", json={"text": "x", "extra": 1}).status_code == 422

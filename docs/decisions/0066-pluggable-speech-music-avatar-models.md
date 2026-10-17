@@ -145,4 +145,35 @@ deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's
   request field or an option; the option that carries lyrics), because the families differ; a request a model
   cannot take is refused in words. The ComfyUI adapter for the same list, and clip editing, are the next music
   steps (V3b).
-
+- **V4 and V3b (2026-10-16, `docs/phase2-voice-plan.md`):** (a) the tasks `separate`, `convert` and `edit` (speech)
+  are descriptors like the others: a `separate` block names the stems a model returns and the rate it reads, a
+  `convert` block the kind of target (a recording of the voice) with its length and the request fields, a
+  `speech_edit` block the style of edit (tagged words) and how many separate changes it takes; (b) every result is a
+  **track** with `parent_id` and an `edit` record, so the library, search, formats and favourites need no new kind;
+  (c) a voice is changed **only into a saved voice made from a recording** (it carries the consent record of
+  ADR-0044), never into a file a run was handed; (d) the second engine, `comfyui`, is `ComfyMusic`: the descriptor
+  names a workflow and its map file, the sidecar is the one the images use, and the model holds the **image** slot,
+  so one big model is in memory at a time; (e) a model whose weights card is unclear (dots.tts Edit: "other",
+  pointing at an Apache-2.0 project) is `conditional`, so it is listed but never chosen for the person.
+- **V5 (2026-10-16, `docs/phase2-voice-plan.md`):** (a) a lip sync model is a `sidecar` engine: the descriptor's
+  `lipsync` block gives the longest voice, the largest picture and the frame rate, and **must say `mark: required`**;
+  (b) the component is installed **by the engine** (the pinned source, the hashed lock, the app's `uv`), not by the
+  shell, so the shell needs no change for each sidecar; its weights are ordinary catalogue entries; (c) a request
+  needs the person's word about the picture and the voice (`check_lipsync`), refused before any work, and the word is
+  stored with the clip; "made here from words" is only valid for speech made here; (d) the visible mark is drawn by
+  the server on every frame and cannot be switched off; (e) the sidecar is its own owner of the one memory slot.
+- **V6 (2026-10-17, `docs/phase2-voice-plan.md`):** dubbing adds no model and no descriptor: it is graph tasks that
+  compose the ones there are (separate, transcribe, the chat model, speak or clone, then ffmpeg). (a) It is **two
+  tasks**, `dub_script` and `dub`, so the person reads and changes the translation before anything is spoken;
+  (b) which models speak a language is read from the descriptors' `languages` (`multi` means all), and a language no
+  ready model speaks is refused before any work; (c) copying the original speaker's voice needs the person's word that
+  it is theirs or that they have permission (the consent of a saved cloned voice) and is kept with the result;
+  (d) the result is a track (`mode: dubbed`, `parent_id`, the script in `edit` and, for search, in `lyrics`); (e)
+  one speaker only: diarisation is not in because the one model for it (Sortformer) is CC-BY-NC.
+- **V7 (2026-10-17, `docs/phase2-voice-plan.md`):** the audiobook is, like dubbing, a graph task over the speaking
+  models there are, not a model. (a) The chapters are **planned by a route** (`POST /audiobook/plan`: headings, or
+  size when there are none) and approved by the person before anything is spoken; (b) a chapter is cut into pieces of
+  at most 700 characters at sentence ends, with a longer pause after a paragraph; (c) **each chapter is a track,
+  kept as soon as it is done**, so a failure or a cancel in chapter 7 leaves 1 to 6 in Your music and says so; (d) a
+  track of the whole book is optional and limited to about two hours because it is built in memory; (e) the words
+  of each chapter are in the track's `lyrics`, so a book is found by what it says.

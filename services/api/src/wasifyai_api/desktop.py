@@ -34,6 +34,7 @@ from wasifyai_platform_sdk.sqlite import (
 )
 
 from wasifyai_api.audio_runtime import AudioEngine, AudioInstaller, AudioServer
+from wasifyai_api.comfy_music import ComfyMusic
 from wasifyai_api.config import Settings
 from wasifyai_api.creation_index import IndexStore
 from wasifyai_api.desktop_discovery import DiscoveryService
@@ -42,6 +43,7 @@ from wasifyai_api.desktop_hub import HubService
 from wasifyai_api.desktop_language import LanguageService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
+from wasifyai_api.lipsync_runtime import LipSyncSidecar
 from wasifyai_api.llama_server import LlamaServer
 from wasifyai_api.runs import RunManager
 from wasifyai_api.safeguards import SettingsStore
@@ -101,6 +103,8 @@ class DesktopBackends:
             await self.discovery.stop()
         if self.audio is not None:
             await self.audio.server.close()  # the speech models' memory goes back with the process
+            if self.audio.lipsync_sidecar is not None:
+                await self.audio.lipsync_sidecar.close()
         if self.llama is not None:
             await self.llama.close()  # the language model's memory goes back with its process
         if self._consumer:
@@ -141,6 +145,8 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         models,
         AudioInstaller(settings.desktop_dir),
         AudioServer(settings.desktop_dir),
+        ComfyMusic(products / "wasifyai-voice" / "workflows", lambda: models.sidecar),
+        LipSyncSidecar(settings.desktop_dir),
     )
     models.audio = audio
     discovery = DiscoveryService(SqliteSettingsStore(engine), models)
@@ -265,6 +271,8 @@ def _build_worker(d: DesktopBackends):
         owners["chat"] = unload_chat
     if d.audio is not None:
         owners["audio"] = d.audio.stop  # the speech runtime is another owner of the one slot
+        if d.audio.lipsync_sidecar is not None:
+            owners["lipsync"] = d.audio.lipsync_sidecar.stop
     slot = SlotManager(owners, idle_unload_s=s.desktop_idle_unload_s)
     if models is not None:
         models.sidecar, models.slot = sidecar, slot

@@ -1,4 +1,4 @@
-# A synthetic library for measuring search (ADR-0041): 23 concepts, each as three items in three
+# A synthetic library for measuring search (ADR-0041): 24 concepts, each as three items in three
 # different languages (a song, an image prompt and a video prompt), so a good search must find them across
 # languages. `queries` are phrased differently from the items, in a language that is sometimes the same
 # as one of the items and sometimes not. `nomatch` queries have nothing in the library to find.
@@ -221,6 +221,15 @@ concepts:
       - { lang: fr, text: "la mer qui ronge les falaises après les tempêtes" }
       - { lang: en, text: "protecting shorelines from flooding" }
       - { lang: es, text: "erosión de la costa por el aumento del nivel del mar" }
+  - id: stem-vocals
+    items:
+      - { kind: track, lang: en, text: "Summer Song (vocals). The vocals of Summer Song: a woman singing a warm acoustic pop melody about the sea" }
+      - { kind: track, lang: de, text: "Sommerlied (Gesang). Der Gesang aus dem Sommerlied, getrennt von der Begleitung, eine klare Frauenstimme" }
+      - { kind: speech, lang: ja, text: "夏の歌のボーカルだけを取り出した録音です。伴奏はありません。" }
+    queries:
+      - { lang: fr, text: "la voix chantée seule, sans l'accompagnement" }
+      - { lang: en, text: "only the singing from the song without the instruments" }
+      - { lang: es, text: "solo la voz de la cantante, sin la música" }
 nomatch:
   - { lang: en, text: "a submarine exploring a deep sea trench" }
   - { lang: es, text: "una panadera amasando pan en la cocina" }

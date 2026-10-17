@@ -7,8 +7,17 @@ describe("the side menu", () => {
     const items = (id: string) => GROUPS.find((g) => g.id === id)?.items.map((i) => i.label);
     expect(items("notebook")).toEqual(["Create", "View Notebooks"]);
     expect(items("video")).toEqual(["Create", "Animate an image", "Extend video", "Your videos"]);
-    expect(items("voice")).toEqual(["Text to speech", "Speech to text", "Lip sync", "Voices"]);
-    expect(items("music")).toEqual(["Create", "Your music", "Lyrics"]);
+    expect(items("voice")).toEqual([
+      "Text to speech",
+      "Speech to text",
+      "Lip sync",
+      "Voices",
+      "Change a voice",
+      "Edit speech",
+      "Dub a recording",
+      "Audiobook",
+    ]);
+    expect(items("music")).toEqual(["Create", "Your music", "Lyrics", "Split into parts"]);
     expect(items("images")).toContain("Your images");
   });
 
@@ -19,12 +28,18 @@ describe("the side menu", () => {
       ["Create", "music"],
       ["Your music", "tracks"],
       ["Lyrics", "lyrics"],
+      ["Split into parts", "separate"],
     ]);
     const voice = GROUPS.find((g) => g.id === "voice")?.items ?? [];
     expect(voice.filter((i) => !i.soon).map((i) => [i.label, i.route])).toEqual([
       ["Text to speech", "speak"],
       ["Speech to text", "transcribe"],
+      ["Lip sync", "lipsync"],
       ["Voices", "voices"],
+      ["Change a voice", "convert"],
+      ["Edit speech", "speechedit"],
+      ["Dub a recording", "dub"],
+      ["Audiobook", "audiobook"],
     ]);
     const notebook = GROUPS.find((g) => g.id === "notebook");
     expect(notebook?.items.some((i) => i.soon)).toBe(false);
@@ -47,6 +62,12 @@ describe("the side menu", () => {
     expect(groupOf("music")).toBe("music");
     expect(groupOf("tracks")).toBe("music");
     expect(groupOf("lyrics")).toBe("music");
+    expect(groupOf("separate")).toBe("music");
+    expect(groupOf("convert")).toBe("voice");
+    expect(groupOf("speechedit")).toBe("voice");
+    expect(groupOf("lipsync")).toBe("voice");
+    expect(groupOf("dub")).toBe("voice");
+    expect(groupOf("audiobook")).toBe("voice");
     expect(groupOf("home")).toBeNull();
     expect(groupOf("models")).toBeNull();
   });

@@ -69,6 +69,7 @@ from wasifyai_api.desktop_audio import router as desktop_audio_router
 from wasifyai_api.desktop_discovery import router as desktop_discovery_router
 from wasifyai_api.desktop_hub import router as desktop_hub_router
 from wasifyai_api.desktop_language import LocalTextProvider
+from wasifyai_api.desktop_lipsync import router as desktop_lipsync_router
 from wasifyai_api.desktop_llm import router as desktop_llm_router
 from wasifyai_api.desktop_models import router as desktop_models_router
 from wasifyai_api.graphs import default_registry
@@ -272,6 +273,7 @@ def create_app(
                 (store.get_speech, "text"),
                 (store.get_transcript, "title"),
                 (store.get_voice, "name"),
+                (store.get_clip, "title"),
             ):
                 try:
                     return str(get(tenant, user, item_id)[field])
@@ -310,6 +312,7 @@ def create_app(
                 "speech": describe_voice_item,
                 "transcript": describe_voice_item,
                 "voice": describe_voice_item,
+                "lipsync": describe_voice_item,
             },
             search_notebooks,
         )
@@ -508,6 +511,7 @@ def create_app(
         app.include_router(files_router)
         app.include_router(desktop_models_router)
         app.include_router(desktop_audio_router)
+        app.include_router(desktop_lipsync_router)
         app.include_router(desktop_discovery_router)
         app.include_router(desktop_llm_router)
         app.include_router(desktop_hub_router)

@@ -70,3 +70,6 @@ bengali-review/
 
 # The engine bundle the desktop app installs from (scripts/build-engine-bundle.sh)
 apps/desktop/engine-bundle/
+
+# listening samples (docs/listening): made on a computer for listening, not for the repository
+docs/listening/samples/

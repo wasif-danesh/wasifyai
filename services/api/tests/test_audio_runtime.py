@@ -180,7 +180,9 @@ ALL = {
     "kokoro-82m-q8_0.gguf", "parakeet-tdt-0.6b-v3-q8_0.gguf", "voxcpm2-q8_0.gguf",
     "qwen3-tts-12hz-0.6b-base-q8_0.gguf", "qwen3-tts-12hz-1.7b-voicedesign-q8_0.gguf",
     "ace-step-1.5-turbo-q8_0.gguf", "stable-audio-3-small-music-q8_0.gguf",
-    "stable-audio-3-small-sfx-q8_0.gguf",
+    "stable-audio-3-small-sfx-q8_0.gguf", "htdemucs-q8_0.gguf", "htdemucs-6stems-q8_0.gguf",
+    "mel-band-roformer-q8_0.gguf", "tone-color-vc-f16.gguf", "meanvc2-120ms-40ms-q4_k.gguf",
+    "dots-tts-edit-q8_0.gguf",
 }  # fmt: skip
 
 
@@ -436,6 +438,7 @@ def test_the_music_models_are_listed_with_their_licence(tmp_path, monkeypatch):
     got = {m["id"]: m for m in eng.models("music")}
     assert set(got) == {
         "ace-step-1.5-turbo",
+        "ace-step-1.5-turbo-comfyui",
         "stable-audio-3-small-music",
         "stable-audio-3-small-sfx",
     }
@@ -499,3 +502,101 @@ async def test_a_clip_that_is_gone_and_a_model_that_cannot_edit_are_told_apart(e
     with pytest.raises(VoiceEngineError) as e:
         await engine.music_edit(sfx, req, tmp_path / "x.wav")
     assert e.value.code == "wrong_task"
+
+
+# ---- audio tools (V4) -----------------------------------------------------------------------
+
+
+def clip_file(tmp_path, name: str, rate: int, channels: int = 1, seconds: float = 1.0) -> Path:
+    path = tmp_path / name
+    path.write_bytes(wav_bytes(seconds, rate, channels))
+    return path
+
+
+async def test_stems_come_back_named_in_the_order_the_descriptor_gives(engine, tmp_path):
+    from wasifyai_platform_sdk import check_separate
+
+    clip = clip_file(tmp_path, "song.wav", 44100, 2)
+    for model_id, names in (
+        ("htdemucs", ["drums", "bass", "other", "vocals"]),
+        ("htdemucs-6stems", ["drums", "bass", "other", "vocals", "guitar", "piano"]),
+        ("mel-band-roformer", ["vocals", "instrumental"]),
+    ):
+        model = engine.resolve("separate", model_id)
+        out = await engine.separate(model, check_separate(model, 20, None), clip)
+        assert [s.name for s in out.stems] == names
+        assert all(s.sample_rate == 44100 and s.seconds > 1 for s in out.stems)
+        # the separation families refuse any other key, so nothing else is sent
+        assert (await last_request(engine))["request"] == {"audio": str(clip)}
+
+
+async def test_a_separator_given_the_wrong_rate_fails_in_words(engine, tmp_path):
+    from wasifyai_platform_sdk import check_separate
+
+    model = engine.resolve("separate", "htdemucs")
+    clip = clip_file(tmp_path, "song.wav", 48000, 2)
+    with pytest.raises(VoiceEngineError) as e:
+        await engine.separate(model, check_separate(model, 20, None), clip)
+    assert e.value.code == "engine_failed" and "rate" not in e.value.message.lower()
+
+
+async def test_a_voice_is_changed_with_the_fields_and_the_rate_each_model_reads(engine, tmp_path):
+    from wasifyai_platform_sdk import check_convert
+
+    for model_id, rate in (("tone-color-vc", 22050), ("meanvc2", 16000)):
+        model = engine.resolve("convert", model_id)
+        assert model.convert["input_rate"] == rate
+        source = clip_file(tmp_path, f"{model_id}-s.wav", rate)
+        reference = clip_file(tmp_path, f"{model_id}-r.wav", rate)
+        req = check_convert(model, 5, 6, None, seed=7)
+        out = await engine.convert(model, req, source, reference)
+        sent = (await last_request(engine))["request"]
+        assert sent == {
+            "audio": str(source),
+            "voice_ref": str(reference),
+            "options": {"seed": 7},
+        }
+        assert out.sample_rate == 16000 and out.seconds > 1 and out.model_id == model_id
+    tone = engine.resolve("convert", "tone-color-vc")
+    wrong = clip_file(tmp_path, "wrong.wav", 24000)
+    with pytest.raises(VoiceEngineError) as e:
+        await engine.convert(tone, check_convert(tone, 5, 6, None), wrong, wrong)
+    assert e.value.code == "engine_failed"
+
+
+async def test_speech_is_edited_by_tagged_words_and_the_recording_as_an_option(engine, tmp_path):
+    from wasifyai_platform_sdk import check_speech_edit
+
+    model = engine.resolve("edit", "dots-tts-edit")
+    clip = clip_file(tmp_path, "said.wav", 24000)
+    req = check_speech_edit(model, 4, "Hello brave world.", "Hello small world.", None, seed=3)
+    out = await engine.speech_edit(model, req, clip)
+    sent = await last_request(engine)
+    assert sent["input"] == 'Hello <sub targ="small">brave</sub> world.'
+    assert sent["options"] == {"template_name": "edit", "source_audio": str(clip), "seed": 3}
+    assert out.sample_rate == 48000
+    with pytest.raises(VoiceEngineError) as e:
+        await engine.speech_edit(model, req, tmp_path / "missing.wav")
+    assert e.value.code == "engine_failed"
+
+
+async def test_a_model_is_only_asked_for_what_it_does(engine, tmp_path):
+    from wasifyai_platform_sdk import check_convert, check_separate, check_speech_edit
+
+    clip = clip_file(tmp_path, "x.wav", 44100, 2)
+    sep = engine.resolve("separate", "htdemucs")
+    conv = engine.resolve("convert", "meanvc2")
+    edit = engine.resolve("edit", "dots-tts-edit")
+    with pytest.raises(Exception, match="does not change a voice"):
+        check_convert(sep, 5, 5, None)
+    with pytest.raises(Exception, match="does not split music"):
+        check_separate(conv, 5, None)
+    with pytest.raises(Exception, match="does not edit speech"):
+        check_speech_edit(conv, 5, "a b", "a c", None)
+    with pytest.raises(VoiceEngineError) as e:
+        await engine.separate(conv, type("R", (), {"source_seconds": 5})(), clip)  # type: ignore[arg-type]
+    assert e.value.code == "wrong_task"
+    with pytest.raises(VoiceEngineError) as e:
+        await engine.speech_edit(sep, type("R", (), {})(), clip)  # type: ignore[arg-type]
+    assert e.value.code == "wrong_task"
+    del edit

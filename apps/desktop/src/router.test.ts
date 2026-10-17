@@ -26,6 +26,12 @@ describe("router", () => {
       "music",
       "tracks",
       "lyrics",
+      "separate",
+      "convert",
+      "speechedit",
+      "lipsync",
+      "dub",
+      "audiobook",
     ] as const) {
       expect(parseHash(`#${routePath(r)}`)).toBe(r);
     }

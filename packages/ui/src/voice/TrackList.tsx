@@ -13,9 +13,21 @@ const FORMAT_LABEL = { wav: "WAV", mp3: "MP3", m4a: "M4A" } as const;
 /** What a track is, in a few words. */
 export function trackKind(t: Track): string {
   if (t.mode === "edit") return `changed (${t.edit.action ?? "edit"})`;
+  if (t.mode === "stem") return `part: ${t.edit.stem ?? "stem"}`;
+  if (t.mode === "converted") return `in the voice of ${t.edit.voice ?? "another voice"}`;
+  if (t.mode === "edited") return "words changed";
+  if (t.mode === "imported") return "added from a file";
+  if (t.mode === "dubbed") return `dubbed into ${t.edit.language ?? "another language"}`;
+  if (t.mode === "chapter") return `chapter ${t.edit.chapter ?? ""} of ${t.edit.of ?? ""}`.trim();
+  if (t.mode === "audiobook") return "audiobook";
   if (t.mode === "sfx") return "sound effect";
   return t.instrumental ? "instrumental" : "song";
 }
+
+/** Whether a track was made from a description (so it can be made again), not changed or added. */
+const isMade = (t: Track) => t.mode === "song" || t.mode === "sfx";
+
+export type TrackTool = "separate" | "convert" | "words";
 
 /** The music that was made: play, favourite, save in a format the computer can make, make it again,
  * change it, rename, delete. With `searchable`, a box finds music by its name, description or lyrics. */
@@ -28,6 +40,7 @@ export function TrackList({
   onAgain,
   onTake,
   onEdit,
+  onTool,
 }: {
   api: VoiceApi;
   /** change it to read the list again (after something new was made) */
@@ -41,6 +54,8 @@ export function TrackList({
   onTake?: (t: Track) => void;
   /** open the editor for this track */
   onEdit?: (t: Track) => void;
+  /** open an audio tool on this track: split it, change its voice, change its words */
+  onTool?: (t: Track, tool: TrackTool) => void;
 }) {
   const [tracks, setTracks] = useState<Track[] | null>(null);
   const [formats, setFormats] = useState<string[]>(["wav"]);
@@ -150,7 +165,8 @@ export function TrackList({
             <div className="flex flex-wrap items-baseline gap-2">
               <span className="font-medium">{t.title}</span>
               <span className="text-muted-foreground text-xs">
-                {trackKind(t)} · {clock(t.seconds)} · {modelTitle?.(t.model_id) ?? t.model_id}
+                {trackKind(t)} · {clock(t.seconds)}
+                {t.model_id ? ` · ${modelTitle?.(t.model_id) ?? t.model_id}` : ""}
               </span>
               <button
                 type="button"
@@ -176,20 +192,33 @@ export function TrackList({
                   Save {FORMAT_LABEL[f as keyof typeof FORMAT_LABEL] ?? f.toUpperCase()}
                 </Button>
               ))}
-              {onAgain && t.mode !== "edit" ? (
+              {onAgain && isMade(t) ? (
                 <Button size="sm" variant="ghost" onClick={() => onAgain(t)}>
                   Make it again
                 </Button>
               ) : null}
-              {onTake && t.mode !== "edit" ? (
+              {onTake && isMade(t) ? (
                 <Button size="sm" variant="ghost" onClick={() => onTake(t)}>
                   Another take
                 </Button>
               ) : null}
-              {onEdit ? (
+              {onEdit && t.mode !== "imported" && t.mode !== "stem" ? (
                 <Button size="sm" variant="ghost" onClick={() => onEdit(t)}>
                   Change it
                 </Button>
+              ) : null}
+              {onTool ? (
+                <>
+                  <Button size="sm" variant="ghost" onClick={() => onTool(t, "separate")}>
+                    Split into parts
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => onTool(t, "convert")}>
+                    Change the voice
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => onTool(t, "words")}>
+                    Change the words
+                  </Button>
+                </>
               ) : null}
               <Button size="sm" variant="ghost" onClick={() => void rename(t)}>
                 Rename

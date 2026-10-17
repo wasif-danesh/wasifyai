@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 _SPEECHES = """
 CREATE TABLE speeches(
@@ -54,8 +54,22 @@ CREATE TABLE tracks(
   edit TEXT NOT NULL DEFAULT '{}');
 CREATE INDEX tracks_owner ON tracks(tenant_id, user_id, created_at DESC);
 """
+_CLIPS = """
+CREATE TABLE clips(
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
+  title TEXT NOT NULL, model_id TEXT NOT NULL, picture_key TEXT NOT NULL,
+  video_key TEXT NOT NULL, voice TEXT NOT NULL DEFAULT '{}', script TEXT NOT NULL DEFAULT '',
+  seconds REAL NOT NULL, fps INTEGER NOT NULL, width INTEGER NOT NULL DEFAULT 0,
+  height INTEGER NOT NULL DEFAULT 0, consent TEXT NOT NULL DEFAULT '{}',
+  load_s REAL NOT NULL DEFAULT 0, elapsed_s REAL NOT NULL DEFAULT 0,
+  favourite INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE INDEX clips_owner ON clips(tenant_id, user_id, created_at DESC);
+CREATE TABLE pictures(
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL, key TEXT NOT NULL,
+  width INTEGER NOT NULL, height INTEGER NOT NULL, created_at TEXT NOT NULL);
+"""
 _SCHEMA = "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);" + (
-    _SPEECHES + _TRANSCRIPTS + _VOICES + _TRACKS
+    _SPEECHES + _TRANSCRIPTS + _VOICES + _TRACKS + _CLIPS
 )
 # what version 2 adds to a version 1 file: how a speech was made, and saved voices
 _V2_UPGRADE = (
@@ -106,6 +120,8 @@ class VoiceStore:
                     db.executescript("BEGIN;" + _V3_UPGRADE + "COMMIT;")
                 elif version == 3:
                     db.executescript("BEGIN;" + _V4_UPGRADE + "COMMIT;")
+                if version < 5:  # version 5 adds lip sync clips and the pictures they are made from
+                    db.executescript("BEGIN;" + _CLIPS + "COMMIT;")
                 if version < SCHEMA_VERSION:
                     db.execute(
                         "UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),)
@@ -387,4 +403,108 @@ class VoiceStore:
         gone = self.get_track(tenant, user, tid)
         with self._connect() as db:
             db.execute("DELETE FROM tracks WHERE id = ?", (tid,))
+        return gone
+
+    # ---- lip sync clips (V5) ----------------------------------------------------------------
+
+    def add_picture(
+        self, tenant: str, user: str, *, key: str, width: int, height: int,
+        picture_id: str | None = None,
+    ) -> dict[str, Any]:  # fmt: skip
+        pid = picture_id or new_id()
+        with self._connect() as db:
+            db.execute(
+                "INSERT INTO pictures VALUES (?,?,?,?,?,?,?)",
+                (pid, tenant, user, key, width, height, now()),
+            )
+        return self.get_picture(tenant, user, pid)
+
+    def get_picture(self, tenant: str, user: str, pid: str) -> dict[str, Any]:
+        with self._connect() as db:
+            r = db.execute(
+                "SELECT * FROM pictures WHERE id = ? AND tenant_id = ? AND user_id = ?",
+                (pid, tenant, user),
+            ).fetchone()
+        if r is None:
+            raise NotFound("picture not found")
+        return dict(r)
+
+    def delete_picture(self, tenant: str, user: str, pid: str) -> dict[str, Any]:
+        gone = self.get_picture(tenant, user, pid)
+        with self._connect() as db:
+            db.execute("DELETE FROM pictures WHERE id = ?", (pid,))
+        return gone
+
+    def stale_pictures(self, before: str) -> list[dict[str, Any]]:
+        """Pictures that were added and never made into a clip, older than `before` (ISO time)."""
+        with self._connect() as db:
+            return [
+                dict(r)
+                for r in db.execute("SELECT * FROM pictures WHERE created_at < ?", (before,))
+            ]
+
+    @staticmethod
+    def _clip(r: sqlite3.Row) -> dict[str, Any]:
+        d = dict(r)
+        d["voice"] = json.loads(d["voice"])
+        d["consent"] = json.loads(d["consent"])
+        d["favourite"] = bool(d["favourite"])
+        return d
+
+    def add_clip(
+        self, tenant: str, user: str, *, title: str, model_id: str, picture_key: str,
+        video_key: str, voice: dict[str, Any], script: str, seconds: float, fps: int,
+        width: int, height: int, consent: dict[str, Any], load_s: float, elapsed_s: float,
+        clip_id: str | None = None,
+    ) -> dict[str, Any]:  # fmt: skip
+        cid, stamp = clip_id or new_id(), now()
+        with self._connect() as db:
+            db.execute(
+                "INSERT INTO clips(id, tenant_id, user_id, title, model_id, picture_key, "
+                "video_key, voice, script, seconds, fps, width, height, consent, load_s, "
+                "elapsed_s, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (cid, tenant, user, title, model_id, picture_key, video_key, json.dumps(voice),
+                 script, seconds, fps, width, height, json.dumps(consent), load_s, elapsed_s,
+                 stamp, stamp),
+            )  # fmt: skip
+        return self.get_clip(tenant, user, cid)
+
+    def get_clip(self, tenant: str, user: str, cid: str) -> dict[str, Any]:
+        with self._connect() as db:
+            r = db.execute(
+                "SELECT * FROM clips WHERE id = ? AND tenant_id = ? AND user_id = ?",
+                (cid, tenant, user),
+            ).fetchone()
+        if r is None:
+            raise NotFound("clip not found")
+        return self._clip(r)
+
+    def list_clips(
+        self, tenant: str, user: str, ids: list[str] | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT * FROM clips WHERE tenant_id = ? AND user_id = ? "
+                "ORDER BY created_at DESC, id LIMIT ?",
+                (tenant, user, max(1, min(limit, 500))),
+            ).fetchall()
+        return [self._clip(r) for r in rows if ids is None or r["id"] in ids]
+
+    def update_clip(
+        self, tenant: str, user: str, cid: str, *, title: str | None = None,
+        favourite: bool | None = None,
+    ) -> dict[str, Any]:  # fmt: skip
+        c = self.get_clip(tenant, user, cid)
+        with self._connect() as db:
+            db.execute(
+                "UPDATE clips SET title = ?, favourite = ?, updated_at = ? WHERE id = ?",
+                (title if title is not None else c["title"],
+                 int(favourite if favourite is not None else c["favourite"]), now(), cid),
+            )  # fmt: skip
+        return self.get_clip(tenant, user, cid)
+
+    def delete_clip(self, tenant: str, user: str, cid: str) -> dict[str, Any]:
+        gone = self.get_clip(tenant, user, cid)
+        with self._connect() as db:
+            db.execute("DELETE FROM clips WHERE id = ?", (cid,))
         return gone

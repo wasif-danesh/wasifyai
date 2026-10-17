@@ -176,7 +176,7 @@ def test_a_version_two_file_gains_tracks_and_the_index_pages_them(tmp_path):
     root = tmp_path / "voice"
     s = VoiceStore(root)
     with sqlite3.connect(s.path) as db:
-        db.execute("DROP TABLE tracks")
+        db.executescript("DROP TABLE tracks; DROP TABLE clips; DROP TABLE pictures;")
         db.execute("UPDATE meta SET value = '2' WHERE key = 'schema'")
     s = VoiceStore(root)
     t = s.add_track(
@@ -210,6 +210,7 @@ def test_a_version_three_file_gains_favourites_and_the_source_of_an_edit(tmp_pat
     root = tmp_path / "voice"
     s = VoiceStore(root)
     with sqlite3.connect(s.path) as db:
+        db.executescript("DROP TABLE clips; DROP TABLE pictures;")
         db.execute("DROP TABLE tracks")
         db.execute(
             "CREATE TABLE tracks(id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, "
@@ -232,3 +233,45 @@ def test_a_version_three_file_gains_favourites_and_the_source_of_an_edit(tmp_pat
     assert s.update_track("t", "u", "old", favourite=True)["favourite"] is True
     assert [t["id"] for t in s.list_tracks("t", "u", favourites=True)] == ["old"]
     VoiceStore(root)  # opening it again is fine
+
+
+def test_a_version_four_file_gains_clips_and_pictures(tmp_path):
+    root = tmp_path / "voice"
+    s = VoiceStore(root)
+    with sqlite3.connect(s.path) as db:
+        db.executescript("DROP TABLE clips; DROP TABLE pictures;")
+        db.execute("UPDATE meta SET value = '4' WHERE key = 'schema'")
+    s = VoiceStore(root)
+    p = s.add_picture("t", "u", key="lipsync/p1.png", width=640, height=480, picture_id="p1")
+    c = s.add_clip(
+        "t", "u", title="Hello", model_id="musetalk-v15", picture_key=p["key"],
+        video_key="lipsync/c1.mp4", voice={"kind": "speech", "id": "s1"}, script="Hi there",
+        seconds=2.0, fps=25, width=640, height=480,
+        consent={"picture": "own", "voice": "generated"}, load_s=0, elapsed_s=3, clip_id="c1",
+    )  # fmt: skip
+    assert c["consent"] == {"picture": "own", "voice": "generated"} and c["favourite"] is False
+    assert s.update_clip("t", "u", "c1", favourite=True, title="Hi")["title"] == "Hi"
+    with pytest.raises(NotFound):
+        s.get_clip("t", "other", "c1")
+    assert [x["id"] for x in s.list_clips("t", "u")] == ["c1"]
+    assert s.stale_pictures("9999") == [s.get_picture("t", "u", "p1")]
+    s.delete_picture("t", "u", "p1")
+    s.delete_clip("t", "u", "c1")
+    assert s.list_clips("t", "u") == []
+
+
+async def test_the_index_source_also_pages_clips(tmp_path):
+    s = VoiceStore(tmp_path / "voice")
+    s.add_clip(
+        "t", "u", title="Greeting", model_id="m", picture_key="k", video_key="v", voice={},
+        script="Welcome to the show", seconds=2, fps=25, width=1, height=1, consent={},
+        load_s=0, elapsed_s=0, clip_id="c1",
+    )  # fmt: skip
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'wasifyai.db'}")
+    src = VoiceIndexSource(engine)
+    items = await src.page(None, 10)
+    assert [(i.item_id, i.kind, i.text) for i in items] == [
+        ("c1", "lipsync", "Greeting. Welcome to the show")
+    ]
+    assert await src.present(["c1", "zz"]) == {"c1"}
+    await engine.dispose()

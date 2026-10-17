@@ -238,7 +238,7 @@ to `@wasifyai/ui` when it is migrated; delete the shim when nothing uses it.
 |---|---|---|
 | Router | `router.ts` | URL hash, eight routes: `/`, `/images/create`, `/images/edit`, `/library`, `/models`, `/settings`, `/notebooks` and `/notebooks/<id>` (`new` is a draft). No library. `useRoute` answers an object; a chat or a draft notebook gets its address without a reload (`adopt`, `adoptNotebook`) |
 | Shell | `Shell.tsx` | side menu + the screen; the menu collapses (remembered in `localStorage`) |
-| Side menu | `Sidebar.tsx` | New chat; groups **Notebook** (Create, View Notebooks), **Images** (Create, Edit, and Transform, Inpaint, Extend, Upscale, Reference marked "Soon", Your images), **Video**, **Voice** (Text to speech and Speech to text work; Lip sync and Voices are "Soon"), **Music** (Create and Your music work; Lyrics is "Soon"); Library, Models, Train ("Soon"); Recents; You and settings. One group is open at a time and the one holding the current page stays open |
+| Side menu | `Sidebar.tsx` | New chat; groups **Notebook** (Create, View Notebooks), **Images** (Create, Edit, and Transform, Inpaint, Extend, Upscale, Reference marked "Soon", Your images), **Video**, **Voice** (Text to speech, Speech to text, Lip sync, Voices, Change a voice, Edit speech, Dub a recording and Audiobook), **Music** (Create, Your music, Lyrics and Split into parts); Library, Models, Train ("Soon"); Recents; You and settings. One group is open at a time and the one holding the current page stays open |
 | Home | `pages/Home.tsx` | greeting and the "Ask anything" box (the assistant, ADR-0057, is not built: the box says so) |
 | Create / Edit | `pages/Create.tsx` | wraps the shared `ImageWorkspace` with this window's model chip and setup notices |
 | Notebooks | `pages/Notebooks.tsx`, `pages/Notebook.tsx`, `notebook-setup.ts` | View Notebooks (cards, search by title and by what is inside, rename, delete, the setup card) and one notebook (the shared `NotebookWorkspace`) |
@@ -262,7 +262,7 @@ disabled with the **Soon** pill, so the menu keeps its final shape (as above).
 | **Notebook** | Create, View Notebooks | `wasifyai-notebooks` (ADR-0065) | stage E |
 | **Images** | Create, Edit, Transform, Inpaint, Extend, Upscale, Reference, Your images | ComfyUI | Create, Edit |
 | **Video** | Create, Animate an image, Extend video, Your videos | `wasifyai-video` on ComfyUI (`video.generate`, `video.animate`) | Soon |
-| **Voice** | Text to speech, Speech to text, Lip sync, Voices | `wasifyai-voice` on audio.cpp (ADR-0066); lip sync MuseTalk later | Speak and Transcribe built (V1); the rest Soon |
+| **Voice** | Text to speech, Speech to text, Lip sync, Voices | `wasifyai-voice` on audio.cpp (ADR-0066); lip sync is MuseTalk, an optional sidecar | all built (V1 to V5) |
 | **Music** | Create, Your music, Lyrics | `wasifyai-voice` on audio.cpp (ADR-0066, V3); the ComfyUI ACE-Step workflow and `text.lyrics` later | Create and Your music built; Lyrics Soon |
 | *Library* | (single item) all creations, searchable (ADR-0041) | | yes |
 | *Models*, *Train* (Soon) | single items | | Models yes |
@@ -559,6 +559,96 @@ Music is another task of the same product and the same runtime, picked from the 
 Not built: the ComfyUI ACE-Step workflow as a second engine for the same list, models beyond these (HeartMuLa and
 others), a watermark decision for generated audio, a song longer than 4 minutes, and a listening check of the
 quality (sung lyrics in order cannot be tested by machine).
+
+### Audio tools (stage V4)
+
+Three tools work on a recording the person already has: a track, a speech, or a file added with **Add a recording**
+(Your music keeps it as a track of kind "added from a file"). Each is a model chosen from a list, and each result is a
+**track** in Your music with `parent_id` (what it came from) and an `edit` record, so search, favourites, rename and
+saving as WAV, MP3 or M4A already work on it.
+
+| Tool | Models (all `commercial_use: yes` unless marked) | What it needs |
+|---|---|---|
+| Split into parts (`separate`) | HTDemucs 4 stems (recommended), HTDemucs 6 stems (adds guitar and piano), Mel-Band RoFormer (vocals and instrumental): MIT | a recording up to 10 minutes; it is converted to 44.1 kHz stereo first; choose which parts to keep |
+| Change a voice (`convert`) | Tone Color VC (OpenVoice v2, MIT, recommended), MeanVC2 (Apache-2.0) | a **saved cloned voice** to sound like (its consent record is copied into the result); both recordings are converted to the rate the model reads |
+| Edit speech (`edit`) | dots.tts Edit (Apache-2.0 project, weights card says "other": `conditional`, never chosen for the person) | what the recording says now, written down by the speech-to-text model on request, and what it should say: the difference becomes `<sub targ="new">old</sub>`, `<del>`, `<ins>` tags (up to 5 separate changes) |
+
+Routes: `POST /tracks/import` (multipart), `POST /words` (write down what a library recording says; nothing is
+saved), and graph tasks `separate`, `convert`, `speech_edit` on `/runs` (source: `source_track` or `source_speech`).
+The window: Music > Split into parts, Voice > Change a voice and Edit speech, and the same three as buttons on every
+track in Your music. Not built: voice conversion with built-in voices (RVC), singing conversion (Seed-VC is GPL-3.0),
+Vevo2 (CC-BY-NC-ND), enhancement and restoration models, and diarisation.
+
+### Music on the image engine (stage V3b)
+
+A music model can be run by the image engine's ComfyUI instead of audio.cpp (`engine: comfyui` in its descriptor).
+The first is **ACE-Step 1.5 Turbo (image engine)**: the same song model, with the language of the lyrics and the time
+signature as options (the audio.cpp build ignores a language). It needs the image engine set up and a 10 GB
+checkpoint, and it holds the image slot while it works. The workflow is `products/wasifyai-voice/workflows/`, a copy
+of the web product's with its last node changed to `PreviewAudio` so nothing is left in ComfyUI's output folder; its
+map file names the inputs, so the code has no node ids. The model list shows "Needs the image engine" for it when
+that is missing. It is not recommended: on a Mac, audio.cpp on Metal is about twice as fast. The reason for it is
+Windows and Linux with a graphics card, where the pinned audio.cpp build runs on the CPU.
+
+### Lip sync (stage V5)
+
+A picture and a voice make a video of the face saying it. The model is chosen from the list like every other
+(MuseTalk 1.5, MIT, the only one so far); the engine is an **optional component**, not part of the app.
+
+| Piece | What it does |
+|---|---|
+| The engine | MuseTalk's code at an exact commit and a hashed package lock (`musetalk_pins.json`, `lipsync_server/musetalk.lock.txt`), set up on a click after the size (about 2.1 GB on disk) is shown, with the app's own `uv`, into `<app data>/engine/musetalk` (its own environment: torch must not touch the engine's). Apple-silicon Macs only for now (the one measured). The engine does this itself, like the speech runtime, not the shell like the image engine. A copy set up by hand is used as it is when `WASIFYAI_MUSETALK_HOME` names it (development) |
+| The weights | the catalogue entry `musetalk-v15` (11 files, 4.2 GB: MuseTalk 1.5, the VAE, whisper-tiny, the face parser, ResNet18, and the face detector and landmark model) fetched in Models after the person sees their size; when the server starts they are linked to where MuseTalk reads them |
+| The process | one `uvicorn` server on loopback (`lipsync_server/`), started on demand, stopped when something else takes the memory (it is its own owner of the one slot, about 12 GB) and when a run is cancelled |
+| The picture | added with `POST /pictures`: checked, flattened to a clean PNG (no location or camera data), at most 1024 pixels; kept until a clip uses it, or for a day |
+| The voice | words (made into speech here with the default model, and kept as a speech), or a recording from the library; at most 5 minutes |
+| The clip | `clips` in `voice.db` (schema 5): the video, the picture (its poster), what the voice came from, the person's answers, the time taken; `GET/PATCH/DELETE /clips`, `/clips/{id}/download`; My creations search finds it by title and words (kind `lipsync`) |
+
+**Consent and the mark (ADR-0044, ADR-0066 decision 8).** Before anything is made the person says **what the picture
+is** (a drawing, a picture of themselves, a picture of someone who agreed) and **whose voice it is** (made here from
+words, their own, one they have permission to use). Without both answers the run is refused before any work is done;
+"made here from words" is only accepted for words, or a speech made here, never for a recording of the library.
+The answers and their wording are kept with the clip. Every video carries a visible **"AI-generated"** label on a
+dark plate in the bottom-left corner of every frame, drawn by the server, and a metadata comment; the descriptor
+must say `mark: required` or it does not load, and there is no switch. The system safeguards of ADR-0047 (classifier,
+moderation, daily limit) are not part of the desktop; consent and the mark are.
+
+Not built: other lip sync models (InfiniteTalk, LivePortrait, the CUDA `liveavatar`), video as the input, moving
+the head (MuseTalk redraws the mouth and keeps the head still), several faces, a CUDA lock for Windows and Linux, and
+languages: nothing was tested beyond English.
+
+### Dubbing (stage V6)
+
+A recording said again in another language. It uses what is already there (no new model): the separator, the speech
+to text model, the chat model, a speaking or copying model, and ffmpeg. Two steps, so the translation can be read and
+changed before anything is spoken.
+
+| Step | What happens |
+|---|---|
+| The script (`dub_script`) | the voice is separated from the background (Mel-Band RoFormer by default; both parts are kept in Your music), what is said is written down with times (Parakeet), and each line is translated by the chat model, in batches of 40 with a length hint per line, a line at a time where a batch does not come back as the right number of lines. The result is a list of lines: start, end, what was said, what it becomes |
+| The dub (`dub`) | each line (as the person left it) is spoken, fitted to its time (played up to 1.3 times faster if it runs over; the largest overrun is reported), and mixed with ffmpeg over the background at its time into a 44.1 kHz stereo track |
+| The voice | the **original speaker's**, copied from the longest stretch of the separated voice that the model takes (needs the person's word that it is theirs or that they have permission; kept with the track), a **saved** voice (a cloned one, or a designed one), or a **built-in** voice (only for a language the model has voices in) |
+| The languages | the ones a speaking or copying model on this computer knows, from the descriptors; today English (Kokoro, built-in voices), and English, Chinese, Japanese, Korean, German, French, Russian, Portuguese, Spanish and Italian (Qwen3-TTS, copying a voice). Writing down the original needs the speech to text model's languages (25 European ones) |
+| The track | `mode: dubbed`, `parent_id`, the script, the language, the fit and the consent in its `edit` record; its translated words are searchable |
+
+Needs ffmpeg on the computer (the dub says so in words when it is missing). One speaker only: the lines of two
+voices would be spoken in one. Not built: telling speakers apart, lip sync of the dubbed voice (use Lip sync on the
+result), sound effects kept separate from music, and a video as the source (a recording's audio only).
+
+### Audiobook (stage V7)
+
+A long text read aloud, chapter by chapter. No new model: any speaking model, with a built-in voice, a designed voice
+or a cloned one.
+
+| Step | What happens |
+|---|---|
+| The chapters | `POST /audiobook/plan` finds them at headings (`Chapter 3`, `CHAPTER ONE: ...`, `# Title`, `Part II`, `Prologue`, `1. Title`), else cuts the text between paragraphs into parts of about 6 000 characters; nothing is made or kept. The person reads them, renames, edits the words, joins a chapter with the next or removes one. A text is at most 400 000 characters, a chapter 60 000, a book 200 chapters |
+| Speaking | each chapter is cut into pieces of at most 700 characters at sentence ends (Chinese and Japanese stops too), spoken one at a time and joined with 0.25 s between pieces and 0.7 s after a paragraph; the title is spoken first (it can be left out) |
+| Keeping | **each chapter is a track the moment it is done** (`mode: chapter`, the words in `lyrics`, so a book is found by what it says); a failure or a cancel leaves the earlier chapters and the message says which; optionally one track of the whole book (`mode: audiobook`) for books up to about 100 000 characters, which is about two hours, because it is joined in memory |
+| The window | Voice > Audiobook: the title, the text (pasted or a `.txt` or `.md` file), the chapters, the voice (a built-in one with the model's own options such as speed, or a saved one), the progress by chapter and part, Cancel |
+
+Not built: chapter markers inside the whole-book file, MP3 or M4A in one go (save each track in Your music), reading
+from the notebooks' sources, several voices in one book, and pronunciation notes.
 
 ## The self-test
 

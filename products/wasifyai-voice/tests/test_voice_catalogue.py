@@ -21,20 +21,36 @@ def test_every_model_has_a_descriptor_and_a_pinned_file():
             "voxcpm2",
             "parakeet-tdt-0.6b-v3",
             "ace-step-1.5-turbo",
+            "ace-step-1.5-turbo-comfyui",
             "stable-audio-3-small-music",
             "stable-audio-3-small-sfx",
+            "htdemucs",
+            "htdemucs-6stems",
+            "mel-band-roformer",
+            "tone-color-vc",
+            "meanvc2",
+            "dots-tts-edit",
+            "musetalk-v15",
         }
     )
     for m in RAW.values():
         for f in m["files"]:
-            assert f["folder"] == "audio" and f["url"].startswith("https://huggingface.co/")
-            assert "/resolve/" in f["url"] and "/main/" not in f["url"]  # pinned to a commit
+            assert f["folder"] == {"comfyui": "checkpoints", "sidecar": "lipsync"}.get(
+                m["voice"]["engine"], "audio"
+            )
+            assert f["url"].startswith("https://")
+            if f["url"].startswith("https://huggingface.co/"):
+                assert "/resolve/" in f["url"] and "/main/" not in f["url"]  # pinned to a commit
+            else:  # the two small face models and a torchvision file, each pinned by SHA-256
+                assert m["voice"]["engine"] == "sidecar"
             assert len(f["sha256"]) == 64 and f["size"] > 0
 
 
 @pytest.mark.parametrize("model_id", sorted(RAW))
 def test_a_descriptor_agrees_with_its_spec(model_id):
     m, raw = catalogue()[model_id], RAW[model_id]["voice"]
+    if m.engine != "audiocpp":
+        pytest.skip(f"{model_id} runs on {m.engine}: its workflow map is tested with the engine")
     if m.family not in SPECS:
         pytest.skip(f"the spec of {m.family} is not in specs/ yet")
     spec = SPECS[m.family]
@@ -43,7 +59,10 @@ def test_a_descriptor_agrees_with_its_spec(model_id):
     assert package is not None, "the descriptor names a package the spec does not have"
     # the package's file is the file we download
     assert package["files"][0].rsplit("/", 1)[-1] == RAW[model_id]["files"][0]["name"]
-    wanted = {"speak": "tts", "transcribe": "asr", "clone": "clone", "design": "design"}
+    wanted = {
+        "speak": "tts", "transcribe": "asr", "clone": "clone", "design": "design",
+        "separate": "sep", "convert": "vc", "edit": "tts",
+    }  # fmt: skip
     needs = {wanted[t] for t in m.tasks if t in wanted}
     if "music" in m.tasks:  # a sound-effects model is the spec's `sfx`, the others its `music`
         needs.add("sfx" if set(m.music["modes"]) == {"sfx"} else "music")
@@ -59,12 +78,14 @@ def test_a_descriptor_agrees_with_its_spec(model_id):
             # runtime, which accepts and silently ignores unknown ones (docs/phase2-voice-plan.md)
             continue
         assert o.name in declared, f"{o.name} is not an option of {m.family}"
-    assert raw["languages"], "languages are declared"
+    assert raw["languages"] or spec.get("languages") == ["language_agnostic"], (
+        "languages are declared"
+    )
 
 
 def test_recommendations_are_commercially_usable_and_unique_per_task():
     models = catalogue().values()
-    for task in ("speak", "transcribe", "clone", "design", "music"):
+    for task in ("speak", "transcribe", "clone", "design", "music", "separate", "convert"):
         recommended = [m for m in models if task in m.recommended]
         assert len(recommended) == 1 and recommended[0].commercial_use == "yes"
 

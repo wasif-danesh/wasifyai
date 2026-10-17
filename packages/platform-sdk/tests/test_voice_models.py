@@ -4,11 +4,16 @@ import pytest
 from wasifyai_platform_sdk import (
     VoiceRequestError,
     check_clone,
+    check_convert,
     check_design,
+    check_lipsync,
     check_music_edit,
     check_options,
+    check_separate,
     check_speak,
+    check_speech_edit,
     check_transcribe,
+    edit_markup,
     parse_voice_model,
 )
 
@@ -368,3 +373,176 @@ def test_a_model_without_an_edit_mode_says_so_and_a_song_request_never_means_an_
     with pytest.raises(VoiceRequestError) as e:
         check_music(editor(), "edit", "fix it", None, False, None, None, None)
     assert e.value.code == "wrong_mode"
+
+
+# ---- audio tools (V4) -----------------------------------------------------------------------
+
+
+def tool(kind: str, **over):
+    """A descriptor of one of the audio tools."""
+    rules = {
+        "separate": {"separate": {"stems": ["vocals", "other"], "input_rate": 44100,
+                                  "max_source_s": 600}},
+        "convert": {"convert": {"target": "reference", "input_rate": 22050,
+                                "reference_seconds": [3, 30], "max_source_s": 300,
+                                "request": {"source": "audio", "reference": "voice_ref"}}},
+        "edit": {"speech_edit": {"style": "markup", "input_rate": 24000, "max_changes": 3,
+                                 "max_source_s": 30}},
+    }[kind]  # fmt: skip
+    base = {"tasks": [kind], "recommended": [], "server_task": "sep", "voices": [],
+            "default_voice": None, "options": [], **rules}  # fmt: skip
+    return parse_voice_model(f"{kind}-model", "A model", "MIT", raw(**{**base, **over}))
+
+
+@pytest.mark.parametrize(
+    "kind, over, message",
+    [
+        ("separate", {"separate": {}}, "declares `separate` rules"),
+        ("separate", {"separate": {"stems": [], "input_rate": 44100, "max_source_s": 60}},
+         "distinct names"),
+        ("separate", {"separate": {"stems": ["a", "a"], "input_rate": 44100, "max_source_s": 60}},
+         "distinct names"),
+        ("separate", {"separate": {"stems": ["a"], "input_rate": 5, "max_source_s": 60}},
+         "sample rate"),
+        ("separate", {"separate": {"stems": ["a"], "input_rate": 44100, "max_source_s": 0}},
+         "max_source_s"),
+        ("convert", {"convert": {}}, "declares `convert` rules"),
+        ("convert", {"convert": {"target": "builtin"}}, "convert.target"),
+        ("edit", {"speech_edit": {"style": "magic"}}, "speech_edit.style"),
+        ("edit", {"speech_edit": {"style": "markup", "input_rate": 24000, "max_changes": 99,
+                                  "max_source_s": 30}}, "max_changes"),
+        ("edit", {"tasks": ["edit"], "speech_edit": {}}, "declares `speech_edit` rules"),
+    ],
+)  # fmt: skip
+def test_a_tool_declares_what_it_needs(kind, over, message):
+    with pytest.raises(ValueError, match=message):
+        tool(kind, **over)
+
+
+def test_only_a_tool_model_declares_tool_rules():
+    with pytest.raises(ValueError, match="declares `separate` rules"):
+        model(separate={"stems": ["a"], "input_rate": 44100, "max_source_s": 60})
+    assert tool("separate").public()["separate"]["stems"] == ["vocals", "other"]
+
+
+def test_a_recording_for_a_tool_must_be_a_length_the_model_takes():
+    sep = tool("separate")
+    assert check_separate(sep, 30, None).source_seconds == 30
+    for seconds, code in ((0.2, "too_short"), (601, "too_long"), (float("nan"), "too_short")):
+        with pytest.raises(VoiceRequestError) as e:
+            check_separate(sep, seconds, None)
+        assert e.value.code == code
+    conv = tool("convert")
+    assert check_convert(conv, 20, 10, None, seed=3).seed == 3
+    for ref in (1.0, 40.0):
+        with pytest.raises(VoiceRequestError) as e:
+            check_convert(conv, 20, ref, None)
+        assert e.value.code == "reference_length" and "3 to 30" in e.value.message
+    with pytest.raises(VoiceRequestError) as e:
+        check_convert(conv, 400, 10, None)
+    assert e.value.code == "too_long"
+    with pytest.raises(VoiceRequestError) as e:
+        check_convert(conv, 20, 10, {"pitch": 3})  # an option the model does not declare
+    assert e.value.code == "unknown_option"
+
+
+@pytest.mark.parametrize(
+    "old, new, want",
+    [
+        ("Hello brave world.", "Hello small world.", 'Hello <sub targ="small">brave</sub> world.'),
+        ("I like red apples", "I like apples", "I like <del>red </del>apples"),
+        ("walk the river and talk", "walk the river slowly and talk",
+         "walk the river <ins>slowly </ins>and talk"),
+        ("Hello world", "Hello world again", "Hello world<ins> again</ins>"),
+        ("one two three four five", "one 2 three 4 five",
+         'one <sub targ="2 three 4">two three four</sub> five'),
+        ("你好世界", "你好朋友", '你好<sub targ="朋友">世界</sub>'),
+        ("It is Cold today", "it is warm today", 'It is <sub targ="warm">Cold</sub> today'),
+    ],
+)  # fmt: skip
+def test_changed_words_are_tagged_the_way_the_editor_reads(old, new, want):
+    # the case of a word is not a change; the text is the original with the changes marked
+    assert edit_markup(old, new, 5) == want
+
+
+def test_too_many_or_no_changes_are_refused_in_words():
+    with pytest.raises(VoiceRequestError) as e:
+        edit_markup("1 a b c 2 d e f 3 g h i 4", "z a b c y d e f x g h i w", 3)
+    assert e.value.code == "too_many_changes" and "fewer" in e.value.message
+    with pytest.raises(VoiceRequestError) as e:
+        edit_markup("Same words.", "same words", 3)
+    assert e.value.code == "no_change"
+
+
+def test_an_edit_request_is_checked_before_it_is_tagged():
+    ed = tool("edit")
+    req = check_speech_edit(ed, 10, "Hello  brave world.", "Hello small world.", None, seed=2)
+    assert req.instruction == 'Hello <sub targ="small">brave</sub> world.' and req.seed == 2
+    for old, new, code in (("", "Hello", "empty_text"), ("Hello <b>", "Hello", "bad_text"),
+                           ('Say "hi"', "Say hello", "bad_text")):  # fmt: skip
+        with pytest.raises(VoiceRequestError) as e:
+            check_speech_edit(ed, 10, old, new, None)
+        assert e.value.code == code
+    with pytest.raises(VoiceRequestError) as e:
+        check_speech_edit(ed, 31, "Hello there", "Hello you", None)
+    assert e.value.code == "too_long"
+    with pytest.raises(VoiceRequestError) as e:
+        check_speech_edit(model(), 10, "Hello there", "Hello you", None)
+    assert e.value.code == "wrong_task"
+
+
+# ---- lip sync (V5) ----------------------------------------------------------------------------
+
+
+def lipsync_rules(**over):
+    return {"max_voice_s": 300, "max_side": 768, "fps": 25, "mark": "required", **over}
+
+
+def talker(**over):
+    base = {
+        "engine": "sidecar", "tasks": ["lipsync"], "recommended": ["lipsync"],
+        "server_task": "lipsync", "voices": [], "default_voice": None, "options": [],
+        "lipsync": lipsync_rules(),
+    }  # fmt: skip
+    return parse_voice_model("musetalk", "MuseTalk", "MIT", raw(**{**base, **over}))
+
+
+@pytest.mark.parametrize(
+    "over, message",
+    [
+        ({"lipsync": {}}, "declares `lipsync` rules"),
+        ({"engine": "audiocpp"}, "runs as a sidecar"),
+        ({"lipsync": lipsync_rules(max_voice_s=1)}, "max_voice_s"),
+        ({"lipsync": lipsync_rules(max_side=64)}, "max_side"),
+        ({"lipsync": lipsync_rules(fps=1)}, "fps"),
+        ({"lipsync": lipsync_rules(mark="optional")}, "cannot be left off"),
+        ({"lipsync": {"max_voice_s": 60, "max_side": 768, "fps": 25}}, "cannot be left off"),
+    ],
+)
+def test_a_lip_sync_model_declares_its_limits_and_that_the_mark_is_not_optional(over, message):
+    with pytest.raises(ValueError, match=message):
+        talker(**over)
+
+
+def test_only_a_lip_sync_model_declares_lip_sync_rules():
+    with pytest.raises(ValueError, match="declares `lipsync` rules"):
+        model(lipsync=lipsync_rules())
+    assert talker().public()["lipsync"]["fps"] == 25
+
+
+def test_a_lip_sync_request_needs_the_persons_word_and_a_voice_the_model_takes():
+    m = talker()
+    ok = check_lipsync(m, 12.5, "drawn", "own")
+    assert ok.consent == {"picture": "drawn", "voice": "own"} and ok.mark == "AI-generated"
+    assert ok.fps == 25 and ok.voice_seconds == 12.5
+    for picture, voice in ((None, "own"), ("drawn", None), ("real", "own"), ("own", "mine")):
+        with pytest.raises(VoiceRequestError) as e:
+            check_lipsync(m, 10, picture, voice)
+        assert e.value.code == "consent_required"
+    for seconds, code in ((0.3, "too_short"), (301, "too_long"), (float("nan"), "too_short")):
+        with pytest.raises(VoiceRequestError) as e:
+            check_lipsync(m, seconds, "own", "own")
+        assert e.value.code == code
+    with pytest.raises(VoiceRequestError) as e:
+        check_lipsync(model(), 10, "own", "own")
+    assert e.value.code == "wrong_task"

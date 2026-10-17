@@ -15,14 +15,27 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 RATE = 24000
 
 
-def wav_bytes(seconds: float) -> bytes:
+def wav_bytes(seconds: float, rate: int = RATE, channels: int = 1) -> bytes:
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
-        w.setnchannels(1)
+        w.setnchannels(channels)
         w.setsampwidth(2)
-        w.setframerate(RATE)
-        w.writeframes(b"\x00\x01" * int(RATE * seconds))
+        w.setframerate(rate)
+        w.writeframes(b"\x00\x01" * channels * int(rate * seconds))
     return buf.getvalue()
+
+
+def wav_rate(path: str) -> int:
+    with wave.open(path) as w:
+        return w.getframerate()
+
+
+STEMS = {
+    "htdemucs": ["drums", "bass", "other", "vocals"],
+    "htdemucs_6stems": ["drums", "bass", "other", "vocals", "guitar", "piano"],
+    "mel_band_roformer": ["vocals", "instrumental"],
+}
+INPUT_RATE = {"tone_color_vc": 22050, "meanvc2": None}
 
 
 def main() -> None:
@@ -48,6 +61,42 @@ def main() -> None:
 
         def fail(self, message):
             self.send(500, {"error": {"message": message, "type": "server_error"}})
+
+        def tool(self, m, req):
+            """A separation or a voice conversion, with the strictness of the real runtime."""
+            import base64
+            import os
+
+            r = req.get("request") or {}
+            state["last"] = req
+            if m["task"] == "sep":
+                if set(r) != {"audio"}:
+                    return self.fail("unknown separation request key")
+                if not os.path.isfile(r["audio"]):
+                    return self.fail("source audio file not found")
+                if wav_rate(r["audio"]) != 44100:
+                    return self.fail("prepare() sample rate mismatch: expected 44100")
+                state["loaded"] = req["model"]
+                outs = [
+                    {"id": n, "audio": base64.b64encode(wav_bytes(2, 44100, 2)).decode(),
+                     "sample_rate": 44100, "channels": 2}
+                    for n in STEMS[m["family"]]
+                ]  # fmt: skip
+                return self.send(200, {"named_audio_outputs": outs, "timing": {"wall_ms": 5}})
+            if not {"audio", "voice_ref"} <= set(r) or set(r) - {"audio", "voice_ref", "options"}:
+                return self.fail("voice conversion needs audio and voice_ref")
+            for key in ("audio", "voice_ref"):
+                if not os.path.isfile(r[key]):
+                    return self.fail(f"{key} file not found")
+                need = INPUT_RATE.get(m["family"])
+                if need and wav_rate(r[key]) != need:
+                    return self.fail("resampling requires libsoxr or 22050 Hz input")
+            state["loaded"] = req["model"]
+            data = wav_bytes(2, 16000)
+            return self.send(
+                200,
+                {"audio": base64.b64encode(data).decode(), "sample_rate": 16000, "channels": 1},
+            )
 
         def do_GET(self):
             if self.path == "/health":
@@ -89,6 +138,18 @@ def main() -> None:
                     if req.get("voice") not in (None, "af_heart", "am_adam"):
                         return self.fail(f"unknown Kokoro voice id: {req['voice']}")
                     allowed = {"speed", "seed"} | ({"instruct"} if m["task"] == "vdes" else set())
+                    if m["family"] == "dots_tts":
+                        allowed = {
+                            "template_name", "source_audio", "seed", "num_inference_steps",
+                            "guidance_scale",
+                        }  # fmt: skip
+                        opts = req.get("options") or {}
+                        if opts.get("template_name") != "edit":
+                            return self.fail("this fake only edits")
+                        if not __import__("os").path.isfile(opts.get("source_audio", "")):
+                            return self.fail("source audio file not found")
+                        if "<" not in req["input"]:
+                            return self.fail("malformed instruction: no edit tags")
                     if set(req.get("options") or {}) - allowed:
                         return self.fail("unknown Kokoro TTS request option")
                     if req["input"].startswith("BOOM"):
@@ -97,10 +158,15 @@ def main() -> None:
                         threading.Event().wait(30)
                     state["loaded"] = req["model"]
                     state["speech"] += 1
-                    return self.send(200, wav_bytes(max(0.2, len(req["input"]) / 20)), "audio/wav")
+                    rate = 48000 if m["family"] == "dots_tts" else RATE
+                    return self.send(
+                        200, wav_bytes(max(0.2, len(req["input"]) / 20), rate), "audio/wav"
+                    )
                 if self.path == "/v1/tasks/run":
                     req = json.loads(body)
                     m = models.get(req.get("model"))
+                    if m is not None and m["task"] in ("sep", "vc"):
+                        return self.tool(m, req)
                     if m is None or m["task"] != "gen":
                         return self.fail("unknown model id or not a music model")
                     r = req.get("request") or {}

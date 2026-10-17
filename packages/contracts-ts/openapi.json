@@ -324,6 +324,20 @@
         "title": "Binding",
         "type": "object"
       },
+      "Body_add_picture_products_wasifyai_voice_pictures_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_add_picture_products_wasifyai_voice_pictures_post",
+        "type": "object"
+      },
       "Body_create_clone_products_wasifyai_voice_voices_clone_post": {
         "properties": {
           "consent": {
@@ -390,6 +404,32 @@
           "file"
         ],
         "title": "Body_create_transcript_products_wasifyai_voice_transcripts_post",
+        "type": "object"
+      },
+      "Body_import_track_products_wasifyai_voice_tracks_import_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_track_products_wasifyai_voice_tracks_import_post",
         "type": "object"
       },
       "Body_upload_products_wasifyai_notebooks_notebooks__nid__documents_upload_post": {
@@ -1902,6 +1942,29 @@
         "title": "OverviewVoices",
         "type": "object"
       },
+      "PlanBook": {
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "default": 6000,
+            "maximum": 30000.0,
+            "minimum": 1000.0,
+            "title": "Target",
+            "type": "integer"
+          },
+          "text": {
+            "maxLength": 800000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "PlanBook",
+        "type": "object"
+      },
       "ProviderView": {
         "properties": {
           "id": {
@@ -3230,6 +3293,41 @@
           }
         },
         "title": "VoicePatch",
+        "type": "object"
+      },
+      "WordsRequest": {
+        "additionalProperties": false,
+        "description": "A recording of the library to write down: a track or a speech.",
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "pattern": "^(track|speech)$",
+            "title": "Kind",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "WordsRequest",
         "type": "object"
       }
     }
@@ -7507,6 +7605,283 @@
         ]
       }
     },
+    "/products/wasifyai-voice/audiobook/plan": {
+      "post": {
+        "description": "The chapters of a long text, for the person to read and change before anything is spoken.\nNothing is made or kept.",
+        "operationId": "plan_book_products_wasifyai_voice_audiobook_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanBook"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Plan Book Products Wasifyai Voice Audiobook Plan Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Plan Book",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/clips": {
+      "get": {
+        "operationId": "list_clips_products_wasifyai_voice_clips_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Clips Products Wasifyai Voice Clips Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Clips",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/clips/{cid}": {
+      "delete": {
+        "operationId": "delete_clip_products_wasifyai_voice_clips__cid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Clip",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      },
+      "get": {
+        "operationId": "get_clip_products_wasifyai_voice_clips__cid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Clip Products Wasifyai Voice Clips  Cid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Clip",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      },
+      "patch": {
+        "operationId": "update_clip_products_wasifyai_voice_clips__cid__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrackPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Clip Products Wasifyai Voice Clips  Cid  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Clip",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/clips/{cid}/download": {
+      "get": {
+        "operationId": "download_clip_products_wasifyai_voice_clips__cid__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Clip",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
     "/products/wasifyai-voice/formats": {
       "get": {
         "description": "The formats a track or a speech can be saved in: WAV always, and what the tools on this\ncomputer can make.",
@@ -7531,6 +7906,50 @@
           }
         },
         "summary": "Formats",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/pictures": {
+      "post": {
+        "description": "A picture to make a talking video from: checked, cleaned of everything but the pixels (no\nlocation, no camera data), scaled down. It is kept until a clip uses it, or for a day.",
+        "operationId": "add_picture_products_wasifyai_voice_pictures_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_add_picture_products_wasifyai_voice_pictures_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add Picture Products Wasifyai Voice Pictures Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Picture",
         "tags": [
           "wasifyai-voice"
         ]
@@ -7786,6 +8205,50 @@
           }
         },
         "summary": "List Tracks",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/tracks/import": {
+      "post": {
+        "description": "Add a recording from this computer to Your music, so the audio tools can work on it.",
+        "operationId": "import_track_products_wasifyai_voice_tracks_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_track_products_wasifyai_voice_tracks_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Import Track Products Wasifyai Voice Tracks Import Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Track",
         "tags": [
           "wasifyai-voice"
         ]
@@ -8517,6 +8980,50 @@
           }
         },
         "summary": "Update Voice",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/words": {
+      "post": {
+        "description": "What a recording of the library says, written down (for the person to change in the\nspeech editor). Nothing is saved.",
+        "operationId": "words_products_wasifyai_voice_words_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WordsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Words Products Wasifyai Voice Words Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Words",
         "tags": [
           "wasifyai-voice"
         ]

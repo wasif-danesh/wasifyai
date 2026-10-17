@@ -25,7 +25,7 @@ def voice_db(engine: AsyncEngine) -> Path | None:
 
 class VoiceIndexSource:
     product_id = PRODUCT_ID
-    kind = "speech"  # and "transcript", "voice", "track": items carry their own kind
+    kind = "speech"  # and "transcript", "voice", "track", "lipsync": items carry their own kind
 
     def __init__(self, engine: AsyncEngine):
         self._engine = engine
@@ -51,6 +51,9 @@ class VoiceIndexSource:
                 "UNION ALL SELECT id, tenant_id, user_id, 'track', "
                 "title || '. ' || description || CASE WHEN lyrics = '' THEN '' ELSE '. ' || "
                 "substr(lyrics, 1, ?) END FROM tracks WHERE (? IS NULL OR id > ?) "
+                "UNION ALL SELECT id, tenant_id, user_id, 'lipsync', "
+                "title || CASE WHEN script = '' THEN '' ELSE '. ' || substr(script, 1, ?) END "
+                "FROM clips WHERE (? IS NULL OR id > ?) "
                 "ORDER BY id LIMIT ?",
                 (
                     after,
@@ -58,6 +61,9 @@ class VoiceIndexSource:
                     TRANSCRIPT_CHARS,
                     after,
                     after,
+                    after,
+                    after,
+                    TRANSCRIPT_CHARS,
                     after,
                     after,
                     TRANSCRIPT_CHARS,
@@ -82,8 +88,9 @@ class VoiceIndexSource:
                     f"SELECT id FROM speeches WHERE id IN ({marks}) "
                     f"UNION SELECT id FROM transcripts WHERE id IN ({marks}) "
                     f"UNION SELECT id FROM voices WHERE id IN ({marks}) "
-                    f"UNION SELECT id FROM tracks WHERE id IN ({marks})",
-                    [*ids, *ids, *ids, *ids],
+                    f"UNION SELECT id FROM tracks WHERE id IN ({marks}) "
+                    f"UNION SELECT id FROM clips WHERE id IN ({marks})",
+                    [*ids, *ids, *ids, *ids, *ids],
                 )
             }
         finally:

@@ -1,0 +1,14 @@
+{
+  "comment": "The lip sync engine's environment (ADR-0066, stage V5): MuseTalk's code at an exact commit (MIT), and the hashed package lock the server runs from. The weights are catalogue entries (products/wasifyai-voice/models.yaml), fetched in Models after the person sees their size. Only Apple-silicon Macs are supported and measured; others would need a CUDA lock.",
+  "commit": "0a89dec45a0192b824e3cf4daf96c239440c5ed8",
+  "source": {
+    "url": "https://github.com/TMElyralab/MuseTalk/archive/0a89dec45a0192b824e3cf4daf96c239440c5ed8.tar.gz",
+    "size": 15958159,
+    "sha256": "2e1685e4bcc58531c5118c0ba485199f22012016ed4608cab725a51d131f7ca7"
+  },
+  "python": "3.12",
+  "lock": "lipsync_server/musetalk.lock.txt",
+  "lock_sha256": "036bb7bcfaaa0ac8ef6cf4e97974986cabd64ef38ddc858455ab1f6a91da8a30",
+  "packages_bytes": 2100000000,
+  "platforms": ["darwin-arm64"]
+}

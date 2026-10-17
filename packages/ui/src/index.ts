@@ -89,6 +89,29 @@ export { COMMERCIAL_TEXT, STATE_TEXT, clock, modelOption, pickModel } from "./vo
 export { useVoiceModels } from "./voice/use-voice-models";
 export { CONSENT_TEXT, VoicesWorkspace, type VoicesWorkspaceProps } from "./voice/VoicesWorkspace";
 export { MusicWorkspace, type MusicWorkspaceProps } from "./voice/MusicWorkspace";
-export { TrackList } from "./voice/TrackList";
+export {
+  AudiobookWorkspace,
+  TEXT_ACCEPT,
+  type AudiobookWorkspaceProps,
+} from "./voice/AudiobookWorkspace";
+export {
+  DubbingWorkspace,
+  LANGUAGE_NAMES,
+  SPEAKER_TEXT,
+  type DubbingWorkspaceProps,
+} from "./voice/DubbingWorkspace";
+export {
+  LipSyncWorkspace,
+  MARK,
+  PICTURE_TEXT,
+  VOICE_TEXT,
+  type LipSyncWorkspaceProps,
+} from "./voice/LipSyncWorkspace";
+export { TrackList, type TrackTool } from "./voice/TrackList";
+export {
+  AudioToolWorkspace,
+  type AudioTool,
+  type AudioToolWorkspaceProps,
+} from "./voice/AudioToolWorkspace";
 export { EditTrack, type EditTrackProps } from "./voice/EditTrack";
 export { LyricsWriter, type LyricsWriterProps } from "./voice/LyricsWriter";

@@ -15,3 +15,8 @@ Then `LIPSYNC_SERVER_URL=http://host.containers.internal:8191` in `.env`. On a C
 `LIPSYNC_MAX_SIDE` (default 768) scales the picture down; blending time grows with the picture's size.
 Measured on a 64 GB Apple M-series Mac: a 5 second clip in about 30 seconds after the models are loaded, 11.8 GB
 at peak (ADR-0044).
+
+`mark` (optional form field, at most 40 characters) is drawn in the corner of every frame and written into the
+file's metadata; the desktop always sends "AI-generated". The two source files here are copied into the engine's
+package (`services/api/src/wasifyai_api/lipsync_server/`), which the desktop app runs; a test fails when they differ,
+so change both together.

@@ -47,7 +47,7 @@ DISK_MARGIN = 1_000_000_000  # keep this much free after a download
 ALLOWED_FOLDERS = frozenset(
     {
         "checkpoints", "diffusion_models", "unet", "text_encoders", "clip", "vae", "loras",
-        "controlnet", "upscale_models", "embeddings", "audio",
+        "controlnet", "upscale_models", "embeddings", "audio", "lipsync",
     }
 )  # fmt: skip
 

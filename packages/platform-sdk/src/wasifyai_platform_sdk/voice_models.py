@@ -130,6 +130,12 @@ class VoiceModel:
     design: dict[str, Any] = field(default_factory=dict, hash=False)
     # music: the modes it offers and how a request is put to the runtime (V3)
     music: dict[str, Any] = field(default_factory=dict, hash=False)
+    # audio tools (V4): splitting a recording into stems, changing whose voice it is, editing words
+    separate: dict[str, Any] = field(default_factory=dict, hash=False)
+    convert: dict[str, Any] = field(default_factory=dict, hash=False)
+    speech_edit: dict[str, Any] = field(default_factory=dict, hash=False)
+    # lip sync (V5): a picture and a voice in, a video out
+    lipsync: dict[str, Any] = field(default_factory=dict, hash=False)
 
     def public(self) -> dict[str, Any]:
         return {
@@ -142,6 +148,8 @@ class VoiceModel:
             "voices": [v.public() for v in self.voices], "default_voice": self.default_voice,
             "options": [o.public() for o in self.options],
             "clone": self.clone, "design": self.design, "music": self.music,
+            "separate": self.separate, "convert": self.convert, "speech_edit": self.speech_edit,
+            "lipsync": self.lipsync,
         }  # fmt: skip
 
     def option(self, name: str) -> OptionSpec | None:
@@ -213,8 +221,14 @@ def parse_voice_model(entry_id: str, title: str, licence: str, raw: dict[str, An
     clone = dict(raw.get("clone") or {})
     design = dict(raw.get("design") or {})
     music = dict(raw.get("music") or {})
+    separate = dict(raw.get("separate") or {})
+    convert = dict(raw.get("convert") or {})
+    speech_edit = dict(raw.get("speech_edit") or {})
+    lipsync = dict(raw.get("lipsync") or {})
     _check_rules(entry_id, tasks, clone, design)
-    _check_music_rules(entry_id, tasks, music)
+    _check_music_rules(entry_id, engine, tasks, music)
+    _check_tool_rules(entry_id, tasks, separate, convert, speech_edit)
+    _check_lipsync_rules(entry_id, engine, tasks, lipsync)
     return VoiceModel(
         id=entry_id, title=title, licence=licence, engine=engine, family=str(raw["family"]),
         package=str(raw["package"]), server_task=str(raw.get("server_task", "tts")),
@@ -227,6 +241,7 @@ def parse_voice_model(entry_id: str, title: str, licence: str, raw: dict[str, An
         ),
         voices=voices, default_voice=str(default_voice) if default_voice else None,
         options=options, clone=clone, design=design, music=music,
+        separate=separate, convert=convert, speech_edit=speech_edit, lipsync=lipsync,
     )  # fmt: skip
 
 
@@ -265,7 +280,7 @@ MAX_MUSIC_DESCRIPTION = 500
 MAX_LYRICS_CHARS = 5000
 
 
-def _check_music_rules(entry_id: str, tasks: tuple[str, ...], music: dict) -> None:
+def _check_music_rules(entry_id: str, engine: str, tasks: tuple[str, ...], music: dict) -> None:
     """The modes of a music model and how the runtime takes each part of a request. The shapes
     differ between families (a duration may be a field of the request or an option; lyrics are an
     option; one family sings only when lyrics say so), so the descriptor states them and nothing
@@ -298,14 +313,99 @@ def _check_music_rules(entry_id: str, tasks: tuple[str, ...], music: dict) -> No
                     f"{entry_id}: song needs lyrics {LYRICS} and instrumental {INSTRUMENTAL}"
                 )
     request = music.get("request") or {}
-    if request.get("duration") not in ("top",) and not str(request.get("duration", "")).startswith(
-        "option:"
-    ):
+    if engine == "comfyui":  # a workflow of the image engine: its map file names the inputs
+        if request.get("duration") != "workflow" or not _ID.match(str(request.get("workflow", ""))):
+            raise ValueError(
+                f"{entry_id}: a ComfyUI music model names its workflow, duration: workflow"
+            )
+        if "edit" in modes:
+            raise ValueError(f"{entry_id}: a ComfyUI workflow here makes music, it does not edit")
+    elif request.get("duration") not in ("top",) and not str(
+        request.get("duration", "")
+    ).startswith("option:"):
         raise ValueError(f"{entry_id}: music.request.duration must be 'top' or 'option:<name>'")
     if any(m.get("lyrics", "unused") != "unused" for m in modes.values()) and not request.get(
         "lyrics_option"
     ):
         raise ValueError(f"{entry_id}: a model that takes lyrics names the option (lyrics_option)")
+
+
+_STEM = re.compile(r"^[a-z][a-z0-9_]{0,23}$")
+CONVERT_TARGETS = ("reference",)  # a recording of the voice to sound like
+EDIT_STYLES = ("markup",)  # tagged text: <sub targ="new">old</sub>, <del>, <ins>
+MAX_TOOL_SOURCE_S = 3600.0
+
+
+def _check_tool_rules(
+    entry_id: str, tasks: tuple[str, ...], separate: dict, convert: dict, speech_edit: dict
+) -> None:
+    """What an audio tool needs the descriptor to say (V4): the stems a separator returns, the kind
+    of target a converter takes, the style of edit and the longest recording each accepts."""
+    for task, rules in (("separate", separate), ("convert", convert), ("edit", speech_edit)):
+        if (task in tasks) != bool(rules):
+            key = "speech_edit" if task == "edit" else task
+            raise ValueError(f"{entry_id}: a {task} model declares `{key}` rules, and only it does")
+    if separate:
+        stems = tuple(str(x) for x in separate.get("stems") or ())
+        if not stems or len(set(stems)) != len(stems) or not all(_STEM.match(x) for x in stems):
+            raise ValueError(f"{entry_id}: separate.stems must be distinct names")
+        if not 8000 <= int(separate.get("input_rate", 0)) <= 96000:
+            raise ValueError(f"{entry_id}: separate.input_rate must be a sample rate")
+    if convert:
+        if convert.get("target") not in CONVERT_TARGETS:
+            raise ValueError(f"{entry_id}: convert.target must be one of {CONVERT_TARGETS}")
+        lo, hi = convert.get("reference_seconds") or [0, 0]
+        if not 0 < lo < hi <= 120:
+            raise ValueError(f"{entry_id}: convert.reference_seconds must be [min, max] (to 120)")
+        if not 8000 <= int(convert.get("input_rate", 0)) <= 48000:
+            raise ValueError(f"{entry_id}: convert.input_rate must be a sample rate")
+        req = convert.get("request") or {}
+        if not (req.get("source") and req.get("reference")):
+            raise ValueError(f"{entry_id}: convert.request names the source and reference fields")
+    if speech_edit:
+        if speech_edit.get("style") not in EDIT_STYLES:
+            raise ValueError(f"{entry_id}: speech_edit.style must be one of {EDIT_STYLES}")
+        if not 8000 <= int(speech_edit.get("input_rate", 0)) <= 48000:
+            raise ValueError(f"{entry_id}: speech_edit.input_rate must be a sample rate")
+        if not 1 <= int(speech_edit.get("max_changes", 0)) <= 16:
+            raise ValueError(f"{entry_id}: speech_edit.max_changes must be 1 to 16")
+    for rules in (separate, convert, speech_edit):
+        if rules and not 1 <= float(rules.get("max_source_s", 0)) <= MAX_TOOL_SOURCE_S:
+            raise ValueError(f"{entry_id}: a tool needs max_source_s (1 to {MAX_TOOL_SOURCE_S:g})")
+
+
+LIPSYNC_PICTURE = {
+    "drawn": "This picture is a drawing, painting or other artwork, not a photograph of a person.",
+    "own": "This is a picture of me.",
+    "permission": "This is a picture of someone who has given me permission to use it.",
+}
+LIPSYNC_VOICE = {
+    "generated": "The voice was made on this computer from words (text to speech).",
+    "own": "This is my own voice.",
+    "permission": "The person whose voice this is has given me permission to use it.",
+}
+MARK_TEXT = "AI-generated"  # drawn on every frame of a lip sync video and written into its metadata
+
+
+def _check_lipsync_rules(entry_id: str, engine: str, tasks: tuple[str, ...], lipsync: dict) -> None:
+    """What a lip sync model declares: the longest voice and the largest picture it takes, the frame
+    rate, and that the visible mark is not optional (ADR-0044, ADR-0066 decision 8)."""
+    if ("lipsync" in tasks) != bool(lipsync):
+        raise ValueError(f"{entry_id}: a lipsync model declares `lipsync` rules, and only it does")
+    if not lipsync:
+        return
+    if engine != "sidecar":
+        raise ValueError(f"{entry_id}: a lip sync model runs as a sidecar here")
+    if not 5 <= float(lipsync.get("max_voice_s", 0)) <= 3600:
+        raise ValueError(f"{entry_id}: lipsync.max_voice_s must be 5 to 3600")
+    if not 256 <= int(lipsync.get("max_side", 0)) <= 2048:
+        raise ValueError(f"{entry_id}: lipsync.max_side must be 256 to 2048")
+    if not 5 <= int(lipsync.get("fps", 0)) <= 60:
+        raise ValueError(f"{entry_id}: lipsync.fps must be 5 to 60")
+    if lipsync.get("mark") != "required":
+        raise ValueError(
+            f"{entry_id}: lipsync.mark must be `required`: the mark cannot be left off"
+        )
 
 
 # ---- validating a request ----------------------------------------------------------------------
@@ -585,6 +685,206 @@ def check_music_edit(
     )  # fmt: skip
 
 
+@dataclass(frozen=True)
+class SeparateRequest:
+    options: dict[str, Any]
+    source_seconds: float
+
+
+def _source_length(model: VoiceModel, rules: dict[str, Any], seconds: float) -> float:
+    if not seconds or seconds != seconds or seconds < 1:
+        raise VoiceRequestError("too_short", "That recording is under one second.")
+    if seconds > float(rules["max_source_s"]):
+        raise VoiceRequestError(
+            "too_long",
+            f"{model.title} takes a recording of up to {float(rules['max_source_s']) / 60:g} "
+            "minutes. Cut it shorter first.",
+        )
+    return seconds
+
+
+def check_separate(
+    model: VoiceModel, source_seconds: float, options: dict[str, Any] | None
+) -> SeparateRequest:
+    """Splitting a recording into stems: the model must be a separator and the recording a length
+    it takes."""
+    if "separate" not in model.tasks:
+        raise VoiceRequestError("wrong_task", f"{model.title} does not split music into stems.")
+    _source_length(model, model.separate, source_seconds)
+    return SeparateRequest(check_options(model, options), source_seconds)
+
+
+@dataclass(frozen=True)
+class ConvertRequest:
+    options: dict[str, Any]
+    seed: int | None
+    source_seconds: float
+
+
+def check_convert(
+    model: VoiceModel,
+    source_seconds: float,
+    reference_seconds: float,
+    options: dict[str, Any] | None,
+    seed: int | None = None,
+) -> ConvertRequest:
+    """Making a recording sound like another voice: a source it can take and a recording of the
+    voice to sound like of the length the model wants."""
+    if "convert" not in model.tasks:
+        raise VoiceRequestError("wrong_task", f"{model.title} does not change a voice.")
+    _source_length(model, model.convert, source_seconds)
+    lo, hi = model.convert["reference_seconds"]
+    if not lo <= reference_seconds <= hi + 0.5:
+        raise VoiceRequestError(
+            "reference_length",
+            f"{model.title} needs a recording of the voice of {lo:g} to {hi:g} seconds.",
+        )
+    return ConvertRequest(
+        check_options(model, options), None if seed is None else int(seed), source_seconds
+    )
+
+
+@dataclass(frozen=True)
+class SpeechEditRequest:
+    instruction: str  # the original words with the changes tagged
+    old_text: str
+    new_text: str
+    options: dict[str, Any]
+    seed: int | None
+    source_seconds: float
+
+
+_WORD = re.compile(r"[\u3400-\u9fff]|[^\W_]+")  # words only: punctuation is not a change
+_CJK = re.compile(r"[\u3000-\u9fff]")
+MAX_EDIT_CHARS = 1000
+
+
+def _word_spans(text: str) -> list[tuple[int, int, str]]:
+    return [(m.start(), m.end(), m.group().casefold()) for m in _WORD.finditer(text)]
+
+
+def edit_markup(old: str, new: str, max_changes: int = 5) -> str:
+    """The recording's words with the changes marked the way the editing model reads them:
+    `<sub targ="new">old</sub>`, `<del>old</del>`, `<ins>new</ins>`. Changes separated by one or two
+    unchanged words are joined into one, so the model gets a few clear edits, not a scatter."""
+    from difflib import SequenceMatcher
+
+    a, b = _word_spans(old), _word_spans(new)
+    ops = SequenceMatcher(None, [x[2] for x in a], [x[2] for x in b], autojunk=False).get_opcodes()
+    regions: list[list[int]] = []
+    for tag, i1, i2, j1, j2 in ops:
+        if tag == "equal":
+            continue
+        if regions and i1 - regions[-1][1] <= 2 and i1 > regions[-1][1]:
+            regions[-1][1], regions[-1][3] = i2, j2
+        elif regions and i1 == regions[-1][1]:
+            regions[-1][1], regions[-1][3] = i2, j2
+        else:
+            regions.append([i1, i2, j1, j2])
+    if not regions:
+        raise VoiceRequestError("no_change", "The words are the same. Change some of them.")
+    if len(regions) > max_changes:
+        raise VoiceRequestError(
+            "too_many_changes",
+            f"That is more than {max_changes} separate changes. Make fewer changes at a time.",
+        )
+    out: list[str] = []
+    pos = 0
+    for i1, i2, j1, j2 in regions:
+        start = a[i1][0] if i1 < len(a) else len(old)
+        out.append(old[pos:start])
+        gone = old[a[i1][0] : a[i2 - 1][1]] if i2 > i1 else ""
+        came = new[b[j1][0] : b[j2 - 1][1]] if j2 > j1 else ""
+        if gone and came:
+            out.append(f'<sub targ="{came}">{gone}</sub>')
+            pos = a[i2 - 1][1]
+        elif gone:
+            end = a[i2 - 1][1]
+            tail = old[end : end + 1]
+            keep = tail if tail.isspace() else ""
+            out.append(f"<del>{gone}{keep}</del>")
+            pos = end + len(keep)
+        else:
+            more = "" if _CJK.search(came[-1:]) or i1 >= len(a) else " "
+            lead = " " if i1 >= len(a) and not _CJK.search(came[:1]) and old[-1:] else ""
+            out.append(f"<ins>{lead}{came}{more}</ins>")
+            pos = start
+    out.append(old[pos:])
+    return "".join(out)
+
+
+def check_speech_edit(
+    model: VoiceModel,
+    source_seconds: float,
+    old_text: str,
+    new_text: str,
+    options: dict[str, Any] | None,
+    seed: int | None = None,
+) -> SpeechEditRequest:
+    """Changing the words in a recording: what was said, what it should say, and a recording the
+    model can take. Characters that would be read as markup are refused."""
+    if "edit" not in model.tasks:
+        raise VoiceRequestError("wrong_task", f"{model.title} does not edit speech.")
+    _source_length(model, model.speech_edit, source_seconds)
+    old = " ".join(_clean_text(old_text, "What was said", MAX_EDIT_CHARS).split())
+    new = " ".join(_clean_text(new_text, "The new words", MAX_EDIT_CHARS).split())
+    if len(old) < 2 or len(new) < 2:
+        raise VoiceRequestError(
+            "text_required", "Write what the recording says, and what it should say."
+        )
+    if any(c in old + new for c in '<>"'):
+        raise VoiceRequestError("bad_text", "Leave < > and double quotes out of the words.")
+    instruction = edit_markup(old, new, int(model.speech_edit["max_changes"]))
+    return SpeechEditRequest(
+        instruction, old, new, check_options(model, options),
+        None if seed is None else int(seed), source_seconds,
+    )  # fmt: skip
+
+
+@dataclass(frozen=True)
+class LipSyncRequest:
+    consent: dict[str, str]  # what the person said about the picture and the voice
+    fps: int
+    voice_seconds: float
+    mark: str
+
+
+def check_lipsync(
+    model: VoiceModel,
+    voice_seconds: float,
+    picture_basis: str | None,
+    voice_basis: str | None,
+    options: dict[str, Any] | None = None,
+) -> LipSyncRequest:
+    """A lip sync request: a voice of a length the model takes, and the person's word about whose
+    picture and whose voice these are. Without that word it is refused, whatever the model is."""
+    if "lipsync" not in model.tasks:
+        raise VoiceRequestError("wrong_task", f"{model.title} does not make talking videos.")
+    if picture_basis not in LIPSYNC_PICTURE:
+        raise VoiceRequestError(
+            "consent_required",
+            "Say what the picture is: a drawing, a picture of you, or of someone who agreed.",
+        )
+    if voice_basis not in LIPSYNC_VOICE:
+        raise VoiceRequestError(
+            "consent_required",
+            "Say whose voice this is: made here from words, yours, or one you may use.",
+        )
+    if not voice_seconds or voice_seconds != voice_seconds or voice_seconds < 1:
+        raise VoiceRequestError("too_short", "That voice is under one second.")
+    if voice_seconds > float(model.lipsync["max_voice_s"]):
+        raise VoiceRequestError(
+            "too_long",
+            f"{model.title} takes a voice of up to {float(model.lipsync['max_voice_s']) / 60:g} "
+            "minutes. Use a shorter one.",
+        )
+    check_options(model, options)
+    return LipSyncRequest(
+        {"picture": picture_basis, "voice": voice_basis},
+        int(model.lipsync["fps"]), voice_seconds, MARK_TEXT,
+    )  # fmt: skip
+
+
 def check_transcribe(model: VoiceModel, options: dict[str, Any] | None) -> dict[str, Any]:
     if "transcribe" not in model.tasks:
         raise VoiceRequestError("wrong_task", f"{model.title} does not transcribe speech.")
@@ -614,6 +914,34 @@ class MusicResult:
     seconds: float
     model_id: str
     seed: int | None
+    load_s: float
+    elapsed_s: float
+
+
+@dataclass(frozen=True)
+class Stem:
+    name: str
+    wav: bytes
+    sample_rate: int
+    seconds: float
+
+
+@dataclass(frozen=True)
+class SeparateResult:
+    stems: tuple[Stem, ...]
+    model_id: str
+    load_s: float
+    elapsed_s: float
+
+
+@dataclass(frozen=True)
+class LipSyncResult:
+    mp4: bytes
+    seconds: float
+    fps: int
+    width: int
+    height: int
+    model_id: str
     load_s: float
     elapsed_s: float
 
@@ -680,3 +1008,27 @@ class SpeechEngine(Protocol):
     async def transcribe(
         self, model: VoiceModel, wav: bytes, options: dict[str, Any]
     ) -> TranscriptResult: ...
+
+    async def separate(
+        self, model: VoiceModel, request: SeparateRequest, source: Path
+    ) -> SeparateResult:
+        """Split a recording that is a file on this computer into stems."""
+        ...
+
+    async def convert(
+        self, model: VoiceModel, request: ConvertRequest, source: Path, reference: Path
+    ) -> SpeechResult:
+        """Make the recording at `source` sound like the voice in the recording at `reference`."""
+        ...
+
+    async def speech_edit(
+        self, model: VoiceModel, request: SpeechEditRequest, source: Path
+    ) -> SpeechResult:
+        """Change the words in the recording at `source`."""
+        ...
+
+    async def lipsync(
+        self, model: VoiceModel, request: LipSyncRequest, picture: Path, voice: Path
+    ) -> LipSyncResult:
+        """Make a video of the face in the picture saying the voice (files on this computer)."""
+        ...

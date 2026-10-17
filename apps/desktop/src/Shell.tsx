@@ -4,15 +4,19 @@ import { presetOf } from "@wasifyai/ui";
 import { PanelLeft } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
+import { AudiobookPage } from "./pages/Audiobook";
 import { CreatePage } from "./pages/Create";
+import { DubPage } from "./pages/Dub";
 import { HomePage } from "./pages/Home";
 import { LibraryPage } from "./pages/Library";
+import { LipSyncPage } from "./pages/LipSync";
 import { ModelsPage } from "./pages/Models";
 import { LyricsPage, MusicPage, TracksPage } from "./pages/Music";
 import { NotebookPage } from "./pages/Notebook";
 import { NotebooksPage } from "./pages/Notebooks";
 import { SettingsPage } from "./pages/Settings";
 import { SpeakPage } from "./pages/Speak";
+import { ToolPage } from "./pages/Tools";
 import { TranscribePage } from "./pages/Transcribe";
 import { VoicesPage } from "./pages/Voices";
 import { useRoute } from "./router";
@@ -144,6 +148,12 @@ export function Shell() {
           {route === "music" ? <MusicPage goModels={() => go("models")} /> : null}
           {route === "tracks" ? <TracksPage go={go} /> : null}
           {route === "lyrics" ? <LyricsPage go={go} /> : null}
+          {route === "lipsync" ? <LipSyncPage goModels={() => go("models")} /> : null}
+          {route === "audiobook" ? <AudiobookPage go={go} goModels={() => go("models")} /> : null}
+          {route === "dub" ? <DubPage go={go} goModels={() => go("models")} /> : null}
+          {route === "separate" ? <ToolPage tool="separate" go={go} /> : null}
+          {route === "convert" ? <ToolPage tool="convert" go={go} /> : null}
+          {route === "speechedit" ? <ToolPage tool="edit" go={go} /> : null}
           {route === "models" ? <ModelsPage /> : null}
           {route === "settings" ? <SettingsPage /> : null}
         </main>

@@ -4,7 +4,7 @@ import type { VoiceModelInfo, VoiceTask } from "@wasifyai/client";
 import { cn } from "../cn";
 import { Label } from "../components/label";
 import { formatBytes } from "../notebook/format";
-import { COMMERCIAL_TEXT, STATE_TEXT, costLine, modelOption } from "./format";
+import { COMMERCIAL_TEXT, costLine, modelOption, stateText } from "./format";
 
 /**
  * The model list for a task, built from the engine's descriptors (ADR-0066): every model it knows is
@@ -69,7 +69,7 @@ export function ModelPicker({
             </a>
             {chosen.state !== "ready" ? (
               <output>
-                {STATE_TEXT[chosen.state]}
+                {stateText(chosen)}
                 {chosen.state === "can_install" ? ` (${formatBytes(chosen.bytes_missing)})` : ""}.
                 {onGetModel && chosen.state === "can_install" ? (
                   <>

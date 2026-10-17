@@ -33,13 +33,18 @@ extend-exclude = ["docs/spikes"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC"]
 
+[tool.ruff.lint.per-file-ignores]
+# the sample generator is mostly the sentences a person is asked to listen for
+"scripts/listening_samples.py" = ["E501"]
+"scripts/listening_page.py" = ["E501"]
+
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends"]
 
 [tool.pyright]
 include = ["services", "packages", "products"]
-# its libraries (torch, parler-tts) exist only inside its container image
-exclude = ["services/speech-indic", "services/stt-indic", "services/lipsync-musetalk", "services/comfyui", ".lipsync", "**/node_modules", "**/.venv"]
+# its libraries (torch, parler-tts, MuseTalk) exist only inside its container image or its own environment
+exclude = ["services/speech-indic", "services/stt-indic", "services/lipsync-musetalk", "services/api/src/wasifyai_api/lipsync_server", "services/comfyui", ".lipsync", "**/node_modules", "**/.venv"]
 typeCheckingMode = "standard"
 # Test helper modules (conftest, fake_comfyui) are imported by name; pytest puts their folders on
 # sys.path, so tell pyright too.

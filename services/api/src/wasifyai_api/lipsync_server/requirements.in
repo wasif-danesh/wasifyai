@@ -1,0 +1,22 @@
+# The lip sync server's own environment (musetalk.lock.txt is made from this: uv pip compile --python-version 3.12 --python-platform aarch64-apple-darwin --generate-hashes).
+torch
+torchvision
+torchaudio
+numpy<2
+diffusers==0.30.2
+transformers==4.44.2
+huggingface_hub<1.0
+accelerate
+omegaconf
+einops
+librosa
+soundfile
+opencv-python-headless
+ffmpeg-python
+imageio-ffmpeg
+tqdm
+scipy
+face-alignment
+fastapi
+uvicorn
+python-multipart

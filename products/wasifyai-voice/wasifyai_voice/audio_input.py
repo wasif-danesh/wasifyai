@@ -38,9 +38,11 @@ def find_converter() -> tuple[str, str] | None:
     return None
 
 
-async def to_wav(data: bytes, filename: str, rate: int = 16000, force: bool = False) -> bytes:
+async def to_wav(
+    data: bytes, filename: str, rate: int = 16000, force: bool = False, channels: int = 1
+) -> bytes:
     """WAV bytes for `data`: as it is when it already is WAV (unless `force`), else converted to
-    mono at `rate`."""
+    `channels` (mono by default) at `rate`."""
     if len(data) > MAX_BYTES:
         raise AudioInputError(
             "too_large", "That file is larger than 300 MB. Use a shorter recording."
@@ -61,10 +63,10 @@ async def to_wav(data: bytes, filename: str, rate: int = 16000, force: bool = Fa
         await asyncio.to_thread(src.write_bytes, data)
         name, exe = tool
         args = (
-            [exe, "-nostdin", "-loglevel", "error", "-i", str(src), "-ac", "1", "-ar", str(rate),
-             "-f", "wav", str(dst)]
+            [exe, "-nostdin", "-loglevel", "error", "-i", str(src), "-ac", str(channels),
+             "-ar", str(rate), "-f", "wav", str(dst)]
             if name == "ffmpeg"
-            else [exe, "-f", "WAVE", "-d", f"LEI16@{rate}", "-c", "1", str(src), str(dst)]
+            else [exe, "-f", "WAVE", "-d", f"LEI16@{rate}", "-c", str(channels), str(src), str(dst)]
         )  # fmt: skip
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -81,6 +83,35 @@ async def to_wav(data: bytes, filename: str, rate: int = 16000, force: bool = Fa
                 "unsupported_audio", "That file is not audio this app can read. Try a WAV or MP3."
             )
         return await asyncio.to_thread(dst.read_bytes)
+
+
+def wav_facts(wav: bytes) -> tuple[int, int, float] | None:
+    """(rate, channels, seconds) of a 16-bit PCM WAV, or None for anything else."""
+    import io
+    import wave
+
+    try:
+        with wave.open(io.BytesIO(wav)) as w:
+            if w.getsampwidth() != 2 or w.getframerate() <= 0:
+                return None
+            return w.getframerate(), w.getnchannels(), w.getnframes() / w.getframerate()
+    except (wave.Error, EOFError):
+        return None
+
+
+async def at_rate(data: bytes, filename: str, rate: int, channels: int) -> tuple[bytes, float]:
+    """(WAV at exactly `rate` and `channels`, its length in seconds) for a recording in any format.
+    A recording that already is that is used as it is; anything else is converted."""
+    wav = await to_wav(data, filename, rate, channels=channels)
+    facts = wav_facts(wav)
+    if facts is None or facts[:2] != (rate, channels):
+        wav = await to_wav(data, filename, rate, force=True, channels=channels)
+        facts = wav_facts(wav)
+    if facts is None or facts[:2] != (rate, channels):
+        raise AudioInputError(
+            "unsupported_audio", "That recording could not be read. Try a WAV or MP3."
+        )
+    return wav, facts[2]
 
 
 # ---- encoding for saving -----------------------------------------------------------------------

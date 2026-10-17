@@ -223,3 +223,11 @@ ability to hand a voice to a ComfyUI workflow were deleted, and the 62 GB of mod
 spike scripts were removed from the Mac. The spike section above stays as the record of what was measured and why
 it was dropped. If a CUDA host and a need for whole-body motion appear, InfiniteTalk (Apache-2.0) can be added back
 as another provider, from this ADR and the git history (the commits of 2026-10-09).
+
+## The desktop (2026-10-16)
+
+The desktop app makes lip sync inside the voice product (ADR-0066, stage V5), with the same engine, MuseTalk. It does
+not use the classifier that refuses photographs of real people, because the app has no model for it and the picture
+never leaves the computer; instead the person **says what the picture is and whose voice it is** before anything is
+made (a drawing, themselves, or someone who agreed), the answer is kept with the video, and **every video carries
+a visible "AI-generated" mark that cannot be turned off**. The web product keeps the ADR-0047 switch as before.

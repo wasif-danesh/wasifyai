@@ -17,7 +17,13 @@ export type Route =
   | "voices"
   | "music"
   | "tracks"
-  | "lyrics";
+  | "lyrics"
+  | "separate"
+  | "convert"
+  | "speechedit"
+  | "lipsync"
+  | "dub"
+  | "audiobook";
 
 const PATHS: Record<Route, string> = {
   home: "/",
@@ -34,6 +40,12 @@ const PATHS: Record<Route, string> = {
   music: "/music/create",
   tracks: "/music/library",
   lyrics: "/music/lyrics",
+  separate: "/music/separate",
+  convert: "/voice/convert",
+  speechedit: "/voice/edit-speech",
+  lipsync: "/voice/lip-sync",
+  dub: "/voice/dub",
+  audiobook: "/voice/audiobook",
 };
 
 /** The id in the draft address: a notebook that is not saved yet. */

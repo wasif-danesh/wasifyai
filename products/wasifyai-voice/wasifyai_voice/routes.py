@@ -21,22 +21,44 @@ from wasifyai_platform_sdk import (
     VoiceEngineError,
     VoiceRequestError,
     check_transcribe,
+    process_image,
     search_text,
 )
+from wasifyai_platform_sdk.uploads import UploadError
 from wasifyai_platform_sdk.voice_models import MAX_DESCRIPTION_CHARS, MAX_REFERENCE_TEXT_CHARS
 
-from wasifyai_voice import audio_input, consent, export, reference
+from wasifyai_voice import audio_input, audiobook, consent, export, reference
 from wasifyai_voice.runtime import PRODUCT_ID, NotAvailable, engine_for, store_for
 from wasifyai_voice.store import NotFound, VoiceStore, new_id
 
 log = logging.getLogger(__name__)
 
 TRANSCRIPT_INDEX_CHARS = 2000
+MAX_IMPORT_S = 3600.0
+PICTURE_MAX_SIDE = 1024  # the engine scales it further to what the model takes
+PICTURE_KEEP_S = 24 * 3600  # an added picture that no clip used is removed after a day
 
 
 class Title(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: str = Field(min_length=1, max_length=200)
+
+
+class WordsRequest(BaseModel):
+    """A recording of the library to write down: a track or a speech."""
+
+    model_config = ConfigDict(extra="forbid")
+    kind: str = Field(pattern="^(track|speech)$")
+    id: str = Field(min_length=1, max_length=64)
+    model: str | None = Field(default=None, max_length=100)
+
+
+class PlanBook(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(min_length=1, max_length=audiobook.MAX_BOOK_CHARS * 2)
+    target: int = Field(
+        default=audiobook.TARGET_CHAPTER_CHARS, ge=1000, le=audiobook.MAX_CHAPTER_CHARS // 2
+    )
 
 
 class TrackPatch(BaseModel):
@@ -163,6 +185,243 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         """The formats a track or a speech can be saved in: WAV always, and what the tools on this
         computer can make."""
         return {"formats": ["wav", *audio_input.available_encodings()]}
+
+    @router.post("/audiobook/plan")
+    async def plan_book(
+        body: PlanBook, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """The chapters of a long text, for the person to read and change before anything is spoken.
+        Nothing is made or kept."""
+        try:
+            chapters = audiobook.plan_chapters(body.text, body.target)
+        except audiobook.BookError as e:
+            raise HTTPException(422, {"code": e.code, "message": str(e)}) from None
+        listed = [c.public() for c in chapters]
+        return {
+            "chapters": listed,
+            "chars": sum(int(c["chars"]) for c in listed),  # type: ignore[call-overload]
+            "estimated_seconds": sum(int(c["estimated_seconds"]) for c in listed),  # type: ignore[call-overload]
+        }
+
+    @router.post("/tracks/import", status_code=201)
+    async def import_track(
+        file: UploadFile = File(...),  # noqa: B008
+        title: str | None = Form(None, max_length=200),
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        """Add a recording from this computer to Your music, so the audio tools can work on it."""
+        assert deps.storage is not None, "storage is required"
+        name = file.filename or "recording"
+        data = await file.read(audio_input.MAX_BYTES + 1)
+        try:
+            wav, seconds = await audio_input.at_rate(data, name, 44100, 2)
+        except audio_input.AudioInputError as e:
+            raise HTTPException(422, {"code": e.code, "message": str(e)}) from None
+        if seconds > MAX_IMPORT_S:
+            raise HTTPException(
+                422,
+                {"code": "too_long", "message": "That recording is longer than an hour."},
+            )
+        tid = new_id()
+        key = f"music/{tid}.wav"
+        with deps.acting_as(identity, PRODUCT_ID):
+            await deps.storage.put(key, wav, "audio/wav")
+        label = (title or "").strip()[:120] or name.rsplit(".", 1)[0][:120] or "Recording"
+        t = await asyncio.to_thread(
+            vstore().add_track, identity.tenant_id, identity.user_id, title=label,
+            mode="imported", description=f"Added from the file {name[:100]}", lyrics="",
+            instrumental=False, model_id="", options={}, seed=None, seconds=round(seconds, 2),
+            sample_rate=44100, audio_key=key, load_s=0, elapsed_s=0, track_id=tid,
+            edit={"action": "import", "file": name[:200]},
+        )  # fmt: skip
+        await reindex_track(identity, t)
+        return await track_out(t, identity)
+
+    @router.post("/words")
+    async def words(
+        body: WordsRequest, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """What a recording of the library says, written down (for the person to change in the
+        speech editor). Nothing is saved."""
+        assert deps.storage is not None, "storage is required"
+        try:
+            engine = engine_for(deps.state)
+        except NotAvailable as e:
+            raise HTTPException(503, str(e)) from None
+        store = vstore()
+        try:
+            if body.kind == "track":
+                row = await asyncio.to_thread(
+                    store.get_track, identity.tenant_id, identity.user_id, body.id
+                )
+            else:
+                row = await asyncio.to_thread(
+                    store.get_speech, identity.tenant_id, identity.user_id, body.id
+                )
+            with deps.acting_as(identity, PRODUCT_ID):
+                data = await deps.storage.get(row["audio_key"])
+        except (NotFound, FileNotFoundError):
+            raise HTTPException(404, "recording not found") from None
+        try:
+            chosen = engine.resolve("transcribe", body.model or None)
+            wav, _ = await audio_input.at_rate(data, "audio.wav", 16000, 1)
+            result = await engine.transcribe(chosen, wav, check_transcribe(chosen, None))
+        except audio_input.AudioInputError as e:
+            raise HTTPException(422, {"code": e.code, "message": str(e)}) from None
+        except VoiceRequestError as e:
+            raise HTTPException(422, {"code": e.code, "message": e.message}) from None
+        except VoiceEngineError as e:
+            status = (
+                409
+                if e.code in ("runtime_missing", "model_missing", "no_model")
+                else 422
+                if e.code == "unknown_model"
+                else 502
+            )
+            raise HTTPException(status, {"code": e.code, "message": e.message}) from None
+        return {"text": result.text, "seconds": round(result.seconds, 2), "model": chosen.id}
+
+    # ---- lip sync: pictures and clips (V5) -------------------------------------------------
+
+    async def clip_out(c: dict[str, Any], identity: Identity) -> dict[str, Any]:
+        assert deps.storage is not None, "object storage is not configured"
+        with deps.acting_as(identity, PRODUCT_ID):
+            video, picture = (
+                await deps.storage.url(c["video_key"]),
+                await deps.storage.url(c["picture_key"]),
+            )
+        hidden = ("tenant_id", "user_id", "video_key", "picture_key")
+        return {k: v for k, v in c.items() if k not in hidden} | {
+            "video_url": video,
+            "picture_url": picture,
+        }
+
+    async def forget_stale_pictures(identity: Identity) -> None:
+        assert deps.storage is not None
+        from datetime import UTC, datetime, timedelta
+
+        before = (datetime.now(UTC) - timedelta(seconds=PICTURE_KEEP_S)).isoformat(
+            timespec="milliseconds"
+        )
+        for p in await asyncio.to_thread(vstore().stale_pictures, before):
+            try:
+                gone = await asyncio.to_thread(
+                    vstore().delete_picture, p["tenant_id"], p["user_id"], p["id"]
+                )
+                with deps.acting_as(Identity(p["tenant_id"], p["user_id"]), PRODUCT_ID):
+                    await deps.storage.delete(gone["key"])
+            except (NotFound, FileNotFoundError):
+                pass
+
+    @router.post("/pictures", status_code=201)
+    async def add_picture(
+        file: UploadFile = File(...),  # noqa: B008
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        """A picture to make a talking video from: checked, cleaned of everything but the pixels (no
+        location, no camera data), scaled down. It is kept until a clip uses it, or for a day."""
+        assert deps.storage is not None, "storage is required"
+        data = await file.read(10 * 1024 * 1024 + 1)
+        if len(data) > 10 * 1024 * 1024:
+            raise HTTPException(
+                422, {"code": "too_large", "message": "That picture is larger than 10 MB."}
+            )
+        try:
+            clean = await asyncio.to_thread(process_image, data, PICTURE_MAX_SIDE)
+        except UploadError as e:
+            raise HTTPException(422, {"code": "bad_picture", "message": e.message}) from None
+        pid = new_id()
+        key = f"lipsync/pictures/{pid}.png"
+        with deps.acting_as(identity, PRODUCT_ID):
+            await deps.storage.put(key, clean.png, "image/png")
+        p = await asyncio.to_thread(
+            vstore().add_picture, identity.tenant_id, identity.user_id, key=key,
+            width=clean.width, height=clean.height, picture_id=pid,
+        )  # fmt: skip
+        await forget_stale_pictures(identity)
+        with deps.acting_as(identity, PRODUCT_ID):
+            url = await deps.storage.url(key)
+        return {"id": p["id"], "width": p["width"], "height": p["height"], "url": url}
+
+    @router.get("/clips")
+    async def list_clips(
+        ids: str | None = Query(None, max_length=2000),
+        limit: int = Query(100, ge=1, le=500),
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        wanted = [i for i in (ids or "").split(",") if i] or None
+        rows = await asyncio.to_thread(
+            vstore().list_clips, identity.tenant_id, identity.user_id, wanted, limit
+        )
+        return {"items": [await clip_out(c, identity) for c in rows]}
+
+    @router.get("/clips/{cid}")
+    async def get_clip(cid: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        try:
+            c = await asyncio.to_thread(
+                vstore().get_clip, identity.tenant_id, identity.user_id, cid
+            )
+        except NotFound:
+            raise HTTPException(404, "clip not found") from None
+        return await clip_out(c, identity)
+
+    @router.get("/clips/{cid}/download")
+    async def download_clip(cid: str, identity: Identity = Depends(deps.identity)) -> Response:
+        assert deps.storage is not None
+        try:
+            c = await asyncio.to_thread(
+                vstore().get_clip, identity.tenant_id, identity.user_id, cid
+            )
+            with deps.acting_as(identity, PRODUCT_ID):
+                data = await deps.storage.get(c["video_key"])
+        except (NotFound, FileNotFoundError):
+            raise HTTPException(404, "clip not found") from None
+        name = export.file_name(c["title"], "mp4")
+        return Response(
+            data, media_type="video/mp4",
+            headers={"Content-Disposition": f'attachment; filename="{name}"',
+                     "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+        )  # fmt: skip
+
+    @router.patch("/clips/{cid}")
+    async def update_clip(
+        cid: str, body: TrackPatch, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        try:
+            c = await asyncio.to_thread(
+                vstore().update_clip, identity.tenant_id, identity.user_id, cid,
+                title=body.title.strip() if body.title else None, favourite=body.favourite,
+            )  # fmt: skip
+        except NotFound:
+            raise HTTPException(404, "clip not found") from None
+        index = getattr(deps.state, "creation_index", None)
+        if index is not None:
+            try:
+                text = search_text(c["title"], c["script"][:TRANSCRIPT_INDEX_CHARS])
+                await index.index(
+                    identity.tenant_id, PRODUCT_ID, identity.user_id, "lipsync", c["id"], text
+                )
+            except Exception:
+                log.warning("the clip could not be added to search", exc_info=True)
+        return await clip_out(c, identity)
+
+    @router.delete("/clips/{cid}", status_code=204)
+    async def delete_clip(cid: str, identity: Identity = Depends(deps.identity)) -> Response:
+        assert deps.storage is not None
+        try:
+            c = await asyncio.to_thread(
+                vstore().delete_clip, identity.tenant_id, identity.user_id, cid
+            )
+        except NotFound:
+            raise HTTPException(404, "clip not found") from None
+        with deps.acting_as(identity, PRODUCT_ID):
+            for key in (c["video_key"], c["picture_key"]):
+                try:
+                    await deps.storage.delete(key)
+                except FileNotFoundError:
+                    pass
+        await deps.unindex(identity, PRODUCT_ID, cid)
+        return Response(status_code=204)
 
     @router.get("/tracks")
     async def list_tracks(

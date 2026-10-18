@@ -72,13 +72,19 @@ def test_every_product_route_requires_an_identity():
 
     app.dependency_overrides[get_identity] = nobody
     paths = app.openapi()["paths"]
-    mine = {p: ops for p, ops in paths.items() if p.startswith("/products/wasifyai-music/")}
+    mine = {p: ops for p, ops in paths.items() if p.startswith("/products/wasifyai-voice/")}
     assert (
-        "/products/wasifyai-music/songs" in mine
-        and "/products/wasifyai-music/songs/{song_id}" in mine
+        "/products/wasifyai-voice/tracks" in mine
+        and "/products/wasifyai-voice/tracks/{tid}" in mine
     )
     with TestClient(app, raise_server_exceptions=False) as client:
         for path, ops in mine.items():
             for method in ops:
-                resp = client.request(method.upper(), path.replace("{song_id}", "x"))
+                resp = client.request(
+                    method.upper(),
+                    path.replace("{tid}", "x")
+                    .replace("{sid}", "x")
+                    .replace("{vid}", "x")
+                    .replace("{cid}", "x"),
+                )
                 assert resp.status_code == 401, (method, path, resp.status_code)

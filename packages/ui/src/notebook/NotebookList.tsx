@@ -3,7 +3,9 @@
 import { type NotebookSummary, when } from "@wasifyai/client";
 import { BookOpen, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { cn } from "../cn";
 import { Button } from "../components/button";
+import { useNotebookPlace } from "./place";
 
 export type NotebookListProps = {
   notebooks: NotebookSummary[];
@@ -15,6 +17,8 @@ export type NotebookListProps = {
   onRemove: (n: NotebookSummary) => void;
   /** Find notebooks by what is in them (My creations search). */
   onFind?: (query: string) => Promise<string[]>;
+  /** Replaces the page's padding (the web app has its own). */
+  className?: string;
 };
 
 function lowerWhen(iso: string): string {
@@ -40,7 +44,9 @@ export function NotebookList({
   onRename,
   onRemove,
   onFind,
+  className,
 }: NotebookListProps) {
+  const hosted = useNotebookPlace() === "hosted";
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<Set<string>>(new Set());
 
@@ -68,7 +74,12 @@ export function NotebookList({
     : notebooks;
 
   return (
-    <div className="mx-auto grid w-full min-w-0 max-w-5xl grid-cols-[minmax(0,1fr)] gap-6 px-8 py-8">
+    <div
+      className={cn(
+        "mx-auto grid w-full min-w-0 max-w-5xl grid-cols-[minmax(0,1fr)] gap-6 px-8 py-8",
+        className,
+      )}
+    >
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-medium text-3xl tracking-tight">Notebooks</h1>
         <div className="flex items-center gap-2">
@@ -100,8 +111,8 @@ export function NotebookList({
           <h2 className="font-medium text-xl">Start your first notebook</h2>
           <p className="max-w-md text-muted-foreground">
             Add documents and ask questions about them. Answers cite the passages they came from,
-            and everything stays on this computer. PDF, Word, PowerPoint, Excel, text, Markdown,
-            HTML and pictures of text can be added.
+            and {hosted ? "your documents are private to you" : "everything stays on this computer"}
+            . PDF, Word, PowerPoint, Excel, text, Markdown, HTML and pictures of text can be added.
           </p>
           <Button type="button" onClick={onCreate}>
             <Plus /> New notebook

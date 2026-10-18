@@ -1,0 +1,32 @@
+# The notebooks worker (ADR-0065, W4/W7): reads the sources people add and makes the Studio outputs.
+# Build from the repository root:  podman build -f products/wasifyai-notebooks/Containerfile -t notebooks-worker .
+# It holds the document reader (Docling and its model weights, about 1.5 GB, fetched while building and
+# checked by SHA-256), so this is the large image; the API image does not carry it.
+FROM python:3.12-slim
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# the libraries the reader's image code (OpenCV) loads
+RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY pyproject.toml uv.lock* ./
+COPY services ./services
+COPY packages ./packages
+COPY products ./products
+RUN uv sync --frozen --no-dev --package wasifyai-notebooks
+ENV PATH="/app/.venv/bin:$PATH"
+
+# The reader, in an environment of its own at /reader (NOTEBOOKS_READER_DIR). The lock is compiled here
+# for this image's architecture; torch comes from PyTorch's CPU index (PyPI's Linux build brings about 3 GB of CUDA).
+RUN case "$(uname -m)" in aarch64|arm64) T=aarch64-unknown-linux-gnu ;; *) T=x86_64-unknown-linux-gnu ;; esac \
+    && uv pip compile products/wasifyai-notebooks/reader/requirements.in --python-version 3.12 \
+        --python-platform "$T" --generate-hashes --no-header --quiet \
+        --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match \
+        -o /tmp/reader.lock \
+    && python -m wasifyai_notebooks.reader_install --reader-dir /reader --lock /tmp/reader.lock \
+        --weights products/wasifyai-notebooks/reader/models.yaml \
+    && rm -rf /tmp/reader.lock /root/.cache
+
+ENV NOTEBOOKS_READER_DIR=/reader PRODUCTS_DIR=/app/products
+RUN useradd --uid 10001 --create-home worker
+USER 10001
+CMD ["python", "-m", "wasifyai_notebooks.worker"]

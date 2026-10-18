@@ -21,7 +21,7 @@ async def stores(engine):
     return PostgresUserStore(engine), PostgresAdminStore(engine)
 
 
-async def test_users_songs_usage_and_audit(engine, stores):
+async def test_users_usage_and_audit(engine, stores):
     users, admin = stores
     tenant = "it-" + uuid4().hex
     ann = await users.resolve(tenant, claims("google", "a1", "ann@example.com"), NO_ADMINS)
@@ -43,13 +43,6 @@ async def test_users_songs_usage_and_audit(engine, stores):
     assert page[0].id not in {u.id for u in older}
 
     async with engine.begin() as conn:
-        await conn.execute(
-            text(
-                "INSERT INTO songs (id, tenant_id, product_id, user_id, title, lyrics, style, "
-                "audio_key) VALUES (:id, :t, 'wasifyai-music', :u, 'Hi', 'l', 's', 'a.mp3')"
-            ),
-            {"id": uuid4(), "t": tenant, "u": ann.id},
-        )
         for kind, qty in (("song.created", 1), ("llm.input_tokens", 120), ("llm.input_tokens", 30)):
             await conn.execute(
                 text(
@@ -58,8 +51,6 @@ async def test_users_songs_usage_and_audit(engine, stores):
                 ),
                 {"id": uuid4(), "t": tenant, "u": ann.id, "k": kind, "q": qty},
             )
-    songs = await admin.songs(tenant, 10, None)
-    assert [(s.title, s.user_email) for s in songs] == [("Hi", "ann@example.com")]
     report = await admin.usage(tenant, 7)
     totals = {t.kind: (t.events, t.quantity) for t in report.totals}
     assert totals == {"song.created": (1, 1.0), "llm.input_tokens": (2, 150.0)}

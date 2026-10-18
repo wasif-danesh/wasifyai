@@ -36,7 +36,7 @@ class BackendSpec:
     id: str
     label: str
     description: str
-    families: frozenset[str]  # capability families it can serve: "image", "music", ...
+    families: frozenset[str]  # capability families it can serve: "image", "video"
     fields: tuple[Field_, ...] = field(default_factory=tuple)
     local_gpu: bool = False  # runs on this machine's GPU: the worker takes the GPU lock
 
@@ -48,7 +48,7 @@ BACKENDS: dict[str, BackendSpec] = {
             LOCAL,
             "ComfyUI (local or self-hosted)",
             "Runs the product's ComfyUI workflow on a ComfyUI server you operate.",
-            frozenset({"image", "music", "video"}),
+            frozenset({"image", "video"}),
             (
                 Field_(
                     "base_url",
@@ -63,7 +63,7 @@ BACKENDS: dict[str, BackendSpec] = {
             COMFY_API,
             "Comfy Cloud / Comfy API (v2)",
             "Runs the same workflow on Comfy Cloud, a serverless deployment or a comfy-api-proxy.",
-            frozenset({"image", "music", "video"}),
+            frozenset({"image", "video"}),
             (
                 Field_(
                     "base_url",

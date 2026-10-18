@@ -12,8 +12,8 @@ import sqlite3
 import unicodedata
 import uuid
 from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
-from datetime import UTC, datetime
+from contextlib import contextmanager, nullcontext
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -140,15 +140,28 @@ CREATE TABLE IF NOT EXISTS artifacts(
   data TEXT,
   file_name TEXT,
   file_mime TEXT,
+  request TEXT,
+  claimed_at TEXT,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS artifacts_notebook ON artifacts(notebook_id, created_at);
 """
 
 
 _GUIDE_COLUMNS = ("guide", "guide_key")  # added to `notebooks` in schema 4
+_OUTPUT_COLUMNS = ("request", "claimed_at")  # added to `artifacts` for a reader's queue
 
 
 class NotebookStore:
+    # The few places where a database differs from SQLite: the error a violated constraint raises, a
+    # savepoint around a statement that may violate one, and how passages and vectors are written.
+    # `PostgresNotebookStore` (pgstore.py) overrides these and the connection, nothing else.
+    _INTEGRITY: tuple[type[Exception], ...] = (sqlite3.IntegrityError,)
+
+    def _guard(self, db: Any) -> Any:
+        """A context in which a constraint error leaves the transaction usable (a savepoint where
+        the database aborts a transaction on error, nothing for SQLite)."""
+        return nullcontext()
+
     def __init__(self, root: Path, *, dimension: int, embedder_id: str):
         """`root` holds `notebooks.db`; `dimension` and `embedder_id` are what the index was built
         with. An index built with another embedder is refused, not mixed (ADR-0065 decision 8)."""
@@ -218,6 +231,7 @@ class NotebookStore:
                 return
             meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
             self._add_guide_columns(db)
+            self._add_output_columns(db)
             if meta.get("schema") != str(SCHEMA_VERSION):
                 # a file made by an earlier version: add what is new, then record the version
                 db.executescript("BEGIN;" + _CHAT_SCHEMA + _STUDIO_SCHEMA + "COMMIT;")
@@ -234,6 +248,13 @@ class NotebookStore:
         for column in _GUIDE_COLUMNS:
             if column not in have:
                 db.execute(f"ALTER TABLE notebooks ADD COLUMN {column} TEXT")
+
+    @staticmethod
+    def _add_output_columns(db: sqlite3.Connection) -> None:
+        have = {r[1] for r in db.execute("PRAGMA table_info(artifacts)")}
+        for column in _OUTPUT_COLUMNS:
+            if column not in have:
+                db.execute(f"ALTER TABLE artifacts ADD COLUMN {column} TEXT")
 
     # ---- notebooks --------------------------------------------------------------------------
 
@@ -353,7 +374,7 @@ class NotebookStore:
                     "VALUES (?,?,?,?,?,?)",
                     (fid, nid, parent_id, name, name_key(name), now()),
                 )
-            except sqlite3.IntegrityError as e:
+            except self._INTEGRITY as e:
                 raise Conflict("A folder with that name is already there.") from e
         return {"id": fid, "notebook_id": nid, "parent_id": parent_id, "name": name}
 
@@ -375,7 +396,7 @@ class NotebookStore:
                     "UPDATE folders SET name = ?, name_key = ? WHERE id = ?",
                     (name, name_key(name), fid),
                 )
-            except sqlite3.IntegrityError as e:
+            except self._INTEGRITY as e:
                 raise Conflict("A folder with that name is already there.") from e
 
     def delete_folder(self, tenant: str, user: str, nid: str, fid: str) -> list[str]:
@@ -387,7 +408,7 @@ class NotebookStore:
             tree = [
                 r[0]
                 for r in db.execute(
-                    "WITH RECURSIVE t(id) AS (SELECT ? UNION ALL "
+                    "WITH RECURSIVE t(id) AS (SELECT CAST(? AS TEXT) UNION ALL "
                     "SELECT f.id FROM folders f JOIN t ON f.parent_id = t.id) SELECT id FROM t",
                     (fid,),
                 )
@@ -585,12 +606,13 @@ class NotebookStore:
             moved = 0
             for did in ids:
                 try:
-                    moved += db.execute(
-                        "UPDATE documents SET folder_id = ?, updated_at = ? "
-                        "WHERE id = ? AND notebook_id = ?",
-                        (folder_id, now(), did, nid),
-                    ).rowcount
-                except sqlite3.IntegrityError:
+                    with self._guard(db):
+                        moved += db.execute(
+                            "UPDATE documents SET folder_id = ?, updated_at = ? "
+                            "WHERE id = ? AND notebook_id = ?",
+                            (folder_id, now(), did, nid),
+                        ).rowcount
+                except self._INTEGRITY:
                     pass  # the same bytes already sit in that folder
         return moved
 
@@ -646,16 +668,39 @@ class NotebookStore:
 
     # ---- the ingest worker's side (not scoped by user: it works through the queue) -----------
 
-    def reset_interrupted(self) -> int:
-        """A source the app quit in the middle of reading is failed at start, so Retry offers it."""
+    def reset_interrupted(self, stale_after_s: float | None = None) -> int:
+        """A source being read when its program stopped is failed, so Retry offers it. On the
+        desktop one program reads, so every source being read is such a one. With several readers
+        (`stale_after_s`) only a source untouched for that long is: another reader may be on the
+        rest."""
+        cutoff = (
+            (datetime.now(UTC) - timedelta(seconds=stale_after_s)).isoformat(
+                timespec="milliseconds"
+            )
+            if stale_after_s is not None
+            else None
+        )
         with self._tx() as db:
-            n = db.execute(
-                "UPDATE documents SET status = ?, error = ?, updated_at = ? WHERE status = ?",
-                (FAILED, "Reading was interrupted when the app closed.", now(), PROCESSING),
-            ).rowcount
+            if cutoff is None:
+                n = db.execute(
+                    "UPDATE documents SET status = ?, error = ?, updated_at = ? WHERE status = ?",
+                    (FAILED, "Reading was interrupted when the app closed.", now(), PROCESSING),
+                ).rowcount
+            else:
+                n = db.execute(
+                    "UPDATE documents SET status = ?, error = ?, updated_at = ? "
+                    "WHERE status = ? AND updated_at < ?",
+                    (FAILED, "Reading was interrupted. Try it again.", now(), PROCESSING, cutoff),
+                ).rowcount
             db.execute(
-                "UPDATE artifacts SET status = ?, error = ?, updated_at = ? WHERE status = ?",
-                (FAILED, "Making this was interrupted when the app closed.", now(), PROCESSING),
+                "UPDATE artifacts SET status = ?, error = ?, updated_at = ? WHERE status = ?"
+                + (
+                    " AND updated_at < ? AND (request IS NULL OR claimed_at IS NOT NULL)"
+                    if cutoff is not None
+                    else ""
+                ),
+                (FAILED, "Making this was interrupted when the app closed.", now(), PROCESSING)
+                + ((cutoff,) if cutoff is not None else ()),
             )
         return n
 
@@ -706,17 +751,7 @@ class NotebookStore:
             row = db.execute("SELECT status, kind FROM documents WHERE id = ?", (did,)).fetchone()
             if row is None or row[0] != PROCESSING:
                 return False
-            db.execute("DELETE FROM chunks WHERE document_id = ?", (did,))
-            for position, (p, v) in enumerate(zip(passages, vectors, strict=True)):
-                cid = db.execute(
-                    "INSERT INTO chunks(document_id, position, content, start_line, end_line) "
-                    "VALUES (?,?,?,?,?)",
-                    (did, position, p.text, p.start_line, p.end_line),
-                ).lastrowid
-                db.execute(
-                    "INSERT INTO chunk_vectors(rowid, embedding) VALUES (?, ?)",
-                    (cid, sqlite_vec.serialize_float32(list(v))),
-                )
+            self._replace_chunks(db, did, passages, vectors)
             if markdown is not None:
                 db.execute("UPDATE documents SET content = ? WHERE id = ?", (markdown, did))
             db.execute(
@@ -726,6 +761,26 @@ class NotebookStore:
                 (READY, pages, embedder, now(), did),
             )
         return True
+
+    def _replace_chunks(
+        self,
+        db: Any,
+        did: str,
+        passages: Sequence[Passage],
+        vectors: Sequence[Sequence[float]],
+    ) -> None:
+        """A document's passages and their vectors, in place of what it had."""
+        db.execute("DELETE FROM chunks WHERE document_id = ?", (did,))
+        for position, (p, v) in enumerate(zip(passages, vectors, strict=True)):
+            cid = db.execute(
+                "INSERT INTO chunks(document_id, position, content, start_line, end_line) "
+                "VALUES (?,?,?,?,?)",
+                (did, position, p.text, p.start_line, p.end_line),
+            ).lastrowid
+            db.execute(
+                "INSERT INTO chunk_vectors(rowid, embedding) VALUES (?, ?)",
+                (cid, sqlite_vec.serialize_float32(list(v))),
+            )
 
     def fail(self, did: str, message: str) -> None:
         with self._tx() as db:
@@ -1046,6 +1101,52 @@ class NotebookStore:
             if not n:
                 raise NotFound("output not found")
 
+    # ---- outputs a worker makes ---------------------------------------------------------------
+
+    def queue_artifact(
+        self, tenant: str, user: str, nid: str, aid: str, request: dict[str, Any]
+    ) -> None:
+        """Leave an output, already recorded as being made, for a worker to make: `request` is
+        everything it needs. It waits (unclaimed) until one takes it."""
+        with self._tx() as db:
+            self._notebook_row(db, tenant, user, nid)
+            n = db.execute(
+                "UPDATE artifacts SET request = ?, claimed_at = NULL, updated_at = ? "
+                "WHERE id = ? AND notebook_id = ? AND status = ?",
+                (json.dumps(request), now(), aid, nid, PROCESSING),
+            ).rowcount
+            if not n:
+                raise NotFound("output not found")
+
+    def claim_output(self) -> dict[str, Any] | None:
+        """The oldest queued output, taken by this reader (one atomic update, so any number of
+        readers can ask): `tenant`, `user`, `notebook_id`, `id` and the `request`."""
+        with self._tx() as db:
+            row = db.execute(
+                "UPDATE artifacts SET claimed_at = ?, updated_at = ? WHERE id = ("
+                "SELECT id FROM artifacts WHERE status = ? AND request IS NOT NULL "
+                "AND claimed_at IS NULL ORDER BY created_at LIMIT 1) AND claimed_at IS NULL "
+                "RETURNING id, notebook_id, request",
+                (now(), now(), PROCESSING),
+            ).fetchone()
+            if row is None:
+                return None
+            owner = db.execute(
+                "SELECT tenant_id, user_id FROM notebooks WHERE id = ?", (row[1],)
+            ).fetchone()
+        if owner is None:
+            return None
+        return {
+            "id": row[0], "notebook_id": row[1], "tenant": owner[0], "user": owner[1],
+            "request": json.loads(row[2]),
+        }  # fmt: skip
+
+    def output_is_active(self, aid: str) -> bool:
+        """Whether an output is still wanted: it was not stopped or deleted while it was made."""
+        with self.connect() as db:
+            row = db.execute("SELECT status FROM artifacts WHERE id = ?", (aid,)).fetchone()
+        return row is not None and row[0] == PROCESSING
+
     def reset_interrupted_artifacts(self) -> int:
         """An output being made when the app quit is failed at start, so it can be made again."""
         with self._tx() as db:
@@ -1098,6 +1199,42 @@ class NotebookStore:
                     "SELECT id FROM documents WHERE notebook_id = ? AND status = ?", (nid, READY)
                 )
             ]
+
+    def record_usage(
+        self, tenant: str, user: str, kind: str, quantity: float, unit: str, **meta: Any
+    ) -> None:
+        """Note something billable done for a person (rule 9). The desktop has no billing."""
+
+    def usage(self, tenant: str, user: str) -> dict[str, int]:
+        """What a person holds: notebooks, sources and the bytes of their files and notes."""
+        with self.connect() as db:
+            notebooks = db.execute(
+                "SELECT COUNT(*) FROM notebooks WHERE tenant_id = ? AND user_id = ?", (tenant, user)
+            ).fetchone()[0]
+            sources, size = db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(d.size_bytes), 0) FROM documents d "
+                "JOIN notebooks n ON n.id = d.notebook_id WHERE n.tenant_id = ? AND n.user_id = ?",
+                (tenant, user),
+            ).fetchone()
+        return {"notebooks": int(notebooks), "sources": int(sources), "bytes": int(size)}
+
+    def source_count(self, tenant: str, user: str, nid: str) -> int:
+        with self.connect() as db:
+            self._notebook_row(db, tenant, user, nid)
+            return int(
+                db.execute(
+                    "SELECT COUNT(*) FROM documents WHERE notebook_id = ?", (nid,)
+                ).fetchone()[0]
+            )
+
+    def owner_of(self, nid: str) -> tuple[str, str] | None:
+        """The (tenant, user) a notebook belongs to, for the reading worker, which works through the
+        queue and so has no request to say whose files these are."""
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT tenant_id, user_id FROM notebooks WHERE id = ?", (nid,)
+            ).fetchone()
+        return (row[0], row[1]) if row else None
 
     def owns(self, tenant: str, user: str, nid: str) -> bool:
         with self.connect() as db:

@@ -1,26 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ImageSummary } from "@wasifyai/client";
-import { presetOf } from "@wasifyai/ui";
+import {
+  AudiobookPage,
+  DubPage,
+  LipSyncPage,
+  LyricsPage,
+  MusicPage,
+  SpeakPage,
+  ToolPage,
+  TracksPage,
+  TranscribePage,
+  VoicesPage,
+  presetOf,
+} from "@wasifyai/ui";
 import { PanelLeft } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
-import { AudiobookPage } from "./pages/Audiobook";
+import { client, voiceApi } from "./api";
 import { CreatePage } from "./pages/Create";
-import { DubPage } from "./pages/Dub";
 import { HomePage } from "./pages/Home";
 import { LibraryPage } from "./pages/Library";
-import { LipSyncPage } from "./pages/LipSync";
 import { ModelsPage } from "./pages/Models";
-import { LyricsPage, MusicPage, TracksPage } from "./pages/Music";
 import { NotebookPage } from "./pages/Notebook";
 import { NotebooksPage } from "./pages/Notebooks";
 import { SettingsPage } from "./pages/Settings";
-import { SpeakPage } from "./pages/Speak";
-import { ToolPage } from "./pages/Tools";
-import { TranscribePage } from "./pages/Transcribe";
 import { VideoPage } from "./pages/Video";
 import { VideosPage } from "./pages/Videos";
-import { VoicesPage } from "./pages/Voices";
+import { remembered } from "./remember";
 import { useRoute } from "./router";
 
 const COLLAPSED_KEY = "wasifyai:sidebar-collapsed";
@@ -45,6 +51,8 @@ export function Shell() {
     adoptNotebook,
   } = useRoute();
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  // what every voice screen is given: this window's engine, its remembered choices, its navigation
+  const voice = { api: voiceApi, runs: client, remembered, go, place: "device" as const };
   // an image whose recipe was sent to Create ("make it again"); used once, then forgotten
   const [again, setAgain] = useState<ImageSummary | null>(null);
   // a result sent to Edit as its source picture ("Edit this result")
@@ -144,18 +152,18 @@ export function Shell() {
               goModels={() => go("models")}
             />
           ) : null}
-          {route === "speak" ? <SpeakPage goModels={() => go("models")} /> : null}
-          {route === "transcribe" ? <TranscribePage goModels={() => go("models")} /> : null}
-          {route === "voices" ? <VoicesPage go={go} /> : null}
-          {route === "music" ? <MusicPage goModels={() => go("models")} /> : null}
-          {route === "tracks" ? <TracksPage go={go} /> : null}
-          {route === "lyrics" ? <LyricsPage go={go} /> : null}
-          {route === "lipsync" ? <LipSyncPage goModels={() => go("models")} /> : null}
-          {route === "audiobook" ? <AudiobookPage go={go} goModels={() => go("models")} /> : null}
-          {route === "dub" ? <DubPage go={go} goModels={() => go("models")} /> : null}
-          {route === "separate" ? <ToolPage tool="separate" go={go} /> : null}
-          {route === "convert" ? <ToolPage tool="convert" go={go} /> : null}
-          {route === "speechedit" ? <ToolPage tool="edit" go={go} /> : null}
+          {route === "speak" ? <SpeakPage {...voice} /> : null}
+          {route === "transcribe" ? <TranscribePage {...voice} /> : null}
+          {route === "voices" ? <VoicesPage {...voice} /> : null}
+          {route === "music" ? <MusicPage {...voice} /> : null}
+          {route === "tracks" ? <TracksPage {...voice} /> : null}
+          {route === "lyrics" ? <LyricsPage {...voice} /> : null}
+          {route === "lipsync" ? <LipSyncPage {...voice} /> : null}
+          {route === "audiobook" ? <AudiobookPage {...voice} /> : null}
+          {route === "dub" ? <DubPage {...voice} /> : null}
+          {route === "separate" ? <ToolPage tool="separate" {...voice} /> : null}
+          {route === "convert" ? <ToolPage tool="convert" {...voice} /> : null}
+          {route === "speechedit" ? <ToolPage tool="edit" {...voice} /> : null}
           {route === "video" ? <VideoPage mode="text" go={go} /> : null}
           {route === "animate" ? <VideoPage mode="image" go={go} /> : null}
           {route === "videos" ? <VideosPage go={go} /> : null}

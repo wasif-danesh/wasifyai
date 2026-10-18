@@ -4,9 +4,13 @@ need no download, and a reader that needs no Docling."""
 import asyncio
 import hashlib
 import math
+import os
 import re
+import socket
 from pathlib import Path
+from urllib.parse import urlparse
 
+import pytest
 from wasifyai_notebooks.components import Components, ReaderInstall, Unavailable
 from wasifyai_notebooks.embedding import EmbedderSpec, Pooling, Purpose
 from wasifyai_notebooks.reading import ReadResult
@@ -75,3 +79,16 @@ class FakeReader:
         if path.name in self.texts:
             return ReadResult(self.texts[path.name], 3)
         return ReadResult(path.read_text(errors="replace"))  # noqa: ASYNC240
+
+
+def pg_dsn() -> str:
+    """The Postgres the store tests run against: `DATABASE_URL` (as CI and `make dev` set it) or the
+    compose stack's default. The test skips when nothing answers there."""
+    url = os.environ.get("DATABASE_URL", "postgresql://wasifyai:wasifyai@localhost:5432/wasifyai")
+    dsn = url.replace("+asyncpg", "").replace("+psycopg", "")
+    u = urlparse(dsn)
+    try:
+        socket.create_connection((u.hostname or "localhost", u.port or 5432), timeout=1).close()
+    except OSError:
+        pytest.skip("Postgres not reachable")
+    return dsn

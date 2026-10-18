@@ -5,17 +5,17 @@ in front of the API. One app serves every product (ADR-0014). The UI is built fr
 **Tailwind CSS**, **react-hook-form** and **Zod** for forms and **TanStack Table** for data grids (ADR-0045); inside a
 product the user navigates with a **side panel** (ADR-0046), and the home page keeps its cards.
 
-![Create a song, with the side panel](../../docs/images/create.jpg)
-
 | Page | What it is |
 |---|---|
-| `/` | The home page, "Wasify AI": a card per product (public) |
-| `/music`, `/image`, `/video`, `/text-to-speech` | Create a song, an image, a video or speech (sign-in required). A video is made in the background: the top bar shows "Making your video…" and a notice says when it is ready |
-| `/music/songs/[id]`, `/image/creations/[id]`, `/video/creations/[id]`, `/text-to-speech/creations/[id]` | One saved result: the media, its words, downloads, delete (links are signed fresh on every visit) |
-| `/creations` | My creations: one library of everything the user made, newest first, as cards or a sortable table, with filters (`?show=songs\|images\|videos\|speeches`), "Load more" and a search that finds things by meaning or exact words in any language (sign-in required) |
-| `/speech-to-text`, `/speech-to-text/creations/[id]` | Upload or record, choose the language, transcribe; one transcript with Copy and downloads (sign-in required) |
-| `/lip-sync` | A "Coming soon" page (public, `noindex`; ADR-0044 designs it) |
-| `/admin/...` | The admin area (admins only): usage, users, songs, models, media, audit log, as sortable, filterable, paged tables |
+| `/` | The assistant: a chat with recent conversations (sign-in required) |
+| `/explore` | The home page, "Wasify AI": a card per product (public) |
+| `/image`, `/video`, `/voice/<screen>` | Create an image or a video, or use a voice screen: text to speech, speech to text, voices, music, lyrics, splitting, voice change, speech edit, dubbing, audiobook, lip sync (sign-in required; the voice screens need `VOICE_ENABLED`, and the menu lists the ones a ready model can run). A video is made in the background: the top bar shows "Making your video…" and a notice says when it is ready |
+| `/image/creations/[id]`, `/video/creations/[id]` | One saved result: the media, its words, downloads, delete (links are signed fresh on every visit) |
+| `/creations` | My creations: one library of everything the user made, newest first, as cards or a sortable table, with filters (`?show=songs\|images\|videos\|speeches\|transcripts\|lipsyncs`), "Load more" and a search that finds things by meaning or exact words in any language (sign-in required) |
+| `/notebooks`, `/notebooks/[id]` | Notebooks (`NOTEBOOKS_ENABLED`) |
+| `/admin/...` | The admin area (admins only): usage, users, models, media, safeguards, audit log, as sortable, filterable, paged tables |
+
+`/music`, `/text-to-speech`, `/speech-to-text` and `/lip-sync` still answer: the middleware sends them to the voice screens.
 
 ## How it fits together
 
@@ -30,22 +30,7 @@ Browser ── fetch ──► app/api/* (BFF route handlers) ──► FastAPI 
   `Last-Event-ID` when it is a plain number, and passes event streams through unbuffered.
 - **Pages that read data are server components** (the saved-result pages, `/creations`, the admin tables): the first
   paint has the data, and an unknown item is a real 404.
-- **Interaction is client components** under `components/create/`, driven by one hook.
-
-## The song flow
-
-`lib/song-flow.ts` is a **pure reducer**: server events in, UI state out. It has no fetch and no React,
-so every behaviour is tested against recorded event sequences. `hooks/use-song-flow.ts` does the I/O
-around it:
-
-- starts a run and answers the approval (`/api/products/wasifyai-music/runs`, `/api/runs/{id}/resume`);
-- **reconnects** if the stream drops mid-run, asking only for what it missed (`Last-Event-ID`);
-- **re-attaches after a reload** while a run is in progress or waiting for approval (the run id is
-  kept in `sessionStorage`; the server replays the events). A *finished* run is not restored: the song
-  lives in My creations, and the create page opens on an empty form;
-- shows an unreachable server or an API error in plain words, with Try again where retrying can help.
-
-The event contract the UI builds against is in `products/wasifyai-music/README.md`.
+- **Interaction is client components**: the shared screens of `packages/ui` (image, video, voice, notebooks, the assistant) mounted by the thin components in `components/*/`.
 
 ## Styling
 
@@ -56,7 +41,7 @@ Tailwind CSS and shadcn/ui (ADR-0045); `app/tailwind.css` is the only stylesheet
   variant follows) and remembers that preference in the browser. `color-mix()` derives borders, tints and glows.
 - **Tailwind** turns the tokens into colours (`bg-surface`, `text-muted-foreground`, `bg-primary`), fluid type steps
   (`text-step-2`) and animations; shared class strings are in `lib/styles.ts`.
-- **Container queries** (the stepper and the song layout adapt to their container's width), `starting:` entrance
+- **Container queries** (the stepper and the layouts adapt to their container's width), `starting:` entrance
   animations and fluid `clamp()` sizes.
 - **Motion respects `prefers-reduced-motion`.**
 
@@ -96,17 +81,11 @@ admin (Google's verified email, or the primary verified address on your GitHub a
 
 ## Downloads
 
-The Download buttons point at `/api/products/wasifyai-music/songs/{id}/download/{audio|cover|video}`, not at the
+The Download buttons point at the app's own origin (`/api/products/<product>/<kind>/{id}/download`), not at the
 storage link. Browsers ignore the `download` attribute on a link to another origin (the storage host), so
-the file would open in a tab. The route is served from the app's own origin with `Content-Disposition:
-attachment` and a readable name (`neon-rain.mp3`); the API looks the song up for the signed-in user only
-([ADR-0034](../../docs/decisions/0034-song-downloads.md)).
-
-- **Audio** is the MP3 with the title, lyrics and cover art written into its tag, so a music player shows the cover.
-- **Cover** is the stored PNG as it is.
-- **Video** is the cover as a picture with the song playing (MP4), made on the first click and kept in storage.
-
-Playing and showing on the page still use the signed storage links.
+the file would open in a tab. The route answers with `Content-Disposition: attachment` and a readable name;
+the API looks the item up for the signed-in user only. Playing and showing on the page still use the signed
+storage links.
 
 ## Admin
 
@@ -124,7 +103,7 @@ lets a must-refuse request through; this takes about half a minute. **Reset to d
 
 ### Media
 
-`/admin/media` lists each product's media capabilities (for example `wasifyai-music` `image.generate` and `music.generate`) and
+`/admin/media` lists each product's media capabilities (for example `wasifyai-image` `image.generate`) and
 what runs them. By default that is the product's own ComfyUI workflow on the local ComfyUI. Choose **Comfy Cloud / Comfy API (v2)**
 or, for images, an **OpenAI-compatible image API**, enter its address and key, then **Test connection** (it checks the service
 answers; it does not generate anything) or **Save**. The next job uses it. A saved key is kept when you save again for the same
@@ -147,9 +126,9 @@ Data grids use `components/ui/data-table.tsx` (TanStack Table: sorting, a filter
 Routes are in two groups with the same URLs: `app/(product)/` (music, image, video, text-to-speech, creations) has the side
 panel and top bar (`components/shell/`: panel, breadcrumb, ⌘K search over My creations, "ready" notices); `app/(site)/`
 (home, sign-in, admin, coming-soon pages) keeps the plain header. A product's panel entry and views come from
-`lib/products.ts`. My creations has a Cards/Table switch; `/creations?show=songs|images|videos|speeches` opens a filter.
+`lib/products.ts`. My creations has a Cards/Table switch; `/creations?show=songs|images|videos|speeches|transcripts|lipsyncs` opens a filter.
 
 ## Not done yet
 
 - Only GitHub sign-in has been tried with a real login; Google and Microsoft are wired the same way.
-- Sharing links for songs and a public gallery are out of scope for the MVP.
+- Sharing links and a public gallery are out of scope for the MVP.

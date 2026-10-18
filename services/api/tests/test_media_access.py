@@ -15,8 +15,8 @@ from tests.test_runs import hello_registry, mem_app
 
 KEY = "comfyui-0123456789abcdef0123456789abcdef"
 CAPS = [
-    MediaCapability(product_id="wasifyai-music", capability="image.generate", workflow="flux2"),
-    MediaCapability(product_id="wasifyai-music", capability="music.generate", workflow="ace"),
+    MediaCapability(product_id="wasifyai-image", capability="image.generate", workflow="flux2"),
+    MediaCapability(product_id="wasifyai-video", capability="video.generate", workflow="ace"),
 ]
 
 
@@ -28,8 +28,8 @@ def make(ready=True, handler=None):
 
 
 T = "tenant"
-IMG = ("wasifyai-music", "image.generate")
-MUS = ("wasifyai-music", "music.generate")
+IMG = ("wasifyai-image", "image.generate")
+MUS = ("wasifyai-video", "video.generate")
 
 
 async def test_everything_starts_on_the_product_default():
@@ -37,7 +37,7 @@ async def test_everything_starts_on_the_product_default():
     listing = await media.list(T)
     assert [(i.capability, i.backend, i.source) for i in listing.items] == [
         ("image.generate", "comfyui-local", "default"),
-        ("music.generate", "comfyui-local", "default"),
+        ("video.generate", "comfyui-local", "default"),
     ]
     assert listing.secrets_ready and {b.id for b in listing.backends} >= {
         "comfy-api",
@@ -130,7 +130,7 @@ async def test_a_key_is_refused_while_the_encryption_key_is_missing():
 async def test_unknown_capabilities_and_reset():
     media, store, _ = make()
     with pytest.raises(MediaAccessError, match="no media capability"):
-        await media.get(T, "wasifyai-music", "video.generate")
+        await media.get(T, "wasifyai-image", "video.generate")
     await media.set(T, *IMG, MediaBindingIn(backend="comfyui-local"), "a")
     view = await media.reset(T, *IMG)
     assert (view.backend, view.source) == ("comfyui-local", "default") and await store.get(
@@ -205,7 +205,7 @@ def routes(monkeypatch, tmp_path):
     get_settings.cache_clear()
 
 
-PATH = "/admin/media/wasifyai-music/image.generate"
+PATH = "/admin/media/wasifyai-image/image.generate"
 
 
 def test_routes_are_for_admins_only(routes):
@@ -221,7 +221,7 @@ def test_routes_are_for_admins_only(routes):
 
 def test_list_save_test_and_reset_through_the_api(routes):
     body = routes.get("/admin/media", headers=ADMIN).json()
-    assert [i["capability"] for i in body["items"]] == ["image.generate", "music.generate"]
+    assert [i["capability"] for i in body["items"]] == ["image.generate", "video.generate"]
 
     saved = routes.put(
         PATH, json={"backend": "comfy-api", "api_key": KEY, "config": {}}, headers=ADMIN
@@ -244,7 +244,7 @@ def test_the_audit_log_records_settings_but_never_the_key(routes):
     assert {"admin.media.update", "admin.media.test", "admin.media.reset"} <= set(entries)
     update = entries["admin.media.update"]
     assert (
-        update.target_id == "wasifyai-music/image.generate"
+        update.target_id == "wasifyai-image/image.generate"
         and update.detail["key_provided"] is True
     )
     assert all(KEY not in e.model_dump_json() for e in routes.audit.entries)
@@ -264,7 +264,7 @@ def test_bad_input_is_422(routes, body):
 
 def test_unknown_capability_is_422(routes):
     r = routes.put(
-        "/admin/media/wasifyai-music/video.generate",
+        "/admin/media/wasifyai-image/video.generate",
         json={"backend": "comfyui-local"},
         headers=ADMIN,
     )

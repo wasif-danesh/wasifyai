@@ -25,6 +25,7 @@ import { Markdown } from "../chat/markdown";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { type MapNode, parseOutline } from "./outputs";
+import { useNotebookPlace } from "./place";
 
 /** Cards one at a time: click or press Space to turn one over, arrows to move. */
 export function FlashcardsViewer({ deck }: { deck: FlashcardsData }) {
@@ -307,6 +308,7 @@ function OverviewVoices({
   script,
   control,
 }: { script: AudioScriptData; control: OverviewControl }) {
+  const where = useNotebookPlace() === "hosted" ? "by the speech model" : "on this computer";
   const [src, setSrc] = useState<string | null>(null);
   const [job, setJob] = useState<OverviewState | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -386,8 +388,8 @@ function OverviewVoices({
           </Button>
           <span className="text-muted-foreground text-xs">
             {script.audio
-              ? "Two voices, made on this computer."
-              : "Two voices read the conversation, made on this computer."}
+              ? `Two voices, made ${where}.`
+              : `Two voices read the conversation, made ${where}.`}
           </span>
         </div>
       )}

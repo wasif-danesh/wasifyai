@@ -2,7 +2,6 @@ import type { Entry } from "@/lib/creations";
 // @vitest-environment jsdom
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { SongSummary, SpeechSummary } from "@wasifyai/contracts";
 import { describe, expect, it } from "vitest";
 import { CreationsTable } from "./CreationsTable";
 
@@ -10,7 +9,7 @@ const song = (id: string, title: string, createdAt: string): Entry => ({
   kind: "song",
   id,
   createdAt,
-  song: { id, title, style: "lo-fi", created_at: createdAt } as unknown as SongSummary,
+  song: { id, title, style: "lo-fi", created_at: createdAt, audio_url: "a" },
 });
 const speech: Entry = {
   kind: "speech",
@@ -19,12 +18,11 @@ const speech: Entry = {
   speech: {
     id: "s1",
     text: "আপনি কেমন আছেন?",
-    language: "bn",
-    language_name: "বাংলা",
-    gender: "female",
     voice: "Aditi",
+    seconds: 2,
     created_at: "2026-10-03T10:00:00Z",
-  } as unknown as SpeechSummary,
+    audio_url: "a",
+  },
 };
 const entries = [
   song("a", "Beta", "2026-10-02T10:00:00Z"),
@@ -41,9 +39,9 @@ describe("CreationsTable", () => {
   it("shows each creation with its type, a link to it and its details", () => {
     render(<CreationsTable entries={entries} />);
     const link = screen.getByRole("link", { name: "আপনি কেমন আছেন?" });
-    expect(link).toHaveAttribute("href", "/text-to-speech/creations/s1");
-    expect(screen.getByText("বাংলা · Female, Aditi")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Beta" })).toHaveAttribute("href", "/music/songs/a");
+    expect(link).toHaveAttribute("href", "/voice/speak");
+    expect(screen.getByText("Aditi")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Beta" })).toHaveAttribute("href", "/voice/tracks");
   });
 
   it("keeps the order it was given until a header is clicked, then sorts by that column", async () => {

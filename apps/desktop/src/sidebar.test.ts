@@ -1,92 +1,65 @@
-import { describe, expect, it } from "vitest";
-import { GROUPS, groupOf } from "./Sidebar";
+import { MENU_GROUPS } from "@wasifyai/ui";
+import { describe, expect, it, vi } from "vitest";
+import { ROUTES, resolveItem } from "./menu";
+import { type Route, routePath } from "./router";
 
-describe("the side menu", () => {
-  it("has the groups in order, each with its items", () => {
-    expect(GROUPS.map((g) => g.label)).toEqual(["Notebook", "Images", "Video", "Voice", "Music"]);
-    const items = (id: string) => GROUPS.find((g) => g.id === id)?.items.map((i) => i.label);
-    expect(items("notebook")).toEqual(["Create", "View Notebooks"]);
-    expect(items("video")).toEqual(["Create", "Animate an image", "Extend video", "Your videos"]);
-    expect(items("voice")).toEqual([
-      "Text to speech",
-      "Speech to text",
-      "Lip sync",
-      "Voices",
-      "Change a voice",
-      "Edit speech",
-      "Dub a recording",
-      "Audiobook",
+const ids = MENU_GROUPS.flatMap((g) => g.items.map((i) => i.id));
+const at = (route: Route, notebook: string | null = null, conversationId: string | null = null) =>
+  resolveItem(route, () => {}, { conversationId, notebook });
+
+describe("the window's side menu", () => {
+  it("opens a screen for everything that is built and marks the rest as soon", () => {
+    const soon = ids.filter((id) => at("home")(id) === undefined);
+    expect(soon).toEqual([
+      "images.transform",
+      "images.inpaint",
+      "images.extend",
+      "images.upscale",
+      "images.reference",
+      "video.extend",
     ]);
-    expect(items("music")).toEqual(["Create", "Your music", "Lyrics", "Split into parts"]);
-    expect(items("images")).toContain("Your images");
+    expect(at("home")("train")).toBeUndefined();
   });
 
-  it("marks what is not built yet, and nothing in Notebook or Images' working tools", () => {
-    const video = GROUPS.find((g) => g.id === "video")?.items ?? [];
-    expect(video.filter((i) => !i.soon).map((i) => [i.label, i.route])).toEqual([
-      ["Create", "video"],
-      ["Animate an image", "animate"],
-      ["Your videos", "videos"],
-    ]);
-    expect(video.filter((i) => i.soon).map((i) => i.label)).toEqual(["Extend video"]);
-    const music = GROUPS.find((g) => g.id === "music")?.items ?? [];
-    expect(music.filter((i) => !i.soon).map((i) => [i.label, i.route])).toEqual([
-      ["Create", "music"],
-      ["Your music", "tracks"],
-      ["Lyrics", "lyrics"],
-      ["Split into parts", "separate"],
-    ]);
-    const voice = GROUPS.find((g) => g.id === "voice")?.items ?? [];
-    expect(voice.filter((i) => !i.soon).map((i) => [i.label, i.route])).toEqual([
-      ["Text to speech", "speak"],
-      ["Speech to text", "transcribe"],
-      ["Lip sync", "lipsync"],
-      ["Voices", "voices"],
-      ["Change a voice", "convert"],
-      ["Edit speech", "speechedit"],
-      ["Dub a recording", "dub"],
-      ["Audiobook", "audiobook"],
-    ]);
-    const notebook = GROUPS.find((g) => g.id === "notebook");
-    expect(notebook?.items.some((i) => i.soon)).toBe(false);
-    const images = GROUPS.find((g) => g.id === "images")?.items ?? [];
-    expect(images.filter((i) => !i.soon).map((i) => i.label)).toEqual([
-      "Create",
-      "Edit",
-      "Your images",
-    ]);
+  it("points every item at a route that exists", () => {
+    for (const [id, route] of Object.entries(ROUTES)) {
+      expect(routePath(route), id).toBeTruthy();
+      expect(ids.includes(id) || ["library", "models"].includes(id), id).toBe(true);
+    }
   });
 
-  it("keeps the group of the current page open", () => {
-    expect(groupOf("notebook")).toBe("notebook");
-    expect(groupOf("notebooks")).toBe("notebook");
-    expect(groupOf("create")).toBe("images");
-    expect(groupOf("library")).toBe("images");
-    expect(groupOf("speak")).toBe("voice");
-    expect(groupOf("transcribe")).toBe("voice");
-    expect(groupOf("voices")).toBe("voice");
-    expect(groupOf("music")).toBe("music");
-    expect(groupOf("tracks")).toBe("music");
-    expect(groupOf("lyrics")).toBe("music");
-    expect(groupOf("separate")).toBe("music");
-    expect(groupOf("convert")).toBe("voice");
-    expect(groupOf("speechedit")).toBe("voice");
-    expect(groupOf("lipsync")).toBe("voice");
-    expect(groupOf("dub")).toBe("voice");
-    expect(groupOf("audiobook")).toBe("voice");
-    expect(groupOf("video")).toBe("video");
-    expect(groupOf("animate")).toBe("video");
-    expect(groupOf("videos")).toBe("video");
-    expect(groupOf("home")).toBeNull();
-    expect(groupOf("models")).toBeNull();
+  it("marks the page being shown", () => {
+    const current = (route: Route, id: string) => {
+      const v = at(route)(id);
+      return v && !("hidden" in v) ? v.current : false;
+    };
+    expect(current("video", "video.create")).toBe(true);
+    expect(current("animate", "video.create")).toBe(false);
+    expect(current("videos", "video.library")).toBe(true);
+    expect(current("tracks", "music.library")).toBe(true);
+    expect(current("speechedit", "voice.edit")).toBe(true);
+    expect(current("models", "models")).toBe(true);
   });
 
-  it("tells a draft from a saved notebook", () => {
-    const [create, view] = GROUPS[0]?.items ?? [];
-    expect(create?.current?.("notebook", "new")).toBe(true);
-    expect(create?.current?.("notebook", "abc")).toBe(false);
-    expect(view?.current?.("notebook", "abc")).toBe(true);
-    expect(view?.current?.("notebooks", null)).toBe(true);
-    expect(view?.current?.("home", null)).toBe(false);
+  it("tells a new chat from an open one, and a draft notebook from a saved one", () => {
+    const view = (route: Route, id: string, nb: string | null, conv: string | null) => {
+      const v = at(route, nb, conv)(id);
+      return v && !("hidden" in v) ? v.current : null;
+    };
+    expect(view("home", "chat", null, null)).toBe(true);
+    expect(view("home", "chat", null, "abc")).toBe(false);
+    expect(view("notebook", "notebook.create", "new", null)).toBe(true);
+    expect(view("notebook", "notebook.create", "abc", null)).toBe(false);
+    expect(view("notebook", "notebook.list", "abc", null)).toBe(true);
+    expect(view("notebooks", "notebook.list", null, null)).toBe(true);
+    expect(view("notebook", "notebook.list", "new", null)).toBe(false);
+  });
+
+  it("goes to the screen when an item is chosen", () => {
+    const go = vi.fn();
+    const v = resolveItem("home", go, { conversationId: null, notebook: null })("video.animate");
+    if (!v || "hidden" in v) throw new Error("no view");
+    v.onSelect?.();
+    expect(go).toHaveBeenCalledWith("animate");
   });
 });

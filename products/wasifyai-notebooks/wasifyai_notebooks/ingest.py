@@ -10,14 +10,18 @@ A failure is written on the source with a sentence a person can act on.
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from wasifyai_notebooks.chunking import chunk, load_tokenizer
+from wasifyai_platform_sdk.usage import EMBEDDING_TOKENS
+
+from wasifyai_notebooks.chunking import chunk
 from wasifyai_notebooks.components import Components, Unavailable
-from wasifyai_notebooks.embedding import Purpose
-from wasifyai_notebooks.reading import Reader, ReadError
+from wasifyai_notebooks.embedding import EmbedError, Purpose, embed_counted
+from wasifyai_notebooks.files import FileLibrary, as_library, original_key
+from wasifyai_notebooks.reading import Reader, ReadError, ReadResult
 from wasifyai_notebooks.store import NotebookStore
 
 log = logging.getLogger(__name__)
@@ -26,6 +30,7 @@ log = logging.getLogger(__name__)
 # empty document (E0: an unreadable scan came back as a bare `<!-- image -->` and no error)
 MIN_TEXT_CHARS = 20
 POLL_S = 1.0
+SWEEP_S = 60.0  # how often a reader looks for sources another reader lost
 
 NO_TEXT = (
     "No text could be read from this file. If it is a scan or a picture of text, the text may be "
@@ -43,12 +48,13 @@ async def ingest_one(
     store: NotebookStore,
     components: Components,
     reader: Reader,
-    files_dir: Path,
+    files: FileLibrary | Path,
     doc: dict[str, Any],
     *,
     tokenizer_factory: Callable[[], Any] | None = None,
 ) -> str:
-    """Read one pending source. Returns its final status."""
+    """Read one pending source. Returns its final status. `files` is where the originals are kept
+    (a library, or the desktop's `files` folder)."""
     began = await asyncio.to_thread(store.begin, doc["id"])
     if began is None:  # cancelled or deleted while it waited
         return "cancelled"
@@ -62,26 +68,32 @@ async def ingest_one(
         if began["kind"] == "note":
             markdown, pages = began["content"] or "", None
         else:
-            stored = original_path(files_dir, began["notebook_id"], began)
-            if not stored.is_file():
-                raise ReadError("The stored file is no longer on this computer.")
-            result = await reader.read(stored, began["suffix"] or "")
+            result = await _read_original(store, as_library(files), reader, began)
             markdown, pages = result.markdown, result.pages
             if len(markdown.strip()) < MIN_TEXT_CHARS:
                 raise ReadError(NO_TEXT)
         if await cancelled():
             return "cancelled"
 
-        tokenizer = (tokenizer_factory or (lambda: load_tokenizer(components.tokenizer_path())))()
-        passages = await asyncio.to_thread(chunk, markdown, tokenizer=tokenizer)
+        tokenizer = (tokenizer_factory or components.tokenizer)()
+        passages = await asyncio.to_thread(
+            chunk, markdown, tokenizer=tokenizer, chunk_size=components.chunk_size
+        )
         if await cancelled():
             return "cancelled"
         if not passages:
             raise ReadError(NO_TEXT)
 
-        vectors = await asyncio.to_thread(
-            embedder.embed, [p.text for p in passages], Purpose.DOCUMENT
+        vectors, tokens = await asyncio.to_thread(
+            embed_counted, embedder, [p.text for p in passages], Purpose.DOCUMENT
         )
+        if tokens:
+            owner = await asyncio.to_thread(store.owner_of, began["notebook_id"])
+            if owner is not None:
+                await asyncio.to_thread(
+                    store.record_usage, *owner, EMBEDDING_TOKENS, tokens, "tokens",
+                    capability="notebooks.embed", source="reading",
+                )  # fmt: skip
         if await cancelled():
             return "cancelled"
 
@@ -95,7 +107,7 @@ async def ingest_one(
             embedder=embedder.spec.id,
         )
         return "ready" if ok else "cancelled"
-    except (ReadError, Unavailable) as e:
+    except (ReadError, Unavailable, EmbedError) as e:
         message = e.message if isinstance(e, Unavailable) else str(e)
         await asyncio.to_thread(store.fail, did, message)
         return "failed"
@@ -108,6 +120,25 @@ async def ingest_one(
         return "failed"
 
 
+async def _read_original(
+    store: NotebookStore, files: FileLibrary, reader: Reader, doc: dict[str, Any]
+) -> ReadResult:
+    """Read a source's stored file. The reader needs a path: the file itself in a folder, a copy
+    (removed afterwards) from object storage."""
+    nid = doc["notebook_id"]
+    owner = await asyncio.to_thread(store.owner_of, nid)
+    if owner is None:
+        raise ReadError("The notebook of this source is gone.")
+    keep = files.for_owner(*owner).local(original_key(nid, doc))
+    stored = await asyncio.to_thread(keep.__enter__)
+    try:
+        if stored is None:
+            raise ReadError("The stored file is no longer here.")
+        return await reader.read(stored, doc["suffix"] or "")
+    finally:
+        await asyncio.to_thread(keep.__exit__, None, None, None)
+
+
 class IngestWorker:
     """The background loop: takes the next pending source, highest priority first."""
 
@@ -116,21 +147,25 @@ class IngestWorker:
         store: NotebookStore,
         components: Components,
         reader: Reader,
-        files_dir: Path,
+        files: FileLibrary | Path,
         *,
         tokenizer_factory: Callable[[], Any] | None = None,
+        stale_after_s: float | None = None,
     ):
+        """`stale_after_s` is for a deployment with several readers (the web): a source another
+        reader has had longer than that is taken as lost. Left out, this is the only reader."""
+        self._stale_after = stale_after_s
         self._store = store
         self._components = components
         self._reader = reader
-        self._files_dir = files_dir
+        self._files = as_library(files)
         self._tokenizer_factory = tokenizer_factory
         self._wake = asyncio.Event()
         self._task: asyncio.Task | None = None
 
     def start(self) -> None:
         if self._task is None or self._task.done():
-            self._store.reset_interrupted()
+            self._store.reset_interrupted(self._stale_after)
             self._task = asyncio.create_task(self._loop())
 
     def wake(self) -> None:
@@ -165,8 +200,12 @@ class IngestWorker:
             )
 
     async def _loop(self) -> None:
+        swept = time.monotonic()
         while True:
             try:
+                if self._stale_after is not None and time.monotonic() - swept > SWEEP_S:
+                    swept = time.monotonic()
+                    await asyncio.to_thread(self._store.reset_interrupted, self._stale_after)
                 # nothing is read until the search model is here: sources added first stay waiting
                 # and are read as soon as the model arrives, instead of failing one by one
                 if self._components.embedder_paths() is None:
@@ -184,7 +223,7 @@ class IngestWorker:
                     self._store,
                     self._components,
                     self._reader,
-                    self._files_dir,
+                    self._files,
                     doc,
                     tokenizer_factory=self._tokenizer_factory,
                 )

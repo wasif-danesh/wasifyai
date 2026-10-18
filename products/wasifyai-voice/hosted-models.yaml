@@ -1,0 +1,46 @@
+# The models the web offers (ADR-0066 decision 11: a deployment lists what it allows). Each is
+# served by a hosted provider through the gateway: `voice.package` is the gateway ALIAS the admin
+# points at the provider's model (OpenRouter or another). The engine speaks the common OpenAI-style
+# audio API, so only speaking and transcribing are listed; the rest is offered when a hosted model
+# for it is chosen. Which providers and models serve an alias is the admin's (LiteLLM), not code.
+models:
+  - id: hosted-speech
+    title: Speech (hosted)
+    licence: The provider's terms of service
+    voice:
+      engine: remote
+      family: openai-speech
+      package: voice-speak          # the gateway alias
+      server_task: tts
+      tasks: [speak]
+      recommended: [speak]
+      languages: [en]
+      sample_rate: 24000
+      commercial_use: "yes"
+      licence_evidence: https://openrouter.ai/terms
+      reviewed: "2026-10-18"
+      voices:
+        - { id: alloy, label: Alloy, language: en }
+        - { id: echo, label: Echo, language: en, gender: male }
+        - { id: nova, label: Nova, language: en, gender: female }
+        - { id: onyx, label: Onyx, language: en, gender: male }
+      default_voice: alloy
+      options:
+        - { name: speed, type: float, label: Speed, default: 1.0, min: 0.5, max: 2.0 }
+  - id: hosted-transcribe
+    title: Speech to text (hosted)
+    licence: The provider's terms of service
+    voice:
+      engine: remote
+      family: openai-transcription
+      package: voice-transcribe     # the gateway alias
+      server_task: stt
+      tasks: [transcribe]
+      recommended: [transcribe]
+      languages: [en]
+      sample_rate: 16000
+      commercial_use: "yes"
+      licence_evidence: https://openrouter.ai/terms
+      reviewed: "2026-10-18"
+      options:
+        - { name: language, type: string, label: Language, description: "A code such as en; left empty it is detected." }

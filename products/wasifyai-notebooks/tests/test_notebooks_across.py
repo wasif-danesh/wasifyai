@@ -7,6 +7,8 @@ from wasifyai_notebooks.across import PASSAGE_CHARS, search_across
 from wasifyai_notebooks.ingest import ingest_one, original_path
 from wasifyai_platform_sdk import RunContext, ToolUnavailable, reset_context, set_context
 
+pytestmark = pytest.mark.usefixtures("use_backends")  # on SQLite and on Postgres
+
 CTX = RunContext("t1", "wasifyai-notebooks", "u1", run_id="r1", thread_id="th1")
 
 

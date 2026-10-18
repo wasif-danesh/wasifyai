@@ -175,23 +175,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/songs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Songs */
-        get: operations["list_songs_admin_songs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/admin/usage": {
         parameters: {
             query?: never;
@@ -408,143 +391,6 @@ export interface paths {
         put?: never;
         /** Enhance */
         post: operations["enhance_products_wasifyai_image_prompt_enhance_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/products/wasifyai-lipsync/lipsyncs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Lipsyncs */
-        get: operations["list_lipsyncs_products_wasifyai_lipsync_lipsyncs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/products/wasifyai-lipsync/lipsyncs/{video_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Lipsync */
-        get: operations["get_lipsync_products_wasifyai_lipsync_lipsyncs__video_id__get"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete Lipsync
-         * @description Delete a clip (or dismiss a failed one): its files first, then the record. A clip still
-         *     being made cannot be deleted: its job is running.
-         */
-        delete: operations["delete_lipsync_products_wasifyai_lipsync_lipsyncs__video_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/products/wasifyai-lipsync/lipsyncs/{video_id}/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download
-         * @description The clip as a file the browser saves (browsers ignore `download` on links to the
-         *     storage host, ADR-0034).
-         */
-        get: operations["download_products_wasifyai_lipsync_lipsyncs__video_id__download_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/products/wasifyai-music/prompt/enhance": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Enhance */
-        post: operations["enhance_products_wasifyai_music_prompt_enhance_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/products/wasifyai-music/songs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Songs */
-        get: operations["list_songs_products_wasifyai_music_songs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/products/wasifyai-music/songs/{song_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Song */
-        get: operations["get_song_products_wasifyai_music_songs__song_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/products/wasifyai-music/songs/{song_id}/download/{kind}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download
-         * @description A file the browser saves. Browsers ignore `download` on links to another origin (the
-         *     storage host), so files are served from here with a Content-Disposition. The song is looked
-         *     up for this user only, like every other route.
-         *
-         *     `audio` is the MP3 with the title, lyrics and cover art written into its tag, so a music
-         *     player shows the cover. `video` is the cover as a picture with the song playing, made on the
-         *     first request and kept in storage.
-         */
-        get: operations["download_products_wasifyai_music_songs__song_id__download__kind__get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -976,163 +822,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/products/wasifyai-stt/languages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Languages
-         * @description The languages to choose from, and what an upload may be.
-         */
-        get: operations["languages_products_wasifyai_stt_languages_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/products/wasifyai-stt/transcripts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Transcripts */
-        get: operations["list_transcripts_products_wasifyai_stt_transcripts_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/products/wasifyai-stt/transcripts/{transcript_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Transcript */
-        get: operations["get_transcript_products_wasifyai_stt_transcripts__transcript_id__get"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete Transcript
-         * @description Delete a transcript (or dismiss a failed one). One still being made cannot be deleted.
-         */
-        delete: operations["delete_transcript_products_wasifyai_stt_transcripts__transcript_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/products/wasifyai-stt/transcripts/{transcript_id}/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download
-         * @description The transcript as a file the browser saves: plain text, SRT, WebVTT or JSON.
-         */
-        get: operations["download_products_wasifyai_stt_transcripts__transcript_id__download_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/products/wasifyai-tts/speeches": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Speeches */
-        get: operations["list_speeches_products_wasifyai_tts_speeches_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/products/wasifyai-tts/speeches/{speech_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Speech */
-        get: operations["get_speech_products_wasifyai_tts_speeches__speech_id__get"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete Speech
-         * @description Delete a result: its file first, then the record.
-         */
-        delete: operations["delete_speech_products_wasifyai_tts_speeches__speech_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/products/wasifyai-tts/speeches/{speech_id}/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download
-         * @description The speech as a file the browser saves (browsers ignore `download` on links to the
-         *     storage host, ADR-0034).
-         */
-        get: operations["download_products_wasifyai_tts_speeches__speech_id__download_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/products/wasifyai-tts/voices": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Voices
-         * @description The languages and voices the form offers: a gender with no voice is an empty list.
-         */
-        get: operations["list_voices_products_wasifyai_tts_voices_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/products/wasifyai-video/prompt/enhance": {
         parameters: {
             query?: never;
@@ -1204,6 +893,27 @@ export interface paths {
         get: operations["download_products_wasifyai_video_videos__video_id__download_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-video/videos/{video_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Video
+         * @description Copy the clip into the person's export folder (the desktop app sets one; a webview
+         *     cannot save a file by itself). Never overwrites: a second copy gets a number.
+         */
+        post: operations["export_video_products_wasifyai_video_videos__video_id__export_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1305,6 +1015,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-voice/lipsync-engine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lipsync Engine
+         * @description The lip sync component's state (installed, running), when this service has it.
+         */
+        get: operations["lipsync_engine_products_wasifyai_voice_lipsync_engine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Models
+         * @description The models the engine offers (the web's hosted ones; the desktop lists them, with what is
+         *     on the computer, under `/desktop/audio/models`).
+         */
+        get: operations["models_products_wasifyai_voice_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-voice/pictures": {
         parameters: {
             query?: never;
@@ -1320,6 +1071,28 @@ export interface paths {
          *     location, no camera data), scaled down. It is kept until a clip uses it, or for a day.
          */
         post: operations["add_picture_products_wasifyai_voice_pictures_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/runtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runtime
+         * @description Whether what runs the models is set up. A service whose models are all hosted has nothing
+         *     to set up and says so (`hosted`); one with the local runtime reports its state, which the
+         *     web only reads: setting it up is done in the desktop app that owns the computer.
+         */
+        get: operations["runtime_products_wasifyai_voice_runtime_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1729,31 +1502,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** AdminSong */
-        AdminSong: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Id */
-            id: string;
-            /** Product Id */
-            product_id: string;
-            /** Title */
-            title: string;
-            /** User Email */
-            user_email: string | null;
-            /** User Id */
-            user_id: string;
-        };
-        /** AdminSongPage */
-        AdminSongPage: {
-            /** Next Before */
-            next_before: string | null;
-            /** Songs */
-            songs: components["schemas"]["AdminSong"][];
-        };
         /** AdminUser */
         AdminUser: {
             /**
@@ -2144,74 +1892,6 @@ export interface components {
             /** Ts */
             ts?: string;
         };
-        /** LanguageCatalog */
-        LanguageCatalog: {
-            /** Languages */
-            languages: components["schemas"]["SpokenLanguage"][];
-            /**
-             * Max Bytes
-             * @default 104857600
-             */
-            max_bytes: number;
-            /**
-             * Max Seconds
-             * @default 1800
-             */
-            max_seconds: number;
-        };
-        /** LanguageChoice */
-        LanguageChoice: {
-            /** English */
-            english: string;
-            /** Genders */
-            genders: {
-                [key: string]: components["schemas"]["VoiceChoice"][];
-            };
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-        };
-        /** LipSyncPage */
-        LipSyncPage: {
-            /** Lipsyncs */
-            lipsyncs: components["schemas"]["LipSyncSummary"][];
-            /** Next Before */
-            next_before: string | null;
-        };
-        /** LipSyncSummary */
-        LipSyncSummary: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Error */
-            error?: string | null;
-            /** Height */
-            height?: number | null;
-            /** Id */
-            id: string;
-            /** Poster Url */
-            poster_url?: string | null;
-            /** Seconds */
-            seconds: number;
-            /** Source */
-            source: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "working" | "done" | "failed";
-            /** Style */
-            style: string;
-            /** Text */
-            text: string;
-            /** Video Url */
-            video_url?: string | null;
-            /** Width */
-            width?: number | null;
-        };
         /** Me */
         Me: {
             /** Role */
@@ -2549,107 +2229,6 @@ export interface components {
             /** Results */
             results: components["schemas"]["SearchHit"][];
         };
-        /** Segment */
-        Segment: {
-            /** End */
-            end: number;
-            /** Start */
-            start: number;
-            /** Text */
-            text: string;
-        };
-        /** SongDetail */
-        SongDetail: {
-            /** Audio Url */
-            audio_url: string;
-            /** Cover Url */
-            cover_url: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Id */
-            id: string;
-            /** Lyrics */
-            lyrics: string;
-            /** Style */
-            style: string;
-            /** Title */
-            title: string;
-        };
-        /** SongPage */
-        SongPage: {
-            /** Next Before */
-            next_before: string | null;
-            /** Songs */
-            songs: components["schemas"]["SongSummary"][];
-        };
-        /** SongSummary */
-        SongSummary: {
-            /** Audio Url */
-            audio_url: string;
-            /** Cover Url */
-            cover_url: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Id */
-            id: string;
-            /** Style */
-            style: string;
-            /** Title */
-            title: string;
-        };
-        /** SpeechPage */
-        SpeechPage: {
-            /** Next Before */
-            next_before: string | null;
-            /** Speeches */
-            speeches: components["schemas"]["SpeechSummary"][];
-        };
-        /** SpeechSummary */
-        SpeechSummary: {
-            /** Audio Url */
-            audio_url: string;
-            /** Characters */
-            characters: number;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Gender */
-            gender: string;
-            /** Id */
-            id: string;
-            /** Language */
-            language: string;
-            /** Language Name */
-            language_name: string;
-            /** Seconds */
-            seconds: number;
-            /** Text */
-            text: string;
-            /** Voice */
-            voice: string;
-        };
-        /** SpokenLanguage */
-        SpokenLanguage: {
-            /** English */
-            english: string;
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /**
-             * Quality
-             * @enum {string}
-             */
-            quality: "good" | "fair" | "limited" | "unrated";
-        };
         SseEvent: components["schemas"]["NodeEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["InterruptEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["JobProgressEvent"] | components["schemas"]["ErrorEvent"] | components["schemas"]["DoneEvent"];
         /** TestOutcome */
         TestOutcome: {
@@ -2778,71 +2357,6 @@ export interface components {
             /** Title */
             title?: string | null;
         };
-        /** TranscriptDetail */
-        TranscriptDetail: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Error */
-            error?: string | null;
-            /** Id */
-            id: string;
-            /** Language */
-            language: string;
-            /** Language Name */
-            language_name: string;
-            /** Preview */
-            preview: string;
-            /** Seconds */
-            seconds: number;
-            /** Segments */
-            segments: components["schemas"]["Segment"][];
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "working" | "done" | "failed";
-            /** Text */
-            text: string;
-            /** Title */
-            title: string;
-        };
-        /** TranscriptPage */
-        TranscriptPage: {
-            /** Next Before */
-            next_before: string | null;
-            /** Transcripts */
-            transcripts: components["schemas"]["TranscriptSummary"][];
-        };
-        /** TranscriptSummary */
-        TranscriptSummary: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Error */
-            error?: string | null;
-            /** Id */
-            id: string;
-            /** Language */
-            language: string;
-            /** Language Name */
-            language_name: string;
-            /** Preview */
-            preview: string;
-            /** Seconds */
-            seconds: number;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "working" | "done" | "failed";
-            /** Title */
-            title: string;
-        };
         /** UploadResult */
         UploadResult: {
             /** Bytes */
@@ -2938,22 +2452,6 @@ export interface components {
             video_url?: string | null;
             /** Width */
             width?: number | null;
-        };
-        /** VoiceCatalog */
-        VoiceCatalog: {
-            /** Languages */
-            languages: components["schemas"]["LanguageChoice"][];
-        };
-        /** VoiceChoice */
-        VoiceChoice: {
-            /** Default */
-            default: boolean;
-            /** Id */
-            id: string;
-            /** Label */
-            label: string;
-            /** Quality */
-            quality: string;
         };
         /** VoicePatch */
         VoicePatch: {
@@ -3301,38 +2799,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SafeguardsStatus"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_songs_admin_songs_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                before?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AdminSongPage"];
                 };
             };
             /** @description Validation Error */
@@ -3822,260 +3288,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnhanceOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_lipsyncs_products_wasifyai_lipsync_lipsyncs_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                before?: string | null;
-                status?: ("working" | "done" | "failed") | null;
-                ids?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LipSyncPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_lipsync_products_wasifyai_lipsync_lipsyncs__video_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                video_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LipSyncSummary"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_lipsync_products_wasifyai_lipsync_lipsyncs__video_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                video_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_products_wasifyai_lipsync_lipsyncs__video_id__download_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                video_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    enhance_products_wasifyai_music_prompt_enhance_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnhanceIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnhanceOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_songs_products_wasifyai_music_songs_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                before?: string | null;
-                ids?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SongPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_song_products_wasifyai_music_songs__song_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                song_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SongDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_products_wasifyai_music_songs__song_id__download__kind__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                song_id: string;
-                kind: "audio" | "cover" | "video";
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -5307,297 +4519,6 @@ export interface operations {
             };
         };
     };
-    languages_products_wasifyai_stt_languages_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LanguageCatalog"];
-                };
-            };
-        };
-    };
-    list_transcripts_products_wasifyai_stt_transcripts_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                before?: string | null;
-                status?: ("working" | "done" | "failed") | null;
-                ids?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TranscriptPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_transcript_products_wasifyai_stt_transcripts__transcript_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                transcript_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TranscriptDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_transcript_products_wasifyai_stt_transcripts__transcript_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                transcript_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_products_wasifyai_stt_transcripts__transcript_id__download_get: {
-        parameters: {
-            query?: {
-                format?: "txt" | "srt" | "vtt" | "json";
-            };
-            header?: never;
-            path: {
-                transcript_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_speeches_products_wasifyai_tts_speeches_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                before?: string | null;
-                ids?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SpeechPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_speech_products_wasifyai_tts_speeches__speech_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                speech_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SpeechSummary"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_speech_products_wasifyai_tts_speeches__speech_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                speech_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_products_wasifyai_tts_speeches__speech_id__download_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                speech_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_voices_products_wasifyai_tts_voices_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VoiceCatalog"];
-                };
-            };
-        };
-    };
     enhance_products_wasifyai_video_prompt_enhance_post: {
         parameters: {
             query?: never;
@@ -5743,6 +4664,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_video_products_wasifyai_video_videos__video_id__export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Exported"];
                 };
             };
             /** @description Validation Error */
@@ -5977,6 +4929,61 @@ export interface operations {
             };
         };
     };
+    lipsync_engine_products_wasifyai_voice_lipsync_engine_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    models_products_wasifyai_voice_models_get: {
+        parameters: {
+            query?: {
+                task?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     add_picture_products_wasifyai_voice_pictures_post: {
         parameters: {
             query?: never;
@@ -6008,6 +5015,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    runtime_products_wasifyai_voice_runtime_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

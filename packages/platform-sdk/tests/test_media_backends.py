@@ -15,13 +15,13 @@ KEY = "comfyui-0123456789abcdef0123456789abcdef"
 
 
 def test_which_backends_can_serve_which_capability():
-    assert family("image.generate") == "image" and family("music.generate") == "music"
+    assert family("image.generate") == "image" and family("video.generate") == "video"
     assert {b.id for b in backends_for("image.generate")} == {
         "comfyui-local",
         "comfy-api",
         "openai-images",
     }
-    assert {b.id for b in backends_for("music.generate")} == {"comfyui-local", "comfy-api"}
+    assert {b.id for b in backends_for("video.generate")} == {"comfyui-local", "comfy-api"}
     assert not BACKENDS["comfy-api"].local_gpu and BACKENDS["comfyui-local"].local_gpu
 
 
@@ -29,7 +29,7 @@ def test_which_backends_can_serve_which_capability():
     ("backend", "capability", "config", "key", "saved", "message"),
     [
         ("nope", "image.generate", {}, None, False, "unknown backend"),
-        ("openai-images", "music.generate", {"model": "m"}, None, False, "cannot serve"),
+        ("openai-images", "video.generate", {"model": "m"}, None, False, "cannot serve"),
         ("comfy-api", "image.generate", {}, None, False, "needs an api key"),
         ("openai-images", "image.generate", {}, None, False, "Model is required"),
         ("openai-images", "image.generate", {"model": "bad model!"}, None, False, "characters"),
@@ -76,7 +76,7 @@ def test_good_configurations_come_back_clean_and_without_secrets():
     }
     assert KEY not in str(clean)
     assert (
-        validate_config("comfy-api", "music.generate", {}, None, True) == {}
+        validate_config("comfy-api", "video.generate", {}, None, True) == {}
     )  # a saved key counts
     assert validate_config("comfyui-local", "image.generate", {}, None, False) == {}
 

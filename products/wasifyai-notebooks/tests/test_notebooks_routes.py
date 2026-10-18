@@ -9,10 +9,13 @@ import pytest
 from fastapi import FastAPI, Header
 from fastapi.testclient import TestClient
 from notebooks_rig import SPEC, FakeComponents, FakeReader
+from wasifyai_notebooks.files import ObjectFiles, artifact_key
 from wasifyai_notebooks.ingest import IngestWorker
 from wasifyai_notebooks.routes import Runtime, build_routes
 from wasifyai_notebooks.store import NotebookStore
-from wasifyai_platform_sdk import Identity, RouteDeps
+from wasifyai_platform_sdk import Identity, RouteDeps, memory_storage
+
+pytestmark = pytest.mark.usefixtures("use_backends")  # on SQLite and on Postgres
 
 
 class Indexed:
@@ -35,7 +38,7 @@ class State:
     storage = None
 
 
-def make_app(tmp_path, **components):
+def make_app(tmp_path, file_kind="local", **components):
     store = NotebookStore(tmp_path / "nb", dimension=SPEC.dimension, embedder_id=SPEC.id)
     comps = FakeComponents(tmp_path, **components)
     reader = FakeReader()
@@ -43,8 +46,9 @@ def make_app(tmp_path, **components):
     tmp = tmp_path / "nb" / "tmp"
     files.mkdir(parents=True)
     tmp.mkdir()
-    worker = IngestWorker(store, comps, reader, files, tokenizer_factory=lambda: "word")
-    runtime = Runtime(store, comps, worker, files, tmp)
+    library = ObjectFiles(memory_storage()) if file_kind == "object" else None
+    worker = IngestWorker(store, comps, reader, library or files, tokenizer_factory=lambda: "word")
+    runtime = Runtime(store, comps, worker, files, tmp, files=library)
 
     async def identity(x_user: str = Header("u1"), x_tenant: str = Header("t1")) -> Identity:
         return Identity(x_tenant, x_user)
@@ -56,9 +60,15 @@ def make_app(tmp_path, **components):
     return app, runtime, comps, reader
 
 
+@pytest.fixture(params=["local", "object"])
+def file_kind(request):
+    """Where the files are kept: folders (the desktop) or object storage (the web)."""
+    return request.param
+
+
 @pytest.fixture
-def api(tmp_path):
-    app, runtime, comps, reader = make_app(tmp_path)
+def api(tmp_path, file_kind):
+    app, runtime, comps, reader = make_app(tmp_path, file_kind)
     with TestClient(app) as c:
         c.base_url = c.base_url.join("/products/wasifyai-notebooks/")
         yield c, runtime, comps, reader
@@ -376,9 +386,8 @@ def test_outputs_are_listed_read_downloaded_renamed_stopped_and_deleted(api):
     assert c.post(f"notebooks/{nid}/artifacts/{art['id']}/cancel").status_code == 202
     assert c.post(f"notebooks/{nid}/artifacts/{art['id']}/cancel").status_code == 409
     made = runtime.store.create_artifact("t1", "u1", nid, fmt="word", prompt="", source_ids=[])
-    folder = runtime.artifacts_dir / nid / made["id"]
-    folder.mkdir(parents=True)
-    (folder / "plan.docx").write_bytes(b"PK-not-really")
+    files = runtime.files_for("t1", "u1")
+    files.put_bytes(artifact_key(nid, made["id"], "plan.docx"), b"PK-not-really")
     runtime.store.finish_artifact(
         "t1", "u1", nid, made["id"], title="Plan", body="# Plan\n\nBody.", data=None,
         file_name="plan.docx",
@@ -403,7 +412,7 @@ def test_outputs_are_listed_read_downloaded_renamed_stopped_and_deleted(api):
     ):
         assert c.get(path, headers=other).status_code == 404
     assert c.delete(f"notebooks/{nid}/artifacts/{made['id']}").status_code == 204
-    assert not folder.exists()
+    assert not files.exists(artifact_key(nid, made["id"], "plan.docx"))
     assert c.get(f"notebooks/{nid}/artifacts/{made['id']}").status_code == 404
 
 

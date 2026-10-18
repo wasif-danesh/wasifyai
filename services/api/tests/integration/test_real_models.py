@@ -99,9 +99,9 @@ def probe(data: bytes, suffix: str) -> dict:
 
 @pytest.fixture
 async def worker():
-    set_context(RunContext("real", "wasifyai-music", "u1", str(uuid4()), str(uuid4())))
+    set_context(RunContext("real", "wasifyai-image", "u1", str(uuid4()), str(uuid4())))
     sink, storage = InMemoryJobSink(), memory_storage()
-    config = load_product_config(PRODUCTS_DIR, "wasifyai-music", environ={})
+    config = load_product_config(PRODUCTS_DIR, "wasifyai-image", environ={})
     caps = build_capabilities(
         config, ProviderDeps(PRODUCTS_DIR, usage=InMemoryUsageRecorder(), job_sink=sink)
     )
@@ -115,27 +115,6 @@ async def worker():
     await client.aclose()
 
 
-@needs("ace_step_1.5_turbo_aio.safetensors")
-@need_ffprobe
-async def test_ace_step_makes_a_song_of_the_requested_length(worker):
-    caps, sink, storage, processor = worker
-    await caps.music.generate(
-        lyrics=LYRICS, style="indie pop, mellow, female vocal, 100 bpm", seed=7, duration_s=20
-    )
-    result = await processor.process(sink.submitted[-1])
-
-    assert result.status == "completed", result.error
-    out = result.outputs["audio"]
-    assert out.content_type == "audio/mpeg" and out.key.endswith("/audio.mp3")
-    audio = await storage.get(object_key("real", "wasifyai-music", "u1", out.key))
-    keep("song.mp3", audio)
-    info = probe(audio, ".mp3")
-    assert info["streams"][0]["codec_name"] == "mp3"
-    assert 18 <= float(info["format"]["duration"]) <= 23, info  # asked for 20 s
-    assert len(audio) > 100_000  # not a stub
-    assert result.gpu_seconds > 0
-
-
 @needs("flux-2-klein-4b.safetensors", "flux2-vae.safetensors")
 async def test_flux2_klein_paints_a_1024_cover(worker):
     caps, sink, storage, processor = worker
@@ -147,7 +126,7 @@ async def test_flux2_klein_paints_a_1024_cover(worker):
 
     assert result.status == "completed", result.error
     out = result.outputs["image"]
-    png = await storage.get(object_key("real", "wasifyai-music", "u1", out.key))
+    png = await storage.get(object_key("real", "wasifyai-image", "u1", out.key))
     keep("cover.png", png)
     assert png.startswith(b"\x89PNG\r\n\x1a\n")
     width, height = struct.unpack(">II", png[16:24])

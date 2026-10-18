@@ -3,6 +3,7 @@
 import { type VideoSummary, type VideosApi, clipLength, when } from "@wasifyai/client";
 import { Save, Search, Sparkles } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Notice } from "../components/notice";
 import { Spinner } from "../components/spinner";
@@ -13,6 +14,12 @@ export type VideoLibraryProps = {
   onCreate?: () => void;
   /** Whether "Save a copy" is on offer. */
   canSave?: boolean;
+  /** Where a clip can be downloaded from (the web app): "Download" is offered when given. */
+  downloadHref?: (video: VideoSummary) => string;
+  /** The line under the title. */
+  subtitle?: string;
+  /** Replaces the page's padding (the web app has its own). */
+  className?: string;
   /** How often to look again while a clip is being made (milliseconds). */
   pollMs?: number;
 };
@@ -22,6 +29,9 @@ export function VideoLibrary({
   videos: api,
   onCreate,
   canSave = false,
+  downloadHref,
+  subtitle = "Every clip you made on this computer.",
+  className,
   pollMs = 5000,
 }: VideoLibraryProps) {
   const [items, setItems] = useState<VideoSummary[] | null>(null);
@@ -107,11 +117,11 @@ export function VideoLibrary({
   }
 
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-6 px-8 pt-16 pb-12">
+    <div className={cn("mx-auto grid w-full max-w-5xl gap-6 px-8 pt-16 pb-12", className)}>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-semibold text-2xl">Your videos</h1>
-          <p className="text-muted-foreground">Every clip you made on this computer.</p>
+          <p className="text-muted-foreground">{subtitle}</p>
         </div>
         <form className="flex items-center gap-2" onSubmit={search}>
           <label className="relative">
@@ -239,6 +249,13 @@ export function VideoLibrary({
               {canSave && open.status === "done" ? (
                 <Button type="button" variant="outline" onClick={() => void save(open)}>
                   <Save className="size-4" /> Save a copy
+                </Button>
+              ) : null}
+              {downloadHref && open.status === "done" ? (
+                <Button asChild variant="outline">
+                  <a href={downloadHref(open)} download>
+                    <Save className="size-4" /> Download
+                  </a>
                 </Button>
               ) : null}
               {open.status === "working" ? null : confirmDelete ? (

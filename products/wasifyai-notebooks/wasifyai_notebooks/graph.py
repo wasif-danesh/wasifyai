@@ -19,9 +19,8 @@ and `citations` carrying each cited passage as it was when the answer was writte
 
 import logging
 import re
-import shutil
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
@@ -30,7 +29,6 @@ from langgraph.graph import END, START, StateGraph
 from wasifyai_platform_sdk import Capabilities, RunError, require_context
 
 from wasifyai_notebooks.components import Unavailable
-from wasifyai_notebooks.embedding import Purpose
 from wasifyai_notebooks.grounding import (
     QUESTION_MAX_CHARS,
     Tier,
@@ -42,17 +40,13 @@ from wasifyai_notebooks.grounding import (
     tier_for,
     user_message,
 )
+from wasifyai_notebooks.output_job import OutputRequest, Progress, make_output
 from wasifyai_notebooks.retrieval import retrieve
 from wasifyai_notebooks.runtime import NotAvailable, Runtime, runtime_for
 from wasifyai_notebooks.store import NotFound
-from wasifyai_notebooks.studio.context import budget_chars, gather, grounding
 from wasifyai_notebooks.studio.formats import (
     FORMATS,
-    BadReply,
-    build,
     infographic_prompt,
-    prompt_for,
-    slug,
 )
 
 log = logging.getLogger(__name__)
@@ -62,6 +56,7 @@ TOP_K = 5
 TITLE_CHARS = 60
 SNIPPET_CHARS = 160
 DEFAULT_CONTEXT = 8192
+MADE_HERE = frozenset({"guide", "infographic"})  # outputs a worker is not asked to make
 
 Status = Literal["working", "done", "refused"]
 
@@ -259,7 +254,7 @@ def build_notebook_chat_graph(
             embedder = rt.components.embedder()
         except Unavailable as e:
             raise RunError(e.code, e.message) from None
-        vector = (await asyncio.to_thread(embedder.embed, [question], Purpose.QUERY))[0]
+        vector = await asyncio.to_thread(rt.query_vector, embedder, t, u, question, "chat")
 
         def search() -> list[Any]:
             with rt.store.connect() as db:
@@ -328,16 +323,16 @@ def build_notebook_chat_graph(
             "labels_removed": checked.removed, "searched": searched,
         }  # fmt: skip
 
-    async def paint(built: Any, write: Any, fail: Any) -> dict[str, Any] | None:
+    async def paint(
+        built: Any, progress: Progress, fail: Callable[[str], Awaitable[None]]
+    ) -> dict[str, Any] | None:
         """Ask the image product for the infographic's picture, as a run of its own (the same tool
         the assistant draws with). Returns the picture's reference, or None after saying why not."""
         host = caps.extras.get("tool_host")
         if host is None:
             await fail("Making pictures is not available here.")
             return None
-        write(
-            {"type": "node", "node": "paint", "status": "started", "label": "Drawing the picture"}
-        )
+        progress("paint", "Drawing the picture")
         message = "The picture could not be made."
         async for ev in host.run_product(
             "wasifyai-image",
@@ -371,124 +366,27 @@ def build_notebook_chat_graph(
         nid, aid = state["notebook_id"], state.get("artifact_id", "")
         fmt = FORMATS[state["format"]]
         spec = state.get("studio") or {}
-        prompt = str(spec.get("prompt", ""))
+        context, tier = facts()
+        request = OutputRequest(
+            fmt.key, str(spec.get("prompt", "")), state.get("document_ids") or [], context, tier
+        )
 
-        async def fail(message: str, error: RunError | None = None) -> None:
-            if aid:
-                await asyncio.to_thread(rt.store.fail_artifact, t, u, nid, aid, message)
-            if error is not None:
-                raise error
+        # Where a worker makes outputs (the web), an output that needs nothing of this program is
+        # left for one and the run ends; the screen follows the output's row. A guide is kept with
+        # the notebook and an infographic's picture is a run of the image product, which only
+        # this program can start, so those are made here.
+        if rt.outputs_by_worker and aid and fmt.key not in MADE_HERE:
+            await asyncio.to_thread(rt.store.queue_artifact, t, u, nid, aid, request.to_json())
+            return {"status": "done", "format": fmt.key, "artifact_id": aid, "title": ""}
 
-        try:
-            write(
-                {
-                    "type": "node",
-                    "node": "read",
-                    "status": "started",
-                    "label": "Reading your sources",
-                }
-            )
-            context, tier = facts()
-            try:
-                embedder = rt.components.embedder()
-            except Unavailable:
-                embedder = None
+        def progress(node: str, label: str) -> None:
+            write({"type": "node", "node": node, "status": "started", "label": label})
 
-            def collect() -> list[Any]:
-                def embed(text: str) -> list[float]:
-                    assert embedder is not None
-                    return embedder.embed([text], Purpose.QUERY)[0]
-
-                with rt.store.connect() as db:
-                    return gather(
-                        db, nid, state.get("document_ids") or [], budget=budget_chars(context),
-                        query=prompt or None, embed=embed if embedder else None,
-                        weight=embedder.spec.semantic_weight if embedder else 0.65,
-                    )  # fmt: skip
-
-            sources = await asyncio.to_thread(collect)
-            if not sources:
-                await fail("The ticked sources have no text to work from.")
-                return {
-                    "status": "refused",
-                    "refusal": {"code": "no_text", "message": "The ticked sources have no text."},
-                }
-            system = prompt_for(fmt, tier, prompt)
-            material = grounding(sources)
-            write({"type": "node", "node": "write", "status": "started",
-                   "label": f"Writing the {fmt.label.lower()}"})  # fmt: skip
-            built = None
-            problem = ""
-            for attempt in range(2):
-                user_text = material
-                if problem:
-                    user_text += (
-                        f"\n\nYour previous reply could not be used: {problem}. "
-                        "Write it again, following the format exactly."
-                    )
-                try:
-                    reply = await caps.text.complete("chat", system, user_text, fmt.schema)
-                except RunError as e:
-                    await fail(e.message, e)
-                    raise
-                except Exception:
-                    log.exception("the language model failed")
-                    await fail(
-                        "The language model did not answer.",
-                        RunError(
-                            "language_failed",
-                            "The language model did not answer. Check it in Models and try again.",
-                            retryable=True,
-                        ),
-                    )
-                    raise
-                try:
-                    built = await asyncio.to_thread(build, fmt, reply)
-                    break
-                except BadReply as e:
-                    problem = str(e)
-                    log.info("studio reply refused (attempt %d): %s", attempt + 1, problem)
-            if built is None:
-                await fail(
-                    f"The model's reply could not be used ({problem}). Try again, or choose a "
-                    "larger model."
-                )
-                return {"status": "done", "format": fmt.key, "artifact_id": aid, "title": ""}
-
-            if fmt.key == "guide":
-                key = await asyncio.to_thread(rt.store.sources_key, t, u, nid)
-                await asyncio.to_thread(rt.store.save_guide, t, u, nid, built.data or {}, key)
-                return {"status": "done", "format": "guide", "title": ""}
-
-            if fmt.key == "infographic":
-                painted = await paint(built, write, fail)
-                if painted is None:
-                    return {"status": "done", "format": fmt.key, "artifact_id": aid, "title": ""}
-                built.data = {**(built.data or {}), **painted}
-
-            file_name = file_mime = None
-            if built.file is not None and built.file_ext:
-                file_name = f"{slug(built.title, fmt.key)}.{built.file_ext}"
-                file_mime = built.file_mime
-                folder = rt.artifacts_dir / nid / aid
-                await asyncio.to_thread(folder.mkdir, parents=True, exist_ok=True)
-                await asyncio.to_thread((folder / file_name).write_bytes, built.file)
-            kept = await asyncio.to_thread(
-                rt.store.finish_artifact, t, u, nid, aid, title=built.title, body=built.markdown,
-                data=built.data, file_name=file_name, file_mime=file_mime,
-            )  # fmt: skip
-            if not kept and file_name:  # stopped or deleted while it was being made
-                await asyncio.to_thread(shutil.rmtree, rt.artifacts_dir / nid / aid, True)
-            await caps.record_usage("notebooks.artifact", 1, "outputs", format=fmt.key)
-            return {"status": "done", "format": fmt.key, "artifact_id": aid, "title": built.title}
-        except RunError:
-            raise
-        except Exception:
-            log.exception("making an output failed")
-            await fail("Something went wrong making this.")
-            raise RunError(
-                "run_failed", "Something went wrong making this.", retryable=True
-            ) from None
+        made = await make_output(
+            rt, caps, tenant=t, user=u, nid=nid, aid=aid, request=request, progress=progress,
+            paint=paint,
+        )  # fmt: skip
+        return cast(ChatState, made)
 
     async def finalise(state: ChatState) -> ChatState:
         await caps.record_usage(

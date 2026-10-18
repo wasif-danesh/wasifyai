@@ -72,7 +72,7 @@ export function DailyEventsTable({ rows }: { rows: DailyRow[] }) {
   );
 }
 
-// ---------------------------------------------------------------- users, songs, audit
+// ---------------------------------------------------------------- users, audit
 
 export type UserRow = {
   id: string;
@@ -110,36 +110,6 @@ export function UsersTable({ rows, footer }: { rows: UserRow[]; footer?: ReactNo
         {
           ...col<UserRow>("joined", "Joined"),
           sortingFn: (a, b) => a.original.joinedAt.localeCompare(b.original.joinedAt),
-        },
-      ]}
-    />
-  );
-}
-
-export type SongRow = {
-  id: string;
-  title: string;
-  product: string;
-  user: string;
-  made: string;
-  madeAt: string;
-};
-export function SongsTable({ rows, footer }: { rows: SongRow[]; footer?: ReactNode }) {
-  return (
-    <DataTable
-      caption="Songs from all users, newest first"
-      filterLabel="Filter songs"
-      empty="No songs yet."
-      data={rows}
-      footer={footer}
-      getRowId={(r) => r.id}
-      columns={[
-        col<SongRow>("title", "Title", { rowHeader: true }),
-        col<SongRow>("product", "Product"),
-        col<SongRow>("user", "User"),
-        {
-          ...col<SongRow>("made", "Made"),
-          sortingFn: (a, b) => a.original.madeAt.localeCompare(b.original.madeAt),
         },
       ]}
     />

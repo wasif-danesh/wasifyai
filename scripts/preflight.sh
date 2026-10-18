@@ -53,12 +53,6 @@ else
   need "Ollama is not reachable at $OLLAMA_URL"
 fi
 
-if [ -x "$ROOT/.lipsync/musetalk/venv/bin/python" ]; then
-  ok "Lip sync engine installed (make dev starts it)"
-else
-  warn "Lip sync engine not installed: Lip Sync is off (services/lipsync-musetalk/setup.sh, about 4 GB)"
-fi
-
 [ -d "$ROOT/.venv" ] && ok "Python deps installed" || need "Python deps missing (uv sync --all-packages)"
 [ -d "$ROOT/node_modules" ] && ok "Node deps installed" || need "Node deps missing (pnpm install)"
 

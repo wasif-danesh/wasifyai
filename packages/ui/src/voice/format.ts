@@ -30,6 +30,7 @@ export function stateText(m: VoiceModelInfo): string {
 /** The text of one choice in the model list. */
 export function modelOption(m: VoiceModelInfo, task: string): string {
   const tags = [m.recommended.includes(task as never) ? "recommended" : null];
+  if (m.engine === "remote") tags.push("hosted");
   if (m.commercial_use === "no" || m.commercial_use === "unreviewed")
     tags.push("not for commercial use");
   if (m.state !== "ready") tags.push(stateText(m).toLowerCase());

@@ -1,4 +1,4 @@
-"""The admin area (ADR-0025): who the caller is, users, songs, usage and the audit log.
+"""The admin area (ADR-0025): who the caller is, users, usage and the audit log.
 
 Every route under /admin needs the admin role; everything an admin does that changes state, or reads
 personal data, is written to the audit log (never with secrets)."""
@@ -34,20 +34,6 @@ class AdminUser(BaseModel):
 
 class AdminUserPage(BaseModel):
     users: list[AdminUser]
-    next_before: datetime | None
-
-
-class AdminSong(BaseModel):
-    id: str
-    product_id: str
-    title: str
-    user_id: str
-    user_email: str | None
-    created_at: datetime
-
-
-class AdminSongPage(BaseModel):
-    songs: list[AdminSong]
     next_before: datetime | None
 
 
@@ -88,9 +74,6 @@ class AdminStore(Protocol):
     async def users(
         self, tenant_id: str, limit: int, before: datetime | None
     ) -> list[AdminUser]: ...
-    async def songs(
-        self, tenant_id: str, limit: int, before: datetime | None
-    ) -> list[AdminSong]: ...
     async def usage(self, tenant_id: str, days: int) -> UsageReport: ...
     async def audit(self, tenant_id: str, entry: AuditEntry) -> None: ...
     async def audit_log(self, tenant_id: str, limit: int) -> list[AuditEntry]: ...
@@ -101,17 +84,12 @@ class InMemoryAdminStore:
 
     def __init__(self) -> None:
         self.user_rows: list[AdminUser] = []
-        self.song_rows: list[AdminSong] = []
         self.usage_report = UsageReport(days=7, totals=[], daily=[])
         self.entries: list[AuditEntry] = []
 
     async def users(self, tenant_id: str, limit: int, before: datetime | None) -> list[AdminUser]:
         rows = [u for u in self.user_rows if before is None or u.created_at < before]
         return sorted(rows, key=lambda u: u.created_at, reverse=True)[:limit]
-
-    async def songs(self, tenant_id: str, limit: int, before: datetime | None) -> list[AdminSong]:
-        rows = [s for s in self.song_rows if before is None or s.created_at < before]
-        return sorted(rows, key=lambda s: s.created_at, reverse=True)[:limit]
 
     async def usage(self, tenant_id: str, days: int) -> UsageReport:
         return self.usage_report.model_copy(update={"days": days})
@@ -144,25 +122,6 @@ class PostgresAdminStore:
             AdminUser(
                 id=str(r[0]), email=r[1], email_verified=r[2], name=r[3], role=r[4],
                 created_at=r[5], providers=list(r[6]),
-            )
-            for r in rows
-        ]  # fmt: skip
-
-    async def songs(self, tenant_id: str, limit: int, before: datetime | None) -> list[AdminSong]:
-        where = "s.tenant_id = :tenant" + (" AND s.created_at < :before" if before else "")
-        sql = text(
-            f"""
-            SELECT s.id, s.product_id, s.title, s.user_id, u.email, s.created_at
-            FROM songs s LEFT JOIN users u ON u.id::text = s.user_id AND u.tenant_id = s.tenant_id
-            WHERE {where} ORDER BY s.created_at DESC LIMIT :limit
-            """
-        )
-        async with self._engine.connect() as conn:
-            rows = (await conn.execute(sql, _params(tenant_id, limit, before))).all()
-        return [
-            AdminSong(
-                id=str(r[0]), product_id=r[1], title=r[2], user_id=r[3], user_email=r[4],
-                created_at=r[5],
             )
             for r in rows
         ]  # fmt: skip
@@ -257,19 +216,6 @@ async def list_users(
     )  # fmt: skip
     return AdminUserPage(
         users=users, next_before=users[-1].created_at if len(users) == limit else None
-    )
-
-
-@router.get("/songs", response_model=AdminSongPage)
-async def list_songs(
-    request: Request,
-    limit: int = Query(25, ge=1, le=100),
-    before: datetime | None = None,
-    identity: Identity = Depends(require_admin),
-) -> AdminSongPage:
-    songs = await _store(request).songs(identity.tenant_id, limit, before)
-    return AdminSongPage(
-        songs=songs, next_before=songs[-1].created_at if len(songs) == limit else None
     )
 
 

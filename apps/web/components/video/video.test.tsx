@@ -1,10 +1,11 @@
+import { STARTED_EVENT } from "@/hooks/use-video-activity";
 // @vitest-environment jsdom
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { VideoSummary } from "@wasifyai/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreationsList } from "../creations/CreationsList";
-import { VideoForm } from "./VideoForm";
+import { VideoLibraryScreen, VideoScreen } from "./VideoScreens";
 import { VideoView } from "./VideoView";
 
 const push = vi.fn();
@@ -15,6 +16,7 @@ vi.mock("next/navigation", () => ({
 
 const fetchMock = vi.fn();
 beforeEach(() => {
+  sessionStorage.clear(); // a run left open by one test must not be restored by the next
   fetchMock.mockReset();
   push.mockReset();
   vi.stubGlobal("fetch", fetchMock);
@@ -40,67 +42,88 @@ const clip = (over: Partial<VideoSummary> = {}): VideoSummary => ({
   ...over,
 });
 
-describe("VideoForm", () => {
-  it("makes a text clip with the chosen length and shape, and tells how long it takes", async () => {
-    const onSubmit = vi.fn();
+describe("VideoScreen (the web app's mount of the shared screen)", () => {
+  it("goes through the BFF, tells the header and offers the download", async () => {
     const user = userEvent.setup();
-    render(<VideoForm onSubmit={onSubmit} />);
-    expect(screen.getByText(/about 3 minutes/)).toBeInTheDocument();
-    const go = screen.getByRole("button", { name: /make my video/i });
-    expect(go).toBeDisabled();
-    await user.type(screen.getByRole("textbox"), "  a fox in snow ");
-    await user.click(screen.getByRole("button", { name: /5 seconds/i }));
-    expect(screen.getByText(/about 8 minutes/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /portrait/i }));
-    await user.click(go);
-    expect(onSubmit).toHaveBeenCalledWith({
-      mode: "text",
-      prompt: "a fox in snow",
-      shape: "portrait",
-      seconds: 5,
-      picture: null,
-    });
-  });
-
-  it("offers only 2 and 5 seconds", () => {
-    render(<VideoForm onSubmit={vi.fn()} />);
-    expect(screen.getAllByRole("button", { name: /\d seconds/i })).toHaveLength(2);
-  });
-
-  it("needs an uploaded picture in picture mode, which hides the shape (the picture sets it)", async () => {
+    const events = [
+      ["node", { node: "generate_video", status: "started", label: "Making your video" }],
+      [
+        "done",
+        {
+          outputs: {
+            status: "done",
+            video_id: "v9",
+            video_url: "http://x/v9.mp4",
+            poster_url: "http://x/v9.jpg",
+            width: 768,
+            height: 512,
+            seconds: 2,
+            prompt: "a red fox",
+            mode: "text",
+          },
+        },
+      ],
+    ] as const;
+    const body = events
+      .map(
+        ([name, data], i) =>
+          `id: ${i + 1}\nevent: ${name}\ndata: ${JSON.stringify({ run_id: "r", thread_id: "t", seq: i + 1, ts: "", ...data })}\n\n`,
+      )
+      .join("");
     fetchMock.mockResolvedValueOnce(
-      Response.json({ upload_id: "u1", key: "uploads/u1.png", width: 3, height: 2, bytes: 9 }),
+      new Response(body, { headers: { "content-type": "text/event-stream" } }),
     );
-    const onSubmit = vi.fn();
-    const user = userEvent.setup({ applyAccept: false });
-    render(<VideoForm onSubmit={onSubmit} />);
-    await user.click(screen.getByRole("button", { name: /from a picture/i }));
-    expect(screen.queryByRole("button", { name: /portrait/i })).toBeNull();
-    await user.type(screen.getByRole("textbox"), "snow falls");
-    const go = screen.getByRole("button", { name: /make my video/i });
-    expect(go).toBeDisabled();
-    await user.upload(screen.getByLabelText("Your picture"), png());
-    await waitFor(() => expect(go).toBeEnabled());
-    await user.click(go);
-    const value = onSubmit.mock.calls[0][0];
-    expect(value).toMatchObject({ mode: "image", prompt: "snow falls", seconds: 2 });
-    expect(value.picture).toMatchObject({ uploadId: "u1", key: "uploads/u1.png" });
+    render(<VideoScreen mode="text" />);
+    await user.type(screen.getByRole("textbox"), "a red fox");
+    await user.click(screen.getByRole("button", { name: /make my video/i }));
+    expect(await screen.findByRole("link", { name: /download/i })).toHaveAttribute(
+      "href",
+      "/api/products/wasifyai-video/videos/v9/download",
+    );
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/products/wasifyai-video/runs");
+    await user.click(screen.getByRole("button", { name: /your videos/i }));
+    expect(push).toHaveBeenCalledWith("/video/library");
   });
 
-  it("enhances a prompt for the right kind in each mode", async () => {
-    fetchMock.mockResolvedValue(
-      Response.json({ prompt: "A fox trots through snow.", changed: true }),
-    );
+  it("tells the header at once when a clip starts being made", async () => {
     const user = userEvent.setup();
-    render(<VideoForm onSubmit={vi.fn()} />);
-    await user.type(screen.getByRole("textbox"), "fox");
-    await user.click(screen.getByRole("button", { name: /enhance/i }));
-    await waitFor(() =>
-      expect(screen.getByRole("textbox")).toHaveValue("A fox trots through snow."),
+    const started = vi.fn();
+    window.addEventListener(STARTED_EVENT, started);
+    const frame = `id: 1\nevent: node\ndata: ${JSON.stringify({ run_id: "r", thread_id: "t", seq: 1, ts: "", node: "generate_video", status: "started", label: "Making your video" })}\n\n`;
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        new ReadableStream({
+          start(c) {
+            c.enqueue(new TextEncoder().encode(frame)); // the job goes on: the stream stays open
+          },
+        }),
+        { headers: { "content-type": "text/event-stream" } },
+      ),
     );
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/api/products/wasifyai-video/prompt/enhance");
-    expect(JSON.parse(init.body as string)).toMatchObject({ kind: "text_to_video", prompt: "fox" });
+    render(<VideoScreen mode="text" />);
+    await user.type(screen.getByRole("textbox"), "a red fox");
+    await user.click(screen.getByRole("button", { name: /make my video/i }));
+    await waitFor(() => expect(started).toHaveBeenCalled());
+    window.removeEventListener(STARTED_EVENT, started);
+  });
+
+  it("says what each mode is for and tells how long a clip takes here", () => {
+    render(<VideoScreen mode="image" />);
+    expect(screen.getByRole("heading", { name: "Animate a picture" })).toBeInTheDocument();
+    expect(screen.getByText(/The clip keeps the shape of your picture/)).toBeInTheDocument();
+  });
+});
+
+describe("VideoLibraryScreen", () => {
+  it("lists clips with a download link", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(Response.json({ videos: [clip()], next_before: null }));
+    render(<VideoLibraryScreen />);
+    await user.click(await screen.findByRole("button", { name: /open: a red fox/i }));
+    expect(screen.getByRole("link", { name: /download/i })).toHaveAttribute(
+      "href",
+      "/api/products/wasifyai-video/videos/00000000-0000-0000-0000-000000000001/download",
+    );
   });
 });
 
@@ -147,7 +170,7 @@ describe("VideoView", () => {
 });
 
 describe("creations with videos", () => {
-  const songs = { songs: [], next_before: null };
+  const songs: never[] = [];
   const images = { images: [], next_before: null };
 
   it("shows clips with their state and filters them", async () => {
@@ -183,8 +206,8 @@ describe("creations with videos", () => {
     expect(screen.getByText("Couldn't be made")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /videos/i }));
     expect(screen.getAllByRole("listitem")).toHaveLength(3);
-    await user.click(screen.getByRole("button", { name: /songs/i }));
-    expect(screen.getByText(/no songs yet/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /music/i }));
+    expect(screen.getByText(/no music yet/i)).toBeInTheDocument();
   });
 
   it("loads more clips from the video list", async () => {
@@ -210,7 +233,7 @@ describe("creations with videos", () => {
 });
 
 describe("searching My creations", () => {
-  const songs = { songs: [], next_before: null };
+  const songs: never[] = [];
   const images = { images: [], next_before: null };
   const search = (results: object[], degraded = false) =>
     Response.json({ query: "fox", degraded, results });

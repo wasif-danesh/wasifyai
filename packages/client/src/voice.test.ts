@@ -819,3 +819,49 @@ describe("audiobooks", () => {
     expect(!lost.ok && lost.code).toBe("lost");
   });
 });
+
+describe("a hosted deployment's voice api", () => {
+  const answering = (calls: string[], body: unknown): Transport => ({
+    async fetch(path) {
+      calls.push(path);
+      return new Response(JSON.stringify(body), {
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+
+  it("lists the product's models from the product, not from the window's engine", async () => {
+    const calls: string[] = [];
+    const api = createVoiceApi(answering(calls, { models: [{ id: "hosted-speech" }] }), {
+      hosted: true,
+    });
+    expect((await api.models("speak")).map((m) => m.id)).toEqual(["hosted-speech"]);
+    expect(calls).toEqual(["/products/wasifyai-voice/models?task=speak"]);
+  });
+
+  it("has nothing to set up when every model is hosted", async () => {
+    const calls: string[] = [];
+    const api = createVoiceApi(answering(calls, { hosted: true }), { hosted: true });
+    expect((await api.runtime()).installed).toBe(true);
+    expect(calls).toEqual(["/products/wasifyai-voice/runtime"]);
+  });
+
+  it("shows the state of a runtime the service has, and cannot set it up from the page", async () => {
+    const calls: string[] = [];
+    const api = createVoiceApi(answering(calls, { installed: false, install: { state: "idle" } }), {
+      hosted: true,
+    });
+    expect((await api.runtime()).installed).toBe(false);
+    await expect(api.installRuntime(1)).rejects.toThrow(/whoever runs this service/);
+    await expect(api.stopRuntime()).rejects.toThrow(/whoever runs this service/);
+    await expect(api.installLipsyncEngine(1)).rejects.toThrow(/whoever runs this service/);
+    expect(calls).toEqual(["/products/wasifyai-voice/runtime"]);
+  });
+
+  it("reads the lip sync component from the product", async () => {
+    const calls: string[] = [];
+    const api = createVoiceApi(answering(calls, { installed: true }), { hosted: true });
+    expect((await api.lipsyncEngine()).installed).toBe(true);
+    expect(calls).toEqual(["/products/wasifyai-voice/lipsync-engine"]);
+  });
+});

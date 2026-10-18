@@ -16,6 +16,12 @@ export type ImageLibraryProps = {
   onRunAgain?: (image: ImageSummary) => void;
   /** Whether "Save a copy" is on offer. */
   canSave?: boolean;
+  /** Where an image can be downloaded from (the web app): "Download" is offered when given. */
+  downloadHref?: (image: ImageSummary) => string;
+  /** The line under the title. */
+  subtitle?: string;
+  /** Replaces the page's padding (the web app has its own). */
+  className?: string;
 };
 
 type Filter = "all" | "favourites";
@@ -26,6 +32,9 @@ export function ImageLibrary({
   onCreate,
   onRunAgain,
   canSave = false,
+  downloadHref,
+  subtitle = "Everything you made on this computer.",
+  className,
 }: ImageLibraryProps) {
   const [items, setItems] = useState<ImageSummary[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
@@ -125,11 +134,11 @@ export function ImageLibrary({
   }
 
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-6 px-8 pt-16 pb-12">
+    <div className={cn("mx-auto grid w-full max-w-5xl gap-6 px-8 pt-16 pb-12", className)}>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-semibold text-2xl">Library</h1>
-          <p className="text-muted-foreground">Everything you made on this computer.</p>
+          <p className="text-muted-foreground">{subtitle}</p>
         </div>
         <form className="flex items-center gap-2" onSubmit={search}>
           <label className="relative">
@@ -275,6 +284,13 @@ export function ImageLibrary({
               {canSave ? (
                 <Button type="button" variant="outline" onClick={() => void save(open)}>
                   <Save className="size-4" /> Save a copy
+                </Button>
+              ) : null}
+              {downloadHref ? (
+                <Button asChild variant="outline">
+                  <a href={downloadHref(open)} download>
+                    <Save className="size-4" /> Download
+                  </a>
                 </Button>
               ) : null}
               {onRunAgain && canRunAgain(open) ? (

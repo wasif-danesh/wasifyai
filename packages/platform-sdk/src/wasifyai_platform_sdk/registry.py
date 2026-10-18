@@ -71,7 +71,7 @@ class GraphRegistry:
         """Let installed product packages register their graphs. A product declares
 
             [project.entry-points."wasifyai.products"]
-            wasifyai-music = "wasifyai_music:register"
+            wasifyai-voice = "wasifyai_voice:register"
 
         where `register(registry)` calls `registry.register(...)`. Returns the names loaded."""
         loaded = []

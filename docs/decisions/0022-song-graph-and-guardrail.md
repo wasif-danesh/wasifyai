@@ -1,6 +1,7 @@
 # ADR-0022: The song graph and its guardrail
 
 - **Status:** Accepted
+- **Update (2026-10-18):** superseded in part by ADR-0067: the song graph and its guardrail was removed and replaced by the voice product (ADR-0066).
 - **Date:** 2026-10-08
 
 ## Context

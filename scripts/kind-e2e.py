@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""Make something with each of the six products through the BFF of a running stack (v1 plan).
+"""Make something with the image and video products through the BFF of a running stack.
 
 Works against the kind cluster (`make kind-up`, auth stub) or the Compose stack:
 
     uv run python scripts/kind-e2e.py [base_url]       # default http://localhost:3000
 
-Each check starts a run, follows its server-sent events and requires the terminal `done` event
-(music also needs the lyrics approved: it stops at an `interrupt` first). Prints one line per
-product and exits 1 if any failed. With real engines set E2E_FACE (a picture with a face) and
-E2E_VOICE (a WAV with speech)."""
+Each check starts a run, follows its server-sent events and requires the terminal `done` event.
+Prints one line per product and exits 1 if any failed."""
 
 import io
 import json
@@ -128,12 +126,6 @@ def run(product: str, payload: dict, approve: bool = False, timeout: int = 600) 
 
 
 def checks():
-    yield (
-        "music",
-        lambda: run(
-            "wasifyai-music", {"idea": "a rainy night in Tokyo", "genre": "indie pop"}, approve=True
-        ),
-    )
     yield "image", lambda: run("wasifyai-image", {"mode": "text", "prompt": "a lighthouse at dawn"})
     yield (
         "video",
@@ -142,34 +134,6 @@ def checks():
             {"mode": "text", "prompt": "waves on a beach", "shape": "landscape", "seconds": 2},
         ),
     )
-    yield (
-        "text to speech",
-        lambda: run(
-            "wasifyai-tts",
-            {"text": "Hello there, how are you today?", "language": "en-US", "gender": "female"},
-        ),
-    )
-
-    def voice() -> bytes:
-        path = os.environ.get("E2E_VOICE")  # a real spoken sentence, for the real speech engines
-        return open(path, "rb").read() if path else wav()
-
-    def face() -> bytes:
-        path = os.environ.get("E2E_FACE")  # a picture with a face, for the real lip sync engine
-        return open(path, "rb").read() if path else png()
-
-    def stt():
-        key = upload("wasifyai-stt", "media", voice(), "audio/wav")
-        return run("wasifyai-stt", {"audio_key": key, "language": "auto"})
-
-    yield "speech to text", stt
-
-    def lipsync():
-        image = upload("wasifyai-lipsync", "images", face(), "image/png")
-        sound = upload("wasifyai-lipsync", "media", voice(), "audio/wav")
-        return run("wasifyai-lipsync", {"source": "audio", "image_key": image, "audio_key": sound})
-
-    yield "lip sync", lipsync
 
 
 def main() -> int:

@@ -98,7 +98,7 @@ create anything with the 6 products.
 
 ## Phase 5: `wasifyai-music` MVP
 
-See [product spec](../products/wasifyai-music/README.md).
+Built, and since replaced by the voice product (ADR-0067); its spec was removed with it.
 
 - [x] Song graph: guardrail → lyrics → approve → music job → cover job → done, with per-user
       daily quota, validated and streamed lyrics, `songs` table (migration 0004); tested with a

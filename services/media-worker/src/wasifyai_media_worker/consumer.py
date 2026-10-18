@@ -52,7 +52,7 @@ class Worker:
         self._backoff = retry_backoff
         self.name = name or f"{socket.gethostname()}-{id(self)}"
         # An entry idle longer than the job timeout belongs to a worker that died.
-        self._stale_ms = (max(processor.s.job_timeout_s, processor.s.lipsync_timeout_s) + 60) * 1000
+        self._stale_ms = (processor.s.job_timeout_s + 60) * 1000
 
     async def run_forever(self) -> None:
         await ensure_groups(self._r)

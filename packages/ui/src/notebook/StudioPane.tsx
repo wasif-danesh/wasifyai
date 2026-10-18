@@ -23,6 +23,7 @@ import { cn } from "../cn";
 import { Button } from "../components/button";
 import { OutputViewer } from "./OutputViewers";
 import { FORMAT_LABEL, STUDIO_TILES, making } from "./outputs";
+import { useNotebookPlace } from "./place";
 import { useOutputs } from "./use-outputs";
 
 const ICONS: Record<StudioFormat, ComponentType<{ className?: string }>> = {
@@ -60,6 +61,7 @@ export type StudioPaneProps = {
 export function StudioPane(props: StudioPaneProps) {
   const { api, runs, notebookId, documentIds, blockedReason, scopeLabel, imageUrl } = props;
   const studio = useOutputs(api, runs, notebookId);
+  const hosted = useNotebookPlace() === "hosted";
   const [brief, setBrief] = useState<StudioFormat | null>(null);
   const [focus, setFocus] = useState("");
   const [open, setOpen] = useState<NotebookOutput | null>(null);
@@ -313,7 +315,8 @@ export function StudioPane(props: StudioPaneProps) {
           </p>
         ) : null}
         <p className="mt-4 px-1 text-muted-foreground text-xs">
-          Made by the chat model on this computer, only from the sources ticked on the left.
+          Made by the chat model{hosted ? "" : " on this computer"}, only from the sources ticked on
+          the left.
         </p>
       </div>
     </section>

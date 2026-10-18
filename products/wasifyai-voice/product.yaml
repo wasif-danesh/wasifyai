@@ -2,5 +2,19 @@ id: wasifyai-voice
 # Speech, transcripts and music on this computer (ADR-0066). The speech and music models and their
 # runtime belong to the engine; this product asks it for them.
 capabilities:
+  # the moderators (ADR-0047): consulted only while the safeguards are on. Text goes to the text moderator,
+  # the picture a face is taken from to a model that can see it.
+  text.moderate:       { provider: litellm, model: moderator }
+  text.moderate_image: { provider: litellm, model: multimodal, inputs: [text, image] }
   # writes lyrics (the Music > Lyrics screen); on the desktop it is the person's chosen chat model
   text.chat: { provider: litellm, model: default-chat }
+# Daily limits per person, counted from the usage events and applied only while the safeguards are on.
+# The audio tools count runs, dubbing counts dubs (its script stops at the limit too), the audiobook counts the
+# characters of text it is asked to read, which is what a hosted voice bills by.
+quotas:
+  speeches_per_user_per_day: 30
+  songs_per_user_per_day: 10
+  lipsyncs_per_user_per_day: 3
+  tools_per_user_per_day: 20
+  dubs_per_user_per_day: 5
+  audiobook_characters_per_user_per_day: 200000

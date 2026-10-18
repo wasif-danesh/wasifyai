@@ -13,24 +13,13 @@ check "all deployments available" "kubectl -n $NS wait --for=condition=available
 check "usage_events table exists" "kubectl -n $NS exec statefulset/wasifyai-postgres -- psql -U wasifyai -d wasifyai -tAc \"select to_regclass('public.usage_events')\" | grep -q usage_events"
 check "rag_chunks table + pgvector extension exist" "kubectl -n $NS exec statefulset/wasifyai-postgres -- psql -U wasifyai -d wasifyai -tAc \"select to_regclass('public.rag_chunks'), (select count(*) from pg_extension where extname='vector')\" | grep -q 'rag_chunks|1'"
 check "web serves / (HTTP 200)" "curl -fsS -m 10 -o /dev/null http://localhost:3000/"
-check "Music page renders" "curl -fsS -m 20 http://localhost:3000/music | grep -q 'a song'"
-check "songs API answers through the BFF" "curl -fsS -m 10 http://localhost:3000/api/products/wasifyai-music/songs | grep -q '\"songs\"'"
-check "an unknown song is a real 404" "test \"\$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/music/songs/00000000-0000-0000-0000-000000000000)\" = 404"
 
 check "Image page renders" "curl -fsS -m 20 http://localhost:3000/image | grep -q 'an image'"
 check "images API answers through the BFF" "curl -fsS -m 10 http://localhost:3000/api/products/wasifyai-image/images | grep -q '\"images\"'"
 check "uploading something that is not a picture is refused" "test \"\$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: image/png' --data-binary 'not a picture' http://localhost:3000/api/products/wasifyai-image/uploads/images)\" = 422"
 
 check "videos API answers through the BFF" "curl -fsS -m 10 http://localhost:3000/api/products/wasifyai-video/videos?status=working | grep -q '\"videos\"'"
-check "My creations lists songs, images, videos and speech" "curl -fsS -m 20 http://localhost:3000/creations | grep -q 'My creations'"
-check "Text to Speech page renders (server-side read of the voice catalog)" "curl -fsS -m 20 http://localhost:3000/text-to-speech | grep -q 'speech'"
-check "voice catalog answers through the BFF" "curl -fsS -m 10 http://localhost:3000/api/products/wasifyai-tts/voices | grep -q '\"languages\"'"
-check "Speech to Text page renders (server-side read of the language list)" "curl -fsS -m 20 http://localhost:3000/speech-to-text | grep -q 'speech'"
-check "language list answers through the BFF" "curl -fsS -m 10 http://localhost:3000/api/products/wasifyai-stt/languages | grep -q '\"languages\"'"
-check "transcripts API answers through the BFF" "curl -fsS -m 10 http://localhost:3000/api/products/wasifyai-stt/transcripts | grep -q '\"transcripts\"'"
-check "lip syncs API answers through the BFF" "curl -fsS -m 10 http://localhost:3000/api/products/wasifyai-lipsync/lipsyncs | grep -q '\"lipsyncs\"'"
-check "uploading something that is not a recording is refused" "test \"\$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: audio/mpeg' --data-binary 'not audio' http://localhost:3000/api/products/wasifyai-stt/uploads/media)\" = 415"
-check "speeches API answers through the BFF" "curl -fsS -m 10 http://localhost:3000/api/products/wasifyai-tts/speeches | grep -q '\"speeches\"'"
+check "My creations renders" "curl -fsS -m 20 http://localhost:3000/creations | grep -q 'My creations'"
 check "prompt enhancing needs a known kind" "test \"\$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{\"kind\":\"nope\",\"prompt\":\"x\"}' http://localhost:3000/api/products/wasifyai-video/prompt/enhance)\" = 422"
 
 # Model aliases live in LiteLLM's database and are seeded by the API (ADR-0025). The local overlay runs
@@ -73,14 +62,6 @@ if kubectl get ns monitoring >/dev/null 2>&1 && kubectl -n monitoring get pod pr
   check "Prometheus scrapes the API and the worker" "prom '/api/v1/targets' | python3 -c \"import json,sys; t=[x for x in json.load(sys.stdin)['data']['activeTargets'] if 'wasifyai' in x['labels'].get('service','')]; sys.exit(0 if len(t)>=2 and all(x['health']=='up' for x in t) else 1)\""
   check "the alert rules are loaded (with the Watchdog)" "prom '/api/v1/rules' | grep -q Watchdog"
   check "Alertmanager has Telegram and heartbeat receivers (ALERT_NOTIFICATIONS=on) or the null receiver (off)" "kubectl -n monitoring get secret alertmanager-wasifyai-config -o jsonpath='{.data.alertmanager\\.yaml}' | base64 -d | grep -qE 'telegram_configs|receiver: .null.'"
-fi
-
-# The music product through the real guardrail and lyrics models: must reach the approval step.
-if [ "${SMOKE_EXPECT_DONE:-0}" = "1" ]; then
-  song="$(curl -sN -m 300 -X POST http://localhost:3000/api/products/wasifyai-music/runs \
-    -H 'content-type: application/json' -d '{"input":{"idea":"a rainy night in Tokyo","genre":"indie pop"}}' 2>&1)"
-  check "song: guardrail passed, lyrics written, waiting for approval" "printf '%s' \"\$song\" | tail -3 | grep -q 'event: interrupt' && printf '%s' \"\$song\" | grep -q 'approve_lyrics'" \
-    || { echo "    what the stream ended with:"; printf '%s' "$song" | tail -c 700 | sed 's/^/    /'; }
 fi
 
 out="$(curl -sN -m 300 -X POST http://localhost:3000/api/products/hello/runs \

@@ -59,13 +59,6 @@ def test_every_weight_file_of_the_catalogue_has_a_place_to_be_laid_out():
     assert entry.voice.engine == "sidecar" and entry.voice.commercial_use == "yes"
 
 
-def test_the_server_copies_in_the_package_are_the_ones_the_service_runs():
-    for name in ("server.py", "engine.py"):
-        mine = (lr.SERVER_DIR / name).read_text()
-        theirs = (REPO / "services" / "lipsync-musetalk" / name).read_text()
-        assert mine == theirs, f"{name} differs between the package and services/lipsync-musetalk"
-
-
 def test_the_mark_is_drawn_on_every_frame_and_cannot_be_asked_away():
     engine = (lr.SERVER_DIR / "engine.py").read_text()
     server = (lr.SERVER_DIR / "server.py").read_text()

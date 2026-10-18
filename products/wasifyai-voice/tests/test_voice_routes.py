@@ -3,7 +3,6 @@
 import asyncio
 import io
 import shutil
-import sqlite3
 
 import pytest
 from fastapi import FastAPI, Header
@@ -36,9 +35,9 @@ class Indexed:
 
 
 @pytest.fixture
-def api(tmp_path):
+def api(tmp_path, new_store):
     engine = FakeEngine()
-    state = app_state(tmp_path, engine)
+    state = app_state(tmp_path, engine, new_store() if new_store.backend == "postgres" else None)
     files = LocalFileStorage(tmp_path / "files", "http://127.0.0.1:1", "s" * 20)
     state.storage = ScopedStorage(files)
     state.creation_index = Indexed()
@@ -481,7 +480,7 @@ def test_a_picture_nobody_used_goes_after_a_day(api):
     old = c.post(
         "pictures", files={"file": ("a.png", io.BytesIO(picture_file()), "image/png")}
     ).json()
-    with sqlite3.connect(store_for(state).path) as db:
+    with store_for(state)._connect() as db:  # noqa: SLF001 - age it, on either database
         db.execute("UPDATE pictures SET created_at = '2020-01-01T00:00:00.000+00:00'")
     new = c.post(
         "pictures", files={"file": ("b.png", io.BytesIO(picture_file()), "image/png")}
@@ -548,3 +547,21 @@ def test_a_text_that_is_empty_or_too_big_is_refused_in_words(api):
     assert r.status_code == 422 and r.json()["detail"]["code"] == "text_too_long"
     assert c.post("audiobook/plan", json={"text": "x", "target": 5}).status_code == 422
     assert c.post("audiobook/plan", json={"text": "x", "extra": 1}).status_code == 422
+
+
+def test_runtime_is_hosted_for_an_engine_with_no_runtime_to_set_up(api):
+    c, _, _ = api
+    assert c.get("runtime").json() == {"hosted": True}
+    assert c.get("lipsync-engine").status_code == 404
+
+
+def test_runtime_and_lip_sync_state_come_from_the_local_engine(api):
+    class Sidecar:
+        def state(self):
+            return {"installed": True, "running": False}
+
+    c, engine, _ = api
+    engine.state = lambda: {"installed": True, "running": False, "backend": "metal"}
+    engine.lipsync_sidecar = Sidecar()
+    assert c.get("runtime").json()["backend"] == "metal"
+    assert c.get("lipsync-engine").json()["installed"] is True

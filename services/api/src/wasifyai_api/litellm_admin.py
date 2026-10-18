@@ -92,6 +92,8 @@ class LiteLLMBackend:
 
     async def call(self, alias: str, kind: str) -> CallResult:
         started = time.monotonic()
+        if kind in ("speech", "transcription"):
+            return await self._call_audio(alias, kind, started)
         try:
             if kind == "embedding":
                 res = await self._client.post(
@@ -116,6 +118,48 @@ class LiteLLMBackend:
             return CallResult(bool(vector), _ms(started), sample=f"{len(vector)} dimensions")
         text = (((body.get("choices") or [{}])[0]).get("message") or {}).get("content") or ""
         return CallResult(True, _ms(started), sample=text.strip()[:80])
+
+    async def _call_audio(self, alias: str, kind: str, started: float) -> CallResult:
+        """A speech alias says a word and gets sound back; a transcription alias reads a second of
+        silence (all it can be sent without a recording of anyone)."""
+        try:
+            if kind == "speech":
+                res = await self._client.post(
+                    "/v1/audio/speech",
+                    json={
+                        "model": alias,
+                        "input": "ok",
+                        "voice": "alloy",
+                        "response_format": "wav",
+                    },
+                )
+            else:
+                res = await self._client.post(
+                    "/v1/audio/transcriptions",
+                    data={"model": alias},
+                    files={"file": ("silence.wav", _silence(), "audio/wav")},
+                )
+        except httpx.HTTPError as exc:
+            return CallResult(False, _ms(started), error=f"unreachable ({type(exc).__name__})")
+        if res.status_code >= 400:
+            return CallResult(False, _ms(started), error=_error_text(res))
+        if kind == "speech":
+            return CallResult(bool(res.content), _ms(started), sample=f"{len(res.content)} bytes")
+        return CallResult(True, _ms(started), sample=str(res.json().get("text", ""))[:80])
+
+
+def _silence(seconds: int = 1, rate: int = 16000) -> bytes:
+    """A mono 16-bit WAV of silence."""
+    import io
+    import wave
+
+    out = io.BytesIO()
+    with wave.open(out, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(b"\x00\x00" * rate * seconds)
+    return out.getvalue()
 
 
 def _ms(started: float) -> int:

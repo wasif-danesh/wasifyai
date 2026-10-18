@@ -50,6 +50,9 @@ export function ModelPicker({
           <p>
             {chosen.licence}. {costLine(chosen)}
           </p>
+          {chosen.engine === "remote" ? (
+            <p>Hosted: what you give this model is sent to its provider to be processed.</p>
+          ) : null}
           <p className="flex flex-wrap items-center gap-2">
             <span
               className={cn(

@@ -1,6 +1,7 @@
 # ADR-0034: Song downloads: audio with its cover inside, and a video
 
 - **Status:** Accepted
+- **Update (2026-10-18):** superseded in part by ADR-0067: song downloads was removed and replaced by the voice product (ADR-0066).
 - **Date:** 2026-10-08
 
 ## Context

@@ -17,6 +17,8 @@ from wasifyai_notebooks.studio.context import (
 )
 from wasifyai_notebooks.studio.formats import FORMATS, BadReply, build, parse_json, prompt_for
 
+pytestmark = pytest.mark.usefixtures("use_backends")  # on SQLite and on Postgres
+
 REPORT = (
     "# Launch plan\n\n## Budget\nThe marketing budget for the launch is **$350,000**.\n\n"
     "## People\n- Engineering has 48 people\n- 5 roles are open\n\n"
@@ -334,10 +336,10 @@ async def test_an_output_stopped_meanwhile_is_not_overwritten(tmp_path, ctx):  #
     assert not (rig.runtime.artifacts_dir / rig.nb["id"] / art["id"]).exists()
 
 
-def test_outputs_are_owned_and_removed_with_their_notebook(tmp_path):
-    from wasifyai_notebooks.store import NotebookStore, NotFound
+def test_outputs_are_owned_and_removed_with_their_notebook(new_store):
+    from wasifyai_notebooks.store import NotFound
 
-    store = NotebookStore(tmp_path, dimension=SPEC.dimension, embedder_id=SPEC.id)
+    store = new_store(dimension=SPEC.dimension, embedder_id=SPEC.id)
     nb = store.create_notebook("t1", "u1", "n")
     a = store.create_artifact("t1", "u1", nb["id"], fmt="report", prompt="", source_ids=["d"])
     assert a["status"] == "processing"

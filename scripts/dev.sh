@@ -9,12 +9,6 @@ cd "$ROOT"
 step "Starting the stack"
 "$CONTAINER_ENGINE" compose up -d --build
 
-step "Lip sync server (native, uses the Mac's GPU)"
-"$ROOT/scripts/lipsync-server.sh" start || warn "the lip sync server did not start; Lip Sync will not work"
-
-step "Speech models (installed once; skipped when present)"
-"$ROOT/scripts/speech-models.sh" || warn "the speech models are not all installed; text to speech and speech to text may fail"
-
 step "Waiting for Postgres"
 for _ in $(seq 1 60); do
   "$CONTAINER_ENGINE" compose exec -T postgres pg_isready -U wasifyai -d wasifyai >/dev/null 2>&1 && break

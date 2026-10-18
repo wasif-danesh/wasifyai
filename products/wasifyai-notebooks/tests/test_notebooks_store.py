@@ -15,8 +15,8 @@ T, U = "t1", "u1"
 
 
 @pytest.fixture
-def store(tmp_path):
-    return NotebookStore(tmp_path, dimension=SPEC.dimension, embedder_id=SPEC.id)
+def store(new_store):
+    return new_store(dimension=SPEC.dimension, embedder_id=SPEC.id)
 
 
 def file_doc(store, nb, name="a.pdf", sha="s1", folder=None):
@@ -120,7 +120,22 @@ def test_a_source_being_read_cannot_be_deleted(store):
     store.delete_document(T, U, nb["id"], d["id"])
 
 
-def test_deleting_removes_passages_vectors_and_keyword_entries(store):
+def test_deleting_a_notebook_removes_its_passages(store):
+    nb = store.create_notebook(T, U, "n")
+    d, _ = file_doc(store, nb)
+    index(store, d["id"], ["alpha beta", "gamma delta"])
+
+    def count(table):
+        with store.connect() as db:
+            return db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+
+    assert count("chunks") == 2
+    store.delete_notebook(T, U, nb["id"])
+    assert count("chunks") == 0 and count("documents") == 0
+
+
+def test_deleting_removes_passages_vectors_and_keyword_entries_in_sqlite(tmp_path):
+    store = NotebookStore(tmp_path, dimension=SPEC.dimension, embedder_id=SPEC.id)
     nb = store.create_notebook(T, U, "n")
     d, _ = file_doc(store, nb)
     index(store, d["id"], ["alpha beta", "gamma delta"])
@@ -175,11 +190,11 @@ def test_a_note_is_pending_until_indexed_and_editing_it_requeues(store):
         store.edit_note(T, U, nb["id"], f["id"], "nope")
 
 
-def test_an_index_built_with_another_embedder_is_refused(tmp_path):
-    NotebookStore(tmp_path, dimension=64, embedder_id="a")
+def test_an_index_built_with_another_embedder_is_refused(new_store):
+    new_store(dimension=64, embedder_id="a")
     with pytest.raises(Conflict, match="indexed with a"):
-        NotebookStore(tmp_path, dimension=64, embedder_id="b")
-    assert NotebookStore(tmp_path, dimension=64, embedder_id="a").stats()["embedder"] == "a"
+        new_store(dimension=64, embedder_id="b")
+    assert new_store(dimension=64, embedder_id="a").stats()["embedder"] == "a"
 
 
 def test_a_passage_comes_with_its_neighbours(store):
@@ -193,3 +208,31 @@ def test_a_passage_comes_with_its_neighbours(store):
     assert got["title"] == "a.pdf"
     with pytest.raises(NotFound):
         store.get_chunk(T, "u2", nb["id"], cid)
+
+
+def test_moving_a_document_next_to_its_twin_is_skipped_and_the_rest_still_move(store):
+    nb = store.create_notebook(T, U, "n")
+    target = store.create_folder(T, U, nb["id"], "Target")
+    a, _ = file_doc(store, nb, "a.pdf", "same")
+    twin, _ = file_doc(store, nb, "twin.pdf", "same", target["id"])  # the same bytes, already there
+    b, _ = file_doc(store, nb, "b.pdf", "other")
+    moved = store.move_documents(T, U, nb["id"], [a["id"], b["id"]], target["id"])
+    assert moved == 1  # a would be a duplicate; b moved; nothing broke for the next statement
+    by_id = {d["id"]: d for d in store.list_documents(T, U, nb["id"])}
+    assert by_id[a["id"]]["folder_id"] is None
+    assert by_id[b["id"]]["folder_id"] == target["id"] and twin["id"] in by_id
+
+
+def test_a_question_in_a_script_without_spaces_or_with_marks_finds_its_passage(store):
+    from wasifyai_notebooks.retrieval import retrieve
+
+    nb = store.create_notebook(T, U, "n")
+    d, _ = file_doc(store, nb)
+    texts = ["स्कैनर का उपयोग कैसे करें", "the quarterly budget is approved", "東京の天気は晴れです"]
+    index(store, d["id"], texts)
+    with store.connect() as db:
+        hindi = retrieve(db, nb["id"], "स्कैनर", vec(7), weight=0.65, mode="lexical")
+        latin = retrieve(db, nb["id"], "Budget approved", vec(7), weight=0.65, mode="lexical")
+    assert [h.content for h in hindi] == [texts[0]]
+    assert [h.content for h in latin] == [texts[1]]
+    assert latin[0].blended == 1.0  # both terms of the question are in the passage

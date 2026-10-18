@@ -121,10 +121,6 @@ def test_too_many_loras_and_a_workflow_without_a_chain_are_refused():
     wf = Workflow.load(WORKFLOWS, "flux2-klein-4b")
     with pytest.raises(ValueError, match="at most 3"):
         wf.fill({"prompt": "x"}, [(f"{n}.safetensors", 1.0) for n in range(4)])
-    song = Workflow.load(PRODUCTS / "wasifyai-music" / "workflows", "flux2-klein-4b")
-    if not song.accepts_loras:
-        with pytest.raises(ValueError, match="does not take LoRAs"):
-            song.fill({"prompt": "x"}, [("a.safetensors", 1.0)])
 
 
 def test_a_chain_that_points_at_a_missing_node_is_a_problem(tmp_path):

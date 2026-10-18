@@ -67,6 +67,12 @@ imagePullSecrets:
     secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: STORAGE_SECRET_KEY }
 {{- end -}}
 
+{{/* The web profile's products (notebooks, voice): what the API and the web app both read. */}}
+{{- define "wasifyai.productsEnv" -}}
+- { name: NOTEBOOKS_ENABLED, value: {{ .Values.notebooks.enabled | quote }} }
+- { name: VOICE_ENABLED, value: {{ .Values.voice.enabled | quote }} }
+{{- end -}}
+
 {{/* Env shared by the API and the migration job. */}}
 {{- define "wasifyai.apiEnv" -}}
 {{ include "wasifyai.dbEnv" . }}
@@ -100,6 +106,18 @@ imagePullSecrets:
   value: {{ .Values.auth.adminEmails | quote }}
 {{- end }}
 {{- include "wasifyai.storageEnv" . | nindent 0 }}
+{{ include "wasifyai.productsEnv" . }}
+{{- if .Values.notebooks.enabled }}
+- { name: NOTEBOOKS_SCHEMA, value: {{ .Values.notebooks.schema | quote }} }
+- { name: NOTEBOOKS_EMBED_MODEL, value: {{ .Values.notebooks.embedModel | quote }} }
+- { name: NOTEBOOKS_EMBED_DIMENSION, value: {{ .Values.notebooks.embedDimension | quote }} }
+{{- end }}
+{{- if .Values.voice.enabled }}
+- { name: VOICE_SCHEMA, value: {{ .Values.voice.schema | quote }} }
+{{- with .Values.voice.modelsFile }}
+- { name: VOICE_MODELS_FILE, value: {{ . | quote }} }
+{{- end }}
+{{- end }}
 {{- end -}}
 
 {{/* Encrypts media provider API keys saved in the admin area. Optional: without it the admin area refuses to save a key. */}}

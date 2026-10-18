@@ -34,10 +34,10 @@ async def test_embed_is_deterministic_and_recorded(products, ctx):
     assert usage.events[-1].kind == "llm.embedding_tokens"
 
 
-async def test_music_generate_builds_job_without_waiting(products, ctx):
+async def test_video_generate_builds_job_without_waiting(products, ctx):
     caps, _, sink = build(products)
-    handle = await caps.music.generate(lyrics="[verse] la la", seed=7)
-    assert handle.status == "queued" and handle.capability == "music.generate"
+    handle = await caps.video.generate(lyrics="[verse] la la", seed=7)
+    assert handle.status == "queued" and handle.capability == "video.generate"
     job = sink.submitted[0]
     assert job.job_id == handle.job_id
     assert (job.tenant_id, job.product_id, job.user_id) == ("t1", "demo", "u1")
@@ -50,7 +50,7 @@ async def test_music_generate_builds_job_without_waiting(products, ctx):
 async def test_unknown_workflow_input_is_rejected(products, ctx):
     caps, _, _ = build(products)
     with pytest.raises(ValueError, match="no input"):
-        await caps.music.generate(volume=11)
+        await caps.video.generate(volume=11)
 
 
 async def test_unconfigured_capability_names_the_product(products, ctx):
@@ -80,6 +80,6 @@ outputs:
 """
     )
     caps, _, sink = build(products)
-    await caps.music.generate(duration_s=45)
+    await caps.video.generate(duration_s=45)
     job = sink.submitted[0]
     assert job.prompt["14"]["inputs"]["seconds"] == 45 and job.prompt["3"]["inputs"]["seed"] == 45

@@ -45,11 +45,11 @@ async def test_save_replace_list_and_delete(store):
     )
     assert not again.key_set
 
-    await store.put(tenant, MediaBinding("p", "music.generate", "comfyui-local", {}, None, "a2"))
+    await store.put(tenant, MediaBinding("p", "video.generate", "comfyui-local", {}, None, "a2"))
     listed = await store.list(tenant)
-    assert [b.capability for b in listed] == ["image.generate", "music.generate"]
+    assert [b.capability for b in listed] == ["image.generate", "video.generate"]
     assert await store.list("another-" + tenant) == []  # tenants are separate
 
     await store.delete(tenant, "p", "image.generate")
     assert await store.get(tenant, "p", "image.generate") is None
-    assert [b.capability for b in await store.list(tenant)] == ["music.generate"]
+    assert [b.capability for b in await store.list(tenant)] == ["video.generate"]

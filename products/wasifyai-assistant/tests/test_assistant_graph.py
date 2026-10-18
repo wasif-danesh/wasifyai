@@ -311,3 +311,28 @@ def test_titles_and_search_text():
     assert len(long) <= 60 and long.endswith("…")
     text = conversation_text("Fox", [msg("user", "draw a fox"), msg("assistant", "ok")])
     assert "Fox" in text and "draw a fox" in text and "ok" not in text.split()
+
+
+def test_the_model_is_only_told_about_tools_the_host_can_run():
+    from wasifyai_assistant.graph import offered_tools
+    from wasifyai_assistant.tools import TOOL_DEFINITIONS
+
+    def names(tools):
+        return [t["function"]["name"] for t in tools or []]
+
+    class Limited(FakeHost):
+        def __init__(self, tools: set[str] | None) -> None:
+            super().__init__()
+            self._tools = tools
+
+        def available_tools(self) -> set[str] | None:
+            return self._tools
+
+    assert offered_tools(None) is None  # no host: no tools
+    assert offered_tools(FakeHost()) == TOOL_DEFINITIONS  # a host that does not say offers all
+    assert offered_tools(Limited(None)) == TOOL_DEFINITIONS
+    assert names(offered_tools(Limited({"search_creations", "generate_image"}))) == [
+        "generate_image",
+        "search_creations",
+    ]
+    assert offered_tools(Limited(set())) is None

@@ -3,13 +3,9 @@ For UI work and laptops that cannot run the real models."""
 
 import asyncio
 import hashlib
-import json
-import math
 import struct
 import tempfile
-import wave
 import zlib
-from io import BytesIO
 from pathlib import Path
 
 from wasifyai_media_worker.comfy import ProgressFn
@@ -37,21 +33,6 @@ def placeholder_png(seed: str, size: int = 256) -> bytes:
         + chunk(b"IDAT", zlib.compress(rows))
         + chunk(b"IEND", b"")
     )
-
-
-def placeholder_wav(seed: str, seconds: float = 2.0, rate: int = 16000) -> bytes:
-    freq = 220 + hashlib.sha256(seed.encode()).digest()[0]
-    frames = b"".join(
-        struct.pack("<h", int(8000 * math.sin(2 * math.pi * freq * i / rate)))
-        for i in range(int(seconds * rate))
-    )
-    buf = BytesIO()
-    with wave.open(buf, "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(rate)
-        w.writeframes(frames)
-    return buf.getvalue()
 
 
 async def placeholder_mp4(seconds: float = 3.0) -> bytes:
@@ -82,19 +63,8 @@ async def run_stub(
     made: dict[str, tuple[bytes, str, str]] = {}
     for name, spec in outputs.items():
         kind = spec.get("type", "image")
-        if kind == "json":
-            sample = {
-                "text": "This is a placeholder transcript.",
-                "language": "en",
-                "segments": [
-                    {"start": 0.0, "end": 2.0, "text": "This is a placeholder transcript."}
-                ],
-            }
-            made[name] = (json.dumps(sample).encode(), "application/json", "json")
-        elif kind == "video":
+        if kind == "video":
             made[name] = (await placeholder_mp4(), "video/mp4", "mp4")
-        elif kind == "audio":
-            made[name] = (placeholder_wav(job_id), "audio/wav", "wav")
         else:
             made[name] = (placeholder_png(job_id), "image/png", "png")
     return made

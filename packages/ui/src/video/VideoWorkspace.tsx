@@ -8,7 +8,7 @@ import {
   clipLength,
 } from "@wasifyai/client";
 import { Library, Save } from "lucide-react";
-import { type FormEvent, type ReactNode, useId, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useId, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Chip } from "../components/chip";
@@ -62,7 +62,9 @@ function VideoForm({
   client,
   onSubmit,
   initial,
+  hint,
 }: {
+  hint?: string;
   mode: Mode;
   client: Pick<RunClient, "uploadImage" | "deleteUpload" | "enhancePrompt">;
   onSubmit: (value: VideoFormValue) => void;
@@ -180,9 +182,8 @@ function VideoForm({
           Make my video
         </Button>
         <span className="text-muted-foreground">
-          {mode === "image"
-            ? "The clip keeps the shape of your picture."
-            : "A 2 second clip takes about a minute on a fast Mac."}
+          {mode === "image" ? "The clip keeps the shape of your picture. " : ""}
+          {hint ?? "A 2 second clip takes about a minute on a fast Mac."}
         </span>
       </div>
     </form>
@@ -218,6 +219,12 @@ export type VideoWorkspaceProps = {
   blockedReason?: string | null;
   /** Whether "Save a copy" is on offer. */
   canSave?: boolean;
+  /** Where a finished clip can be downloaded from (the web app): "Download" is offered when given. */
+  downloadHref?: (result: VideoResult) => string;
+  /** The line next to the Make button: how long it takes here. */
+  hint?: string;
+  /** Called when the clip starts being made (the web app tells its header). */
+  onMaking?: () => void;
   onOpenLibrary?: () => void;
 };
 
@@ -229,6 +236,9 @@ export function VideoWorkspace({
   notices,
   blockedReason = null,
   canSave = false,
+  downloadHref,
+  hint,
+  onMaking,
   onOpenLibrary,
 }: VideoWorkspaceProps) {
   const { state, start, reset, retry } = useVideoFlow(runs);
@@ -263,6 +273,10 @@ export function VideoWorkspace({
     }
   }
 
+  useEffect(() => {
+    if (phase === "making") onMaking?.();
+  }, [phase, onMaking]);
+
   const job = jobText(state.job);
   const showForm = phase === "idle" || phase === "refused";
   return (
@@ -289,6 +303,7 @@ export function VideoWorkspace({
             client={runs}
             onSubmit={(v) => (blockedReason ? null : submit(v))}
             initial={asked}
+            hint={hint}
           />
         </>
       ) : (
@@ -341,6 +356,13 @@ export function VideoWorkspace({
                 {canSave && videos ? (
                   <Button type="button" onClick={() => void save(state.result as VideoResult)}>
                     <Save className="size-4" /> Save a copy
+                  </Button>
+                ) : null}
+                {downloadHref ? (
+                  <Button asChild>
+                    <a href={downloadHref(state.result)} download>
+                      <Save className="size-4" /> Download
+                    </a>
                   </Button>
                 ) : null}
                 <Button type="button" variant="outline" onClick={reset}>

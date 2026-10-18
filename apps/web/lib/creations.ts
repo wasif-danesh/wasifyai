@@ -1,22 +1,16 @@
 import { clock } from "./format";
+import type { LipSyncCard, SongCard, SpeechCard, TranscriptCard } from "./voice-cards";
 
-// What My creations shows: one entry per song, image or video, whatever product made it (ADR-0040).
-import type {
-  ImageSummary,
-  LipSyncSummary,
-  SongSummary,
-  SpeechSummary,
-  TranscriptSummary,
-  VideoSummary,
-} from "@wasifyai/contracts";
+// What My creations shows: one entry per piece of music, image, video, speech, transcript or lip sync (ADR-0040).
+import type { ImageSummary, VideoSummary } from "@wasifyai/contracts";
 
 export type Entry =
-  | { kind: "song"; id: string; createdAt: string; song: SongSummary }
+  | { kind: "song"; id: string; createdAt: string; song: SongCard }
   | { kind: "image"; id: string; createdAt: string; image: ImageSummary }
   | { kind: "video"; id: string; createdAt: string; video: VideoSummary }
-  | { kind: "speech"; id: string; createdAt: string; speech: SpeechSummary }
-  | { kind: "transcript"; id: string; createdAt: string; transcript: TranscriptSummary }
-  | { kind: "lipsync"; id: string; createdAt: string; lipsync: LipSyncSummary };
+  | { kind: "speech"; id: string; createdAt: string; speech: SpeechCard }
+  | { kind: "transcript"; id: string; createdAt: string; transcript: TranscriptCard }
+  | { kind: "lipsync"; id: string; createdAt: string; lipsync: LipSyncCard };
 
 export type Filter =
   | "all"
@@ -35,9 +29,9 @@ export function longEnough(query: string): boolean {
 }
 
 /** The `kind` the search API takes for a filter, or undefined for "all". */
-export function kindOf(filter: Filter): Entry["kind"] | undefined {
+export function kindOf(filter: Filter): string | undefined {
   const kinds = {
-    songs: "song",
+    songs: "track", // the index calls the voice product's music a track
     images: "image",
     videos: "video",
     speeches: "speech",
@@ -65,10 +59,10 @@ export function toRow(entry: Entry): Row {
     case "song":
       return {
         ...base,
-        kindLabel: "Song",
+        kindLabel: "Music",
         title: entry.song.title,
         detail: entry.song.style ?? "",
-        href: `/music/songs/${entry.id}`,
+        href: "/voice/tracks",
         status: "done",
       };
     case "image":
@@ -94,8 +88,8 @@ export function toRow(entry: Entry): Row {
         ...base,
         kindLabel: "Speech",
         title: entry.speech.text,
-        detail: `${entry.speech.language_name} · ${entry.speech.gender === "male" ? "Male" : "Female"}, ${entry.speech.voice}`,
-        href: `/text-to-speech/creations/${entry.id}`,
+        detail: entry.speech.voice,
+        href: "/voice/speak",
         status: "done",
       };
     case "transcript":
@@ -103,19 +97,17 @@ export function toRow(entry: Entry): Row {
         ...base,
         kindLabel: "Transcript",
         title: entry.transcript.title || "Transcribing…",
-        detail: [entry.transcript.language_name, clock(entry.transcript.seconds)]
-          .filter(Boolean)
-          .join(" · "),
-        href: `/speech-to-text/creations/${entry.id}`,
+        detail: clock(entry.transcript.seconds),
+        href: "/voice/transcribe",
         status: entry.transcript.status,
       };
     case "lipsync":
       return {
         ...base,
         kindLabel: "Lip sync",
-        title: entry.lipsync.text || entry.lipsync.style || "Lip sync",
+        title: entry.lipsync.text || "Lip sync",
         detail: clock(entry.lipsync.seconds),
-        href: `/lip-sync/creations/${entry.id}`,
+        href: "/voice/lipsync",
         status: entry.lipsync.status,
       };
   }

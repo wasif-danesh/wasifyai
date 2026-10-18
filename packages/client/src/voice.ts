@@ -258,7 +258,32 @@ export type VoiceApi = ReturnType<typeof createVoiceApi>;
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
-export function createVoiceApi(transport: Transport) {
+/** Where the models and the runtime come from. On the desktop the engine lists them with what is on the
+ * computer and the person sets the runtime up; on the web the models are hosted, always ready, and there is
+ * nothing to set up (`hosted`). */
+export type VoiceApiOptions = { hosted?: boolean };
+
+/** The runtime a hosted deployment has: nothing to install, so the setup card never shows. */
+export const HOSTED_RUNTIME: AudioRuntime = {
+  installed: true,
+  tag: null,
+  backend: "hosted",
+  source: null,
+  running: true,
+  plan: {
+    supported: true,
+    platform: "hosted",
+    tag: "",
+    bytes: 0,
+    url: null,
+    backend: "hosted",
+    measured: false,
+    found: null,
+  },
+  install: { state: "ready", step: null, message: "", done_bytes: 0, total_bytes: 0 },
+};
+
+export function createVoiceApi(transport: Transport, options: VoiceApiOptions = {}) {
   const base = `/products/${VOICE_PRODUCT}`;
   async function request(path: string, init?: RequestInit): Promise<Response> {
     const res = await transport.fetch(path, init);
@@ -280,18 +305,37 @@ export function createVoiceApi(transport: Transport) {
     body: JSON.stringify(body),
   });
 
+  // On the web the runtime and the models are set up by whoever runs the service (in the desktop app on
+  // the same computer, or in the deployment), not by the person using the page.
+  const notHere = <T>(): Promise<T> =>
+    Promise.reject(new Error("This is set up by whoever runs this service, not from this page."));
+  const desktopOnly = <T>(run: () => Promise<T>): (() => Promise<T>) =>
+    options.hosted ? notHere : run;
+
   return {
-    runtime: () => json<AudioRuntime>("/desktop/audio"),
+    runtime: async () => {
+      if (!options.hosted) return json<AudioRuntime>("/desktop/audio");
+      const state = await json<AudioRuntime & { hosted?: boolean }>(`${base}/runtime`);
+      return state.hosted ? HOSTED_RUNTIME : state;
+    },
     models: async (task?: VoiceTask) =>
       (
-        await json<{ models: VoiceModelInfo[]; runtime: AudioRuntime }>(
-          `/desktop/audio/models${task ? `?task=${task}` : ""}`,
+        await json<{ models: VoiceModelInfo[]; runtime?: AudioRuntime }>(
+          options.hosted
+            ? `${base}/models${task ? `?task=${task}` : ""}`
+            : `/desktop/audio/models${task ? `?task=${task}` : ""}`,
         )
       ).models,
     installRuntime: (confirmBytes: number) =>
-      json<AudioRuntime>("/desktop/audio/install", post({ confirm_bytes: confirmBytes })),
-    useFoundRuntime: () => json<AudioRuntime>("/desktop/audio/use-found", { method: "POST" }),
-    stopRuntime: () => json<{ stopped: boolean }>("/desktop/audio/stop", { method: "POST" }),
+      options.hosted
+        ? notHere<AudioRuntime>()
+        : json<AudioRuntime>("/desktop/audio/install", post({ confirm_bytes: confirmBytes })),
+    useFoundRuntime: desktopOnly(() =>
+      json<AudioRuntime>("/desktop/audio/use-found", { method: "POST" }),
+    ),
+    stopRuntime: desktopOnly(() =>
+      json<{ stopped: boolean }>("/desktop/audio/stop", { method: "POST" }),
+    ),
 
     speeches: async (limit = 100) =>
       (await json<{ items: Speech[] }>(`${base}/speeches?limit=${limit}`)).items,
@@ -356,11 +400,15 @@ export function createVoiceApi(transport: Transport) {
         post({ ...source, model }),
       ),
 
-    lipsyncEngine: () => json<LipSyncEngine>("/desktop/lipsync"),
+    lipsyncEngine: () =>
+      json<LipSyncEngine>(options.hosted ? `${base}/lipsync-engine` : "/desktop/lipsync"),
     installLipsyncEngine: (confirmBytes: number) =>
-      json<LipSyncEngine>("/desktop/lipsync/install", post({ confirm_bytes: confirmBytes })),
-    stopLipsyncEngine: () =>
+      options.hosted
+        ? notHere<LipSyncEngine>()
+        : json<LipSyncEngine>("/desktop/lipsync/install", post({ confirm_bytes: confirmBytes })),
+    stopLipsyncEngine: desktopOnly(() =>
       json<{ stopped: boolean }>("/desktop/lipsync/stop", { method: "POST" }),
+    ),
     /** A picture to make a talking video from; it is kept until a clip uses it, or for a day. */
     addPicture(file: File) {
       const form = new FormData();

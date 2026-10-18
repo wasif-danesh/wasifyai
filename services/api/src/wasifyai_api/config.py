@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -63,6 +64,27 @@ class Settings(BaseSettings):
     storage_region: str = "us-east-1"
     storage_access_key: str = ""
     storage_secret_key: str = ""
+
+    # Notebooks on the web (docs/phase3-web-parity-plan.md, W4): off until a reading worker is
+    # deployed, because a source waits for it. The models and the reader are on the worker's
+    # machine; the engine needs the search model's folder only to answer about what was read.
+    notebooks_enabled: bool = False
+    notebooks_models_dir: str = ""
+    notebooks_reader_dir: str = ""
+    notebooks_schema: str = "notebooks"
+    notebooks_embed_model: str = "creation-embedder"  # the gateway alias that serves the search
+    notebooks_embed_dimension: int = 1024
+
+    # Speech on the web (docs/phase3-web-parity-plan.md, W5): the hosted models of
+    # `products/wasifyai-voice/hosted-models.yaml`, asked through the gateway by alias. Off until
+    # the gateway has the aliases (`voice-speak`, `voice-transcribe`) pointed at provider models.
+    voice_enabled: bool = False
+    voice_schema: str = "voice"
+    # what answers speech: hosted (the gateway's speech routes), local (the models in
+    # DESKTOP_DATA_DIR, as the desktop app runs them) or both; local and both are for a service on a
+    # machine that has the models
+    voice_engine: Literal["hosted", "local", "both"] = "hosted"
+    voice_models_file: str = ""  # your own descriptors; default: the product's file
 
     @model_validator(mode="after")
     def _desktop_defaults(self) -> "Settings":

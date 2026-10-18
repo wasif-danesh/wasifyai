@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from wasifyai_api.admin import AdminSong, AdminUser, InMemoryAdminStore, UsageReport, UsageTotal
+from wasifyai_api.admin import AdminUser, InMemoryAdminStore, UsageReport, UsageTotal
 from wasifyai_api.config import get_settings
 from wasifyai_api.users import InMemoryUserStore
 from wasifyai_platform_sdk import InMemoryUsageRecorder
@@ -23,12 +23,6 @@ def store():
             role="user", providers=["google"], created_at=NOW - timedelta(hours=i),
         )
         for i in range(5)
-    ]  # fmt: skip
-    s.song_rows = [
-        AdminSong(
-            id="s1", product_id="wasifyai-music", title="A song", user_id="u1",
-            user_email="user1@example.com", created_at=NOW,
-        )
     ]  # fmt: skip
     s.usage_report = UsageReport(
         days=7,
@@ -69,7 +63,7 @@ def as_user():
     return {"authorization": "Bearer " + token(sub="google:1", email="ann@example.com")}
 
 
-ROUTES = ["/admin/users", "/admin/songs", "/admin/usage", "/admin/audit"]
+ROUTES = ["/admin/users", "/admin/usage", "/admin/audit"]
 
 
 @pytest.mark.parametrize("path", ROUTES)
@@ -130,9 +124,7 @@ def test_reading_users_is_audited_but_not_logged_with_data(jwt_client, store):
     assert log[0]["action"] == "admin.users.list"
 
 
-def test_songs_and_usage_have_the_documented_shape(jwt_client):
-    songs = jwt_client.get("/admin/songs", headers=as_admin()).json()
-    assert songs["songs"][0]["title"] == "A song" and songs["songs"][0]["user_email"]
+def test_usage_has_the_documented_shape(jwt_client):
     usage = jwt_client.get("/admin/usage?days=30", headers=as_admin()).json()
     assert usage["days"] == 30 and usage["totals"][0]["kind"] == "song.created"
 

@@ -108,32 +108,22 @@ async def tables(engine):
         async with engine.connect() as c:
             await c.execute(text("select 1 from videos limit 1"))
             await c.execute(text("select 1 from images limit 1"))
-            await c.execute(text("select 1 from songs limit 1"))
     except Exception:
         pytest.skip("product tables missing (make migrate)")
     tenant = "it-" + uuid4().hex
     yield tenant
     async with engine.begin() as c:
-        for t in ("songs", "images", "videos"):
+        for t in ("images", "videos"):
             await c.execute(text(f"DELETE FROM {t} WHERE tenant_id = :t"), {"t": tenant})
 
 
 async def test_the_sources_list_and_check_real_rows(engine, tables):
     from wasifyai_image.index import ImageIndexSource
-    from wasifyai_music.index import SongIndexSource
     from wasifyai_video.index import VideoIndexSource
 
     tenant = tables
-    ids = {k: str(uuid4()) for k in ("song", "image", "video", "working")}
+    ids = {k: str(uuid4()) for k in ("image", "video", "working")}
     async with engine.begin() as c:
-        await c.execute(
-            text(
-                "INSERT INTO songs (id, tenant_id, product_id, user_id, title, lyrics, style, "
-                "audio_key) VALUES (:id, :t, 'wasifyai-music', 'u1', 'Lluvia', "
-                "'[verse]\nhola mundo', 'pop', 'k')"
-            ),
-            {"id": ids["song"], "t": tenant},
-        )
         await c.execute(
             text(
                 "INSERT INTO images (id, tenant_id, product_id, user_id, mode, prompt, width, "
@@ -152,14 +142,10 @@ async def test_the_sources_list_and_check_real_rows(engine, tables):
                 {"id": ids[key], "t": tenant, "s": status},
             )
 
-    (song,) = [i for i in await SongIndexSource(engine).page(None, 1000) if i.tenant_id == tenant]
-    assert (song.item_id, song.user_id, song.kind) == (ids["song"], "u1", "song")
-    assert "Lluvia" in song.text and "hola mundo" in song.text and "[verse]" not in song.text
     (image,) = [i for i in await ImageIndexSource(engine).page(None, 1000) if i.tenant_id == tenant]
     assert (image.item_id, image.text) == (ids["image"], "a red fox")
     mine = [i for i in await VideoIndexSource(engine).page(None, 1000) if i.tenant_id == tenant]
     assert [i.item_id for i in mine] == [ids["video"]]  # a clip still being made is not indexed
     assert await VideoIndexSource(engine).present([ids["video"], ids["working"]]) == {ids["video"]}
-    assert await SongIndexSource(engine).present([ids["song"], str(uuid4())]) == {ids["song"]}
     after = await ImageIndexSource(engine).page(ids["image"], 1000)
     assert ids["image"] not in [i.item_id for i in after]

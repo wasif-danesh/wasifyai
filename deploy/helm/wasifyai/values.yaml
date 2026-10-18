@@ -43,15 +43,33 @@ web:
     requests: { cpu: 50m, memory: 128Mi }
     limits: { memory: 512Mi }
 
+# Products that run only on the web profile (docs/phase3-web-parity-plan.md). Off until the pieces they need are
+# there: notebooks need the worker below and the gateway's `creation-embedder` alias; voice needs the gateway's
+# `voice-speak` and `voice-transcribe` aliases bound to a speech provider in the admin Models page (the provider
+# receives the text and the recordings). Both need object storage and the platform Postgres (with pgvector).
+notebooks:
+  enabled: false
+  schema: notebooks
+  embedModel: creation-embedder
+  embedDimension: 1024
+  # Reads the sources people add and makes the Studio outputs. Any number can run; the database is the queue.
+  # The image holds the document reader and its models (about 1.5 GB on disk) and needs memory to read a page.
+  worker:
+    replicas: 1
+    resources:
+      requests: { cpu: 250m, memory: 1Gi }
+      limits: { memory: 4Gi }
+voice:
+  enabled: false
+  schema: voice
+  modelsFile: ""        # your own descriptors; empty = the product's hosted-models.yaml
+
 mediaWorker:
   enabled: true
   replicas: 1
   # stub: placeholder images/audio, no GPU or ComfyUI. real: drive ComfyUI (set comfyui.enabled or
   # env.COMFYUI_BASE_URL). One job at a time per GPU id; workers sharing a GPU share `gpuId`.
   comfyuiMode: stub
-  # real | stub for the speech servers on their own; empty follows comfyuiMode. A laptop cluster sets real
-  # (with speech.enabled) to run the CPU speech servers for real while the GPU models stay placeholders.
-  speechMode: ""
   gpuId: gpu0
   jobTimeoutSeconds: 900
   resources:
@@ -139,62 +157,6 @@ metrics:
     failureRatioCritical: "0.5"
     failureRatioWarning: "0.2"
     volumeFullPercent: 90
-
-# Lip Sync (ADR-0044): the address of the lip sync server (MuseTalk, services/lipsync-musetalk). On a Mac it runs
-# natively (scripts/lipsync-server.sh); scripts/kind-up.sh sets this to an address the cluster can reach. Empty:
-# a lip sync is a placeholder clip.
-lipsync:
-  enabled: false            # run the server as a pod (image lipsync-musetalk); otherwise set serverUrl
-  serverUrl: ""             # a server outside the cluster (used when enabled=false)
-  device: cpu               # cuda on a GPU host (with gpuResources)
-  storage: 12Gi             # the model files, about 4 GB
-  storageClass: ""
-  resources:
-    requests: { cpu: "2", memory: 6Gi }
-    limits: { memory: 12Gi }
-  gpuResources: {}          # e.g. { nvidia.com/gpu: 1 } in a cloud overlay
-  nodeSelector: {}
-  tolerations: []
-
-# Speech (ADR-0042): Speaches serving Kokoro for text to speech (and Whisper for ADR-0043). Off by default;
-# the voices and Whisper are downloaded into the volume on first use (see docs/configuration.md).
-speech:
-  enabled: false
-  image: ghcr.io/speaches-ai/speaches:latest-cpu   # pin to a version before relying on it
-  whisperComputeType: int8
-  # Installed into the volume by a Job after each install or upgrade (the server downloads on request).
-  # About 5 GB in all. Keep in step with scripts/speech-models.sh.
-  models:
-    - speaches-ai/Kokoro-82M-v1.0-ONNX
-    - deepdml/faster-whisper-large-v3-turbo-ct2
-    - Systran/faster-whisper-large-v3
-  storage: 10Gi
-  storageClass: ""
-  resources:
-    requests: { cpu: "1", memory: 2Gi }
-    limits: { memory: 6Gi }
-
-# Indic Parler-TTS for Bengali (ADR-0042). Needs a Secret holding a Hugging Face token (read access to the
-# gated model): kubectl create secret generic hf-token --from-literal=token=... Off by default.
-speechIndic:
-  enabled: false
-  dtype: float32            # bfloat16 halves the memory and is about 4 times slower on a CPU
-  hfTokenSecret: { name: hf-token, key: token }
-  storage: 10Gi
-  storageClass: ""
-  resources:
-    requests: { cpu: "2", memory: 5Gi }
-    limits: { memory: 8Gi }
-
-# IndicConformer for speech to text in the Indian languages (ADR-0043); same Hugging Face token Secret as speechIndic.
-sttIndic:
-  enabled: false
-  hfTokenSecret: { name: hf-token, key: token }
-  storage: 10Gi
-  storageClass: ""
-  resources:
-    requests: { cpu: "2", memory: 4Gi }
-    limits: { memory: 6Gi }
 
 redis:
   enabled: true

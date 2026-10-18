@@ -114,8 +114,7 @@ the side panel and the shadcn/ui components are built for the product screens; o
 
 ## Capabilities
 
-Graphs request **capabilities** (`text.<name>`, `image.generate`, `music.generate`, later
-`video.generate`), never specific models. `product.yaml` binds each capability to a
+Graphs request **capabilities** (`text.<name>`, `image.generate`, `video.generate`), never specific models. `product.yaml` binds each capability to a
 provider (`litellm`, `comfyui`, later `http`). Swapping a model is a config change.
 Details: [configuration.md](configuration.md), ADR-0010.
 

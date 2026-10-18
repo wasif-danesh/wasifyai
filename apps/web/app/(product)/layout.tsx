@@ -16,7 +16,12 @@ export default async function ProductLayout({ children }: { children: ReactNode 
   return (
     <TooltipProvider>
       <SidebarProvider defaultOpen={defaultOpen}>
-        <AppSidebar isAdmin={isAdmin} footer={<UserMenu />} />
+        <AppSidebar
+          isAdmin={isAdmin}
+          footer={<UserMenu />}
+          notebooks={process.env.NOTEBOOKS_ENABLED === "true"}
+          voice={process.env.VOICE_ENABLED === "true"}
+        />
         <SidebarInset>
           <TopBar />
           <main id="main" className={page}>

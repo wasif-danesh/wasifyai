@@ -13,6 +13,7 @@ import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from wasifyai_notebooks.embedding import BGE_SMALL, EmbedderSpec, OnnxEmbedder
 
@@ -82,6 +83,14 @@ class Components:
             self._embedder = OnnxEmbedder(self.spec, *paths)
         return self._embedder
 
+    chunk_size: int = 480  # tokens of `tokenizer()` a passage holds at most (chunking.CHUNK_TOKENS)
+
+    def tokenizer(self) -> Any:
+        """What counts the size of a passage while a document is cut."""
+        from wasifyai_notebooks.chunking import load_tokenizer
+
+        return load_tokenizer(self.tokenizer_path())
+
     def tokenizer_path(self) -> Path:
         paths = self.embedder_paths()
         if paths is None:
@@ -128,3 +137,29 @@ class Components:
 def reader_dir_from(data_dir: Path) -> Path:
     override = os.environ.get("WASIFYAI_READER_DIR")
     return Path(override) if override else Path(data_dir) / "components" / "reader"
+
+
+class GatewayComponents(Components):
+    """The search model is the platform's, asked through the gateway; there are no model files. A
+    passage is sized in characters (about 1500 of them, a few hundred tokens in any script), because
+    a word count cuts nothing in a language written without spaces."""
+
+    chunk_size = 1500
+
+    def __init__(self, embedder: Any, reader_dir: Path):
+        super().__init__(lambda: [], reader_dir, embedder.spec)
+        self._gateway = embedder
+
+    def embedder_paths(self) -> tuple[Path, Path] | None:  # type: ignore[override]
+        return (Path("gateway"), Path("gateway"))  # nothing to wait for
+
+    def embedder(self) -> Any:
+        return self._gateway
+
+    def tokenizer(self) -> Any:
+        return "character"
+
+    def state(self) -> dict[str, dict[str, object]]:
+        out = super().state()
+        out["embedder"] = {"ready": True, "id": self.spec.id, "size_bytes": 0}
+        return out

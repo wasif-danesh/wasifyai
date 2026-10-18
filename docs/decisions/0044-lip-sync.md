@@ -1,6 +1,7 @@
 # ADR-0044: Lip Sync
 
 - **Status:** Accepted (built 2026-10-09; the engine is MuseTalk, see "Engine change"; InfiniteTalk was removed)
+- **Update (2026-10-18):** superseded in part by ADR-0067: the lip sync product was removed and replaced by the voice product (ADR-0066).
 - **Date:** 2026-10-09
 
 ## Context

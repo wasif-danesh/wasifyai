@@ -316,3 +316,35 @@ class ReaderInstaller:
                 raise InstallError(
                     "check", "The reader ran but did not read a test page correctly."
                 )
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Set the reader up without a person to ask: `python -m wasifyai_notebooks.reader_install`.
+    For building the worker's image, where the size is agreed to by building the image."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Set up the notebooks' document reader.")
+    parser.add_argument("--reader-dir", type=Path, required=True)
+    parser.add_argument("--lock", type=Path, required=True, help="the hashed requirements")
+    parser.add_argument("--weights", type=Path, required=True, help="reader/models.yaml")
+    parser.add_argument("--uv", default=shutil.which("uv") or "uv")
+    args = parser.parse_args(argv)
+
+    async def install() -> int:
+        installer = ReaderInstaller(
+            reader_dir=args.reader_dir,
+            lock=args.lock,
+            weights=load_weights(args.weights),
+            worker_script=Path(__file__).with_name("docling_worker.py"),
+            uv=args.uv,
+        )
+        installer.start(installer.total_bytes)
+        await installer.wait()
+        print(installer.progress.message)
+        return 0 if installer.progress.state == "ready" else 1
+
+    return asyncio.run(install())
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -14,7 +14,6 @@ logs:
 	$(CONTAINER_ENGINE) compose logs -f
 down:
 	$(CONTAINER_ENGINE) compose down
-	-./scripts/lipsync-server.sh stop
 migrate:
 	cd services/api && uv run alembic upgrade head   # needs postgres on localhost:5432
 test:

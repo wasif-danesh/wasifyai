@@ -11,6 +11,8 @@ from wasifyai_platform_sdk import RunError, VoiceEngineError
 from wasifyai_voice import audiobook
 from wasifyai_voice.runtime import store_for
 
+pytestmark = pytest.mark.usefixtures("use_backends")  # on SQLite and on Postgres
+
 BOOK = """The Lighthouse
 
 CHAPTER ONE: The Storm

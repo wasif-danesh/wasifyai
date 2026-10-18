@@ -3,3 +3,9 @@ id: wasifyai-notebooks
 # person's chosen local model serves every text binding.
 capabilities:
   text.chat: { provider: litellm, model: default-chat }
+# What one person may hold, applied only while the safeguards are on (ADR-0047), so on the web
+# (docs/phase3-web-parity-plan.md, W4); the desktop has none.
+quotas:
+  notebooks_per_user: 50
+  sources_per_notebook: 300
+  bytes_per_user: 2147483648

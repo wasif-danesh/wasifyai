@@ -1,11 +1,15 @@
 """Test doubles for the voice product: a speech engine without a runtime, the shipped catalogue."""
 
 import io
+import os
+import socket
 import wave
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import urlparse
 
+import pytest
 import yaml
 from wasifyai_platform_sdk import (
     LipSyncResult,
@@ -174,5 +178,25 @@ class FakeEngine:
         )  # fmt: skip
 
 
-def app_state(tmp_path: Path, engine: FakeEngine | None = None) -> SimpleNamespace:
-    return SimpleNamespace(audio=engine or FakeEngine(), desktop_dir=tmp_path, storage=None)
+def app_state(
+    tmp_path: Path, engine: FakeEngine | None = None, store: Any = None
+) -> SimpleNamespace:
+    """The engine's app state. Without a `store` the desktop's folder is used (SQLite); with one
+    (the web's Postgres store) it is the library, as the web engine provides it."""
+    state = SimpleNamespace(audio=engine or FakeEngine(), desktop_dir=tmp_path, storage=None)
+    if store is not None:
+        state.voice_store = store
+    return state
+
+
+def pg_dsn() -> str:
+    """The Postgres the store tests run against: `DATABASE_URL` (as CI and `make dev` set it) or the
+    compose stack's default. The test skips when nothing answers there."""
+    url = os.environ.get("DATABASE_URL", "postgresql://wasifyai:wasifyai@localhost:5432/wasifyai")
+    dsn = url.replace("+asyncpg", "").replace("+psycopg", "")
+    u = urlparse(dsn)
+    try:
+        socket.create_connection((u.hostname or "localhost", u.port or 5432), timeout=1).close()
+    except OSError:
+        pytest.skip("Postgres not reachable")
+    return dsn

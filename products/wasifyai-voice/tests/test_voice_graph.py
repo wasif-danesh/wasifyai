@@ -1,5 +1,6 @@
 """The Speak graph on a fake engine: refusals in words, errors with codes, the speech kept."""
 
+import json
 from typing import Any
 
 import pytest
@@ -22,6 +23,8 @@ from wasifyai_platform_sdk.storage import object_key
 from wasifyai_voice.graph import build_speak
 from wasifyai_voice.runtime import store_for
 
+pytestmark = pytest.mark.usefixtures("use_backends")  # on SQLite and on Postgres
+
 CTX = RunContext("t1", "wasifyai-voice", "u1", run_id="r1", thread_id="th1")
 
 
@@ -32,19 +35,56 @@ def ctx():
     reset_context(token)
 
 
+def verdict(allowed: bool = True, category: str = "ok") -> str:
+    return json.dumps({"allowed": allowed, "category": category, "reason": ""})
+
+
 class Rig:
-    def __init__(self, tmp_path, engine: FakeEngine | None = None, turns=None):
+    """The graph over a fake engine. The safeguards are off unless asked for (the desktop's
+    default); with them on, `moderate` and `picture` script the two moderators and `used` the
+    day's count."""
+
+    def __init__(
+        self,
+        tmp_path,
+        engine: FakeEngine | None = None,
+        turns=None,
+        safeguards: bool = False,
+        moderate: list[str] | None = None,
+        picture: list[str] | None = None,
+        quotas: dict[str, int] | None = None,
+        used: int = 0,
+    ):
         d = tmp_path / "products" / "wasifyai-voice"
         d.mkdir(parents=True)
         caps = {"text.chat": {"provider": "fake", "defaults": {"turns": turns}}} if turns else {}
+        caps["text.moderate"] = {
+            "provider": "fake",
+            "defaults": {"replies": moderate or [verdict()]},
+        }
+        caps["text.moderate_image"] = {
+            "provider": "fake",
+            "inputs": ["text", "image"],
+            "defaults": {"replies": picture or [verdict()]},
+        }
         (d / "product.yaml").write_text(
-            yaml.safe_dump({"id": "wasifyai-voice", "capabilities": caps})
+            yaml.safe_dump({"id": "wasifyai-voice", "capabilities": caps, "quotas": quotas or {}})
         )
         config = load_product_config(tmp_path / "products", "wasifyai-voice")
         self.usage = InMemoryUsageRecorder()
+
+        async def on() -> bool:
+            return safeguards
+
         self.caps = build_capabilities(
-            config, ProviderDeps(products_dir=tmp_path / "products", usage=self.usage)
+            config,
+            ProviderDeps(products_dir=tmp_path / "products", usage=self.usage, safeguards=on),
         )
+
+        async def used_today(meter: Any) -> int:
+            return used
+
+        self.caps.extras["quota_used"] = used_today
         self.engine = engine or FakeEngine()
         self.state = app_state(tmp_path, self.engine)
         self.caps.extras["app_state"] = self.state
@@ -61,6 +101,10 @@ class Rig:
         self.caps.indexer = Indexer()
         self.graph: Any = build_speak(self.caps, InMemorySaver())
         self._n = 0
+
+    @property
+    def moderator_prompts(self) -> list[Any]:  # what the words moderator was asked to judge
+        return self.caps.text._bound["moderate"][1].prompts  # pyright: ignore[reportAttributeAccessIssue]
 
     @property
     def model(self) -> Any:  # the scripted text provider keeps what it was sent in `chats`
@@ -267,7 +311,7 @@ async def test_a_song_is_made_kept_titled_indexed_and_counted(tmp_path, ctx):
     assert saved["seed"] == 11 and saved["audio_key"] == f"music/{final['track_id']}.wav"
     assert rig.indexed[-1][0] == "track" and "la la la" in rig.indexed[-1][2]
     assert [e["node"] for e in events if e["type"] == "node"] == ["check_request", "make_music"]
-    assert [(u.kind, u.unit) for u in rig.usage.events][-1] == ("voice.track", "tracks")
+    assert [(u.kind, u.unit) for u in rig.usage.events][-1] == ("voice.music", "tracks")
     key = object_key("t1", "wasifyai-voice", "u1", saved["audio_key"])
     assert await rig.files.exists(key)
 
@@ -352,7 +396,7 @@ async def test_a_track_is_changed_and_kept_as_a_new_one_that_remembers_its_sourc
     }  # fmt: skip
     assert not (store_for(rig.state).root / "tmp" / clip).exists()  # the scratch copy is gone
     assert [e["node"] for e in events if e["type"] == "node"] == ["edit_music"]
-    assert [(u.kind, u.unit) for u in rig.usage.events][-1] == ("voice.track", "tracks")
+    assert [(u.kind, u.unit) for u in rig.usage.events][-1] == ("voice.music", "tracks")
 
 
 @pytest.mark.parametrize(

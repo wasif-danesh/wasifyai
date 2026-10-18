@@ -121,6 +121,12 @@ class ScopedStorage:
     def __init__(self, storage: Storage):
         self._storage = storage
 
+    @property
+    def backing(self) -> Storage:
+        """The storage underneath, for code that builds its own owner-prefixed keys (a worker that
+        has no run to take the person from)."""
+        return self._storage
+
     def _key(self, rel: str) -> str:
         ctx = require_context()
         return object_key(ctx.tenant_id, ctx.product_id, ctx.user_id, rel)

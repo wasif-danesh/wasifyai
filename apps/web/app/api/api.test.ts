@@ -8,9 +8,6 @@ import {
 } from "./products/[productId]/images/[imageId]/route";
 import { POST as enhancePOST } from "./products/[productId]/prompt/enhance/route";
 import { POST as runsPOST } from "./products/[productId]/runs/route";
-import { GET as downloadGET } from "./products/[productId]/songs/[songId]/download/[kind]/route";
-import { GET as songGET } from "./products/[productId]/songs/[songId]/route";
-import { GET as songsGET } from "./products/[productId]/songs/route";
 import { DELETE as uploadDELETE } from "./products/[productId]/uploads/images/[uploadId]/route";
 import { POST as uploadPOST } from "./products/[productId]/uploads/images/route";
 import { GET as videoDownloadGET } from "./products/[productId]/videos/[videoId]/download/route";
@@ -33,64 +30,6 @@ const params = <T extends object>(p: T) => ({ params: Promise.resolve(p) });
 const upstreamUrl = () => fetchMock.mock.calls.at(-1)?.[0] as string;
 const upstreamInit = () => fetchMock.mock.calls.at(-1)?.[1] as RequestInit;
 
-describe("song downloads", () => {
-  it("accepts the video kind too", async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response("MP4", { headers: { "content-type": "video/mp4" } }),
-    );
-    const res = await downloadGET(
-      new Request("http://web/x"),
-      params({
-        productId: "wasifyai-music",
-        songId: "3f2b8c1e-0000-4000-8000-000000000001",
-        kind: "video",
-      }),
-    );
-    expect(res.status).toBe(200);
-    expect(upstreamUrl()).toMatch(/\/download\/video$/);
-  });
-
-  const id = "3f2b8c1e-0000-4000-8000-000000000001";
-
-  it("passes the file through with the headers that make the browser save it", async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response("MP3BYTES", {
-        headers: {
-          "content-type": "audio/mpeg",
-          "content-disposition": 'attachment; filename="neon-rain.mp3"',
-          "content-length": "8",
-          "cache-control": "private, no-store",
-        },
-      }),
-    );
-    const res = await downloadGET(
-      new Request(`http://web/api/products/wasifyai-music/songs/${id}/download/audio`),
-      params({ productId: "wasifyai-music", songId: id, kind: "audio" }),
-    );
-    expect(upstreamUrl()).toMatch(
-      new RegExp(`/products/wasifyai-music/songs/${id}/download/audio$`),
-    );
-    expect(res.headers.get("content-disposition")).toBe('attachment; filename="neon-rain.mp3"');
-    expect(res.headers.get("content-type")).toBe("audio/mpeg");
-    expect(res.headers.get("cache-control")).toBe("private, no-store");
-    expect(await res.text()).toBe("MP3BYTES");
-  });
-
-  it.each([
-    ["lyrics", id],
-    ["gif", id],
-    ["audio", "not-a-uuid"],
-    ["../audio", id],
-  ])("rejects kind %j for song %j before calling the API", async (kind, songId) => {
-    const res = await downloadGET(
-      new Request("http://web/x"),
-      params({ productId: "wasifyai-music", songId, kind }),
-    );
-    expect(res.status).toBe(400);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-});
-
 describe("without a session", () => {
   afterEach(() => {
     process.env.AUTH_MODE = "stub";
@@ -101,10 +40,10 @@ describe("without a session", () => {
   it("answers 401 and never calls the API", async () => {
     process.env.AUTH_MODE = "jwt";
     vi.doMock("@/auth", () => ({ auth: async () => null }));
-    const { GET } = await import("./products/[productId]/songs/route");
+    const { GET } = await import("./products/[productId]/videos/route");
     const res = await GET(
-      new Request("http://web/api/products/wasifyai-music/songs"),
-      params({ productId: "wasifyai-music" }),
+      new Request("http://web/api/products/wasifyai-video/videos"),
+      params({ productId: "wasifyai-video" }),
     );
     expect(res.status).toBe(401);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -194,34 +133,6 @@ describe("reconnect to a run", () => {
 
   it("only accepts real run ids", async () => {
     expect((await call({}, "not-a-uuid")).status).toBe(400);
-  });
-});
-
-describe("songs", () => {
-  it("lists songs, passing paging parameters on", async () => {
-    fetchMock.mockResolvedValueOnce(Response.json({ songs: [], next_before: null }));
-    const res = await songsGET(
-      new Request("http://web/api/x?limit=5&before=2026-10-08T00:00:00Z"),
-      params({ productId: "wasifyai-music" }),
-    );
-    expect(upstreamUrl()).toMatch(
-      /\/products\/wasifyai-music\/songs\?limit=5&before=2026-10-08T00:00:00Z$/,
-    );
-    expect(await res.json()).toEqual({ songs: [], next_before: null });
-  });
-
-  it("fetches one song by id, and refuses ids that are not UUIDs", async () => {
-    fetchMock.mockResolvedValueOnce(Response.json({ id: RUN }));
-    await songGET(
-      new Request("http://web/x"),
-      params({ productId: "wasifyai-music", songId: RUN }),
-    );
-    expect(upstreamUrl()).toMatch(new RegExp(`/songs/${RUN}$`));
-    const bad = await songGET(
-      new Request("http://web/x"),
-      params({ productId: "wasifyai-music", songId: "../runs" }),
-    );
-    expect(bad.status).toBe(400);
   });
 });
 

@@ -35,7 +35,7 @@ aliases:
       temperature: 0.7
       think: false
   # A classifier must give the same answer every time: no sampling randomness. It keeps thinking
-  # on; see products/wasifyai-music/evals for the measurements behind both settings (ADR-0022).
+  # on; see ADR-0022 for the measurements behind both settings.
   moderator:
     purpose: Safety classifier for every request, lyrics and cover prompt (guardrail)
     kind: chat
@@ -79,3 +79,16 @@ aliases:
     litellm_params:
       model: ollama/nomic-embed-text
       api_base: "{OLLAMA_BASE_URL}"
+  # Speech on the web (W5, ADR-0066): the voice product asks the gateway for these, and the provider the
+  # alias is bound to receives the text, or the recording. The admin binds them to the provider's own speech
+  # and transcription models (OpenRouter or similar); the defaults are only a starting point and need a key.
+  voice-speak:
+    purpose: Hosted text to speech for the web voice screens (the provider receives the text)
+    kind: speech
+    litellm_params:
+      model: openai/tts-1
+  voice-transcribe:
+    purpose: Hosted speech to text for the web voice screens (the provider receives the recording)
+    kind: transcription
+    litellm_params:
+      model: openai/whisper-1

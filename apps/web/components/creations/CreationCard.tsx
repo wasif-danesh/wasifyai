@@ -5,7 +5,8 @@ import type { Entry } from "@/lib/creations";
 import { clock, styleTags, timeAgo } from "@/lib/format";
 import { clamp2, coverTile } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import type { LipSyncSummary, VideoSummary } from "@wasifyai/contracts";
+import type { LipSyncCard as LipSyncEntry } from "@/lib/voice-cards";
+import type { VideoSummary } from "@wasifyai/contracts";
 import { Mic } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -62,7 +63,7 @@ export function CreationCard({ entry, note }: { entry: Entry; note?: string }) {
     const { speech } = entry;
     return (
       <Card
-        href={`/text-to-speech/creations/${speech.id}`}
+        href="/voice/speak"
         kind="Speech"
         cover={
           <div
@@ -73,11 +74,9 @@ export function CreationCard({ entry, note }: { entry: Entry; note?: string }) {
           </div>
         }
         title={speech.text}
-        lang={speech.language}
         tags={
           <>
-            <Badge variant="tag">{speech.language_name}</Badge>
-            <Badge variant="tag">{speech.gender === "male" ? "Male" : "Female"}</Badge>
+            <Badge variant="tag">{speech.voice}</Badge>
             {noteTag}
           </>
         }
@@ -89,31 +88,22 @@ export function CreationCard({ entry, note }: { entry: Entry; note?: string }) {
     const { transcript } = entry;
     return (
       <Card
-        href={`/speech-to-text/creations/${transcript.id}`}
+        href="/voice/transcribe"
         kind="Transcript"
-        status={transcript.status}
         cover={
           <div
             className={cn(picture, "grid place-items-center p-4 text-primary-foreground")}
             aria-hidden="true"
           >
-            {transcript.status === "working" ? <Spinner /> : <Mic className="size-10" />}
+            <Mic className="size-10" />
           </div>
         }
-        title={transcript.title || "Transcribing…"}
-        lang={transcript.language}
+        title={transcript.title}
         tags={
-          transcript.status === "working" ? (
-            <Badge variant="tag">Transcribing…</Badge>
-          ) : transcript.status === "failed" ? (
-            <Badge variant="tag">Couldn't be transcribed</Badge>
-          ) : (
-            <>
-              <Badge variant="tag">{transcript.language_name}</Badge>
-              <Badge variant="tag">{clock(transcript.seconds)}</Badge>
-              {noteTag}
-            </>
-          )
+          <>
+            <Badge variant="tag">{clock(transcript.seconds)}</Badge>
+            {noteTag}
+          </>
         }
         when={transcript.created_at}
       />
@@ -135,14 +125,15 @@ export function CreationCard({ entry, note }: { entry: Entry; note?: string }) {
   }
   return (
     <Card
-      href={`/music/songs/${entry.id}`}
-      kind="Song"
+      href="/voice/tracks"
+      kind="Music"
       cover={
-        entry.song.cover_url ? (
-          <img className={picture} src={entry.song.cover_url} alt="" loading="lazy" />
-        ) : (
-          <div className={picture} aria-hidden="true" />
-        )
+        <div
+          className={cn(picture, "grid place-items-center p-4 text-primary-foreground")}
+          aria-hidden="true"
+        >
+          <Equaliser still />
+        </div>
       }
       title={entry.song.title}
       tags={
@@ -196,36 +187,24 @@ function VideoCard({ video, note }: { video: VideoSummary; note?: string }) {
   );
 }
 
-function LipSyncCard({ lipsync, note }: { lipsync: LipSyncSummary; note?: string }) {
+function LipSyncCard({ lipsync, note }: { lipsync: LipSyncEntry; note?: string }) {
   return (
     <Card
-      href={`/lip-sync/creations/${lipsync.id}`}
+      href="/voice/lipsync"
       kind="Lip sync"
-      status={lipsync.status}
       cover={
-        lipsync.status === "done" && lipsync.poster_url ? (
+        lipsync.poster_url ? (
           <img className={picture} src={lipsync.poster_url} alt="" loading="lazy" />
         ) : (
-          <div
-            className={cn(picture, "grid place-items-center text-primary-foreground")}
-            aria-hidden="true"
-          >
-            {lipsync.status === "working" ? <Spinner /> : null}
-          </div>
+          <div className={picture} aria-hidden="true" />
         )
       }
-      title={lipsync.text || lipsync.style || "Lip sync"}
+      title={lipsync.text || "Lip sync"}
       tags={
-        lipsync.status === "working" ? (
-          <Badge variant="tag">Making your lip sync…</Badge>
-        ) : lipsync.status === "failed" ? (
-          <Badge variant="tag">Couldn't be made</Badge>
-        ) : (
-          <>
-            <Badge variant="tag">{clock(lipsync.seconds)}</Badge>
-            {note ? <Badge variant="tag">{note}</Badge> : null}
-          </>
-        )
+        <>
+          <Badge variant="tag">{clock(lipsync.seconds)}</Badge>
+          {note ? <Badge variant="tag">{note}</Badge> : null}
+        </>
       }
       when={lipsync.created_at}
     />

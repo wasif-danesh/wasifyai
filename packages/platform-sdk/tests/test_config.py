@@ -9,7 +9,7 @@ REPO_PRODUCTS = Path(__file__).resolve().parents[3] / "products"
 
 def test_loads_and_validates(products):
     cfg = load_product_config(products, "demo", environ={})
-    assert cfg.capabilities["music.generate"].workflow == "tiny"
+    assert cfg.capabilities["video.generate"].workflow == "tiny"
     assert cfg.quotas == {"songs_per_user_per_day": 10}
     assert cfg.settings["audio_format"] == "mp3"
 
@@ -17,20 +17,20 @@ def test_loads_and_validates(products):
 def test_env_file_overlay_wins_over_base(products):
     (products / "demo" / "product.dev.yaml").write_text(
         "capabilities:\n"
-        "  music.generate: { provider: comfyui, workflow: tiny, defaults: { duration_s: 10 } }\n"
+        "  video.generate: { provider: comfyui, workflow: tiny, defaults: { duration_s: 10 } }\n"
     )
     cfg = load_product_config(products, "demo", env="dev", environ={})
-    assert cfg.capabilities["music.generate"].defaults["duration_s"] == 10
+    assert cfg.capabilities["video.generate"].defaults["duration_s"] == 10
     assert "text.chat" in cfg.capabilities  # untouched keys survive the merge
 
 
 def test_env_var_overrides_win_over_files(products):
     env = {
-        "DEMO__CAPABILITIES__MUSIC_GENERATE__DEFAULTS__DURATION_S": "15",
+        "DEMO__CAPABILITIES__VIDEO_GENERATE__DEFAULTS__DURATION_S": "15",
         "DEMO__QUOTAS__SONGS_PER_USER_PER_DAY": "3",
     }
     cfg = load_product_config(products, "demo", environ=env)
-    assert cfg.capabilities["music.generate"].defaults["duration_s"] == 15
+    assert cfg.capabilities["video.generate"].defaults["duration_s"] == 15
     assert cfg.quotas["songs_per_user_per_day"] == 3
 
 
@@ -41,7 +41,7 @@ id: demo
 capabilities:
   text.chat: { provider: litellm }
   bogus: { provider: fake }
-  music.generate: { provider: comfyui, workflow: missing }
+  video.generate: { provider: comfyui, workflow: missing }
 """
     )
     with pytest.raises(ConfigError) as e:
@@ -52,7 +52,7 @@ capabilities:
 
 def test_missing_workflow_file_is_reported(products):
     (products / "demo" / "product.yaml").write_text(
-        "id: demo\ncapabilities:\n  music.generate: { provider: comfyui, workflow: missing }\n"
+        "id: demo\ncapabilities:\n  video.generate: { provider: comfyui, workflow: missing }\n"
     )
     with pytest.raises(ConfigError, match="workflow map not found"):
         load_product_config(products, "demo", environ={})
@@ -76,7 +76,7 @@ def test_unknown_keys_are_rejected(products):
         load_product_config(products, "demo", environ={})
 
 
-@pytest.mark.parametrize("product", ["hello", "media-demo", "wasifyai-music"])
+@pytest.mark.parametrize("product", ["hello", "media-demo", "wasifyai-voice", "wasifyai-image"])
 def test_committed_product_configs_are_valid(product):
     """Every shipped product loads, its workflows and map files exist, and every mapped node ID
     is present in the workflow JSON."""

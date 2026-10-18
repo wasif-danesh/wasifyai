@@ -50,7 +50,7 @@ spec:
           labels: { severity: critical }
           annotations:
             summary: "Jobs are waiting and none has finished for a while"
-            runbook: "Check the worker and the GPU server (ComfyUI, lip sync, speech) it is waiting on"
+            runbook: "Check the worker and the GPU server (ComfyUI) it is waiting on"
         - alert: JobFailureRateHigh
           expr: |
             sum(rate(wdai_jobs_total{status="failed"}[10m]))

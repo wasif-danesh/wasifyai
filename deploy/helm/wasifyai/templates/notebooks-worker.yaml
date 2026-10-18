@@ -1,0 +1,43 @@
+{{- if .Values.notebooks.enabled }}
+# Reads the sources people add to notebooks and makes their Studio outputs (ADR-0065).
+# Only this pod carries the document reader; the API does not.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-notebooks-worker
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.notebooks.worker.replicas }}
+  selector:
+    matchLabels: {{- include "wasifyai.selector" (dict "root" . "component" "notebooks-worker") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "wasifyai.selector" (dict "root" . "component" "notebooks-worker") | nindent 8 }}
+    spec:
+      {{- include "wasifyai.pullSecrets" . | nindent 6 }}
+      {{- if .Values.postgres.enabled }}
+      initContainers:
+        - name: wait-for-db
+          image: {{ .Values.postgres.image }}
+          command: ["sh", "-c", "until pg_isready -h {{ .Release.Name }}-postgres -U {{ .Values.postgres.user }}; do sleep 2; done"]
+      {{- end }}
+      containers:
+        - name: notebooks-worker
+          image: {{ include "wasifyai.image" (dict "root" . "name" "wasifyai-notebooks") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            {{- include "wasifyai.dbEnv" . | nindent 12 }}
+            - { name: LITELLM_BASE_URL, value: "http://{{ .Release.Name }}-litellm:4000" }
+            - name: LITELLM_API_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: LITELLM_API_KEY }
+            - { name: NOTEBOOKS_SCHEMA, value: {{ .Values.notebooks.schema | quote }} }
+            - { name: NOTEBOOKS_EMBED_MODEL, value: {{ .Values.notebooks.embedModel | quote }} }
+            - { name: NOTEBOOKS_EMBED_DIMENSION, value: {{ .Values.notebooks.embedDimension | quote }} }
+            - { name: PRODUCT_ENV, value: {{ .Values.env.PRODUCT_ENV | quote }} }
+            - { name: LOG_LEVEL, value: {{ .Values.env.LOG_LEVEL | quote }} }
+            {{- include "wasifyai.storageEnv" . | nindent 12 }}
+          # a worker that cannot reach the database or the storage exits at start and is restarted
+          securityContext: { allowPrivilegeEscalation: false, runAsNonRoot: true }
+          resources: {{- toYaml .Values.notebooks.worker.resources | nindent 12 }}
+{{- end }}

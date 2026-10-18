@@ -71,6 +71,8 @@ export type ImageWorkspaceProps = {
   onOpenLibrary?: () => void;
   /** Whether "Save a copy" (the engine exports to a folder) is on offer. */
   canSave?: boolean;
+  /** Where an image can be downloaded from (the web app): "Download" is offered when given. */
+  downloadHref?: (image: ImageSummary) => string;
   /** Why making an image is not possible right now (for example: the model cannot fit). */
   blockedReason?: string | null;
   /** Styles (LoRAs) the image engine can apply now. */
@@ -126,6 +128,7 @@ export function ImageWorkspace({
   preset,
   onOpenLibrary,
   canSave = false,
+  downloadHref,
   blockedReason = null,
   loras = [],
   availableLoras = [],
@@ -322,9 +325,12 @@ export function ImageWorkspace({
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(19rem,28rem)_minmax(0,1fr)]">
-        <section className="flex min-h-0 flex-col border-e" aria-label="Controls">
-          <div className="min-h-0 flex-1 overflow-auto px-6 py-6">
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto md:grid-cols-[minmax(19rem,28rem)_minmax(0,1fr)] md:overflow-visible">
+        <section
+          className="flex flex-col border-b md:min-h-0 md:border-e md:border-b-0"
+          aria-label="Controls"
+        >
+          <div className="flex-1 px-6 py-6 md:min-h-0 md:overflow-auto">
             <h1 className="font-semibold text-2xl tracking-tight">
               {mode === "text" ? "Create images" : "Edit a picture"}
             </h1>
@@ -528,8 +534,8 @@ export function ImageWorkspace({
           </div>
         </section>
 
-        <section className="flex min-h-0 min-w-0 flex-col" aria-label="Result">
-          <div className="grid min-h-0 flex-1 place-items-center overflow-auto p-6">
+        <section className="flex min-h-[22rem] min-w-0 flex-col md:min-h-0" aria-label="Result">
+          <div className="grid flex-1 place-items-center p-6 md:min-h-0 md:overflow-auto">
             {working ? (
               <output className="grid w-full max-w-md gap-4">
                 <div className="flex items-center gap-3 font-semibold">
@@ -588,6 +594,13 @@ export function ImageWorkspace({
                   {canSave ? (
                     <Button type="button" variant="outline" onClick={() => void save(shown)}>
                       <Save className="size-4" /> Save a copy
+                    </Button>
+                  ) : null}
+                  {downloadHref && shown.id ? (
+                    <Button asChild variant="outline">
+                      <a href={downloadHref(shown)} download>
+                        <Save className="size-4" /> Download
+                      </a>
                     </Button>
                   ) : null}
                   {canRunAgain(shown) ? (

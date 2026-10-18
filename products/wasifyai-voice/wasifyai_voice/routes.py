@@ -99,6 +99,45 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
             "audio_url": url
         }
 
+    # ---- the models ------------------------------------------------------------------------
+
+    @router.get("/models")
+    async def models(
+        task: str | None = Query(None, max_length=20),
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        """The models the engine offers (the web's hosted ones; the desktop lists them, with what is
+        on the computer, under `/desktop/audio/models`)."""
+        try:
+            engine = engine_for(deps.state)
+        except NotAvailable as e:
+            raise HTTPException(503, str(e)) from None
+        return {"models": engine.models(task)}
+
+    @router.get("/runtime")
+    async def runtime(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """Whether what runs the models is set up. A service whose models are all hosted has nothing
+        to set up and says so (`hosted`); one with the local runtime reports its state, which the
+        web only reads: setting it up is done in the desktop app that owns the computer."""
+        try:
+            engine = engine_for(deps.state)
+        except NotAvailable as e:
+            raise HTTPException(503, str(e)) from None
+        state = getattr(engine, "state", None)
+        return state() if callable(state) else {"hosted": True}  # type: ignore[no-any-return]
+
+    @router.get("/lipsync-engine")
+    async def lipsync_engine(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """The lip sync component's state (installed, running), when this service has it."""
+        try:
+            engine = engine_for(deps.state)
+        except NotAvailable as e:
+            raise HTTPException(503, str(e)) from None
+        sidecar = getattr(engine, "lipsync_sidecar", None)
+        if sidecar is None:
+            raise HTTPException(404, "Lip sync is not available in this deployment.")
+        return sidecar.state()  # type: ignore[no-any-return]
+
     # ---- speeches --------------------------------------------------------------------------
 
     @router.get("/speeches")
@@ -181,7 +220,7 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
             log.warning("the track could not be added to search", exc_info=True)
 
     @router.get("/formats")
-    async def formats() -> dict[str, list[str]]:
+    async def formats(identity: Identity = Depends(deps.identity)) -> dict[str, list[str]]:
         """The formats a track or a speech can be saved in: WAV always, and what the tools on this
         computer can make."""
         return {"formats": ["wav", *audio_input.available_encodings()]}

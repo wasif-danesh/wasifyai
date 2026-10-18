@@ -59,6 +59,8 @@ export {
 } from "./video/VideoWorkspace";
 export { VideoLibrary, type VideoLibraryProps } from "./video/VideoLibrary";
 export { ChatScreen, type ChatScreenProps } from "./chat/ChatScreen";
+export { AssistantHome, type AssistantHomeProps, greeting } from "./chat/AssistantHome";
+export { conversationsChanged, useConversations } from "./chat/use-conversations";
 export { ToolCard, type ToolCardProps } from "./chat/ToolCard";
 export { Markdown, inline, parseBlocks } from "./chat/markdown";
 export { type UseAssistantChatOptions, useAssistantChat } from "./chat/use-assistant-chat";
@@ -70,6 +72,7 @@ export {
   type NotebookWorkspaceProps,
 } from "./notebook/NotebookWorkspace";
 export { SetupCard, type SetupItem } from "./notebook/SetupCard";
+export { NotebookPlaceProvider, type NotebookPlace } from "./notebook/place";
 export { SourceGuide, type SourceGuideProps } from "./notebook/SourceGuide";
 export { SourceViewer, splitAt } from "./notebook/SourceViewer";
 export { useGuide } from "./notebook/use-guide";
@@ -130,3 +133,31 @@ export {
 } from "./voice/AudioToolWorkspace";
 export { EditTrack, type EditTrackProps } from "./voice/EditTrack";
 export { LyricsWriter, type LyricsWriterProps } from "./voice/LyricsWriter";
+export {
+  AudiobookPage,
+  DubPage,
+  LipSyncPage,
+  LyricsPage,
+  MusicPage,
+  SpeakPage,
+  ToolPage,
+  TracksPage,
+  TranscribePage,
+  VoicesPage,
+  sendToTool,
+  type AudioToolName,
+  type Remembered,
+  type Runs,
+  type VoicePageProps,
+  type VoiceTarget,
+} from "./voice/pages";
+export {
+  CHAT_ITEM,
+  EXTRA_ITEMS,
+  MENU_GROUPS,
+  type ItemResolver,
+  type ItemView,
+  type MenuGroupDef,
+  type MenuItemDef,
+} from "./shell/menu";
+export { type MenuLink, type Recents, SideMenu, type SideMenuProps } from "./shell/SideMenu";

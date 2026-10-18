@@ -1,8 +1,8 @@
-import { CreateImage } from "@/components/image/CreateImage";
+import { ImageScreen } from "@/components/image/ImageScreens";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Image" };
 
 export default function ImagePage() {
-  return <CreateImage />;
+  return <ImageScreen mode="text" />;
 }

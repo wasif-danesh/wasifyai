@@ -12,6 +12,7 @@ dependencies = [
     "obstore>=0.11.1",
     "openai>=3.26.0",
     "pillow>=10",
+    "psycopg[binary,pool]>=3.2",
     "pydantic>=2.9",
     "pyyaml>=6",
     "redis>=8.1.0",

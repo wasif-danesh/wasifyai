@@ -1,6 +1,7 @@
 // The products shown on the home page: one entry per card. Adding a product to the app is one
 // entry here plus its own area under /<id>. `soon` cards show a "Coming soon" tag and link to a
-// plain "Coming soon" page until the product is built (each has an ADR that designs it).
+// plain "Coming soon" page until the product is built (each has an ADR that designs it). Music, speech and lip
+// sync are screens of the voice product (`/voice/<screen>`), which are there when `VOICE_ENABLED`.
 export type Product = {
   id: "music" | "image" | "video" | "text-to-speech" | "speech-to-text" | "lip-sync";
   title: string;
@@ -20,10 +21,10 @@ export const PRODUCTS: Product[] = [
     title: "Music",
     blurb: "Turn a story or feeling into lyrics, then hear it come to life.",
     action: "Create a song",
-    href: "/music",
+    href: "/voice/music",
     status: "live",
     views: [
-      { label: "Create", href: "/music" },
+      { label: "Create", href: "/voice/music" },
       { label: "In My creations", href: "/creations?show=songs" },
     ],
     library: "songs",
@@ -61,10 +62,10 @@ export const PRODUCTS: Product[] = [
     blurb:
       "Type or paste text, pick a language and a male or female voice, and get natural speech to play and download.",
     action: "Create speech",
-    href: "/text-to-speech",
+    href: "/voice/speak",
     status: "live",
     views: [
-      { label: "Create", href: "/text-to-speech" },
+      { label: "Create", href: "/voice/speak" },
       { label: "In My creations", href: "/creations?show=speeches" },
     ],
     library: "speeches",
@@ -75,10 +76,10 @@ export const PRODUCTS: Product[] = [
     blurb:
       "Upload an audio or video file, or record your voice, and get a transcript with timestamps. Leave while it's made: we'll tell you when it's ready.",
     action: "Transcribe audio",
-    href: "/speech-to-text",
+    href: "/voice/transcribe",
     status: "live",
     views: [
-      { label: "Create", href: "/speech-to-text" },
+      { label: "Create", href: "/voice/transcribe" },
       { label: "In My creations", href: "/creations?show=transcripts" },
     ],
     library: "transcripts",
@@ -89,12 +90,27 @@ export const PRODUCTS: Product[] = [
     blurb:
       "Give a character image a voice, a song or a script, and watch it speak or sing in sync.",
     action: "Create lip sync",
-    href: "/lip-sync",
+    href: "/voice/lipsync",
     status: "live",
     views: [
-      { label: "Create", href: "/lip-sync" },
+      { label: "Create", href: "/voice/lipsync" },
       { label: "In My creations", href: "/creations?show=lipsyncs" },
     ],
     library: "lipsyncs",
   },
 ];
+
+/** The cards that lead to the voice product's screens: shown only where the voice product is on. */
+export const VOICE_BACKED: Product["id"][] = [
+  "music",
+  "text-to-speech",
+  "speech-to-text",
+  "lip-sync",
+];
+
+/** The products to show: those backed by the voice product only when it is on. */
+export function currentProducts(
+  voiceOn: boolean = process.env.VOICE_ENABLED === "true",
+): Product[] {
+  return PRODUCTS.filter((p) => voiceOn || !VOICE_BACKED.includes(p.id));
+}

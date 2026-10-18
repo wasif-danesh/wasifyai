@@ -82,5 +82,6 @@ release   ─► tag or promotion PR ─► Argo CD ─► prod
   then `values/cloud/{homelab,gcp,...}.yaml` (ADR-0016).
 - Local Kubernetes: `make kind-up`, `make kind-test`, `make kind-down` (kind on Podman).
 - Home lab setup: [runbooks/homelab-k3s.md](runbooks/homelab-k3s.md).
+- Notebooks and speech on the web profile (switches, gateway aliases, the worker): [runbooks/web-notebooks-voice.md](runbooks/web-notebooks-voice.md).
 - CI also installs charts into a `kind` cluster as a smoke test.
 - Occasionally smoke-test a second cloud so portability does not rot.

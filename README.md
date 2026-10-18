@@ -7,8 +7,8 @@ streaming, a stateful agent runtime, a model gateway, GPU media workers, storage
 auth, monitoring, and (later) billing. Each **product** is a thin layer on top: a few
 LangGraph graphs, a Next.js UI and a config file.
 
-> **Status: prototype (v1 in progress).** Six products run end to end: **music**, **images**, **video**,
-> **text to speech**, **speech to text** and **lip sync**. Everything a user makes lands in one library,
+> **Status: prototype (v1 in progress).** Products run end to end: **images**, **video**, **notebooks**, and the
+> **voice** product (**text to speech**, **speech to text**, **music**, **audio tools**, **dubbing**, **audiobooks** and **lip sync**). Everything a user makes lands in one library,
 > **My creations**, searchable by meaning in any language. The whole system runs in containers and installs on
 > a local Kubernetes cluster from a Helm chart, with monitoring and alerts to Telegram. Next are staging on a
 > GPU box and a short GCP test, built with OpenTofu. See the [roadmap](docs/roadmap.md).
@@ -34,10 +34,7 @@ LangGraph graphs, a Next.js UI and a config file.
 Browser ─► Next.js (UI + BFF) ─► FastAPI + LangGraph ─► LiteLLM ─► Ollama / vLLM
                                         │
                                         ├─► Postgres (pgvector, checkpoints, jobs)
-                                        ├─► Redis (job queue, pub/sub) ─► Media worker ─┬─► ComfyUI (images, music, video)
-                                        │                                               ├─► Speech servers (Kokoro, Whisper,
-                                        │                                               │   Indic Parler-TTS, IndicConformer)
-                                        │                                               └─► Lip sync server (MuseTalk)
+                                        ├─► Redis (job queue, pub/sub) ─► Media worker ───► ComfyUI (images, video)
                                         └─► Object storage (SeaweedFS / S3 / GCS / Azure Blob)
 
 Prometheus, Alertmanager, Grafana and Loki watch all of it and alert to Telegram.
@@ -48,12 +45,11 @@ Prometheus, Alertmanager, Grafana and Loki watch all of it and alert to Telegram
    pass the event stream through unchanged.
 2. **FastAPI** runs the product's **LangGraph** graph and streams progress to the browser as
    Server-Sent Events: node status, tokens, interrupts, job progress, and a final result.
-3. Graphs ask for **capabilities** (`text.chat`, `music.generate`, `image.generate`, `speech.synthesize`,
-   `video.lipsync`), never for specific models. Config binds each capability to a provider.
+3. Graphs ask for **capabilities** (`text.chat`, `image.generate`, `video.generate`), never for specific models. Config binds each capability to a provider.
 4. Text goes through **LiteLLM**, an OpenAI-compatible gateway that maps aliases to Ollama
    (dev, staging) or vLLM / hosted APIs (prod).
-5. Slow work (music, images, video, speech, lip sync) is never awaited inline. The graph enqueues a job in
-   **Redis**, a **media worker** drives ComfyUI or a speech or lip sync server, and the graph resumes when the
+5. Slow work (images, video) is never awaited inline. The graph enqueues a job in
+   **Redis**, a **media worker** drives ComfyUI, and the graph resumes when the
    job finishes.
 6. Graph state is checkpointed in **Postgres**, so a run can pause for user input and resume.
 7. A set of **safeguards** (content moderation and per-user quotas) is one system-wide switch in the admin area:
@@ -64,12 +60,8 @@ Prometheus, Alertmanager, Grafana and Loki watch all of it and alert to Telegram
 
 | Product | What it does |
 |---|---|
-| [`wasifyai-music`](products/wasifyai-music/README.md) | A song idea becomes lyrics you approve, a 60-second track and cover art |
 | [`wasifyai-image`](products/wasifyai-image/README.md) | Text to image and image to image (FLUX.2 klein 4B) |
 | [`wasifyai-video`](products/wasifyai-video/README.md) | Text to video and image to video, 2 or 5 seconds (LTX-Video 2B), made in the background |
-| [`wasifyai-tts`](products/wasifyai-tts/README.md) | Text to speech in eight languages, a male and a female voice each (Kokoro; Bengali with Indic Parler-TTS) |
-| [`wasifyai-stt`](products/wasifyai-stt/README.md) | Speech to text from a file or the microphone, 51 languages (Whisper; IndicConformer for the Indian languages) |
-| [`wasifyai-lipsync`](products/wasifyai-lipsync/README.md) | A character picture and a voice, a song or a script (up to 5 minutes) become a talking clip (MuseTalk) |
 
 A product is a folder under `products/` with its `product.yaml`, graphs, prompts and ComfyUI
 workflows. Adding a product adds no API endpoints: the graph registry exposes registered
@@ -86,11 +78,10 @@ make setup      # installs missing tools, starts Podman + Ollama, pulls the mode
 make dev        # starts the stack, waits for Postgres, runs migrations, follows logs
 ```
 
-Then open http://localhost:3000, choose a product and make something. GPU media (music, images, video) are
+Then open http://localhost:3000, choose a product and make something. GPU media (images, video) are
 placeholders by default; set `COMFYUI_MODE=real` in `.env` and run ComfyUI with the models for real ones (see
-[products/wasifyai-music](products/wasifyai-music/README.md) and [Hardware notes](#hardware-notes)). Lip Sync runs on
-its own server, which `make dev` starts once it is installed (`services/lipsync-musetalk/setup.sh`, about 4 GB;
-see [products/wasifyai-lipsync](products/wasifyai-lipsync/README.md)).
+[Hardware notes](#hardware-notes)). Music, speech and lip sync are the voice product: hosted models through the
+gateway, or the models on this machine (`scripts/web-local.sh`, [runbook](docs/runbooks/web-notebooks-voice.md)).
 
 Sign-in is off by default (`AUTH_MODE=stub` in `.env.example`: everyone is the dev user). To turn it on,
 set `AUTH_MODE=jwt`, the two secrets and a provider's client id and secret: see
@@ -199,7 +190,7 @@ missing and points back to `make setup`.
   Kokoro (small). **Bengali** uses Indic Parler-TTS, which needs about 4.5 GB of memory on its own and runs
   about five times slower than real time on a CPU, so give the Podman VM about **12 GB** (`podman machine set
   --memory 12288`). Its model is gated: accept the terms on its Hugging Face page and put a read token in
-  `.env` as `HF_TOKEN` ([products/wasifyai-tts](products/wasifyai-tts/README.md)).
+  `.env` as `HF_TOKEN`.
 - The lip sync server (MuseTalk) runs natively on the Mac so it can use the Apple GPU: about 12 GB of memory
   and 5 seconds of compute per second of video. `make dev` starts and `make down` stops it.
 - Ollama runs natively on the host so it can use the GPU. On Apple Silicon it uses Metal. On
@@ -216,8 +207,6 @@ missing and points back to `make setup`.
 | API (FastAPI) | http://localhost:8000 (`/health`, `/docs`) |
 | LiteLLM | http://localhost:4000 |
 | Object storage (S3 API) | http://localhost:8333 |
-| Speech servers: Kokoro and Whisper (Speaches) / Indic Parler-TTS / IndicConformer | http://localhost:8100 / :8101 / :8102 |
-| Lip sync server (MuseTalk, native) | http://localhost:8191 |
 | Postgres / Redis | `localhost:5432` / `localhost:6379` |
 
 `make logs` follows container logs, and `make down` stops everything.
@@ -235,10 +224,9 @@ make kind-e2e     # makes something with each of the six products
 make kind-down    # delete the cluster
 ```
 
-The default `KIND_MODE=full` runs **every service as a pod, nothing native**: Ollama with its models, the CPU
-speech servers, the lip sync server (CPU) and ComfyUI, plus Prometheus, Alertmanager, Grafana and Loki. It needs a
+The default `KIND_MODE=full` runs **every service as a pod, nothing native**: Ollama with its models and ComfyUI, plus Prometheus, Alertmanager, Grafana and Loki. It needs a
 Podman VM of about 24 GB of memory and 100 GB of disk (`podman machine set --memory 32768 --disk-size 160`) and
-downloads about 20 GB of models on the first start. There is no GPU in the cluster, so GPU media (images, music,
+downloads about 20 GB of models on the first start. There is no GPU in the cluster, so GPU media (images,
 video) are placeholders, apart from one model-free ComfyUI graph the smoke test runs for real. `KIND_MODE=light`
 is what CI runs: no models. `KIND_SAFEGUARDS=1` turns the production safeguards on. Home lab setup with k3s and
 Argo CD: [runbook](docs/runbooks/homelab-k3s.md).
@@ -255,11 +243,7 @@ Argo CD: [runbook](docs/runbooks/homelab-k3s.md).
 | API docs | Swagger UI for the API | `http://localhost:8000/docs` | `kubectl -n wasifyai port-forward svc/wasifyai-api 8000:8000`, then `http://localhost:8000/docs` |
 | LiteLLM | the model gateway | `http://localhost:4000` | `kubectl -n wasifyai port-forward svc/wasifyai-litellm 4000:4000`, then `http://localhost:4000` |
 | Object storage | S3 API (SeaweedFS) | `http://localhost:8333` | `kubectl -n wasifyai port-forward svc/wasifyai-storage 8333:8333`, then `http://localhost:8333` |
-| Speech: Kokoro, Whisper | text to speech, speech to text | `http://localhost:8100` | `kubectl -n wasifyai port-forward svc/wasifyai-speech 8100:8000`, then `http://localhost:8100` |
-| Speech: Indic Parler-TTS | Bengali and other Indic voices | `http://localhost:8101` | not in the cluster |
-| Speech: IndicConformer | speech to text for Indian languages | `http://localhost:8102` | not in the cluster |
-| Lip sync server | MuseTalk | `http://localhost:8191` | `kubectl -n wasifyai port-forward svc/wasifyai-lipsync 8191:8000`, then `http://localhost:8191` |
-| ComfyUI | images, music (and video on :8189) | `http://localhost:8188` | `kubectl -n wasifyai port-forward svc/wasifyai-comfyui 8188:8188`, then `http://localhost:8188` |
+| ComfyUI | images (and video on :8189) | `http://localhost:8188` | `kubectl -n wasifyai port-forward svc/wasifyai-comfyui 8188:8188`, then `http://localhost:8188` |
 | Ollama | the language models | `http://localhost:11434` | `kubectl -n wasifyai port-forward svc/wasifyai-ollama 11434:11434`, then `http://localhost:11434` |
 | Postgres | database, checkpoints, usage events | `localhost:5432` | `kubectl -n wasifyai port-forward svc/wasifyai-postgres 5432:5432`, then `localhost:5432` |
 | Redis | job queue and run events | `localhost:6379` | `kubectl -n wasifyai port-forward svc/wasifyai-redis 6379:6379`, then `localhost:6379` |
@@ -317,12 +301,8 @@ Without a valid token every route except `/health` answers `401`. Responses for 
 | `GET /creations/search?q=&kind=&limit=` | Search the signed-in user's own creations by meaning and exact words, in any language ([ADR-0041](docs/decisions/0041-semantic-search.md)); every list route also takes `ids=` |
 | `POST /products/{id}/prompt/enhance` | Rewrite the user's prompt for the product's model ([ADR-0038](docs/decisions/0038-prompt-enhancement.md)) |
 | `DELETE /products/{id}/uploads/images/{upload_id}` | Take back an uploaded picture ([ADR-0039](docs/decisions/0039-picture-input.md)) |
-| `GET /products/wasifyai-tts/voices`, `GET /products/wasifyai-tts/speeches`, `GET/DELETE /products/wasifyai-tts/speeches/{id}`, `.../download` | The voice catalog (languages, male and female voices), and the signed-in user's speech with an MP3 download ([ADR-0042](docs/decisions/0042-text-to-speech.md)) |
-| `POST /products/wasifyai-stt/uploads/media` (raw body), `GET /products/wasifyai-stt/languages`, `GET /products/wasifyai-stt/transcripts`, `GET/DELETE .../transcripts/{id}`, `.../download?format=txt\|srt\|vtt\|json` | A recording or video becomes a clean WAV; the languages; the signed-in user's transcripts ([ADR-0043](docs/decisions/0043-speech-to-text.md)) |
-| `GET /products/wasifyai-lipsync/lipsyncs`, `GET/DELETE .../lipsyncs/{id}`, `.../download`; uploads of a picture and a voice (at most 5 minutes) | The signed-in user's lip syncs, including ones still being made ([ADR-0044](docs/decisions/0044-lip-sync.md)) |
 | `GET /products/wasifyai-video/videos`, `GET/DELETE /products/wasifyai-video/videos/{id}`, `.../download` | The signed-in user's clips, including ones still being made ([ADR-0037](docs/decisions/0037-video-product.md)) |
 | `GET /products/wasifyai-image/images`, `GET/DELETE /products/wasifyai-image/images/{id}`, `.../download` | The signed-in user's images ([ADR-0036](docs/decisions/0036-image-product.md)) |
-| `GET /products/wasifyai-music/songs`, `GET /products/wasifyai-music/songs/{id}` | The signed-in user's songs, with presigned audio and cover links (product-provided routes, [ADR-0023](docs/decisions/0023-product-provided-routes.md)) |
 | `GET/PUT /admin/safeguards` | Admin only: the system-wide safeguards switch ([ADR-0047](docs/decisions/0047-safeguards-switch.md)) |
 
 Try it without the browser, through the Next.js BFF:
@@ -351,23 +331,19 @@ wasifyai/
 ├─ apps/web/                 # Next.js app (shadcn/ui, Tailwind, TanStack Table): product UIs, side panel, admin, BFF
 ├─ services/
 │  ├─ api/                   # FastAPI + LangGraph runtime (graphs, runs, identity, migrations, metrics)
-│  ├─ media-worker/          # Redis consumer that drives ComfyUI, the speech servers and the lip sync server
-│  ├─ comfyui/               # ComfyUI container image (CPU by default, CUDA by build argument)
-│  ├─ lipsync-musetalk/      # the lip sync server (MuseTalk): image, setup script, model fetcher
-│  ├─ speech-indic/          # small speech server for Indic Parler-TTS (Bengali)
-│  └─ stt-indic/             # small transcription server for IndicConformer (Indian languages)
+│  ├─ media-worker/          # Redis consumer that drives ComfyUI
+│  └─ comfyui/               # ComfyUI container image (CPU by default, CUDA by build argument)
 ├─ packages/
 │  ├─ contracts/             # Pydantic models: SSE events and request bodies (source of truth)
 │  ├─ contracts-ts/          # TypeScript types generated from the OpenAPI schema
 │  └─ platform-sdk/          # Capabilities, providers, product config, storage, usage, graph registry
 ├─ products/
 │  ├─ hello/, media-demo/    # sample products: config only (used by the smoke tests)
-│  ├─ wasifyai-music/           # song graph, guardrail, prompts, workflows, evals, tests
 │  ├─ wasifyai-image/           # text to image and image to image
 │  ├─ wasifyai-video/           # text to video and image to video
-│  ├─ wasifyai-tts/             # text to speech: voice catalog, graph, guardrail
-│  ├─ wasifyai-stt/             # speech to text: languages, transcripts, formats
-│  └─ wasifyai-lipsync/         # lip sync: graph, guardrails, store, search
+│  ├─ wasifyai-voice/           # speech, music, audio tools, dubbing, audiobook, lip sync (one graph, one store)
+│  ├─ wasifyai-notebooks/       # source-grounded notebooks
+│  └─ wasifyai-assistant/       # the chat
 ├─ deploy/
 │  ├─ compose/               # LiteLLM config for the local stack
 │  ├─ helm/wasifyai/            # Helm chart + values overlays (local, staging, prod, cloud/*)
@@ -473,12 +449,8 @@ The same container images run everywhere. Only infrastructure and configuration 
 | [Monitoring runbook](docs/runbooks/monitoring.md) | The stack, the alerts, where to look, fire drills |
 | [Roadmap](docs/roadmap.md) | Build phases, checklists and planned work |
 | [Decisions](docs/decisions/README.md) | Architecture decision records (ADRs) |
-| [`wasifyai-music`](products/wasifyai-music/README.md) | The first product's spec |
 | [`wasifyai-image`](products/wasifyai-image/README.md) | Text to image and image to image |
 | [`wasifyai-video`](products/wasifyai-video/README.md) | Text to video and image to video |
-| [`wasifyai-tts`](products/wasifyai-tts/README.md) | Text to speech |
-| [`wasifyai-stt`](products/wasifyai-stt/README.md) | Speech to text |
-| [`wasifyai-lipsync`](products/wasifyai-lipsync/README.md) | Lip Sync |
 | [`apps/web`](apps/web/README.md) | The web app: components, side panel, styling, sign-in |
 
 ## Principles
@@ -500,7 +472,7 @@ v1 is a working, deployable system, not a production launch. Four stages:
 | 3 | Staging on the 24 GB NVIDIA box, built with OpenTofu | Next |
 | 4 | GCP test with the safeguards on, then shut down | Planned |
 
-After v1: the Indic speech servers on staging, real GPU media, a CUDA image for the lip sync server, long
+After v1: real GPU media, long
 transcripts in search, SEO, analytics and billing (proposed ADRs 0026 to 0029).
 
 Details and checklists: [docs/roadmap.md](docs/roadmap.md).

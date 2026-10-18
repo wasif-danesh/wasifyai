@@ -25,7 +25,7 @@ id: demo
 capabilities:
   text.chat:      { provider: fake, defaults: { reply: "hi there" } }
   text.embed:     { provider: fake }
-  music.generate: { provider: comfyui, workflow: tiny, defaults: { duration_s: 60 } }
+  video.generate: { provider: comfyui, workflow: tiny, defaults: { duration_s: 60 } }
 quotas: { songs_per_user_per_day: 10 }
 settings: { audio_format: mp3 }
 """

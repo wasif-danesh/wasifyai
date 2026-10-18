@@ -32,6 +32,7 @@ from wasifyai_platform_sdk import (
 
 from wasifyai_voice import audio_input
 from wasifyai_voice.runtime import store_for
+from wasifyai_voice.safeguards import CLIPS, TOOLS, Guard, metered
 from wasifyai_voice.store import NotFound, new_id, now
 
 log = logging.getLogger(__name__)
@@ -67,6 +68,7 @@ class Kit:
     at_rate: Callable[[Source, int, int], Awaitable[tuple[Path, float]]]
     keep: Callable[..., Awaitable[dict[str, Any]]]
     failed: Callable[[VoiceEngineError], RunError]
+    guard: Guard
 
 
 def build_tools(
@@ -74,6 +76,7 @@ def build_tools(
     app_state: Any,
     engine: Callable[[], Any],
     refuse_with: Refuse,
+    guard: Guard,
 ) -> dict[str, Any]:
     async def load_source(state: dict[str, Any]) -> Source:
         """The recording a run was pointed at: `source_track` or `source_speech`."""
@@ -287,6 +290,8 @@ def build_tools(
             raise failed(e) from None
         except SourceMissing as e:
             return refuse_with("unknown_source", e.message)
+        if refusal := await guard.words(str(state.get("text", ""))):  # the words that will be said
+            return refuse_with(*refusal)
         clip = None
         try:
             clip, seconds = await at_rate(source, int(model.speech_edit["input_rate"]), 1)
@@ -347,6 +352,11 @@ def build_tools(
                 "consent_required",
                 "Say what the picture is and whose voice this is before a video is made.",
             )
+        # ADR-0047, before any work: the daily limit, the picture, and the words that will be said
+        if refusal := await guard.over_limit(CLIPS):
+            return refuse_with(*refusal)
+        if refusal := await guard.picture(png) or await guard.words(script):
+            return refuse_with(*refusal)
         say: dict[str, Any] | None = None
         source: Source | None = None
         if script:  # words are made into speech here, so the voice is never somebody's recording
@@ -366,6 +376,18 @@ def build_tools(
                 source = await load_source(state)
             except SourceMissing as e:
                 return refuse_with("unknown_source", e.message)
+            if await guard.on():  # the words of a recording are said by the face: read them first
+                try:
+                    heard, _ = await audio_input.at_rate(source.wav, "voice.wav", 16000, 1)
+                    said = await eng.transcribe(eng.resolve("transcribe", None), heard, {})
+                except (audio_input.AudioInputError, VoiceEngineError):
+                    raise RunError(
+                        "moderation_unavailable",
+                        "We couldn't check what the recording says right now. Please try again.",
+                        retryable=True,
+                    ) from None
+                if refusal := await guard.words(said.text):
+                    return refuse_with(*refusal)
         if voice_basis == "generated" and source.kind != "speech":
             # only speech made here from words is "generated"; a track may be somebody's recording
             return refuse_with(
@@ -455,11 +477,16 @@ def build_tools(
         at_rate=at_rate,
         keep=keep,
         failed=failed,
+        guard=guard,
     )
+
+    def limited(name: str, node: Any) -> Any:
+        return metered(caps, guard, refuse_with, TOOLS, node, tool=name)
+
     return {
-        "separate": separate,
-        "convert": convert,
-        "speech_edit": speech_edit,
+        "separate": limited("separate", separate),
+        "convert": limited("convert", convert),
+        "speech_edit": limited("speech_edit", speech_edit),
         "lipsync": lipsync,
         "kit": kit,
     }

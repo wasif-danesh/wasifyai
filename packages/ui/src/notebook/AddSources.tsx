@@ -5,6 +5,7 @@ import { type DragEvent, useId, useRef, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Textarea } from "../components/textarea";
+import { useNotebookPlace } from "./place";
 
 /** What the engine reads (its hardening list): shown to the person and given to the file picker. */
 export const SOURCE_TYPES = [
@@ -66,6 +67,7 @@ export function AddSources({
   onClose,
   className,
 }: AddSourcesProps) {
+  const hosted = useNotebookPlace() === "hosted";
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [text, setText] = useState(false);
@@ -98,7 +100,10 @@ export function AddSources({
         <div>
           <h2 className="font-medium text-xl">{heading}</h2>
           <p className="mt-1 text-muted-foreground text-sm">
-            Documents stay on this computer. Ask questions about them once they are read.
+            {hosted
+              ? "Documents are kept in your account, private to you."
+              : "Documents stay on this computer."}{" "}
+            Ask questions about them once they are read.
           </p>
         </div>
         {onClose ? (

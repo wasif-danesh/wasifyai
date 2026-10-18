@@ -6,9 +6,9 @@ cd "$ROOT"
 
 CLUSTER=wasifyai; NS=wasifyai; TAG=dev; REG=localhost/wasifyai
 # KIND_MODE=full (the default): every service runs as a pod, nothing native: Ollama with its models, the CPU
-#   speech servers, the lip sync server and ComfyUI. Needs a Podman VM of about 24 GB and a few tens of GB of
+#   and ComfyUI. Needs a Podman VM of about 24 GB and a few tens of GB of
 #   model downloads on first start; no GPU, so the GPU media models are placeholders (stub mode).
-# KIND_MODE=light: the small cluster CI uses: Ollama, the speech and lip sync servers are native or absent.
+# KIND_MODE=light: the small cluster CI uses: Ollama is native or absent.
 MODE="${KIND_MODE:-full}"
 [ "$CONTAINER_ENGINE" = "podman" ] && export KIND_EXPERIMENTAL_PROVIDER=podman
 
@@ -31,8 +31,7 @@ fi
 
 step "Building images"
 IMAGES=("api:services/api" "media-worker:services/media-worker" "web:apps/web")
-[ "$MODE" = "full" ] && IMAGES+=("lipsync-musetalk:services/lipsync-musetalk" "comfyui:services/comfyui")
-[ "${KIND_SPEECH:-0}" = "all" ] && IMAGES+=("speech-indic:services/speech-indic" "stt-indic:services/stt-indic")
+[ "$MODE" = "full" ] && IMAGES+=("comfyui:services/comfyui")
 for pair in "${IMAGES[@]}"; do
   name="${pair%%:*}"; dir="${pair##*:}"
   "$CONTAINER_ENGINE" build -q -f "$dir/Containerfile" -t "$REG/$name:$TAG" . >/dev/null
@@ -63,7 +62,7 @@ done
 step "Secrets"
 scripts/k8s-secrets.sh "$NS"
 
-OLLAMA_EXTERNAL_URL="${OLLAMA_EXTERNAL_URL:-}"; LIPSYNC_EXTERNAL_URL="${LIPSYNC_EXTERNAL_URL:-}"
+OLLAMA_EXTERNAL_URL="${OLLAMA_EXTERNAL_URL:-}"
 if [ "$MODE" = "light" ]; then
   # Where can pods reach the Ollama running natively on this machine?
   OLLAMA_EXTERNAL_URL="${OLLAMA_EXTERNAL_URL:-}"
@@ -74,33 +73,9 @@ if [ "$MODE" = "light" ]; then
     [ -n "$ip" ] && OLLAMA_EXTERNAL_URL="http://$ip:11434" || OLLAMA_EXTERNAL_URL="http://127.0.0.1:11434"
   fi
   ok "Ollama URL for pods: $OLLAMA_EXTERNAL_URL"
-
-  # The lip sync server runs natively on the Mac (its GPU is not reachable from a container): if it answers on
-  # this machine, point the worker at it by the same host address as Ollama.
-  LIPSYNC_EXTERNAL_URL="${LIPSYNC_EXTERNAL_URL:-}"
-  if [ -z "$LIPSYNC_EXTERNAL_URL" ] && curl -fsS -m 3 "http://127.0.0.1:8191/health" >/dev/null 2>&1; then
-    LIPSYNC_EXTERNAL_URL="http://${OLLAMA_EXTERNAL_URL#http://}"; LIPSYNC_EXTERNAL_URL="${LIPSYNC_EXTERNAL_URL%:*}:8191"
-  fi
-  if [ -n "$LIPSYNC_EXTERNAL_URL" ]; then ok "Lip sync server for pods: $LIPSYNC_EXTERNAL_URL"
-  else warn "No lip sync server on 127.0.0.1:8191 (make dev or scripts/lipsync-server.sh start): lip sync is a placeholder"; fi
 fi
 
-# KIND_SPEECH=1 runs the CPU speech servers (Kokoro and Whisper, about 6 GB of memory and a few GB of model
-# downloads on first use) for real; KIND_SPEECH=all adds the Indic ones (needs the hf-token Secret).
 extra=()
-case "${KIND_SPEECH:-0}" in
-  1) extra+=(--set speech.enabled=true --set mediaWorker.speechMode=real) ;;
-  all) extra+=(--set speech.enabled=true --set speechIndic.enabled=true --set sttIndic.enabled=true --set mediaWorker.speechMode=real) ;;
-esac
-if [ "${KIND_SPEECH:-0}" = "all" ]; then
-  # the Hugging Face token comes from .env and goes straight into a Secret; it is never printed
-  hf="$(grep -E '^HF_TOKEN=' .env 2>/dev/null | head -1 | cut -d= -f2-)"
-  if [ -n "$hf" ]; then
-    kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-    kubectl -n "$NS" create secret generic hf-token --from-literal=token="$hf" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-    ok "hf-token Secret set from .env"
-  else warn "KIND_SPEECH=all needs HF_TOKEN in .env; the Indic servers will not start"; fi
-fi
 [ "${KIND_SAFEGUARDS:-0}" = "1" ] && extra+=(--set safeguards.forceOn=true)
 
 step "Installing the chart"
@@ -109,8 +84,6 @@ if [ "$MODE" = "full" ]; then
   helm upgrade --install wasifyai deploy/helm/wasifyai -n "$NS" \
     -f deploy/helm/wasifyai/values/local.yaml \
     --set ollama.enabled=true --set ollama.externalUrl= \
-    --set speech.enabled=true --set mediaWorker.speechMode=real \
-    --set lipsync.enabled=true \
     --set comfyui.enabled=true --set "comfyui.image=$REG/comfyui:$TAG" \
     --set env.PRODUCT_ENV=kind \
     ${extra[@]+"${extra[@]}"} \
@@ -119,7 +92,6 @@ else
   helm upgrade --install wasifyai deploy/helm/wasifyai -n "$NS" \
     -f deploy/helm/wasifyai/values/local.yaml \
     --set "ollama.externalUrl=$OLLAMA_EXTERNAL_URL" \
-    ${LIPSYNC_EXTERNAL_URL:+--set "lipsync.serverUrl=$LIPSYNC_EXTERNAL_URL"} \
     ${extra[@]+"${extra[@]}"} \
     --wait --timeout 10m
 fi
@@ -130,7 +102,7 @@ if [ "$MODE" = "full" ] && [ "${KIND_MONITORING:-1}" = "1" ]; then
 fi
 
 if [ "$MODE" = "full" ]; then
-  step "Waiting for the model downloads (Ollama, speech, lip sync: a first start takes a while)"
+  step "Waiting for the model downloads (Ollama: a first start takes a while)"
   kubectl -n "$NS" wait --for=condition=complete job --all --timeout=90m
 fi
 

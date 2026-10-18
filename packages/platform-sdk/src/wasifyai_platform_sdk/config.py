@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from wasifyai_platform_sdk.workflows import workflow_problems
 
-CAPABILITY_NAME = re.compile(r"^(text|image|music|video|speech)\.[a-z0-9_]+$")
+CAPABILITY_NAME = re.compile(r"^(text|image|video)\.[a-z0-9_]+$")
 
 
 class ConfigError(Exception):
@@ -35,7 +35,7 @@ class ConfigError(Exception):
 class CapabilityBinding(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    provider: Literal["litellm", "comfyui", "speech", "lipsync", "fake"]
+    provider: Literal["litellm", "comfyui", "fake"]
     model: str | None = None  # litellm: a LiteLLM alias, never a raw model name
     workflow: str | None = None  # comfyui: workflow name under products/<id>/workflows/
     defaults: dict[str, Any] = Field(default_factory=dict)

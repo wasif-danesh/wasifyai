@@ -96,7 +96,7 @@ describe("auth mode and redirects", () => {
 });
 
 describe("which pages need a session", () => {
-  it.each(["/", "/signin"])("%s is public", (path) => {
+  it.each(["/explore", "/signin"])("%s is public", (path) => {
     expect(isPublicPath(path)).toBe(true);
   });
 
@@ -133,6 +133,8 @@ describe("which pages need a session", () => {
     expect(signInReason("/text-to-speech")).toMatch(/create speech/);
     expect(signInReason("/speech-to-text/creations/x")).toMatch(/transcribe/);
     expect(signInReason("/admin")).toBe("Sign in to continue.");
-    expect(signInReason("/")).toBe("Sign in to continue.");
+    expect(signInReason("/")).toBe("Sign in to chat and keep your conversations.");
+    expect(signInReason("/chat/abc")).toBe("Sign in to chat and keep your conversations.");
+    expect(signInReason("/somewhere-else")).toBe("Sign in to continue.");
   });
 });

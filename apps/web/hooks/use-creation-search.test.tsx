@@ -27,7 +27,6 @@ const song = (id: string) => ({
   style: "pop",
   created_at: "2026-10-08T00:00:00Z",
   audio_url: "a",
-  cover_url: null,
 });
 const image = (id: string) => ({
   id,
@@ -40,6 +39,36 @@ const image = (id: string) => ({
   thumb_url: "t",
 });
 const settle = () => act(async () => void (await vi.advanceTimersByTimeAsync(DEBOUNCE_MS + 10)));
+
+describe("useCreationSearch and the voice product", () => {
+  it("finds a speech the voice product keeps, even when the older speech product is gone", async () => {
+    fetchMock.mockImplementation(async (path: string) => {
+      if (path.startsWith("/api/creations/search") || path.includes("/creations/search")) {
+        return Response.json({ query: "hello", degraded: false, results: [hit("speech", "v1")] });
+      }
+      if (path.startsWith("/api/products/wasifyai-voice/speeches")) {
+        return Response.json({
+          items: [
+            {
+              id: "v1",
+              text: "Hello there",
+              voice: "alloy",
+              seconds: 2,
+              created_at: "2026-10-18T00:00:00Z",
+              audio_url: "a",
+            },
+          ],
+        });
+      }
+      return Response.json({ detail: "no such product" }, { status: 404 });
+    });
+    const { result } = renderHook(() => useCreationSearch("hello", "all"));
+    await settle();
+    expect(result.current.status).toBe("done");
+    if (result.current.status !== "done") return;
+    expect(result.current.entries.map((e) => `${e.kind}:${e.id}`)).toEqual(["speech:v1"]);
+  });
+});
 
 describe("useCreationSearch", () => {
   it("is not a search below two characters", async () => {
@@ -63,11 +92,11 @@ describe("useCreationSearch", () => {
         Response.json({
           query: "rain madrid",
           degraded: false,
-          results: [hit("image", "i1"), hit("song", "s2", "words"), hit("song", "s1")],
+          results: [hit("image", "i1"), hit("track", "s2", "words"), hit("track", "s1")],
         }),
       )
-      .mockResolvedValueOnce(Response.json({ songs: [song("s1"), song("s2")], next_before: null }))
-      .mockResolvedValueOnce(Response.json({ images: [image("i1")], next_before: null }));
+      .mockResolvedValueOnce(Response.json({ images: [image("i1")], next_before: null }))
+      .mockResolvedValueOnce(Response.json({ items: [song("s1"), song("s2")] }));
     const { result, rerender } = renderHook(({ q }) => useCreationSearch(q, "all"), {
       initialProps: { q: "ra" },
     });
@@ -80,7 +109,7 @@ describe("useCreationSearch", () => {
     expect(urls[0]).toBe("/api/creations/search?q=rain+madrid&limit=30");
     expect(urls.slice(1).sort()).toEqual([
       "/api/products/wasifyai-image/images?ids=i1",
-      "/api/products/wasifyai-music/songs?ids=s2,s1",
+      "/api/products/wasifyai-voice/tracks?ids=s2,s1",
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     const s = result.current;
@@ -146,7 +175,7 @@ describe("useCreationSearch", () => {
     rerender({ q: "second" });
     await settle();
     await act(async () =>
-      release(Response.json({ query: "first", degraded: false, results: [hit("song", "late")] })),
+      release(Response.json({ query: "first", degraded: false, results: [hit("track", "late")] })),
     );
     const s = result.current;
     if (s.status !== "done") throw new Error("expected done");

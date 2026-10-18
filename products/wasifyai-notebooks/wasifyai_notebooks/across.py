@@ -13,7 +13,6 @@ from typing import Any
 from wasifyai_platform_sdk import ToolUnavailable
 
 from wasifyai_notebooks.components import Unavailable
-from wasifyai_notebooks.embedding import Purpose
 from wasifyai_notebooks.retrieval import retrieve
 from wasifyai_notebooks.runtime import Runtime
 
@@ -74,7 +73,7 @@ async def search_across(
         embedder = rt.components.embedder()
     except Unavailable as e:
         raise ToolUnavailable(e.message) from None
-    vector = (await asyncio.to_thread(embedder.embed, [query], Purpose.QUERY))[0]
+    vector = await asyncio.to_thread(rt.query_vector, embedder, tenant, user, query, "assistant")
     return await asyncio.to_thread(
         _search, rt, tenant, user, query, vector, embedder.spec.semantic_weight, limit
     )

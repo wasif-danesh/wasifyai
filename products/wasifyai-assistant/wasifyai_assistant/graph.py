@@ -120,6 +120,19 @@ def build_assistant(caps: Capabilities, checkpointer: Any):
     return build_assistant_graph(caps, checkpointer, store)
 
 
+def offered_tools(h: ToolHost | None) -> list[dict[str, Any]] | None:
+    """The tool definitions the model is told about: those the host can run here (all of them for a
+    host that does not say), or none without a host."""
+    if h is None:
+        return None
+    available = getattr(h, "available_tools", None)
+    names = available() if callable(available) else None
+    if names is None:
+        return TOOL_DEFINITIONS
+    chosen = [t for t in TOOL_DEFINITIONS if t["function"]["name"] in names]
+    return chosen or None
+
+
 def build_assistant_graph(caps: Capabilities, checkpointer: Any, store: ConversationStore):
     def host() -> ToolHost | None:
         return caps.extras.get("tool_host")
@@ -158,7 +171,7 @@ def build_assistant_graph(caps: Capabilities, checkpointer: Any, store: Conversa
         ctx = require_context()
         write = get_stream_writer()
         conv_id = state["conversation_id"]
-        tools = TOOL_DEFINITIONS if host() is not None else None
+        tools = offered_tools(host())
         reply = ""
         for round_no in range(MAX_ROUNDS + 1):
             history = await store.messages(ctx.tenant_id, ctx.user_id, conv_id)

@@ -2,15 +2,13 @@
 
 import type { Entry, Filter } from "@/lib/creations";
 import { kindOf, longEnough } from "@/lib/creations";
-import type {
-  ImagePage,
-  LipSyncPage,
-  SearchResponse,
-  SongPage,
-  SpeechPage,
-  TranscriptPage,
-  VideoPage,
-} from "@wasifyai/contracts";
+import {
+  clipFromVoice,
+  speechFromVoice,
+  trackFromVoice,
+  transcriptFromVoice,
+} from "@/lib/voice-cards";
+import type { ImagePage, SearchResponse, VideoPage } from "@wasifyai/contracts";
 import { useEffect, useState } from "react";
 
 export const DEBOUNCE_MS = 300;
@@ -37,6 +35,16 @@ async function getJson<T>(url: string, signal: AbortSignal): Promise<T> {
   return (await res.json()) as T;
 }
 
+/** A product that is not there (the older speech products are retired where voice is on) is no results,
+ * not a failed search. */
+async function optional<T>(p: Promise<T>): Promise<T | null> {
+  try {
+    return await p;
+  } catch {
+    return null;
+  }
+}
+
 /** The ids of one kind, asked of that product's own list route (only a product can sign its files'
  * links), then put back in the order search ranked them. */
 async function cards(response: SearchResponse, signal: AbortSignal): Promise<Entry[]> {
@@ -45,36 +53,26 @@ async function cards(response: SearchResponse, signal: AbortSignal): Promise<Ent
     by(kind)
       .map((r) => r.id)
       .join(",");
-  const [songs, images, videos, speeches, transcripts, lipsyncs] = await Promise.all([
-    by("song").length
-      ? getJson<SongPage>(`/api/products/wasifyai-music/songs?ids=${ids("song")}`, signal)
-      : null,
+  const list = <T>(kind: string, route: string) =>
+    by(kind).length
+      ? optional(
+          getJson<{ items: T[] }>(`/api/products/wasifyai-voice/${route}?ids=${ids(kind)}`, signal),
+        )
+      : null;
+  const [images, videos, speeches, transcripts, tracks, clips] = await Promise.all([
     by("image").length
       ? getJson<ImagePage>(`/api/products/wasifyai-image/images?ids=${ids("image")}`, signal)
       : null,
     by("video").length
       ? getJson<VideoPage>(`/api/products/wasifyai-video/videos?ids=${ids("video")}`, signal)
       : null,
-    by("speech").length
-      ? getJson<SpeechPage>(`/api/products/wasifyai-tts/speeches?ids=${ids("speech")}`, signal)
-      : null,
-    by("transcript").length
-      ? getJson<TranscriptPage>(
-          `/api/products/wasifyai-stt/transcripts?ids=${ids("transcript")}`,
-          signal,
-        )
-      : null,
-    by("lipsync").length
-      ? getJson<LipSyncPage>(
-          `/api/products/wasifyai-lipsync/lipsyncs?ids=${ids("lipsync")}`,
-          signal,
-        )
-      : null,
+    // hits carry no product, but speech, music and video are all the voice product's now
+    list<Parameters<typeof speechFromVoice>[0]>("speech", "speeches"),
+    list<Parameters<typeof transcriptFromVoice>[0]>("transcript", "transcripts"),
+    list<Parameters<typeof trackFromVoice>[0]>("track", "tracks"),
+    list<Parameters<typeof clipFromVoice>[0]>("lipsync", "clips"),
   ]);
   const found = new Map<string, Entry>();
-  for (const song of songs?.songs ?? []) {
-    found.set(`song:${song.id}`, { kind: "song", id: song.id, createdAt: song.created_at, song });
-  }
   for (const image of images?.images ?? []) {
     found.set(`image:${image.id}`, {
       kind: "image",
@@ -91,7 +89,8 @@ async function cards(response: SearchResponse, signal: AbortSignal): Promise<Ent
       video,
     });
   }
-  for (const speech of speeches?.speeches ?? []) {
+  for (const item of speeches?.items ?? []) {
+    const speech = speechFromVoice(item);
     found.set(`speech:${speech.id}`, {
       kind: "speech",
       id: speech.id,
@@ -99,7 +98,8 @@ async function cards(response: SearchResponse, signal: AbortSignal): Promise<Ent
       speech,
     });
   }
-  for (const transcript of transcripts?.transcripts ?? []) {
+  for (const item of transcripts?.items ?? []) {
+    const transcript = transcriptFromVoice(item);
     found.set(`transcript:${transcript.id}`, {
       kind: "transcript",
       id: transcript.id,
@@ -107,7 +107,12 @@ async function cards(response: SearchResponse, signal: AbortSignal): Promise<Ent
       transcript,
     });
   }
-  for (const lipsync of lipsyncs?.lipsyncs ?? []) {
+  for (const item of tracks?.items ?? []) {
+    const song = trackFromVoice(item);
+    found.set(`track:${song.id}`, { kind: "song", id: song.id, createdAt: song.created_at, song });
+  }
+  for (const item of clips?.items ?? []) {
+    const lipsync = clipFromVoice(item);
     found.set(`lipsync:${lipsync.id}`, {
       kind: "lipsync",
       id: lipsync.id,

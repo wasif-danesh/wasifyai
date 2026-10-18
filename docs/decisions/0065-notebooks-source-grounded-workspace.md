@@ -209,3 +209,87 @@ and Hindi; a reranker; video overview; scanned non-Latin text.
 6. **Google Docs:** export to `.docx` or `.pdf` in v1; a Drive connector later.
 7. **Dependencies:** the list above is approved (rule 12), subject to the licence check in S5.
 8. **Create:** opens a draft stored after the first source.
+
+## Amendment 2026-10-18: the web profile's store (docs/phase3-web-parity-plan.md, W4 step 1)
+
+The notebooks store has a Postgres form, `PostgresNotebookStore` (`pgstore.py`), the "adapter written when the web
+product needs it" of decision 5. It is the same class of store: every method and its ownership rule runs the same SQL
+through a thin connection (`PgDb`); the few differences are hooks (`_INTEGRITY`, `_guard` for a savepoint, `_replace_chunks`).
+The tables are in their own schema (`notebooks`), created and checked by the store on start under an advisory lock
+(the product owns its schema, as above), with `chunks.embedding vector(N)` in the passage row and the passage's terms in
+a `text[]` column with a GIN index.
+
+Retrieval (`pgretrieval.py`) keeps the contract and the blend (`retrieval.rank`): the keyword leg proposes the 20 passages
+holding most of the question's terms (cut by the same tokenizer as the SQLite index, so the two agree on what a word is; a
+shorter passage wins a tie, standing in for BM25's length weighting) and scores coverage as before; the semantic leg is an
+exact pgvector cosine scan of the notebook or the ticked sources, so another notebook can never crowd it out. Measured
+on the test corpus, both databases answer the same questions with the same top passage; no ranking measurement on a large
+library has been made, and the keyword candidates differ from BM25's on ties.
+
+Not part of this step: serving notebooks from the web engine (the runtime and routes still read local folders for the
+original files and generated documents; those move to object storage and the reader to a worker job in the next steps).
+The tests of the store, the ingest, the chat graph, the routes, the studio and the passage search run on SQLite and on
+Postgres (CI has the Postgres service; a machine without one skips the Postgres half).
+
+## Amendment 2026-10-18 (2): files and the reading worker on the web (W4 step 2)
+
+- **Files behind an interface** (`files.py`). A source's original and an output's file are kept through a `FileStore` for
+  an owner, with plain keys (`files/{notebook}/{document}/{name}`, `artifacts/{notebook}/{output}/{name}`). `LocalFiles` is
+  the desktop's folders, in the layout it always had; `ObjectFiles` is the deployment's object storage under
+  `{tenant}/wasifyai-notebooks/{user}/...` (rules 7 and 10), with parts of a key limited to what object storage accepts
+  (a title with spaces or accents is stored with `_`; the real title is in the database). The routes, the studio and the
+  reading code ask for the store of the person they act for; nothing else touches a folder. A download streams a
+  folder's file and reads an object into the response.
+- **The reader is a worker.** The engine's program on the web only serves requests (`Runtime.reads_sources` is false). A source waits in
+  the database as `pending`, which is the queue; `python -m wasifyai_notebooks.worker` takes the next one (`begin` is one
+  atomic update, so any number of workers can run), fetches the file from object storage to a temporary path, reads it
+  with the document reader (still a program of its own), cuts, embeds and indexes it, and writes the result. A source a worker
+  lost is failed after 30 minutes untouched (a reading may take 15), by whichever worker notices; the desktop, with one
+  reader, still fails every interrupted source at start.
+- **Switch.** `NOTEBOOKS_ENABLED=true` (web profile only; off by default) lets the engine serve notebooks from Postgres and object
+  storage. Off, the routes answer 503 as before, so nothing is offered whose worker is not running. The worker takes the same
+  database and storage settings as the engine, plus `NOTEBOOKS_MODELS_DIR` and `NOTEBOOKS_READER_DIR` on its machine.
+- The tests of the routes, the studio files and the reading run against both homes (the routes tests also against folders and
+  objects); the web setup is tested end to end on Postgres and in-memory storage (stored by the engine's program, read by a
+  worker, found by a question).
+
+Not done: the worker's image and its Helm release (W7), the search model through the gateway instead of local files
+(step 3), per-tenant quotas on sources and bytes, and the audio overview's voices on the web (they need the speech runtime, W5).
+
+## Amendment 2026-10-18 (3): the search model through the gateway, and limits (W4 step 3)
+
+- **Search model.** On the web the embedder is the platform's, asked through the gateway by alias (rule 5):
+  `GatewayEmbedder` calls `/v1/embeddings` for `creation-embedder` (bge-m3, multilingual, 1024 dimensions, MIT) in batches of 32, tries a
+  busy gateway (429 or 5xx) again with a growing wait, does not repeat a refusal, and checks the dimension. It needs no
+  model files on the engine's or the worker's machine. `GatewayComponents` sizes a passage in characters (1500, a few
+  hundred tokens in any script) because the desktop's whitespace-style counting cuts nothing in a language written without spaces;
+  the desktop keeps its local bge-small and its token-sized passages unchanged. The embedder's id (`gateway:creation-embedder`) is
+  recorded in the index like any other, so a library made with the local model is refused (not mixed) until it is read again.
+  The local model stays available on the web with `NOTEBOOKS_MODELS_DIR` and no gateway.
+- **Usage (rule 9).** Every embedding call records `llm.embedding_tokens` for the person (`record_usage`, a row in `usage_events` on
+  Postgres, nothing on the desktop): the reading worker for what it indexes, the engine for questions (chat, search, studio, the
+  assistant's tool), each with its `source`.
+- **Limits.** `quotas:` in `product.yaml`: `notebooks_per_user` (50), `sources_per_notebook` (300), `bytes_per_user` (2 GB of files and
+  notes together), counted per tenant and user and enforced while the safeguards are on (ADR-0047), so not on the desktop. A request
+  over a limit gets 429 with a sentence; an upload of several files keeps those that fit and lists the others under `rejected`.
+
+Not done: a limit on embedding tokens per day (the usage is recorded, the limit waits for the billing design), moderation of
+sources, and measuring bge-m3's ranking on the evaluation corpus against bge-small's (English) result.
+
+## Amendment 2026-10-18 (4): Studio outputs made by a worker (W4 step 5)
+
+- **One function, two callers.** Making an output (read the ticked sources, ask the chat model, build the file, save the result) is
+  `make_output` (`output_job.py`), no longer a part of the graph node. A run of the graph calls it, as before (the desktop; an infographic
+  and a guide anywhere, because a guide is kept with the notebook and the infographic's picture is a run of the image product, which
+  only the engine's program can start). On the web the engine's program only **queues** the output and ends the run at once.
+- **The queue is the output's row.** Queuing stores the request (format, focus, ticked sources, the model's window and prompt tier) as JSON
+  on the row, which stays `processing`, so the screens, Stop and the 2-second polling work unchanged. A worker takes the oldest one
+  with a single atomic update (`claimed_at`; any number can run), makes it for the person it belongs to (the run context carries their
+  tenant and user, so the model's usage is noted for them), and finishes, fails or finds it stopped. An output a worker took and lost
+  is failed after 30 minutes untouched; one nobody has taken yet is never failed by the sweep (the worker may just be down).
+- **The worker.** `python -m wasifyai_notebooks.worker` makes outputs when it has a gateway (`LITELLM_BASE_URL`), building the chat model from the
+  product's own `product.yaml` (`PRODUCTS_DIR`), and reads sources as before. The desktop is untouched: no queue, no columns used.
+
+Not done: a limit on outputs per day, progress steps while a worker makes one (the screen shows "being made" until it is done), and
+making an infographic in the worker (it needs a run of the image product, so it stays with the engine).
+

@@ -10,17 +10,13 @@ dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.8", "pyright>=1.1.380", "ht
 
 [tool.uv.workspace]
 members = ["services/*", "packages/contracts", "packages/platform-sdk", "products/*"]
-exclude = ["products/hello", "products/media-demo", "services/speech-indic", "services/stt-indic", "services/lipsync-musetalk", "services/comfyui"]   # config-only samples; a container-only service
+exclude = ["products/hello", "products/media-demo", "services/comfyui"]   # config-only samples; a container-only service
 
 [tool.uv.sources]
 wasifyai-api = { workspace = true }
 wasifyai-media-worker = { workspace = true }
 wasifyai-contracts = { workspace = true }
 wasifyai-platform-sdk = { workspace = true }
-wasifyai-music = { workspace = true }
-wasifyai-stt = { workspace = true }
-wasifyai-tts = { workspace = true }
-wasifyai-lipsync = { workspace = true }
 wasifyai-notebooks = { workspace = true }
 wasifyai-voice = { workspace = true }
 wasifyai-video = { workspace = true }
@@ -44,12 +40,12 @@ extend-immutable-calls = ["fastapi.Depends"]
 
 [tool.pyright]
 include = ["services", "packages", "products"]
-# its libraries (torch, parler-tts, MuseTalk) exist only inside its container image or its own environment
-exclude = ["services/speech-indic", "services/stt-indic", "services/lipsync-musetalk", "services/api/src/wasifyai_api/lipsync_server", "services/comfyui", ".lipsync", "**/node_modules", "**/.venv"]
+# its libraries (torch, MuseTalk) exist only inside its own environment
+exclude = ["services/api/src/wasifyai_api/lipsync_server", "services/comfyui", ".lipsync", "**/node_modules", "**/.venv"]
 typeCheckingMode = "standard"
 # Test helper modules (conftest, fake_comfyui) are imported by name; pytest puts their folders on
 # sys.path, so tell pyright too.
-extraPaths = ["products/wasifyai-music/tests", "products/wasifyai-image/tests", "products/wasifyai-video/tests", "products/wasifyai-tts/tests", "products/wasifyai-stt/tests", "products/wasifyai-lipsync/tests", "products/wasifyai-assistant/tests", "products/wasifyai-notebooks/tests", "products/wasifyai-voice/tests", "services/media-worker/tests"]
+extraPaths = ["products/wasifyai-image/tests", "products/wasifyai-video/tests", "products/wasifyai-assistant/tests", "products/wasifyai-notebooks/tests", "products/wasifyai-voice/tests", "services/media-worker/tests"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

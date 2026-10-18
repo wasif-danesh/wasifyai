@@ -24,11 +24,18 @@ class ApiToolHost:
         index: Callable[[], Any],
         describers: dict[str, Describer] | None = None,
         notebook_search: NotebookSearch | None = None,
+        available: Callable[[], set[str]] | None = None,
     ):
         self._runs = runs
         self._index = index
         self._describers = describers or {}
         self._notebook_search = notebook_search
+        self._available = available
+
+    def available_tools(self) -> set[str] | None:
+        """The tools this deployment can run (the assistant offers the model only these); `None`
+        when it was not told, which means all of them."""
+        return self._available() if self._available else None
 
     def run_product(
         self, product_id: str, graph_input: dict[str, Any]

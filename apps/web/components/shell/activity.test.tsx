@@ -3,11 +3,8 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Activity } from "./Activity";
 
-const none = { working: [], notice: null, dismiss: vi.fn() };
-vi.mock("@/hooks/use-video-activity", () => ({ useVideoActivity: () => none }));
-vi.mock("@/hooks/use-transcript-activity", () => ({ useTranscriptActivity: () => none }));
-vi.mock("@/hooks/use-lipsync-activity", () => ({
-  useLipSyncActivity: () => ({
+vi.mock("@/hooks/use-video-activity", () => ({
+  useVideoActivity: () => ({
     working: [],
     notice: { id: "x", status: "failed", prompt: "Hello", error: "It failed." },
     dismiss: vi.fn(),
@@ -22,7 +19,7 @@ describe("Activity", () => {
         <Activity enabled />
       </header>,
     );
-    const notice = screen.getByText("Your lip sync couldn't be made");
+    const notice = screen.getByText("Your video couldn't be made");
     expect(notice).toBeInTheDocument();
     expect(screen.getByTestId("bar")).not.toContainElement(notice);
     expect(document.body).toContainElement(notice);

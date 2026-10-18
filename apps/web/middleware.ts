@@ -12,7 +12,17 @@ const guard = auth((req) => {
   return NextResponse.redirect(url);
 });
 
+/** The addresses of the older music, speech and lip sync pages, now screens of the voice product. */
+const MOVED: Record<string, string> = {
+  "/music": "/voice/music",
+  "/text-to-speech": "/voice/speak",
+  "/speech-to-text": "/voice/transcribe",
+  "/lip-sync": "/voice/lipsync",
+};
+
 export default function middleware(req: NextRequest, event: NextFetchEvent) {
+  const to = process.env.VOICE_ENABLED === "true" ? MOVED[req.nextUrl.pathname] : undefined;
+  if (to) return NextResponse.redirect(new URL(to, req.nextUrl.origin));
   if (!authEnabled()) return NextResponse.next();
   return (guard as unknown as (r: NextRequest, e: NextFetchEvent) => Promise<Response>)(req, event);
 }

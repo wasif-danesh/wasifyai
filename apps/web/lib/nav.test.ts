@@ -3,10 +3,9 @@ import { crumbs, isCurrent, productOf } from "./nav";
 
 describe("navigation helpers", () => {
   it("finds the product a path belongs to", () => {
-    expect(productOf("/music")?.id).toBe("music");
-    expect(productOf("/music/songs/abc")?.id).toBe("music");
-    expect(productOf("/text-to-speech/creations/x")?.id).toBe("text-to-speech");
-    expect(productOf("/musical")).toBeUndefined();
+    expect(productOf("/image")?.id).toBe("image");
+    expect(productOf("/video/creations/abc")?.id).toBe("video");
+    expect(productOf("/imagery")).toBeUndefined();
     expect(productOf("/creations")).toBeUndefined();
   });
 
@@ -15,6 +14,20 @@ describe("navigation helpers", () => {
     expect(crumbs("/video/creations/1")).toEqual([
       { label: "Video", href: "/video" },
       { label: "Saved result" },
+    ]);
+    expect(crumbs("/video/library")).toEqual([
+      { label: "Video", href: "/video" },
+      { label: "Library" },
+    ]);
+    expect(crumbs("/image/edit")).toEqual([{ label: "Image", href: "/image" }, { label: "Edit" }]);
+    expect(crumbs("/notebooks")).toEqual([{ label: "Notebooks" }]);
+    expect(crumbs("/notebooks/new")).toEqual([
+      { label: "Notebooks", href: "/notebooks" },
+      { label: "New notebook" },
+    ]);
+    expect(crumbs("/notebooks/abc")).toEqual([
+      { label: "Notebooks", href: "/notebooks" },
+      { label: "Notebook" },
     ]);
     expect(crumbs("/creations")).toEqual([{ label: "My creations" }]);
     expect(crumbs("/somewhere")).toEqual([]);

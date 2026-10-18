@@ -10,17 +10,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useCreationSearch } from "@/hooks/use-creation-search";
 import type { Entry, Filter } from "@/lib/creations";
-import { PRODUCT } from "@/lib/run-client";
 import { actions, empty, hint, panel } from "@/lib/styles";
 import { cn } from "@/lib/utils";
-import type {
-  ImagePage,
-  LipSyncPage,
-  SongPage,
-  SpeechPage,
-  TranscriptPage,
-  VideoPage,
-} from "@wasifyai/contracts";
+import type { LipSyncCard, SongCard, SpeechCard, TranscriptCard } from "@/lib/voice-cards";
+import type { ImagePage, VideoPage } from "@wasifyai/contracts";
 import { LayoutGrid, Table2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useMemo, useState } from "react";
@@ -32,7 +25,7 @@ const tiles =
   "m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,13rem),1fr))] items-stretch gap-4 p-0";
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "songs", label: "Songs" },
+  { value: "songs", label: "Music" },
   { value: "images", label: "Images" },
   { value: "videos", label: "Videos" },
   { value: "speeches", label: "Speech" },
@@ -41,34 +34,27 @@ const FILTERS: { value: Filter; label: string }[] = [
 ];
 
 export function CreationsList({
-  songs: songPage,
+  songs = [],
   images: imagePage,
   videos: videoPage = null,
-  speeches: speechPage = null,
-  transcripts: transcriptPage = null,
-  lipsyncs: lipsyncPage = null,
+  speeches = [],
+  transcripts = [],
+  lipsyncs = [],
   initialFilter = "all",
 }: {
-  songs: SongPage | null;
+  /** the voice product's lists: the latest of each, with no further pages */
+  songs?: SongCard[];
   images: ImagePage | null;
   videos?: VideoPage | null;
-  speeches?: SpeechPage | null;
-  transcripts?: TranscriptPage | null;
-  lipsyncs?: LipSyncPage | null;
+  speeches?: SpeechCard[];
+  transcripts?: TranscriptCard[];
+  lipsyncs?: LipSyncCard[];
   initialFilter?: Filter;
 }) {
-  const [songs, setSongs] = useState(songPage?.songs ?? []);
   const [images, setImages] = useState(imagePage?.images ?? []);
   const [videos, setVideos] = useState(videoPage?.videos ?? []);
-  const [speeches, setSpeeches] = useState(speechPage?.speeches ?? []);
-  const [songNext, setSongNext] = useState(songPage?.next_before ?? null);
   const [imageNext, setImageNext] = useState(imagePage?.next_before ?? null);
   const [videoNext, setVideoNext] = useState(videoPage?.next_before ?? null);
-  const [transcripts, setTranscripts] = useState(transcriptPage?.transcripts ?? []);
-  const [transcriptNext, setTranscriptNext] = useState(transcriptPage?.next_before ?? null);
-  const [lipsyncs, setLipsyncs] = useState(lipsyncPage?.lipsyncs ?? []);
-  const [lipsyncNext, setLipsyncNext] = useState(lipsyncPage?.next_before ?? null);
-  const [speechNext, setSpeechNext] = useState(speechPage?.next_before ?? null);
   const [filter, setFilter] = useState<Filter>(initialFilter);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -144,14 +130,6 @@ export function CreationsList({
     setFailed(false);
     const q = (before: string) => `limit=${PAGE}&before=${encodeURIComponent(before)}`;
     const jobs: Promise<boolean>[] = [];
-    if (songNext && (filter === "all" || filter === "songs")) {
-      jobs.push(
-        page<SongPage>(`/api/products/${PRODUCT}/songs?${q(songNext)}`, (p) => {
-          setSongs((cur) => [...cur, ...p.songs]);
-          setSongNext(p.next_before ?? null);
-        }),
-      );
-    }
     if (imageNext && (filter === "all" || filter === "images")) {
       jobs.push(
         page<ImagePage>(`/api/products/wasifyai-image/images?${q(imageNext)}`, (p) => {
@@ -165,30 +143,6 @@ export function CreationsList({
         page<VideoPage>(`/api/products/wasifyai-video/videos?${q(videoNext)}`, (p) => {
           setVideos((cur) => [...cur, ...p.videos]);
           setVideoNext(p.next_before ?? null);
-        }),
-      );
-    }
-    if (speechNext && (filter === "all" || filter === "speeches")) {
-      jobs.push(
-        page<SpeechPage>(`/api/products/wasifyai-tts/speeches?${q(speechNext)}`, (p) => {
-          setSpeeches((cur) => [...cur, ...p.speeches]);
-          setSpeechNext(p.next_before ?? null);
-        }),
-      );
-    }
-    if (transcriptNext && (filter === "all" || filter === "transcripts")) {
-      jobs.push(
-        page<TranscriptPage>(`/api/products/wasifyai-stt/transcripts?${q(transcriptNext)}`, (p) => {
-          setTranscripts((cur) => [...cur, ...p.transcripts]);
-          setTranscriptNext(p.next_before ?? null);
-        }),
-      );
-    }
-    if (lipsyncNext && (filter === "all" || filter === "lipsyncs")) {
-      jobs.push(
-        page<LipSyncPage>(`/api/products/wasifyai-lipsync/lipsyncs?${q(lipsyncNext)}`, (p) => {
-          setLipsyncs((cur) => [...cur, ...p.lipsyncs]);
-          setLipsyncNext(p.next_before ?? null);
         }),
       );
     }
@@ -214,18 +168,12 @@ export function CreationsList({
   };
   const hasMore =
     filter === "all"
-      ? Boolean(songNext || imageNext || videoNext || speechNext || transcriptNext || lipsyncNext)
-      : filter === "songs"
-        ? Boolean(songNext)
-        : filter === "images"
-          ? Boolean(imageNext)
-          : filter === "videos"
-            ? Boolean(videoNext)
-            : filter === "speeches"
-              ? Boolean(speechNext)
-              : filter === "transcripts"
-                ? Boolean(transcriptNext)
-                : Boolean(lipsyncNext);
+      ? Boolean(imageNext || videoNext)
+      : filter === "images"
+        ? Boolean(imageNext)
+        : filter === "videos"
+          ? Boolean(videoNext)
+          : false;
 
   const [view, setView] = useState<"cards" | "table">("cards");
   useEffect(() => {
@@ -351,12 +299,12 @@ export function CreationsList({
           <h2 className="text-step-1 font-semibold">
             {filter === "all"
               ? "Your creative space is ready"
-              : `No ${filter === "speeches" ? "speech" : filter} yet`}
+              : `No ${filter === "speeches" ? "speech" : filter === "songs" ? "music" : filter} yet`}
           </h2>
           <p>Make something new and it will appear here.</p>
           <div className={actions}>
             <Button asChild>
-              <Link href="/music">Create a song</Link>
+              <Link href="/voice/music">Create music</Link>
             </Button>
             <Button asChild variant="outline">
               <Link href="/image">Make an image</Link>
@@ -365,13 +313,13 @@ export function CreationsList({
               <Link href="/video">Make a video</Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/text-to-speech">Create speech</Link>
+              <Link href="/voice/speak">Create speech</Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/speech-to-text">Transcribe audio</Link>
+              <Link href="/voice/transcribe">Transcribe audio</Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/lip-sync">Make a lip sync</Link>
+              <Link href="/voice/lipsync">Make a lip sync</Link>
             </Button>
           </div>
         </div>

@@ -12,9 +12,7 @@ from wasifyai_platform_sdk.config import CapabilityBinding, ProductConfig
 from wasifyai_platform_sdk.jobs import InMemoryJobSink, JobSink
 from wasifyai_platform_sdk.providers.comfyui import ComfyUIProvider
 from wasifyai_platform_sdk.providers.fake import FakeMediaProvider, FakeTextProvider
-from wasifyai_platform_sdk.providers.lipsync import LipSyncProvider
 from wasifyai_platform_sdk.providers.litellm import LiteLLMTextProvider
-from wasifyai_platform_sdk.providers.speech import SpeechProvider
 from wasifyai_platform_sdk.storage import ScopedStorage
 from wasifyai_platform_sdk.usage import InMemoryUsageRecorder, UsageRecorder
 
@@ -52,7 +50,7 @@ register_provider(
     ),
 )
 register_provider("fake", "text", lambda d, c: FakeTextProvider(d.usage, d.embedding_dims))
-for _family in ("image", "music", "video"):
+for _family in ("image", "video"):
     register_provider(
         "comfyui",
         _family,
@@ -61,20 +59,13 @@ for _family in ("image", "music", "video"):
     register_provider("fake", _family, lambda d, c: FakeMediaProvider(d.job_sink))
 
 
-register_provider("speech", "speech", lambda d, c: SpeechProvider(d.job_sink))
-register_provider("lipsync", "video", lambda d, c: LipSyncProvider(d.job_sink))  # ADR-0044
-register_provider("fake", "speech", lambda d, c: FakeMediaProvider(d.job_sink))
-
-
 def build_capabilities(config: ProductConfig, deps: ProviderDeps) -> Capabilities:
     """Instantiate the providers a product's config binds, and expose them as `caps`."""
     cache: dict[tuple[str, str], Any] = {}
     grouped: dict[str, dict[str, tuple[CapabilityBinding, Any]]] = {
         "text": {},
         "image": {},
-        "music": {},
         "video": {},
-        "speech": {},
     }
     for name, binding in config.capabilities.items():
         family, _, action = name.partition(".")
@@ -87,9 +78,7 @@ def build_capabilities(config: ProductConfig, deps: ProviderDeps) -> Capabilitie
     return Capabilities(
         text=TextCapabilities(grouped["text"], config.id),
         image=MediaCapabilities("image", grouped["image"], config.id),
-        music=MediaCapabilities("music", grouped["music"], config.id),
         video=MediaCapabilities("video", grouped["video"], config.id),
-        speech=MediaCapabilities("speech", grouped["speech"], config.id),
         storage=deps.storage,
         config=config,
         db=deps.db,

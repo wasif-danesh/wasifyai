@@ -71,40 +71,9 @@ services:
     # media flow works without ComfyUI or a GPU. Set COMFYUI_MODE=real to use ComfyUI at
     # COMFYUI_BASE_URL (native ComfyUI on the host: http://host.containers.internal:8188).
     depends_on: [redis, postgres, seaweedfs]
-  # Speech (ADR-0042, ADR-0043): one OpenAI-compatible server for text to speech (Kokoro, Piper) and
-  # speech to text (faster-whisper). CPU image: in a container on a Mac there is no GPU. Models are
-  # downloaded on first use into the volume, never into the image. Published on the host only for the
-  # evaluation scripts (services/api/evals/speech).
-  speech:
-    image: ghcr.io/speaches-ai/speaches:latest-cpu
-    volumes: ["speechmodels:/home/ubuntu/.cache/huggingface/hub"]
-    ports: ["8100:8000"]
-    environment:
-      # CPU Whisper in full precision needs more memory than the Podman VM has; int8 is the usual choice
-      WHISPER__COMPUTE_TYPE: int8
-      LOG_LEVEL: info
-    restart: unless-stopped
-  # Indic Parler-TTS for Bengali and the other Indic languages (ADR-0042). Our own adapter; the gated model is
-  # downloaded into the volume on first use with HF_TOKEN (only that variable is passed in).
-  speech-indic:
-    build: { context: ., dockerfile: services/speech-indic/Containerfile }
-    volumes: ["indicmodels:/models"]
-    ports: ["8101:8000"]
-    environment:
-      HF_TOKEN: ${HF_TOKEN:-}
-    restart: unless-stopped
-  # IndicConformer for speech to text in the Indian languages (ADR-0043). Our own adapter; the gated model
-  # is downloaded into the volume on first use with HF_TOKEN (only that variable is passed in).
-  stt-indic:
-    build: { context: ., dockerfile: services/stt-indic/Containerfile }
-    volumes: ["sttmodels:/models"]
-    ports: ["8102:8000"]
-    environment:
-      HF_TOKEN: ${HF_TOKEN:-}
-    restart: unless-stopped
   web:
     build: { context: ., dockerfile: apps/web/Containerfile }
     env_file: .env
     depends_on: [api]
     ports: ["3000:3000"]
-volumes: { pgdata: {}, seaweeddata: {}, speechmodels: {}, indicmodels: {}, sttmodels: {} }
+volumes: { pgdata: {}, seaweeddata: {} }

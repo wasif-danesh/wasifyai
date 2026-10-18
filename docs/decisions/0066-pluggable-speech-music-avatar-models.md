@@ -177,3 +177,26 @@ deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's
   kept as soon as it is done**, so a failure or a cancel in chapter 7 leaves 1 to 6 in Your music and says so; (d) a
   track of the whole book is optional and limited to about two hours because it is built in memory; (e) the words
   of each chapter are in the track's `lyrics`, so a book is found by what it says.
+- **W5 (2026-10-18, `docs/phase3-web-parity-plan.md`):** the web serves the same product through a second engine.
+  (a) Hosting answer: a rented cloud GPU for staging and production, and the web offers models from a hosted provider
+  (OpenRouter or similar) behind the gateway; (b) the seam is `SpeechEngine`: `HostedSpeechEngine` implements it with
+  the gateway's speech and transcription routes by alias, its models are `engine: remote` descriptors, and a task it
+  does not serve is refused with `not_offered` ("in the desktop app"), so nothing is claimed that the deployment cannot
+  do; (c) the voice product replaces the older `wasifyai-tts` and `wasifyai-stt` on the web (their menu entries and
+  create pages go; saved results stay readable); (d) a hosted model sends the person's text or recording to the
+  provider, so the screens say so, and its descriptor records the provider's terms as the licence evidence; (e) voice
+  cloning and dubbing on the public service come last, behind a flag, with the desktop's consent text (decision of
+  2026-10-18), and are not part of this step.
+- **W5 b to e (2026-10-18):** the web does not wait for a GPU host. (a) The web profile may run the desktop's runtime
+  itself (`VOICE_ENGINE=local` or `both`, `CombinedSpeechEngine`): the same descriptors, graphs and store, so music,
+  splitting, voice change, speech edit, dubbing, the audiobook and lip sync behave as on the desktop; (b) the web only
+  uses what is ready on that machine, it never installs a runtime or fetches a model; (c) a web screen is offered only
+  when a ready model can do its task, so the menu cannot link to a screen that fails; (d) the screens are shared with the
+  desktop and say where things go by `place`, and a hosted model says its input is sent to its provider; (e) the older
+  `wasifyai-music` page stays reachable by address where music is not offered, and is retired with W6.
+- **W6 (2026-10-18):** the voice product replaces the older web music, speech and lip sync products. (a) It first took on their
+  safeguards, so retiring them keeps the protection ADR-0042, ADR-0043 and ADR-0044 gave: words, lyrics and descriptions go
+  to the text moderator, a lip sync picture to the picture moderator, with daily limits, only while the safeguards are on
+  (ADR-0047); (b) a product is retired by `PRODUCTS_RETIRED`, which keeps its routes and saved results and makes nothing
+  new; (c) the older results are read where they are, not migrated, until there is data to move; (d) the older packages are
+  deleted only after that and after the web runs music on a GPU host through the voice product.

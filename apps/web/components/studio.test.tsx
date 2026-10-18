@@ -10,12 +10,12 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/music/songs" }));
 describe("the studio's products", () => {
   it("lists music, image, video, text to speech, speech to text and lip sync as live, each with its own page", () => {
     expect(PRODUCTS.map((p) => [p.id, p.status, p.href])).toEqual([
-      ["music", "live", "/music"],
+      ["music", "live", "/voice/music"],
       ["image", "live", "/image"],
       ["video", "live", "/video"],
-      ["text-to-speech", "live", "/text-to-speech"],
-      ["speech-to-text", "live", "/speech-to-text"],
-      ["lip-sync", "live", "/lip-sync"],
+      ["text-to-speech", "live", "/voice/speak"],
+      ["speech-to-text", "live", "/voice/transcribe"],
+      ["lip-sync", "live", "/voice/lipsync"],
     ]);
   });
 
@@ -28,9 +28,9 @@ describe("the studio's products", () => {
   });
 });
 
-describe("the home page", () => {
+describe("the explore page (what can be made, public)", () => {
   it("has the headline and the subtitle, with Ideas picked out", async () => {
-    const Home = (await import("@/app/(site)/page")).default;
+    const Home = (await import("@/app/(site)/explore/page")).default;
     const { container } = render(<Home />);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Bring Your Ideas to Life");
     expect(container.querySelector("[data-accent]")).toHaveTextContent("Ideas");
@@ -44,7 +44,7 @@ describe("ProductCard", () => {
   it("is one link to the product, with a direct action for a live product", () => {
     render(<ProductCard product={PRODUCTS[0]} />);
     const link = screen.getByRole("link", { name: /Music/ });
-    expect(link).toHaveAttribute("href", "/music");
+    expect(link).toHaveAttribute("href", "/voice/music");
     expect(within(link).getByText("Create a song")).toBeInTheDocument();
     expect(link).toHaveAttribute("data-status", "live");
   });
@@ -57,7 +57,7 @@ describe("ProductCard", () => {
     expect(within(link).queryByText("Create a song")).not.toBeInTheDocument();
   });
 
-  it.each([["Lip Sync", "Create lip sync", "/lip-sync"]])(
+  it.each([["Lip Sync", "Create lip sync", "/voice/lipsync"]])(
     "shows %s as live, with its description and a %s button",
     (title, action, href) => {
       const product = PRODUCTS.find((p) => p.title === title);

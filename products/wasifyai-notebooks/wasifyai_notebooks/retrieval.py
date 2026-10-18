@@ -14,7 +14,7 @@ import json
 import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal, cast
 
 import sqlite_vec
 
@@ -59,6 +59,13 @@ def retrieve(
     """
     if not query.strip() or (document_ids is not None and not document_ids):
         return []
+    if getattr(db, "dialect", "sqlite") == "postgres":
+        from wasifyai_notebooks.pgretrieval import retrieve_pg
+
+        return retrieve_pg(
+            cast(Any, db), notebook_id, query, vector, weight=weight, top_k=top_k,
+            document_ids=document_ids, mode=mode,
+        )  # fmt: skip
     scope = json.dumps(list(dict.fromkeys(document_ids))) if document_ids is not None else None
     blob = sqlite_vec.serialize_float32(list(vector))
 
@@ -157,7 +164,20 @@ def _best(
         (blob, json.dumps(sorted(candidates))),
     ).fetchall()
 
-    def blended(row: sqlite3.Row | tuple) -> float:
+    return rank(rows, keyword, weight, top_k, mode)
+
+
+def rank(
+    rows: Sequence[Sequence[Any]],
+    keyword: dict[int, float],
+    weight: float,
+    top_k: int,
+    mode: Mode,
+) -> list[Hit]:
+    """Order candidates by the blend. A row is `(chunk id, document id, title, content, start line,
+    end line, cosine distance)`; shared by every database."""
+
+    def blended(row: Sequence[Any]) -> float:
         cosine = max(0.0, 1.0 - row[6])  # a passage pointing the other way is no evidence
         if mode == "dense":
             return cosine

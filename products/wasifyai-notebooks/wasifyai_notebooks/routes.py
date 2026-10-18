@@ -12,6 +12,7 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
@@ -21,8 +22,14 @@ from wasifyai_platform_sdk.search import search_text
 
 from wasifyai_notebooks import hardening
 from wasifyai_notebooks.components import Unavailable
-from wasifyai_notebooks.ingest import original_path
+from wasifyai_notebooks.files import FileStore, artifact_key, original_key
 from wasifyai_notebooks.overview import AUDIO_FILE, NotPossible, Voicer, choose_voices
+from wasifyai_notebooks.quotas import (
+    QuotaExceeded,
+    active_limits,
+    check_new_notebook,
+    check_new_source,
+)
 from wasifyai_notebooks.reader_install import InstallError
 from wasifyai_notebooks.retrieval import retrieve
 from wasifyai_notebooks.runtime import NotAvailable, Runtime, runtime_for
@@ -106,6 +113,24 @@ class ConfirmReader(BaseModel):
     confirm_bytes: int
 
 
+async def send_file(fs: FileStore, key: str, mime: str, name: str, missing: str) -> Response:
+    """A stored file as a download. A folder's file is streamed; an object is read and sent. Always
+    an attachment: an HTML or SVG file shown inline would run in the app's origin."""
+    path = await asyncio.to_thread(fs.local_path, key)
+    if path is not None:
+        return FileResponse(path, media_type=mime, filename=name)
+    data = await asyncio.to_thread(fs.read_bytes, key)
+    if data is None:
+        raise HTTPException(404, missing)
+    quoted = quote(name)
+    disposition = (
+        f"attachment; filename*=utf-8''{quoted}"
+        if quoted != name
+        else f'attachment; filename="{name}"'
+    )
+    return Response(data, media_type=mime, headers={"content-disposition": disposition})
+
+
 def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
     """`runtime` is injectable for tests; production builds it from the app's data folder."""
     router = APIRouter(tags=[PRODUCT_ID])
@@ -120,7 +145,8 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
             except NotAvailable as e:
                 raise HTTPException(503, str(e)) from None
         r = holder["rt"]
-        r.worker.start()
+        if r.reads_sources:
+            r.worker.start()
         return r
 
     async def reindex(identity: Identity, nid: str) -> None:
@@ -155,6 +181,8 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
             raise HTTPException(404, str(e)) from None
         except Conflict as e:
             raise HTTPException(409, str(e)) from None
+        except QuotaExceeded as e:
+            raise HTTPException(429, str(e)) from None
 
     # ---- components ------------------------------------------------------------------------
 
@@ -188,8 +216,12 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
     async def create_notebook(
         body: NewNotebook, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
+        r = rt()
+        limits = await active_limits(deps.state)
+        if limits:
+            await call(check_new_notebook, limits, r.store, identity.tenant_id, identity.user_id)
         made = await call(
-            rt().store.create_notebook, identity.tenant_id, identity.user_id, body.title.strip()
+            r.store.create_notebook, identity.tenant_id, identity.user_id, body.title.strip()
         )
         await reindex(identity, made["id"])
         return made
@@ -216,8 +248,9 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
     async def delete_notebook(nid: str, identity: Identity = Depends(deps.identity)) -> Response:
         r = rt()
         await call(r.store.delete_notebook, identity.tenant_id, identity.user_id, nid)
-        await asyncio.to_thread(shutil.rmtree, r.files_dir / nid, True)
-        await asyncio.to_thread(shutil.rmtree, r.artifacts_dir / nid, True)
+        fs = r.files_for(identity.tenant_id, identity.user_id)
+        await asyncio.to_thread(fs.delete_prefix, f"files/{nid}")
+        await asyncio.to_thread(fs.delete_prefix, f"artifacts/{nid}")
         await deps.unindex(identity, PRODUCT_ID, nid)  # out of search too (ADR-0041)
         return Response(status_code=204)
 
@@ -256,8 +289,9 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
     ) -> Response:
         r = rt()
         docs = await call(r.store.delete_folder, identity.tenant_id, identity.user_id, nid, fid)
+        fs = r.files_for(identity.tenant_id, identity.user_id)
         for did in docs:
-            await asyncio.to_thread(shutil.rmtree, r.files_dir / nid / did, True)
+            await asyncio.to_thread(fs.delete_prefix, f"files/{nid}/{did}")
         await reindex(identity, nid)
         return Response(status_code=204)
 
@@ -280,6 +314,12 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
         nid: str, body: NewNote, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
         r = rt()
+        limits = await active_limits(deps.state)
+        if limits:
+            await call(
+                check_new_source, limits, r.store, identity.tenant_id, identity.user_id, nid,
+                len(body.content.encode()),
+            )  # fmt: skip
         doc = await call(
             r.store.add_note, identity.tenant_id, identity.user_id, nid,
             title=body.title.strip(), content=body.content, folder_id=body.folder_id,
@@ -299,6 +339,9 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
         if not await call(r.store.owns, identity.tenant_id, identity.user_id, nid):
             raise HTTPException(404, "notebook not found")
         priority = BULK if len(files) > BULK_AFTER else INTERACTIVE
+        fs = r.files_for(identity.tenant_id, identity.user_id)
+        limits = await active_limits(deps.state)
+        taken_bytes = 0
         created: list[dict[str, Any]] = []
         duplicates: list[dict[str, Any]] = []
         rejected: list[dict[str, str]] = []
@@ -312,13 +355,25 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
                         f"The file is larger than {hardening.MAX_BYTES // (1024 * 1024)} MB."
                     )
                 checked = await asyncio.to_thread(hardening.check_file, temp, name)
+                if limits:
+                    try:
+                        await call(
+                            check_new_source, limits, r.store, identity.tenant_id,
+                            identity.user_id, nid, size, adding=len(created),
+                            adding_bytes=taken_bytes,
+                        )  # fmt: skip
+                    except HTTPException as e:
+                        if e.status_code != 429:
+                            raise
+                        raise hardening.Refused(str(e.detail)) from None
                 from wasifyai_notebooks.store import new_id
 
                 did = new_id()
                 title = hardening.safe_name(name)
-                target = r.files_dir / nid / did / title
-                await asyncio.to_thread(target.parent.mkdir, parents=True, exist_ok=True)
-                await asyncio.to_thread(shutil.move, str(temp), str(target))
+                held = f"files/{nid}/{did}"
+                await asyncio.to_thread(
+                    fs.put_file, original_key(nid, {"id": did, "title": title}), temp, checked.mime
+                )
                 try:
                     doc, existed = await call(
                         r.store.add_file, identity.tenant_id, identity.user_id, nid,
@@ -326,13 +381,14 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
                         sha256=digest, folder_id=folder_id, priority=priority, doc_id=did,
                     )  # fmt: skip
                 except BaseException:
-                    await asyncio.to_thread(shutil.rmtree, target.parent, True)
+                    await asyncio.to_thread(fs.delete_prefix, held)
                     raise
                 if existed:
-                    await asyncio.to_thread(shutil.rmtree, target.parent, True)
+                    await asyncio.to_thread(fs.delete_prefix, held)
                     duplicates.append(doc)
                 else:
                     created.append(doc)
+                    taken_bytes += size
             except hardening.Refused as e:
                 rejected.append({"name": name, "reason": str(e)})
             finally:
@@ -376,7 +432,8 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
     ) -> Response:
         r = rt()
         await call(r.store.delete_document, identity.tenant_id, identity.user_id, nid, did)
-        await asyncio.to_thread(shutil.rmtree, r.files_dir / nid / did, True)
+        fs = r.files_for(identity.tenant_id, identity.user_id)
+        await asyncio.to_thread(fs.delete_prefix, f"files/{nid}/{did}")
         await reindex(identity, nid)
         return Response(status_code=204)
 
@@ -403,20 +460,16 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
         return {"moved": moved}
 
     @router.get("/notebooks/{nid}/documents/{did}/original")
-    async def original(
-        nid: str, did: str, identity: Identity = Depends(deps.identity)
-    ) -> FileResponse:
+    async def original(nid: str, did: str, identity: Identity = Depends(deps.identity)) -> Response:
         r = rt()
         doc = await call(r.store.get_document, identity.tenant_id, identity.user_id, nid, did)
         if doc["kind"] != "file":
             raise HTTPException(404, "this source has no file")
-        path = original_path(r.files_dir, nid, doc)
-        if not path.is_file():
-            raise HTTPException(404, "the file is no longer on this computer")
-        # always an attachment: an HTML or SVG file shown inline would run in the app's origin
-        return FileResponse(
-            path, media_type=doc["mime"] or "application/octet-stream", filename=doc["title"]
-        )
+        return await send_file(
+            r.files_for(identity.tenant_id, identity.user_id), original_key(nid, doc),
+            doc["mime"] or "application/octet-stream", doc["title"],
+            "the file is no longer here",
+        )  # fmt: skip
 
     @router.get("/notebooks/{nid}/passages/{chunk_id}")
     async def passage(
@@ -471,24 +524,23 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
     ) -> Response:
         r = rt()
         await call(r.store.delete_artifact, identity.tenant_id, identity.user_id, nid, aid)
-        await asyncio.to_thread(shutil.rmtree, r.artifacts_dir / nid / aid, True)
+        fs = r.files_for(identity.tenant_id, identity.user_id)
+        await asyncio.to_thread(fs.delete_prefix, artifact_key(nid, aid))
         return Response(status_code=204)
 
     @router.get("/notebooks/{nid}/artifacts/{aid}/file")
     async def artifact_file(
         nid: str, aid: str, identity: Identity = Depends(deps.identity)
-    ) -> FileResponse:
+    ) -> Response:
         r = rt()
         art = await call(r.store.get_artifact, identity.tenant_id, identity.user_id, nid, aid)
         if not art["file_name"]:
             raise HTTPException(404, "this output has no file")
-        path = r.artifacts_dir / nid / aid / Path(art["file_name"]).name
-        if not path.is_file():
-            raise HTTPException(404, "the file is no longer on this computer")
-        # always an attachment, like a source's original
-        return FileResponse(
-            path, media_type=art["file_mime"] or "application/octet-stream",
-            filename=art["file_name"],
+        return await send_file(
+            r.files_for(identity.tenant_id, identity.user_id),
+            artifact_key(nid, aid, art["file_name"]),
+            art["file_mime"] or "application/octet-stream", art["file_name"],
+            "the file is no longer here",
         )  # fmt: skip
 
     # ---- the audio overview's voices (ADR-0066, V2) ------------------------------------------
@@ -524,7 +576,14 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
             raise HTTPException(409, str(e)) from None
         data = art["data"]
 
+        scratch = r.tmp_dir / "voices" / nid / aid
+
         async def finished(model_id: str, chosen: dict[int, str]) -> None:
+            fs = r.files_for(identity.tenant_id, identity.user_id)
+            await asyncio.to_thread(
+                fs.put_file, artifact_key(nid, aid, AUDIO_FILE), scratch / AUDIO_FILE, "audio/wav"
+            )
+            await asyncio.to_thread(shutil.rmtree, scratch, True)
             await call(
                 r.store.set_artifact_data, identity.tenant_id, identity.user_id, nid, aid,
                 {**data, "audio": True, "audio_file": AUDIO_FILE, "audio_model": model_id,
@@ -534,7 +593,7 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
         try:
             job = voicer.start(
                 engine=engine, model=model, voices=voices, turns=data["turns"],
-                out_dir=r.artifacts_dir / nid / aid, key=(nid, aid), on_done=finished,
+                out_dir=scratch, key=(nid, aid), on_done=finished,
             )  # fmt: skip
         except NotPossible as e:
             raise HTTPException(409, str(e)) from None
@@ -551,13 +610,13 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
     @router.get("/notebooks/{nid}/artifacts/{aid}/audio")
     async def overview_audio(
         nid: str, aid: str, identity: Identity = Depends(deps.identity)
-    ) -> FileResponse:
+    ) -> Response:
         r = rt()
         await call(r.store.get_artifact, identity.tenant_id, identity.user_id, nid, aid)
-        path = r.artifacts_dir / nid / aid / AUDIO_FILE
-        if not path.is_file():
-            raise HTTPException(404, "this overview has no voices yet")
-        return FileResponse(path, media_type="audio/wav", filename="audio-overview.wav")
+        return await send_file(
+            r.files_for(identity.tenant_id, identity.user_id), artifact_key(nid, aid, AUDIO_FILE),
+            "audio/wav", "audio-overview.wav", "this overview has no voices yet",
+        )  # fmt: skip
 
     # ---- conversations ---------------------------------------------------------------------
     # A question is a run of this product's graph (`POST /products/wasifyai-notebooks/runs` with
@@ -608,9 +667,10 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
             embedder = r.components.embedder()
         except Unavailable as e:
             raise HTTPException(409, {"code": e.code, "message": e.message}) from None
-        from wasifyai_notebooks.embedding import Purpose
 
-        vector = (await asyncio.to_thread(embedder.embed, [body.query], Purpose.QUERY))[0]
+        vector = await asyncio.to_thread(
+            r.query_vector, embedder, identity.tenant_id, identity.user_id, body.query, "search"
+        )
 
         def run() -> list[Any]:
             with r.store.connect() as db:

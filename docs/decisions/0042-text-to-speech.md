@@ -1,6 +1,7 @@
 # ADR-0042: Text to Speech
 
 - **Status:** Accepted for the Kokoro slice (Indic Parler-TTS and Bengali are still Proposed)
+- **Update (2026-10-18):** superseded in part by ADR-0067: the text to speech product was removed and replaced by the voice product (ADR-0066).
 - **Date:** 2026-10-09
 
 ## Context

@@ -240,10 +240,9 @@ def test_the_engine_refuses_requests_without_the_shells_token(data_dir):
 
 def test_only_the_enabled_products_are_served(data_dir):
     with TestClient(create_app()) as c:
-        for product in ("wasifyai-music", "hello", "media-demo"):
+        for product in ("hello", "media-demo"):
             r = c.post(f"/products/{product}/runs", json={"input": {}}, headers=auth())
             assert r.status_code == 404
-        assert c.get("/products/wasifyai-music/songs", headers=auth()).status_code == 404
 
 
 def test_creations_and_users_survive_a_restart(data_dir):
@@ -453,3 +452,28 @@ def test_the_video_model_is_in_the_catalogue_and_search_takes_every_kind(data_di
         for kind in ("track", "voice", "video"):
             r = c.get("/creations/search", params={"q": "fox", "kind": kind}, headers=auth())
             assert r.status_code == 200, (kind, r.text)
+
+
+def test_the_assistant_is_offered_the_tools_the_desktop_can_run(data_dir):
+    app = create_app()
+    with TestClient(app):
+        host = app.state.caps["wasifyai-assistant"].extras["tool_host"]
+        # the speech runtime and the notebooks are served by the desktop engine
+        assert host.available_tools() == {
+            "search_creations",
+            "generate_image",
+            "make_music",
+            "search_notebooks",
+        }
+
+
+def test_a_host_reports_exactly_the_tools_it_was_told_it_can_run(tmp_path, monkeypatch):
+    from wasifyai_api.tool_host import ApiToolHost
+
+    served = {
+        "search_creations",
+        "generate_image",
+    }  # what the web's main.py computes: no speech, no notebooks
+    host = ApiToolHost(lambda: None, lambda: None, available=lambda: served)
+    assert host.available_tools() == served
+    assert ApiToolHost(lambda: None, lambda: None).available_tools() is None

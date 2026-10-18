@@ -39,7 +39,7 @@ async def test_an_unreadable_setting_fails_closed():
 
 
 async def test_capabilities_without_a_switch_have_the_safeguards_on():
-    caps = Capabilities(text=None, image=None, music=None, video=None, speech=None)  # type: ignore[arg-type]
+    caps = Capabilities(text=None, image=None, video=None)  # type: ignore[arg-type]
     assert await caps.safeguards_on() is True
 
     async def off() -> bool:

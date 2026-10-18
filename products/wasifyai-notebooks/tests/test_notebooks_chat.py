@@ -21,6 +21,8 @@ from wasifyai_platform_sdk import (
     set_context,
 )
 
+pytestmark = pytest.mark.usefixtures("use_backends")  # on SQLite and on Postgres
+
 CTX = RunContext("t1", "wasifyai-notebooks", "u1", run_id="r1", thread_id="th1")
 
 

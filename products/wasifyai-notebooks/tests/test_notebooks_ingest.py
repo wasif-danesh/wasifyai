@@ -9,14 +9,13 @@ from wasifyai_notebooks.embedding import Purpose
 from wasifyai_notebooks.ingest import NO_TEXT, IngestWorker, ingest_one, original_path
 from wasifyai_notebooks.reading import ReadError
 from wasifyai_notebooks.retrieval import retrieve
-from wasifyai_notebooks.store import NotebookStore
 
 T, U = "t1", "u1"
 
 
 class Rig:
-    def __init__(self, tmp_path, **kw):
-        self.store = NotebookStore(tmp_path / "db", dimension=SPEC.dimension, embedder_id=SPEC.id)
+    def __init__(self, tmp_path, new_store, **kw):
+        self.store = new_store(dimension=SPEC.dimension, embedder_id=SPEC.id)
         self.components = FakeComponents(tmp_path, **kw)
         self.reader = FakeReader()
         self.files = tmp_path / "files"
@@ -46,8 +45,8 @@ class Rig:
 
 
 @pytest.fixture
-def rig(tmp_path):
-    return Rig(tmp_path)
+def rig(tmp_path, new_store):
+    return Rig(tmp_path, new_store)
 
 
 async def test_a_file_is_read_cut_embedded_and_found(rig):
@@ -149,8 +148,8 @@ async def test_a_note_is_indexed_and_its_text_is_not_overwritten(rig):
     assert rig.search("different vendor")[0].title == "Idea"
 
 
-async def test_the_worker_waits_for_the_search_model_then_reads(tmp_path):
-    rig = Rig(tmp_path, embedder_ready=False)
+async def test_the_worker_waits_for_the_search_model_then_reads(tmp_path, new_store):
+    rig = Rig(tmp_path, new_store, embedder_ready=False)
     d = rig.add("a.txt", "# A\n\nWaiting for the model to arrive on this computer.\n")
     rig.worker.start()
     try:
@@ -164,8 +163,8 @@ async def test_the_worker_waits_for_the_search_model_then_reads(tmp_path):
         await rig.worker.stop()
 
 
-async def test_a_batch_is_read_one_at_a_time_highest_priority_first(tmp_path):
-    rig = Rig(tmp_path)
+async def test_a_batch_is_read_one_at_a_time_highest_priority_first(tmp_path, new_store):
+    rig = Rig(tmp_path, new_store)
     bulk = rig.add("bulk.txt", "# Bulk\n\nCopied with a whole folder, so it can wait its turn.\n")
     with rig.store._tx() as db:
         db.execute("UPDATE documents SET priority = 10 WHERE id = ?", (bulk["id"],))

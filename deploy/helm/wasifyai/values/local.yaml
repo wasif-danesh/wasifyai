@@ -23,13 +23,3 @@ postgres:
 # No GPU on a laptop cluster: ComfyUI (when enabled) must not ask for one.
 comfyui:
   gpuResources: null
-
-# kind on a laptop: the Indic servers fit next to everything else only with small requests (limits unchanged)
-speechIndic:
-  resources:
-    requests: { cpu: 500m, memory: 2Gi }
-    limits: { memory: 8Gi }
-sttIndic:
-  resources:
-    requests: { cpu: 500m, memory: 2Gi }
-    limits: { memory: 6Gi }

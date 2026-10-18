@@ -298,7 +298,7 @@ class VoiceStore:
         with self._connect() as db:
             rows = db.execute(
                 "SELECT * FROM voices WHERE tenant_id = ? AND user_id = ? "
-                "AND (? IS NULL OR kind = ?) ORDER BY created_at DESC, id",
+                "AND (CAST(? AS TEXT) IS NULL OR kind = ?) ORDER BY created_at DESC, id",
                 (tenant, user, kind, kind),
             ).fetchall()
         return [self._voice(r) for r in rows]

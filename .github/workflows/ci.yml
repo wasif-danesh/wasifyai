@@ -44,6 +44,10 @@ jobs:
       - run: pnpm install
       - run: pnpm lint && pnpm typecheck && pnpm test
       - run: pnpm --filter web build   # catches what lint and types cannot: a broken production build
+      # the screens shared with the desktop window, in a real browser: layout checks only (the screenshots are
+      # kept per operating system, see apps/web/playwright.config.ts)
+      - run: pnpm --filter web exec playwright install --with-deps chromium
+      - run: pnpm --filter web test:e2e:layout
   setup:
     # Proves `make setup` installs tools on a clean machine. Ollama is stubbed: its installer is
     # the vendor's own and several GB, and the engine/model steps need a full machine.
@@ -89,7 +93,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: [python, web, helm-kind]
     runs-on: ubuntu-latest
-    # Seven services, two architectures, the arm64 half under QEMU: this is the slowest job by far. The
+    # Eight images, two architectures, the arm64 half under QEMU: this is the slowest job by far. The
     # limit keeps a stuck build from holding the run open for GitHub's six hours.
     timeout-minutes: 120
     permissions: { contents: read, packages: write }
@@ -100,7 +104,7 @@ jobs:
         with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
       - run: |
           sudo apt-get update && sudo apt-get install -y buildah
-          for s in services/api services/media-worker services/speech-indic services/stt-indic apps/web; do
+          for s in services/api services/media-worker products/wasifyai-notebooks apps/web; do
             n=$(basename $s)
             buildah build --platform linux/arm64,linux/amd64 --manifest ghcr.io/${{ github.repository }}/$n:${{ github.sha }} -f $s/Containerfile .
             buildah manifest push --all ghcr.io/${{ github.repository }}/$n:${{ github.sha }} docker://ghcr.io/${{ github.repository }}/$n:${{ github.sha }}
@@ -108,7 +112,7 @@ jobs:
           done
           # The model servers are for the NVIDIA hosts (staging, GCP), so amd64 only: the arm64 build under QEMU
           # would take hours and nothing runs it.
-          for s in services/lipsync-musetalk services/comfyui; do
+          for s in services/comfyui; do
             n=$(basename $s)
             buildah build --platform linux/amd64 --manifest ghcr.io/${{ github.repository }}/$n:${{ github.sha }} -f $s/Containerfile .
             buildah manifest push --all ghcr.io/${{ github.repository }}/$n:${{ github.sha }} docker://ghcr.io/${{ github.repository }}/$n:${{ github.sha }}

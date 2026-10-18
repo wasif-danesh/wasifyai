@@ -1,6 +1,7 @@
 # ADR-0043: Speech to Text
 
 - **Status:** Accepted for the Whisper and IndicConformer slices (chunked search and an MLX server are still Proposed)
+- **Update (2026-10-18):** superseded in part by ADR-0067: the speech to text product was removed and replaced by the voice product (ADR-0066).
 - **Date:** 2026-10-09
 
 ## Context

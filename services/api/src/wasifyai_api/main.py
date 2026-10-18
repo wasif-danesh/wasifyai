@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import tempfile
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -315,7 +316,24 @@ def create_app(
                 "lipsync": describe_voice_item,
             },
             search_notebooks,
+            lambda: available_tools(),
         )
+
+        def available_tools() -> set[str]:
+            """What the assistant may offer the model here: a tool is offered only where what it
+            needs is served (images by the image product, music by the speech runtime, notebooks by
+            the desktop's library), so the model is never told about something that cannot run."""
+            served = set(enabled(reg.products()))
+            tools = {"search_creations"}
+            if "wasifyai-image" in served:
+                tools.add("generate_image")
+            audio = getattr(app.state, "audio", None)
+            if "wasifyai-voice" in served and audio is not None and audio.models("music"):
+                tools.add("make_music")
+            notebooks_here = desktop_profile or getattr(app.state, "notebooks_web", None)
+            if notebooks_here and "wasifyai-notebooks" in served:
+                tools.add("search_notebooks")
+            return tools
 
         def build_graphs(saver: Any) -> dict[str, Any]:
             graphs: dict[str, Any] = {}
@@ -406,6 +424,59 @@ def create_app(
         )
         app.state.engine = db
         app.state.storage = store
+        if not desktop and settings.voice_enabled and store is not None and db is not None:
+            try:
+                from wasifyai_voice.pgstore import PostgresVoiceStore
+
+                from wasifyai_api.hosted_speech import HostedSpeechEngine, load_hosted_models
+            except ImportError:  # the voice product is not part of this build
+                logging.getLogger("wasifyai_api").warning(
+                    "VOICE_ENABLED is set but the voice product is not installed"
+                )
+            else:
+                app.state.voice_store = await asyncio.to_thread(
+                    PostgresVoiceStore, settings.database_url, schema=settings.voice_schema
+                )
+                hosted = None
+                if settings.voice_engine in ("hosted", "both"):
+                    models_file = Path(
+                        settings.voice_models_file or pdir / "wasifyai-voice" / "hosted-models.yaml"
+                    )
+                    hosted = HostedSpeechEngine(
+                        load_hosted_models(models_file),
+                        settings.litellm_base_url,
+                        settings.litellm_api_key,
+                    )
+                if settings.voice_engine == "hosted":
+                    app.state.audio = hosted
+                else:
+                    from wasifyai_api.local_speech import CombinedSpeechEngine, build_local_engine
+
+                    local = build_local_engine(settings, Path(pdir))
+                    app.state.audio = (
+                        CombinedSpeechEngine(local, hosted) if hosted is not None else local
+                    )
+        if not desktop and settings.notebooks_enabled and store is not None and db is not None:
+            try:
+                from wasifyai_notebooks.runtime import WebSetup
+            except ImportError:  # notebooks are not part of this build
+                logging.getLogger("wasifyai_api").warning(
+                    "NOTEBOOKS_ENABLED is set but the notebooks product is not installed"
+                )
+            else:
+                app.state.notebooks_web = WebSetup(
+                    dsn=settings.database_url,
+                    storage=store.backing,
+                    models_dir=Path(settings.notebooks_models_dir or "/models"),
+                    reader_dir=Path(settings.notebooks_reader_dir or "/reader"),
+                    tmp_dir=Path(tempfile.gettempdir()) / "notebooks",
+                    schema=settings.notebooks_schema,
+                    loop=asyncio.get_running_loop(),
+                    gateway_url=settings.litellm_base_url,
+                    gateway_key=settings.litellm_api_key,
+                    embed_model=settings.notebooks_embed_model,
+                    embed_dimension=settings.notebooks_embed_dimension,
+                )
         if desktop:
             app.state.local_files = desktop.local_files
             app.state.desktop_models = desktop.models
@@ -461,6 +532,12 @@ def create_app(
                 await consumer.stop()
             if desktop:
                 await desktop.stop()
+            elif (web_voice := getattr(app.state, "voice_store", None)) is not None:
+                web_audio: Any = getattr(app.state, "audio", None)
+                if web_audio is not None:  # the hosted client, and the local models' memory
+                    close = getattr(web_audio, "close", None)
+                    await (close() if close is not None else web_audio.stop())
+                await asyncio.to_thread(web_voice.close)
             if getattr(app.state, "runs", None):
                 await app.state.runs.aclose()
             if owns_conn and conn is not None:

@@ -13,6 +13,8 @@ from wasifyai_platform_sdk import RunError
 from wasifyai_voice import dubbing
 from wasifyai_voice.runtime import store_for
 
+pytestmark = pytest.mark.usefixtures("use_backends")  # on SQLite and on Postgres
+
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
 
 SCRIPT = [

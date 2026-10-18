@@ -146,19 +146,13 @@ async def test_unreachable_backend_retries_then_gives_up():
 
 async def test_stub_runner_makes_placeholder_files_without_a_gpu():
     rig = Rig(StubRunner())
-    audio = job()
-    audio.outputs = {
-        "image": {"node": "1", "type": "image"},
-        "audio": {"node": "2", "type": "audio"},
-    }  # noqa: E702
-    result = await rig.p.process(audio)
+    picture = job()
+    picture.outputs = {"image": {"node": "1", "type": "image"}}
+    result = await rig.p.process(picture)
     assert result.status == "completed"
     assert (
         await rig.storage.get(object_key("t1", "p1", "u1", result.outputs["image"].key))
     ).startswith(b"\x89PNG")
-    assert (
-        await rig.storage.get(object_key("t1", "p1", "u1", result.outputs["audio"].key))
-    ).startswith(b"RIFF")
 
 
 async def test_one_job_at_a_time_on_a_gpu():

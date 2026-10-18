@@ -68,5 +68,6 @@
 | [0064](0064-model-hub-discover-and-on-device.md) | A model hub: discover open-weight models and see what is on the device | Accepted |
 | [0065](0065-notebooks-source-grounded-workspace.md) | Notebooks: a NotebookLM-style, source-grounded workspace built on SurfSense's local code | Accepted (E0 gate) |
 | [0066](0066-pluggable-speech-music-avatar-models.md) | Speech, music and lip sync run any model the person picks: descriptors, engine adapters and one dropdown | Accepted |
+| [0067](0067-retire-the-older-web-products.md) | Retire the older music, speech and lip sync web products and delete what they made | Accepted |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

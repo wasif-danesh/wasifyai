@@ -4,7 +4,6 @@
 # 622c1ded8), written for this store. See ../../PROVENANCE.md.
 """The text a Studio format is written from: the ticked sources, cut to the model's window."""
 
-import json
 import sqlite3
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -60,12 +59,15 @@ def gather(
     `MIN_SHARE_CHARS` the selection's best passages for the query are taken instead, and only
     sources that hold one are returned.
     """
+    wanted = list(dict.fromkeys(document_ids))
+    if not wanted:
+        return []
     rows = {
         r[0]: (r[1], r[2] or "")
         for r in db.execute(
             "SELECT id, title, content FROM documents WHERE notebook_id = ? "
-            "AND status = 'ready' AND id IN (SELECT value FROM json_each(?))",
-            (notebook_id, json.dumps(list(dict.fromkeys(document_ids)))),
+            f"AND status = 'ready' AND id IN ({','.join('?' * len(wanted))})",
+            (notebook_id, *wanted),
         )
     }
     ids = [i for i in dict.fromkeys(document_ids) if i in rows and rows[i][1].strip()]

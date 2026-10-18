@@ -13,3 +13,8 @@
 **/.ruff_cache
 .DS_Store
 docs
+**/target
+.claude
+engine-bundle
+**/test-results
+**/playwright-report

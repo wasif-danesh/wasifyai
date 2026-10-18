@@ -307,21 +307,6 @@ class BackendRouter:
         b = await self._binding(job)
         from wasifyai_media_worker.processor import ComfyRunner  # circular at import time
 
-        # a lip sync is real exactly when its server is configured (a placeholder otherwise)
-        if b is None and job.workflow == "lipsync" and self._s.lipsync_server_url:
-            from wasifyai_media_worker.lipsync import LipSyncRunner
-
-            return LipSyncRunner(self._s.lipsync_server_url, self._s.lipsync_timeout_s, self._http)
-        if b is None and job.capability.startswith("speech.") and not self._s.speech_is_stub:
-            if job.capability == "speech.transcribe":
-                from wasifyai_media_worker.transcribe import OpenAITranscriptionRunner
-
-                return OpenAITranscriptionRunner(
-                    self._s.speech_server_map, self._s.job_timeout_s, self._http
-                )
-            from wasifyai_media_worker.speech import OpenAISpeechRunner
-
-            return OpenAISpeechRunner(self._s.speech_server_map, self._s.job_timeout_s, self._http)
         if b is None:
             video_url = self._video_url(job)
             return self._local_runner(video_url, ComfyRunner) if video_url else self._default
@@ -349,8 +334,6 @@ class BackendRouter:
 
     def _video_url(self, job: JobRequest) -> str:
         """The separate ComfyUI for video jobs, if set (never in stub mode)."""
-        if job.workflow == "lipsync":  # not a ComfyUI job: it has no graph to send
-            return ""
         if job.capability.startswith("video.") and self._s.comfyui_mode != "stub":
             return self._s.comfyui_video_base_url
         return ""

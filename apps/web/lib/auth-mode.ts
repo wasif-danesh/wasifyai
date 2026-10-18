@@ -11,8 +11,9 @@ export function safeNext(value: string | null | undefined): string {
   return value;
 }
 
-/** Pages anyone may open without signing in: the home page and the sign-in page. */
-const PUBLIC_PATHS = new Set(["/", "/signin"]);
+/** Pages anyone may open without signing in: the page that shows what can be made, and the sign-in page. The home
+ * page is the assistant, which needs a person. */
+const PUBLIC_PATHS = new Set(["/explore", "/signin"]);
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.has(pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname);
@@ -38,5 +39,7 @@ export function signInReason(next: string): string {
   if (next === "/video" || next.startsWith("/video/")) {
     return "Sign in to create videos and keep them.";
   }
+  if (next === "/" || next.startsWith("/chat/"))
+    return "Sign in to chat and keep your conversations.";
   return "Sign in to continue.";
 }

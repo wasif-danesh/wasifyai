@@ -36,6 +36,7 @@ from wasifyai_platform_sdk import (
 
 from wasifyai_voice import audio_input, consent, dubbing
 from wasifyai_voice.runtime import store_for
+from wasifyai_voice.safeguards import DUBS, metered
 from wasifyai_voice.store import NotFound
 from wasifyai_voice.tools import Kit, Refuse, Source, SourceMissing
 
@@ -258,6 +259,9 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
             return refuse_with(e.code, str(e))
         except SourceMissing as e:
             return refuse_with("unknown_source", e.message)
+        # ADR-0047: the words that will be said in the other language are moderated before speaking
+        if refusal := await kit.guard.words(*(s.text for s in lines), kind="dubbed lines"):
+            return refuse_with(*refusal)
         voice_from = str(state.get("voice_from") or "builtin")
         basis = state.get("speaker_basis")
         if voice_from == "speaker" and basis not in consent.STATEMENTS:
@@ -451,4 +455,9 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
         with wave.open(io.BytesIO(wav)) as w:
             return w.getnframes() / float(w.getframerate())
 
-    return {"dub_script": dub_script, "dub": dub}
+    # the script costs a transcription and a separation, so it stops at the limit too; a dub is
+    # counted once it is made
+    return {
+        "dub_script": metered(caps, kit.guard, refuse_with, DUBS, dub_script, count=False),
+        "dub": metered(caps, kit.guard, refuse_with, DUBS, dub),
+    }

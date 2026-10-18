@@ -132,8 +132,11 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
 
   return (
     <div className="mx-auto grid w-full min-w-0 max-w-3xl gap-6">
-      <section aria-label="New voice" className="grid gap-4 rounded-2xl border bg-card p-5">
-        <div role="tablist" aria-label="How to make the voice" className="flex gap-2">
+      <section
+        aria-label="New voice"
+        className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 rounded-2xl border bg-card p-5"
+      >
+        <div role="tablist" aria-label="How to make the voice" className="flex flex-wrap gap-2">
           {(
             [
               ["design", "Describe a voice"],
@@ -175,7 +178,13 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
             />
             <div className="flex flex-wrap gap-2">
               {EXAMPLES.map((x) => (
-                <Button key={x} size="xs" variant="outline" onClick={() => setDescription(x)}>
+                <Button
+                  key={x}
+                  size="xs"
+                  variant="outline"
+                  className="h-auto max-w-full whitespace-normal py-1 text-start"
+                  onClick={() => setDescription(x)}
+                >
                   {x}
                 </Button>
               ))}

@@ -73,3 +73,8 @@ apps/desktop/engine-bundle/
 
 # listening samples (docs/listening): made on a computer for listening, not for the repository
 docs/listening/samples/
+
+# Playwright output
+apps/web/e2e/results/
+apps/web/test-results/
+apps/web/playwright-report/

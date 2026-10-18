@@ -1,7 +1,7 @@
 """Capability interfaces. Graphs ask for capabilities, never models (ADR-0010, rule 4).
 
 async for delta in caps.text.stream("lyrics", system, prompt): ...
-handle = await caps.music.generate(lyrics=..., style=..., duration_s=60)
+handle = await caps.image.generate(prompt=..., width=1024, height=1024)
 key = await caps.storage.put("songs/42/audio.mp3", data)
 """
 
@@ -127,7 +127,7 @@ class TextCapabilities:
 
 
 class MediaCapabilities:
-    """`caps.image` / `caps.music` / `caps.video`: generate() enqueues a job, returns a handle."""
+    """`caps.image` / `caps.video`: generate() enqueues a job, returns a handle."""
 
     def __init__(
         self,
@@ -145,18 +145,6 @@ class MediaCapabilities:
     async def edit(self, **inputs: Any) -> JobHandle:
         """Change a picture the user uploaded: pass its storage key as `image_key`."""
         return await self._run("edit", inputs)
-
-    async def synthesize(self, **inputs: Any) -> JobHandle:
-        """Say a text aloud (ADR-0042): `text`, `language`, `engine`, `voice` and `model`."""
-        return await self._run("synthesize", inputs)
-
-    async def transcribe(self, **inputs: Any) -> JobHandle:
-        """Turn an uploaded recording into text (ADR-0043): `audio_key`, `language`, `model`."""
-        return await self._run("transcribe", inputs)
-
-    async def lipsync(self, **inputs: Any) -> JobHandle:
-        """Make a character picture speak or sing (ADR-0044): `image_key` and `audio_key`."""
-        return await self._run("lipsync", inputs)
 
     async def animate(self, **inputs: Any) -> JobHandle:
         """Make a clip from a picture the user uploaded: pass its storage key as `image_key`."""
@@ -177,9 +165,7 @@ class MediaCapabilities:
 class Capabilities:
     text: TextCapabilities
     image: MediaCapabilities
-    music: MediaCapabilities
     video: MediaCapabilities
-    speech: MediaCapabilities
     storage: ScopedStorage | None = None
     rag: RagStore | None = None
     config: ProductConfig | None = None  # this product's validated config (quotas, settings)

@@ -11,17 +11,11 @@ export type DoneEvent = components["schemas"]["DoneEvent"];
 export type RunRequest = components["schemas"]["RunRequest"];
 export type ResumeRequest = components["schemas"]["ResumeRequest"];
 
-// wasifyai-music's read API (product-provided routes)
-export type SongSummary = components["schemas"]["SongSummary"];
-export type SongDetail = components["schemas"]["SongDetail"];
-export type SongPage = components["schemas"]["SongPage"];
 
 // The admin area and the caller's identity
 export type Me = components["schemas"]["Me"];
 export type AdminUser = components["schemas"]["AdminUser"];
 export type AdminUserPage = components["schemas"]["AdminUserPage"];
-export type AdminSong = components["schemas"]["AdminSong"];
-export type AdminSongPage = components["schemas"]["AdminSongPage"];
 export type UsageReport = components["schemas"]["UsageReport"];
 export type AuditEntry = components["schemas"]["AuditEntry"];
 export type AuditPage = components["schemas"]["AuditPage"];
@@ -50,25 +44,11 @@ export type UploadResult = components["schemas"]["UploadResult"];
 // wasifyai-video's read API and the prompt enhancer every product shares
 export type VideoSummary = components["schemas"]["VideoSummary"];
 export type VideoPage = components["schemas"]["VideoPage"];
-export type LipSyncSummary = components["schemas"]["LipSyncSummary"];
-export type LipSyncPage = components["schemas"]["LipSyncPage"];
 export type EnhanceResult = components["schemas"]["EnhanceOut"];
 
 // Search over My creations (ADR-0041)
 export type SearchHit = components["schemas"]["SearchHit"];
 export type SearchResponse = components["schemas"]["SearchResponse"];
 
-// wasifyai-tts: the voice catalog and a user's speech results (ADR-0042)
-export type SpeechSummary = components["schemas"]["SpeechSummary"];
-export type SpeechPage = components["schemas"]["SpeechPage"];
-export type VoiceCatalog = components["schemas"]["VoiceCatalog"];
-export type LanguageChoice = components["schemas"]["LanguageChoice"];
-export type VoiceChoice = components["schemas"]["VoiceChoice"];
 
-// wasifyai-stt: the languages to choose from and a user's transcripts (ADR-0043)
-export type SpokenLanguages = components["schemas"]["LanguageCatalog"];
-export type SpokenLanguage = components["schemas"]["SpokenLanguage"];
-export type TranscriptSummary = components["schemas"]["TranscriptSummary"];
-export type TranscriptDetail = components["schemas"]["TranscriptDetail"];
-export type TranscriptPage = components["schemas"]["TranscriptPage"];
 export type MediaUploadResult = components["schemas"]["MediaUploadResult"];

@@ -10,5 +10,7 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     include: ["**/*.test.{ts,tsx}"],
     exclude: ["node_modules", ".next", "e2e"],
+    // Component tests that open a Radix select take about 0.5 s here and over 5 s on a loaded CI runner.
+    testTimeout: 15_000,
   },
 });

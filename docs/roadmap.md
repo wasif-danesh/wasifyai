@@ -4,6 +4,11 @@ Build a **walking skeleton** first: the thinnest slice through every layer, depl
 Kubernetes early. The riskiest assumptions are portability and the delivery pipeline, so
 prove them while the code is small.
 
+**Current focus (2026-10-18): the desktop app.** Next: `docs/phase4-agent-plan.md` (an MCP server, an MCP client and an
+assistant that knows the product; ADR-0068 to ADR-0071, Accepted) and `docs/phase5-agent-training-compose-plan.md`
+(an agent on Hermes, training, Compose; ADR-0072 to ADR-0077, Proposed). What is unverified or open on the web side is in
+`docs/backlog.md`.
+
 ## v1 plan (decided 2026-10-10)
 
 v1 is **not a production launch**. Feature work is frozen; the aim is to prove the whole system deploys and works,

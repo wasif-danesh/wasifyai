@@ -19,7 +19,7 @@
 | [0015](0015-phase-0-tooling-choices.md) | Phase 0 tooling choices | Accepted |
 | [0016](0016-helm-chart-structure.md) | One umbrella Helm chart, plain Ingress, in-cluster state for non-prod | Accepted |
 | [0017](0017-platform-core-design.md) | Platform core: capability layer, usage events, storage and RAG | Accepted |
-| [0018](0018-default-text-model-gemma4-e4b.md) | Default text model: Gemma 4 E4B | Accepted |
+| [0018](0018-default-text-model-gemma4-e4b.md) | Default text model: Gemma 4 E4B | Accepted (default superseded alias by alias by 0078) |
 | [0019](0019-cover-image-model-flux2-klein-4b.md) | Cover image model: FLUX.2 [klein] 4B | Accepted |
 | [0020](0020-multimodal-input.md) | Multimodal input in the capability layer | Accepted |
 | [0021](0021-media-pipeline-redis-streams.md) | Media pipeline on Redis Streams | Accepted |
@@ -69,5 +69,16 @@
 | [0065](0065-notebooks-source-grounded-workspace.md) | Notebooks: a NotebookLM-style, source-grounded workspace built on SurfSense's local code | Accepted (E0 gate) |
 | [0066](0066-pluggable-speech-music-avatar-models.md) | Speech, music and lip sync run any model the person picks: descriptors, engine adapters and one dropdown | Accepted |
 | [0067](0067-retire-the-older-web-products.md) | Retire the older music, speech and lip sync web products and delete what they made | Accepted |
+| [0068](0068-one-action-catalogue.md) | One action catalogue: everything the product can do, described once | Accepted |
+| [0069](0069-mcp-server.md) | An MCP server: Claude Code, Codex and OpenCode can use the app | Accepted |
+| [0070](0070-mcp-client.md) | An MCP client: the assistant can use other people's MCP servers | Accepted |
+| [0071](0071-assistant-that-knows-the-product.md) | An assistant that knows the product, guides, and runs it when the person clicks | Accepted |
+| [0072](0072-agent-system-on-hermes.md) | An agent system for long tasks, built on Hermes Agent | Accepted |
+| [0073](0073-training-platform.md) | Training in the app, made simple: one platform, Unsloth as the trainer, three simple cards | Accepted |
+| [0074](0074-language-model-training.md) | Teach my assistant to write like me: language-model fine-tuning for non-technical people | Accepted |
+| [0075](0075-decision-model-training.md) | Training a decision model: teach the app to sort and judge things | Accepted |
+| [0076](0076-image-lora-training.md) | Make my own character or style: image LoRA from nothing but pictures (automatic captions and magic word) | Accepted |
+| [0077](0077-compose-programmatic-video.md) | Compose (experimental): videos written as code, rendered deterministically | Accepted |
+| [0078](0078-one-default-model-qwen35-9b.md) | One default model for the app: Qwen3.5-9B (switch alias by alias after checks) | Accepted |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

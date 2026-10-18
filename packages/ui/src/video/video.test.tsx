@@ -177,6 +177,12 @@ describe("VideoLibrary", () => {
   });
 
   it("shows a clip being made and a failed one, and looks again while one is being made", async () => {
+    // The later polls answer only when the test says so: on a slow runner a 20 ms poll could otherwise
+    // finish the clip before the failed one is opened.
+    let finish: () => void = () => {};
+    const finished = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
     const list = vi
       .fn()
       .mockResolvedValueOnce({
@@ -193,7 +199,10 @@ describe("VideoLibrary", () => {
         ],
         next_before: null,
       })
-      .mockResolvedValue({ videos: [clip({ id: "w", prompt: "Busy" })], next_before: null });
+      .mockImplementation(async () => {
+        await finished;
+        return { videos: [clip({ id: "w", prompt: "Busy" })], next_before: null };
+      });
     const user = userEvent.setup();
     render(<VideoLibrary videos={api({ list })} pollMs={20} />);
 
@@ -203,6 +212,7 @@ describe("VideoLibrary", () => {
     await user.click(screen.getByRole("button", { name: "Close" }));
 
     // the poll finds it finished
+    finish();
     await waitFor(() => expect(screen.queryByText("Being made")).toBeNull());
     expect(list.mock.calls.length).toBeGreaterThan(1);
   });

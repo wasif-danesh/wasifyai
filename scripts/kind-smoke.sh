@@ -14,7 +14,7 @@ check "usage_events table exists" "kubectl -n $NS exec statefulset/wasifyai-post
 check "rag_chunks table + pgvector extension exist" "kubectl -n $NS exec statefulset/wasifyai-postgres -- psql -U wasifyai -d wasifyai -tAc \"select to_regclass('public.rag_chunks'), (select count(*) from pg_extension where extname='vector')\" | grep -q 'rag_chunks|1'"
 check "web serves / (HTTP 200)" "curl -fsS -m 10 -o /dev/null http://localhost:3000/"
 
-check "Image page renders" "curl -fsS -m 20 http://localhost:3000/image | grep -q 'an image'"
+check "Image page renders" "curl -fsS -m 20 http://localhost:3000/image | grep -q 'data-workspace'"
 check "images API answers through the BFF" "curl -fsS -m 10 http://localhost:3000/api/products/wasifyai-image/images | grep -q '\"images\"'"
 check "uploading something that is not a picture is refused" "test \"\$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: image/png' --data-binary 'not a picture' http://localhost:3000/api/products/wasifyai-image/uploads/images)\" = 422"
 
@@ -24,7 +24,7 @@ check "prompt enhancing needs a known kind" "test \"\$(curl -s -o /dev/null -w '
 
 # Model aliases live in LiteLLM's database and are seeded by the API (ADR-0025). The local overlay runs
 # with AUTH_MODE=stub, where the dev user is an admin, so ask the API from inside its own pod.
-check "default model aliases are seeded in the gateway" "kubectl -n $NS exec deploy/wasifyai-api -c api -- python -c \"import urllib.request,json,sys; m=json.load(urllib.request.urlopen('http://localhost:8000/admin/models',timeout=20))['models']; sys.exit(0 if len(m)==8 and all(x['source']=='default' for x in m) else 1)\""
+check "default model aliases are seeded in the gateway" "kubectl -n $NS exec deploy/wasifyai-api -c api -- python -c \"import urllib.request,json,sys; m=json.load(urllib.request.urlopen('http://localhost:8000/admin/models',timeout=20))['models']; sys.exit(0 if len(m)==10 and all(x['source']=='default' for x in m) else 1)\""
 
 # Media pipeline: queue -> worker (stub mode) -> object storage -> completion -> graph resumes.
 # Needs no LLM or GPU, so it also runs in CI.

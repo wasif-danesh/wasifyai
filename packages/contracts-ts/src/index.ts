@@ -11,7 +11,6 @@ export type DoneEvent = components["schemas"]["DoneEvent"];
 export type RunRequest = components["schemas"]["RunRequest"];
 export type ResumeRequest = components["schemas"]["ResumeRequest"];
 
-
 // The admin area and the caller's identity
 export type Me = components["schemas"]["Me"];
 export type AdminUser = components["schemas"]["AdminUser"];
@@ -49,6 +48,5 @@ export type EnhanceResult = components["schemas"]["EnhanceOut"];
 // Search over My creations (ADR-0041)
 export type SearchHit = components["schemas"]["SearchHit"];
 export type SearchResponse = components["schemas"]["SearchResponse"];
-
 
 export type MediaUploadResult = components["schemas"]["MediaUploadResult"];

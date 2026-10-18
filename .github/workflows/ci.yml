@@ -27,6 +27,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --all-packages
+      # The voice product converts recordings with ffmpeg (macOS uses afconvert); the runner has neither.
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: uv run ruff check . && uv run ruff format --check .
       - run: uv run pyright
       - name: Migrate (also proves 0001-0003 apply on an empty database)

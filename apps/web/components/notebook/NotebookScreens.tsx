@@ -138,7 +138,7 @@ export function NotebookScreen({ notebook }: { notebook: string }) {
   }
 
   return (
-    <div data-workspace className="h-[calc(100dvh-3.5rem)] min-h-[32rem]">
+    <div data-workspace className="h-[calc(100dvh-3.5rem)] min-h-[32rem] min-w-0">
       <NotebookPlaceProvider place="hosted">
         <NotebookWorkspace
           api={webNotebooks}

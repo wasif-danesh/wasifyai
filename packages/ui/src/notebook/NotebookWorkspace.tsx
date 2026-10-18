@@ -251,7 +251,7 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
         {tab("studio", "Studio")}
       </div>
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[19rem_minmax(0,1fr)_17rem] xl:grid-cols-[21rem_minmax(0,1fr)_19rem]">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] lg:grid-cols-[19rem_minmax(0,1fr)_17rem] xl:grid-cols-[21rem_minmax(0,1fr)_19rem]">
         <div className={cn("min-h-0 border-e", pane !== "sources" && "hidden lg:block")}>
           {viewing && notebookId ? (
             <SourceViewer

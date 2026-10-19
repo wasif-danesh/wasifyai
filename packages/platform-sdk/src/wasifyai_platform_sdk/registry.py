@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from importlib.metadata import entry_points
 from typing import Any
 
+from wasifyai_platform_sdk.actions.library import LibraryKind
+from wasifyai_platform_sdk.actions.model import Action
 from wasifyai_platform_sdk.capabilities import Capabilities
 from wasifyai_platform_sdk.routes import RouteFactory
 from wasifyai_platform_sdk.search import IndexSourceFactory
@@ -22,6 +24,10 @@ class CheckResult:
     ran: int = 0
 
 
+# () -> the actions a product declares (ADR-0068), and the kinds of creation it keeps
+ActionProvider = Callable[[], list[Action]]
+LibraryProvider = Callable[[], list[LibraryKind]]
+
 # check(caps) -> CheckResult, run with capabilities bound to a candidate model (ADR-0025). A product
 # registers one for a capability whose model must be vetted before an admin can change it.
 ModelCheck = Callable[[Capabilities], Awaitable[CheckResult]]
@@ -33,6 +39,8 @@ class GraphRegistry:
         self._routes: dict[str, RouteFactory] = {}
         self._checks: dict[tuple[str, str], ModelCheck] = {}
         self._sources: dict[str, IndexSourceFactory] = {}
+        self._actions: dict[str, ActionProvider] = {}
+        self._library: dict[str, LibraryProvider] = {}
 
     def register(self, product_id: str, builder: GraphBuilder) -> None:
         if product_id in self._builders:
@@ -50,6 +58,23 @@ class GraphRegistry:
 
     def index_sources(self) -> dict[str, IndexSourceFactory]:
         return dict(self._sources)
+
+    def add_actions(self, product_id: str, provider: ActionProvider) -> None:
+        """Declare what this product can do (ADR-0068). A product without actions is not exposed to
+        the assistant or to MCP. `provider()` returns the `Action`s; it is called once, when the
+        catalogue is built."""
+        self._actions[product_id] = provider
+
+    def add_library_kinds(self, product_id: str, provider: LibraryProvider) -> None:
+        """Let the `library.*` actions reach what this product keeps (one `LibraryKind` per kind of
+        creation, ADR-0041 and ADR-0068)."""
+        self._library[product_id] = provider
+
+    def action_providers(self) -> dict[str, ActionProvider]:
+        return dict(self._actions)
+
+    def library_providers(self) -> dict[str, LibraryProvider]:
+        return dict(self._library)
 
     def add_check(self, product_id: str, capability: str, check: ModelCheck) -> None:
         """Vet any model that is about to serve `capability` (for example `text.moderate`)."""

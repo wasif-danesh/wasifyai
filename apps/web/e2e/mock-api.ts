@@ -153,7 +153,24 @@ export function sseDone(outputs: Record<string, unknown>, node: string): string 
 }
 
 /** Answer every /api call the image and video screens make. */
-export async function mockApi(page: Page): Promise<void> {
+/** Three files the engine could not read (no document reader), with titles as long as real file names. */
+export const UNREADABLE_SOURCES = [
+  "PESTLE Template for the Marketing Plan 2026.docx",
+  "Web Enrolment System Requirements v3 (final).pdf",
+  "keyboard-shortcuts-reference-card-macos.pptx",
+].map((title, n) => ({
+  ...SOURCES[0],
+  id: `u${n + 1}`,
+  title,
+  status: "failed",
+  error:
+    "Reading this kind of file needs the document reader. Set it up in Settings, then read the source again.",
+}));
+
+export async function mockApi(
+  page: Page,
+  opts: { unreadableSources?: boolean } = {},
+): Promise<void> {
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^\/api/, "");
@@ -199,7 +216,8 @@ export async function mockApi(page: Page): Promise<void> {
       const found = NOTEBOOKS.find((n) => n.id === id);
       if (!found) return json(route, { detail: "notebook not found" }, 404);
       if (rest === "") return json(route, found);
-      if (rest === "/documents") return json(route, SOURCES);
+      if (rest === "/documents")
+        return json(route, opts.unreadableSources ? UNREADABLE_SOURCES : SOURCES);
       if (rest === "/folders" || rest === "/conversations" || rest === "/artifacts") {
         return json(route, []);
       }

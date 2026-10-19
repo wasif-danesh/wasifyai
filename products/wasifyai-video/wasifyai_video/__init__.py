@@ -4,6 +4,7 @@ from wasifyai_platform_sdk import GraphRegistry
 
 
 def register(registry: GraphRegistry) -> None:
+    from wasifyai_video.actions import actions, library_kinds
     from wasifyai_video.canary import moderation_check, picture_check
     from wasifyai_video.graphs.video import build_video
     from wasifyai_video.index import video_index_source
@@ -11,6 +12,8 @@ def register(registry: GraphRegistry) -> None:
 
     registry.register("wasifyai-video", build_video)
     registry.add_routes("wasifyai-video", build_routes)
+    registry.add_actions("wasifyai-video", actions)  # what agents may ask (ADR-0068)
+    registry.add_library_kinds("wasifyai-video", library_kinds)
     registry.add_index_source("wasifyai-video", video_index_source)  # searchable in My creations
     # whatever models serve the guardrail must pass these first (ADR-0025)
     registry.add_check("wasifyai-video", "text.moderate", moderation_check)

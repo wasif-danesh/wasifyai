@@ -47,6 +47,7 @@ from wasifyai_platform_sdk import (
 )
 from wasifyai_platform_sdk.providers.litellm import LiteLLMTextProvider
 
+from wasifyai_api.actions_engine import build_executor
 from wasifyai_api.admin import AdminStore, PostgresAdminStore
 from wasifyai_api.admin import me_router as me_router
 from wasifyai_api.admin import router as admin_router
@@ -317,6 +318,9 @@ def create_app(
             },
             search_notebooks,
             lambda: available_tools(),
+            lambda: app.state,
+            lambda: set(enabled(reg.products())),
+            lambda: route_deps,
         )
 
         def available_tools() -> set[str]:
@@ -335,6 +339,17 @@ def create_app(
                 tools.add("search_notebooks")
             return tools
 
+        # The action catalogue and its one executor (ADR-0068): the assistant runs its tools
+        # through it; MCP will. Audit and approvals live in the database the engine already has.
+        executor = build_executor(
+            reg,
+            tool_host,
+            served=enabled(reg.products()),
+            db=None if injected else db,
+            usage=recorder,
+        )
+        app.state.actions = executor
+
         def build_graphs(saver: Any) -> dict[str, Any]:
             graphs: dict[str, Any] = {}
             for product_id in enabled(reg.products()):
@@ -346,6 +361,7 @@ def create_app(
                     caps.rag = RagService(db, lambda texts, c=caps: c.text.embed("embed", texts))
                 caps.indexer = ContextIndexer(app.state.creation_index)
                 caps.extras["tool_host"] = tool_host  # the assistant's tools (ADR-0057)
+                caps.extras["actions"] = executor  # ...which run as actions (ADR-0068)
                 caps.extras["app_state"] = app.state  # notebooks reach their library through it
                 app.state.caps[product_id] = caps
                 graphs[product_id] = reg.build(product_id, caps, saver)

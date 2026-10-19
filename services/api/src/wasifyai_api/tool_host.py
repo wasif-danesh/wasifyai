@@ -8,7 +8,8 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
-from wasifyai_platform_sdk import ToolUnavailable, require_context
+from wasifyai_platform_sdk import ToolUnavailable, VoiceEngineError, require_context
+from wasifyai_platform_sdk.actions import Need, Readiness
 
 log = logging.getLogger(__name__)
 
@@ -25,12 +26,18 @@ class ApiToolHost:
         describers: dict[str, Describer] | None = None,
         notebook_search: NotebookSearch | None = None,
         available: Callable[[], set[str]] | None = None,
+        state: Callable[[], Any] | None = None,
+        served: Callable[[], set[str]] | None = None,
+        route_deps: Callable[[], Any] | None = None,
     ):
         self._runs = runs
         self._index = index
         self._describers = describers or {}
         self._notebook_search = notebook_search
         self._available = available
+        self._state = state
+        self._served = served
+        self._route_deps = route_deps
 
     def available_tools(self) -> set[str] | None:
         """The tools this deployment can run (the assistant offers the model only these); `None`
@@ -69,3 +76,61 @@ class ApiToolHost:
         return await self._notebook_search(
             ctx.tenant_id, ctx.user_id, query.strip()[:300], max(1, min(limit, 8))
         )
+
+    # ---- what the action executor asks (ADR-0068) --------------------------------------------
+
+    @property
+    def deps(self) -> Any:
+        """The route deps product code reaches its stores through (app state, storage, search)."""
+        return self._route_deps() if self._route_deps else None
+
+    def _app_state(self) -> Any:
+        return self._state() if self._state else None
+
+    async def readiness(self, need: Need) -> Readiness:
+        """Whether one thing an action requires is ready on this computer, and if not, the step
+        that fixes it or the reason it cannot be here."""
+        state = self._app_state()
+        if need.kind == "product":
+            served = self._served() if self._served else None
+            if served is not None and need.name not in served:
+                return Readiness.unavailable(f"{need.name} is not part of this build.")
+            return Readiness.ready()
+        if need.kind == "model":
+            audio = getattr(state, "audio", None)
+            if audio is None:
+                return Readiness.unavailable("Speech and music are not available here yet.")
+            try:
+                audio.resolve(need.name, None)
+            except VoiceEngineError as e:
+                if e.code in ("runtime_missing", "model_missing", "no_model"):
+                    return Readiness.needs_setup(e.message, ui="models")
+                return Readiness.unavailable(e.message)
+            return Readiness.ready()
+        if need.kind == "runtime" and need.name == "models":
+            if getattr(state, "desktop_models", None) is None:
+                return Readiness.unavailable("Models are managed in the desktop app.")
+            return Readiness.ready()
+        if need.kind == "notebooks":
+            here = getattr(state, "desktop_dir", None) or getattr(state, "notebooks_web", None)
+            if not here:
+                return Readiness.unavailable("Notebooks are not available here.")
+            return Readiness.ready()
+        if need.kind == "chat":
+            return Readiness.ready()  # a missing chat model is reported by the run itself
+        return Readiness.unavailable(f"This computer cannot check {need}.")
+
+    def facts(self) -> dict[str, Any]:
+        """Small facts for `app.status`: nothing private, no paths of the person's files."""
+        state = self._app_state()
+        facts: dict[str, Any] = {}
+        svc = getattr(state, "desktop_models", None)
+        if svc is not None:
+            from wasifyai_api.desktop_models import free_disk_bytes
+
+            facts["disk_free_bytes"] = free_disk_bytes(svc.models_dir)
+            facts["models_ready"] = sum(
+                1 for e in svc.catalogue.values() if all(svc.locate(f) is not None for f in e.files)
+            )
+        facts["export_folder_set"] = getattr(state, "export_dir", None) is not None
+        return facts

@@ -8,8 +8,12 @@ left open there). This plan refines three requests from the owner:
 3. An **assistant "trained" on the product** that guides ("How can I do a text to speech?" gives steps, then asks
    for the text and offers a button that makes the file) and executes.
 
-Decisions are in four ADRs, all **Proposed** until the owner says yes: ADR-0068 (action catalogue),
-ADR-0069 (MCP server), ADR-0070 (MCP client), ADR-0071 (assistant that knows the product).
+Decisions are in four ADRs, **Accepted 2026-10-18**: ADR-0068 (action catalogue), ADR-0069 (MCP server),
+ADR-0070 (MCP client), ADR-0071 (assistant that knows the product).
+
+**Status (2026-10-19):** stage A1 is built and unstaged for review: the catalogue (38 actions), the executor, the
+audit and approval stores, the help drafts and the tests that tie them to the menu. See `docs/actions.md`. Stages A2
+onward are not started; the spikes S1 and S3 run on their own.
 
 ## What the refinement changed
 
@@ -63,7 +67,7 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
 | S4 | Secrets: Python `keyring` in the engine, or the shell as owner? OAuth with a loopback callback in a Tauri app; Client ID Metadata Documents support in the SDK | A working login against one real remote server and the decision |
 | S5 | A macOS sandbox for stdio servers: possible without breaking the app's own sandbox and notarisation? | A yes/no with a test profile, or "later" with the reason |
 
-### Stage A1. The action catalogue and executor (M) — foundation
+### Stage A1. The action catalogue and executor (M) — foundation — **built 2026-10-19** (`docs/actions.md`)
 
 - `wasifyai_platform_sdk.actions`: the `Action` model, registry, `requires` resolver, `run_action` with approvals,
   audit and `origin`; the `ActionResult` type; `docs/contracts/actions.json` export.
@@ -76,6 +80,8 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
   auto; usage and audit entries exist; no change visible to the person yet.
 
 ### Stage A2. The assistant guides and proposes (M) — first thing the owner sees
+
+> **Note (2026-10-19, ADR-0082):** the chat UI moves to assistant-ui. Build A2's backend (help corpus, `propose_action`, `confirm_action`) as planned, but write its **cards as assistant-ui tool UIs** after chat stage CU1 (`docs/chat-ui-migration-plan.md`), not as new `ToolCard` code.
 
 - The meta-tools (`how_to`, `app_status`, `propose_action`, `open_screen`), the help retrieval, the system prompt
   map generated from the catalogue.

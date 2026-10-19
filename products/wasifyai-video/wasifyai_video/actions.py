@@ -1,0 +1,209 @@
+"""What the video product can do, for the action catalogue (ADR-0068): make a clip from words,
+make a picture of the library move, and the library's clips as a kind of creation."""
+
+import asyncio
+from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+from wasifyai_platform_sdk.actions import (
+    Action,
+    ActionContext,
+    ActionRefused,
+    LibraryItem,
+    LibraryKind,
+    Outcome,
+    RunBinding,
+    need_product,
+)
+from wasifyai_platform_sdk.actions.helpers import need_deps, stage_picture
+
+from wasifyai_video.routes import file_name, save_copy
+from wasifyai_video.schemas import MAX_PROMPT_CHARS
+from wasifyai_video.videos import VideoRecord, video_store
+
+PRODUCT_ID = "wasifyai-video"
+Shape = Literal["landscape", "portrait", "square"]
+
+
+class Strict(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class GenerateIn(Strict):
+    prompt: str = Field(
+        min_length=1, max_length=MAX_PROMPT_CHARS,
+        description="What happens in the clip, in clear concrete words, in English.",
+    )  # fmt: skip
+    shape: Shape = Field("landscape", description="The shape of the picture.")
+    seconds: Literal[2, 5] = Field(2, description="How long the clip is.")
+
+
+class AnimateIn(Strict):
+    image_id: str = Field(min_length=1, max_length=64, description="The picture to set moving.")
+    prompt: str = Field(
+        min_length=1, max_length=MAX_PROMPT_CHARS, description="What should move, in English."
+    )
+    seconds: Literal[2, 5] = Field(2, description="How long the clip is.")
+
+
+class VideoOut(BaseModel):
+    video_id: str
+    product_id: str
+    uri: str
+    prompt: str
+    seconds: int
+    width: int
+    height: int
+
+
+def _made(outputs: dict, prompt: str) -> Outcome | None:
+    if outputs.get("status") != "done" or not outputs.get("video_id"):
+        return None
+    seconds = int(outputs.get("seconds", 0))
+    width, height = int(outputs.get("width", 0)), int(outputs.get("height", 0))
+    return Outcome.ok(
+        {
+            "video_id": outputs["video_id"], "product_id": PRODUCT_ID, "prompt": prompt,
+            "uri": f"wasify://creation/video/{outputs['video_id']}", "seconds": seconds,
+            "width": width, "height": height,
+        },
+        f'The video was made ({seconds} seconds, {width}x{height}) from "{prompt}" and saved to '
+        "the library.",
+    )  # fmt: skip
+
+
+def _generate_input(p: GenerateIn, ctx: ActionContext) -> dict:
+    return {"mode": "text", "prompt": p.prompt, "shape": p.shape, "seconds": p.seconds}
+
+
+def _generate_result(outputs: dict, p: GenerateIn) -> Outcome | None:
+    return _made(outputs, p.prompt)
+
+
+async def _picture_data(ctx: ActionContext, image_id: str) -> bytes:
+    """The picture's file, through the library kind the image product declares."""
+    kind = ctx.library.get("image")
+    data = await kind.read(ctx, image_id) if kind and kind.read else None
+    if data is None:
+        raise ActionRefused("not_found", "That picture is not in the library.")
+    return data
+
+
+async def _animate_check(p: AnimateIn, ctx: ActionContext) -> None:
+    await _picture_data(ctx, p.image_id)
+
+
+async def _animate_input(p: AnimateIn, ctx: ActionContext) -> dict:
+    key = await stage_picture(ctx, PRODUCT_ID, await _picture_data(ctx, p.image_id))
+    return {"mode": "image", "prompt": p.prompt, "image_key": key, "seconds": p.seconds}
+
+
+def _animate_result(outputs: dict, p: AnimateIn) -> Outcome | None:
+    return _made(outputs, p.prompt)
+
+
+def actions() -> list[Action]:
+    return [
+        Action(
+            id="video.generate", title="Make a video",
+            summary="Make a short video clip from a description.",
+            description=(
+                "Make a short video clip (2 or 5 seconds) from a description and save it to the "
+                "person's library. It takes minutes on this computer and only one clip is made "
+                "at a time, so it returns a job handle when it is not done within the wait. To "
+                "set a picture moving, use video.animate."
+            ),
+            input=GenerateIn, output=VideoOut,
+            examples=({"prompt": "waves rolling onto a beach at sunrise"},
+                      {"prompt": "a paper boat on a rainy street", "shape": "portrait",
+                       "seconds": 5}),
+            effect="make", flags=("costly",), requires=(need_product(PRODUCT_ID),), long=True,
+            product=PRODUCT_ID,
+            bind=RunBinding(PRODUCT_ID, "video", _generate_input, _generate_result),
+            ui="video.create",
+        ),
+        Action(
+            id="video.animate", title="Animate a picture",
+            summary="Make a picture of the library move.",
+            description=(
+                "Turn a picture the person has in the library into a short clip (2 or 5 seconds) "
+                "by saying what should move. Takes minutes; returns a job handle when it is not "
+                "done within the wait."
+            ),
+            input=AnimateIn, output=VideoOut,
+            examples=({"image_id": "0b7c1f9e-0000-4000-8000-000000000000",
+                       "prompt": "the clouds drift slowly to the left"},),
+            effect="make", flags=("costly",), requires=(need_product(PRODUCT_ID),), long=True,
+            product=PRODUCT_ID,
+            bind=RunBinding(PRODUCT_ID, "video", _animate_input, _animate_result,
+                            check=_animate_check),
+            ui="video.animate",
+        ),
+    ]  # fmt: skip
+
+
+# ---- the library's clips ----------------------------------------------------------------------
+
+
+def _item(v: VideoRecord) -> LibraryItem:
+    return LibraryItem(
+        kind="video", id=v.id, title=v.prompt[:120],
+        created_at=v.created_at.isoformat() if v.created_at else None,
+        detail={"seconds": v.seconds, "status": v.status, "width": v.width, "height": v.height},
+    )  # fmt: skip
+
+
+async def _list(ctx: ActionContext, limit: int) -> list[LibraryItem]:
+    rows = await video_store(need_deps(ctx).engine).list(
+        ctx.actor.tenant_id, ctx.actor.user_id, limit, None, None
+    )
+    return [_item(v) for v in rows]
+
+
+async def _get(ctx: ActionContext, item_id: str) -> LibraryItem | None:
+    found = await video_store(need_deps(ctx).engine).get(
+        ctx.actor.tenant_id, ctx.actor.user_id, item_id
+    )
+    return _item(found) if found else None
+
+
+async def _delete(ctx: ActionContext, item_id: str) -> bool:
+    deps = need_deps(ctx)
+    store = video_store(deps.engine)
+    video = await store.get(ctx.actor.tenant_id, ctx.actor.user_id, item_id)
+    if video is None:
+        return False
+    if video.status == "working":
+        raise ActionRefused("busy", "That video is still being made.")
+    with deps.acting_as(ctx.actor, PRODUCT_ID):  # its files first, then the record
+        for key in (video.video_key, video.poster_key):
+            if not key:
+                continue
+            try:
+                await deps.storage.delete(key)
+            except FileNotFoundError:
+                pass
+    await store.delete(ctx.actor.tenant_id, ctx.actor.user_id, item_id)
+    await deps.unindex(ctx.actor, PRODUCT_ID, item_id)  # out of search too (ADR-0041)
+    return True
+
+
+async def _export(ctx: ActionContext, item_id: str, folder: Path) -> Path | None:
+    deps = need_deps(ctx)
+    video = await video_store(deps.engine).get(ctx.actor.tenant_id, ctx.actor.user_id, item_id)
+    if video is None or video.status != "done" or not video.video_key:
+        return None
+    with deps.acting_as(ctx.actor, PRODUCT_ID):
+        try:
+            data = await deps.storage.get(video.video_key)
+        except FileNotFoundError:
+            return None
+    return await asyncio.to_thread(save_copy, folder, file_name(video.prompt, ""), "mp4", data)
+
+
+def library_kinds() -> list[LibraryKind]:
+    return [LibraryKind("video", PRODUCT_ID, "video", _list, _get, _delete, None, _export)]
+
+
+__all__ = ["actions", "library_kinds"]

@@ -8,6 +8,8 @@ import yaml
 from langgraph.checkpoint.memory import InMemorySaver
 from wasifyai_assistant.graph import build_assistant_graph
 from wasifyai_assistant.store import InMemoryConversationStore
+from wasifyai_image.actions import actions as image_actions
+from wasifyai_notebooks.actions import actions as notebook_actions
 from wasifyai_platform_sdk import (
     InMemoryUsageRecorder,
     ProviderDeps,
@@ -15,6 +17,14 @@ from wasifyai_platform_sdk import (
     build_capabilities,
     load_product_config,
 )
+from wasifyai_platform_sdk.actions import (
+    ActionExecutor,
+    ActionRegistry,
+    Need,
+    Readiness,
+    builtin_actions,
+)
+from wasifyai_voice.actions import actions as voice_actions
 
 
 class FakeHost:
@@ -50,6 +60,15 @@ class FakeHost:
         self.searches.append(query)
         return self.hits
 
+    # the rest of an `ActionHost`: everything is ready, and there are no stores to reach
+    deps = None
+
+    async def readiness(self, need: Need) -> Readiness:
+        return Readiness.ready()
+
+    def facts(self) -> dict[str, Any]:
+        return {}
+
     async def search_notebooks(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         self.notebook_searches.append(query)
         if self.notebook_error:
@@ -79,6 +98,15 @@ class Rig:
         self.host = host
         if host is not None:
             self.caps.extras["tool_host"] = host
+            # the tools run as catalogue actions (ADR-0068), through the one executor
+            self.executor = ActionExecutor(
+                ActionRegistry(
+                    [*builtin_actions(), *image_actions(), *voice_actions(), *notebook_actions()]
+                ),
+                host,
+                usage=self.usage,
+            )
+            self.caps.extras["actions"] = self.executor
         self.indexed: list[tuple[str, str, str]] = []
 
         class Indexer:

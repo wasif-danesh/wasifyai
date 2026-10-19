@@ -28,7 +28,7 @@ from wasifyai_assistant.store import (
     Message,
     SqlConversationStore,
 )
-from wasifyai_assistant.tools import TOOL_DEFINITIONS, parse_arguments, run_tool
+from wasifyai_assistant.tools import TOOL_DEFINITIONS, ToolOutcome, parse_arguments, run_tool
 
 log = logging.getLogger(__name__)
 
@@ -213,13 +213,11 @@ def build_assistant_graph(caps: Capabilities, checkpointer: Any, store: Conversa
             for c in calls:
                 args = parse_arguments(c.arguments)
                 write({"type": "tool_call", "id": c.id, "name": c.name, "arguments": args})
-                tool_host = host()
-                if tool_host is None:
-                    from wasifyai_assistant.tools import ToolOutcome
-
+                executor = caps.extras.get("actions")
+                if host() is None or executor is None:
                     outcome = ToolOutcome("error", text="Tools are not available here.")
                 else:
-                    outcome = await run_tool(c.name, args, tool_host, write)
+                    outcome = await run_tool(c.name, args, executor, write)
                 write(
                     {
                         "type": "tool_result", "id": c.id, "name": c.name,

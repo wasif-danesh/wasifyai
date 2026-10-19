@@ -233,3 +233,22 @@ test("a notebook shows its sources and fits the screen @layout", async ({ page }
   await settle(page);
   await noSideScroll(page);
 });
+
+test("sources that could not be read fit the pane and say so in full @layout", async ({ page }) => {
+  await mockApi(page, { unreadableSources: true });
+  await page.goto(`/notebooks/${NOTEBOOK_ID}`);
+  if (phone(page)) await page.getByRole("button", { name: "Sources", exact: true }).click();
+  await expect(page.getByText("Could not be read", { exact: true }).first()).toBeVisible();
+  await settle(page);
+  // the list does not scroll sideways, and every "Could not be read" label is fully inside it
+  const list = page.getByRole("list").filter({ hasText: "PESTLE Template" }).first();
+  const box = await list.boundingBox();
+  const overflow = await list.evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(overflow, "the sources list scrolls sideways").toBeLessThanOrEqual(1);
+  const labels = page.getByText("Could not be read", { exact: true });
+  for (let i = 0; i < (await labels.count()); i += 1) {
+    const b = await labels.nth(i).boundingBox();
+    expect(b && box && b.x + b.width <= box.x + box.width + 1, `label ${i} is cut off`).toBe(true);
+  }
+  await noSideScroll(page);
+});

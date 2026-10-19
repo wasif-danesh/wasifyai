@@ -66,15 +66,20 @@ function Tick({
 function status(s: NotebookSource) {
   if (s.status === "failed")
     return (
-      <span className="text-destructive text-xs" title={s.error ?? undefined}>
+      <span
+        className="shrink-0 whitespace-nowrap text-destructive text-xs"
+        title={s.error ?? undefined}
+      >
         Could not be read
       </span>
     );
   if (s.status === "cancelled")
-    return <span className="text-muted-foreground text-xs">Stopped</span>;
+    return (
+      <span className="shrink-0 whitespace-nowrap text-muted-foreground text-xs">Stopped</span>
+    );
   if (reading(s))
     return (
-      <span className="flex items-center gap-1 text-muted-foreground text-xs">
+      <span className="flex shrink-0 items-center gap-1 whitespace-nowrap text-muted-foreground text-xs">
         <Loader2 className="size-3 animate-spin" aria-hidden="true" />
         {s.status === "pending" ? "Waiting" : "Reading…"}
       </span>
@@ -362,7 +367,7 @@ export function SourcesPane(props: SourcesPaneProps) {
           Saved sources appear here. Add files, then ask questions about them.
         </p>
       ) : (
-        <ul className="grid min-h-0 flex-1 content-start gap-0.5 overflow-auto p-2">
+        <ul className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-0.5 overflow-auto p-2">
           {roots.map((f) => folder(f, 0))}
           {top.map((s) => row(s, 0))}
         </ul>

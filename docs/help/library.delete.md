@@ -1,0 +1,38 @@
+---
+action: library.delete
+screen: library
+synonyms: [delete, remove, get rid of]
+---
+# Delete a creation
+
+Action: `library.delete`
+
+## What it is for
+
+Delete one creation and its files for good. It cannot be undone, so the app always asks you first.
+
+## Steps in the app
+
+1. Open **Library** and choose the creation.
+2. Choose Delete and confirm.
+
+## Fields
+
+- `kind`: Which sort of creation.
+- `id`: Its id.
+
+## Limits
+
+- Always needs your yes in the app window. A video that is still being made cannot be deleted.
+
+## Needs
+
+- Nothing.
+
+## Examples
+
+- Delete that picture.
+
+## Problems
+
+- **Still being made** Wait until the video is ready, then delete it.

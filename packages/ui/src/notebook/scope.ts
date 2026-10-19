@@ -57,14 +57,35 @@ export function scopeIds(sources: NotebookSource[], unticked: Set<string>): stri
   return sources.filter((s) => s.status === "ready" && !unticked.has(s.id)).map((s) => s.id);
 }
 
-/** "12 of 14 sources" for the chat box and the header. */
+/** "12 of 14 sources" for the chat box and the header, with what is being read or could not be read. */
 export function scopeLabel(sources: NotebookSource[], unticked: Set<string>): string {
   const ready = sources.filter((s) => s.status === "ready");
   const used = ready.filter((s) => !unticked.has(s.id)).length;
   const reading = sources.filter((s) => s.status === "pending" || s.status === "processing").length;
+  const failed = sources.filter((s) => s.status === "failed").length;
+  const notes = [
+    reading > 0 ? `${reading} being read` : "",
+    failed > 0 ? `${failed} could not be read` : "",
+  ].filter(Boolean);
+  if (ready.length === 0 && sources.length > 0)
+    return notes.length ? notes.join(", ") : "No sources";
   const base =
     used === ready.length
       ? `${used} source${used === 1 ? "" : "s"}`
       : `${used} of ${ready.length} sources`;
-  return reading > 0 ? `${base}, ${reading} being read` : base;
+  return notes.length ? `${base}, ${notes.join(", ")}` : base;
+}
+
+/**
+ * Why a question or an output cannot be made when no source is ready, or null when one is. "Still being read"
+ * is only said while something is being read: when every source failed, saying so and how to go on is the
+ * honest answer (a person who sees "still being read" waits for something that will never finish).
+ */
+export function noReadySourceReason(sources: NotebookSource[]): string | null {
+  if (sources.length === 0 || sources.some((s) => s.status === "ready")) return null;
+  if (sources.some((s) => s.status === "pending" || s.status === "processing"))
+    return "Your sources are still being read.";
+  if (sources.some((s) => s.status === "failed"))
+    return "None of your sources could be read. Open one to see why, then read it again.";
+  return "Reading was stopped. Read your sources again to ask about them.";
 }

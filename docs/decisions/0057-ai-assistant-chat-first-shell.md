@@ -73,3 +73,8 @@ its own security decision first. Voice input waits for the audio vertical.
 
 **Measured (2026-10-16):** the evaluation cases the consequences ask for are `products/wasifyai-assistant/evals/`;
 the recommended local model, Qwen3 4B, got 11 of 11 (see `docs/phase2-stage-d-plan.md`, D6).
+
+## Amendment (2026-10-19): decision 7 is resolved by ADR-0082
+
+The UI spike (stage D5, 2026-10-16) chose our own components. The owner decided on 2026-10-19 that the chat is built on `assistant-ui` (the project Unsloth Studio uses) and `streamdown`, for editing, branching, attachments, dictation, read-aloud and richer tool UI. See ADR-0082 and `docs/chat-ui-migration-plan.md`. The rest of this ADR stands.
+

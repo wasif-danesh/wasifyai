@@ -8,11 +8,14 @@ PRODUCT_ID = "wasifyai-notebooks"
 
 
 def register(registry: GraphRegistry) -> None:
+    from wasifyai_notebooks.actions import actions, library_kinds
     from wasifyai_notebooks.graph import build_notebook_chat
     from wasifyai_notebooks.index import notebook_index_source
     from wasifyai_notebooks.routes import build_routes
 
     registry.register(PRODUCT_ID, build_notebook_chat)  # one grounded turn (ADR-0065 decision 10)
     registry.add_routes(PRODUCT_ID, build_routes)
+    registry.add_actions(PRODUCT_ID, actions)  # what agents may ask (ADR-0068)
+    registry.add_library_kinds(PRODUCT_ID, library_kinds)
     # a notebook is a creation: searchable in My creations (ADR-0041, ADR-0065 decision 12)
     registry.add_index_source(PRODUCT_ID, notebook_index_source)

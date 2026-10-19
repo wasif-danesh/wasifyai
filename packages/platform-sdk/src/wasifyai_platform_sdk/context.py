@@ -25,6 +25,10 @@ def reset_context(token: Token) -> None:
     _current.reset(token)
 
 
+def current_context() -> RunContext | None:
+    return _current.get()
+
+
 def require_context() -> RunContext:
     ctx = _current.get()
     if ctx is None:

@@ -19,7 +19,7 @@ import { SourceGuide } from "./SourceGuide";
 import { type Highlight, SourceViewer } from "./SourceViewer";
 import { SourcesPane } from "./SourcesPane";
 import { StudioPane } from "./StudioPane";
-import { scopeIds, scopeLabel } from "./scope";
+import { noReadySourceReason, scopeIds, scopeLabel } from "./scope";
 import { useGuide } from "./use-guide";
 import { useNotebookChat } from "./use-notebook-chat";
 import { useNotebookSources } from "./use-notebook-sources";
@@ -108,6 +108,7 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
   const scope = useMemo(() => scopeIds(src.sources, unticked), [src.sources, unticked]);
   const label = scopeLabel(src.sources, unticked);
   const everyTickedOff = scope !== undefined && scope.length === 0;
+  const noReady = noReadySourceReason(src.sources);
 
   const blocked = !searchReady
     ? "Get the search model first (see Set up reading documents)."
@@ -115,8 +116,8 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
       ? "Choose a chat model to ask questions."
       : none
         ? "Add a source first."
-        : ready === 0 && src.sources.length > 0
-          ? "Your sources are still being read."
+        : noReady !== null
+          ? noReady
           : everyTickedOff
             ? "Tick at least one source."
             : null;
@@ -129,7 +130,7 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
       : notebookId === null || none
         ? "Add a source first."
         : ready === 0
-          ? "Your sources are still being read."
+          ? (noReady ?? "Your sources are still being read.")
           : everyTickedOff
             ? "Tick at least one source."
             : null;

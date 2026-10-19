@@ -1,7 +1,7 @@
 CONTAINER_ENGINE ?= podman
 export CONTAINER_ENGINE
 
-.PHONY: engine-bundle test-comfyui test-integration setup setup-k8s preflight dev down logs migrate test lint format contracts helm-lint kind-up kind-test kind-e2e kind-down monitoring-up monitoring-drill monitoring-drill-meta urls
+.PHONY: engine-bundle reader-locks test-comfyui test-integration setup setup-k8s preflight dev down logs migrate test lint format contracts helm-lint kind-up kind-test kind-e2e kind-down monitoring-up monitoring-drill monitoring-drill-meta urls
 setup:
 	./scripts/setup.sh
 setup-k8s:
@@ -35,8 +35,11 @@ format:
 	uv run ruff format . && uv run ruff check --fix .
 engine-bundle:   # the files the desktop app installs the engine from (apps/desktop/engine-bundle)
 	./scripts/build-engine-bundle.sh
+reader-locks:   # the notebooks' document reader lock files (products/wasifyai-notebooks/reader), commit the result
+	./scripts/lock-reader.sh
 contracts:
 	uv run python scripts/export_openapi.py
+	uv run python -m wasifyai_api.actions_engine --write
 	pnpm --filter @wasifyai/contracts generate
 helm-lint:
 	@for f in "" "-f deploy/helm/wasifyai/values/local.yaml" "-f deploy/helm/wasifyai/values/staging.yaml -f deploy/helm/wasifyai/values/cloud/homelab.yaml" "-f deploy/helm/wasifyai/values/prod.yaml"; do \

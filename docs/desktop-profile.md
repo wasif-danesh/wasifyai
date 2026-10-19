@@ -359,6 +359,19 @@ instructions; the window shows the source, the notebook and a snippet, with "Ope
 is not installed or notebooks are not part of the build the tool answers that in words. The model never sees a
 file or a link, only a sentence, passages and ids.
 
+### The tools are catalogue actions (ADR-0068, stage A1)
+
+The four tools run through the action executor (`wasifyai_platform_sdk.actions`, `docs/actions.md`): `generate_image`
+is `image.generate`, `make_music` is `music.generate`, `search_creations` is `library.search`, `search_notebooks`
+is `notebook.search`, all with the origin `assistant`. What the model is shown (names, descriptions, the system
+prompt) and what the person sees did not change, so the tool-choice evaluation below measures the same thing. The
+assistant's setting is "make things at once" (`ApprovalPolicy(make="auto")`); deleting and anything that needs a
+person's word always ask, from any origin, and are not offered to the model. The engine builds the catalogue
+for the products it serves (`app.state.actions`, `wasifyai_api.actions_engine`), with the audit log and the
+pending approvals in the same SQLite file (`action_audit`, `action_approvals`, created on first use, additive
+only). Every call writes one audit entry (no content) and one `action.run` usage event. `docs/contracts/actions.json`
+is the catalogue as a file; `docs/help/` holds the help for every action.
+
 ### Evaluating a model for the assistant
 
 `uv run python products/wasifyai-assistant/evals/run_tool_eval.py --gguf <file> --data-dir <app data>` runs the
@@ -432,7 +445,7 @@ computer, and searched. The window and the grounded chat arrive in E3 and E2; th
 | Search model | `embedding.py`, `models.yaml` | bge-small-en-v1.5 (quantised ONNX, 67 MB) through the Models panel like any model; the index records it and refuses another |
 | Retrieval | `retrieval.py` | SurfSense's blend of BM25 and cosine (0.65), per notebook or per ticked sources; `mode` dense, lexical, hybrid for evaluation |
 | Ingest | `ingest.py` | one source at a time, highest priority first; cancel checked between steps; nothing is read until the search model is present (sources wait, they do not fail); a file with almost no text fails in words (`No text could be read...`); work in progress at quit is failed at start with Retry |
-| Reader setup | `reader_install.py`, `reader/` | `POST /setup/reader` with the size shown: environment from the engine's own Python, hashed lock per platform, nine weight files by SHA-256, a check that reads a test picture. Lock compiled by `scripts/build-engine-bundle.sh` |
+| Reader setup | `reader_install.py`, `reader/` | `POST /setup/reader` with the size shown: environment from the engine's own Python, hashed lock per platform, nine weight files by SHA-256, a check that reads a test picture. The locks are **committed** in `products/wasifyai-notebooks/reader/requirements-<target>.lock` (`make reader-locks` writes them; the bundle script copies them), so a development checkout (`pnpm tauri dev`) can set the reader up too: before 2026-10-19 only the bundle had them and a checkout said "The reader is not part of this build" |
 | Search index | `index.py` | notebooks are a creation kind (`notebook`) in My creations search (ADR-0041) |
 
 Routes, under `/products/wasifyai-notebooks` (loopback token; another person's notebook is a 404):

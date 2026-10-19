@@ -1,0 +1,4622 @@
+{
+  "version": 1,
+  "schema": "https://json-schema.org/draft/2020-12/schema",
+  "actions": [
+    {
+      "id": "app.status",
+      "title": "What this computer can do",
+      "summary": "Which actions are ready, which need a step, which cannot run here.",
+      "description": "What this computer can do right now: for each action ready, needs_setup (with the step that fixes it) or unavailable (with the reason), and small facts such as free disk. Call it before telling a person how to do something, so the answer says what is missing.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Only the actions of one area, for example 'speech'.",
+            "title": "Domain"
+          }
+        },
+        "title": "StatusIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "ActionState": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "ready",
+                  "needs_setup",
+                  "unavailable"
+                ],
+                "title": "State",
+                "type": "string"
+              },
+              "step": {
+                "default": "",
+                "title": "Step",
+                "type": "string"
+              },
+              "reason": {
+                "default": "",
+                "title": "Reason",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "state"
+            ],
+            "title": "ActionState",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/$defs/ActionState"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "facts": {
+            "additionalProperties": true,
+            "title": "Facts",
+            "type": "object"
+          }
+        },
+        "required": [
+          "actions"
+        ],
+        "title": "StatusOut",
+        "type": "object"
+      },
+      "examples": [
+        {},
+        {
+          "domain": "speech"
+        }
+      ],
+      "effect": "read",
+      "flags": [],
+      "requires": [],
+      "long": false,
+      "product": "platform",
+      "ui": null,
+      "ui_exempt": "It answers a question and is not a screen: screens show their own state.",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/app.status.md"
+    },
+    {
+      "id": "audiobook.make",
+      "title": "Make an audiobook",
+      "summary": "Read a whole book aloud, one track per chapter.",
+      "description": "Read a long text aloud as an audiobook: one track per chapter, optionally one track of the whole. It can take a long time; it returns a job handle.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "description": "The book. The chapters are found in it as audiobook.plan shows.",
+            "maxLength": 800000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "default": "Audiobook",
+            "maxLength": 120,
+            "title": "Title",
+            "type": "string"
+          },
+          "whole": {
+            "default": false,
+            "description": "Also make one track of the whole book.",
+            "title": "Whole",
+            "type": "boolean"
+          },
+          "read_titles": {
+            "default": true,
+            "description": "Speak each chapter's title first.",
+            "title": "Read Titles",
+            "type": "boolean"
+          },
+          "voice": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Voice"
+          },
+          "saved_voice": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Saved Voice"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "BookMakeIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "TrackRef": {
+            "properties": {
+              "track_id": {
+                "title": "Track Id",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "seconds": {
+                "title": "Seconds",
+                "type": "number"
+              },
+              "uri": {
+                "title": "Uri",
+                "type": "string"
+              },
+              "stem": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Stem"
+              }
+            },
+            "required": [
+              "track_id",
+              "title",
+              "seconds",
+              "uri"
+            ],
+            "title": "TrackRef",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "track_id": {
+            "title": "Track Id",
+            "type": "string"
+          },
+          "tracks": {
+            "items": {
+              "$ref": "#/$defs/TrackRef"
+            },
+            "title": "Tracks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "track_id",
+          "tracks"
+        ],
+        "title": "TracksOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "text": "Chapter 1\nOnce upon a time...",
+          "title": "Story"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "costly"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        },
+        {
+          "kind": "model",
+          "name": "speak"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-voice",
+      "ui": "voice.audiobook",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/audiobook.make.md"
+    },
+    {
+      "id": "audiobook.plan",
+      "title": "Find the chapters",
+      "summary": "Split a long text into chapters and estimate the time.",
+      "description": "Find the chapters of a long text and how long each takes to read aloud. Nothing is spoken or kept. Use it before audiobook.make.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "maxLength": 800000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "target": {
+            "default": 6000,
+            "maximum": 30000,
+            "minimum": 1000,
+            "title": "Target",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "BookPlanIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "ChapterRow": {
+            "properties": {
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "chars": {
+                "title": "Chars",
+                "type": "integer"
+              },
+              "estimated_seconds": {
+                "title": "Estimated Seconds",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "title",
+              "chars",
+              "estimated_seconds"
+            ],
+            "title": "ChapterRow",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "chapters": {
+            "items": {
+              "$ref": "#/$defs/ChapterRow"
+            },
+            "title": "Chapters",
+            "type": "array"
+          },
+          "chars": {
+            "title": "Chars",
+            "type": "integer"
+          },
+          "estimated_seconds": {
+            "title": "Estimated Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chapters",
+          "chars",
+          "estimated_seconds"
+        ],
+        "title": "BookPlanOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "text": "Chapter 1\nOnce upon a time..."
+        }
+      ],
+      "effect": "read",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-voice",
+      "ui": "voice.audiobook",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/audiobook.plan.md"
+    },
+    {
+      "id": "dub.make",
+      "title": "Dub a recording",
+      "summary": "Speak the script in the new language and mix it with the background.",
+      "description": "The second step of dubbing: speaks the (checked) lines of dub.script in the new language and saves the dub as a new track. Copying the original speaker's voice is not offered here: use a built-in or a saved voice.",
+      "input": {
+        "$defs": {
+          "DubLine": {
+            "properties": {
+              "start": {
+                "minimum": 0,
+                "title": "Start",
+                "type": "number"
+              },
+              "end": {
+                "exclusiveMinimum": 0,
+                "title": "End",
+                "type": "number"
+              },
+              "source": {
+                "default": "",
+                "description": "What was said.",
+                "maxLength": 2000,
+                "title": "Source",
+                "type": "string"
+              },
+              "text": {
+                "description": "What it becomes in the new language.",
+                "maxLength": 2000,
+                "minLength": 1,
+                "title": "Text",
+                "type": "string"
+              }
+            },
+            "required": [
+              "start",
+              "end",
+              "text"
+            ],
+            "title": "DubLine",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "source_kind": {
+            "default": "track",
+            "description": "Whether the recording is a track or a speech.",
+            "enum": [
+              "track",
+              "speech"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_id": {
+            "description": "The id of the recording.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "language": {
+            "maxLength": 10,
+            "minLength": 2,
+            "title": "Language",
+            "type": "string"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/$defs/DubLine"
+            },
+            "maxItems": 400,
+            "minItems": 1,
+            "title": "Segments",
+            "type": "array"
+          },
+          "voice_from": {
+            "default": "builtin",
+            "description": "A built-in voice, or a saved voice (saved_voice).",
+            "enum": [
+              "builtin",
+              "saved"
+            ],
+            "title": "Voice From",
+            "type": "string"
+          },
+          "voice": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Voice"
+          },
+          "saved_voice": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Saved Voice"
+          },
+          "vocals_track": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "From dub.script.",
+            "title": "Vocals Track"
+          },
+          "background_track": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "From dub.script.",
+            "title": "Background Track"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Title"
+          }
+        },
+        "required": [
+          "source_id",
+          "language",
+          "segments"
+        ],
+        "title": "DubMakeIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "track_id": {
+            "title": "Track Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "track_id",
+          "product_id",
+          "title",
+          "seconds",
+          "uri"
+        ],
+        "title": "TrackOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "source_kind": "track",
+          "source_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "language": "fr",
+          "segments": [
+            {
+              "start": 0.0,
+              "end": 2.5,
+              "text": "Bonjour à tous."
+            }
+          ]
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        },
+        {
+          "kind": "model",
+          "name": "speak"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-voice",
+      "ui": "voice.dub",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/dub.make.md"
+    },
+    {
+      "id": "dub.script",
+      "title": "Write the dub script",
+      "summary": "Write down a recording and translate it, line by line, for a dub.",
+      "description": "The first step of dubbing a recording into another language: writes down what is said and translates it line by line with the times. Check or change the lines, then call dub.make with them. Nothing is spoken yet.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "source_kind": {
+            "default": "track",
+            "description": "Whether the recording is a track or a speech.",
+            "enum": [
+              "track",
+              "speech"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_id": {
+            "description": "The id of the recording.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "language": {
+            "description": "The language to dub into (en, fr ...).",
+            "maxLength": 10,
+            "minLength": 2,
+            "title": "Language",
+            "type": "string"
+          },
+          "background": {
+            "default": false,
+            "description": "Separate the voice from the music behind it first.",
+            "title": "Background",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "source_id",
+          "language"
+        ],
+        "title": "DubScriptIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "DubLine": {
+            "properties": {
+              "start": {
+                "minimum": 0,
+                "title": "Start",
+                "type": "number"
+              },
+              "end": {
+                "exclusiveMinimum": 0,
+                "title": "End",
+                "type": "number"
+              },
+              "source": {
+                "default": "",
+                "description": "What was said.",
+                "maxLength": 2000,
+                "title": "Source",
+                "type": "string"
+              },
+              "text": {
+                "description": "What it becomes in the new language.",
+                "maxLength": 2000,
+                "minLength": 1,
+                "title": "Text",
+                "type": "string"
+              }
+            },
+            "required": [
+              "start",
+              "end",
+              "text"
+            ],
+            "title": "DubLine",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/$defs/DubLine"
+            },
+            "title": "Segments",
+            "type": "array"
+          },
+          "vocals_track": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Vocals Track"
+          },
+          "background_track": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Background Track"
+          }
+        },
+        "required": [
+          "language",
+          "segments"
+        ],
+        "title": "DubScriptOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "source_kind": "track",
+          "source_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "language": "fr"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        },
+        {
+          "kind": "model",
+          "name": "transcribe"
+        },
+        {
+          "kind": "chat",
+          "name": ""
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-voice",
+      "ui": "voice.dub",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/dub.script.md"
+    },
+    {
+      "id": "image.edit",
+      "title": "Change a picture",
+      "summary": "Change a picture of the library by describing the change.",
+      "description": "Change a picture the person already has in the library: say what to change. It makes a new picture and keeps the original. Use image.generate for a new one.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "image_id": {
+            "description": "The picture to change.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Image Id",
+            "type": "string"
+          },
+          "prompt": {
+            "description": "What to change, in English.",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "image_id",
+          "prompt"
+        ],
+        "title": "EditIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "image_id": {
+            "title": "Image Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "image_id",
+          "product_id",
+          "uri",
+          "prompt",
+          "width",
+          "height"
+        ],
+        "title": "ImageOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "image_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "prompt": "make the sky a sunset"
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-image"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-image",
+      "ui": "images.edit",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/image.edit.md"
+    },
+    {
+      "id": "image.generate",
+      "title": "Make a picture",
+      "summary": "Make a new picture from a description.",
+      "description": "Make a new picture from a description and save it to the person's library. Use it when the person asks you to draw, paint, make or generate an image. Write the prompt as a clear, concrete description in English. Returns the picture's id and size. To change a picture that exists, use image.edit.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "prompt": {
+            "description": "A clear, concrete description of the picture, in English.",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "size": {
+            "default": "square",
+            "description": "The shape of the picture.",
+            "enum": [
+              "square",
+              "landscape",
+              "portrait",
+              "wide",
+              "tall"
+            ],
+            "title": "Size",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "title": "GenerateIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "image_id": {
+            "title": "Image Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "image_id",
+          "product_id",
+          "uri",
+          "prompt",
+          "width",
+          "height"
+        ],
+        "title": "ImageOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "prompt": "a red teapot on a wooden table"
+        },
+        {
+          "prompt": "a cat dressed as an astronaut on the moon",
+          "size": "wide"
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-image"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-image",
+      "ui": "images.create",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/image.generate.md"
+    },
+    {
+      "id": "job.cancel",
+      "title": "Stop a long job",
+      "summary": "Stop a job that can still be stopped.",
+      "description": "Stop a job. Work that already runs as a product's own run cannot be stopped: it finishes and is saved to the library. The answer says which it was.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "JobIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "ok",
+              "refused",
+              "error",
+              "cancelled",
+              "unknown"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Seconds"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Progress"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          }
+        },
+        "required": [
+          "job_id",
+          "action",
+          "status"
+        ],
+        "title": "JobOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "job_id": "a1b2c3d4e5f60718"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [],
+      "long": false,
+      "product": "platform",
+      "ui": null,
+      "ui_exempt": "A job is shown where it was started: on its card or its screen.",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/job.cancel.md"
+    },
+    {
+      "id": "job.status",
+      "title": "Check a long job",
+      "summary": "How a job that was started earlier is going.",
+      "description": "The status of a job: the job_id an action returned while it was running.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "JobIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "ok",
+              "refused",
+              "error",
+              "cancelled",
+              "unknown"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Seconds"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Progress"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          }
+        },
+        "required": [
+          "job_id",
+          "action",
+          "status"
+        ],
+        "title": "JobOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "job_id": "a1b2c3d4e5f60718"
+        }
+      ],
+      "effect": "read",
+      "flags": [],
+      "requires": [],
+      "long": false,
+      "product": "platform",
+      "ui": null,
+      "ui_exempt": "A job is shown where it was started: on its card or its screen.",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/job.status.md"
+    },
+    {
+      "id": "job.wait",
+      "title": "Wait for a long job",
+      "summary": "Wait a little while for a job to end.",
+      "description": "Wait up to a number of seconds (at most 50) for a job to end, then give its status or its result. If it is still running, call it again.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Job Id",
+            "type": "string"
+          },
+          "seconds": {
+            "default": 25,
+            "description": "How long to wait at most.",
+            "maximum": 50.0,
+            "minimum": 0,
+            "title": "Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "JobWaitIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "ok",
+              "refused",
+              "error",
+              "cancelled",
+              "unknown"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Seconds"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Progress"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Result"
+          }
+        },
+        "required": [
+          "job_id",
+          "action",
+          "status"
+        ],
+        "title": "JobOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "job_id": "a1b2c3d4e5f60718",
+          "seconds": 25
+        }
+      ],
+      "effect": "read",
+      "flags": [],
+      "requires": [],
+      "long": false,
+      "product": "platform",
+      "ui": null,
+      "ui_exempt": "A job is shown where it was started: on its card or its screen.",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/job.wait.md"
+    },
+    {
+      "id": "library.delete",
+      "title": "Delete a creation",
+      "summary": "Delete a creation and its files for good.",
+      "description": "Delete one creation and its files. It cannot be undone, so the person is always asked in the app first.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "image",
+              "video",
+              "speech",
+              "track",
+              "transcript",
+              "voice",
+              "lipsync",
+              "notebook"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "id": {
+            "description": "The id from a search or a list.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "RefIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "deleted",
+          "kind",
+          "id"
+        ],
+        "title": "DeleteOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "kind": "image",
+          "id": "0b7c1f9e"
+        }
+      ],
+      "effect": "destroy",
+      "flags": [
+        "private"
+      ],
+      "requires": [],
+      "long": false,
+      "product": "platform",
+      "ui": "library",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/library.delete.md"
+    },
+    {
+      "id": "library.export",
+      "title": "Save a copy to a folder",
+      "summary": "Copy a creation into the export folder.",
+      "description": "Copy a creation out of the library into the person's export folder and return the file's name and path. It never replaces a file. This is the only way a file leaves the library.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "image",
+              "video",
+              "speech",
+              "track",
+              "transcript",
+              "voice",
+              "lipsync",
+              "notebook"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "id": {
+            "description": "The id from a search or a list.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "RefIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path"
+        ],
+        "title": "ExportOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "kind": "image",
+          "id": "0b7c1f9e"
+        }
+      ],
+      "effect": "change",
+      "flags": [
+        "private"
+      ],
+      "requires": [],
+      "long": false,
+      "product": "platform",
+      "ui": "library",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/library.export.md"
+    },
+    {
+      "id": "library.get",
+      "title": "Look at one creation",
+      "summary": "Show what is known about one creation.",
+      "description": "Get one creation by kind and id: its title, its date and its size.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "image",
+              "video",
+              "speech",
+              "track",
+              "transcript",
+              "voice",
+              "lipsync",
+              "notebook"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "id": {
+            "description": "The id from a search or a list.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "RefIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "ItemOut": {
+            "properties": {
+              "kind": {
+                "title": "Kind",
+                "type": "string"
+              },
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "uri": {
+                "title": "Uri",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "created_at": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Created At"
+              },
+              "detail": {
+                "additionalProperties": true,
+                "title": "Detail",
+                "type": "object"
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "uri",
+              "title"
+            ],
+            "title": "ItemOut",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "item": {
+            "$ref": "#/$defs/ItemOut"
+          }
+        },
+        "required": [
+          "item"
+        ],
+        "title": "GetOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "kind": "track",
+          "id": "0b7c1f9e"
+        }
+      ],
+      "effect": "read",
+      "flags": [
+        "private"
+      ],
+      "requires": [],
+      "long": false,
+      "product": "platform",
+      "ui": "library",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/library.get.md"
+    },
+    {
+      "id": "library.list",
+      "title": "List my creations",
+      "summary": "List the newest creations of one kind.",
+      "description": "List the newest creations of one kind (image, video, speech, track, transcript, voice, lipsync, notebook). Use library.search to find something by what it is about. Returns kind, id, title and small facts for each.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "description": "Which sort of creation to list.",
+            "enum": [
+              "image",
+              "video",
+              "speech",
+              "track",
+              "transcript",
+              "voice",
+              "lipsync",
+              "notebook"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "maximum": 50,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ListIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "ItemOut": {
+            "properties": {
+              "kind": {
+                "title": "Kind",
+                "type": "string"
+              },
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "uri": {
+                "title": "Uri",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "created_at": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Created At"
+              },
+              "detail": {
+                "additionalProperties": true,
+                "title": "Detail",
+                "type": "object"
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "uri",
+              "title"
+            ],
+            "title": "ItemOut",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/ItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ListOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "kind": "image",
+          "limit": 5
+        }
+      ],
+      "effect": "read",
+      "flags": [
+        "private"
+      ],
+      "requires": [],
+      "long": false,
+      "product": "platform",
+      "ui": "library",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/library.list.md"
+    },
+    {
+      "id": "library.rename",
+      "title": "Rename a creation",
+      "summary": "Give a creation a new name.",
+      "description": "Change the name of a creation that has one (a song, a transcript, a voice, a notebook, a talking video). Images, videos and speech have no name to change.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "image",
+              "video",
+              "speech",
+              "track",
+              "transcript",
+              "voice",
+              "lipsync",
+              "notebook"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "id": {
+            "description": "The id from a search or a list.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "description": "The new name.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "title"
+        ],
+        "title": "RenameIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "ItemOut": {
+            "properties": {
+              "kind": {
+                "title": "Kind",
+                "type": "string"
+              },
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "uri": {
+                "title": "Uri",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "created_at": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Created At"
+              },
+              "detail": {
+                "additionalProperties": true,
+                "title": "Detail",
+                "type": "object"
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "uri",
+              "title"
+            ],
+            "title": "ItemOut",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "item": {
+            "$ref": "#/$defs/ItemOut"
+          }
+        },
+        "required": [
+          "item"
+        ],
+        "title": "GetOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "kind": "track",
+          "id": "0b7c1f9e",
+          "title": "Rain song"
+        }
+      ],
+      "effect": "change",
+      "flags": [
+        "private"
+      ],
+      "requires": [],
+      "long": false,
+      "product": "platform",
+      "ui": "library",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/library.rename.md"
+    },
+    {
+      "id": "library.search",
+      "title": "Search my creations",
+      "summary": "Find things the person made earlier by what they were about.",
+      "description": "Find things the person made earlier (images, videos, songs, speech, transcripts, voices, notebooks) by what they were about. It names the things it finds but does not read inside documents: to learn what their documents say, use notebook.search. Returns kind, id and a short text for each.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "description": "What to look for.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "limit": {
+            "default": 6,
+            "description": "How many results at most.",
+            "maximum": 12,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "Hit": {
+            "properties": {
+              "kind": {
+                "title": "Kind",
+                "type": "string"
+              },
+              "product_id": {
+                "title": "Product Id",
+                "type": "string"
+              },
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "uri": {
+                "title": "Uri",
+                "type": "string"
+              },
+              "text": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Text"
+              }
+            },
+            "required": [
+              "kind",
+              "product_id",
+              "id",
+              "uri"
+            ],
+            "title": "Hit",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/$defs/Hit"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "SearchOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "query": "the song I made about the rain"
+        }
+      ],
+      "effect": "read",
+      "flags": [
+        "private"
+      ],
+      "requires": [],
+      "long": false,
+      "product": "platform",
+      "ui": "library",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/library.search.md"
+    },
+    {
+      "id": "lipsync.make",
+      "title": "Lip sync",
+      "summary": "Make a picture talk.",
+      "description": "Make a picture of the library talk: a video of the face saying words (made into speech here) or a recording. The video is always marked AI-generated. It needs the person's word, in the app window, about the picture and the voice.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "image_id": {
+            "description": "The picture, from the library.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Image Id",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Words for the face to say.",
+            "title": "Text"
+          },
+          "source_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "track",
+                  "speech"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Or a recording of the library.",
+            "title": "Source Kind"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Id"
+          },
+          "voice": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "A built-in voice for the words.",
+            "title": "Voice"
+          },
+          "picture_is": {
+            "description": "What the picture is: 'drawn' (artwork), 'own' (the person) or 'permission' (someone who agreed).",
+            "enum": [
+              "drawn",
+              "own",
+              "permission"
+            ],
+            "title": "Picture Is",
+            "type": "string"
+          },
+          "voice_is": {
+            "anyOf": [
+              {
+                "enum": [
+                  "generated",
+                  "own",
+                  "permission"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "For a recording: whose voice: 'own' or 'permission'. Words are 'generated'.",
+            "title": "Voice Is"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Title"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          }
+        },
+        "required": [
+          "image_id",
+          "picture_is"
+        ],
+        "title": "LipSyncIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "clip_id": {
+            "title": "Clip Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "clip_id",
+          "title",
+          "seconds",
+          "uri"
+        ],
+        "title": "ClipOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "image_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "text": "Hello, I am your guide.",
+          "picture_is": "drawn"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "needs_consent",
+        "costly",
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        },
+        {
+          "kind": "model",
+          "name": "lipsync"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-voice",
+      "ui": "voice.lipsync",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "I confirm I may use this picture and this voice: the picture is artwork, a picture of me, or of someone who agreed; the voice is made here from words, my own, or one I have permission to use. The video is marked as AI-generated.",
+      "help": "docs/help/lipsync.make.md"
+    },
+    {
+      "id": "models.download",
+      "title": "Get a model",
+      "summary": "Download a model to this computer.",
+      "description": "Start downloading a model that is missing. The person is always shown the files and their size in the app window and must approve. One download runs at a time; follow it with models.status.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "model_id": {
+            "description": "From models.list.",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Model Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_id"
+        ],
+        "title": "DownloadIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "download_id": {
+            "title": "Download Id",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "bytes_total": {
+            "title": "Bytes Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "download_id",
+          "model_id",
+          "bytes_total"
+        ],
+        "title": "DownloadOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "model_id": "kokoro-82m"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "needs_consent",
+        "costly"
+      ],
+      "requires": [
+        {
+          "kind": "runtime",
+          "name": "models"
+        }
+      ],
+      "long": false,
+      "product": "platform",
+      "ui": "models",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "I agree to download this model to this computer. The files and their size are shown in the window before I approve.",
+      "help": "docs/help/models.download.md"
+    },
+    {
+      "id": "models.list",
+      "title": "Models on this computer",
+      "summary": "Which models are here, partly here or missing.",
+      "description": "List the models this app knows, with whether each is on this computer (ready), partly downloaded or missing, and how much is missing. Filter by task (speak, music, transcribe ...).",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "task": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Only models for a task: speak, music, transcribe ...",
+            "title": "Task"
+          }
+        },
+        "title": "ListIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "ModelRow": {
+            "properties": {
+              "model_id": {
+                "title": "Model Id",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "status": {
+                "title": "Status",
+                "type": "string"
+              },
+              "product_id": {
+                "title": "Product Id",
+                "type": "string"
+              },
+              "bytes_missing": {
+                "default": 0,
+                "title": "Bytes Missing",
+                "type": "integer"
+              },
+              "memory_warning": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Memory Warning"
+              }
+            },
+            "required": [
+              "model_id",
+              "title",
+              "status",
+              "product_id"
+            ],
+            "title": "ModelRow",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/$defs/ModelRow"
+            },
+            "title": "Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models"
+        ],
+        "title": "ListOut",
+        "type": "object"
+      },
+      "examples": [
+        {},
+        {
+          "task": "speak"
+        }
+      ],
+      "effect": "read",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "runtime",
+          "name": "models"
+        }
+      ],
+      "long": false,
+      "product": "platform",
+      "ui": "models",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/models.list.md"
+    },
+    {
+      "id": "models.status",
+      "title": "Model and download status",
+      "summary": "State of one model and of the running download.",
+      "description": "The state of one model (ready, partial, missing), the progress of the download that runs now, and the free disk space.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "model_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "One model; omit for the downloads.",
+            "title": "Model Id"
+          }
+        },
+        "title": "StatusIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "DownloadRow": {
+            "properties": {
+              "download_id": {
+                "title": "Download Id",
+                "type": "string"
+              },
+              "model_id": {
+                "title": "Model Id",
+                "type": "string"
+              },
+              "status": {
+                "title": "Status",
+                "type": "string"
+              },
+              "bytes_done": {
+                "title": "Bytes Done",
+                "type": "integer"
+              },
+              "bytes_total": {
+                "title": "Bytes Total",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "download_id",
+              "model_id",
+              "status",
+              "bytes_done",
+              "bytes_total"
+            ],
+            "title": "DownloadRow",
+            "type": "object"
+          },
+          "ModelRow": {
+            "properties": {
+              "model_id": {
+                "title": "Model Id",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "status": {
+                "title": "Status",
+                "type": "string"
+              },
+              "product_id": {
+                "title": "Product Id",
+                "type": "string"
+              },
+              "bytes_missing": {
+                "default": 0,
+                "title": "Bytes Missing",
+                "type": "integer"
+              },
+              "memory_warning": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Memory Warning"
+              }
+            },
+            "required": [
+              "model_id",
+              "title",
+              "status",
+              "product_id"
+            ],
+            "title": "ModelRow",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ModelRow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "download": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DownloadRow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "disk_free_bytes": {
+            "title": "Disk Free Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "disk_free_bytes"
+        ],
+        "title": "StatusOut",
+        "type": "object"
+      },
+      "examples": [
+        {},
+        {
+          "model_id": "kokoro-82m"
+        }
+      ],
+      "effect": "read",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "runtime",
+          "name": "models"
+        }
+      ],
+      "long": false,
+      "product": "platform",
+      "ui": "models",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/models.status.md"
+    },
+    {
+      "id": "music.generate",
+      "title": "Make music",
+      "summary": "Make a piece of music, a song or a sound effect.",
+      "description": "Make a piece of music or a song and save it to the person's library. Use it when the person asks you to compose, make or write music, a song or a tune. Describe the style in a few words in English (genre, mood, instruments). Add lyrics only if the person gave them or asked for a song with words. Takes about a minute for 30 seconds.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "description": "The style and mood in a few words, in English: genre, mood, instruments.",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "lyrics": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The words to sing, if any.",
+            "title": "Lyrics"
+          },
+          "instrumental": {
+            "default": false,
+            "description": "No singing.",
+            "title": "Instrumental",
+            "type": "boolean"
+          },
+          "seconds": {
+            "default": 30,
+            "description": "Length in seconds.",
+            "maximum": 120,
+            "minimum": 5,
+            "title": "Seconds",
+            "type": "number"
+          },
+          "mode": {
+            "default": "song",
+            "description": "A song, or a sound effect.",
+            "enum": [
+              "song",
+              "sfx"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Title"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Seed"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          }
+        },
+        "required": [
+          "description"
+        ],
+        "title": "MusicIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "track_id": {
+            "title": "Track Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "track_id",
+          "product_id",
+          "title",
+          "seconds",
+          "uri"
+        ],
+        "title": "TrackOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "description": "calm piano, rainy evening"
+        },
+        {
+          "description": "upbeat pop",
+          "lyrics": "[verse]\nSun",
+          "seconds": 60
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "costly"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        },
+        {
+          "kind": "model",
+          "name": "music"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-voice",
+      "ui": "music.create",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/music.generate.md"
+    },
+    {
+      "id": "music.lyrics",
+      "title": "Write lyrics",
+      "summary": "Write song lyrics from an idea.",
+      "description": "Write song lyrics in sections ([verse], [chorus]) from an idea, to read or to give to music.generate. Nothing is saved.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "idea": {
+            "description": "What the song is about.",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Idea",
+            "type": "string"
+          },
+          "style": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The kind of music it is for.",
+            "title": "Style"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The language to write in.",
+            "title": "Language"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "maximum": 120,
+                "minimum": 5,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "How long the song is.",
+            "title": "Seconds"
+          }
+        },
+        "required": [
+          "idea"
+        ],
+        "title": "LyricsIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "lyrics": {
+            "title": "Lyrics",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lyrics"
+        ],
+        "title": "LyricsOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "idea": "a song about a lighthouse keeper",
+          "style": "folk"
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        },
+        {
+          "kind": "chat",
+          "name": ""
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-voice",
+      "ui": "music.lyrics",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/music.lyrics.md"
+    },
+    {
+      "id": "music.separate",
+      "title": "Split into parts",
+      "summary": "Split a recording into its voice, drums, bass and so on.",
+      "description": "Split a recording of the library into parts (vocals, drums, bass, other). Each part is saved as a new track.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "source_kind": {
+            "default": "track",
+            "description": "Whether the recording is a track or a speech.",
+            "enum": [
+              "track",
+              "speech"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_id": {
+            "description": "The id of the recording.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "stems": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 8,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Which parts to keep; all if omitted.",
+            "title": "Stems"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "title": "SeparateIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "TrackRef": {
+            "properties": {
+              "track_id": {
+                "title": "Track Id",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "seconds": {
+                "title": "Seconds",
+                "type": "number"
+              },
+              "uri": {
+                "title": "Uri",
+                "type": "string"
+              },
+              "stem": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Stem"
+              }
+            },
+            "required": [
+              "track_id",
+              "title",
+              "seconds",
+              "uri"
+            ],
+            "title": "TrackRef",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "track_id": {
+            "title": "Track Id",
+            "type": "string"
+          },
+          "tracks": {
+            "items": {
+              "$ref": "#/$defs/TrackRef"
+            },
+            "title": "Tracks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "track_id",
+          "tracks"
+        ],
+        "title": "TracksOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "source_kind": "track",
+          "source_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "stems": [
+            "vocals"
+          ]
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        },
+        {
+          "kind": "model",
+          "name": "separate"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-voice",
+      "ui": "music.separate",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/music.separate.md"
+    },
+    {
+      "id": "notebook.add_source",
+      "title": "Add a note to a notebook",
+      "summary": "Add a text note as a source of a notebook.",
+      "description": "Add a text note (a title and the text) as a source of a notebook. It is read in the background and can then be asked about. Files and web pages are added in the app.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "notebook_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Notebook Id",
+            "type": "string"
+          },
+          "title": {
+            "description": "A name for the note.",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "content": {
+            "description": "The text of the note.",
+            "maxLength": 1000000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "notebook_id",
+          "title",
+          "content"
+        ],
+        "title": "AddSourceIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "notebook_id": {
+            "title": "Notebook Id",
+            "type": "string"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "notebook_id",
+          "document_id",
+          "title"
+        ],
+        "title": "SourceOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "notebook_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "title": "Budget",
+          "content": "Budget: 40,000."
+        }
+      ],
+      "effect": "change",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-notebooks"
+        },
+        {
+          "kind": "notebooks",
+          "name": ""
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-notebooks",
+      "ui": "notebook.list",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/notebook.add_source.md"
+    },
+    {
+      "id": "notebook.ask",
+      "title": "Ask a notebook",
+      "summary": "Ask a question that the notebook's sources answer.",
+      "description": "Ask one notebook a question. The answer is written from its sources only, with [n] labels that point at the passages used. Use notebook.search to look across all notebooks instead.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "notebook_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Notebook Id",
+            "type": "string"
+          },
+          "question": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "document_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Only these sources; all the ready ones if omitted.",
+            "title": "Document Ids"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Continue a conversation.",
+            "title": "Conversation Id"
+          }
+        },
+        "required": [
+          "notebook_id",
+          "question"
+        ],
+        "title": "AskIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "reply": {
+            "title": "Reply",
+            "type": "string"
+          },
+          "citations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Conversation Id"
+          }
+        },
+        "required": [
+          "reply"
+        ],
+        "title": "AskOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "notebook_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "question": "What is the launch budget?"
+        }
+      ],
+      "effect": "read",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-notebooks"
+        },
+        {
+          "kind": "notebooks",
+          "name": ""
+        },
+        {
+          "kind": "chat",
+          "name": ""
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-notebooks",
+      "ui": "notebook.list",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/notebook.ask.md"
+    },
+    {
+      "id": "notebook.create",
+      "title": "Create a notebook",
+      "summary": "Make an empty notebook.",
+      "description": "Make a new, empty notebook. Add sources to it afterwards.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "default": "Untitled notebook",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "CreateIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "notebook_id": {
+            "title": "Notebook Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "notebook_id",
+          "title",
+          "uri"
+        ],
+        "title": "NotebookOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "title": "Trip to Lisbon"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-notebooks"
+        },
+        {
+          "kind": "notebooks",
+          "name": ""
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-notebooks",
+      "ui": "notebook.create",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/notebook.create.md"
+    },
+    {
+      "id": "notebook.list",
+      "title": "My notebooks",
+      "summary": "List the person's notebooks.",
+      "description": "List the person's notebooks with their ids and how many sources each has, to use as notebook_id in the other notebook actions.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "ListIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "NotebookRow": {
+            "properties": {
+              "notebook_id": {
+                "title": "Notebook Id",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "uri": {
+                "title": "Uri",
+                "type": "string"
+              },
+              "sources": {
+                "title": "Sources",
+                "type": "integer"
+              },
+              "ready": {
+                "title": "Ready",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "notebook_id",
+              "title",
+              "uri",
+              "sources",
+              "ready"
+            ],
+            "title": "NotebookRow",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "notebooks": {
+            "items": {
+              "$ref": "#/$defs/NotebookRow"
+            },
+            "title": "Notebooks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "notebooks"
+        ],
+        "title": "ListOut",
+        "type": "object"
+      },
+      "examples": [
+        {}
+      ],
+      "effect": "read",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-notebooks"
+        },
+        {
+          "kind": "notebooks",
+          "name": ""
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-notebooks",
+      "ui": "notebook.list",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/notebook.list.md"
+    },
+    {
+      "id": "notebook.search",
+      "title": "Search inside notebooks",
+      "summary": "Find passages about a topic across all notebooks.",
+      "description": "Look inside the person's notebooks (the documents, notes and pages they added as sources) for passages about a topic. Use it when they ask about something that may be in their own documents or notebooks. Answer only from the passages that are about the question, and say which notebook and source each came from.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "description": "What to look for.",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "Passage": {
+            "properties": {
+              "notebook_id": {
+                "title": "Notebook Id",
+                "type": "string"
+              },
+              "notebook": {
+                "title": "Notebook",
+                "type": "string"
+              },
+              "document_id": {
+                "title": "Document Id",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "snippet": {
+                "title": "Snippet",
+                "type": "string"
+              }
+            },
+            "required": [
+              "notebook_id",
+              "notebook",
+              "document_id",
+              "title",
+              "snippet"
+            ],
+            "title": "Passage",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/$defs/Passage"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "SearchOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "query": "launch budget"
+        }
+      ],
+      "effect": "read",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-notebooks"
+        },
+        {
+          "kind": "notebooks",
+          "name": ""
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-notebooks",
+      "ui": "notebook.list",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/notebook.search.md"
+    },
+    {
+      "id": "notebook.studio_output",
+      "title": "Make a Studio output",
+      "summary": "Make a report, quiz, flashcards, slides or another output from a notebook.",
+      "description": "Make an output from a notebook's sources and keep it in the notebook's Studio: report, study_guide, flashcards, quiz, mindmap, word, pdf, slides, datatable, audio, infographic. Slow ones return a job handle.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "notebook_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Notebook Id",
+            "type": "string"
+          },
+          "format": {
+            "description": "What to make: report, study_guide, flashcards, quiz, mindmap, word, pdf, slides, datatable, audio, infographic.",
+            "enum": [
+              "report",
+              "study_guide",
+              "flashcards",
+              "quiz",
+              "mindmap",
+              "word",
+              "pdf",
+              "slides",
+              "datatable",
+              "audio",
+              "infographic"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "prompt": {
+            "default": "",
+            "description": "What to focus on, if anything.",
+            "maxLength": 1000,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "document_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Document Ids"
+          }
+        },
+        "required": [
+          "notebook_id",
+          "format"
+        ],
+        "title": "StudioIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "notebook_id": {
+            "title": "Notebook Id",
+            "type": "string"
+          },
+          "artifact_id": {
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "format": {
+            "title": "Format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "notebook_id",
+          "artifact_id",
+          "format"
+        ],
+        "title": "StudioOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "notebook_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "format": "quiz"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-notebooks"
+        },
+        {
+          "kind": "notebooks",
+          "name": ""
+        },
+        {
+          "kind": "chat",
+          "name": ""
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-notebooks",
+      "ui": "notebook.list",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/notebook.studio_output.md"
+    },
+    {
+      "id": "speech.speak",
+      "title": "Text to speech",
+      "summary": "Read a text aloud in a voice and save it.",
+      "description": "Read a text aloud and save the recording to the person's library. Use it when the person asks to hear a text, read something aloud, or make a voice-over. Choose a built-in voice (voice), a saved voice (saved_voice, from voice.list), or leave both out. Takes a few seconds to a minute; returns the speech id.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "description": "What to say.",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "voice": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "A built-in voice of the model.",
+            "title": "Voice"
+          },
+          "saved_voice": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The id of a saved voice (voice.list), instead of voice.",
+            "title": "Saved Voice"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "A model id; the best ready one.",
+            "title": "Model"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The model's own options.",
+            "title": "Options"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SpeakIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "speech_id": {
+            "title": "Speech Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "speech_id",
+          "uri",
+          "seconds"
+        ],
+        "title": "SpeechOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "text": "Hello, and welcome."
+        },
+        {
+          "text": "Good evening.",
+          "saved_voice": "5c1d0e2a-0000-4000-8000-000000000000"
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        },
+        {
+          "kind": "model",
+          "name": "speak"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-voice",
+      "ui": "voice.speak",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/speech.speak.md"
+    },
+    {
+      "id": "speech.transcribe",
+      "title": "Speech to text",
+      "summary": "Write down what a recording of the library says.",
+      "description": "Write down what a recording in the library says (a track or a speech) and save it as a transcript. Returns the start of the text and the transcript's id.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "source_kind": {
+            "default": "track",
+            "description": "Whether the recording is a track or a speech.",
+            "enum": [
+              "track",
+              "speech"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_id": {
+            "description": "The id of the recording.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Title"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "title": "TranscribeIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "transcript_id": {
+            "title": "Transcript Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "transcript_id",
+          "uri",
+          "title",
+          "seconds",
+          "text"
+        ],
+        "title": "TranscriptOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "source_kind": "track",
+          "source_id": "0b7c1f9e-0000-4000-8000-000000000000"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        },
+        {
+          "kind": "model",
+          "name": "transcribe"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-voice",
+      "ui": "voice.transcribe",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/speech.transcribe.md"
+    },
+    {
+      "id": "video.animate",
+      "title": "Animate a picture",
+      "summary": "Make a picture of the library move.",
+      "description": "Turn a picture the person has in the library into a short clip (2 or 5 seconds) by saying what should move. Takes minutes; returns a job handle when it is not done within the wait.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "image_id": {
+            "description": "The picture to set moving.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Image Id",
+            "type": "string"
+          },
+          "prompt": {
+            "description": "What should move, in English.",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "seconds": {
+            "default": 2,
+            "description": "How long the clip is.",
+            "enum": [
+              2,
+              5
+            ],
+            "title": "Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "image_id",
+          "prompt"
+        ],
+        "title": "AnimateIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "video_id": {
+            "title": "Video Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "integer"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "video_id",
+          "product_id",
+          "uri",
+          "prompt",
+          "seconds",
+          "width",
+          "height"
+        ],
+        "title": "VideoOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "image_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "prompt": "the clouds drift slowly to the left"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "costly"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-video",
+      "ui": "video.animate",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/video.animate.md"
+    },
+    {
+      "id": "video.generate",
+      "title": "Make a video",
+      "summary": "Make a short video clip from a description.",
+      "description": "Make a short video clip (2 or 5 seconds) from a description and save it to the person's library. It takes minutes on this computer and only one clip is made at a time, so it returns a job handle when it is not done within the wait. To set a picture moving, use video.animate.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "prompt": {
+            "description": "What happens in the clip, in clear concrete words, in English.",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "shape": {
+            "default": "landscape",
+            "description": "The shape of the picture.",
+            "enum": [
+              "landscape",
+              "portrait",
+              "square"
+            ],
+            "title": "Shape",
+            "type": "string"
+          },
+          "seconds": {
+            "default": 2,
+            "description": "How long the clip is.",
+            "enum": [
+              2,
+              5
+            ],
+            "title": "Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "title": "GenerateIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "video_id": {
+            "title": "Video Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "integer"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "video_id",
+          "product_id",
+          "uri",
+          "prompt",
+          "seconds",
+          "width",
+          "height"
+        ],
+        "title": "VideoOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "prompt": "waves rolling onto a beach at sunrise"
+        },
+        {
+          "prompt": "a paper boat on a rainy street",
+          "shape": "portrait",
+          "seconds": 5
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "costly"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-video",
+      "ui": "video.create",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/video.generate.md"
+    },
+    {
+      "id": "voice.clone",
+      "title": "Copy a voice",
+      "summary": "Save a voice cloned from a recording.",
+      "description": "Save a voice cloned from a recording of the library (2 to 30 seconds of one person speaking clearly). It needs the person's word, in the app window, that the voice is their own or that they have permission. Returns the voice id.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "source_kind": {
+            "default": "track",
+            "description": "Whether the recording is a track or a speech.",
+            "enum": [
+              "track",
+              "speech"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_id": {
+            "description": "The id of the recording.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "voice_is": {
+            "description": "Whose voice it is: 'own' (the person's own voice) or 'permission' (someone who agreed).",
+            "enum": [
+              "own",
+              "permission"
+            ],
+            "title": "Voice Is",
+            "type": "string"
+          },
+          "reference_text": {
+            "default": "",
+            "description": "What the recording says, if known.",
+            "maxLength": 1000,
+            "title": "Reference Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "name",
+          "voice_is"
+        ],
+        "title": "CloneIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "voice_id": {
+            "title": "Voice Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "voice_id",
+          "name",
+          "kind",
+          "uri"
+        ],
+        "title": "VoiceOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "source_kind": "speech",
+          "source_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "name": "My voice",
+          "voice_is": "own"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "needs_consent",
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-voice",
+      "ui": "voice.voices",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "I confirm this is my own voice, or that I have the permission of the person whose voice it is.",
+      "help": "docs/help/voice.clone.md"
+    },
+    {
+      "id": "voice.convert",
+      "title": "Change a voice",
+      "summary": "Make a recording sound like a saved cloned voice.",
+      "description": "Make a recording of the library sound like one of the person's cloned voices (voice.list, kind clone). Keeps the original and saves the result as a new track.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "source_kind": {
+            "default": "track",
+            "description": "Whether the recording is a track or a speech.",
+            "enum": [
+              "track",
+              "speech"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_id": {
+            "description": "The id of the recording.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "saved_voice": {
+            "description": "A cloned voice (voice.list).",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Saved Voice",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Title"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Seed"
+          }
+        },
+        "required": [
+          "source_id",
+          "saved_voice"
+        ],
+        "title": "ConvertIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "track_id": {
+            "title": "Track Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "track_id",
+          "product_id",
+          "title",
+          "seconds",
+          "uri"
+        ],
+        "title": "TrackOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "source_kind": "track",
+          "source_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "saved_voice": "5c1d0e2a-0000-4000-8000-000000000000"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        },
+        {
+          "kind": "model",
+          "name": "convert"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-voice",
+      "ui": "voice.convert",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/voice.convert.md"
+    },
+    {
+      "id": "voice.design",
+      "title": "Describe a voice",
+      "summary": "Save a voice described in words.",
+      "description": "Save a new voice described in words (age, tone, pace) so it can be used again. No recording is involved. Returns the voice id.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "description": {
+            "description": "The voice in words: age, tone, pace. No brackets.",
+            "maxLength": 300,
+            "minLength": 3,
+            "title": "Description",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description"
+        ],
+        "title": "DesignIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "voice_id": {
+            "title": "Voice Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "voice_id",
+          "name",
+          "kind",
+          "uri"
+        ],
+        "title": "VoiceOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "name": "Calm narrator",
+          "description": "a calm woman, slow and warm"
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-voice",
+      "ui": "voice.voices",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/voice.design.md"
+    },
+    {
+      "id": "voice.edit_speech",
+      "title": "Edit speech",
+      "summary": "Change some words in a recording.",
+      "description": "Change some of the words a recording says, keeping the voice: give what it says now (old_text) and what it should say (text). Saves the result as a new track.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "source_kind": {
+            "default": "track",
+            "description": "Whether the recording is a track or a speech.",
+            "enum": [
+              "track",
+              "speech"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_id": {
+            "description": "The id of the recording.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "old_text": {
+            "description": "What the recording says now.",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Old Text",
+            "type": "string"
+          },
+          "text": {
+            "description": "What it should say instead.",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Title"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Seed"
+          }
+        },
+        "required": [
+          "source_id",
+          "old_text",
+          "text"
+        ],
+        "title": "EditSpeechIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "track_id": {
+            "title": "Track Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "track_id",
+          "product_id",
+          "title",
+          "seconds",
+          "uri"
+        ],
+        "title": "TrackOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "source_kind": "speech",
+          "source_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "old_text": "meet at noon",
+          "text": "meet at one"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        },
+        {
+          "kind": "model",
+          "name": "edit"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-voice",
+      "ui": "voice.edit",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/voice.edit_speech.md"
+    },
+    {
+      "id": "voice.list",
+      "title": "My saved voices",
+      "summary": "List the voices the person saved.",
+      "description": "List the saved voices (described in words, or cloned from a recording) with their ids, to use as saved_voice in speech.speak, audiobook.make and the others.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "design",
+                  "clone"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Only described or only cloned.",
+            "title": "Kind"
+          }
+        },
+        "title": "VoiceListIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "VoiceRow": {
+            "properties": {
+              "voice_id": {
+                "title": "Voice Id",
+                "type": "string"
+              },
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "kind": {
+                "title": "Kind",
+                "type": "string"
+              },
+              "description": {
+                "default": "",
+                "title": "Description",
+                "type": "string"
+              },
+              "uri": {
+                "title": "Uri",
+                "type": "string"
+              }
+            },
+            "required": [
+              "voice_id",
+              "name",
+              "kind",
+              "uri"
+            ],
+            "title": "VoiceRow",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "voices": {
+            "items": {
+              "$ref": "#/$defs/VoiceRow"
+            },
+            "title": "Voices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "voices"
+        ],
+        "title": "VoiceListOut",
+        "type": "object"
+      },
+      "examples": [
+        {},
+        {
+          "kind": "clone"
+        }
+      ],
+      "effect": "read",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-voice",
+      "ui": "voice.voices",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/voice.list.md"
+    }
+  ]
+}

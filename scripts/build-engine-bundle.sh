@@ -49,24 +49,17 @@ done
 rm -f "$COMFY_REQ"
 
 # The notebooks' document reader (ADR-0065 decision 7): Docling in an environment of its own, set up on
-# request. A hashed lock per platform, compiled from products/wasifyai-notebooks/reader/requirements.in;
-# the engine installs it with --require-hashes. Intel Macs are left out (torch no longer ships for them).
-READER_PLATFORMS="aarch64-apple-darwin x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-pc-windows-msvc"
+# request. The hashed lock per platform is committed in the repository (scripts/lock-reader.sh writes it, a
+# development checkout uses the same files); the bundle carries a copy and the engine installs it with
+# --require-hashes. Intel Macs are left out (torch no longer ships for them).
+READER_SRC="products/wasifyai-notebooks/reader"
 mkdir -p "$OUT/products/wasifyai-notebooks/reader"
-cp products/wasifyai-notebooks/reader/models.yaml "$OUT/products/wasifyai-notebooks/reader/"
-for target in $READER_PLATFORMS; do
-  echo "locking the document reader for $target"
-  # PyPI's Linux torch brings about 3 GB of CUDA wheels; the CPU build comes from PyTorch's own index
-  # (the installer passes the same index, see reader_install.py)
-  EXTRA=""
-  case "$target" in
-    *linux*) EXTRA="--extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match" ;;
-  esac
-  # shellcheck disable=SC2086
-  uv pip compile products/wasifyai-notebooks/reader/requirements.in --python-version "${PY_VERSION%.*}" \
-    --python-platform "$target" --generate-hashes --no-header --quiet $EXTRA \
-    -o "$OUT/products/wasifyai-notebooks/reader/requirements-$target.lock"
-done
+cp "$READER_SRC/models.yaml" "$OUT/products/wasifyai-notebooks/reader/"
+if ! ls "$READER_SRC"/requirements-*.lock >/dev/null 2>&1; then
+  echo "no document reader lock files in $READER_SRC: run scripts/lock-reader.sh first" >&2
+  exit 1
+fi
+cp "$READER_SRC"/requirements-*.lock "$OUT/products/wasifyai-notebooks/reader/"
 
 for p in $PRODUCTS; do
   mkdir -p "$OUT/products/$p"

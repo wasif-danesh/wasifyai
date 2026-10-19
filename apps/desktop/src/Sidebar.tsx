@@ -31,10 +31,11 @@ export function Sidebar({
         resolve={resolveItem(route, go, { conversationId, notebook })}
         onSearch={() => go("library")}
         header={
-          // room for the window's traffic-light buttons, and a place to drag the window by
+          // room for the window's traffic-light buttons (the start padding), a place to drag the window by, and the
+          // hide button at the end of the row, next to the page title across the divider
           <div
             data-tauri-drag-region
-            className={cn("flex h-10 items-center gap-1", MAC && "ps-20")}
+            className={cn("flex h-10 items-center justify-end gap-1 pe-2", MAC && "ps-20")}
           >
             <button
               type="button"

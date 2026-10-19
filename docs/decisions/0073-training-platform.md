@@ -11,7 +11,7 @@
 - **Supersedes:** ADR-0062's "LoRA training: mflux" row (the engine choice moves to this ADR and ADR-0076; mflux
   stays for the Mac), and re-opens ADR-0054 (withdrawn) for the desktop.
 - **Specific ADRs:** ADR-0074 (language models), ADR-0075 (decision models), ADR-0076 (image LoRA).
-- **Plan:** `docs/phase5-agent-training-compose-plan.md`, stages T0 to T5.
+- **Plan:** `docs/phase5-agent-training-video-builder-plan.md`, stages T0 to T5.
 
 ## Context
 
@@ -171,3 +171,31 @@ models; continuous training on chats.
 - **Rented GPUs:** the person's **own account and key on the desktop**; **our own account on the web app**
   (to be confirmed when the web hosting is settled). The first provider is not named yet; it is chosen in T0.
 - **Decision model** means Unsloth's decision model (confirmed).
+
+## Amendment after spike T0 (2026-10-19; report: `docs/spikes/training-t0.md`)
+
+Measured on the owner's M5 Pro, 64 GB. Verdict: **T1 Go**, with the conditions below.
+
+- **The component seam (decision 2) is concrete:** Unsloth's trainer runs **headless**, with no Studio UI and no server:
+  `unsloth train --config x.yaml`, the Python adapter `create_mlx_trainer_adapter()`, and the worker entry
+  `run_mlx_training_process(event_queue, stop_queue, config)`, all with progress, stop-with-save and resume (measured).
+  Studio's REST routes (`/api/train/*`) exist but were read, not run. Our seam is a **small runner script of ours that
+  runs as a separate process and only speaks JSON lines over a pipe** (progress out, a stop line in).
+- **Licence boundary, as the texts read (no legal advice; counsel must read it before shipping):** the repository
+  `LICENSE` is Apache-2.0, but `COPYING` is the AGPL text with the statement that `unsloth/*` is Apache-2.0 and
+  `studio/*` and `unsloth_cli/*` are AGPLv3. In the installed packages the "Apache" `unsloth` library has AGPL headers in
+  67 of 145 files; **the MLX trainer itself (`unsloth_zoo/mlx/*`) carries AGPL v3 headers while the package metadata
+  says LGPL-3.0-or-later**. AGPL v3 says inclusion of a covered work in an aggregate of separate and independent
+  works does not extend the licence to the rest. The conservative reading is the one already planned and now sharper:
+  **ship the component unmodified, with its `COPYING` and a source link, and a runner that is a separate executable**.
+  Open for counsel: the mixed headers, and whether a runner importing the adapter in-process counts as a "larger program".
+- **T1 conditions:** (a) the licence reading above; (b) pre-seed the transformers side environments (60 MB each) so
+  installs need no network; (c) pin unsloth 2026.10.6 and mlx 0.32.3 and count the **2.1 GB** environment as the
+  component's size (a no-torch variant was not tried); (d) own the Qwen3.5 PEFT conversion (`mlx2peft.py`) and the
+  **thinking-off serving rule**.
+- **Measured descriptors (decision 3):** Unsloth MLX QLoRA Qwen3-0.6B 0.31 s/step, 1.19 GB; Qwen3.5-0.8B 0.22 s/step,
+  1.76 GB; mlx-lm 0.058 s/step, 0.98 GB and 0.48 s/step, **6.33 GB** (Qwen3.5's large vocabulary); Laya sorter 0.14
+  s/step, a 12 s run, 15 ms per answer; Z-Image LoRA with mflux 9 to 12 s/step when not swapping (30 s or worse with
+  full swap), 39.9 GB footprint; captions 2.5 to 3.4 s per picture with Qwen3.5-9B. Table in the report, section 7.
+- **Not measured:** Qwen3.5-9B and any model over 2B; the 16 and 32 GB tiers; Clef; the REST routes; Unsloth's diffusion
+  trainer and AI Toolkit; rented GPUs; Windows and Linux.

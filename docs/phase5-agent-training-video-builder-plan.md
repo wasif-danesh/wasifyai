@@ -1,4 +1,4 @@
-# Phase 5 plan: an agent, training, and Compose (desktop first)
+# Phase 5 plan: an agent, training, and Video Builder (desktop first)
 
 Written 2026-10-18 (all of ADR-0072 to ADR-0077 **Accepted** the same day, see "Decisions"), after the owner approved ADR-0068 to ADR-0071 (`docs/phase4-agent-plan.md`). **Revised the same
 day** after the owner's Unsloth Studio screenshot: "decision model" is Unsloth's decision model, training reuses
@@ -9,7 +9,9 @@ things the owner asked for, in six Proposed ADRs:
 |---|---|
 | An AI agent system on **Hermes Agent**: type a goal, get a result | ADR-0072 |
 | Training, **simple for non-technical people**, reusing **Unsloth**: the platform, **language models**, **decision models** ("sorters"), **image LoRA** (upload pictures only; the app writes the captions and suggests the magic word) | ADR-0073 (platform), ADR-0074 (language), ADR-0075 (decision model), ADR-0076 (image LoRA, with full diffusion fine-tuning as a remote-only last section) |
-| Something like **HyperFrames** (experimental): videos written as code | ADR-0077 (Compose) |
+| Something like **HyperFrames** (experimental): videos written as code | ADR-0077 (Video Builder) |
+| **Text to motion graphics**, working name Motion Graphics (`iart-ai/motion-skills`), added later the same day | ADR-0079 (Accepted) |
+| **Text/image to 3D** (`TRELLIS.2`, `Pixal3D`), added later the same day | ADR-0080 (Accepted) |
 
 Nothing here is built. Everything waits for the owner's yes to the ADRs and to the components they install.
 
@@ -32,7 +34,7 @@ Nothing here is built. Everything waits for the owner's yes to the ADRs and to t
    check, train) then "use it"; **the app chooses every setting** (the person sees "Quick" or "Better" and a time);
    everything Studio shows lives in a collapsed "For experts" panel. For images the person **only uploads pictures**:
    the app checks them, writes the descriptions with the multimodal model, and offers three magic-word suggestions.
-5. **Hyperframes-like?** Yes, as **Compose**, experimental: adopt HyperFrames itself as the render engine behind an
+5. **Hyperframes-like?** Yes, as **Video Builder**, experimental: adopt HyperFrames itself as the render engine behind an
    interface, after two gates: the **GSAP licence** and a **sandbox** for rendering code (a composition is code).
 
 ## What the refinement changed
@@ -89,7 +91,7 @@ results."*
    languages, not guessed), **results**: what the project itself reports (benchmarks, adoption, releases) and
    what the agent could verify, marked as the project's claims when it could not.
 5. **Write.** A Markdown report with sections, a table of technologies, and **sources with the time read**. Saved as
-   a `report` in My creations, exported to PDF or Word on request, and offered as a **Compose** video later.
+   a `report` in My creations, exported to PDF or Word on request, and offered as a **Video Builder** video later.
 6. **Show its work.** The feed lists each page read; the report cites them; the transcript is kept as `agent_run`.
 
 Time: minutes. Cost: tokens (a hosted model shows a range first). Risks and the controls: README text from a
@@ -101,14 +103,14 @@ exact task type.
 ## The picture
 
 ```
- window:  Agent screen · Teach screens · Compose screen · assistant cards
+ window:  Agent screen · Teach screens · Video Builder screen · assistant cards
               │                 │                  │               │
               ▼                 ▼                  ▼               ▼
         ACTION CATALOGUE + EXECUTOR  (ADR-0068; approvals in the window, audit, limits)
               │                 │                  │
    ┌──────────┘      ┌──────────┘                  └───────────┐
    ▼                 ▼                                         ▼
- AgentEngine      Training runners                      ComposeEngine
+ AgentEngine      Training runners                      VideoBuilderEngine
  (ADR-0072)       (ADR-0073)                            (ADR-0077)
    │ Hermes in its   ├ this computer: Unsloth component  │ HyperFrames + Node +
    │ own venv;       │   (MLX on the Mac), mflux (image) │ Chrome for Testing,
@@ -131,7 +133,9 @@ exact task type.
 | Diffusion full fine-tune | **remote only**, last | memory and compute; not verified for any engine |
 | Agent with a local model | Mac with a large memory only (64,000-token context) | Hermes requirement; the cache for that context is large and shared with the one slot |
 | Agent with a hosted model | anywhere | the person's key; data leaves |
-| Compose render | CPU, any Mac | speed to be measured (V0) |
+| Video Builder render | CPU, any Mac | speed to be measured (V0) |
+| Motion graphics (template path) | any computer; the model only fills slots | ADR-0079; the custom path needs a capable model |
+| Text/image to 3D (Pixal3D; TRELLIS.2 not in v1) | **Mac (Metal)**, NVIDIA, AMD or any Vulkan card, through the native `pixal3d.cpp` binary; the original code needs NVIDIA 24 GB | author figures: M5 24 GB 9 min 21 s at 512 with 5.6 GB; RTX 4090 about 3 min; to be measured on the owner's Mac (TD0) |
 
 ## Stages
 
@@ -141,7 +145,7 @@ Sizes: S under a week, M one to two weeks, L two to four. Each ends with somethi
 
 | Stage | What | Size | Done when |
 |---|---|---|---|
-| **G0** | Spike: Hermes through the TUI gateway, ACP and the HTTP API; can the host set toolsets, working directory and write-root per task; its MCP client against our MCP server; **64,000 tokens of context on a 32 and a 64 GB Mac**; one real task (the GitHub report) with a hosted model and with a local model | S | A table of what works, the chosen path, the numbers, a recorded run |
+| **G0** | **Done 2026-10-19, Go.** Spike: Hermes through the TUI gateway, ACP and the HTTP API; can the host set toolsets, working directory and write-root per task; its MCP client against our MCP server; **64,000 tokens of context on a 32 and a 64 GB Mac**; one real task (the GitHub report) with a hosted model and with a local model | S | A table of what works, the chosen path, the numbers, a recorded run |
 | **G1** | `AgentEngine`, the Hermes component (pinned, hashed, installed on request), the product `wasifyai-agent`, a minimal Agent screen: goal box, feed, Stop, approvals as cards | M | The GitHub report runs end to end on a hosted model from the screen |
 | **G2** | Tool profiles and the task workspace; our MCP connection per task; limits and watchdog; taint; results promoted to `report` and `agent_run` creations; model readiness (`agent-ready`) on the Models page | M | A task cannot write outside its folder, cannot act after reading a web page without asking, stops at its limits |
 | **G3** | **Agent evaluation:** about 20 task types with rubrics (research, compare, summarise a repo, a folder, notes to report), scored on three model tiers; the safety cases (injection in a web page, a request to delete, an out-of-scope path) | M | Acceptance set before G1 is declared done; results kept like the assistant's |
@@ -151,7 +155,7 @@ Sizes: S under a week, M one to two weeks, L two to four. Each ends with somethi
 
 | Stage | What | Size | Done when |
 |---|---|---|---|
-| **T0** | Spikes: **how to drive the Unsloth trainer as a component** (its API or CLI, headless, from our adapter; AGPL redistribution read with the licence check); its **MLX backend on 16, 32 and 64 GB Macs** (memory and time by model size) against `mlx-lm`; the **chat-template round trip**; **GGUF LoRA conversion** for the models in the hub; the **Laya and Clef licences** and whether Laya trains and serves on the Mac; Z-Image LoRA with mflux (recipe, time, memory); **auto-caption quality** and the magic-word tokenizer check on the mascot set; Unsloth's diffusion trainer and AI Toolkit on a **rented NVIDIA GPU** from a generated config | M | A descriptor file per engine and family with measured numbers, and a go or no-go on each licence |
+| **T0** | **Done 2026-10-19, Go.** Spikes: **how to drive the Unsloth trainer as a component** (its API or CLI, headless, from our adapter; AGPL redistribution read with the licence check); its **MLX backend on 16, 32 and 64 GB Macs** (memory and time by model size) against `mlx-lm`; the **chat-template round trip**; **GGUF LoRA conversion** for the models in the hub; the **Laya and Clef licences** and whether Laya trains and serves on the Mac; Z-Image LoRA with mflux (recipe, time, memory); **auto-caption quality** and the magic-word tokenizer check on the mascot set; Unsloth's diffusion trainer and AI Toolkit on a **rented NVIDIA GPU** from a generated config | M | A descriptor file per engine and family with measured numbers, and a go or no-go on each licence |
 | **T1** | The platform and the simple screens: datasets (check, consent, moderation), runs, progress with samples, model cards, **My models**, publishing, the `train.*` actions, the "Teach" front door with three cards and the "For experts" panel | L | A fixture run of each engine through the same screens with fake trainers in CI |
 | **T2** | **Teach my assistant to write like me** (language): the four example sources, data checks, Quick and Better, evaluation with our regression cases, GGUF LoRA, "My style" in the model picker | L | A style adapter loads in the language server and passes the regression cases |
 | **T3** | **Make my character or style** on the Mac with mflux: picture checks, automatic captions, three magic-word suggestions, evaluation grid, magic-word and memorisation tests, publish to ComfyUI with the key rename | M | A mascot LoRA made in the app from uploaded pictures only, in under an hour, and used in Create image |
@@ -160,21 +164,75 @@ Sizes: S under a week, M one to two weeks, L two to four. Each ends with somethi
 | **T5b** | A "that was wrong" button that feeds corrections back and offers a retrain | S | Optional |
 | **T4** | **Diffusion full fine-tune**, remote only, behind the questionnaire (ADR-0076, last section) | M | Optional; dropped without cost if unwanted |
 
-### Compose (ADR-0077)
+### Video Builder (ADR-0077)
 
 | Stage | What | Size | Done when |
 |---|---|---|---|
-| **V0** | Spikes: HyperFrames render speed and memory on the Mac (720p30, 1080p30, a 60-second composition); **the GSAP licence read and a decision**; the sandbox (request interception, profile, limits) against hostile compositions; whether WKWebView can render deterministically; Chrome for Testing size and signing | S | Go or no-go, with numbers |
-| **V1** | The component (Node, browser, HyperFrames), `ComposeEngine`, project folders, preview, render with progress and cancel, the experimental screen | M | A template renders in the app and in a hostile-composition test nothing escapes |
-| **V2** | Assets from the library, speech and captions with word times, music with ducking, five templates, the `compose.*` actions, creations kinds | M | A 60-second explainer with voice and captions made from a script |
+| **V0** | **Done 2026-10-19, Go (sandbox first).** Spikes: HyperFrames render speed and memory on the Mac (720p30, 1080p30, a 60-second composition); **the GSAP licence read and a decision**; the sandbox (request interception, profile, limits) against hostile compositions; whether WKWebView can render deterministically; Chrome for Testing size and signing | S | Go or no-go, with numbers |
+| **V1** | The component (Node, browser, HyperFrames), `VideoBuilderEngine`, project folders, preview, render with progress and cancel, the experimental screen | M | A template renders in the app and in a hostile-composition test nothing escapes |
+| **V2** | Assets from the library, speech and captions with word times, music with ducking, five templates, the `video_builder.*` actions, creations kinds | M | A 60-second explainer with voice and captions made from a script |
 | **V3** | Authoring by the assistant and the agent, a generated skill for Claude Code, "turn this report into a video" | M | The GitHub report becomes a video from one request |
+
+### Motion Graphics (ADR-0079)
+
+| Stage | What | Size | Done when |
+|---|---|---|---|
+| **MG0** | Spike after V1: adapt five skills (kinetic typography, chart animation, explainer, lower thirds, web/GSAP) to HyperFrames; run about 20 requests with and without a skill on three model tiers; test transparent video (HyperFrames, else the lower-thirds route) | S | A table of which skills raise the score, and the alpha answer |
+| **MG1** | Template path: five vetted templates with slots, exact-text check, `motion.make`, the plain-words loop with three-still previews | M | "Lower third for Maya Chen" and "chart from my CSV" work from the screen and from chat |
+| **MG2** | Custom path: skill catalogue lookup, model-written compositions in the sandbox, the look-and-fix check | M | Passes the evaluation on a capable model; off on small ones |
+| **MG3** | Transparent outputs (WebM alpha, ProRes), more skills that earned their place | S | Optional |
+
+### 3D (ADR-0080)
+
+| Stage | What | Size | Done when |
+|---|---|---|---|
+| **TD0** | **Done 2026-10-19, Go.** **Pixal3D-only spike** (owner's priority): run the pinned `pixal3d.cpp` Metal binary with the Pixal3D single-view and multi-view models on the owner's Mac at 1024 and 1536 (time, memory, failures); 20 inputs; Q8_0 against original quality; the **DINOv3** redistribution read and the weights-bundle licence; `pixal3d.cpp` NOTICE and vendored code read; build the same commit in CI; one run on a rented GPU. No TRELLIS.2 work | S to M | Descriptors with measured numbers, a default resolution, a go or no-go on the DINOv3 position |
+| **TD1** | Platform: the `model3d` component (installer, `trellis-server`, slot owner), creation kind (search, card, filter), `model3d.*` actions, the viewer (`<model-viewer>`, dependency approval first), tiers 2 and 3 through the runner | M | A GLB from a fixture engine in CI, shown and searchable |
+| **TD2** | The screen: from a picture, from words through four candidate pictures, input checks, cut-out preview, plain-words result | M | A mascot photo becomes a model on the Mac from one screen |
+| **TD3** | Multi-view input; turntable video as a Video Builder template (WebGL in headless Chrome to verify) | S | Optional |
+| **TD4** | Our own GPU host for the web, once it exists (backlog B5) | L | Not scheduled |
+
+### Design system (ADR-0081)
+
+| Stage | What | Size | Done when |
+|---|---|---|---|
+| **DS0** | Write `design/DESIGN.md` from today's tokens (still violet), the generator `scripts/design/build-tokens.mjs`, generated CSS and types, the CI "generated files are current" check | S | Screenshots of every screen are unchanged |
+| **DS1** | The token lint (no raw colours, sizes, radii), contrast, gamut, completeness and reduced-motion validation; replace the hard-coded values the lint finds | S to M | `pnpm design:check` passes in CI |
+| **DS2** | The blue template (`design/themes/blue.md`) as the default: visual review of the recommended blue and two alternatives, neutrals and accents, chart palette; the token-swap test | S | Web and desktop look blue, AA contrast holds in both schemes, layout checks pass |
+| **DS3** | Component catalogue (states, light and dark, density), content guide and state patterns, axe checks (dependency approval first) | M | Every component and state is visible in one place and checked |
+| **DS4** | Screen patterns for Teach, Agent, Video Builder, Motion Graphics and 3D, written before they are built; usability tests of the flows as they land | ongoing | Each Phase 5 screen is built against the system |
+
+## Spike results (2026-10-19)
+
+All four spikes ran on the owner's M5 Pro (64 GB) and are written up in `docs/spikes/`. Each ADR carries an amendment with
+the details; this is the summary.
+
+| Spike | Report | Verdict | What changed |
+|---|---|---|---|
+| **G0** agent | `agent-g0.md` | **G1 Go** | Control path is the TUI gateway, one process per task; Research profile holds only through a host allow-list; Qwen3.5-9B holds 64k in about 8 GB but found the right repo in 1 of 3 runs, so local stays "limited"; **GitHub Models is retired, hosted = Hugging Face only**; G1 adds a "repositories sorted by stars" action and a sources section |
+| **T0** training | `training-t0.md` | **T1 Go; T2 Go for small models** | Unsloth's trainer runs headless on the Mac; GGUF LoRA works for Qwen3 and Qwen3.5 (our converter for Qwen3.5); thinking must be off for the template round trip; Laya trains on the Mac; Z-Image trains at 9 to 12 s/step; **licence headers are mixed (AGPL inside the "Apache" package), counsel must read them**; Laya has no licence file |
+| **V0** Video Builder | `video-builder-v0.md` | **V1 Go (sandbox first); MG1 Go (templates)** | Render is about real time and byte-identical; **stock HyperFrames is not sandboxed**, so V1 starts with our own locked launch; alpha video works; WKWebView can render GSAP deterministically |
+| **TD0** 3D | `pixal3d-td0.md` | **TD1 Go, TD2 Go** | 198 to 1361 s per picture at 1024 (median about 11.6 min), about 18 GB; single view 1024 only; 1M-triangle GLB, not watertight; server has no progress or cancel; prebuilt Metal binary lacks the tensor API, so build in CI; DINOv3 handling recommended |
+
+### Decisions waiting for the owner after the spikes
+
+1. DINOv3 route for 3D (the TD0 recommendation is to download the bundle, show the Meta agreement and "Built with DINOv3", record `conditional`, never mirror).
+2. Patch `pixal3d.cpp` for 50k and 200k face targets, or offer only the 1M mesh in v1.
+3. Build the pinned `pixal3d.cpp` commit in CI with a current SDK (and test on a macOS 26 Mac).
+4. Have someone qualified read the Unsloth AGPL section (mixed headers) before shipping the training component.
+5. Approve the optional follow-up downloads: Qwen3.5-9B bf16 (about 19 GB, for 9B training memory) and Clef-flash (about 19 GB).
+6. Ask Convai Innovations about Laya's licence file and training data.
+7. A Hugging Face key (set as an environment variable by the owner) for G0's missing hosted run; an optional rented NVIDIA GPU for the Pixal3D quality comparison and the NVIDIA training paths.
+8. V1 sandbox path: our own launch (preferred) or an OS-profile wrapper; whether the installed Chrome is offered at all; the open fonts to ship.
 
 ## Suggested order (Phase 4 first, then these)
 
 `Phase 4: S1, S3 → A1 (catalogue) → A2 ‖ M1 (card and MCP server) → A3` is already decided and is the base:
-Hermes uses our MCP server, training and Compose are actions in the catalogue.
+Hermes uses our MCP server, training and Video Builder are actions in the catalogue.
 
 Then, in parallel sessions where files do not overlap:
+
+0. **DS0 to DS2 (the design system, ADR-0081) is top priority as soon as the four spikes finish**, before any Phase 5 screen is built.
 
 1. **G0, T0, V0** (spikes, all three, one week): they decide go and no-go and cost nothing in product code.
 2. **T1 then T3 then T2** (the platform with its simple screens, the Mac image LoRA, the language card): the nearest to
@@ -182,9 +240,11 @@ Then, in parallel sessions where files do not overlap:
 3. **G1 then G2** (the agent): needs M1. The headline feature; the GitHub report is the demo.
 4. **T5** (sorters) once the T0 licence answers are in: the smallest training feature and the easiest for a
    non-technical person to understand.
-5. **V1 then V2** (Compose): needs the V0 licence and sandbox answers.
+5. **V1 then V2** (Video Builder): needs the V0 licence and sandbox answers.
 6. **G3** (the agent evaluation) alongside G1.
-7. **V3, T3b, T5b, G4, T4** last.
+7. **MG0 then MG1** after V1, and **TD0** (a week of reading and running on the owner's Mac) in
+   parallel with the other spikes; **TD1 and TD2** only if the gates pass.
+8. **V3, T3b, T5b, G4, T4, MG2, MG3, TD3, TD4** last.
 
 ## Rules these stages follow
 
@@ -216,8 +276,11 @@ Then, in parallel sessions where files do not overlap:
 | Automatic captions are wrong for faces or unusual mascots | The caption grid is editable; quality measured in T0; "Describe again" |
 | A trained LoRA of a real person | Consent statement, card, moderation when safeguards are on, no sharing in v1 |
 | Licences: FLUX.1-dev non-commercial; GSAP; Remotion; base models | Descriptors carry `commercial_use`; the GSAP gate in V0 |
-| Compose runs model-written code | Sandbox, request interception, resource limits, notice on untrusted sources |
+| Video Builder runs model-written code | Sandbox, request interception, resource limits, notice on untrusted sources |
 | AI Toolkit and Unsloth's diffusion trainer need CUDA | They are only ever run on NVIDIA or rented hosts |
+| The original 3D code carries non-commercial pieces (nvdiffrast, nvdiffrec, RMBG-2.0); the encoder DINOv3 is gated and conditional | The native engine avoids the first three; DINOv3 conditions shown in About and the model card; TD0 reads the redistribution terms |
+| The 3D engine is young (two months, one maintainer) | Pinned commit and hash, built in CI, descriptor seam with alternates, regression set on every pin change |
+| Third-party skills are instructions a model obeys | Imported as reviewed, pinned, adapted files; never fetched at run time (ADR-0079) |
 | Scope: three large features | Spikes first; each stage ships alone; T4, T5b and G4 can be dropped |
 
 ## Decisions (answered by the owner, 2026-10-18)
@@ -229,9 +292,11 @@ Then, in parallel sessions where files do not overlap:
 | 3 | Licence reads | Approved (reading only). Done: Laya and Clef-flash are listed **Apache-2.0** on Hugging Face (ADR-0075). Still to read in T0: the licence files and Studio's AGPL terms |
 | 4 | Models for the agent | **Qwen3.5-9B**, also the app's one default model, replacing Gemma alias by alias after checks (**ADR-0078**). Hosted providers first: **Hugging Face and GitHub** only |
 | 5 | Rented GPUs | The person's own account on the desktop; ours on the web (to confirm) |
-| 6 | GSAP | The desktop is open source and free, so it is not an issue there; ask again before any paid or hosted Compose |
+| 6 | GSAP | The desktop is open source and free, so it is not an issue there; ask again before any paid or hosted Video Builder |
 | 7 | Order | Unchanged: spikes, then the training platform with the Mac image LoRA, then the agent |
 | 8 | Optional last items (T4, T5b, G4) | Unchanged: last, droppable |
+| 10 | Design system (ADR-0081): `design/DESIGN.md` as the single source, blue replaces violet, build-time swap only, no Figma | **Accepted 2026-10-19.** Still needs your approval later for the axe-core dependency (MPL-2.0) |
+| 9 | Motion Graphics and 3D ADRs (0079, 0080) | **Accepted 2026-10-18**, including the `<model-viewer>` dependency. Still needed from you: accept Meta's DINOv3 licence on Hugging Face (by hand) and say yes to the TD0 download (the pinned `pixal3d.cpp` Metal build and Pixal3D weights, sizes shown first) |
 
 New work this created: **the model switch (ADR-0078)** needs the guardrail, assistant, lyrics and caption checks before
 each alias moves, and the Qwen3.5-9B context and memory numbers from G0.

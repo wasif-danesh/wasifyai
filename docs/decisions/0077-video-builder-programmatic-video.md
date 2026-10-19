@@ -1,11 +1,12 @@
-# ADR-0077: Compose (experimental): videos written as code, rendered deterministically
+# ADR-0077: Video Builder (experimental): videos written as code, rendered deterministically
 
-- **Status:** Accepted (2026-10-18, by the owner), together with the components it names. Labelled **experimental** in the app.
+- **Status:** Accepted (2026-10-18, by the owner), together with the components it names. Labelled **experimental** in the app. **Renamed from "Compose" to "Video Builder" on 2026-10-18** (working name, chosen by the
+  owner; "Compose" clashed with Compose Multiplatform and `docker compose`). Action names are `video_builder.*`.
 - **Date:** 2026-10-18
 - **Depends on:** ADR-0068 (action catalogue), ADR-0069 (our MCP server), ADR-0072 (the agent), ADR-0066 (speech,
   music, transcripts), ADR-0059 and ADR-0037 (images and generated video), ADR-0041 (searchable), ADR-0047, ADR-0061
   (how outside code enters).
-- **Plan:** `docs/phase5-agent-training-compose-plan.md`, stages V0 to V3.
+- **Plan:** `docs/phase5-agent-training-video-builder-plan.md`, stages V0 to V3.
 
 ## Context
 
@@ -39,20 +40,20 @@ Constraints that matter:
 
 ## Decision
 
-1. **A new product, `Compose`, marked experimental.** A "Compose" screen (under Video in the menu, behind a
+1. **A new product, `Video Builder`, marked experimental.** A "Video Builder" screen (under Video in the menu, behind a
    Labs switch in Settings) with: projects (a folder per composition), a **preview** player, a **Render** button
    with progress, an **asset panel** that inserts things from the library (pictures, speech, music, transcripts,
    clips), and a code view (read-only at first, editable later). The person can also say what they want and let
    the **assistant or the agent write it** (decision 5).
 2. **Adopt HyperFrames as the render engine for v1; do not build our own renderer yet.** The seam is an interface
-   `ComposeEngine` (create project, lint, preview, render, list assets) so another engine can replace it. We adopt
+   `VideoBuilderEngine` (create project, lint, preview, render, list assets) so another engine can replace it. We adopt
    because a deterministic browser-to-MP4 renderer is hard to get right and the project is Apache-2.0 and
    agent-oriented. Adopting is gated on: the GSAP licence read (decision 8), a measured render speed (V0), and a
    headless browser that is safe to ship (decision 4). If the gate fails, the fallback is our own engine on the
    same composition idea with the Web Animations API, which is a larger project and a new ADR.
 3. **Installed as a managed component on request, like ComfyUI and the notebooks' reader:** the size, source and
    versions are shown first; the pinned HyperFrames package and Node.js runtime go to
-   `<app data>/components/compose/`, the browser as a pinned **Chrome for Testing** build (or the person's
+   `<app data>/components/video-builder/`, the browser as a pinned **Chrome for Testing** build (or the person's
    installed Chrome if they choose, with a version check). FFmpeg is the app's own. No component is installed
    without a click, and none is needed by the rest of the app.
 4. **A composition is rendered in a sandbox, because it is code.** The renderer runs with: a **fresh browser
@@ -63,9 +64,9 @@ Constraints that matter:
    Rendering a composition **from an untrusted source** (imported, or written by an agent that has read web
    pages: the taint rule of ADR-0070) shows a notice and requires a click. A composition cannot call the engine's
    API: assets are copied into the project first.
-5. **Authoring by the assistant and the agent through the same catalogue.** New actions (ADR-0068): `compose.create`
-   (from a template and a script), `compose.add_asset`, `compose.lint`, `compose.preview_frame` (returns a still so
-   a model can look), `compose.render`. Our MCP server (ADR-0069) exposes them, so Claude Code or Hermes
+5. **Authoring by the assistant and the agent through the same catalogue.** New actions (ADR-0068): `video_builder.create`
+   (from a template and a script), `video_builder.add_asset`, `video_builder.lint`, `video_builder.preview_frame` (returns a still so
+   a model can look), `video_builder.render`. Our MCP server (ADR-0069) exposes them, so Claude Code or Hermes
    (ADR-0072) can write the HTML with HyperFrames' skills **and** use our speech, music and image actions for the
    assets, with our approvals. The HyperFrames skills are not copied into the app as-is: they are read, reviewed
    and adapted (they refer to tools we do not ship), and shipped as our own help files and a generated skill for
@@ -79,8 +80,8 @@ Constraints that matter:
    with charts), **Social vertical** (9:16 captions), **Lyric or caption video**. A template is a HyperFrames
    project with slots our actions fill.
 8. **Licence work before code (a gate, not a footnote).** Read the GSAP Standard No Charge licence as it stands,
-   decide whether Compose is a "Prohibited Use" and whether a paid Business membership is needed if the app ever
-   charges, and ask GSAP (it invites the question). If the answer is no or unclear, Compose ships on the Web
+   decide whether Video Builder is a "Prohibited Use" and whether a paid Business membership is needed if the app ever
+   charges, and ask GSAP (it invites the question). If the answer is no or unclear, Video Builder ships on the Web
    Animations API or Anime.js and the HyperFrames conventions are followed only where they do not require GSAP.
    Likewise check the licences of the browser build, Node.js, fonts and any template asset (rule 12).
 9. **Outputs are creations (ADR-0041).** A composition (project folder, kind `composition`) and its renders (kind
@@ -111,7 +112,7 @@ Constraints that matter:
   or animation timelines. Kept for simple slideshow renders if the engine is unavailable.
 - **Generate everything with video models.** They make seconds of footage, not a script-driven video with text and
   charts; they remain a source of clips inside a composition.
-- **Skip Compose.** An option; it is the owner's experiment and is cheap to try behind a switch.
+- **Skip Video Builder.** An option; it is the owner's experiment and is cheap to try behind a switch.
 
 ## Open questions
 
@@ -133,5 +134,33 @@ embedding third-party scripts; audio recording in the composition; the web deplo
 
 - **The desktop app will be open source and free**, so the **GSAP gate (decision 8) is cleared for the desktop**:
   no one is charged for it. It is not a free pass for everything: GSAP's terms (read earlier) bar using it to build a
-  tool that competes with Webflow's visual animation builders, which Compose is not, and a **paid or hosted web
-  version of Compose would need the question asked again**. The Web Animations API fallback stays as the plan B.
+  tool that competes with Webflow's visual animation builders, which Video Builder is not, and a **paid or hosted web
+  version of Video Builder would need the question asked again**. The Web Animations API fallback stays as the plan B.
+
+## Amendment after spike V0 (2026-10-19; `docs/spikes/video-builder-v0.md`)
+
+Measured on the owner's M5 Pro, 64 GB, while other spikes ran (times are pessimistic). Verdict: **V1 Go, with its first
+milestone changed to the sandboxed render path.**
+
+- **Speed and determinism:** a 10 s title renders in 6.6 to 8.8 s warm (12.7 s cold), a 60 s composition in 41 to 49 s
+  at 720p30 (2 to 3 GB) and 58 s at 1080p30; MP4 12 to 25 MB. The same input gave a **byte-identical MP4** across runs,
+  worker counts, Chrome 152 and 155, and with or without network (one machine only).
+- **A stock HyperFrames render is not sandboxed** (decision 4 is therefore a build task, not a setting): it starts Chrome
+  with `--no-sandbox`, popups allowed and no network limit, and a hostile composition rendered through the real CLI
+  reached localhost and a remote host. A locked-down launch (fresh profile, request interception allowing only the
+  project, no downloads or prompts) stopped remote access, file reads, localhost, downloads, prompts and an infinite loop;
+  **memory exhaustion needs a 25 ms watchdog** (about 0.1 GB overshoot at a 1 GB limit). **V1 must start with our own
+  launch** (or an OS-profile wrapper, which leaves localhost open), vendor GSAP and fonts, **reject non-local URLs at
+  lint time** (the compiler fetches CDN scripts in Node), run the watchdog and `terminateExecution`, and keep the hostile
+  corpus in CI. The managed component must set `HYPERFRAMES_NO_TELEMETRY=1` and `HYPERFRAMES_SKIP_SKILLS=1` and redirect
+  `~/.hyperframes`.
+- **Browser (decision 3):** the pinned **headless shell 152.0.7977.30** (97.5 MB download, 193 MB unpacked) is ad-hoc
+  signed, not notarised, and macOS **quarantine blocks it**: download without the quarantine flag or clear it after the
+  hash check. The installed Chrome works but is 4 GB with an uncontrolled version.
+- **WKWebView (open question 2):** it seeks a GSAP composition deterministically (1,800 frames, identical on three
+  runs, 43 fps), so a Chrome component is not strictly required on a Mac; verified for GSAP and CSS only (video, audio,
+  fonts, WebGL untested; not Chrome-identical). A possible later alternative, not a V1 dependency.
+- **Transparent video:** HyperFrames itself writes WebM VP9 with alpha and ProRes 4444 (decode with libvpx; the default
+  decoder drops the alpha). Fonts must be shipped with templates: system fonts differ per machine.
+- **Not measured:** another Mac or 16 and 32 GB with a model resident, Docker, Windows and Linux, audio and video inputs,
+  4K, HyperFrames Studio, CPU-time limits, WebRTC and service-worker escapes.

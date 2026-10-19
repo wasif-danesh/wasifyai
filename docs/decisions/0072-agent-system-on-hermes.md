@@ -5,7 +5,7 @@
 - **Depends on:** ADR-0068 (action catalogue, approvals), ADR-0069 (our MCP server), ADR-0070 (MCP client),
   ADR-0071 (the assistant), ADR-0056 (one engine; one memory slot), ADR-0047 (safeguards), ADR-0041 (everything
   made is searchable), ADR-0061 (how outside code enters).
-- **Plan:** `docs/phase5-agent-training-compose-plan.md`, stages G0 to G4.
+- **Plan:** `docs/phase5-agent-training-video-builder-plan.md`, stages G0 to G4.
 
 ## Context
 
@@ -174,6 +174,34 @@ per-tenant isolation).
   32 and a 64 GB Mac, and how well it calls tools, is measured in G0 and G3; the `agent-ready` check (decision 7)
   still decides per machine.
 - **Hosted models, first providers: Hugging Face (Inference Providers) and GitHub (GitHub Models) only**, with the
-  person's own key. Others (OpenRouter, Anthropic, OpenAI, a custom endpoint) come later. Not verified: whether
-  GitHub Models' free limits allow a 64,000-token context (G0 checks, and the Models page says so if not). If the
-  owner meant something else by "Hugging Face and GitHub", this line changes.
+  person's own key. Others (OpenRouter, Anthropic, OpenAI, a custom endpoint) come later. **Corrected 2026-10-19 after
+  spike G0: GitHub Models was retired on 2026-07-30 (as read in the session's documents check), so the first hosted
+  provider is Hugging Face Inference Providers only.** Other providers come later.
+
+## Amendment after spike G0 (2026-10-19; report: `docs/spikes/agent-g0.md`)
+
+Measured on the owner's MacBook Pro M5 Pro, 64 GB. Verdict for stage G1: **Go**, on the conditions below.
+
+- **Control path (decision 3 is now concrete):** the **TUI gateway over stdio** (`python -m tui_gateway.entry`), **one
+  process per task**. ACP is the fallback; the HTTP API is the weakest fit. Per task: the toolset is configuration (not
+  a call argument), the working folder is set at session creation, and the write-root is a process environment
+  variable. Events, approvals answered from outside, and stop (a running command ends in 0.15 s) all work on all three
+  paths. Hermes's MCP client connected to a stub MCP server and its untrusted-server approval was verified.
+- **What Hermes does not enforce (decides the profiles, decision 4):** the Research profile holds only because the host
+  **allow-lists toolsets and leaves out `terminal`**; the write-root is **not a sandbox** and **reads are
+  unrestricted**. So file reading must come only through our MCP server and the attached-folder rule, never through
+  Hermes's own file tools.
+- **Install (decision 2):** Hermes builds its own Python environment on first start (about 662 MB, 272 MB of it
+  downloaded packages; its Python 3.14.7 comes from `~/.hermes/tools/`). The installer must build this **ahead of
+  time from the pinned, hashed lock, with no first-run download**.
+- **Models (ADR-0078):** Qwen3.5-9B Q4_K_M holds 64,000 tokens on this Mac in about **8 GB**; prompt reading 1,080 /
+  858 / 686 tokens/s and writing 39.3 / 37.4 / 28.5 tokens/s at 8k / 32k / 62k; **thinks by default** (off with
+  `--reasoning off` or `enable_thinking: false`); 10 of 10 small tool-calling cases. On the example task the local model
+  finished in 71 to 143 s but **found the right repository in 1 of 3 runs**, so the local 9B stays **"limited" for agents**
+  until G3 shows otherwise. Hugging Face Inference Providers serve Qwen3.5-9B at 262,144 context with tools.
+- **G1 conditions:** (1) the acceptance run uses a **hosted model**; (2) G1 includes a **deterministic "repositories
+  sorted by stars" read action** and a **mandatory sources section** in every report, because free web search alone found
+  the right repository once in three; (3) the Models page shows "about 8 GB for 64k context"; a 16 and a 32 GB
+  measurement is still needed before ADR-0078's minimum-RAM line is written.
+- **Not done:** the hosted-model run (no key), the 32 GB case, the app's own llama.cpp, MLX, Windows and Linux, learning
+  features, MCP over Streamable HTTP.

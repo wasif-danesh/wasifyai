@@ -81,3 +81,15 @@ machine cannot run it.
    web and Compose stack).
 3. Whether a smaller Qwen3.5 exists to serve 8 GB machines.
 4. Audio input (Gemma's was never confirmed either): not required.
+
+## Amendment after spike G0 (2026-10-19; `docs/spikes/agent-g0.md`)
+
+- **Open question 1 is answered for the owner's Mac (M5 Pro, 64 GB, llama.cpp Metal, Q4_K_M):** a 62,038-token prompt ran;
+  two of two hidden-fact lookups at 62,056 tokens were exact; **about 8 GB of memory in total at 64k**. Prompt reading
+  1,080 / 858 / 686 tokens/s at 8k / 32k / 62k; writing 39.3 / 37.4 / 28.5 tokens/s.
+- **Thinking is on by default** and is switched off with `--reasoning off` (server) or
+  `chat_template_kwargs {"enable_thinking": false}` (request): this ADR's decision 2 holds.
+- **Tool calling:** 10 of 10 small cases, with thinking on and off. The assistant's 11 cases and the guardrail set
+  (decision 1's checks) are still to run.
+- **Still not measured:** 16 and 32 GB Macs. The minimum-RAM line in decision 3 is **not written yet** and waits for
+  those measurements.

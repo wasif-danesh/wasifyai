@@ -6,7 +6,7 @@
 - **Depends on:** ADR-0073 (training platform and the simplicity rules), ADR-0056 (one slot; llama.cpp managed),
   ADR-0063/0064 (models the person has, and the hub), ADR-0071 (the assistant's evaluation and its fine-tune gate),
   ADR-0072 (agent models), ADR-0065 (notebooks), ADR-0047.
-- **Plan:** `docs/phase5-agent-training-compose-plan.md`, stage T2.
+- **Plan:** `docs/phase5-agent-training-video-builder-plan.md`, stage T2.
 
 ## Context
 
@@ -110,3 +110,18 @@ a handful to a few hundred examples, not a Hugging Face dataset, and have never 
 
 Preference tuning; continued pre-training and full fine-tuning on the simple path; embedding, audio or vision language
 models; merging several adapters; sharing adapters; training on a schedule from new chats.
+
+## Amendment after spike T0 (2026-10-19; `docs/spikes/training-t0.md`)
+
+- **Verdict: T2 Go for small models; conditional for 9B.** Qwen3-0.6B and Qwen3.5-0.8B train in under 30 s, learn the
+  style (0 of 12 held-out replies carried the sign-off before, 12 of 12 after), convert to a GGUF LoRA and serve.
+- **Engine (decision 3):** Unsloth is the default engine and `mlx-lm` the fallback for small Qwen3 models.
+  Unsloth was lighter on Qwen3.5 (1.76 GB against 6.33 GB for mlx-lm on the 0.8B), so the 9B on a 16 GB Mac may need
+  Unsloth's chunked loss: **measure before promising it**.
+- **Chat template (decision 5):** formatted text equals the model's own template (44 of 44), but the served prompt
+  equals the training prompt **only with thinking switched off** (44 of 44; 0 of 44 with thinking on, for Qwen3 and
+  Qwen3.5). Training and serving both disable thinking, and the round-trip test enforces it.
+- **GGUF LoRA (decision 6):** llama.cpp's converter works for Qwen3 and Qwen3.5 and `llama-server --lora` applies the
+  result. Unsloth's own PEFT export refuses Qwen3.5 adapters; a 30-line converter of ours fixes it (identical to
+  Unsloth's output on Qwen3).
+- **Not measured:** Qwen3.5-9B (ADR-0078's recommended base), the 16 and 32 GB tiers.

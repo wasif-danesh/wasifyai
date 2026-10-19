@@ -8,7 +8,7 @@
   ADR-0062 (reuse matrix), ADR-0056 (inventory from `wasifyai-art`), ADR-0038 (prompt and caption aids), ADR-0035
   (upload hardening), ADR-0047, ADR-0044 (a person's word about a picture), ADR-0012 (licences).
 - **Re-opens and replaces:** ADR-0054 (withdrawn) for the desktop.
-- **Plan:** `docs/phase5-agent-training-compose-plan.md`, stages T3 and T3b.
+- **Plan:** `docs/phase5-agent-training-video-builder-plan.md`, stages T3 and T3b.
 
 ## Context
 
@@ -148,3 +148,14 @@ checks it. It is the lowest priority and can be dropped without cost.
 Video LoRAs; LoRAs for edit models; training from a single picture; stacking and merging LoRAs in the trainer (the
 LoRA chain stacks at generation time); sharing or selling LoRAs; collecting pictures from the web; a full diffusion
 fine-tune.
+
+## Amendment after spike T0 (2026-10-19; `docs/spikes/training-t0.md`)
+
+- **Z-Image (base) LoRA trains with mflux 0.22.0 on the Mac:** 9 to 12 s per step when memory is free (30 s or worse when
+  swap is full), 768 px, 8-bit, gradient checkpointing, rank 16, full timestep range, **39.9 GB peak footprint** (12.6 GB
+  resident). Binding, quality and loading in ComfyUI are **not tested**. FLUX.2 klein base 4B stays at 7.5 s/step.
+- **Automatic captions (decision 2):** about 3 s per picture with Qwen3.5-9B; scenes were described correctly but **the
+  mascot's own design leaked into 5 of 6 captions**. The caption step therefore needs a **trait-stripping pass** (remove
+  what the LoRA should learn) before captions are used; the editable caption grid stays.
+- **Magic-word check (decision 3):** works; both text encoders use the same Qwen3 tokenizer, so one check serves both.
+- **Verdict: T3 Go in principle.** Not measured: the NVIDIA paths (Unsloth diffusion, AI Toolkit) and rented GPUs.

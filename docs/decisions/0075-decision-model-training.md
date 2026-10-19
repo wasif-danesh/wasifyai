@@ -7,7 +7,7 @@
 - **Depends on:** ADR-0073 (training platform; read its revision note), ADR-0068 (action catalogue), ADR-0071 (the
   assistant), ADR-0072 (agents), ADR-0061 and ADR-0062 (how Unsloth code enters, the reuse matrix), ADR-0012
   (licence check), ADR-0047.
-- **Plan:** `docs/phase5-agent-training-compose-plan.md`, stage T5.
+- **Plan:** `docs/phase5-agent-training-video-builder-plan.md`, stage T5.
 
 ## Context
 
@@ -122,3 +122,15 @@ Hugging Face lists both **`convaiinnovations/laya`** (421M parameters) and **`Cl
 Qwen3.5-9B) as **Apache-2.0**, and Laya also carries a `commercial-use` tag. That clears open question 1 in
 principle. Not yet read: the licence files and model cards themselves, and the licences of the training data the
 authors used; T0 reads them before anything ships. Clef sharing Qwen3.5-9B's backbone fits ADR-0078.
+
+## Amendment after spike T0 (2026-10-19; `docs/spikes/training-t0.md`)
+
+- **Laya trains and serves on the Mac through Studio's MLX decision trainer:** 30 steps in 9.2 s of training (12.3 s
+  wall), 15 ms per answer, 2.4 GB resident. Laya through its own MPS script was **not tested**.
+- **Licences, read from the files:** the Laya repository has **no `LICENSE` file**; the licence is the README front
+  matter (`apache-2.0`, tag `commercial-use`) and a footer, and the training data is unstated. A GitHub repository
+  shows a `LICENSE` and the studio vendors Laya 0.3.5 with an Apache-2.0 `LICENSE.laya`. So `commercial_use` is
+  **conditional** until Convai Innovations confirms the licence file and the data. Clef-flash is Apache-2.0 with a full
+  licence file; it was **not run** (19 GB, not approved), and Studio's code suggests it may run on the Mac, so "GPU only"
+  (decision 4) is untested rather than known.
+- **Stage T5: Go, with the licence question.** The `decision.decide` request shape is unchanged.

@@ -31,7 +31,7 @@ export function ModeTabs({
   );
 }
 
-/** The prompt box shared by the image and video forms: label, text, hint, Enhance, counter and example chips. */
+/** The prompt box shared by the image and video forms: label, text, hint, Improve prompt, counter and example chips. */
 export function PromptField({
   id,
   label,

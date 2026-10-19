@@ -1,13 +1,13 @@
 "use client";
 
 import { type Enhanced, HttpError } from "@wasifyai/client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { fieldError } from "../styles";
 import { Button } from "./button";
 import { Spinner } from "./spinner";
 
 /**
- * "Enhance" for a prompt box (ADR-0038): the product's model rewrites what the user typed into a better
+ * "Improve prompt" for a prompt box (ADR-0038): the product's model rewrites what the user typed into a better
  * prompt (in English for images and video). The result replaces the text and "Undo" brings the original
  * back; nothing is submitted. The user can edit the result before making anything.
  */
@@ -44,11 +44,19 @@ export function EnhanceButton({
   const [note, setNote] = useState<string | null>(null);
   const [original, setOriginal] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const helpId = useId();
   useEffect(() => () => abort.current?.abort(), []);
 
   const text = value.trim();
   const blocked =
     disabled || busy || text.length === 0 || value.length > maxChars || (needsPicture && !uploadId);
+
+  const help =
+    needsPicture && !uploadId
+      ? "Choose a picture first."
+      : text.length === 0
+        ? "Type a prompt first, then improve it."
+        : "Rewrites your prompt with more detail so the result is better. The new prompt is written in English. Nothing is made yet, and you can undo it.";
 
   async function enhance() {
     if (blocked) return;
@@ -63,7 +71,7 @@ export function EnhanceButton({
       if (out.changed) {
         setOriginal(value);
         onChange(out.prompt);
-        setNote("Prompt enhanced.");
+        setNote("Prompt improved.");
       } else {
         setNote("That prompt already looks good.");
       }
@@ -95,15 +103,15 @@ export function EnhanceButton({
         onClick={enhance}
         disabled={blocked}
         aria-busy={busy}
-        title={
-          needsPicture && !uploadId
-            ? "Choose a picture first"
-            : "Rewrite your text into a better prompt"
-        }
+        title={help}
+        aria-describedby={helpId}
       >
         {busy ? <Spinner /> : <span aria-hidden="true">✨</span>}
-        {busy ? "Enhancing…" : "Enhance"}
+        {busy ? "Improving…" : "Improve prompt"}
       </Button>
+      <span id={helpId} className="sr-only">
+        {help}
+      </span>
       {original !== null && !busy ? (
         <Button type="button" variant="link" size="sm" onClick={undo}>
           Undo

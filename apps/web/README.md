@@ -37,7 +37,9 @@ Browser ── fetch ──► app/api/* (BFF route handlers) ──► FastAPI 
 Tailwind CSS and shadcn/ui (ADR-0045); `app/tailwind.css` is the only stylesheet and has no component classes.
 
 - **Design tokens** as OKLCH custom properties, with `light-dark()`, so dark mode follows the system with no second
-  stylesheet. The theme control can override the system choice (it sets `data-theme` on `<html>`, which the `dark:`
+  stylesheet. **They are generated from `design/DESIGN.md` (ADR-0081): edit that file, run `pnpm design:build`, never the
+  generated `packages/ui/src/tokens.generated.css`.** `pnpm design:check` (also in CI) fails on a stale generated file or a
+  hard-coded colour, font size or radius in a screen. The theme control can override the system choice (it sets `data-theme` on `<html>`, which the `dark:`
   variant follows) and remembers that preference in the browser. `color-mix()` derives borders, tints and glows.
 - **Tailwind** turns the tokens into colours (`bg-surface`, `text-muted-foreground`, `bg-primary`), fluid type steps
   (`text-step-2`) and animations; shared class strings are in `lib/styles.ts`.
@@ -112,8 +114,7 @@ backend, and is never shown. Needs `MEDIA_SECRETS_KEY` (`make setup` creates it)
 ## UI components and the side panel (ADR-0045, ADR-0046)
 
 Controls and tables are shadcn/ui components in `components/ui/` (our source: edit them freely), react-hook-form with
-Zod for forms and TanStack Table for grids. All styling is Tailwind utilities and these components; `app/tailwind.css` is the only stylesheet (design tokens as
-CSS variables, the theme that turns them into Tailwind colours, sizes and animations, and a few base styles). There are no
+Zod for forms and TanStack Table for grids. All styling is Tailwind utilities and these components; `app/tailwind.css` is the only stylesheet (the base styles and the theme that maps the generated design tokens, `design/DESIGN.md`, onto Tailwind colours, sizes and animations). There are no
 component classes: shared class strings live in `lib/styles.ts`. Check keyboard use, Bengali and right-to-left text, dark and light colours, and
 320 px width.
 

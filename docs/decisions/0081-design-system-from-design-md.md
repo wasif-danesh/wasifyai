@@ -50,7 +50,7 @@ icon set, illustration, copy beyond written rules). A structural redesign remain
    reads the active file and writes:
    - `packages/ui/src/tokens.generated.css` (the variables and the `@theme` mapping that `tailwind.css` imports; light
      and dark through `light-dark()` as today),
-   - `packages/ui/src/tokens.generated.ts` (token names and types, for the catalogue and tests),
+   - `packages/ui/src/tokens.gen.ts` (token names and types, for the catalogue and tests),
    - `docs/design-system/tokens.md` (the table of every token, generated).
    Generated files are committed and marked "do not edit". CI fails if they differ from what the generator produces
    (`pnpm design:check`). If the script outgrows us, **Style Dictionary** (Apache-2.0) is the upgrade, with its own
@@ -154,3 +154,33 @@ icon set, illustration, copy beyond written rules). A structural redesign remain
 
 A runtime theme picker; Figma sync; per-user theming; a documentation site outside the app; motion design beyond tokens;
 a new logo; right-to-left product copy (the layout supports it, translations are not v1).
+
+## Amendment after DS0 to DS2 (2026-10-19)
+
+Built and verified on the owner's Mac. What changed from the plan above, and what was found:
+
+- **Files:** `design/DESIGN.md` (rules and the active tokens), `design/themes/violet.md` and `blue.md` (tokens only),
+  `design/token-allowlist.json`, `design/CHANGELOG.md`, `scripts/design/build-tokens.mjs`, `check-tokens.mjs`, `swap-test.mjs`,
+  generated `packages/ui/src/tokens.generated.css`, `tokens.gen.ts` (named `.gen.ts` so Biome ignores it) and
+  `docs/design-system/tokens.md`. Commands: `pnpm design:build`, `design:use <name>`, `design:check` (also a CI step in the web
+  job) and `design:swap-test`. No dependency was added.
+- **Templates are tokens-only files.** `pnpm design:use blue` replaces the tokens block inside `DESIGN.md` and keeps its rules, so the
+  prose has one copy. This differs from "a template is another whole `DESIGN.md`" in decision 1 on purpose; replacing the tokens
+  block is what swaps the look. `design/active` was not needed: `DESIGN.md` is the active file.
+- **Gamut is a template policy** (`checks.gamut`: `error` by default, `warn` for violet). The old violet look has four colours slightly
+  outside sRGB and two weak contrast pairs (accent text on a selected row in dark, 4.0:1; the picture label, 3.1:1); the validator found
+  them. **Blue passes everything strictly** (28 contrast rules in both schemes become 32 with the new tokens, all in sRGB).
+- **The `@theme inline` wiring stays in `tailwind.css`** (which role feeds which Tailwind colour is structure, not look). The generated
+  file holds the variables and the `@theme` size and easing values. The animation names and their durations also stay there.
+- **The lint found about 90 hard-coded values** in 12 files; all were replaced by tokens except the product illustrations
+  (`ProductArt.tsx`, a deliberate allow-list entry because DESIGN.md says a template does not change illustrations) and one
+  `em`-relative size for inline code. Folding font sizes into a scale moved some text by a pixel or less; `--text-2xs` is 0.65rem so the
+  side menu did not shift.
+- **Blue 1.0.0 is now the default:** accent `oklch(50% 0.17 258)` light and `oklch(76% 0.12 250)` dark; the recommended blue from decision
+  7, with cool neutrals, teal and sky as the other brand colours, status colours reduced in chroma to sit inside sRGB, `--accent-soft`
+  at 10% and the picture scrim at 84% so both pass AA.
+- **Checks run:** generated files current; lint, types and 1,300+ unit tests pass; the web and desktop builds pass; the 168 Playwright
+  checks (102 layout, 66 screenshots in light, dark and phone) pass; **the swap test passed for both templates**. All 66 darwin
+  screenshots were regenerated for the blue look; CI keeps running the layout checks only.
+- **Not done (DS3 and after):** the component catalogue page, axe-core (needs approval), the content guide beyond the first rules in
+  DESIGN.md, bundled fonts, a density token, chart palette, the illustrations in token colours, and the usability tests.

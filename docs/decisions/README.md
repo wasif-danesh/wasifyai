@@ -82,6 +82,6 @@
 | [0078](0078-one-default-model-qwen35-9b.md) | One default model for the app: Qwen3.5-9B (switch alias by alias after checks) | Accepted |
 | [0079](0079-text-to-motion-graphics.md) | Text to motion graphics: describe it, get an animated title, chart or overlay (motion-skills as reviewed content) | Accepted |
 | [0080](0080-text-and-image-to-3d.md) | Text and image to 3D with Pixal3D through pixal3d.cpp (runs on the Mac; one licence gate: DINOv3) | Accepted |
-| [0081](0081-design-system-from-design-md.md) | A design system with design/DESIGN.md as the single source of the look (new blue accent; top priority after the spikes) | Accepted |
+| [0081](0081-design-system-from-design-md.md) | A design system with design/DESIGN.md as the single source of the look (blue accent; DS0 to DS2 built 2026-10-19) | Accepted |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

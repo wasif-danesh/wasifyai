@@ -6,7 +6,7 @@ prove them while the code is small.
 
 **Current focus (2026-10-18): the desktop app.** Next: `docs/phase4-agent-plan.md` (an MCP server, an MCP client and an
 assistant that knows the product; ADR-0068 to ADR-0071, Accepted) and `docs/phase5-agent-training-video-builder-plan.md`
-(an agent on Hermes, training, Video Builder; ADR-0072 to ADR-0077, Proposed). **Next after the Phase 5 spikes: the design system (ADR-0081, Accepted 2026-10-19): `design/DESIGN.md` as the single source of the look, blue replacing violet.** What is unverified or open on the web side is in
+(an agent on Hermes, training, Video Builder; ADR-0072 to ADR-0077, Proposed). **The design system (ADR-0081): DS0 to DS2 done 2026-10-19: `design/DESIGN.md` is the single source of the look and blue replaces violet; DS3 (catalogue, accessibility checks, content guide) is next.** What is unverified or open on the web side is in
 `docs/backlog.md`.
 
 ## v1 plan (decided 2026-10-10)

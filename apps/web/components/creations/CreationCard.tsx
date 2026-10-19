@@ -38,11 +38,11 @@ function Card({
       className="relative grid h-full grid-rows-[auto_1fr] gap-3 overflow-hidden rounded-lg border bg-surface p-[0.8rem] text-foreground no-underline transition-[translate,box-shadow,border-color] duration-300 ease-out-soft hover:-translate-y-1 hover:border-primary/45 hover:text-foreground hover:shadow-card"
     >
       {cover}
-      <span className="absolute start-[1.15rem] top-[1.15rem] rounded-full border border-white/20 bg-[oklch(20%_0.02_280/0.72)] px-[0.6rem] py-[0.3rem] text-[0.7rem] font-bold tracking-[0.04em] text-white uppercase backdrop-blur-[10px]">
+      <span className="absolute start-[1.15rem] top-[1.15rem] rounded-full border border-scrim-foreground/20 bg-scrim px-[0.6rem] py-[0.3rem] text-2xs font-bold tracking-[0.04em] text-scrim-foreground uppercase backdrop-blur-[10px]">
         {kind}
       </span>
       <div className="grid h-32 min-h-0 grid-rows-[auto_auto_1fr] gap-[0.9rem] px-[0.15rem] pt-[0.1rem] pb-[0.2rem]">
-        <h3 className="text-[1.05rem] leading-tight" lang={lang}>
+        <h3 className="text-lead leading-tight" lang={lang}>
           <span className={clamp2}>{title}</span>
         </h3>
         <div className="flex flex-nowrap gap-[0.35rem] overflow-hidden [&>*]:shrink-0">{tags}</div>

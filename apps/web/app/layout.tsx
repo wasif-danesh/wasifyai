@@ -1,3 +1,4 @@
+import { themeColor } from "@wasifyai/ui/tokens";
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "./tailwind.css";
@@ -10,8 +11,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   colorScheme: "light dark",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f3ef" },
-    { media: "(prefers-color-scheme: dark)", color: "#111214" },
+    { media: "(prefers-color-scheme: light)", color: themeColor.light },
+    { media: "(prefers-color-scheme: dark)", color: themeColor.dark },
   ],
 };
 

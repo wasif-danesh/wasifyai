@@ -1,0 +1,24 @@
+{
+  "_comment": "Reviewed exceptions to the token lint (scripts/design/check-tokens.mjs, ADR-0081). Every entry needs a reason. A file entry exempts the whole file; a match entry exempts lines of that file containing the text.",
+  "files": [
+    {
+      "path": "apps/web/components/ProductArt.tsx",
+      "reason": "Illustrations of the six products use their own palette. DESIGN.md lists illustrations and product art as things a template does not change. Redraw in token colours when the products get new art."
+    },
+    {
+      "path": "packages/ui/src/tokens.generated.css",
+      "reason": "Generated from design/DESIGN.md."
+    },
+    {
+      "path": "packages/ui/src/tokens.gen.ts",
+      "reason": "Generated from design/DESIGN.md."
+    }
+  ],
+  "lines": [
+    {
+      "path": "packages/ui/src/chat/markdown.tsx",
+      "match": "text-[0.9em]",
+      "reason": "Inline code is sized relative to the surrounding text (em), which a rem token cannot express."
+    }
+  ]
+}

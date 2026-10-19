@@ -11,7 +11,8 @@
     "./tailwind.css": "./src/tailwind.css",
     "./cn": "./src/cn.ts",
     "./styles": "./src/styles.ts",
-    "./pictures": "./src/pictures.ts"
+    "./pictures": "./src/pictures.ts",
+    "./tokens": "./src/tokens.gen.ts"
   },
   "scripts": {
     "lint": "biome check .",

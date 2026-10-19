@@ -1,5 +1,6 @@
 "use client";
 
+import { themeColor } from "@wasifyai/ui/tokens";
 import { useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
@@ -8,7 +9,7 @@ const STORAGE_KEY = "wasifyai-theme";
 function applyColorScheme(theme: Theme) {
   document.documentElement.style.colorScheme = theme;
   document.documentElement.dataset.theme = theme; // the dark: classes of the shadcn components follow this
-  const color = theme === "dark" ? "#111214" : "#f4f3ef";
+  const color = themeColor[theme];
   const metaTags = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
   for (let index = 0; index < metaTags.length; index += 1) {
     metaTags[index].content = color;
@@ -73,7 +74,7 @@ export function ThemeToggle() {
   return (
     <button
       type="button"
-      className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-[0.65rem] border bg-surface px-2.5 py-1.5 text-[0.82rem] font-medium whitespace-nowrap text-foreground transition-colors hover:border-primary/35 hover:bg-muted"
+      className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-control border bg-surface px-2.5 py-1.5 text-ui-sm font-medium whitespace-nowrap text-foreground transition-colors hover:border-primary/35 hover:bg-muted"
       onClick={toggle}
       aria-label={nextTheme ? `Switch to ${nextTheme} theme` : "Toggle light and dark theme"}
       title={nextTheme ? `Switch to ${nextTheme} theme` : "Toggle light and dark theme"}

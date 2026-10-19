@@ -1,0 +1,55 @@
+/* The design tokens. GENERATED from design/DESIGN.md by scripts/design/build-tokens.mjs (ADR-0081). Do not edit by hand:
+   change design/DESIGN.md and run `pnpm design:build`. Template: blue 1.0.0. */
+
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(oklch(97% 0.004 250), oklch(15% 0.012 255));
+  --surface: light-dark(oklch(100% 0 0), oklch(21% 0.014 255));
+  --surface-solid: light-dark(oklch(100% 0 0), oklch(21% 0.014 255));
+  --surface-2: light-dark(oklch(96% 0.006 250), oklch(26% 0.016 255));
+  --text: light-dark(oklch(21% 0.02 255), oklch(95% 0.006 250));
+  --muted: light-dark(oklch(49% 0.02 255), oklch(70% 0.016 255));
+  --border: light-dark(oklch(90% 0.01 250), oklch(34% 0.018 255));
+  --accent: light-dark(oklch(50% 0.17 258), oklch(76% 0.12 250));
+  --accent-2: light-dark(oklch(55% 0.09 205), oklch(78% 0.11 205));
+  --accent-3: oklch(80% 0.11 235);
+  --on-accent: light-dark(oklch(99% 0 0), oklch(19% 0.04 250));
+  --accent-soft: color-mix(in oklch, var(--accent) 10%, transparent);
+  --ok: light-dark(oklch(52% 0.125 155), oklch(76% 0.15 155));
+  --warn: light-dark(oklch(58% 0.12 70), oklch(82% 0.13 80));
+  --danger: light-dark(oklch(55% 0.19 25), oklch(74% 0.14 25));
+  --ok-soft: light-dark(oklch(95% 0.03 140), oklch(28% 0.04 140));
+  --on-ok-soft: light-dark(oklch(42% 0.11 145), oklch(82% 0.12 140));
+  --scrim: oklch(20% 0.03 255 / 0.84);
+  --on-scrim: oklch(100% 0 0);
+
+  --radius-sm: 0.5rem;
+  --radius: 0.85rem;
+  --radius-lg: 1.15rem;
+
+  --shadow: 0 1px 2px oklch(22% 0.03 255 / 0.05), 0 12px 30px -16px oklch(30% 0.08 255 / 0.22);
+
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+
+  --space: clamp(1rem, 0.8rem + 1vw, 1.75rem);
+}
+
+/* sizes and easing that Tailwind reads as theme values (fluid type steps, the soft ease) */
+@theme {
+  --radius-control: 0.65rem;
+  --text-step--1: clamp(0.8rem, 0.78rem + 0.1vw, 0.875rem);
+  --text-step-0: clamp(1rem, 0.96rem + 0.2vw, 1.0625rem);
+  --text-step-1: clamp(1.2rem, 1.1rem + 0.5vw, 1.4rem);
+  --text-step-2: clamp(1.5rem, 1.3rem + 1vw, 2rem);
+  --text-step-3: clamp(2.1rem, 1.6rem + 2.5vw, 3.4rem);
+  --text-2xs: 0.65rem;
+  --text-ui-sm: 0.8rem;
+  --text-ui: 0.9rem;
+  --text-ui-lg: 0.95rem;
+  --text-lead: 1.05rem;
+  --text-title: 1.15rem;
+  --text-display: clamp(2rem, 8vw, 2.55rem);
+  --text-display-lg: clamp(2.55rem, 5.3vw, 3.9rem);
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}

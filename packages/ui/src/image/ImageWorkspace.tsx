@@ -383,7 +383,7 @@ export function ImageWorkspace({
 
               {mode === "text" ? (
                 <fieldset className="m-0 grid gap-2 border-0 p-0">
-                  <legend className="mb-1 font-semibold text-[0.95rem]">Aspect ratio</legend>
+                  <legend className="mb-1 font-semibold text-ui-lg">Aspect ratio</legend>
                   <div className="flex flex-wrap gap-2">
                     {SIZES.map((s) => (
                       <Chip key={s.id} aria-pressed={size === s.id} onClick={() => setSize(s.id)}>
@@ -402,7 +402,7 @@ export function ImageWorkspace({
                 <section className="grid gap-2" aria-label="Styles">
                   <button
                     type="button"
-                    className="flex items-center justify-between font-semibold text-[0.95rem]"
+                    className="flex items-center justify-between font-semibold text-ui-lg"
                     aria-expanded={stylesOpen}
                     onClick={() => setStylesOpen((v) => !v)}
                   >

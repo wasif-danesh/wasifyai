@@ -4,7 +4,7 @@ import type { Product } from "@/lib/products";
 export function ProductArt({ id }: { id: Product["id"] }) {
   return (
     <svg
-      className="aspect-[16/10] w-full rounded-[0.68rem] bg-muted"
+      className="aspect-[16/10] w-full rounded-control bg-muted"
       viewBox="0 0 320 190"
       aria-hidden="true"
       focusable="false"

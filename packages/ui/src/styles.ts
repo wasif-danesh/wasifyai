@@ -18,7 +18,7 @@ export const actions = "flex flex-wrap items-center gap-2.5";
 
 /** A link that looks like a quiet button with a back arrow. */
 export const backLink =
-  "-ms-2.5 inline-flex items-center gap-1.5 justify-self-start rounded-[0.65rem] py-1.5 ps-2.5 pe-3 font-semibold text-muted-foreground no-underline transition-colors hover:bg-accent hover:text-foreground";
+  "-ms-2.5 inline-flex items-center gap-1.5 justify-self-start rounded-control py-1.5 ps-2.5 pe-3 font-semibold text-muted-foreground no-underline transition-colors hover:bg-accent hover:text-foreground";
 
 /** An empty-state block: icon or art, a heading, a line and an action, centred. */
 export const empty =
@@ -33,7 +33,7 @@ export const coverTile =
 
 /** A form field: label, control and hint, stacked. */
 export const field = "grid gap-1.5";
-export const fieldLabel = "text-[0.95rem] font-semibold";
+export const fieldLabel = "text-ui-lg font-semibold";
 export const hint = "text-step--1 text-muted-foreground";
 export const fieldError = "text-step--1 text-destructive";
 

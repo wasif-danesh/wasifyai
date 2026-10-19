@@ -32,7 +32,7 @@ export function CitationPill({
       onClick={() => onOpen(citation)}
       title={`${citation.title}${where}`}
       aria-label={`Source ${n}: ${citation.title}`}
-      className="mx-0.5 inline-grid h-5 min-w-5 -translate-y-px place-items-center rounded-full bg-primary/15 px-1.5 align-middle font-semibold text-[0.7rem] text-primary hover:bg-primary/25"
+      className="mx-0.5 inline-grid h-5 min-w-5 -translate-y-px place-items-center rounded-full bg-primary/15 px-1.5 align-middle font-semibold text-2xs text-primary hover:bg-primary/25"
     >
       {n}
     </button>

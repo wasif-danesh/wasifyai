@@ -99,7 +99,7 @@ export function PictureInput({
 
       {uploading ? (
         <output className="grid gap-[0.6rem]">
-          <div className="flex justify-between gap-4 text-[0.95rem] text-muted-foreground">
+          <div className="flex justify-between gap-4 text-ui-lg text-muted-foreground">
             <span>Uploading your picture…</span>
             <Button type="button" variant="link" size="xs" onClick={onCancel}>
               Cancel

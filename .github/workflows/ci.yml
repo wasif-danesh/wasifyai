@@ -44,6 +44,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install
+      - run: pnpm design:check   # the generated tokens match design/DESIGN.md, and no screen hard-codes a colour or size (ADR-0081)
       - run: pnpm lint && pnpm typecheck && pnpm test
       - run: pnpm --filter web build   # catches what lint and types cannot: a broken production build
       # the screens shared with the desktop window, in a real browser: layout checks only (the screenshots are

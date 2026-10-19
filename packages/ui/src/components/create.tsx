@@ -111,7 +111,7 @@ export function JobMeter({
 }) {
   return (
     <div className="grid gap-[0.6rem]">
-      <div className="flex justify-between gap-4 text-[0.95rem] text-muted-foreground tabular-nums">
+      <div className="flex justify-between gap-4 text-ui-lg text-muted-foreground tabular-nums">
         <span>{title}</span>
         <span>{text}</span>
       </div>

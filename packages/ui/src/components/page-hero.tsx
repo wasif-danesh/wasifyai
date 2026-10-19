@@ -19,7 +19,7 @@ export function PageHero({
     <header className={cn("grid gap-3 pb-2", className)}>
       {icon}
       {eyebrow ? (
-        <span className="text-[0.72rem] font-bold tracking-[0.13em] text-primary uppercase">
+        <span className="text-2xs font-bold tracking-[0.13em] text-primary uppercase">
           {eyebrow}
         </span>
       ) : null}

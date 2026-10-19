@@ -165,7 +165,7 @@ export function Markdown({
             return (
               <pre
                 key={key}
-                className="overflow-auto rounded-lg border bg-muted/50 p-3 font-mono text-[0.85rem]"
+                className="overflow-auto rounded-lg border bg-muted/50 p-3 font-mono text-ui"
                 data-lang={b.lang || undefined}
               >
                 <code>{b.text}</code>
@@ -174,7 +174,7 @@ export function Markdown({
           case "table":
             return (
               <div key={key} className="overflow-auto rounded-lg border">
-                <table className="w-full border-collapse text-left text-[0.9rem]">
+                <table className="w-full border-collapse text-left text-ui">
                   <thead className="bg-muted/50">
                     <tr>
                       {b.head.map((h, j) => (
@@ -203,7 +203,7 @@ export function Markdown({
             );
           case "heading":
             return (
-              <p key={key} className="font-semibold text-[1.05rem]">
+              <p key={key} className="font-semibold text-lead">
                 {inline(b.text, renderLabel)}
               </p>
             );

@@ -41,7 +41,7 @@ export function Notice({
       >
         {ICON[tone]}
       </span>
-      <h3 className="text-[1.05rem] font-semibold">{title}</h3>
+      <h3 className="text-lead font-semibold">{title}</h3>
       {children ? <p className="text-muted-foreground">{children}</p> : <span />}
       {actions ? (
         <div className="col-start-2 mt-2 flex flex-wrap items-center gap-2.5">{actions}</div>

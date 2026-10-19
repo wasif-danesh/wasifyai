@@ -49,11 +49,11 @@ export type SideMenuProps = {
 };
 
 const ITEM =
-  "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[0.95rem] outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring";
+  "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-ui-lg outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring";
 
 function Soon() {
   return (
-    <span className="ms-auto rounded-full border px-2 py-0.5 text-[0.65rem] text-muted-foreground uppercase tracking-wide">
+    <span className="ms-auto rounded-full border px-2 py-0.5 text-2xs text-muted-foreground uppercase tracking-wide">
       Soon
     </span>
   );
@@ -93,7 +93,7 @@ export function SideMenu({
     const current = !soon && view.current === true;
     const className = cn(
       ITEM,
-      small && "py-1.5 text-[0.9rem]",
+      small && "py-1.5 text-ui",
       current && "bg-accent",
       soon && "cursor-default opacity-60 hover:bg-transparent",
     );
@@ -238,7 +238,7 @@ export function SideMenu({
                       type="button"
                       title={c.title}
                       aria-current={c.current ? "page" : undefined}
-                      className={cn(ITEM, "py-1.5 text-[0.9rem]", c.current && "bg-accent")}
+                      className={cn(ITEM, "py-1.5 text-ui", c.current && "bg-accent")}
                       onClick={c.onSelect}
                     >
                       <span className="truncate">{c.title || "New chat"}</span>

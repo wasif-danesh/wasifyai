@@ -196,9 +196,9 @@ Sizes: S under a week, M one to two weeks, L two to four. Each ends with somethi
 
 | Stage | What | Size | Done when |
 |---|---|---|---|
-| **DS0** | Write `design/DESIGN.md` from today's tokens (still violet), the generator `scripts/design/build-tokens.mjs`, generated CSS and types, the CI "generated files are current" check | S | Screenshots of every screen are unchanged |
-| **DS1** | The token lint (no raw colours, sizes, radii), contrast, gamut, completeness and reduced-motion validation; replace the hard-coded values the lint finds | S to M | `pnpm design:check` passes in CI |
-| **DS2** | The blue template (`design/themes/blue.md`) as the default: visual review of the recommended blue and two alternatives, neutrals and accents, chart palette; the token-swap test | S | Web and desktop look blue, AA contrast holds in both schemes, layout checks pass |
+| **DS0** | **Done 2026-10-19.** Write `design/DESIGN.md` from today's tokens (still violet), the generator `scripts/design/build-tokens.mjs`, generated CSS and types, the CI "generated files are current" check | S | Screenshots of every screen are unchanged |
+| **DS1** | **Done 2026-10-19.** The token lint (no raw colours, sizes, radii), contrast, gamut, completeness and reduced-motion validation; replace the hard-coded values the lint finds | S to M | `pnpm design:check` passes in CI |
+| **DS2** | **Done 2026-10-19.** The blue template (`design/themes/blue.md`) as the default: visual review of the recommended blue and two alternatives, neutrals and accents, chart palette; the token-swap test | S | Web and desktop look blue, AA contrast holds in both schemes, layout checks pass |
 | **DS3** | Component catalogue (states, light and dark, density), content guide and state patterns, axe checks (dependency approval first) | M | Every component and state is visible in one place and checked |
 | **DS4** | Screen patterns for Teach, Agent, Video Builder, Motion Graphics and 3D, written before they are built; usability tests of the flows as they land | ongoing | Each Phase 5 screen is built against the system |
 

@@ -237,9 +237,9 @@ export function CreationsList({
               type="button"
               aria-pressed={filter === value}
               onClick={() => setFilter(value)}
-              className="inline-flex items-center gap-[0.45rem] rounded-full border-0 bg-transparent px-[0.85rem] py-[0.55rem] text-[0.9rem] font-semibold text-muted-foreground transition-colors hover:text-foreground aria-pressed:bg-accent aria-pressed:text-foreground max-[520px]:px-[0.7rem]"
+              className="inline-flex items-center gap-[0.45rem] rounded-full border-0 bg-transparent px-[0.85rem] py-[0.55rem] text-ui font-semibold text-muted-foreground transition-colors hover:text-foreground aria-pressed:bg-accent aria-pressed:text-foreground max-[520px]:px-[0.7rem]"
             >
-              {label} <span className="text-[0.78rem] opacity-70">{counts[value]}</span>
+              {label} <span className="text-ui-sm opacity-70">{counts[value]}</span>
             </button>
           ))}
         </fieldset>

@@ -26,7 +26,7 @@ export function Equaliser({ still = false, mark = false }: { still?: boolean; ma
         <i
           key={m.delay}
           className={cn(
-            "block h-full flex-1 origin-bottom rounded-[2px] animate-eq",
+            "block h-full flex-1 origin-bottom rounded-xs animate-eq",
             mark ? "bg-brand-3" : "bg-linear-to-t from-primary to-brand-2",
           )}
           style={
@@ -44,7 +44,7 @@ export function Logo() {
   return (
     <Link
       href="/"
-      className="inline-flex items-center gap-[0.65rem] text-[1.15rem] font-bold tracking-[-0.02em] whitespace-nowrap text-foreground no-underline hover:text-foreground"
+      className="inline-flex items-center gap-[0.65rem] text-title font-bold tracking-[-0.02em] whitespace-nowrap text-foreground no-underline hover:text-foreground"
       aria-label="Wasify AI, home"
     >
       <Equaliser still mark />

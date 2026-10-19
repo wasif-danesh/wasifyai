@@ -47,7 +47,7 @@ export async function Header() {
               }}
             >
               <span
-                className="hidden max-w-[12ch] truncate text-[0.9rem] text-muted-foreground md:inline"
+                className="hidden max-w-[12ch] truncate text-ui text-muted-foreground md:inline"
                 title={session?.user?.email ?? undefined}
               >
                 {who}

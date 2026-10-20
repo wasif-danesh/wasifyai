@@ -75,9 +75,12 @@ def test_an_image_is_made_end_to_end_on_the_desktop_profile(data_dir):
         names = [e for e, _ in events]
         assert names[-1] == "done" and "error" not in names
 
-        # the job went through the queue and the worker, and its progress reached the stream
+        # the job went through the queue and the worker, and its progress reached the stream.
+        # A fast worker (a Windows runner) can claim the job before the stream's first read,
+        # so the first status seen is queued or running.
         jobs = [d for e, d in events if e == "job_progress"]
-        assert [j["status"] for j in jobs][0] == "queued" and jobs[-1]["status"] == "completed"
+        statuses = [j["status"] for j in jobs]
+        assert statuses[0] in ("queued", "running") and statuses[-1] == "completed"
         assert [d["seq"] for _, d in events] == sorted(d["seq"] for _, d in events)
 
         done = events[-1][1]["outputs"]

@@ -13,7 +13,7 @@ import {
   type VoiceApi,
   type VoiceModelInfo,
 } from "@wasifyai/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AssistantHome } from "../AssistantHome";
 
 const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
@@ -82,6 +82,12 @@ class FakeAudio {
   pause = vi.fn();
   removeAttribute() {}
 }
+
+// The new chat is a separate chunk (AssistantHome loads it lazily). Loading assistant-ui took longer than the default wait on a slow
+// Windows runner, so the first "next" test found an empty page. Load it once here, with room to do so.
+beforeAll(async () => {
+  await import("../ChatScreenNext");
+}, 60_000);
 
 beforeEach(() => {
   FakeAudio.played = 0;

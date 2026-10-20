@@ -11,7 +11,7 @@ import {
   type VoiceApi,
   type VoiceModelInfo,
 } from "@wasifyai/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { AssistantHome } from "../AssistantHome";
 
 const runs = { startRun: vi.fn(async () => {}), watchRun: vi.fn(async () => {}) };
@@ -61,6 +61,12 @@ function home(props: Partial<React.ComponentProps<typeof AssistantHome>> = {}) {
     />,
   );
 }
+
+// The new chat is a separate chunk (AssistantHome loads it lazily). Loading assistant-ui took longer than the default wait on a slow
+// Windows runner, so the first "next" test found an empty page. Load it once here, with room to do so.
+beforeAll(async () => {
+  await import("../ChatScreenNext");
+}, 60_000);
 
 afterEach(() => vi.restoreAllMocks());
 

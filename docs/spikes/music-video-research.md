@@ -86,7 +86,7 @@ backends.** Treat as a signal that AutoMV is not unchallenged, not as proof.
 | Latest release | **v3.1.0, 2026-10-19** (MOSS Image 5B, H3 community checkpoint, Viggle fixes) | v1.6.5 (2026-08-08) shown |
 | Licence | **"Maestro License Notice" = WanGP Non-Commercial Evaluation License 1.1** (GitHub shows "Other"/NOASSERTION). https://raw.githubusercontent.com/Blizaine/Maestro/main/LICENSE | same |
 
-I take Blizaine/Maestro to be the one the owner means (https://github.com/Blizaine/Maestro); **to be confirmed with the owner**.
+Blizaine/Maestro is the one the owner means (https://github.com/Blizaine/Maestro); **confirmed by the owner on 2026-10-20**.
 
 **Licence terms (quoted from the notice, summarised):** free for non-commercial use, copying, modification and redistribution
 (personal projects, research, education, evaluation). **Not allowed:** selling or sublicensing Maestro or derivatives, offering
@@ -221,7 +221,29 @@ A rough, **not measured** cost model for a 3-minute song with 36 shots of 5 s: a
 - Whether MuseTalk lip sync is acceptable on sung vocals (we have only tested speech).
 - Whether the star counts and dates came through the page reader correctly (they were read through a summarising tool, not by hand).
 
-## 6. Sources
+## 6. Owner's answers (2026-10-20) and what they change for research
+
+Recorded in full in ADR-0084 ("Owner's answers"). For these notes:
+
+- **Research versus shipping.** The owner confirmed Maestro's non-commercial licence is not an obstacle to *studying* it in the MV0 spike
+  (the WanGP notice allows non-commercial research and evaluation; I read it as covering a spike whose output is a report, which the owner
+  has now decided). The rule for anything that could be **shipped** (code, a default model, a downloaded file) is unchanged: commercial
+  use allowed, or badge-only. So the licence tables above stay as they are; they describe what can ship.
+- **What the spike may run (follow-up answer: the Mac only).** Maestro needs an NVIDIA GPU (Windows or Linux), so it is only read and its
+  demos watched; no NVIDIA machine is used. AutoMV end to end needs Gemini and Doubao API keys (about USD 10 to 20 per song, per its
+  authors); no keys are used and no money spent; its local preprocessing (htdemucs, Whisper, SongFormer) may run on the Mac. LTX-2.5 through the community MLX port is to be tried (47 GB or more
+  of files accepted). Anything else may be installed if disk allows, in a throwaway environment outside the repo, deleted at the end with a
+  disk report.
+- **Goal.** A fast, honest draft: the research above is re-read for speed. Relevant figures for the draft design: FLUX.2 klein 4B about 13 s
+  warm per 1024 px still; LTX 0.9.5 small clip (512x320, 15 steps, 25 frames) 13 s, full size 2 s clip 72 s and 5 s clip 252 s; AutoMV's own
+  runtime is about 30 minutes on hosted APIs; Maestro's Auto mode runs the whole chain (hours on a 24 GB NVIDIA card, not measured by us).
+- **Hosted:** local only to start; the Seedance 2.5 price notes in section 2.3 stay as background for a possible later opt-in idea.
+- **No visible "AI-generated" mark:** removed everywhere including lip sync (follow-up answer), to be reviewed before release; it amends
+  ADR-0066/0044 when the code changes (backlog D13).
+- **Licences with a revenue threshold** (LTX-2.x at USD 10M, Stability Community) may be shipped defaults, for all products (follow-up
+  answer). Section 3's "conditional" rows read accordingly; non-commercial, unreviewed and territory-barred models are still never defaults.
+
+## 7. Sources
 
 AutoMV paper https://arxiv.org/abs/2512.12196 , https://arxiv.org/html/2512.12196v1 ; repo https://github.com/multimodal-art-projection/AutoMV
 (API read 2026-10-20) ; issues https://github.com/multimodal-art-projection/AutoMV/issues ; project page https://m-a-p.ai/AutoMV/ ;

@@ -18,6 +18,11 @@ function fakeAssistant(over: Partial<AssistantApi> = {}): AssistantApi {
     updateSearch: vi.fn(async () => {
       throw new Error("unused");
     }),
+    setHead: vi.fn(async () => {}),
+    attach: vi.fn(async () => {
+      throw new Error("unused");
+    }),
+    unattach: vi.fn(async () => {}),
     list: vi.fn(async () => [{ id: "c1", title: "Fox poem", created_at: "", updated_at: "" }]),
     get: vi.fn(async (id: string) => ({
       id,

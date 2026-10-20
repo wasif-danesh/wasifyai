@@ -21,6 +21,11 @@ const assistant: AssistantApi = {
   updateSearch: async () => {
     throw new Error("unused");
   },
+  setHead: async () => {},
+  attach: async () => {
+    throw new Error("unused");
+  },
+  unattach: async () => {},
   list: async () => [],
   get: async () => {
     throw new Error("unused");

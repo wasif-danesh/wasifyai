@@ -11,11 +11,14 @@ from wasifyai_assistant.store import InMemoryConversationStore
 from wasifyai_image.actions import actions as image_actions
 from wasifyai_notebooks.actions import actions as notebook_actions
 from wasifyai_platform_sdk import (
+    InMemoryUploadStore,
     InMemoryUsageRecorder,
     ProviderDeps,
+    ScopedStorage,
     ToolUnavailable,
     build_capabilities,
     load_product_config,
+    new_upload,
 )
 from wasifyai_platform_sdk.actions import (
     ActionExecutor,
@@ -24,6 +27,7 @@ from wasifyai_platform_sdk.actions import (
     Readiness,
     builtin_actions,
 )
+from wasifyai_platform_sdk.storage import memory_storage
 from wasifyai_voice.actions import actions as voice_actions
 
 
@@ -132,8 +136,18 @@ class Rig:
 
         self.caps.indexer = Indexer()
         self.store = InMemoryConversationStore()
+        self.uploads = InMemoryUploadStore()
+        self.caps.storage = ScopedStorage(memory_storage())  # what was attached is kept here
         self._turns = 0
-        self.graph = build_assistant_graph(self.caps, InMemorySaver(), self.store)
+        self.graph = build_assistant_graph(self.caps, InMemorySaver(), self.store, self.uploads)
+
+    async def attach(self, kind: str, data: bytes) -> str:
+        """Put a file where an upload would have: the person's storage and the upload table.
+        Returns its id, which a turn names in `attachments`."""
+        record = new_upload("t1", "wasifyai-assistant", "u1", len(data), kind)
+        await self.caps.storage.put(record.key, data)  # type: ignore[union-attr]
+        await self.uploads.add(record)
+        return record.id
 
     @property
     def model(self) -> Any:
@@ -149,9 +163,13 @@ class Rig:
 
     async def turn_with(self, graph_input: dict[str, Any]) -> tuple[dict, list[dict]]:
         """Run one turn with the whole run input (the ids a client chose, for one)."""
-        graph: Any = self.graph
         config = {"configurable": {"thread_id": f"th-{self._turns}"}}
         self._turns += 1
+        self.config = config
+        return await self._stream(graph_input, config)
+
+    async def _stream(self, graph_input: Any, config: dict) -> tuple[dict, list[dict]]:
+        graph: Any = self.graph
         final: dict[str, Any] = {}
         events: list[dict[str, Any]] = []
         async for mode, chunk in graph.astream(
@@ -162,3 +180,18 @@ class Rig:
             else:
                 final = chunk
         return final, events
+
+    async def paused(self) -> dict[str, Any] | None:
+        """What the last turn is waiting for the person to answer (the card), or None."""
+        graph: Any = self.graph
+        state = await graph.aget_state(self.config)
+        for task in state.tasks:
+            for intr in task.interrupts:
+                return dict(intr.value)
+        return None
+
+    async def answer(self, value: Any) -> tuple[dict, list[dict]]:
+        """The person's answer to the card; the turn goes on and the events after it come back."""
+        from langgraph.types import Command
+
+        return await self._stream(Command(resume=value), self.config)

@@ -77,7 +77,7 @@ class UploadRecord:
     bytes: int
     created_at: datetime | None = None
     consumed_at: datetime | None = None
-    kind: str = "image"  # "image" or "audio" (ADR-0043)
+    kind: str = "image"  # "image", "audio" (ADR-0043) or "text" (the words of an attached document)
     seconds: float | None = None  # the length of an audio upload
 
     @property
@@ -94,7 +94,7 @@ def new_upload(
     seconds: float | None = None,
 ) -> UploadRecord:
     upload_id = str(uuid4())
-    ext = "wav" if kind == "audio" else "png"
+    ext = {"audio": "wav", "text": "txt"}.get(kind, "png")
     return UploadRecord(
         upload_id, tenant_id, product_id, user_id, f"uploads/{upload_id}.{ext}", size,
         kind=kind, seconds=seconds,

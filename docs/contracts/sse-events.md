@@ -1,7 +1,7 @@
 # SSE event contract
 
 Status: **Finalised (Phase 1)**. Changes need an ADR. Additive fields of ADR-0082 (accepted 2026-10-20): `job_progress.tool_call_id`,
-the run request's `run_id`, `POST /runs/{run_id}/cancel`, the `reasoning` event, and the assistant's message ids and `thinking` option (last section). The Pydantic models in `packages/contracts` (`wasifyai_contracts/events.py`) are the source of truth;
+the run request's `run_id`, `POST /runs/{run_id}/cancel`, the `reasoning` event, and the assistant's message ids, `thinking` option, message tree and `confirm_action` cards (last section). The Pydantic models in `packages/contracts` (`wasifyai_contracts/events.py`) are the source of truth;
 this doc describes them. TypeScript types are generated into `packages/contracts-ts` with
 `make contracts`.
 
@@ -50,8 +50,8 @@ Every `data` object includes:
 |---|---|---|
 | `node` | A graph node starts or finishes | `node`, `status` (`started` \| `completed`), `label` (human-readable) |
 | `token` | LLM output streams | `node`, `text` (delta) |
-| `interrupt` | Graph pauses for the user | `interrupt_id`, `kind` (e.g. `approve_lyrics`), `payload` (editable data) |
-| `reasoning` | A model's thinking text streams (ADR-0082 decision 6, ADR-0083); only when thinking was asked for, or the model thinks anyway | `node`, `text` (delta). Shown collapsed under "Thinking"; stored as a `reasoning` part; **never sent back to the model as context** |
+| `interrupt` | Graph pauses for the user | `interrupt_id`, `kind` (e.g. `approve_lyrics`, or `confirm_action` for the assistant's card), `payload` (editable data, or the card) |
+| `reasoning` | A model's thinking text streams (ADR-0082 decision 6, ADR-0083); only when thinking was asked for, or the model thinks anyway | `node`, `text` (delta). Shown collapsed under "Thinking"; stored as a `reasoning` part; **never sent back to the model as context**. The notebooks' chat also emits it (not stored there) |
 | `tool_call` | The assistant calls a tool (ADR-0057) | `id`, `name`, `arguments` (object) |
 | `tool_result` | A tool call finished | `id` (same as its `tool_call`), `name`, `status` (`ok` \| `refused` \| `error`), `output` (a small reference: an image id, search hits; never a file) |
 | `job_progress` | Media job state changes | `job_id`, `capability`, `status` (`queued` \| `running` \| `completed` \| `failed`), `queue_position?`, `progress?` (0–1), `preview_url?`, `tool_call_id?` (the assistant's `tool_call` this job belongs to; without it a client gives the progress to the last tool still running) |
@@ -130,4 +130,38 @@ data: {"run_id":"…","thread_id":"…","seq":57,"ts":"…","outputs":{"title":"
   (the chosen ones, or the engine's own when none were sent, or when the chosen ones were taken).
 - **Stop** keeps the words written so far as the reply (stored under `client_reply_id` when it is the turn's first assistant
   message).
-- Not in this contract yet (stage CU2): `parent_message_id`, a conversation read with the tree, a stored `interrupt` part.
+- **The message tree (ADR-0082, stage CU2).** Every stored row has a `parent_id` (none for a first message) and the conversation a `head_id`, the last row of the
+  branch on screen. An edited message is a sibling of the one it replaced; an answer made again is a sibling of the answer it replaced. One assistant turn is
+  several rows chained one under the other (the call, the tool row, the answer); the first row of it names the turn. Run input:
+  - **`parent_message_id`** (string): where the turn goes. Left out = under the head (what every client did before). `""` = a first message. An id = under the
+    **last row of the turn that starts at that id** (a user message is its own last row), so a client names an assistant turn by its first row. An id that is not
+    in the conversation is refused (`not_found`).
+  - **`regenerate`** (bool, with `conversation_id` and `parent_message_id` = a **user** message): answer that message again. No new message is stored; the answer
+    becomes its sibling; `text` is not needed. Anything else as the parent is refused (`invalid_request`).
+  - `GET /products/wasifyai-assistant/conversations/{id}` answers the branch on screen (messages oldest first, each with `parent_id`) and `head_id`; with
+    **`?tree=1`** every message of every branch. `PATCH` takes `{title?, head_id?}`: `head_id` (any message of a branch; the engine keeps the last row of that turn)
+    is how the window says which branch the person chose, so a reload comes back to it. A conversation from before the tree reads as a chain with its head at the end.
+  - The model is only ever given the branch the turn is on.
+- **Attachments (ADR-0083, CO2).** Run input **`attachments`**: `[{id, name}]`, at most 4, the ids of uploads made just before: a picture through `POST /products/wasifyai-assistant/uploads/images`
+  (the hardened upload; answers `upload_id`), a document through `POST /products/wasifyai-assistant/attachments` (body = the file, `x-file-name` = its name, percent-encoded; answers `{id, kind, name, chars,
+  pages, truncated}`; text, Markdown, CSV and HTML, and PDF and Office when the document reader is installed). The user message is stored with `attachment` parts `{kind, id, key, name, bytes}` and the
+  uploads are consumed; a conversation read adds a short-lived `url` to a picture part. A picture for a model that cannot read pictures ends the run with `refused`, code `no_vision`, and stores nothing.
+  Attachments are untrusted text (see the next point). `GET .../options` also answers `attach: {available, images, documents, images_note}`.
+- **Read aloud (ADR-0083, CU3) is not a stream and not a run.** `POST /products/wasifyai-voice/read-aloud` takes JSON `{text, part}` (`text`: a reply as the model wrote it, 1 to 40,000
+  characters; `part`: 0 to 7, default 0; unknown fields are refused) and answers one **passage** of it spoken: `{audio, part, parts, truncated, seconds, model, displaced}`. The engine turns the text into
+  plain words (code blocks, addresses, tags, citations like `[1]`, table rules, control and bidirectional characters dropped; the text of links, headings and emphasis kept), cuts it at the ends of
+  sentences into passages of at most 600 characters (the first about 300, so sound starts sooner), and reads at most 8 of them (`truncated` is true when the reply was longer than that: it is read from its start). `parts` is how many passages
+  there are (never above 8) and the window asks for `part` 1 while part 0 plays. `audio` is a **base64 WAV** (the speech model's own rate, mono, 16-bit): this is the one route that carries sound
+  bytes in JSON, because nothing is stored to link to (the audio is not kept anywhere, on the engine or in the window) and the web's pass-through (`apps/web/app/api/products/[productId]/[...path]`)
+  forwards a JSON body unchanged, so no custom response headers are needed. `displaced` is `"chat"` when the chat model had to be unloaded to make room. Nothing is kept: no creation, library row,
+  search entry, usage row, file or log of the words. Refusals are `{detail: {code, message}}`: `nothing_to_read` (422: only code or a picture), `no_such_part` (404), `text_too_long` and the
+  speech model's own refusals (422), `model_missing` / `runtime_missing` / `no_model` (409: the message says what to get), the speech runtime failing (502), no speech engine (503). The window shows
+  the `message`. It is not an action (`docs/actions.md`, "Not actions").
+- **Cards that wait for the person (ADR-0071).** Run input **`approvals`** (bool): this client shows a card and sends the answer back. Only then does an action that
+  needs the person's yes (after the web was read, a picture or a song; a `destroy` action) park the turn. Without it that action is refused in words, as before.
+  The turn emits `interrupt` with `kind: "confirm_action"` and `payload {kind, tool_call_id, title, summary, params}` (`params`: a few short parameters, plain text),
+  stores a `tool` row with a part `{type: "interrupt", kind, status: "pending", tool_call_id, approval_id, run_id, title, summary, params}` so a reload shows the card,
+  and waits (`waiting_input`). **`POST /runs/{run_id}/resume {"value": {"approved": true}}`** answers it; anything but a literal `true` is a no. `{"approved": false,
+  "expired": true}` is "the person went on without answering": the turn closes without another model call. The part becomes `approved` or `declined`; the tool's
+  `tool_result` follows in the same row and the stream goes on in the same message. A second answer is `409`. The window's click is the only way an approval is
+  decided: no action exposes it.

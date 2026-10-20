@@ -103,3 +103,12 @@ library only through `library.export`, into the export folder.
 
 Settings, account and anything that changes the person's configuration. Downloading a model is an action
 (`models.download`) because it shows its size and waits for a yes.
+
+**Dictation** (the Mic in the chat box, `POST /products/wasifyai-voice/dictation`, ADR-0083) is not an action: it is the person's own
+voice, recorded by the window while they press the button, and it returns text to the box and nothing else (no creation, no library
+row, no audit of the words). There is nothing for an agent to call; writing down a recording that is in the library is
+`speech.transcribe`.
+
+**Read aloud** (the speaker button under a reply, `POST /products/wasifyai-voice/read-aloud`, ADR-0083) is not an action either: it speaks the text of
+a reply the person is looking at, only when they press the button, and returns sound to the window and nothing else (no creation, no library row,
+no audit of the words). Making a speech that is kept in the library is `speech.speak`.

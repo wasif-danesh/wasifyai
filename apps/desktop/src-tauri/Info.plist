@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Shown once by macOS when the person first presses Mic in the chat box (ADR-0083, decision 5). Tauri merges this file into the
+	     app's Info.plist, and embeds it in a development build; Cargo does not watch it, so after editing it run `touch build.rs`. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Wasify AI listens only while you press Mic in the chat box, to write down what you say. The sound is turned into text on this computer and is not kept.</string>
+</dict>
+</plist>

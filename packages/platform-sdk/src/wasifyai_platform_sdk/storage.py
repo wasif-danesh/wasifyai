@@ -167,6 +167,15 @@ class ScopedStorage:
     async def delete_for(self, owner: tuple[str, str, str], rel: str) -> None:
         await self._storage.delete(object_key(*owner, rel))
 
+    async def get_for(self, owner: tuple[str, str, str], rel: str) -> bytes:
+        return await self._storage.get(object_key(*owner, rel))
+
+    async def url_for(
+        self, owner: tuple[str, str, str], rel: str, expires: timedelta = timedelta(hours=1)
+    ) -> str:
+        """A short-lived link to one of the owner's files, for a request that has no run."""
+        return await self._storage.url(object_key(*owner, rel), expires)
+
 
 def memory_storage() -> Storage:
     return Storage(MemoryStore())

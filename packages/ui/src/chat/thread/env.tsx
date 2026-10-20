@@ -14,6 +14,18 @@ export type ThreadEnv = {
   imageOrigins?: string[];
   /** Thinking is on for this chat: a pending answer says it takes longer */
   thinkingOn?: boolean;
+  /** The person answered a card that waits for them (ADR-0071): yes or no */
+  onDecide?: (approved: boolean) => void;
+  /** The notebook chat (CU4) is a plain back-and-forth: no edit, no "answer again", no versions. */
+  linear?: boolean;
+  /** What a waiting answer says (default: "Thinking…"). */
+  pending?: string;
+  /** A line above an answer (what was searched). */
+  lead?: (messageId: string) => ReactNode;
+  /** More buttons beside Copy (Save as note). */
+  extras?: (messageId: string) => ReactNode;
+  /** `[n]` source labels in an answer, drawn as pills; without it a label stays text. */
+  renderLabel?: (messageId: string, n: number) => ReactNode;
 };
 
 const Env = createContext<ThreadEnv | null>(null);

@@ -406,3 +406,64 @@ def test_a_model_that_will_not_fit_is_not_fetched_unless_the_person_insists(tmp_
 
         insisted = c.post("/desktop/models/demo/download", json={**body, "accept_memory": True})
         assert insisted.status_code == 200
+
+
+# ---- a speech model beside the chat model (ADR-0083, decision 5) --------------------------------
+
+
+@pytest.mark.parametrize(
+    ("total_gb", "free_gb", "fits"),
+    [
+        (64, 40, True),  # this Mac: 6.9 GB chat model + 3 GB speech, budget 48 GB
+        (32, 20, True),  # a 32 GB Mac: budget 24 GB
+        (16, 4, True),  # a 16 GB Mac: 9.9 GB together, 4 GB free besides, budget 12 GB
+        (16, 1, False),  # the same Mac with the rest of it busy: only 1 GB is free to add 3 GB
+        (8, 4, False),  # 8 GB: 9.9 GB is more than its 6 GB budget
+    ],
+)
+async def test_a_small_model_stays_beside_the_chat_model_only_when_the_two_fit(
+    tmp_path, origin, monkeypatch, total_gb, free_gb, fits
+):
+    from wasifyai_api import desktop_models as dm
+
+    gb = 1_000_000_000
+    monkeypatch.setattr(
+        dm,
+        "read_machine",
+        lambda reclaim=0: dm.Machine("unified", total_gb * gb, free_gb * gb, None, None, reclaim),
+    )
+    svc = service(tmp_path, origin)
+    assert await svc.fits_beside(3 * gb, int(6.9 * gb)) is fits
+
+
+async def test_unknown_sizes_never_share(tmp_path, origin):
+    svc = service(tmp_path, origin)
+    assert await svc.fits_beside(0, 6_900_000_000) is False
+    assert await svc.fits_beside(3_000_000_000, 0) is False  # the chat model's size is unknown
+
+
+@pytest.mark.parametrize(
+    ("total_gb", "free_gb", "fits"),
+    [
+        (64, 40, True),  # this Mac: 6.9 GB chat model + 1 GB Kokoro (measured 0.9 GB)
+        (32, 20, True),
+        (16, 4, True),  # 7.9 GB together, 4 GB free besides, budget 12 GB
+        (16, 0.5, False),  # the rest of it busy: only 0.5 GB is free to add 1 GB
+        (8, 4, False),  # 8 GB: 7.9 GB is more than its 6 GB budget
+    ],
+)
+async def test_the_read_aloud_voice_stays_beside_the_chat_model_only_when_the_two_fit(
+    tmp_path, origin, monkeypatch, total_gb, free_gb, fits
+):
+    from wasifyai_api import desktop_models as dm
+
+    gb = 1_000_000_000
+    monkeypatch.setattr(
+        dm,
+        "read_machine",
+        lambda reclaim=0: dm.Machine(
+            "unified", total_gb * gb, int(free_gb * gb), None, None, reclaim
+        ),
+    )
+    svc = service(tmp_path, origin)
+    assert await svc.fits_beside(1 * gb, int(6.9 * gb)) is fits

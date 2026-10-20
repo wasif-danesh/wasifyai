@@ -6,6 +6,9 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   clearScreen: false,
+  // the microphone recorder's worklet is one file shared with the web app (packages/ui/public); the window's content policy needs it
+  // served from the app itself
+  publicDir: "../../packages/ui/public",
   server: { port: 1420, strictPort: true },
   build: { target: "es2022", outDir: "dist", emptyOutDir: true },
 });

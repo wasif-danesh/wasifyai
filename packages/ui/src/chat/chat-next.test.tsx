@@ -28,6 +28,11 @@ const assistant: AssistantApi = {
   updateSearch: async () => {
     throw new Error("unused");
   },
+  setHead: async () => {},
+  attach: async () => {
+    throw new Error("unused");
+  },
+  unattach: async () => {},
   list: async () => [],
   get: async (id) => ({
     id,
@@ -107,6 +112,8 @@ describe("ChatScreenNext", () => {
         text: "Hi\nagain",
         client_message_id: expect.any(String),
         client_reply_id: expect.any(String),
+        parent_message_id: "", // a first message: no parent
+        approvals: true, // this screen can show a card
       },
     ]);
     await waitFor(() => expect(onConversation).toHaveBeenCalledWith("c1", "Hi"));

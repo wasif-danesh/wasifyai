@@ -320,6 +320,82 @@ async def test_the_slot_is_held_while_a_request_runs(tmp_path, monkeypatch):
         await server.close()
 
 
+async def test_dictation_asks_the_slot_to_keep_its_model_beside_the_chat_model(
+    tmp_path, monkeypatch
+):
+    from wasifyai_platform_sdk import Held
+
+    eng, server = make_engine(tmp_path, monkeypatch)
+    asked: list[tuple[str, int | None]] = []
+
+    class Hold:
+        def __init__(self, held):
+            self.held = held
+
+        async def __aenter__(self):
+            return self.held
+
+        async def __aexit__(self, *a):
+            return False
+
+    class Slot:
+        displaced = None
+
+        def hold(self, owner, beside_bytes=None):
+            asked.append((owner, beside_bytes))
+            return Hold(Held(shared=self.displaced is None, displaced=self.displaced))
+
+    eng.slot = Slot()
+    try:
+        model = eng.resolve("transcribe", None)
+        plain = await eng.transcribe(model, wav_bytes(1.0), {})
+        quick = await eng.transcribe(model, wav_bytes(1.0), {}, beside=True)
+        assert asked == [("audio", None), ("audio", 3_000_000_000)]  # the catalogue's 3 GB
+        assert plain.displaced is None and quick.displaced is None
+        eng.slot.displaced = "chat"  # they did not fit: the slot unloaded the chat model
+        assert (await eng.transcribe(model, wav_bytes(1.0), {}, beside=True)).displaced == "chat"
+    finally:
+        await server.close()
+
+
+async def test_read_aloud_asks_the_slot_to_keep_the_speech_model_beside_the_chat_model(
+    tmp_path, monkeypatch
+):
+    from wasifyai_platform_sdk import Held
+
+    eng, server = make_engine(tmp_path, monkeypatch)
+    asked: list[tuple[str, int | None]] = []
+
+    class Hold:
+        def __init__(self, held):
+            self.held = held
+
+        async def __aenter__(self):
+            return self.held
+
+        async def __aexit__(self, *a):
+            return False
+
+    class Slot:
+        displaced = None
+
+        def hold(self, owner, beside_bytes=None):
+            asked.append((owner, beside_bytes))
+            return Hold(Held(shared=self.displaced is None, displaced=self.displaced))
+
+    eng.slot = Slot()
+    try:
+        model = eng.resolve("speak", None)
+        plain = await eng.speak(model, "hello", None, {})
+        quick = await eng.speak(model, "hello", None, {}, beside=True)
+        assert asked == [("audio", None), ("audio", 1_000_000_000)]  # the catalogue's 1 GB
+        assert plain.displaced is None and quick.displaced is None
+        eng.slot.displaced = "chat"  # they did not fit: the slot unloaded the chat model
+        assert (await eng.speak(model, "hello", None, {}, beside=True)).displaced == "chat"
+    finally:
+        await server.close()
+
+
 def test_segments_split_at_sentences_and_at_twelve_seconds():
     words = [
         ("a", 0.0, 1.0),

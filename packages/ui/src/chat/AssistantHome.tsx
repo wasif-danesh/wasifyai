@@ -1,11 +1,24 @@
 "use client";
 
-import type { AssistantApi, ChatOptions, ImagesApi } from "@wasifyai/client";
+import {
+  type AssistantApi,
+  type ChatOptions,
+  type DictationReadiness,
+  type ImagesApi,
+  type ReadAloudReadiness,
+  type SpeechModelOffer,
+  type VoiceApi,
+  dictationReadiness,
+  readAloudReadiness,
+} from "@wasifyai/client";
 import { Pencil, Trash2 } from "lucide-react";
 import { type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { ChatScreen, type ChatScreenProps } from "./ChatScreen";
 import type { TrackLookup } from "./ToolCard";
 import type { ComposerOptionsAvailable } from "./composer-options";
+import { startRecording } from "./dictation/recorder";
+import type { MicControl, MicSetup } from "./dictation/use-dictation";
+import type { ReadAloudControl } from "./read-aloud/use-read-aloud";
 import { conversationsChanged } from "./use-conversations";
 
 export function greeting(hour: number): string {
@@ -46,6 +59,13 @@ export type AssistantHomeProps = {
   onOpenSettings?: () => void;
   /** Which options of the box the chat offers; by default what the engine says the model in use can do (ADR-0083). */
   composerOptions?: ChatScreenProps["composerOptions"];
+  /**
+   * The speech client, for the Mic (ADR-0083). Without it, or where the engine cannot write words down, the box has no Mic.
+   * On the web the models are hosted and always ready; on the desktop a missing model is offered as a download.
+   */
+  voice?: VoiceApi;
+  /** Fetch the speech model (desktop only: the web has no models to fetch). Reports how far it is, 0 to 1. */
+  getSpeechModel?: (modelId: string, onProgress: (fraction: number) => void) => Promise<void>;
   /** Which chat screen to show: the one built on our own components (the default) or the new one on assistant-ui (Labs). */
   screen?: "classic" | "next";
 };
@@ -66,6 +86,8 @@ export function AssistantHome({
   onOpenCreation,
   onOpenSettings,
   composerOptions,
+  voice,
+  getSpeechModel,
   screen = "classic",
 }: AssistantHomeProps) {
   const [title, setTitle] = useState("");
@@ -98,9 +120,90 @@ export function AssistantHome({
         : o,
     );
   }, [assistant]);
+  // whether the microphone can write words down here: a speech model is ready, or can be got, or the Mic is not shown
+  const [speech, setSpeech] = useState<DictationReadiness | null>(null);
+  // whether a reply can be read aloud here: a voice is ready, or can be got, or there is no Read aloud button
+  const [voiceReady, setVoiceReady] = useState<ReadAloudReadiness | null>(null);
+  const readSpeech = useCallback(async () => {
+    if (!voice) return;
+    try {
+      const [models, runtime] = await Promise.all([voice.models("transcribe"), voice.runtime()]);
+      setSpeech(dictationReadiness(models, runtime));
+    } catch {
+      setSpeech({ state: "unavailable" });
+    }
+    try {
+      const [models, runtime] = await Promise.all([voice.models("speak"), voice.runtime()]);
+      setVoiceReady(readAloudReadiness(models, runtime));
+    } catch {
+      setVoiceReady({ state: "unavailable" });
+    }
+  }, [voice]);
+  useEffect(() => {
+    void readSpeech();
+  }, [readSpeech]);
+  // getting a speech model (and the runtime that runs it, when that is missing), after the click that followed the card
+  const setupFor = useCallback(
+    (
+      model: SpeechModelOffer,
+      runtimeBytes: number,
+      fetchModel: NonNullable<typeof getSpeechModel>,
+    ): MicSetup & { languages: string[] } => ({
+      title: model.title,
+      licence: model.licence,
+      from: model.from,
+      languages: model.languages,
+      bytes: model.bytes + runtimeBytes,
+      run: async (onProgress) => {
+        if (!voice) return;
+        if (runtimeBytes > 0) {
+          onProgress(null);
+          await voice.installRuntime(runtimeBytes);
+          for (;;) {
+            const rt = await voice.runtime();
+            if (rt.install.state === "failed") throw new Error(rt.install.message);
+            if (rt.installed) break;
+            await new Promise((r) => setTimeout(r, 500));
+          }
+        }
+        if (model.bytes > 0) await fetchModel(model.id, onProgress);
+        await readSpeech();
+      },
+    }),
+    [voice, readSpeech],
+  );
+  const mic = useMemo<MicControl | undefined>(() => {
+    if (!voice || !speech || speech.state === "unavailable") return undefined;
+    const base: MicControl = { record: startRecording, transcribe: (wav) => voice.dictate(wav) };
+    if (speech.state === "ready") return base;
+    if (!getSpeechModel) return undefined; // nothing here can fetch a model (the web): no button
+    return { ...base, setup: setupFor(speech.model, speech.runtimeBytes, getSpeechModel) };
+  }, [voice, speech, getSpeechModel, setupFor]);
+  const readAloud = useMemo<ReadAloudControl | undefined>(() => {
+    if (!voice || !voiceReady || voiceReady.state === "unavailable") return undefined;
+    const base: ReadAloudControl = {
+      speak: (text, part, signal) => voice.readAloud(text, part, signal),
+    };
+    if (voiceReady.state === "ready") return base;
+    if (!getSpeechModel) return undefined; // nothing here can fetch a model (the web): no button
+    return { ...base, setup: setupFor(voiceReady.model, voiceReady.runtimeBytes, getSpeechModel) };
+  }, [voice, voiceReady, getSpeechModel, setupFor]);
   const engineOptions = useMemo<ComposerOptionsAvailable>(() => {
     const s = offered?.search;
+    const a = offered?.attach;
     return {
+      mic,
+      readAloud,
+      // files: only where the engine can keep them (a model that cannot read pictures still takes documents)
+      attach: a?.available
+        ? {
+            images: a.images,
+            documents: a.documents,
+            imagesNote: a.images_note,
+            upload: (file, name) => assistant.attach(file, name),
+            discard: (id) => assistant.unattach(id),
+          }
+        : undefined,
       thinking: offered?.thinking,
       search: s?.available
         ? {
@@ -115,7 +218,7 @@ export function AssistantHome({
           }
         : undefined,
     };
-  }, [offered, allowSearch, onOpenSettings]);
+  }, [offered, allowSearch, onOpenSettings, mic, readAloud, assistant]);
   // the hour is read in the browser, so a page rendered on a server says the same as the person's clock
   const [hour, setHour] = useState<number | null>(null);
   useEffect(() => setHour(new Date().getHours()), []);

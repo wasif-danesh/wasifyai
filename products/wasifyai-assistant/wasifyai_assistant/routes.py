@@ -2,6 +2,7 @@
 
 Every query is scoped by tenant, product and user; another person's conversation is a plain 404."""
 
+import contextlib
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -28,10 +29,12 @@ class MessageOut(BaseModel):
     role: str
     parts: list[dict[str, Any]]
     created_at: str
+    parent_id: str | None = None
 
 
 class ConversationOut(ConversationSummary):
     messages: list[MessageOut]
+    head_id: str | None = None  # the last message of the branch on screen
 
 
 class ConversationList(BaseModel):
@@ -52,11 +55,21 @@ class SearchOptions(BaseModel):
     needs_key: bool = False  # the chosen service needs a key that is not saved yet
 
 
+class AttachOptions(BaseModel):
+    """Attaching files to a message (ADR-0083, CO2): what this engine and the model in use take."""
+
+    available: bool = False  # the engine can keep an attachment at all
+    images: bool | None = False  # the model reads pictures (None: not known, so try)
+    documents: bool = False  # text, Markdown, CSV and HTML always; PDF and Office with the reader
+    images_note: str = ""  # why a picture will not work, in words, when it will not
+
+
 class ChatOptions(BaseModel):
     """What the chat box can offer with the model in use (ADR-0083)."""
 
     thinking: bool  # the model can think when asked: the box gets a Thinking switch
     search: SearchOptions = SearchOptions()
+    attach: AttachOptions = AttachOptions()
 
 
 class SearchProviderOut(BaseModel):
@@ -93,9 +106,13 @@ class SearchUpdate(BaseModel):
     remove_key: str | None = Field(default=None, max_length=40)
 
 
-class Rename(BaseModel):
+class ConversationPatch(BaseModel):
+    """A change to a conversation: its title, or which branch is shown (`head_id`: a message of
+    the branch; the engine keeps the last message of that turn)."""
+
     model_config = ConfigDict(extra="forbid")
-    title: str = Field(min_length=1, max_length=120)
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    head_id: str | None = Field(default=None, max_length=80)
 
 
 def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> APIRouter:
@@ -114,6 +131,13 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
         if language is not None:
             chosen = language.selected
             thinking = bool(chosen and chosen.thinking)
+            images: bool | None = getattr(chosen, "vision", False) if chosen else False
+            why = (
+                ""
+                if images is not False
+                else "This model reads pictures only with its picture reader (a file named "
+                "mmproj, kept next to the model). None was found for this model."
+            )
         else:
             caps = (getattr(deps.state, "caps", None) or {}).get(PRODUCT_ID)
             try:
@@ -121,7 +145,13 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
             except (AttributeError, KeyError):
                 binding = None
             thinking = bool(binding and binding.defaults.get("thinking_options"))
-        return ChatOptions(thinking=thinking, search=await search_options())
+            images = bool(binding and "image" in getattr(binding, "inputs", []))
+            why = "" if images else "The chat model in use does not read pictures."
+        stored = getattr(deps.state, "uploads", None) is not None and deps.storage is not None
+        attach = AttachOptions(
+            available=stored, images=images if stored else False, documents=stored, images_note=why
+        )
+        return ChatOptions(thinking=thinking, search=await search_options(), attach=attach)
 
     async def search_options() -> SearchOptions:
         web = getattr(deps.state, "web", None)
@@ -179,31 +209,71 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
             next_before=page[-1].updated_at if more and page else None,
         )
 
+    async def with_link(owner: tuple[str, str, str], part: dict[str, Any]) -> dict[str, Any]:
+        """A picture attached to a message, with a short-lived link the window can show it from."""
+        storage = deps.storage
+        if part.get("type") != "attachment" or part.get("kind") != "image" or storage is None:
+            return part
+        try:
+            return {**part, "url": await storage.url_for(owner, str(part.get("key", "")))}
+        except ValueError:
+            return part
+
     @router.get("/conversations/{conversation_id}", response_model=ConversationOut)
     async def get_conversation(
-        conversation_id: str, identity: Identity = Depends(deps.identity)
+        conversation_id: str,
+        tree: bool = Query(False, description="every branch, not only the one on screen"),
+        identity: Identity = Depends(deps.identity),
     ) -> ConversationOut:
+        """The conversation. Its messages are the branch on screen (oldest first), or with
+        `tree=1` every message of every branch, each with its `parent_id`; `head_id` is the last
+        message of the branch on screen."""
         c = await conversations().get(identity.tenant_id, identity.user_id, conversation_id)
         if c is None:
             raise HTTPException(404, "conversation not found")
-        msgs = await conversations().messages(identity.tenant_id, identity.user_id, c.id)
-        return ConversationOut(
-            **c.__dict__,
-            messages=[
-                MessageOut(id=m.id, seq=m.seq, role=m.role, parts=m.parts, created_at=m.created_at)
-                for m in msgs
-            ],
-        )
+        head = await conversations().head(identity.tenant_id, identity.user_id, c.id)
+        if tree:
+            msgs = await conversations().messages(identity.tenant_id, identity.user_id, c.id)
+        else:
+            msgs = await conversations().path(identity.tenant_id, identity.user_id, c.id, head)
+        owner = (identity.tenant_id, PRODUCT_ID, identity.user_id)
+        out: list[MessageOut] = []
+        for m in msgs:
+            parts = m.parts
+            if any(p.get("type") == "attachment" for p in parts):
+                parts = [await with_link(owner, p) for p in parts]
+            out.append(
+                MessageOut(
+                    id=m.id,
+                    seq=m.seq,
+                    role=m.role,
+                    parts=parts,
+                    created_at=m.created_at,
+                    parent_id=m.parent_id,
+                )
+            )
+        return ConversationOut(**c.__dict__, head_id=head, messages=out)
 
     @router.patch("/conversations/{conversation_id}", response_model=ConversationSummary)
-    async def rename_conversation(
-        conversation_id: str, body: Rename, identity: Identity = Depends(deps.identity)
+    async def patch_conversation(
+        conversation_id: str, body: ConversationPatch, identity: Identity = Depends(deps.identity)
     ) -> ConversationSummary:
-        ok = await conversations().rename(
-            identity.tenant_id, identity.user_id, conversation_id, body.title.strip()
-        )
+        """Rename the conversation, or show another branch (`head_id`)."""
+        if body.title is None and body.head_id is None:
+            raise HTTPException(422, "nothing to change")
         c = await conversations().get(identity.tenant_id, identity.user_id, conversation_id)
-        if not ok or c is None:
+        if c is None:
+            raise HTTPException(404, "conversation not found")
+        if body.title is not None and not await conversations().rename(
+            identity.tenant_id, identity.user_id, conversation_id, body.title.strip()
+        ):
+            raise HTTPException(404, "conversation not found")
+        if body.head_id is not None and not await conversations().set_head(
+            identity.tenant_id, identity.user_id, conversation_id, body.head_id
+        ):
+            raise HTTPException(404, "message not found")
+        c = await conversations().get(identity.tenant_id, identity.user_id, conversation_id)
+        if c is None:
             raise HTTPException(404, "conversation not found")
         return ConversationSummary(**c.__dict__)
 
@@ -211,8 +281,17 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
     async def delete_conversation(
         conversation_id: str, identity: Identity = Depends(deps.identity)
     ) -> Response:
+        gone = await conversations().messages(identity.tenant_id, identity.user_id, conversation_id)
         if not await conversations().delete(identity.tenant_id, identity.user_id, conversation_id):
             raise HTTPException(404, "conversation not found")
+        # what was attached goes with the conversation (ADR-0083)
+        if deps.storage is not None:
+            owner = (identity.tenant_id, PRODUCT_ID, identity.user_id)
+            for m in gone:
+                for p in m.parts:
+                    if p.get("type") == "attachment":
+                        with contextlib.suppress(FileNotFoundError, ValueError):
+                            await deps.storage.delete_for(owner, str(p.get("key", "")))
         await deps.unindex(identity, PRODUCT_ID, conversation_id)  # out of search too (ADR-0041)
         return Response(status_code=204)
 

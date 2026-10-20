@@ -38,7 +38,7 @@ from wasifyai_api.comfy_music import ComfyMusic
 from wasifyai_api.config import Settings
 from wasifyai_api.creation_index import IndexStore
 from wasifyai_api.desktop_discovery import DiscoveryService
-from wasifyai_api.desktop_fit import assess_fit, need_declared
+from wasifyai_api.desktop_fit import assess_fit, need_declared, process_rss_bytes
 from wasifyai_api.desktop_hub import HubService
 from wasifyai_api.desktop_language import LanguageService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
@@ -286,7 +286,16 @@ def _build_worker(d: DesktopBackends):
         owners["audio"] = d.audio.stop  # the speech runtime is another owner of the one slot
         if d.audio.lipsync_sidecar is not None:
             owners["lipsync"] = d.audio.lipsync_sidecar.stop
-    slot = SlotManager(owners, idle_unload_s=s.desktop_idle_unload_s)
+
+    async def can_share(small: str, need: int, resident: str) -> bool:
+        """A speech model may stay in memory beside the chat model when the two fit (ADR-0083,
+        decision 5). Only that pair was measured (docs/spikes/composer-co0.md, section 4)."""
+        if (small, resident) != ("audio", "chat") or models is None or d.llama is None:
+            return False
+        held = await asyncio.to_thread(process_rss_bytes, d.llama.pid)
+        return await models.fits_beside(need, held)
+
+    slot = SlotManager(owners, idle_unload_s=s.desktop_idle_unload_s, can_share=can_share)
     if models is not None:
         models.sidecar, models.slot = sidecar, slot
     if d.language is not None:

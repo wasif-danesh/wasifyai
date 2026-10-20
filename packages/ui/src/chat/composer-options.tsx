@@ -2,10 +2,13 @@
 // The options of the chat box (ADR-0083): one bar, token-styled, shared by the current composer and the assistant-ui one. A button is
 // there only when it can work (a model that cannot think has no Thinking button), and every disabled button says why. Attach, Search and
 // Mic plug into the same bar in the next stages.
-import { Brain, Globe, type LucideIcon } from "lucide-react";
+import { Brain, Globe, type LucideIcon, Mic, Square } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
+import { type AttachControl, useAttachments } from "./attachments/use-attachments";
+import { type MicControl, useDictation } from "./dictation/use-dictation";
+import type { ReadAloudControl } from "./read-aloud/use-read-aloud";
 
 export type ComposerOption = {
   id: string;
@@ -70,7 +73,17 @@ export type SearchControl = {
 };
 
 /** Which options a screen can offer (what the engine and the chosen model can do), told by the app. */
-export type ComposerOptionsAvailable = { thinking?: boolean; search?: SearchControl };
+export type ComposerOptionsAvailable = {
+  thinking?: boolean;
+  search?: SearchControl;
+  /** dictation: absent where this engine cannot write words down (the button is not shown) */
+  mic?: MicControl;
+  /** attaching files: absent where this engine cannot keep them (the button is not shown) */
+  attach?: AttachControl;
+  /** reading a reply aloud: absent where this engine has no voice to offer (no button under a reply). Not a button of the box, but it
+   * comes from the same engine facts and reaches both chat screens the same way. */
+  readAloud?: ReadAloudControl;
+};
 
 /** The card that asks before a search is first allowed, or says what is missing. Plain words, no jargon. */
 function SearchNotice({
@@ -144,6 +157,8 @@ function write(key: string, value: Saved): void {
 export function useComposerOptions(
   conversationId: string | null | undefined,
   available: ComposerOptionsAvailable = {},
+  /** where words from the microphone go: into the message box, to be changed and sent by the person (never sent by themselves) */
+  onDictation?: (text: string) => void,
 ) {
   const key = conversationId || "new";
   const [saved, setSaved] = useState<Saved>({});
@@ -182,8 +197,15 @@ export function useComposerOptions(
   const thinking = Boolean(available.thinking && saved.thinking);
   const searching = Boolean(control?.ready && saved.search);
 
+  const attach = useAttachments(available.attach);
+  const attachOption = attach.option;
+  const dictation = useDictation(available.mic, onDictation);
+  const { phase: micPhase, toggle: toggleMic } = dictation;
+  const hasMic = Boolean(available.mic);
+
   const bar = useMemo<ComposerOption[]>(() => {
     const out: ComposerOption[] = [];
+    if (attachOption) out.push(attachOption);
     if (available.thinking)
       out.push({
         id: "thinking",
@@ -215,10 +237,37 @@ export function useComposerOptions(
           else setSearch(!searching);
         },
       });
+    if (hasMic) {
+      const recording = micPhase === "recording";
+      out.push({
+        id: "mic",
+        label: recording ? "Stop" : "Mic",
+        Icon: recording ? Square : Mic,
+        pressed: recording,
+        disabled: micPhase === "starting" || micPhase === "transcribing",
+        hint: recording
+          ? "Listening. Press to stop and write down what you said."
+          : micPhase === "transcribing"
+            ? "Writing down what you said."
+            : "Press, speak, then press again. What you say is written in the box for you to change.",
+        onPress: toggleMic,
+      });
+    }
     return out;
-  }, [available.thinking, thinking, setThinking, control, searching, setSearch]);
+  }, [
+    attachOption,
+    available.thinking,
+    thinking,
+    setThinking,
+    control,
+    searching,
+    setSearch,
+    hasMic,
+    micPhase,
+    toggleMic,
+  ]);
 
-  const notice: ReactNode =
+  const searchNotice: ReactNode =
     control && asking === "consent" ? (
       <SearchNotice
         heading="Allow the assistant to search the web?"
@@ -255,11 +304,23 @@ export function useComposerOptions(
         onClose={() => setAsking(null)}
       />
     ) : null;
+  const notice: ReactNode =
+    searchNotice || dictation.notice ? (
+      <>
+        {searchNotice}
+        {dictation.notice}
+      </>
+    ) : null;
 
   /** what to add to the next message's run input */
+  const attachInput = attach.runInput;
   const runInput = useMemo<Record<string, unknown>>(
-    () => ({ ...(thinking ? { thinking: true } : {}), ...(searching ? { search: true } : {}) }),
-    [thinking, searching],
+    () => ({
+      ...(thinking ? { thinking: true } : {}),
+      ...(searching ? { search: true } : {}),
+      ...attachInput,
+    }),
+    [thinking, searching, attachInput],
   );
-  return { bar, thinking, searching, notice, runInput };
+  return { bar, thinking, searching, notice, runInput, attach };
 }

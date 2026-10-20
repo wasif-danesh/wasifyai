@@ -1,6 +1,6 @@
 "use client";
 
-import { webAssistant, webImages } from "@/lib/library";
+import { webAssistant, webImages, webVoice } from "@/lib/library";
 import { webClient } from "@/lib/run-client";
 import { AssistantHome, useChatNext } from "@wasifyai/ui";
 import { useRouter } from "next/navigation";
@@ -31,6 +31,7 @@ export function ChatHome({ conversationId }: { conversationId: string | null }) 
         runs={webClient}
         assistant={webAssistant}
         images={webImages}
+        voice={webVoice}
         conversationId={conversationId}
         screen={next ? "next" : "classic"}
         onAdopt={(id) => window.history.replaceState(null, "", `/chat/${id}`)}

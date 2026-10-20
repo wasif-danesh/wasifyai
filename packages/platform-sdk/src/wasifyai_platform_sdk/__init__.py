@@ -74,7 +74,7 @@ from wasifyai_platform_sdk.search import (
     search_text,
 )
 from wasifyai_platform_sdk.secretbox import SecretBox, SecretsUnavailable
-from wasifyai_platform_sdk.slots import OwnerLock, SlotManager
+from wasifyai_platform_sdk.slots import Held, OwnerLock, SlotManager
 from wasifyai_platform_sdk.storage import (
     LocalFileStorage,
     ScopedStorage,
@@ -268,6 +268,7 @@ __all__ = [
     "load_product_config",
     "memory_storage",
     "SlotManager",
+    "Held",
     "OwnerLock",
     "LocalFileStorage",
     "object_key",

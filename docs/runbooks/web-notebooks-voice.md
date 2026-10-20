@@ -47,6 +47,11 @@ lies; the chart cannot do that, a hand-made deployment can.
   swept the same way. The guide and the infographic are made by the API.
 - **Speech returns "busy" or "engine failed".** The provider refused or timed out; the person sees a short message
   that does not name the provider. Look at the API log (`hosted_speech`) and at the alias test on the Models page.
+- **The Mic in the chat box** posts a short WAV to `/products/wasifyai-voice/dictation`, which uses the same `voice-transcribe` alias; it is shown only when the engine lists a transcription model. Clips are limited to 10 MB and 5 minutes
+  and are not stored. If the Mic is missing on the web, the alias has no model (check `GET /api/products/wasifyai-voice/models?task=transcribe`).
+- **Read aloud under a reply** posts the reply's text to `/products/wasifyai-voice/read-aloud`, which speaks it with the `voice-speak` alias (the hosted `hosted-speech` model) one passage at a time (at most 8 of up to 600 characters) and stores nothing; the button
+  is shown only when the engine lists a text-to-speech model. On the web the text of a reply therefore goes to the speech provider you configured, which the desktop app never does. If the button is missing, the alias has no model
+  (check `GET /api/products/wasifyai-voice/models?task=speak`). Like dictation it writes no usage event or quota yet.
 - **Costs.** Embedding tokens are recorded as `llm.embedding_tokens` usage events. Speech and transcription are billed by
   the provider and appear in the gateway's own spend log; the platform does not yet write usage events or quotas for
   them (to do before the web is public). Set a spend limit at the provider.

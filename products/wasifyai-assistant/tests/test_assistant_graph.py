@@ -597,21 +597,83 @@ async def test_only_an_address_from_a_search_or_the_person_can_be_opened(tmp_pat
     assert next(e for e in ev2 if e["type"] == "tool_result")["status"] == "ok"
 
 
-async def test_after_the_web_has_been_read_nothing_is_made_without_the_persons_approval(
+def drawing_after_a_search(host):
+    return [
+        {"tool_calls": [{"name": "web_search", "arguments": {"query": "fox"}}]},
+        {"tool_calls": [{"name": "generate_image", "arguments": {"prompt": "a fox"}}]},
+        {"text": "Done thinking."},
+    ]
+
+
+async def test_after_the_web_has_been_read_making_something_waits_for_the_persons_answer(
     tmp_path, ctx
 ):
     host = web_host()
-    rig = Rig(
-        tmp_path,
-        [{"tool_calls": [{"name": "web_search", "arguments": {"query": "fox"}}]},
-         {"tool_calls": [{"name": "generate_image", "arguments": {"prompt": "a fox"}}]},
-         {"text": "I could not."}],
-        host,
-    )  # fmt: skip
-    _, events = await rig.turn_with({"text": "fox then draw", "search": True})
+    rig = Rig(tmp_path, drawing_after_a_search(host), host)
+    state, events = await rig.turn_with(
+        {"text": "fox then draw", "search": True, "approvals": True}
+    )
+    assert host.runs == []  # nothing was made, and the run is parked, not finished
+    ask = await rig.paused()
+    assert ask and ask["kind"] == "confirm_action" and ask["tool_call_id"]
+    assert ask["title"] == "Make a picture" and ask["params"]["prompt"] == "a fox"
+    assert [e["type"] for e in events].count("tool_result") == 1  # only the search has an answer
+    assert "reply" not in state
+
+    # the card is stored with the conversation, so a reload still shows it
+    convs = await rig.store.recent("t1", "u1", 5)
+    rows = await rig.store.messages("t1", "u1", convs[0].id)
+    assert [m.role for m in rows] == ["user", "assistant", "tool", "assistant", "tool"]
+    waiting = rows[-1].parts[-1]
+    assert waiting["type"] == "interrupt" and waiting["status"] == "pending"
+    assert waiting["run_id"] == "r1" and waiting["tool_call_id"] == ask["tool_call_id"]
+
+
+async def test_approving_the_card_makes_the_thing_and_the_turn_goes_on(tmp_path, ctx):
+    host = web_host()
+    rig = Rig(tmp_path, drawing_after_a_search(host), host)
+    await rig.turn_with({"text": "fox then draw", "search": True, "approvals": True})
+    state, events = await rig.answer({"approved": True})
+    assert len(host.runs) == 1  # now it was made
     made = next(e for e in events if e["type"] == "tool_result" and e["name"] == "generate_image")
-    assert made["status"] == "refused" and "approval" in made["output"]["message"]
-    assert host.runs == []  # the image product was never started
+    assert made["status"] == "ok"
+    assert state["status"] == "done" and state["reply"] == "Done thinking."
+    assert "loop" not in state or not state["loop"]
+    convs = await rig.store.recent("t1", "u1", 5)
+    rows = await rig.store.messages("t1", "u1", convs[0].id)
+    tool = rows[-2]
+    assert tool.role == "tool"
+    assert [p["type"] for p in tool.parts] == ["interrupt", "tool_result"]
+    assert tool.parts[0]["status"] == "approved"
+    assert rows[-1].parent_id == tool.id and rows[-1].text() == "Done thinking."
+    assert await rig.paused() is None
+
+
+async def test_declining_the_card_makes_nothing_and_tells_the_model(tmp_path, ctx):
+    host = web_host()
+    rig = Rig(tmp_path, drawing_after_a_search(host), host)
+    await rig.turn_with({"text": "fox then draw", "search": True, "approvals": True})
+    state, events = await rig.answer({"approved": False})
+    assert host.runs == []
+    made = next(e for e in events if e["type"] == "tool_result" and e["name"] == "generate_image")
+    assert made["status"] == "refused" and "chose not to" in made["output"]["message"]
+    assert "chose not to" in rig.model.chats[2]["messages"][-1]["content"]
+    assert state["status"] == "done"
+    convs = await rig.store.recent("t1", "u1", 5)
+    rows = await rig.store.messages("t1", "u1", convs[0].id)
+    assert rows[-2].parts[0]["status"] == "declined"
+
+
+async def test_moving_on_without_answering_closes_the_turn_without_asking_the_model(tmp_path, ctx):
+    host = web_host()
+    rig = Rig(tmp_path, drawing_after_a_search(host), host)
+    await rig.turn_with({"text": "fox then draw", "search": True, "approvals": True})
+    chats = len(rig.model.chats)
+    state, events = await rig.answer({"approved": False, "expired": True})
+    assert host.runs == [] and len(rig.model.chats) == chats  # no further model call
+    assert state["reply"] == "I did not do that, because it was not approved."
+    made = next(e for e in events if e["type"] == "tool_result" and e["name"] == "generate_image")
+    assert made["status"] == "refused" and "went on without answering" in made["output"]["message"]
 
 
 async def test_the_taint_stays_for_the_rest_of_the_conversation(tmp_path, ctx):
@@ -625,11 +687,36 @@ async def test_the_taint_stays_for_the_rest_of_the_conversation(tmp_path, ctx):
         host,
     )  # fmt: skip
     first, _ = await rig.turn_with({"text": "search", "search": True})
-    _, events = await rig.turn_with(
-        {"text": "now draw it", "conversation_id": first["conversation_id"]}  # search is off now
+    await rig.turn_with(
+        {
+            "text": "now draw it",
+            "conversation_id": first["conversation_id"],
+            "approvals": True,  # search is off now
+        }
     )
+    ask = await rig.paused()
+    assert ask and ask["kind"] == "confirm_action" and host.runs == []
+
+
+async def test_a_client_that_cannot_show_the_card_is_told_no_in_words(tmp_path, ctx):
+    host = web_host()
+    rig = Rig(tmp_path, drawing_after_a_search(host), host)
+    state, events = await rig.turn_with({"text": "fox then draw", "search": True})
+    assert await rig.paused() is None and state["status"] == "done"
     made = next(e for e in events if e["type"] == "tool_result" and e["name"] == "generate_image")
-    assert made["status"] == "refused" and host.runs == []
+    assert made["status"] == "refused" and "approval" in made["output"]["message"]
+    assert host.runs == []
+
+
+async def test_only_a_clear_yes_approves(tmp_path, ctx):
+    for answer in ({"approved": "yes"}, {"approved": 1}, "approve", {}):
+        host = web_host()
+        folder = tmp_path / str(len(list(tmp_path.iterdir())))
+        folder.mkdir()
+        rig = Rig(folder, drawing_after_a_search(host), host)
+        await rig.turn_with({"text": "fox then draw", "search": True, "approvals": True})
+        await rig.answer(answer)
+        assert host.runs == [], answer  # anything but approved: true is a no
 
 
 async def test_without_the_web_in_the_chat_things_are_still_made_at_once(tmp_path, ctx):

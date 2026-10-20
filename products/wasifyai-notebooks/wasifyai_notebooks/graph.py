@@ -298,6 +298,8 @@ def build_notebook_chat_graph(
         text = ""
         try:
             async for chunk in caps.text.chat("chat", messages, None):
+                if chunk.reasoning:  # shown collapsed; never stored, never part of the answer
+                    write({"type": "reasoning", "node": "answer", "text": chunk.reasoning})
                 if chunk.text:
                     text += chunk.text
                     write({"type": "token", "node": "answer", "text": chunk.text})

@@ -254,6 +254,116 @@ export type Transcript = {
 
 export type TranscriptFormat = "txt" | "srt" | "vtt";
 
+/** What dictating a clip gives back: the words, and nothing is kept. */
+export type Dictation = {
+  text: string;
+  seconds: number;
+  model: string;
+  /** whose model was unloaded to make room for the speech model, when they did not fit together */
+  displaced: string | null;
+};
+
+/** One passage of a reply, spoken (`readAloud`). Nothing is kept: the sound is in this object and nowhere else. */
+export type ReadAloudPart = {
+  /** the sound, a WAV file */
+  wav: Blob;
+  /** which passage this is (0 is the first), and how many there are in all */
+  part: number;
+  parts: number;
+  /** the reply was longer than the most that is read in one go: only its start is spoken */
+  truncated: boolean;
+  seconds: number;
+  model: string;
+  /** "chat" when the chat model had to be unloaded to make room for the speech model */
+  displaced: string | null;
+};
+
+/** What getting a speech model costs, for the setup card: what it is, where from, how big. */
+export type SpeechModelOffer = {
+  id: string;
+  title: string;
+  licence: string;
+  from: string;
+  bytes: number;
+  /** the languages it speaks or reads (codes such as "en-us") */
+  languages: string[];
+};
+
+/** Whether the microphone can write words down, or a reply can be read aloud, here: from the engine's models and runtime. */
+export type SpeechReadiness =
+  | { state: "ready"; model: string }
+  /** nothing to use yet; `model` is the one to get, with what getting it costs */
+  | { state: "needs_setup"; model: SpeechModelOffer; runtimeBytes: number }
+  /** this engine cannot do it (no model of that kind offered, or none that fits this computer) */
+  | { state: "unavailable" };
+
+export type DictationReadiness = SpeechReadiness;
+export type ReadAloudReadiness = SpeechReadiness;
+
+/** The host a model comes from, for the setup card ("huggingface.co"). */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "";
+  }
+}
+
+function readiness(
+  task: "transcribe" | "speak",
+  models: VoiceModelInfo[],
+  runtime: AudioRuntime,
+): SpeechReadiness {
+  const ready = models.find((m) => m.state === "ready" && m.tasks.includes(task));
+  if (ready) return { state: "ready", model: ready.id };
+  const wanted = models
+    .filter(
+      (m) => m.tasks.includes(task) && (m.state === "can_install" || m.state === "needs_runtime"),
+    )
+    .sort((a, b) => Number(b.recommended.includes(task)) - Number(a.recommended.includes(task)));
+  const pick = wanted[0];
+  if (!pick || (!runtime.installed && !runtime.plan.supported)) return { state: "unavailable" };
+  return {
+    state: "needs_setup",
+    model: {
+      id: pick.id,
+      title: pick.title,
+      licence: pick.licence,
+      from: hostOf(pick.licence_evidence),
+      bytes: pick.bytes_missing,
+      languages: pick.languages ?? [],
+    },
+    runtimeBytes: runtime.installed ? 0 : runtime.plan.bytes,
+  };
+}
+
+/** Can the microphone write words down? From the engine's speech-to-text models and runtime. */
+export function dictationReadiness(
+  models: VoiceModelInfo[],
+  runtime: AudioRuntime,
+): DictationReadiness {
+  return readiness("transcribe", models, runtime);
+}
+
+/** Can a reply be read aloud? From the engine's text-to-speech models and runtime. */
+export function readAloudReadiness(
+  models: VoiceModelInfo[],
+  runtime: AudioRuntime,
+): ReadAloudReadiness {
+  return readiness("speak", models, runtime);
+}
+
+/** Bytes of a base64 string, as a Blob (the engine returns a read-aloud passage inside its JSON). */
+function blobFromBase64(data: string, type: string): Blob {
+  const raw = atob(data);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return new Blob([bytes], { type });
+}
+
+/** The longest reply text sent to be read aloud (the engine's own limit; a longer reply is read from its start). */
+export const MAX_READ_ALOUD_CHARS = 40_000;
+
 export type VoiceApi = ReturnType<typeof createVoiceApi>;
 
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -459,6 +569,35 @@ export function createVoiceApi(transport: Transport, options: VoiceApiOptions = 
     transcripts: async (limit = 100) =>
       (await json<{ items: Transcript[] }>(`${base}/transcripts?limit=${limit}`)).items,
     transcript: (id: string) => json<Transcript>(`${base}/transcripts/${encodeURIComponent(id)}`),
+    /**
+     * A short clip from the chat box's microphone (a 16 kHz mono 16-bit WAV, five minutes at most), written down. Nothing is
+     * saved: the answer is the text alone (ADR-0083). `displaced` is "chat" when the chat model had to be unloaded to make room.
+     */
+    dictate(wav: Blob) {
+      const form = new FormData();
+      form.append("file", wav, "dictation.wav");
+      return json<Dictation>(`${base}/dictation`, { method: "POST", body: form });
+    },
+    /**
+     * One passage of a chat reply, spoken by the speech model (ADR-0083). `text` is the reply as the model wrote it (the engine turns it
+     * into plain words); ask for `part` 0, then 1 ... up to `parts - 1` while the first plays. Nothing is saved on the engine side:
+     * no creation, no library row. `displaced` is "chat" when the chat model had to be unloaded to make room.
+     */
+    async readAloud(text: string, part = 0, signal?: AbortSignal): Promise<ReadAloudPart> {
+      const got = await json<{
+        audio: string;
+        part: number;
+        parts: number;
+        truncated: boolean;
+        seconds: number;
+        model: string;
+        displaced: string | null;
+      }>(`${base}/read-aloud`, {
+        ...post({ text: text.slice(0, MAX_READ_ALOUD_CHARS), part }),
+        signal,
+      });
+      return { ...got, wav: blobFromBase64(got.audio, "audio/wav") };
+    },
     transcribe(file: File, model?: string, title?: string) {
       const form = new FormData();
       form.append("file", file, file.name);

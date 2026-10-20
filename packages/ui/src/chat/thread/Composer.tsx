@@ -2,10 +2,19 @@
 
 import { AuiIf, ComposerPrimitive, useAui } from "@assistant-ui/react";
 import { ArrowUp, Square } from "lucide-react";
+import type { ClipboardEventHandler, ReactNode } from "react";
 import { Button } from "../../components/button";
 import { type ComposerOption, ComposerOptions } from "../composer-options";
 
 const MAX_CHARS = 4000;
+
+/** What a screen hands the box to take files (`useAttachments`): chips above the words, the hidden picker, drops and pastes. */
+export type AttachBox = {
+  chips: ReactNode;
+  picker: ReactNode;
+  dropProps: object;
+  onPaste?: ClipboardEventHandler;
+};
 
 /**
  * The message box. One element for the whole life of the chat, so typing is never interrupted when the first answer starts:
@@ -16,18 +25,35 @@ export function Composer({
   empty,
   blockedReason,
   options = [],
+  label = "Message",
+  placeholder = "Ask anything",
+  start,
+  chip,
+  attach,
 }: {
   empty: boolean;
   blockedReason?: string | null;
   /** the options bar: Thinking, and in time Attach, Search and Mic (ADR-0083) */
   options?: ComposerOption[];
+  /** the box's name for a screen reader, and what it says while empty (the notebook chat names its sources) */
+  label?: string;
+  placeholder?: string;
+  /** beside the options, at the start of the bar (the notebook's scope) */
+  start?: ReactNode;
+  /** before Stop and Send (the notebook's model chip) */
+  chip?: ReactNode;
+  /** files attached to the next message (ADR-0083) */
+  attach?: AttachBox;
 }) {
   return (
-    <ComposerPrimitive.Root className="mx-auto w-full max-w-3xl">
+    <ComposerPrimitive.Root className="mx-auto w-full max-w-3xl" {...attach?.dropProps}>
       <div className="rounded-3xl border bg-card px-5 py-3 shadow-card focus-within:ring-[3px] focus-within:ring-ring/40">
+        {attach?.chips}
+        {attach?.picker}
         <ComposerPrimitive.Input
-          aria-label="Message"
-          placeholder="Ask anything"
+          onPaste={attach?.onPaste}
+          aria-label={label}
+          placeholder={placeholder}
           dir="auto"
           maxLength={MAX_CHARS}
           minRows={empty ? 3 : 1}
@@ -36,8 +62,10 @@ export function Composer({
           className="min-h-10 w-full resize-none bg-transparent py-1 text-lg outline-none placeholder:text-muted-foreground"
         />
         <div className="mt-1 flex items-center justify-between gap-2">
+          {start}
           <ComposerOptions options={options} />
           <div className="ms-auto flex items-center gap-2">
+            {chip}
             <AuiIf condition={(s) => s.thread.isRunning}>
               <ComposerPrimitive.Cancel asChild>
                 <Button type="button" variant="outline" size="sm">

@@ -260,6 +260,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-assistant/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attach Document
+         * @description A document for a chat message: the body is the file, `x-file-name` its name.
+         */
+        post: operations["attach_document_products_wasifyai_assistant_attachments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-assistant/conversations": {
         parameters: {
             query?: never;
@@ -284,7 +304,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Conversation */
+        /**
+         * Get Conversation
+         * @description The conversation. Its messages are the branch on screen (oldest first), or with
+         *     `tree=1` every message of every branch, each with its `parent_id`; `head_id` is the last
+         *     message of the branch on screen.
+         */
         get: operations["get_conversation_products_wasifyai_assistant_conversations__conversation_id__get"];
         put?: never;
         post?: never;
@@ -292,8 +317,11 @@ export interface paths {
         delete: operations["delete_conversation_products_wasifyai_assistant_conversations__conversation_id__delete"];
         options?: never;
         head?: never;
-        /** Rename Conversation */
-        patch: operations["rename_conversation_products_wasifyai_assistant_conversations__conversation_id__patch"];
+        /**
+         * Patch Conversation
+         * @description Rename the conversation, or show another branch (`head_id`).
+         */
+        patch: operations["patch_conversation_products_wasifyai_assistant_conversations__conversation_id__patch"];
         trace?: never;
     };
     "/products/wasifyai-assistant/options": {
@@ -1038,6 +1066,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-voice/dictation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dictate
+         * @description A short clip from the chat box's microphone, written down. Nothing is saved: the clip is
+         *     held in memory for this request and the answer is the text alone (no creation, no library
+         *     row, no search entry, no log of the words). Only a 16 kHz mono 16-bit WAV of up to five
+         *     minutes is read (`dictation.inspect`); the speech model may stay in memory beside the chat
+         *     model when the two fit (`displaced` names whose model was unloaded when they did not).
+         */
+        post: operations["dictate_products_wasifyai_voice_dictation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-voice/formats": {
         parameters: {
             query?: never;
@@ -1115,6 +1167,31 @@ export interface paths {
          *     location, no camera data), scaled down. It is kept until a clip uses it, or for a day.
          */
         post: operations["add_picture_products_wasifyai_voice_pictures_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-voice/read-aloud": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read Aloud Passage
+         * @description One passage of a chat reply, spoken. Nothing is saved: the text is held for this request
+         *     and the sound goes back in the answer (a WAV, base64), with no creation, no library row, no
+         *     search entry, no file and no log of the words. The text is turned into plain words and cut at
+         *     sentence ends (`read_aloud.passages`); ask for `part` 0, 1, 2 ... up to `parts`. The speech
+         *     model may stay in memory beside the chat model when the two fit (`displaced` names whose model
+         *     was unloaded when they did not).
+         */
+        post: operations["read_aloud_passage_products_wasifyai_voice_read_aloud_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1594,6 +1671,50 @@ export interface components {
             /** Users */
             users: components["schemas"]["AdminUser"][];
         };
+        /**
+         * AttachOptions
+         * @description Attaching files to a message (ADR-0083, CO2): what this engine and the model in use take.
+         */
+        AttachOptions: {
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
+            /**
+             * Documents
+             * @default false
+             */
+            documents: boolean;
+            /**
+             * Images
+             * @default false
+             */
+            images: boolean | null;
+            /**
+             * Images Note
+             * @default
+             */
+            images_note: string;
+        };
+        /** AttachmentResult */
+        AttachmentResult: {
+            /** Chars */
+            chars: number;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Pages */
+            pages?: number | null;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
         /** AuditEntry */
         AuditEntry: {
             /** Action */
@@ -1676,6 +1797,11 @@ export interface components {
             /** Title */
             title?: string | null;
         };
+        /** Body_dictate_products_wasifyai_voice_dictation_post */
+        Body_dictate_products_wasifyai_voice_dictation_post: {
+            /** File */
+            file: string;
+        };
         /** Body_import_track_products_wasifyai_voice_tracks_import_post */
         Body_import_track_products_wasifyai_voice_tracks_import_post: {
             /** File */
@@ -1695,6 +1821,15 @@ export interface components {
          * @description What the chat box can offer with the model in use (ADR-0083).
          */
         ChatOptions: {
+            /**
+             * @default {
+             *       "available": false,
+             *       "documents": false,
+             *       "images": false,
+             *       "images_note": ""
+             *     }
+             */
+            attach: components["schemas"]["AttachOptions"];
             /**
              * @default {
              *       "available": false,
@@ -1726,6 +1861,8 @@ export interface components {
         ConversationOut: {
             /** Created At */
             created_at: string;
+            /** Head Id */
+            head_id?: string | null;
             /** Id */
             id: string;
             /** Messages */
@@ -1734,6 +1871,17 @@ export interface components {
             title: string;
             /** Updated At */
             updated_at: string;
+        };
+        /**
+         * ConversationPatch
+         * @description A change to a conversation: its title, or which branch is shown (`head_id`: a message of
+         *     the branch; the engine keeps the last message of that turn).
+         */
+        ConversationPatch: {
+            /** Head Id */
+            head_id?: string | null;
+            /** Title */
+            title?: string | null;
         };
         /** ConversationSummary */
         ConversationSummary: {
@@ -2065,6 +2213,8 @@ export interface components {
             created_at: string;
             /** Id */
             id: string;
+            /** Parent Id */
+            parent_id?: string | null;
             /** Parts */
             parts: {
                 [key: string]: unknown;
@@ -2241,6 +2391,19 @@ export interface components {
             needs_key: boolean;
         };
         /**
+         * ReadAloudRequest
+         * @description A chat reply, as the model wrote it, and which passage of it to speak (0 is the first).
+         */
+        ReadAloudRequest: {
+            /**
+             * Part
+             * @default 0
+             */
+            part: number;
+            /** Text */
+            text: string;
+        };
+        /**
          * ReasoningEvent
          * @description A model's thinking text, as it streams (ADR-0082 decision 6, ADR-0083). Only a turn that
          *     asked for thinking has them (or a model that thinks whatever it is asked). It is shown
@@ -2271,11 +2434,6 @@ export interface components {
             thread_id: string;
             /** Ts */
             ts?: string;
-        };
-        /** Rename */
-        Rename: {
-            /** Title */
-            title: string;
         };
         /** ResumeRequest */
         ResumeRequest: {
@@ -3166,6 +3324,26 @@ export interface operations {
             };
         };
     };
+    attach_document_products_wasifyai_assistant_attachments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentResult"];
+                };
+            };
+        };
+    };
     list_conversations_products_wasifyai_assistant_conversations_get: {
         parameters: {
             query?: {
@@ -3200,7 +3378,10 @@ export interface operations {
     };
     get_conversation_products_wasifyai_assistant_conversations__conversation_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description every branch, not only the one on screen */
+                tree?: boolean;
+            };
             header?: never;
             path: {
                 conversation_id: string;
@@ -3258,7 +3439,7 @@ export interface operations {
             };
         };
     };
-    rename_conversation_products_wasifyai_assistant_conversations__conversation_id__patch: {
+    patch_conversation_products_wasifyai_assistant_conversations__conversation_id__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -3269,7 +3450,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Rename"];
+                "application/json": components["schemas"]["ConversationPatch"];
             };
         };
         responses: {
@@ -5196,6 +5377,41 @@ export interface operations {
             };
         };
     };
+    dictate_products_wasifyai_voice_dictation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_dictate_products_wasifyai_voice_dictation_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     formats_products_wasifyai_voice_formats_get: {
         parameters: {
             query?: never;
@@ -5288,6 +5504,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_aloud_passage_products_wasifyai_voice_read_aloud_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadAloudRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

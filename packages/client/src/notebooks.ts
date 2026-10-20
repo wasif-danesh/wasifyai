@@ -345,6 +345,8 @@ export type AskedMessage = {
   role: "user" | "assistant";
   text: string;
   citations: NotebookCitation[];
+  /** the model's thinking, for a model that returns it (the new chat shows it collapsed under "Thinking"; not stored) */
+  reasoning?: string;
   /** the answer is still arriving */
   streaming?: boolean;
   /** what was searched: shown as one line above the answer */
@@ -484,6 +486,16 @@ function onEvent(state: AskState, e: ParsedEvent): AskState {
         phase: "answering",
         messages: withLast(base.messages, (m) =>
           m.role === "assistant" ? { ...m, text: m.text + String(data.text ?? "") } : m,
+        ),
+      };
+    case "reasoning":
+      return {
+        ...base,
+        phase: "answering",
+        messages: withLast(base.messages, (m) =>
+          m.role === "assistant"
+            ? { ...m, reasoning: (m.reasoning ?? "") + String(data.text ?? "") }
+            : m,
         ),
       };
     case "done": {

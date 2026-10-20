@@ -3,6 +3,7 @@
 import {
   ASSISTANT_PRODUCT,
   type AssistantApi,
+  type AttachmentInfo,
   type ParsedEvent,
   type RunClient,
   chatReducer,
@@ -40,6 +41,10 @@ export type UseAssistantChatOptions = {
   onConversation?: (id: string, title: string) => void;
   /** Extra fields for the next run's input (the options of the box: `{ thinking: true }`). */
   runInput?: Record<string, unknown>;
+  /** The files attached to the next message, as the message shows them (their ids go in `runInput`). */
+  attachedFiles?: AttachmentInfo[];
+  /** A message was sent: what was attached to it belongs to it now, and the box lets go. */
+  onSend?: () => void;
 };
 
 /**
@@ -52,6 +57,8 @@ export function useAssistantChat({
   conversationId,
   onConversation,
   runInput,
+  attachedFiles,
+  onSend,
 }: UseAssistantChatOptions) {
   const [state, dispatchRaw] = useReducer(chatReducer, initialChat);
   const local = useRef(state);
@@ -61,6 +68,10 @@ export function useAssistantChat({
   notify.current = onConversation;
   const extra = useRef(runInput);
   extra.current = runInput;
+  const files = useRef(attachedFiles);
+  files.current = attachedFiles;
+  const sent = useRef(onSend);
+  sent.current = onSend;
 
   const dispatch = useCallback((action: Parameters<typeof chatReducer>[1]) => {
     local.current = chatReducer(local.current, action);
@@ -86,8 +97,14 @@ export function useAssistantChat({
       abort.current?.abort();
       const ctrl = new AbortController();
       abort.current = ctrl;
-      dispatch({ type: "submitted", text: message, id: `u-${Date.now()}` });
+      dispatch({
+        type: "submitted",
+        text: message,
+        id: `u-${Date.now()}`,
+        files: files.current,
+      });
       const input: Record<string, unknown> = { ...extra.current, text: message };
+      sent.current?.(); // the files belong to this message now
       if (local.current.conversationId) input.conversation_id = local.current.conversationId;
       const resting = () => local.current.phase !== "working";
       try {

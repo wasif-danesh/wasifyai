@@ -19,6 +19,28 @@ export type StoredPart =
   /** the model's thinking (ADR-0083); shown collapsed, never given back to the model */
   | { type: "reasoning"; text: string }
   | { type: "tool_call"; id: string; name: string; arguments: Record<string, unknown> }
+  /** a file attached to a message (ADR-0083, CO2); a picture has a short-lived `url` when the engine read the chat */
+  | {
+      type: "attachment";
+      kind: "image" | "document";
+      id: string;
+      key?: string;
+      name: string;
+      bytes?: number;
+      url?: string;
+    }
+  /** a card that waits for the person's answer (ADR-0071): stored when the turn parks, updated when it is answered */
+  | {
+      type: "interrupt";
+      kind: string;
+      status: "pending" | "approved" | "declined";
+      tool_call_id: string;
+      approval_id?: string;
+      run_id: string;
+      title?: string;
+      summary?: string;
+      params?: Record<string, unknown>;
+    }
   | {
       type: "tool_result";
       id: string;
@@ -34,9 +56,15 @@ export type StoredMessage = {
   role: "user" | "assistant" | "tool";
   parts: StoredPart[];
   created_at: string;
+  /** the message this one follows; empty for a first message (an engine from before the tree sends none: a chain) */
+  parent_id?: string | null;
 };
 
-export type Conversation = ConversationSummary & { messages: StoredMessage[] };
+export type Conversation = ConversationSummary & {
+  messages: StoredMessage[];
+  /** the last message of the branch on screen */
+  head_id?: string | null;
+};
 
 /** Web search as the chat box sees it (ADR-0083): whether there is a Search button, and what pressing it must ask. */
 export type SearchOptions = {
@@ -53,8 +81,31 @@ export type SearchOptions = {
   needs_key: boolean;
 };
 
+/** Attaching files (ADR-0083, CO2): what the engine keeps and the model in use reads. */
+export type AttachOptions = {
+  available: boolean;
+  /** the model reads pictures (null: not known, so a picture is tried) */
+  images: boolean | null;
+  documents: boolean;
+  /** why a picture will not work, in words, when it will not */
+  images_note: string;
+};
+
 /** What the chat box can offer with the model in use (ADR-0083). */
-export type ChatOptions = { thinking: boolean; search?: SearchOptions };
+export type ChatOptions = { thinking: boolean; search?: SearchOptions; attach?: AttachOptions };
+
+/** A file that was sent to the engine and waits to be attached to the next message. */
+export type UploadedAttachment = {
+  id: string;
+  kind: "image" | "document";
+  name: string;
+  chars?: number;
+  pages?: number;
+  width?: number;
+  height?: number;
+  /** a document longer than the engine keeps */
+  truncated?: boolean;
+};
 
 export type SearchProvider = {
   id: string;
@@ -86,8 +137,15 @@ export type AssistantApi = {
   options(): Promise<ChatOptions>;
   searchStatus(): Promise<SearchStatus>;
   updateSearch(update: SearchUpdate): Promise<SearchStatus>;
+  /** Send a picture (PNG, JPEG, WebP) or a document to the engine to attach to the next message. Refused in words. */
+  attach(file: Blob, name: string): Promise<UploadedAttachment>;
+  /** Take back a file that was sent but not used. Failures are not worth showing: the engine clears unused ones after a day. */
+  unattach(id: string): Promise<void>;
   list(limit?: number): Promise<ConversationSummary[]>;
-  get(id: string): Promise<Conversation>;
+  /** One conversation: the branch on screen, or with `tree` every message of every branch. */
+  get(id: string, opts?: { tree?: boolean }): Promise<Conversation>;
+  /** Remember which branch is on screen (any message of it; the engine keeps the end of that turn). */
+  setHead(id: string, messageId: string): Promise<void>;
   rename(id: string, title: string): Promise<ConversationSummary>;
   remove(id: string): Promise<void>;
 };
@@ -109,11 +167,64 @@ export function createAssistantApi(transport: Transport): AssistantApi {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(update),
       }),
+    async attach(file, name) {
+      const kind = /^image\/(png|jpeg|webp)$/.test(file.type) ? "image" : "document";
+      const product = `/products/${ASSISTANT_PRODUCT}`;
+      if (kind === "image") {
+        const r = await json<{ upload_id: string; width: number; height: number }>(
+          `${product}/uploads/images`,
+          { method: "POST", headers: { "content-type": file.type }, body: file },
+        );
+        return { id: r.upload_id, kind, name, width: r.width, height: r.height };
+      }
+      const r = await json<{
+        id: string;
+        name: string;
+        chars: number;
+        pages: number | null;
+        truncated: boolean;
+      }>(`${product}/attachments`, {
+        method: "POST",
+        headers: {
+          "content-type": file.type || "application/octet-stream",
+          "x-file-name": encodeURIComponent(name),
+        },
+        body: file,
+      });
+      return {
+        id: r.id,
+        kind,
+        name: r.name,
+        chars: r.chars,
+        pages: r.pages ?? undefined,
+        truncated: r.truncated,
+      };
+    },
+    async unattach(id) {
+      try {
+        await transport.fetch(
+          `/products/${ASSISTANT_PRODUCT}/uploads/images/${encodeURIComponent(id)}`,
+          {
+            method: "DELETE",
+          },
+        );
+      } catch {
+        // cleared by the engine after a day
+      }
+    },
     async list(limit = 30) {
       const page = await json<{ conversations: ConversationSummary[] }>(`${base}?limit=${limit}`);
       return page.conversations;
     },
-    get: (id) => json<Conversation>(`${base}/${encodeURIComponent(id)}`),
+    get: (id, opts) =>
+      json<Conversation>(`${base}/${encodeURIComponent(id)}${opts?.tree ? "?tree=1" : ""}`),
+    async setHead(id, messageId) {
+      await json<ConversationSummary>(`${base}/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ head_id: messageId }),
+      });
+    },
     rename: (id, title) =>
       json<ConversationSummary>(`${base}/${encodeURIComponent(id)}`, {
         method: "PATCH",
@@ -133,15 +244,33 @@ export type ToolStatus = "ok" | "refused" | "error";
 
 /** A tool call that waits for the person's answer (an `interrupt` event: the `confirm_action` card of ADR-0071). */
 export type ToolApproval = {
-  /** the interrupt's id */
+  /** the interrupt's id (a stored card: the approval's id) */
   id: string;
   kind: string;
   runId: string;
   state: "pending" | "approved" | "declined";
+  /** what the card says: the action's name, one line, and a few of its parameters (plain text) */
+  title?: string;
+  summary?: string;
+  params?: Record<string, unknown>;
+};
+
+/** A file attached to a message, as a message shows it. */
+export type AttachmentInfo = {
+  kind: "image" | "document";
+  id: string;
+  name: string;
+  /** a picture: where to show it from (a short-lived link, or the picture the person chose) */
+  url?: string;
+  /** a document: how much of it there is, when known */
+  chars?: number;
+  pages?: number;
 };
 
 export type ChatPart =
   | { type: "text"; text: string }
+  /** what a person attached to this message */
+  | { type: "attachment"; file: AttachmentInfo }
   /** the model's thinking, shown collapsed under "Thinking" */
   | { type: "reasoning"; text: string }
   | {
@@ -191,7 +320,7 @@ export const initialChat: ChatState = {
 };
 
 export type ChatAction =
-  | { type: "submitted"; text: string; id: string }
+  | { type: "submitted"; text: string; id: string; files?: AttachmentInfo[] }
   | { type: "event"; event: ParsedEvent }
   | { type: "failed"; message: string; retryable?: boolean; code?: string }
   | { type: "loaded"; conversation: Conversation }
@@ -205,8 +334,12 @@ export type ChatAction =
 export function fromStored(messages: StoredMessage[]): ChatMessage[] {
   const out: ChatMessage[] = [];
   const results = new Map<string, Extract<StoredPart, { type: "tool_result" }>>();
+  const cards = new Map<string, Extract<StoredPart, { type: "interrupt" }>>();
   for (const m of messages) {
-    for (const p of m.parts) if (p.type === "tool_result") results.set(p.id, p);
+    for (const p of m.parts) {
+      if (p.type === "tool_result") results.set(p.id, p);
+      if (p.type === "interrupt") cards.set(p.tool_call_id, p);
+    }
   }
   let current: ChatMessage | null = null;
   for (const m of messages) {
@@ -215,8 +348,17 @@ export function fromStored(messages: StoredMessage[]): ChatMessage[] {
       out.push({
         id: m.id,
         role: "user",
-        parts: m.parts.flatMap((p) =>
-          p.type === "text" ? [{ type: "text" as const, text: p.text }] : [],
+        parts: m.parts.flatMap((p): ChatPart[] =>
+          p.type === "text"
+            ? [{ type: "text", text: p.text }]
+            : p.type === "attachment"
+              ? [
+                  {
+                    type: "attachment",
+                    file: { kind: p.kind, id: p.id, name: p.name, url: p.url },
+                  },
+                ]
+              : [],
         ),
       });
     } else if (m.role === "assistant") {
@@ -230,13 +372,29 @@ export function fromStored(messages: StoredMessage[]): ChatMessage[] {
           current.parts.push({ type: "reasoning", text: p.text });
         if (p.type === "tool_call") {
           const r = results.get(p.id);
+          const card = cards.get(p.id);
+          // a call with a card and no result yet is still waiting for the person
+          const waiting = !r && card?.status === "pending";
           current.parts.push({
             type: "tool",
             id: p.id,
             name: p.name,
             arguments: p.arguments,
-            status: r ? r.status : "error",
+            status: r ? r.status : waiting ? "running" : "error",
             output: r?.output,
+            ...(card
+              ? {
+                  approval: {
+                    id: card.approval_id ?? card.tool_call_id,
+                    kind: card.kind,
+                    runId: card.run_id,
+                    state: card.status,
+                    title: card.title,
+                    summary: card.summary,
+                    params: card.params,
+                  },
+                }
+              : {}),
           });
         }
       }
@@ -282,7 +440,14 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         lastSeq: 0,
         messages: [
           ...state.messages,
-          { id: action.id, role: "user", parts: [{ type: "text", text: action.text }] },
+          {
+            id: action.id,
+            role: "user",
+            parts: [
+              { type: "text", text: action.text },
+              ...(action.files ?? []).map((file): ChatPart => ({ type: "attachment", file })),
+            ],
+          },
           { id: `${action.id}-reply`, role: "assistant", parts: [], streaming: true },
         ],
       };

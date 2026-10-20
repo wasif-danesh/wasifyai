@@ -33,17 +33,28 @@ export function toolOf(p: ToolCallMessagePartProps): Tool {
     progress: art?.progress,
     jobStatus: art?.jobStatus,
     queuePosition: art?.queuePosition,
+    approval: art?.card,
   };
 }
 
 function adapt(Card: ComponentType<ToolCardProps>) {
   function ToolUI(p: ToolCallMessagePartProps) {
-    const { images, tracks, onOpenCreation } = useThreadEnv();
-    return (
-      <Card tool={toolOf(p)} images={images} tracks={tracks} onOpenCreation={onOpenCreation} />
-    );
+    const { images, tracks, onOpenCreation, onDecide } = useThreadEnv();
+    const tool = toolOf(p);
+    // a call that waits for the person (or was just answered and is still running) shows its card, not its result
+    if (tool.approval && tool.status === "running")
+      return <ConfirmActionCard tool={tool} onDecide={onDecide} />;
+    return <Card tool={tool} images={images} tracks={tracks} onOpenCreation={onOpenCreation} />;
   }
   return ToolUI;
+}
+
+/** A tool call named `confirm_action` (the card of a model that proposes an action): the same card. */
+function Confirm(p: ToolCallMessagePartProps) {
+  const { onDecide } = useThreadEnv();
+  const tool = toolOf(p);
+  if (!tool.approval) return null;
+  return <ConfirmActionCard tool={tool} onDecide={onDecide} />;
 }
 
 export const toolUIs = {
@@ -53,7 +64,7 @@ export const toolUIs = {
   search_notebooks: adapt(NotebookSearchCard),
   web_search: adapt(WebSearchCard),
   web_read: adapt(WebReadCard),
-  confirm_action: ConfirmActionCard,
+  confirm_action: Confirm,
 } as const;
 
 /** A tool nobody registered a card for. */

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Used when the app is signed with the hardened runtime (a release build): without it macOS never lets the microphone through,
+	     whatever the person answers (ADR-0083, decision 5). Referenced from tauri.conf.json, bundle.macOS.entitlements. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>

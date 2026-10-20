@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { ParsedEvent } from "./sse";
 import type { Transport } from "./transport";
 import {
+  type AudioRuntime,
+  HOSTED_RUNTIME,
+  MAX_READ_ALOUD_CHARS,
+  type VoiceModelInfo,
   convertVoice,
   createVoiceApi,
+  dictationReadiness,
   dubScript,
   editWords,
   makeAudiobook,
@@ -13,6 +18,7 @@ import {
   makeLyrics,
   makeSpeech,
   makeTrack,
+  readAloudReadiness,
   separateAudio,
 } from "./voice";
 
@@ -863,5 +869,206 @@ describe("a hosted deployment's voice api", () => {
     const api = createVoiceApi(answering(calls, { installed: true }), { hosted: true });
     expect((await api.lipsyncEngine()).installed).toBe(true);
     expect(calls).toEqual(["/products/wasifyai-voice/lipsync-engine"]);
+  });
+});
+
+// ---- dictation (ADR-0083, decision 5) ------------------------------------------------------------
+
+const model = (over: Partial<VoiceModelInfo>): VoiceModelInfo =>
+  ({
+    id: "parakeet-tdt-0.6b-v3",
+    title: "Parakeet TDT 0.6B v3",
+    licence: "CC-BY-4.0",
+    tasks: ["transcribe"],
+    recommended: ["transcribe"],
+    licence_evidence: "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+    state: "ready",
+    bytes_missing: 0,
+    ...over,
+  }) as VoiceModelInfo;
+
+const runtime = (over: Partial<AudioRuntime> = {}, bytes = 40_000_000): AudioRuntime => ({
+  ...HOSTED_RUNTIME,
+  installed: true,
+  plan: { ...HOSTED_RUNTIME.plan, supported: true, bytes },
+  ...over,
+});
+
+describe("dictating a clip", () => {
+  it("sends the WAV as a file and returns the text alone", async () => {
+    const { t, calls } = transport(() =>
+      jsonRes({ text: "buy two apples", seconds: 2, model: "m", displaced: null }),
+    );
+    const got = await createVoiceApi(t).dictate(new Blob(["RIFF"], { type: "audio/wav" }));
+    expect(got.text).toBe("buy two apples");
+    expect(calls[0]?.path).toBe("/products/wasifyai-voice/dictation");
+    expect(calls[0]?.init?.method).toBe("POST");
+    const file = (calls[0]?.init?.body as FormData).get("file") as File;
+    expect(file.name).toBe("dictation.wav");
+  });
+
+  it("raises the engine's sentence when the clip is refused", async () => {
+    const { t } = transport(() =>
+      jsonRes({ detail: { code: "silent", message: "Nothing could be heard." } }, 422),
+    );
+    await expect(createVoiceApi(t).dictate(new Blob(["x"]))).rejects.toThrow(
+      "Nothing could be heard.",
+    );
+  });
+});
+
+describe("whether the microphone can write words down", () => {
+  it("is ready when a speech-to-text model is", () => {
+    expect(dictationReadiness([model({})], runtime())).toEqual({
+      state: "ready",
+      model: "parakeet-tdt-0.6b-v3",
+    });
+  });
+
+  it("offers the recommended model with what getting it costs when none is here", () => {
+    const got = dictationReadiness(
+      [
+        model({
+          id: "whisper",
+          title: "Whisper",
+          state: "can_install",
+          recommended: [],
+          bytes_missing: 1,
+        }),
+        model({ state: "can_install", bytes_missing: 915_733_744 }),
+      ],
+      runtime({ installed: false }),
+    );
+    expect(got).toEqual({
+      state: "needs_setup",
+      model: {
+        id: "parakeet-tdt-0.6b-v3",
+        title: "Parakeet TDT 0.6B v3",
+        licence: "CC-BY-4.0",
+        from: "huggingface.co",
+        bytes: 915_733_744,
+        languages: [],
+      },
+      runtimeBytes: 40_000_000,
+    });
+  });
+
+  it("counts no runtime download once the runtime is there", () => {
+    const got = dictationReadiness([model({ state: "can_install", bytes_missing: 5 })], runtime());
+    expect(got.state === "needs_setup" && got.runtimeBytes).toBe(0);
+  });
+
+  it("is unavailable where there is no model to use or get, or no runtime for this computer", () => {
+    expect(dictationReadiness([], runtime())).toEqual({ state: "unavailable" });
+    expect(
+      dictationReadiness(
+        [model({ state: "can_install", bytes_missing: 5 })],
+        runtime({ installed: false, plan: { ...HOSTED_RUNTIME.plan, supported: false } }),
+      ),
+    ).toEqual({ state: "unavailable" });
+  });
+});
+
+// ---- read aloud (ADR-0083, CU3) ------------------------------------------------------------------
+
+const kokoro = (over: Partial<VoiceModelInfo> = {}): VoiceModelInfo =>
+  model({
+    id: "kokoro-82m",
+    title: "Kokoro 82M",
+    licence: "Apache-2.0",
+    tasks: ["speak"],
+    recommended: ["speak"],
+    languages: ["en-us", "en-gb"],
+    licence_evidence: "https://huggingface.co/hexgrad/Kokoro-82M",
+    ...over,
+  });
+
+describe("reading a reply aloud", () => {
+  const wavBase64 = btoa("RIFFxxxxWAVE");
+  const answer = {
+    audio: wavBase64,
+    part: 0,
+    parts: 3,
+    truncated: false,
+    seconds: 4.2,
+    model: "kokoro-82m",
+    displaced: null,
+  };
+
+  it("posts the text and the passage wanted, and returns the sound as a file", async () => {
+    const { t, calls } = transport(() => jsonRes(answer));
+    const got = await createVoiceApi(t).readAloud("Hello **there**.", 1);
+    expect(calls[0]?.path).toBe("/products/wasifyai-voice/read-aloud");
+    expect(calls[0]?.init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ text: "Hello **there**.", part: 1 });
+    expect(got.parts).toBe(3);
+    expect(got.wav.type).toBe("audio/wav");
+    expect(got.wav.size).toBe(12);
+  });
+
+  it("never sends more than the most the engine reads", async () => {
+    const { t, calls } = transport(() => jsonRes(answer));
+    await createVoiceApi(t).readAloud("x".repeat(MAX_READ_ALOUD_CHARS + 500));
+    expect(JSON.parse(String(calls[0]?.init?.body)).text).toHaveLength(MAX_READ_ALOUD_CHARS);
+  });
+
+  it("raises the engine's sentence when it is refused", async () => {
+    const { t } = transport(() =>
+      jsonRes(
+        { detail: { code: "model_missing", message: "Kokoro 82M is not on this computer yet." } },
+        409,
+      ),
+    );
+    await expect(createVoiceApi(t).readAloud("Hi.")).rejects.toThrow(
+      "Kokoro 82M is not on this computer yet.",
+    );
+  });
+
+  it("hands the abort signal to the request", async () => {
+    const { t, calls } = transport(() => jsonRes(answer));
+    const c = new AbortController();
+    await createVoiceApi(t).readAloud("Hi.", 0, c.signal);
+    expect(calls[0]?.init?.signal).toBe(c.signal);
+  });
+});
+
+describe("whether a reply can be read aloud", () => {
+  it("is ready when a text-to-speech model is (a speech-to-text one does not count)", () => {
+    expect(readAloudReadiness([model({}), kokoro()], runtime())).toEqual({
+      state: "ready",
+      model: "kokoro-82m",
+    });
+    expect(readAloudReadiness([model({})], runtime())).toEqual({ state: "unavailable" });
+  });
+
+  it("offers the voice with what getting it costs, and the languages it speaks", () => {
+    const got = readAloudReadiness(
+      [
+        model({ state: "can_install", bytes_missing: 915_733_744 }), // dictation's model is not offered for this
+        kokoro({ state: "can_install", bytes_missing: 189_549_408 }),
+      ],
+      runtime({ installed: false }),
+    );
+    expect(got).toEqual({
+      state: "needs_setup",
+      model: {
+        id: "kokoro-82m",
+        title: "Kokoro 82M",
+        licence: "Apache-2.0",
+        from: "huggingface.co",
+        bytes: 189_549_408,
+        languages: ["en-us", "en-gb"],
+      },
+      runtimeBytes: 40_000_000,
+    });
+  });
+
+  it("is unavailable when this computer has no runtime to set up", () => {
+    expect(
+      readAloudReadiness(
+        [kokoro({ state: "can_install", bytes_missing: 5 })],
+        runtime({ installed: false, plan: { ...HOSTED_RUNTIME.plan, supported: false } }),
+      ),
+    ).toEqual({ state: "unavailable" });
   });
 });

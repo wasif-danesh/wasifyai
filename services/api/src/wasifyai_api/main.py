@@ -54,6 +54,7 @@ from wasifyai_api.admin import router as admin_router
 from wasifyai_api.admin_media import router as admin_media_router
 from wasifyai_api.admin_models import router as admin_models_router
 from wasifyai_api.admin_safeguards import router as admin_safeguards_router
+from wasifyai_api.attachments import router as attachments_router
 from wasifyai_api.auth import MIN_SECRET_BYTES
 from wasifyai_api.config import get_settings
 from wasifyai_api.creation_index import (
@@ -604,6 +605,7 @@ def create_app(
     app.include_router(admin_media_router)
     app.include_router(admin_safeguards_router)
     app.include_router(uploads_router)
+    app.include_router(attachments_router)
     app.include_router(creations_router)
     if desktop_profile:
         app.include_router(files_router)

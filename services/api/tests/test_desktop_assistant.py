@@ -45,8 +45,14 @@ class H(http.server.BaseHTTPRequestHandler):
         n = int(self.headers.get("content-length", "0"))
         req = json.loads(self.rfile.read(n) or b"{}")
         msgs = req["messages"]
-        has_result = any(m["role"] == "tool" for m in msgs)
-        last_user = [m for m in msgs if m["role"] == "user"][-1]["content"]
+        last_at = max(i for i, m in enumerate(msgs) if m["role"] == "user")
+        has_result = any(m["role"] == "tool" for m in msgs[last_at:])  # in this turn
+        last_user = msgs[last_at]["content"]
+        shown = last_user
+        if isinstance(last_user, list):  # a message with pictures: its text part is what to read
+            last_user = " ".join(p.get("text", "") for p in last_user if p["type"] == "text")
+        with open(__file__ + ".log", "a") as log:  # what the model was given, for the test to read
+            log.write(json.dumps({"args": args, "user": shown}) + "\n")
         events = []
         think = bool((req.get("chat_template_kwargs") or {}).get("enable_thinking"))
         if think:  # llama.cpp names the thinking field `reasoning_content`
@@ -416,4 +422,140 @@ def test_web_search_is_off_until_allowed_then_cites_the_web_and_keeps_keys_encry
             .fetchone()[0]
         )
         assert secret not in raw and "tavily" in raw  # saved, and not in the clear
+        c.post("/desktop/language-engine/stop", headers=auth())
+
+
+def test_a_picture_asked_for_after_the_web_was_read_waits_for_a_click_then_is_made(data_dir):
+    """CU2, approvals on the desktop profile: the run parks on a card, the card survives a reload,
+    and the window's answer through /runs/{id}/resume carries the turn on."""
+    from wasifyai_platform_sdk.web import DuckDuckGoProvider
+
+    base = "/products/wasifyai-assistant"
+    with TestClient(create_app()) as c:
+        choose_the_model(c)
+        web = c.app.state.web  # type: ignore[attr-defined]
+        web._ddg = DuckDuckGoProvider(
+            min_gap_s=0,
+            run=lambda q, n: [{"title": "Fox", "href": "https://wiki.test/fox", "body": "Foxes."}],
+        )
+        c.put(f"{base}/search", json={"consent": True}, headers=auth())
+        first = ask_with(c, {"input": {"text": "Look up red foxes on the web", "search": True}})
+        cid = first[-1][1]["outputs"]["conversation_id"]
+
+        events = ask_with(
+            c, {"input": {"text": "now draw a teapot", "conversation_id": cid, "approvals": True}}
+        )
+        names = [e for e, _ in events]
+        assert names[-1] == "interrupt" and "done" not in names, names
+        card = events[-1][1]
+        assert card["kind"] == "confirm_action" and card["payload"]["title"] == "Make a picture"
+        assert card["payload"]["params"]["prompt"] == "a red teapot on a table"
+        run_id = card["run_id"]
+
+        # nothing was made yet, and a reload shows the card
+        one = c.get(f"{base}/conversations/{cid}", headers=auth()).json()
+        waiting = one["messages"][-1]["parts"][-1]
+        assert waiting["type"] == "interrupt" and waiting["status"] == "pending"
+        assert (
+            waiting["run_id"] == run_id
+            and waiting["tool_call_id"] == card["payload"]["tool_call_id"]
+        )
+
+        r = c.post(f"/runs/{run_id}/resume", json={"value": {"approved": True}}, headers=auth())
+        assert r.status_code == 200, r.text
+        resumed = parse(r.text)
+        names = [e for e, _ in resumed]
+        assert "job_progress" in names and names[-1] == "done", names
+        result = next(d for e, d in resumed if e == "tool_result")
+        assert result["name"] == "generate_image" and result["status"] == "ok"
+        assert (
+            c.post(
+                f"/runs/{run_id}/resume", json={"value": {"approved": True}}, headers=auth()
+            ).status_code
+            == 409
+        )
+        one = c.get(f"{base}/conversations/{cid}", headers=auth()).json()
+        tool = one["messages"][-2]
+        assert tool["role"] == "tool" and tool["parts"][0]["status"] == "approved"
+        c.post("/desktop/language-engine/stop", headers=auth())
+
+
+def test_documents_and_pictures_are_attached_kept_with_the_chat_and_deleted_with_it(data_dir):
+    """CO2 on the desktop profile: a document is read to its words and quoted to the model, a
+    picture needs the model's projector, and both go with the conversation when it is deleted."""
+    import io
+
+    from PIL import Image
+
+    base = "/products/wasifyai-assistant"
+    model_dir = next(data_dir.parent.glob("home/.lmstudio/models/acme/demo"))
+    with TestClient(create_app()) as c:
+        choose_the_model(c)
+        offered = c.get(f"{base}/options", headers=auth()).json()["attach"]
+        assert offered["available"] is True and offered["documents"] is True
+        assert offered["images"] is False and "mmproj" in offered["images_note"]
+
+        # a document: read to words, kept, quoted to the model, shown back by name
+        r = c.post(
+            f"{base}/attachments", content=b"The launch is on Friday.",
+            headers={**auth(), "x-file-name": "plan.md"},
+        )  # fmt: skip
+        assert r.status_code == 201, r.text
+        doc = r.json()
+        events = ask_with(
+            c,
+            {"input": {"text": "When?", "attachments": [{"id": doc["id"], "name": "plan.md"}]}},
+        )
+        assert events[-1][0] == "done"
+        cid = events[-1][1]["outputs"]["conversation_id"]
+        log = [
+            json.loads(x)
+            for x in (data_dir / "engine/llamacpp/b1/llama-server.log").read_text().splitlines()
+        ]
+        assert "The launch is on Friday." in log[-1]["user"] and "--mmproj" not in log[-1]["args"]
+        stored = c.get(f"{base}/conversations/{cid}", headers=auth()).json()
+        part = stored["messages"][0]["parts"][1]
+        assert part["type"] == "attachment" and part["name"] == "plan.md" and "url" not in part
+
+        # a picture before the model has a projector: refused in words, nothing attached
+        buf = io.BytesIO()
+        Image.new("RGB", (40, 30), (200, 30, 30)).save(buf, "PNG")
+        up = c.post(f"{base}/uploads/images", content=buf.getvalue(), headers=auth())
+        assert up.status_code == 201, up.text
+        pic = up.json()["upload_id"]
+        refused = ask_with(
+            c, {"input": {"text": "look", "attachments": [{"id": pic, "name": "a.png"}]}}
+        )
+        out = refused[-1][1]["outputs"]
+        assert out["status"] == "refused" and out["refusal"]["code"] == "no_vision"
+
+        # with the projector next to the model the picture goes to the server with --mmproj
+        (model_dir / "mmproj-F16.gguf").write_bytes(b"GGUF" + b"\0" * 100)
+        (item,) = [i for i in wait_for_scan(c)["items"] if i["kind"] == "language"]
+        chosen = c.put(
+            "/desktop/language", json={"item_id": item["id"], "context": 4096}, headers=auth()
+        )
+        assert chosen.status_code == 200, chosen.text
+        assert c.get(f"{base}/options", headers=auth()).json()["attach"]["images"] is True
+        seen = ask_with(
+            c, {"input": {"text": "look", "attachments": [{"id": pic, "name": "a.png"}]}}
+        )
+        assert seen[-1][0] == "done", seen[-1]
+        log = [
+            json.loads(x)
+            for x in (data_dir / "engine/llamacpp/b1/llama-server.log").read_text().splitlines()
+        ]
+        assert "--mmproj" in log[-1]["args"]
+        assert [p["type"] for p in log[-1]["user"]] == ["text", "image_url"]
+        cid2 = seen[-1][1]["outputs"]["conversation_id"]
+        read = c.get(f"{base}/conversations/{cid2}", headers=auth()).json()
+        link = read["messages"][0]["parts"][1]
+        assert link["kind"] == "image" and link["url"].startswith("http")
+        shown = c.get(link["url"].replace(BASE, ""))  # the signed link serves the stored picture
+        assert shown.status_code == 200 and shown.headers["content-type"].startswith("image/")
+
+        # deleting the conversation takes what was attached with it
+        assert c.delete(f"{base}/conversations/{cid2}", headers=auth()).status_code == 204
+        assert c.get(f"{base}/conversations/{cid2}", headers=auth()).status_code == 404
+        assert c.get(link["url"].replace(BASE, "")).status_code == 404  # the picture went with it
         c.post("/desktop/language-engine/stop", headers=auth())

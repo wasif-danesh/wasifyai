@@ -1,7 +1,8 @@
-// The chat as a tree of messages (ADR-0082). The engine stores one straight line today, so a conversation is a chain: every
-// message has the one before it as its parent. The tree is there so that edit, regenerate and the branch picker (stage CU2)
-// only add: a message with a second child is a branch. User and assistant messages only; a tool's result is a part of the
-// assistant message that called it.
+// The chat as a tree of messages (ADR-0082, stage CU2). Every message has a parent; a message with a second child is a branch:
+// an edited message is a sibling of the one it replaced, and an answer made again is a sibling of the answer it replaced.
+// User and assistant messages only; a tool's result is a part of the assistant message that called it. The engine stores
+// several rows for one assistant turn (the call, the tool's results, the answer); they are folded into one node here, named
+// by the turn's first row, which is the id the engine accepts as a parent.
 //
 // `chatReducer` (assistant.ts) still folds the events of the turn that is running; this reducer keeps the nodes around it.
 import {
@@ -10,6 +11,7 @@ import {
   type ChatPart,
   type ChatState,
   type Conversation,
+  type StoredMessage,
   chatReducer,
   fromStored,
   initialChat,
@@ -42,7 +44,12 @@ export type TreeAction =
   | { type: "chat"; action: ChatAction }
   | { type: "event"; event: ParsedEvent }
   | { type: "loaded"; conversation: Conversation }
-  | { type: "begin"; user: ChatMessage; replyId: string; parentId: string | null }
+  /** the person's message and the reply about to stream under it; no `user` = the reply is made again under `parentId` */
+  | { type: "begin"; user: ChatMessage | null; replyId: string; parentId: string | null }
+  /** show the branch that ends at (or below) this node */
+  | { type: "head"; headId: string }
+  /** the person answered the card that waits on this branch */
+  | { type: "answered"; approved: boolean }
   | { type: "reset" };
 
 /** The active path: the node `leafId` and its ancestors, oldest first. */
@@ -58,13 +65,88 @@ export function pathTo(nodes: Record<string, TreeNode>, leafId: string | null): 
   return out;
 }
 
-/** The nodes of the stored conversation as a chain: today's engine sends no parent, so each message follows the one before. */
-function chainOf(messages: ChatMessage[]): TreeNode[] {
-  return messages.map((message, i) => ({
-    id: message.id,
-    parentId: i === 0 ? null : (messages[i - 1] as ChatMessage).id,
-    message,
-  }));
+/** The nodes of a stored conversation. Rows of one assistant turn become one node (named by its first row); an engine from
+ * before the tree sends no parents, and then each row follows the one before it. `headRow` is the last row of the branch on
+ * screen; without it the last node is the head. */
+export function treeFromStored(
+  messages: StoredMessage[],
+  headRow?: string | null,
+): { nodes: Record<string, TreeNode>; order: string[]; headId: string | null } {
+  const rows = [...messages].sort((a, b) => a.seq - b.seq);
+  const chain = rows.length > 0 && rows.every((r) => r.parent_id === undefined);
+  const parentOf = (r: StoredMessage, i: number): string | null =>
+    chain ? (i === 0 ? null : (rows[i - 1] as StoredMessage).id) : (r.parent_id ?? null);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const nodeOf = new Map<string, string>();
+  const turnRows = new Map<string, StoredMessage[]>();
+  const first = new Map<string, number>();
+  rows.forEach((r, i) => {
+    const parent = parentOf(r, i);
+    const parentRow = parent ? byId.get(parent) : undefined;
+    if (r.role === "user") {
+      nodeOf.set(r.id, r.id);
+      turnRows.set(r.id, [r]);
+      first.set(r.id, i);
+    } else if (parentRow && parentRow.role !== "user" && nodeOf.has(parentRow.id)) {
+      const id = nodeOf.get(parentRow.id) as string; // the next row of the same turn
+      nodeOf.set(r.id, id);
+      turnRows.get(id)?.push(r);
+    } else {
+      nodeOf.set(r.id, r.id);
+      turnRows.set(r.id, [r]);
+      first.set(r.id, i);
+    }
+  });
+  const nodes: Record<string, TreeNode> = {};
+  const order = [...turnRows.keys()].sort((a, b) => (first.get(a) ?? 0) - (first.get(b) ?? 0));
+  for (const id of order) {
+    const own = turnRows.get(id) as StoredMessage[];
+    const message = fromStored(own)[0];
+    if (!message) continue;
+    const top = own[0] as StoredMessage;
+    const parent = parentOf(top, first.get(id) ?? 0);
+    nodes[id] = {
+      id,
+      parentId: parent ? (nodeOf.get(parent) ?? null) : null,
+      message: { ...message, id },
+    };
+  }
+  const kept = order.filter((id) => nodes[id]);
+  const head = (headRow && nodeOf.get(headRow)) || kept[kept.length - 1] || null;
+  return { nodes, order: kept, headId: head };
+}
+
+/** The run that waits for an answer to a card on this path (the last message's pending card), if any. */
+export function pendingRunOf(path: ChatMessage[]): string | null {
+  const last = path[path.length - 1];
+  if (!last || last.role !== "assistant") return null;
+  for (const p of last.parts)
+    if (p.type === "tool" && p.approval?.state === "pending") return p.approval.runId;
+  return null;
+}
+
+/** The newest descendant of a node: where a branch ends (the newest child each time). */
+export function leafFrom(s: Pick<TreeState, "nodes" | "order">, id: string): string {
+  const children = new Map<string, string>();
+  for (const k of s.order) {
+    const n = s.nodes[k];
+    if (n?.parentId) children.set(n.parentId, k); // later nodes win: the newest child
+  }
+  let cur = id;
+  const seen = new Set<string>();
+  for (;;) {
+    const next = children.get(cur);
+    if (!next || seen.has(cur)) return cur;
+    seen.add(cur);
+    cur = next;
+  }
+}
+
+/** The siblings of a node (the messages with the same parent, oldest first), itself included. */
+export function siblingsOf(s: Pick<TreeState, "nodes" | "order">, id: string): string[] {
+  const me = s.nodes[id];
+  if (!me) return [];
+  return s.order.filter((k) => s.nodes[k]?.parentId === me.parentId);
 }
 
 function upsert(s: TreeState, node: TreeNode): TreeState {
@@ -122,18 +204,48 @@ function interrupted(s: TreeState, e: ParsedEvent): TreeState {
   const last = s.chat.messages[s.chat.messages.length - 1];
   if (!last || last.role !== "assistant") return s;
   const runId = String(d.run_id ?? s.chat.runId ?? "");
+  const payload = (d.payload as Record<string, unknown>) ?? {};
+  const approval = {
+    id: String(d.interrupt_id),
+    kind: String(d.kind ?? "interrupt"),
+    runId,
+    state: "pending" as const,
+    title: typeof payload.title === "string" ? payload.title : undefined,
+    summary: typeof payload.summary === "string" ? payload.summary : undefined,
+    params:
+      payload.params && typeof payload.params === "object"
+        ? (payload.params as Record<string, unknown>)
+        : undefined,
+  };
+  // the card belongs to the tool call it is about, when the engine names one
+  const callId = typeof payload.tool_call_id === "string" ? payload.tool_call_id : null;
+  const target = callId ? last.parts.find((p) => p.type === "tool" && p.id === callId) : undefined;
+  if (target) {
+    const parts = last.parts.map((p) =>
+      p === target && p.type === "tool" ? { ...p, approval } : p,
+    );
+    const message: ChatMessage = { ...last, streaming: false, parts };
+    const node = s.nodes[last.id];
+    return {
+      ...s,
+      pendingRunId: runId,
+      nodes: node ? { ...s.nodes, [last.id]: { ...node, message } } : s.nodes,
+      chat: {
+        ...s.chat,
+        phase: "idle",
+        runId,
+        lastSeq: Math.max(s.chat.lastSeq, typeof d.seq === "number" ? d.seq : 0),
+        messages: [...s.chat.messages.slice(0, -1), message],
+      },
+    };
+  }
   const part: ChatPart = {
     type: "tool",
     id: String(d.interrupt_id),
     name: String(d.kind ?? "interrupt"),
-    arguments: (d.payload as Record<string, unknown>) ?? {},
+    arguments: payload,
     status: "running",
-    approval: {
-      id: String(d.interrupt_id),
-      kind: String(d.kind ?? "interrupt"),
-      runId,
-      state: "pending",
-    },
+    approval,
   };
   const message: ChatMessage = { ...last, streaming: false, parts: [...last.parts, part] };
   const messages = [...s.chat.messages.slice(0, -1), message];
@@ -157,34 +269,65 @@ export function treeReducer(s: TreeState, a: TreeAction): TreeState {
     case "reset":
       return initialTree;
     case "loaded": {
-      const nodes: Record<string, TreeNode> = {};
-      const order: string[] = [];
-      const chain = chainOf(fromStored(a.conversation.messages));
-      for (const n of chain) {
-        nodes[n.id] = n;
-        order.push(n.id);
-      }
-      const headId = chain.length ? (chain[chain.length - 1] as TreeNode).id : null;
-      const messages = pathTo(nodes, headId);
+      const { nodes, order, headId } = treeFromStored(
+        a.conversation.messages,
+        a.conversation.head_id,
+      );
       return {
         chat: {
           ...initialChat,
           conversationId: a.conversation.id,
           title: a.conversation.title,
-          messages,
+          messages: pathTo(nodes, headId),
         },
         nodes,
         order,
         headId,
-        // a stored interrupt is read in stage CU2 (the engine does not store one yet)
-        pendingRunId: null,
+        pendingRunId: pendingRunOf(pathTo(nodes, headId)),
       };
     }
+    case "answered": {
+      // the person clicked the card: show the answer on it, and the turn goes on
+      const last = s.chat.messages[s.chat.messages.length - 1];
+      if (!last || last.role !== "assistant") return s;
+      const parts = last.parts.map((p) =>
+        p.type === "tool" && p.approval?.state === "pending"
+          ? {
+              ...p,
+              approval: {
+                ...p.approval,
+                state: a.approved ? ("approved" as const) : ("declined" as const),
+              },
+            }
+          : p,
+      );
+      const message: ChatMessage = { ...last, parts, streaming: true };
+      const node = s.nodes[last.id];
+      return {
+        ...s,
+        pendingRunId: null,
+        nodes: node ? { ...s.nodes, [last.id]: { ...node, message } } : s.nodes,
+        chat: {
+          ...s.chat,
+          phase: "working",
+          error: null,
+          messages: [...s.chat.messages.slice(0, -1), message],
+        },
+      };
+    }
+    case "head": {
+      // the person picked another branch: show the path to the node, down to the end of that branch
+      if (!s.nodes[a.headId] || s.chat.phase === "working") return s;
+      const leaf = leafFrom(s, a.headId);
+      return { ...s, headId: leaf, chat: { ...s.chat, messages: pathTo(s.nodes, leaf) } };
+    }
     case "begin": {
-      // the person's message and the reply that is about to stream under it
-      const withUser = upsert(s, { id: a.user.id, parentId: a.parentId, message: a.user });
       const reply: ChatMessage = { id: a.replyId, role: "assistant", parts: [], streaming: true };
-      const next = upsert(withUser, { id: reply.id, parentId: a.user.id, message: reply });
+      // the reply streams under the new message, or under the one being answered again
+      const user = a.user;
+      const withUser = user ? upsert(s, { id: user.id, parentId: a.parentId, message: user }) : s;
+      const under = user ? user.id : a.parentId;
+      const next = upsert(withUser, { id: reply.id, parentId: under, message: reply });
       return {
         ...next,
         headId: reply.id,
@@ -195,7 +338,7 @@ export function treeReducer(s: TreeState, a: TreeAction): TreeState {
           error: null,
           runId: null,
           lastSeq: 0,
-          messages: [...pathTo(s.nodes, a.parentId), a.user, reply],
+          messages: [...pathTo(s.nodes, a.parentId), ...(user ? [user] : []), reply],
         },
       };
     }

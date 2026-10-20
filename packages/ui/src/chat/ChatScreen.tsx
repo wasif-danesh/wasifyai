@@ -8,12 +8,15 @@ import { Button } from "../components/button";
 import { Notice } from "../components/notice";
 import { Reasoning } from "./Reasoning";
 import { ToolCard, type TrackLookup } from "./ToolCard";
+import { MessageAttachments } from "./attachments/AttachmentChip";
 import {
   ComposerOptions,
   type ComposerOptionsAvailable,
   useComposerOptions,
 } from "./composer-options";
+import { joinDictation } from "./dictation/use-dictation";
 import { Markdown } from "./markdown";
+import { ReadAloudBar, ReadAloudProvider, useReadAloud } from "./read-aloud/use-read-aloud";
 import { useAssistantChat } from "./use-assistant-chat";
 
 const MAX_CHARS = 4000;
@@ -61,8 +64,10 @@ function Bubble({
   thinkingOn?: boolean;
 }) {
   if (message.role === "user") {
+    const files = message.parts.flatMap((p) => (p.type === "attachment" ? [p.file] : []));
     return (
-      <div className="flex justify-end">
+      <div className="grid justify-items-end gap-2">
+        <MessageAttachments files={files} />
         <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-accent px-4 py-2.5">
           {message.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}
         </p>
@@ -70,6 +75,9 @@ function Bubble({
     );
   }
   const thinking = message.streaming && message.parts.length === 0;
+  const said = message.streaming
+    ? ""
+    : message.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
   return (
     <div className="grid gap-3">
       {thinking ? (
@@ -78,7 +86,7 @@ function Bubble({
         </output>
       ) : null}
       {message.parts.map((p, n) =>
-        p.type === "text" ? (
+        p.type === "attachment" ? null : p.type === "text" ? (
           // biome-ignore lint/suspicious/noArrayIndexKey: the parts of a message only ever grow at the end
           <Markdown key={`t${n}`} text={p.text} />
         ) : p.type === "reasoning" ? (
@@ -98,6 +106,7 @@ function Bubble({
           />
         ),
       )}
+      <ReadAloudBar id={message.id} text={said} />
     </div>
   );
 }
@@ -123,15 +132,23 @@ export function ChatScreen({
   title,
   composerOptions,
 }: ChatScreenProps) {
-  const options = useComposerOptions(conversationId, composerOptions);
+  const [draft, setDraft] = useState("");
+  const input = useRef<HTMLTextAreaElement>(null);
+  const readAloud = useReadAloud(composerOptions?.readAloud);
+  // words from the microphone go after what is in the box, which stays the person's to change and send
+  const options = useComposerOptions(conversationId, composerOptions, (text) => {
+    setDraft((d) => joinDictation(d, text).slice(0, MAX_CHARS));
+    input.current?.focus();
+  });
   const { state, send, stop, retry } = useAssistantChat({
     runs,
     api: assistant,
     conversationId,
     onConversation,
     runInput: options.runInput,
+    attachedFiles: options.attach.files,
+    onSend: options.attach.clear,
   });
-  const [draft, setDraft] = useState("");
   const boxId = useId();
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -147,7 +164,7 @@ export function ChatScreen({
 
   function submit() {
     const text = draft.trim();
-    if (!text || working || blockedReason) return;
+    if (!text || working || blockedReason || options.attach.busy) return;
     setDraft("");
     stick.current = true;
     void send(text);
@@ -160,14 +177,19 @@ export function ChatScreen({
         e.preventDefault();
         submit();
       }}
+      {...options.attach.dropProps}
     >
       {options.notice}
       <div className="rounded-3xl border bg-card px-5 py-3 shadow-card focus-within:ring-[3px] focus-within:ring-ring/40">
+        {options.attach.chips}
+        {options.attach.picker}
         <label htmlFor={boxId} className="sr-only">
           Message
         </label>
         <textarea
           id={boxId}
+          onPaste={options.attach.onPaste}
+          ref={input}
           rows={empty ? 3 : 1}
           maxLength={MAX_CHARS}
           value={draft}
@@ -192,7 +214,7 @@ export function ChatScreen({
             <button
               type="submit"
               aria-label="Send"
-              disabled={!draft.trim() || working || Boolean(blockedReason)}
+              disabled={!draft.trim() || working || Boolean(blockedReason) || options.attach.busy}
               className="grid size-10 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
             >
               <ArrowUp className="size-5" />
@@ -209,93 +231,95 @@ export function ChatScreen({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {title || actions ? (
-        <header
-          data-tauri-drag-region
-          className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-6 pt-1"
-        >
-          <h1 className="min-w-0 truncate ps-2 font-medium text-sm">{title}</h1>
-          <div className="flex items-center gap-1">{actions}</div>
-        </header>
-      ) : null}
+    <ReadAloudProvider value={readAloud}>
+      <div className="flex h-full min-h-0 flex-col">
+        {title || actions ? (
+          <header
+            data-tauri-drag-region
+            className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-6 pt-1"
+          >
+            <h1 className="min-w-0 truncate ps-2 font-medium text-sm">{title}</h1>
+            <div className="flex items-center gap-1">{actions}</div>
+          </header>
+        ) : null}
 
-      {empty ? (
-        <div
-          key="hero"
-          className="grid min-h-0 flex-1 content-end justify-items-center gap-8 overflow-auto px-8 pb-8"
-        >
-          {hero}
+        {empty ? (
+          <div
+            key="hero"
+            className="grid min-h-0 flex-1 content-end justify-items-center gap-8 overflow-auto px-8 pb-8"
+          >
+            {hero}
+          </div>
+        ) : (
+          <div
+            key="thread"
+            ref={scroller}
+            className="min-h-0 flex-1 overflow-auto px-6 py-6"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+            }}
+          >
+            <div className={cn("mx-auto grid w-full max-w-3xl gap-6")} aria-live="polite">
+              {state.messages.map((m) => (
+                <Bubble
+                  key={m.id}
+                  message={m}
+                  images={images}
+                  tracks={tracks}
+                  onOpenCreation={onOpenCreation}
+                  thinkingOn={options.thinking}
+                />
+              ))}
+              {state.error ? (
+                <Notice
+                  tone="error"
+                  title="That did not work"
+                  actions={
+                    state.error.code === "no_language_model" && onNeedModel ? (
+                      <Button type="button" onClick={onNeedModel}>
+                        Choose a model
+                      </Button>
+                    ) : state.error.retryable ? (
+                      <Button type="button" variant="outline" onClick={retry}>
+                        Try again
+                      </Button>
+                    ) : undefined
+                  }
+                >
+                  {state.error.message}
+                </Notice>
+              ) : null}
+            </div>
+          </div>
+        )}
+
+        {/* the same element in both states, so typing is never interrupted when the first answer starts */}
+        <div key="composer" className={cn("grid shrink-0 gap-4 px-6", empty ? "" : "pt-2 pb-5")}>
+          {notices ? <div className="mx-auto w-full max-w-3xl">{notices}</div> : null}
+          {box}
         </div>
-      ) : (
-        <div
-          key="thread"
-          ref={scroller}
-          className="min-h-0 flex-1 overflow-auto px-6 py-6"
-          onScroll={(e) => {
-            const el = e.currentTarget;
-            stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-          }}
-        >
-          <div className={cn("mx-auto grid w-full max-w-3xl gap-6")} aria-live="polite">
-            {state.messages.map((m) => (
-              <Bubble
-                key={m.id}
-                message={m}
-                images={images}
-                tracks={tracks}
-                onOpenCreation={onOpenCreation}
-                thinkingOn={options.thinking}
-              />
-            ))}
-            {state.error ? (
-              <Notice
-                tone="error"
-                title="That did not work"
-                actions={
-                  state.error.code === "no_language_model" && onNeedModel ? (
-                    <Button type="button" onClick={onNeedModel}>
-                      Choose a model
-                    </Button>
-                  ) : state.error.retryable ? (
-                    <Button type="button" variant="outline" onClick={retry}>
-                      Try again
-                    </Button>
-                  ) : undefined
-                }
-              >
-                {state.error.message}
-              </Notice>
+
+        {empty ? (
+          <div key="examples" className="min-h-0 flex-1 px-8 pt-4">
+            {examples.length ? (
+              <ul className="mx-auto flex max-w-3xl flex-wrap justify-center gap-2">
+                {examples.map((ex) => (
+                  <li key={ex}>
+                    <button
+                      type="button"
+                      className="rounded-full border px-3 py-1.5 text-muted-foreground text-sm hover:bg-accent"
+                      onClick={() => setDraft(ex)}
+                    >
+                      {ex}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             ) : null}
           </div>
-        </div>
-      )}
-
-      {/* the same element in both states, so typing is never interrupted when the first answer starts */}
-      <div key="composer" className={cn("grid shrink-0 gap-4 px-6", empty ? "" : "pt-2 pb-5")}>
-        {notices ? <div className="mx-auto w-full max-w-3xl">{notices}</div> : null}
-        {box}
+        ) : null}
       </div>
-
-      {empty ? (
-        <div key="examples" className="min-h-0 flex-1 px-8 pt-4">
-          {examples.length ? (
-            <ul className="mx-auto flex max-w-3xl flex-wrap justify-center gap-2">
-              {examples.map((ex) => (
-                <li key={ex}>
-                  <button
-                    type="button"
-                    className="rounded-full border px-3 py-1.5 text-muted-foreground text-sm hover:bg-accent"
-                    onClick={() => setDraft(ex)}
-                  >
-                    {ex}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+    </ReadAloudProvider>
   );
 }

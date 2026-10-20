@@ -10,7 +10,8 @@ import type {
 } from "@wasifyai/client";
 import { isWorking } from "@wasifyai/client";
 import { Plus } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { useChatNext } from "../chat/labs";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { AddSources } from "./AddSources";
@@ -23,6 +24,11 @@ import { noReadySourceReason, scopeIds, scopeLabel } from "./scope";
 import { useGuide } from "./use-guide";
 import { useNotebookChat } from "./use-notebook-chat";
 import { useNotebookSources } from "./use-notebook-sources";
+
+// the chat on assistant-ui (ADR-0082, CU4), a separate chunk fetched only when Labs has it on
+const NotebookChatNext = lazy(() =>
+  import("./NotebookChatNext").then((m) => ({ default: m.NotebookChatNext })),
+);
 
 type PaneName = "sources" | "chat" | "studio";
 
@@ -68,6 +74,8 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
   const [draftTitle, setDraftTitle] = useState(title);
   useEffect(() => setDraftTitle(title), [title]);
 
+  const [chatNext] = useChatNext(); // Settings, Labs: the new chat is off until asked for
+  const ChatView = chatNext ? NotebookChatNext : NotebookChat;
   const chat = useNotebookChat({
     runs,
     api,
@@ -299,72 +307,74 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
               ))}
             </div>
           ) : null}
-          <NotebookChat
-            state={chat.state}
-            onSend={(text) => void chat.send(text, scope)}
-            onStop={chat.stop}
-            onRetry={chat.retry}
-            onOpenCitation={openCitation}
-            scope={label}
-            blockedReason={blocked}
-            notices={showAdder ? undefined : props.notices}
-            chip={props.chip}
-            onNeedModel={props.onNeedModel}
-            onSaveNote={(m) => void saveNote(m)}
-            draftSeed={seed}
-            guide={
-              <SourceGuide
-                state={guide.state}
-                making={guide.making}
-                problem={guide.problem}
-                onMake={() => void guide.make()}
-                onAsk={(q) => setSeed({ text: q, id: Date.now() })}
-              />
-            }
-            empty={
-              showAdder ? (
-                <div className="grid w-full max-w-xl gap-4">
-                  {adder}
-                  {props.notices}
-                </div>
-              ) : undefined
-            }
-            header={
-              conversations.length > 0 || chat.state.messages.length > 0 ? (
-                <>
-                  {conversations.length > 1 ? (
-                    <select
-                      aria-label="Conversation"
-                      className="h-8 max-w-48 rounded-md border bg-background px-2 text-sm"
-                      value={conversationId ?? ""}
-                      onChange={(e) => {
+          <Suspense fallback={null}>
+            <ChatView
+              state={chat.state}
+              onSend={(text) => void chat.send(text, scope)}
+              onStop={chat.stop}
+              onRetry={chat.retry}
+              onOpenCitation={openCitation}
+              scope={label}
+              blockedReason={blocked}
+              notices={showAdder ? undefined : props.notices}
+              chip={props.chip}
+              onNeedModel={props.onNeedModel}
+              onSaveNote={(m) => void saveNote(m)}
+              draftSeed={seed}
+              guide={
+                <SourceGuide
+                  state={guide.state}
+                  making={guide.making}
+                  problem={guide.problem}
+                  onMake={() => void guide.make()}
+                  onAsk={(q) => setSeed({ text: q, id: Date.now() })}
+                />
+              }
+              empty={
+                showAdder ? (
+                  <div className="grid w-full max-w-xl gap-4">
+                    {adder}
+                    {props.notices}
+                  </div>
+                ) : undefined
+              }
+              header={
+                conversations.length > 0 || chat.state.messages.length > 0 ? (
+                  <>
+                    {conversations.length > 1 ? (
+                      <select
+                        aria-label="Conversation"
+                        className="h-8 max-w-48 rounded-md border bg-background px-2 text-sm"
+                        value={conversationId ?? ""}
+                        onChange={(e) => {
+                          chat.reset();
+                          setConversationId(e.target.value || null);
+                        }}
+                      >
+                        {conversations.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.title || "Conversation"}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={isWorking(chat.state)}
+                      onClick={() => {
                         chat.reset();
-                        setConversationId(e.target.value || null);
+                        setConversationId(null);
                       }}
                     >
-                      {conversations.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.title || "Conversation"}
-                        </option>
-                      ))}
-                    </select>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={isWorking(chat.state)}
-                    onClick={() => {
-                      chat.reset();
-                      setConversationId(null);
-                    }}
-                  >
-                    <Plus /> New chat
-                  </Button>
-                </>
-              ) : undefined
-            }
-          />
+                      <Plus /> New chat
+                    </Button>
+                  </>
+                ) : undefined
+              }
+            />
+          </Suspense>
           {adding && !none && notebookId !== null ? (
             <div className="absolute inset-0 z-10 grid place-items-center bg-background/80 p-6 backdrop-blur-sm">
               {adder}

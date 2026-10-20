@@ -93,7 +93,32 @@ files we ship with their licences recorded; the desktop never fetches fonts from
   **Search** is a pill like Thinking. The first press shows a card (`accent` fill) that names the service and what is sent and has "Allow search" and "Not now"; a service
   that needs a key says so and opens Settings. Under an answer that used the web, **source cards** list each result: the title as a link (opens in the person's own browser;
   only http and https are links), the site at the end of the line and a two-line snippet in `muted-foreground`.
+  **Read aloud** is a speaker icon button in the action row under a finished reply (beside Copy and Answer again; `muted-foreground`, `accent` fill while it works, 36 px or 44 px on a touch screen), named "Read this reply aloud"
+  and, while it works, "Stop reading aloud" (`aria-pressed`). While it works it shows a status line next to it in `muted-foreground` text-xs: a pulsing `primary` dot (still when the person prefers less motion) and "Getting ready to read…",
+  "Reading aloud" or "Reading aloud · 2 of 3"; the icon is a spinner before the first sound and a square (stop) after. It never plays by itself. A problem or note is the same `accent` card as Mic's under the reply; with no voice installed the first press
+  shows "Set up read aloud" (name, licence, source, languages, size, "Download" and "Not now").
+  **Mic** (dictation) is a pill too ("Mic"; while it listens "Stop", pressed). Pressing it shows a card (`accent` fill) above the box: a pulsing `destructive` dot (still
+  when the person prefers less motion), "Listening with <the microphone's name> · 0:07" in a status line, and a "Cancel" that throws the clip away; "Stop" is the pill
+  itself. Then "Transcribing…", and the words land in the box after what is there, to be changed and sent by the person; they are never sent by themselves. A problem
+  (the microphone is turned off for this app, none was found, nothing could be heard, the speech model is busy) is an alert card with one sentence and "Close". With no
+  speech model the first press shows the **setup card** instead of recording: what it is, the model's name and licence, where it comes from, the size, and one "Download 956 MB"
+  button with "Not now"; nothing is fetched before the click. The pill is absent where the engine cannot write words down (the web without a hosted transcription model).
+  **Attach** (a paperclip, first in the bar) opens the file picker; drops and pastes work on the box. Files wait **above the words** as chips: a 56 px thumbnail for a picture, a rounded chip (name, then a muted line:
+  "12 pages", "3,200 characters", "Only the start is used") for a document, a spinner while it goes up, a `destructive` border and the engine's sentence when it is refused, a round remove button on the corner. After sending they sit
+  above the person's message, right-aligned. Everything is a token; at 320 px the chips wrap.
+  **Versions:** a message with more than one version (an edit, or an answer made again) shows "2 / 3" with previous and next arrows under it; the person's
+  messages have a pencil ("Edit message") that opens an edit box in place (Cancel, Send), and replies have "Answer again". **The confirm card** (`ConfirmActionCard`) is an
+  `accent` panel, 28 rem wide at most: the action's name, a line, up to four parameters as plain text, then "Go ahead" and "Not now"; once answered it says what happened.
   Everything is a token; at 320 px nothing scrolls sideways (a wide table, code block or diagram scrolls inside its own frame).
+- **Notebook chat (the same thread primitives, ADR-0082 stage CU4; behind the same Labs switch):** the old layout kept: a slim bar above the thread
+  (conversation switcher, "New chat"), then, while empty, the add-sources screen or the guide and one line ("Ask a question about your sources. Answers cite the passages
+  they came from."), then the box. **The box** is the assistant's with two differences: it is named and says "Ask about your sources", and its bar starts with the
+  **scope** ("12 of 14 sources, 2 being read", `text-xs`, `muted-foreground`, truncates) and carries the model chip before Stop and Send; no options bar. An answer is
+  the assistant's plain text with, above it, one `text-xs` line with a search icon ("Searched 3 sources, found 5 passages"), while it waits "Reading your sources…",
+  and **citation pills**: `[n]` becomes a small round `primary`-tint button (20 px, `font-semibold`, `text-2xs`) named "Source n: title", which opens the passage in the
+  sources pane; a label that is not one of the answer's passages stays as text, and a label inside code or a link is left alone. Under a finished answer: Copy (icon) and
+  "Save as note". There is no Edit, "Answer again" or version picker (a notebook's conversation is a line). A model's thinking is the same closed "Thinking" `<details>`
+  under the answer. A failure is the same `Notice` with Try again or Choose a model.
 - **Teach (training):** a front door with three cards; three steps (add examples, check, train) then "use it"; the app picks the
   settings and shows "Quick" or "Better" and a time (ADR-0073).
 - **Agent:** a goal box, starting points, a live feed, approvals as inline cards, Stop always visible, the result saved as a report.

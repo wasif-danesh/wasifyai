@@ -24,7 +24,7 @@ class Side:
             raise VoiceEngineError("model_missing", f"{self.name}: not ready")
         return SimpleNamespace(id=f"{self.name}-model", engine=self.engine)
 
-    async def speak(self, model, text, voice, options):
+    async def speak(self, model, text, voice, options, *, beside=False):
         self.asked.append(text)
         return self.name
 

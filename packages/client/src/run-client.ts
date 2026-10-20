@@ -2,6 +2,9 @@ import { type ParsedEvent, parseSse } from "./sse";
 import { HttpError, type Transport, errorMessage } from "./transport";
 
 export type SongInput = { idea: string; genre?: string; mood?: string };
+/** The window's answer to a `confirm_action` card (ADR-0071): a clear yes, or no; `expired` = the person went on without answering. */
+export type ConfirmAnswer = { approved: boolean; expired?: boolean };
+
 export type Approval = {
   action: "approve" | "regenerate";
   title?: string;
@@ -80,7 +83,12 @@ export function createRunClient(transport: Transport) {
     },
 
     /** Answer a run's interrupt (approve, edit) and follow it on. */
-    resumeRun(runId: string, value: Approval, signal: AbortSignal, onEvent: OnEvent) {
+    resumeRun(
+      runId: string,
+      value: Approval | ConfirmAnswer,
+      signal: AbortSignal,
+      onEvent: OnEvent,
+    ) {
       return stream(
         `/runs/${runId}/resume`,
         { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ value }), signal },

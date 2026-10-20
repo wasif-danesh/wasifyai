@@ -31,6 +31,7 @@ from wasifyai_platform_sdk import Identity, VoiceModel, parse_voice_model
 
 from wasifyai_api.desktop_fit import (
     Machine,
+    Need,
     assess_fit,
     need_declared,
     physical_memory_bytes,
@@ -358,16 +359,28 @@ class ModelsService:
         return None
 
     def reclaimable_bytes(self) -> int:
-        """Memory the app's own resident model holds: free to whatever is loaded next."""
+        """Memory the app's own resident models hold: free to whatever is loaded next."""
         slot = self.slot
         if slot is None or not slot.resident_owner:
             return 0
-        owner = {"image": self.sidecar, "chat": self.llama, "audio": self.audio}.get(
-            slot.resident_owner
-        )
-        if owner is self.audio and owner is not None:
-            owner = owner.server
-        return process_rss_bytes(getattr(owner, "pid", None)) if owner is not None else 0
+        owners = {"image": self.sidecar, "chat": self.llama, "audio": self.audio}
+        total = 0
+        for name in slot.resident_owners:  # the resident model and the small ones beside it
+            owner = owners.get(name)
+            if owner is not None and owner is self.audio:
+                owner = owner.server
+            total += process_rss_bytes(getattr(owner, "pid", None)) if owner is not None else 0
+        return total
+
+    async def fits_beside(self, need_bytes: int, resident_bytes: int) -> bool:
+        """Do a resident model of `resident_bytes` and a small one of `need_bytes` fit in memory
+        together? The ordinary check (ADR-0063) on their sum, where the resident one's memory counts
+        as free for it (it stays). Unknown sizes say no, so the small one takes the slot instead."""
+        if need_bytes <= 0 or resident_bytes <= 0:
+            return False
+        machine = await asyncio.to_thread(lambda: read_machine(resident_bytes))
+        fit = assess_fit(Need(resident_bytes + need_bytes, estimate=True), machine)
+        return fit.verdict == "fits"
 
     async def machine(self) -> Machine:
         """The computer's memory now (a few commands are run: not on the event loop)."""

@@ -2,3 +2,6 @@ id: wasifyai-assistant
 capabilities:
   # the model that answers; on the desktop the person's chosen local model serves every text binding
   text.chat: { provider: litellm, model: default-chat }
+# a picture attached to a message (ADR-0083 CO2): checked, cleaned and re-encoded like every upload (ADR-0035)
+uploads:
+  image: { max_bytes: 10485760 }

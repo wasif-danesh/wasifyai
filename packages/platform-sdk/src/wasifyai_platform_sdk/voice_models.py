@@ -905,6 +905,7 @@ class SpeechResult:
     voice: str | None
     load_s: float  # time spent before the model answered (0 when it was already loaded)
     elapsed_s: float
+    displaced: str | None = None  # whose model was unloaded to make room (read aloud, ADR-0083)
 
 
 @dataclass(frozen=True)
@@ -960,6 +961,7 @@ class TranscriptResult:
     seconds: float  # length of the audio
     model_id: str
     elapsed_s: float
+    displaced: str | None = None  # whose model was unloaded to make room (dictation, ADR-0083)
 
 
 class SpeechEngine(Protocol):
@@ -975,8 +977,17 @@ class SpeechEngine(Protocol):
         ...
 
     async def speak(
-        self, model: VoiceModel, text: str, voice: str | None, options: dict[str, Any]
-    ) -> SpeechResult: ...
+        self,
+        model: VoiceModel,
+        text: str,
+        voice: str | None,
+        options: dict[str, Any],
+        *,
+        beside: bool = False,
+    ) -> SpeechResult:
+        """Speak `text`. `beside`: a short passage read aloud in the chat, which may keep the model
+        in memory next to the chat model when the two fit (the engine's slot decides)."""
+        ...
 
     async def design(
         self, model: VoiceModel, text: str, description: str, options: dict[str, Any]
@@ -1006,8 +1017,11 @@ class SpeechEngine(Protocol):
         ...
 
     async def transcribe(
-        self, model: VoiceModel, wav: bytes, options: dict[str, Any]
-    ) -> TranscriptResult: ...
+        self, model: VoiceModel, wav: bytes, options: dict[str, Any], *, beside: bool = False
+    ) -> TranscriptResult:
+        """Write down a recording. `beside`: a short clip for dictation, which may keep the model
+        in memory next to the chat model when the two fit (the engine's slot decides)."""
+        ...
 
     async def separate(
         self, model: VoiceModel, request: SeparateRequest, source: Path

@@ -80,6 +80,10 @@ class FakeEngine:
         self.speech_edited: list[tuple[str, Any, tuple[int, int]]] = []
         self.lipsynced: list[tuple[str, Any, tuple[int, int], int]] = []
         self.fail_with: VoiceEngineError | None = None
+        self.beside: list[bool] = []  # did each transcription ask to stay beside the chat model
+        self.beside_speak: list[bool] = []  # the same for each read-aloud passage
+        self.words = "Hello there. Second sentence."
+        self.displaced: str | None = None
 
     def models(self, task: str | None = None) -> list[dict[str, Any]]:
         return [
@@ -101,12 +105,15 @@ class FakeEngine:
             raise VoiceEngineError("model_missing", f"{m.title} is not on this computer yet.")
         return m
 
-    async def speak(self, model, text, voice, options) -> SpeechResult:
+    async def speak(self, model, text, voice, options, *, beside=False) -> SpeechResult:
         if self.fail_with:
             raise self.fail_with
         self.spoken.append((model.id, text, voice, dict(options)))
+        self.beside_speak.append(beside)
         seconds = max(0.5, len(text) / 20)
-        return SpeechResult(wav(seconds), model.sample_rate, seconds, model.id, voice, 0.4, 0.9)
+        return SpeechResult(
+            wav(seconds), model.sample_rate, seconds, model.id, voice, 0.4, 0.9, self.displaced
+        )
 
     async def design(self, model, text, description, options) -> SpeechResult:
         if self.fail_with:
@@ -164,17 +171,18 @@ class FakeEngine:
         return LipSyncResult(b"\x00\x00\x00\x18ftypmp42" + b"0" * 32, request.voice_seconds,
                              request.fps, 640, 480, model.id, 0.5, 4.0)  # fmt: skip
 
-    async def transcribe(self, model, data, options) -> TranscriptResult:
+    async def transcribe(self, model, data, options, *, beside=False) -> TranscriptResult:
         if self.fail_with:
             raise self.fail_with
         self.transcribed.append((model.id, len(data), dict(options)))
+        self.beside.append(beside)
         return TranscriptResult(
-            "Hello there. Second sentence.",
+            self.words,
             (
                 TranscriptSegment(0.0, 1.0, "Hello there."),
                 TranscriptSegment(1.5, 3.0, "Second sentence."),
             ),
-            3.0, model.id, 0.2,
+            3.0, model.id, 0.2, self.displaced,
         )  # fmt: skip
 
 

@@ -4,6 +4,7 @@
 import { defaultRehypePlugins, defaultRemarkPlugins } from "streamdown";
 import type { StreamdownProps } from "streamdown";
 import { RELATIVE_ORIGIN, SafeLink } from "./SafeLink";
+import { LABEL_TAG, SourceLabel, labelsAsPills } from "./labels";
 
 /** A remark plugin: raw HTML in a message becomes plain text, so nothing a model writes is ever parsed as markup. */
 export function htmlAsText() {
@@ -22,6 +23,8 @@ export function htmlAsText() {
 export type MarkdownConfig = {
   /** Origins a picture in an answer may load from. None by default: the assistant's pictures come as cards, not as markdown. */
   imageOrigins?: string[];
+  /** Turn `[n]` source labels into pills the screen draws (the notebook chat); see `labels.tsx`. */
+  labels?: boolean;
 };
 
 type Harden = [(options: object) => unknown, object?];
@@ -32,7 +35,10 @@ export function hardenedProps(config: MarkdownConfig = {}): Partial<StreamdownPr
   return {
     dir: "auto", // right-to-left text is laid out right to left, per block
     linkSafety: { enabled: false }, // our own SafeLink decides; no confirmation dialog
-    components: { a: SafeLink as never },
+    components: {
+      a: SafeLink as never,
+      ...(config.labels ? { [LABEL_TAG]: SourceLabel as never } : {}),
+    },
     // a diagram: the strict level AND no HTML labels (strict alone still lets an <img> in a label load a remote picture)
     mermaid: {
       config: {
@@ -54,6 +60,8 @@ export function hardenedProps(config: MarkdownConfig = {}): Partial<StreamdownPr
           allowDataImages: false,
         },
       ],
+      // after the sanitiser and the link rules, so only text can become a label
+      ...(config.labels ? [labelsAsPills] : []),
     ] as never,
   };
 }

@@ -116,9 +116,15 @@ class HostedSpeechEngine:
         return res
 
     async def speak(
-        self, model: VoiceModel, text: str, voice: str | None, options: dict[str, Any]
+        self,
+        model: VoiceModel,
+        text: str,
+        voice: str | None,
+        options: dict[str, Any],
+        *,
+        beside: bool = False,
     ) -> SpeechResult:
-        t0 = time.monotonic()
+        t0 = time.monotonic()  # `beside` is for a local model's memory: a hosted one holds none
         body: dict[str, Any] = {
             "model": model.package, "input": text, "response_format": "wav",
             **({"voice": voice} if voice else {}),
@@ -130,9 +136,9 @@ class HostedSpeechEngine:
         return SpeechResult(res.content, rate, seconds, model.id, voice, 0.0, time.monotonic() - t0)
 
     async def transcribe(
-        self, model: VoiceModel, wav: bytes, options: dict[str, Any]
+        self, model: VoiceModel, wav: bytes, options: dict[str, Any], *, beside: bool = False
     ) -> TranscriptResult:
-        t0 = time.monotonic()
+        t0 = time.monotonic()  # `beside` is for a local model's memory: a hosted one holds none
         data = {"model": model.package, "response_format": "verbose_json"}
         if options.get("language"):
             data["language"] = str(options["language"])

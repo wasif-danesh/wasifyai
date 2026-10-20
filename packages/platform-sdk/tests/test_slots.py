@@ -151,3 +151,127 @@ async def test_lock_for_has_the_hold_the_job_processor_uses():
     lock = s.lock_for("image")
     async with lock.hold():
         assert s.holding and s.resident_owner == "image"
+
+
+# ---- a small owner beside the resident one (ADR-0083, decision 5) -------------------------------
+
+
+def sharing(answer: bool | Exception, owners=("image", "chat", "audio")):
+    u = Unloads()
+    asked: list[tuple[str, int, str]] = []
+
+    async def can_share(owner: str, need: int, resident: str) -> bool:
+        asked.append((owner, need, resident))
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    return SlotManager({o: u.make(o) for o in owners}, None, can_share), u, asked
+
+
+async def test_a_small_owner_that_fits_runs_beside_the_resident_model_and_evicts_nothing():
+    s, u, asked = sharing(True)
+    async with s.hold("chat"):
+        pass
+    async with s.hold("audio", beside_bytes=2_400_000_000) as held:
+        assert held.shared and held.displaced is None
+    assert u.calls == [] and s.resident_owner == "chat" and s.resident_owners == ["chat", "audio"]
+    assert asked == [("audio", 2_400_000_000, "chat")]
+
+
+async def test_a_small_owner_does_not_wait_for_the_model_that_is_answering():
+    s, _, _ = sharing(True)
+    answering = asyncio.Event()
+    release = asyncio.Event()
+
+    async def chat():
+        async with s.hold("chat"):
+            answering.set()
+            await release.wait()
+
+    t = asyncio.create_task(chat())
+    await answering.wait()
+    async with asyncio.timeout(1):  # would never come back if it queued behind the chat turn
+        async with s.hold("audio", beside_bytes=1) as held:
+            assert held.shared
+    release.set()
+    await t
+
+
+async def test_when_they_do_not_fit_the_small_owner_takes_the_slot_and_says_what_it_unloaded():
+    s, u, _ = sharing(False)
+    async with s.hold("chat"):
+        pass
+    async with s.hold("audio", beside_bytes=1) as held:
+        assert not held.shared and held.displaced == "chat"
+    assert u.calls == ["chat"] and s.resident_owners == ["audio"]
+
+
+async def test_a_check_that_fails_means_they_do_not_fit():
+    s, u, _ = sharing(RuntimeError("memory could not be read"))
+    async with s.hold("chat"):
+        pass
+    async with s.hold("audio", beside_bytes=1) as held:
+        assert held.displaced == "chat"
+    assert u.calls == ["chat"]
+
+
+async def test_nothing_resident_or_its_own_model_means_no_question_and_no_displacing():
+    s, u, asked = sharing(True)
+    async with s.hold("audio", beside_bytes=1) as held:
+        assert not held.shared and held.displaced is None
+    async with s.hold("audio", beside_bytes=1) as held:
+        assert not held.shared and held.displaced is None
+    assert asked == [] and u.calls == []
+
+
+async def test_an_ordinary_owner_arriving_unloads_the_small_one_beside_the_chat_model():
+    s, u, _ = sharing(True)
+    async with s.hold("chat"):
+        pass
+    async with s.hold("audio", beside_bytes=1):
+        pass
+    async with s.hold("image"):
+        assert sorted(u.calls) == ["audio", "chat"]
+        assert s.resident_owners == ["image"]
+
+
+async def test_the_chat_model_staying_resident_keeps_the_small_one_beside_it():
+    s, u, _ = sharing(True)
+    async with s.hold("chat"):
+        pass
+    async with s.hold("audio", beside_bytes=1):
+        pass
+    async with s.hold("chat"):  # the next message
+        pass
+    assert u.calls == [] and s.resident_owners == ["chat", "audio"]
+
+
+async def test_the_idle_time_unloads_both_and_a_running_dictation_finishes_first():
+    u = Unloads()
+    s = SlotManager({o: u.make(o) for o in ("chat", "audio")}, 0.05, lambda *a: _yes())
+    async with s.hold("chat"):
+        pass
+    async with s.hold("audio", beside_bytes=1):
+        await asyncio.sleep(0.02)
+    await asyncio.sleep(0.15)
+    assert sorted(u.calls) == ["audio", "chat"] and s.resident_owners == []
+
+    async with s.hold("chat"):
+        pass
+    done = []
+
+    async def dictate():
+        async with s.hold("audio", beside_bytes=1):
+            await asyncio.sleep(0.2)  # longer than the idle time
+            done.append(1)
+
+    t = asyncio.create_task(dictate())
+    await asyncio.sleep(0.01)
+    assert await s.unload_now() is True
+    assert done == [1]  # the clip was transcribed before its model went away
+    await t
+
+
+async def _yes() -> bool:
+    return True

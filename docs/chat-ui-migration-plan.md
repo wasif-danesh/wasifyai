@@ -2,7 +2,7 @@
 
 Written 2026-10-19 for ADR-0082 (Accepted for assistant-ui). The chat screens (the assistant home and conversation, and the
 notebook chat) move to `@assistant-ui/react` and `streamdown`, in stages, with the old screen kept until the new one has parity.
-**Status (2026-10-20): CU0 done; CU1 built behind the Labs switch (see "CU1 as built" below); CU2 onward not started.**
+**Status (2026-10-20): CU0 done; CU1 built behind the Labs switch (see "CU1 as built" below); CU2 built the same day (see "CU2 as built"); CU4's notebook chat and reasoning part built behind the same switch (see "CU4 as built"; switching the default and deleting the old code are still to do, one release later); CU3 (attachments, dictation, read-aloud) is built separately and is complete (see "CU3 read-aloud as built"); CU5 not started.**
 
 ## What is replaced, what stays
 
@@ -39,9 +39,9 @@ Sizes: S under a week, M one to two weeks.
 |---|---|---|---|
 | **CU0** | **Done 2026-10-20 (`docs/spikes/chat-ui-cu0.md`): ExternalStoreRuntime, 0.15.29, streamdown Go if hardened.** **Spike and decision.** Ask the owner for the dependency approvals (sizes shown). Prototype `ExternalStoreRuntime` and `LocalRuntime` against a fake engine inside a scratch app, in both the Next.js app and the Vite window. Run the checklist below. Write `docs/spikes/chat-ui-cu0.md`; pick the runtime and the version | S | A table per checklist item, the runtime and version chosen, the bundle-size delta, a go or no-go on `streamdown` |
 | **CU1** | **Built 2026-10-20, behind Labs; the owner checked it in the desktop window the same day (see "CU1 as built").** **Parity.** The new thread, composer, streaming text, markdown, stop, retry, copy; tool UIs (job card, search results) ported from `ToolCard`; the home composer and suggestions; tokens only; both apps; behind a Labs switch. Rewrite the tests around behaviour | M | The new screen passes the parity checklist (below) in the web app and the desktop window, in light, dark and phone width, and the Playwright screenshots are reviewed |
-| **CU2** | **Edit and branch, and action cards.** Server: message tree fields (additive migration and `ensure_columns`), a run's `parent_message_id`, a conversation read with the active path and sibling counts. UI: edit a message, regenerate, branch picker. The `confirm_action` card as a human-in-the-loop tool UI (with stage A2) | M | Edit and regenerate create branches that survive a reload; an approval card works and the result reaches the assistant |
-| **CU3** | **Attachments, dictation, read-aloud.** Image attachments for the multimodal model (upload hardening of ADR-0035); documents later through the notebooks reader. Dictation and read-aloud adapters on our own speech models (ADR-0066): opt-in, local, the download size shown | M | A picture can be attached and described; dictation fills the box; read-aloud speaks a reply, all locally |
-| **CU4** | **Notebook chat on the same primitives; reasoning part; switch the default and delete the old chat code** one release later | M | The notebook chat has scope chips and citation pills as before; "Thinking" shows for models that return it; the old `ChatScreen`, `ToolCard`, `markdown.tsx` are gone |
+| **CU2** | **Built 2026-10-20 (see "CU2 as built").** **Edit and branch, and action cards.** Server: message tree fields (additive migration and `ensure_columns`), a run's `parent_message_id`, a conversation read with the active path and sibling counts. UI: edit a message, regenerate, branch picker. The `confirm_action` card as a human-in-the-loop tool UI (with stage A2) | M | Edit and regenerate create branches that survive a reload; an approval card works and the result reaches the assistant |
+| **CU3** | **Done 2026-10-20: attachments (CO2) and dictation (CO4) work on both chat screens through the options bar and the same engine routes, and read-aloud speaks a reply from a button under it (see "CU3 read-aloud as built"; not yet checked in the real window or by ear).** **Attachments, dictation, read-aloud.** Image attachments for the multimodal model (upload hardening of ADR-0035); documents later through the notebooks reader. Dictation and read-aloud adapters on our own speech models (ADR-0066): opt-in, local, the download size shown | M | A picture can be attached and described; dictation fills the box; read-aloud speaks a reply, all locally |
+| **CU4** | **Notebook chat and reasoning part built 2026-10-20 behind Labs (see "CU4 as built"); still to do: switch the default and delete the old chat code** one release later. Original scope: notebook chat on the same primitives; reasoning part; switch the default and delete the old chat code | M | The notebook chat has scope chips and citation pills as before; "Thinking" shows for models that return it; the old `ChatScreen`, `ToolCard`, `markdown.tsx` are gone |
 | **CU5** | Optional: the thread list, compare mode, anything from Studio that earns its place | S | Only if wanted |
 
 ## CU1 as built (2026-10-20)
@@ -72,6 +72,79 @@ four cards), `markdown.tsx` and `useAssistantChat` are untouched and remain the 
   diagram and a long answer with Stop all worked. A person checked it, no test did.
 - **Open:** VoiceOver was not run; the web profile's Postgres and
   Redis were not available to run here (CI's integration job covers the contract).
+
+## CU2 as built (2026-10-20)
+
+- **Tree (engine).** `messages.parent_id` and `conversations.head_id` (Postgres: migration `0021_message_tree`; the desktop's SQLite file gets the columns and a chain
+  backfill the first time the store opens it, once). `ConversationStore` gained `head`, `set_head`, `path`, `leaf_of`, `set_parts`; `add_message` takes `parent_id`
+  (the head by default). The graph only ever gives the model the branch the turn is on, and a run takes `parent_message_id` and `regenerate`. Conversations written
+  before the tree read as chains. Contract: `docs/contracts/sse-events.md` ("The message tree").
+- **Tree (window).** `treeFromStored` builds the tree from the rows (one node per assistant turn, named by its first row), `begin` takes a parent and no user message
+  (answer again), `head` switches branch. `useThreadChat` has `send(text, {parentId})` (an edit is a send under the old message's parent), `regenerate`, `selectBranch`
+  (tells the engine). The thread has an edit box on the person's messages ("Edit message"), "Answer again" on replies, and a "2 / 3" version picker with arrows.
+- **Cards.** A turn that needs the person's yes parks on an `interrupt` (`confirm_action`): `run_turn` is a resumable loop (its position is in the checkpointed state;
+  an `approve` node holds the `interrupt()`), so the model is not asked again on resume. The card is stored in the tool row, so a reload shows it; the window's click goes
+  to `POST /runs/{id}/resume`; the turn continues in the same message. The card is plain text (`ConfirmActionCard`): the action's name, one line, a few parameters, "Go
+  ahead" and "Not now". Sending a message while a card waits closes it first (`expired`), so the turn is whole before the next one starts. Only a client that sends
+  `approvals: true` gets a card; the usual chat screen still gets the refusal in words. This is the first use of the card; A2's `propose_action` will use the same card.
+- **Tests.** Engine: `test_message_tree.py` (both stores, an old database file, edit, regenerate, tool turns, routes), the approval cases in `test_assistant_graph.py`
+  (park, approve, decline, move on, only a clear yes, a client without cards) and an HTTP run on the desktop profile (`test_desktop_assistant.py`). Window:
+  `chat-tree.test.ts`, `thread-tree.test.tsx`, `thread-approval.test.tsx`.
+- **Attachments (CO2, 2026-10-20)** are shown on a person's message as chips (`attachments/AttachmentChip.tsx`; the thread reads them from the message's own data, not from its text), and the box's files are handed to `Composer` as an `attach` prop. CU3 moves them onto assistant-ui's attachment adapters later without changing the engine routes.
+- **Not done:** the web app's server-rendered `/chat/[id]` still reads the branch on screen only; edit and the version picker were not run in the real window (WKWebView) or
+  with VoiceOver; the Postgres migration was written but not run against a Postgres here (CI's integration job covers it); A2's `propose_action`, and the setting that lets
+  a person choose "ask first" for making things, are still on hold.
+
+## CU4 as built (2026-10-20)
+
+The notebook chat now has a twin on the same primitives, behind the same Labs switch ("Try the new chat"; `useChatNext`). `NotebookWorkspace` picks
+`NotebookChat` (the default, untouched apart from moving `CitationPill` to its own file) or the lazy `NotebookChatNext` (`packages/ui/src/notebook/NotebookChatNext.tsx`,
+the same props, so nothing else moved). Where each part lives:
+
+- **The runtime.** `useLinearRuntime` in `thread/use-chat-runtime.ts` (still the only file that imports the runtime API): a chain of messages with send and Stop and nothing
+  else (no `onEdit`, `onReload` or branch switching, so the library offers none). `NotebookChatNext` turns `AskedMessage` into `ChatMessage` once per object, so a message that
+  did not change keeps its identity between tokens.
+- **Shared files, small optional additions.** `ThreadEnv` gained `linear` (hides Edit, "Answer again" and the version picker), `pending` (what a waiting answer says: "Reading
+  your sources…"), `lead(id)` (the search line above an answer), `extras(id)` ("Save as note" beside Copy) and `renderLabel(id, n)`; `Composer` gained `label`, `placeholder`,
+  `start` (the scope) and `chip` (the model chip). Without them nothing changes for the assistant.
+- **Citation pills in streamdown.** `thread/markdown/labels.tsx`: with `labels` set, a rehype plugin that runs **after** the sanitiser and the link rules turns `[n]` in text into a
+  `<source-label>` element, which streamdown renders as the screen's pill (through `LabelContext`). Because it runs last, raw HTML a model writes (`<source-label n="1">`) is
+  still text, and a label inside code or a link is left alone. The markdown safety test is unchanged and green; `notebook-next.test.tsx` has the notebook's own cases.
+- **Reasoning ("Thinking").** `askReducer` folds a `reasoning` event into `AskedMessage.reasoning`; the thread shows the same closed `Reasoning` details as the assistant. The notebook
+  graph now forwards `ChatChunk.reasoning` as a `reasoning` event (it ignored it before). It is **not stored** (a reload of an old conversation shows no thinking), not part of
+  the reply and never sent back to the model. The notebook has no Thinking switch (the engine asks the model not to think, ADR-0078), so it shows only for a model that
+  thinks anyway; a switch for the notebook is a small follow-up if wanted.
+- **Kept as they were.** The notebook run client (`useNotebookChat`, re-attach after a lost connection, scope as `document_ids`), scope label, the passage viewer
+  (`onOpenCitation`), the guide, the draft seed, the add-sources screen as the empty state, the model chip, the conversation switcher and "New chat", "Save as note".
+- **Weight.** The notebook's new chat is a lazy chunk (assistant-ui and the thread are shared with the assistant's chunk); the first-screen budget of
+  `pnpm chat:bundle-check` is unchanged (196 KB gzip against 330).
+- **Tests.** `notebook/notebook-next.test.tsx` (the notebook's chat behaviours against the new screen, thinking, the markdown rules, and the workspace with Labs on and off);
+  `client/notebooks.test.ts` (reasoning); `products/wasifyai-notebooks/tests/test_notebooks_chat.py` (thinking is streamed apart and not stored);
+  `apps/web/e2e/notebook-chat-next.spec.ts` (pill, search line, scope, thinking, retry, right to left at 320 px, light and dark, and a picture).
+- **Not done:** switching the default and deleting `NotebookChat`, the old `ChatScreen`, `ToolCard`, `markdown.tsx` (one release after the switch becomes the default; `CitationPill`
+  already lives in its own file); VoiceOver and the real desktop window (WKWebView) were not run; the thinking is not stored.
+
+## CU3 read-aloud as built (2026-10-20)
+
+A speaker button under each assistant reply speaks it with our own speech model. Report with measurements: `docs/spikes/composer-co0.md`, "What CU3 read-aloud built".
+
+- **Engine.** `POST /products/wasifyai-voice/read-aloud` (`wasifyai_voice/routes.py`, text handling in `wasifyai_voice/read_aloud.py`; contract in `docs/contracts/sse-events.md`). Body `{text, part}`; the answer is
+  one spoken passage (a base64 WAV) with `part`, `parts`, `truncated`, `displaced`. The reply's markdown becomes plain words (code blocks, addresses, tags, citations, table rules and control or bidirectional
+  characters are dropped), is cut at sentence ends into passages (first about 300 characters, the rest at most 600, at most 8), and nothing is stored: no creation, library row, search entry, usage row, file or log
+  of the words. `SpeechEngine.speak` gained a keyword `beside` (the same light-owner rule as dictation); `SpeechResult` gained `displaced`.
+- **Window.** `packages/ui/src/chat/read-aloud/`: `useReadAloud` (state: one reply at a time, the next passage is asked for while the current one plays, Stop aborts the request and the sound, leaving the screen
+  does the same), `ReadAloudButton` (inside the action row of the new thread's `AssistantMessage`), `ReadAloudBar` (under the old screen's `Bubble`), `ReadAloudNotice` (the setup card, a problem or a note under the
+  reply), `player.ts` (one audio element, unlocked inside the click because WebKit lets a page play only after a click; each sound is a blob address released at once). The control comes from
+  `composerOptions.readAloud`, which `AssistantHome` builds from `voice.models("speak")` and the runtime (`readAloudReadiness` in `packages/client`) and which both chat screens read the same way. It is never played
+  by itself, and there is no setting that makes it so (open question 4 below stays "opt-in").
+- **Setup.** With no voice installed the first press shows a card with the model's name, licence, source host, the languages it speaks, the size (the voice plus the runtime when that is missing) and one
+  "Download" button with "Not now"; nothing is fetched before the click (the same handshake as dictation's, `getSpeechModel`). On the web there is no download, so the button appears only when the hosted engine
+  lists a text-to-speech model. **The voice is Kokoro 82M (Apache-2.0, 190 MB on disk, 0.9 GB in memory, English only).** It is the only local model whose recommended task is `speak`; nothing was downloaded here.
+- **Model slot.** Read aloud holds the same `audio` owner as dictation with `beside_bytes` = the catalogue's 1 GB, so the existing `can_share` rule applies unchanged (speech beside chat). Sums computed with the real
+  fit rule: this Mac, a 32 GB Mac and a 16 GB Mac with about 4 GB free keep the voice beside the chat model; a 16 GB Mac with 0.5 GB free, and an 8 GB Mac, unload the chat model for a moment and the window says so.
+- **Not done / not verified:** by-ear checks of the real voice on a real reply (Kokoro is not installed on this Mac, and the owner has not yet said yes to the 190 MB), the real window (WKWebView), VoiceOver, a language
+  other than English (Kokoro lists only `en-us` and `en-gb`; text in another language would be spoken badly, and the card says which languages the voice speaks), a reply read while the chat model is answering the next
+  message (the slot lets the voice finish first), and the web profile against a real hosted voice.
 
 ## CU0 checklist (each item gets a measured answer)
 

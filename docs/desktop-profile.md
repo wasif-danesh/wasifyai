@@ -243,6 +243,7 @@ to `@wasifyai/ui` when it is migrated; delete the shim when nothing uses it.
 | Create / Edit | `pages/Create.tsx` | wraps the shared `ImageWorkspace` with this window's model chip and setup notices |
 | Notebooks | `pages/Notebooks.tsx`, `pages/Notebook.tsx`, `notebook-setup.ts` (the web app mounts the same `NotebookList` and `NotebookWorkspace`, with `NotebookPlaceProvider` saying where documents live) | View Notebooks (cards, search by title and by what is inside, rename, delete, the setup card) and one notebook (the shared `NotebookWorkspace`) |
 | Library | `pages/Library.tsx` | wraps the shared `ImageLibrary`; "Make it again" sends the recipe to Create (`Shell.tsx` holds it until the route changes) |
+| Attach (chat box) | `packages/ui/src/chat/attachments/`, `services/api/.../attachments.py`, `products/wasifyai-assistant/wasifyai_assistant/attachments.py` | pictures (the model's projector, `--mmproj`) and documents (read to text on the engine); see the CO2 section of `docs/spikes/composer-co0.md` |
 | Models, Settings | `pages/Models.tsx`, `pages/Settings.tsx` | the model panel; the image engine card, updates, restart and repair; "Searching the web" (`SearchSettings` in `packages/ui`: service, permission, key; the engine side is `web_search.py`, keys encrypted with `secrets.key` in the data folder, ADR-0083) |
 
 On macOS the title bar is an overlay (`titleBarStyle: Overlay`, traffic lights at 18,22) and the menu leaves
@@ -540,6 +541,22 @@ silently (the recommended one is only the starting choice).
 Recordings: the runtime reads WAV only. Other formats are converted with ffmpeg when it is on the computer, else with
 macOS's `afconvert`; with neither the person is told to install ffmpeg or save a WAV. Bundling ffmpeg is an open
 question for the owner (licence and size).
+
+### Dictation: the Mic in the chat box (ADR-0083, stage CO4)
+
+The chat box writes down what the person says. The window records the microphone (`getUserMedia` and an `AudioWorklet` loaded from `/recorder-worklet.js`, a file of the app itself because the window's content policy
+refuses a blob) and averages it to a 16 kHz mono 16-bit WAV in the page; `POST /products/wasifyai-voice/dictation` returns the text and keeps nothing (WAV only, 10 MB and 5 minutes at most, a silent clip refused;
+`wasifyai_voice/dictation.py`). The model slot has a **light-owner rule**: the speech model stays in memory beside the chat model when `ModelsService.fits_beside` says the two fit (the chat server's memory plus the
+speech model's catalogue figure, against the fit check's budget), and dictation does not wait for a chat answer that is being written; when they do not fit, dictation unloads the chat model and the window says so.
+The shell has `src-tauri/Info.plist` (`NSMicrophoneUsageDescription`) and `Entitlements.plist` (`com.apple.security.device.audio-input`, used when the app is signed); Cargo does not watch `Info.plist`, so after
+editing it run `touch build.rs`. With no speech model the first press shows a setup card (name, licence, source, size, one download). Details and what was not verified: `docs/spikes/composer-co0.md`, "What CO4 built".
+
+### Read aloud: the speaker under a reply (ADR-0083, stage CU3)
+
+A button under each assistant reply speaks it with the local speech model (Kokoro 82M, Apache-2.0, 190 MB on disk, English only). It is opt-in (only a press starts it), local and keeps nothing: `POST /products/wasifyai-voice/read-aloud`
+(`wasifyai_voice/read_aloud.py`) turns the reply into plain words, cuts it into passages and speaks the one asked for, and the window asks for the next while the first plays. The model slot treats it as dictation's twin: the same
+`audio` owner with `beside_bytes` = 1 GB, so the voice stays beside the chat model when `fits_beside` says the two fit. With no voice the first press shows a setup card (name, licence, source, languages, size, one download). Details and what was not verified:
+`docs/spikes/composer-co0.md`, "What CU3 read-aloud built".
 
 ### Your voices and the audio overview (stage V2)
 

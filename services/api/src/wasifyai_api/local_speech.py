@@ -101,8 +101,16 @@ class CombinedSpeechEngine:
 
     # ---- the work ----------------------------------------------------------------------------
 
-    async def speak(self, model: VoiceModel, text: str, voice: str | None, options: dict[str, Any]):
-        return await self._engine(model).speak(model, text, voice, options)
+    async def speak(
+        self,
+        model: VoiceModel,
+        text: str,
+        voice: str | None,
+        options: dict[str, Any],
+        *,
+        beside: bool = False,
+    ):
+        return await self._engine(model).speak(model, text, voice, options, beside=beside)
 
     async def design(self, model: VoiceModel, text: str, description: str, options: dict[str, Any]):
         return await self._engine(model).design(model, text, description, options)
@@ -123,8 +131,10 @@ class CombinedSpeechEngine:
     async def music_edit(self, model: VoiceModel, request: MusicEditRequest, source: Path):
         return await self._engine(model).music_edit(model, request, source)
 
-    async def transcribe(self, model: VoiceModel, wav: bytes, options: dict[str, Any]):
-        return await self._engine(model).transcribe(model, wav, options)
+    async def transcribe(
+        self, model: VoiceModel, wav: bytes, options: dict[str, Any], *, beside: bool = False
+    ):
+        return await self._engine(model).transcribe(model, wav, options, beside=beside)
 
     async def separate(self, model: VoiceModel, request: SeparateRequest, source: Path):
         return await self._engine(model).separate(model, request, source)

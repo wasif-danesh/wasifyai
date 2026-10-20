@@ -11,6 +11,7 @@ from wasifyai_notebooks.ingest import IngestWorker, ingest_one, original_path
 from wasifyai_notebooks.routes import Runtime
 from wasifyai_notebooks.store import NotebookStore
 from wasifyai_platform_sdk import (
+    ChatChunk,
     InMemoryUsageRecorder,
     ProviderDeps,
     RunContext,
@@ -159,6 +160,25 @@ async def test_a_question_is_searched_answered_cited_and_saved(tmp_path, ctx):
     assert [e.kind for e in rig.usage.events if e.kind == "notebooks.message"] == [
         "notebooks.message"
     ]
+
+
+async def test_a_model_that_thinks_has_its_thinking_streamed_apart_from_the_answer(
+    tmp_path, ctx, monkeypatch
+):
+    rig = Rig(tmp_path, [{"text": "unused"}])
+    await rig.add("budget.txt", BUDGET)
+
+    async def thinking_model(*_a, **_k):
+        yield ChatChunk(reasoning="The budget is in budget.txt. ")
+        yield ChatChunk(text="It is $350,000 [1].")
+
+    monkeypatch.setattr(rig.model, "chat", thinking_model)
+    state, events = await rig.ask("What is the marketing budget?")
+    thoughts = [e["text"] for e in events if e["type"] == "reasoning"]
+    assert thoughts == ["The budget is in budget.txt. "]
+    assert state["reply"] == "It is $350,000 [1]."  # the thinking is not part of the answer
+    msgs = rig.store.messages("t1", "u1", rig.nb["id"], state["conversation_id"])
+    assert "budget.txt." not in msgs[1]["text"]  # and is not stored
 
 
 async def test_the_next_question_continues_with_the_history_without_old_passages(tmp_path, ctx):

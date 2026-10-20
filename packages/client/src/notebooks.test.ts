@@ -65,6 +65,21 @@ describe("a question and its answer", () => {
     expect(s.lastSeq).toBe(5);
   });
 
+  it("keeps a model's thinking apart from the answer, and keeps the answer when it is checked", () => {
+    const s = run([
+      ev("reasoning", { node: "answer", text: "The budget is in " }, 2),
+      ev("reasoning", { node: "answer", text: "the first file." }, 3),
+      ev("token", { text: "It is $350,000." }, 4),
+      ev("done", { outputs: { status: "done", reply: "It is $350,000.", citations: [] } }, 5),
+    ]);
+    expect(s.messages[1]).toMatchObject({
+      reasoning: "The budget is in the first file.",
+      text: "It is $350,000.",
+      streaming: false,
+    });
+    expect(s.phase).toBe("idle");
+  });
+
   it("ignores other tools, and says why a question was not sent", () => {
     const s = run([ev("tool_call", { id: "x", name: "something_else", arguments: {} })]);
     expect(s.messages[1]?.searched).toBeUndefined();

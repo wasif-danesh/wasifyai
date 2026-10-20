@@ -61,6 +61,11 @@ function assistantWith(options: ChatOptions, over: Partial<AssistantApi> = {}): 
     options: vi.fn(async () => options),
     searchStatus: vi.fn(async () => status()),
     updateSearch: vi.fn(async () => status({ consented: true })),
+    setHead: vi.fn(async () => {}),
+    attach: vi.fn(async () => {
+      throw new Error("unused");
+    }),
+    unattach: vi.fn(async () => {}),
     list: vi.fn(async () => []),
     get: vi.fn(),
     rename: vi.fn(),

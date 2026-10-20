@@ -170,7 +170,7 @@ async def delete_upload(
         raise HTTPException(404, "upload not found") from None
     store: UploadStore = state.uploads
     record = None
-    for ext in ("png", "wav"):
+    for ext in ("png", "wav", "txt"):
         record = await store.find(
             identity.tenant_id, product_id, identity.user_id, f"uploads/{uid}.{ext}"
         )

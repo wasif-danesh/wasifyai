@@ -35,6 +35,9 @@
   "bundle": {
     "active": true,
     "targets": ["app", "dmg", "nsis", "deb", "appimage"],
+    "macOS": {
+      "entitlements": "Entitlements.plist"
+    },
     "license": "AGPL-3.0-only",
     "copyright": "Copyright 2026 Wasif Danesh",
     "icon": [

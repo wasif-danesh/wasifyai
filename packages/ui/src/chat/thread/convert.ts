@@ -1,6 +1,6 @@
 // Our messages (`ChatMessage`, folded from the engine's events) into the shape assistant-ui reads. Pure, and free of the
 // library's runtime: `use-chat-runtime.ts` is the only file that hands the result to it.
-import type { ChatMessage, ChatPart } from "@wasifyai/client";
+import type { AttachmentInfo, ChatMessage, ChatPart, ToolApproval } from "@wasifyai/client";
 
 type Tool = Extract<ChatPart, { type: "tool" }>;
 
@@ -8,7 +8,13 @@ type Tool = Extract<ChatPart, { type: "tool" }>;
 export type ToolResult = { status: Tool["status"]; output: Record<string, unknown> };
 
 /** A running job's progress, handed to the tool UI beside the call (UI only, not part of the result). */
-export type ToolArtifact = { progress?: number; jobStatus?: string; queuePosition?: number };
+export type ToolArtifact = {
+  progress?: number;
+  jobStatus?: string;
+  queuePosition?: number;
+  /** the card that waits for the person's answer, or was answered (ADR-0071) */
+  card?: ToolApproval;
+};
 
 export type LikePart =
   | { type: "text"; text: string }
@@ -28,6 +34,8 @@ export type LikeMessage = {
   id: string;
   role: "user" | "assistant";
   content: LikePart[];
+  /** what the person attached to this message (the thread shows it under their words) */
+  metadata?: { custom: { attachments: AttachmentInfo[] } };
   status?:
     | { type: "running" }
     | { type: "requires-action"; reason: "interrupt" }
@@ -42,6 +50,7 @@ function toolPart(p: Tool): LikePart {
       ? { progress: p.progress, jobStatus: p.jobStatus, queuePosition: p.queuePosition }
       : undefined;
   const a = p.approval;
+  const artifact = progress || a ? { ...progress, ...(a ? { card: a } : {}) } : undefined;
   return {
     type: "tool-call",
     toolCallId: p.id,
@@ -51,7 +60,7 @@ function toolPart(p: Tool): LikePart {
       ? { result: { status: p.status as ToolResult["status"], output: p.output ?? {} } }
       : {}),
     isError: p.status === "error",
-    ...(progress ? { artifact: progress } : {}),
+    ...(artifact ? { artifact } : {}),
     ...(a
       ? {
           approval: {
@@ -66,18 +75,26 @@ function toolPart(p: Tool): LikePart {
 
 export function toLikeMessage(m: ChatMessage): LikeMessage {
   if (m.role === "user") {
+    const files = m.parts.flatMap((p) => (p.type === "attachment" ? [p.file] : []));
     return {
       id: m.id,
       role: "user",
-      content: m.parts.map((p) => ({ type: "text", text: p.type === "text" ? p.text : "" })),
+      content: m.parts.flatMap((p): LikePart[] =>
+        p.type === "text" ? [{ type: "text", text: p.text }] : [],
+      ),
+      ...(files.length ? { metadata: { custom: { attachments: files } } } : {}),
     };
   }
   const waiting = m.parts.some((p) => p.type === "tool" && p.approval?.state === "pending");
   return {
     id: m.id,
     role: "assistant",
-    content: m.parts.map((p) =>
-      p.type === "text" || p.type === "reasoning" ? { type: p.type, text: p.text } : toolPart(p),
+    content: m.parts.flatMap((p): LikePart[] =>
+      p.type === "text" || p.type === "reasoning"
+        ? [{ type: p.type, text: p.text }]
+        : p.type === "tool"
+          ? [toolPart(p)]
+          : [],
     ),
     status: m.streaming
       ? { type: "running" }

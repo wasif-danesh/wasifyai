@@ -5,11 +5,14 @@
     POST /transcripts (multipart)                                 GET /transcripts,
     /transcripts/{id}
     GET  /transcripts/{id}/export?format=txt|srt|vtt              PATCH, DELETE /transcripts/{id}
+    POST /dictation (multipart, a 16 kHz mono WAV)                text back, nothing kept
+    POST /read-aloud (a reply's text, one passage at a time)      sound back, nothing kept
 
 Making a speech is a run of the product's graph (`/products/wasifyai-voice/runs`); transcribing a
 recording is one request, because the runtime reads it faster than it plays."""
 
 import asyncio
+import base64
 import logging
 from typing import Any
 
@@ -20,6 +23,7 @@ from wasifyai_platform_sdk import (
     RouteDeps,
     VoiceEngineError,
     VoiceRequestError,
+    check_speak,
     check_transcribe,
     process_image,
     search_text,
@@ -27,7 +31,15 @@ from wasifyai_platform_sdk import (
 from wasifyai_platform_sdk.uploads import UploadError
 from wasifyai_platform_sdk.voice_models import MAX_DESCRIPTION_CHARS, MAX_REFERENCE_TEXT_CHARS
 
-from wasifyai_voice import audio_input, audiobook, consent, export, reference
+from wasifyai_voice import (
+    audio_input,
+    audiobook,
+    consent,
+    dictation,
+    export,
+    read_aloud,
+    reference,
+)
 from wasifyai_voice.runtime import PRODUCT_ID, NotAvailable, engine_for, store_for
 from wasifyai_voice.store import NotFound, VoiceStore, new_id
 
@@ -51,6 +63,14 @@ class WordsRequest(BaseModel):
     kind: str = Field(pattern="^(track|speech)$")
     id: str = Field(min_length=1, max_length=64)
     model: str | None = Field(default=None, max_length=100)
+
+
+class ReadAloudRequest(BaseModel):
+    """A chat reply, as the model wrote it, and which passage of it to speak (0 is the first)."""
+
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(min_length=1, max_length=read_aloud.MAX_RAW_CHARS)
+    part: int = Field(default=0, ge=0, lt=read_aloud.MAX_PASSAGES)
 
 
 class PlanBook(BaseModel):
@@ -319,6 +339,89 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
             )
             raise HTTPException(status, {"code": e.code, "message": e.message}) from None
         return {"text": result.text, "seconds": round(result.seconds, 2), "model": chosen.id}
+
+    @router.post("/dictation")
+    async def dictate(
+        file: UploadFile = File(...),  # noqa: B008
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        """A short clip from the chat box's microphone, written down. Nothing is saved: the clip is
+        held in memory for this request and the answer is the text alone (no creation, no library
+        row, no search entry, no log of the words). Only a 16 kHz mono 16-bit WAV of up to five
+        minutes is read (`dictation.inspect`); the speech model may stay in memory beside the chat
+        model when the two fit (`displaced` names whose model was unloaded when they did not)."""
+        try:
+            engine = engine_for(deps.state)
+        except NotAvailable as e:
+            raise HTTPException(503, str(e)) from None
+        data = await file.read(dictation.MAX_BYTES + 1)
+        try:
+            clip = await asyncio.to_thread(dictation.inspect, data)
+            chosen = engine.resolve("transcribe", None)
+            result = await engine.transcribe(
+                chosen, data, check_transcribe(chosen, None), beside=True
+            )
+        except dictation.DictationError as e:
+            raise HTTPException(422, {"code": e.code, "message": str(e)}) from None
+        except VoiceRequestError as e:
+            raise HTTPException(422, {"code": e.code, "message": e.message}) from None
+        except VoiceEngineError as e:
+            status = 409 if e.code in ("runtime_missing", "model_missing", "no_model") else 502
+            raise HTTPException(status, {"code": e.code, "message": e.message}) from None
+        text = result.text.strip()
+        if not text:
+            raise HTTPException(
+                422,
+                {
+                    "code": "no_speech",
+                    "message": "No words were caught. Speak closer to it and try again.",
+                },
+            )
+        return {
+            "text": text,
+            "seconds": round(clip.seconds, 2),
+            "model": chosen.id,
+            "displaced": result.displaced,
+        }
+
+    @router.post("/read-aloud")
+    async def read_aloud_passage(
+        body: ReadAloudRequest, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """One passage of a chat reply, spoken. Nothing is saved: the text is held for this request
+        and the sound goes back in the answer (a WAV, base64), with no creation, no library row, no
+        search entry, no file and no log of the words. The text is turned into plain words and cut
+        at sentence ends (`read_aloud.passages`); ask for `part` 0, 1, 2 ... up to `parts`. The
+        speech model may stay in memory beside the chat model when the two fit (`displaced` names
+        whose model was unloaded when they did not)."""
+        try:
+            engine = engine_for(deps.state)
+        except NotAvailable as e:
+            raise HTTPException(503, str(e)) from None
+        try:
+            found = await asyncio.to_thread(read_aloud.passages, body.text)
+            if body.part >= len(found.items):
+                raise read_aloud.ReadAloudError("no_such_part", "There is no more to read.")
+            chosen = engine.resolve("speak", None)
+            text, voice, options = check_speak(chosen, found.items[body.part], None, None)
+            result = await engine.speak(chosen, text, voice, options, beside=True)
+        except read_aloud.ReadAloudError as e:
+            status = 404 if e.code == "no_such_part" else 422
+            raise HTTPException(status, {"code": e.code, "message": str(e)}) from None
+        except VoiceRequestError as e:
+            raise HTTPException(422, {"code": e.code, "message": e.message}) from None
+        except VoiceEngineError as e:
+            status = 409 if e.code in ("runtime_missing", "model_missing", "no_model") else 502
+            raise HTTPException(status, {"code": e.code, "message": e.message}) from None
+        return {
+            "audio": base64.b64encode(result.wav).decode("ascii"),
+            "part": body.part,
+            "parts": len(found.items),
+            "truncated": found.truncated,
+            "seconds": round(result.seconds, 2),
+            "model": chosen.id,
+            "displaced": result.displaced,
+        }
 
     # ---- lip sync: pictures and clips (V5) -------------------------------------------------
 

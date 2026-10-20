@@ -55,6 +55,7 @@ const StreamdownBody = memo(function StreamdownBody({
   text,
   animating,
   imageOrigins,
+  labels,
 }: MarkdownProps) {
   const { code, math, mermaid } = needs(text);
   const [plugins, setPlugins] = useState<Plugins>({ ...loaded });
@@ -72,7 +73,7 @@ const StreamdownBody = memo(function StreamdownBody({
       gone = true;
     };
   }, [code, math, mermaid]);
-  const props = useMemo(() => hardenedProps({ imageOrigins }), [imageOrigins]);
+  const props = useMemo(() => hardenedProps({ imageOrigins, labels }), [imageOrigins, labels]);
   return (
     <Streamdown
       data-markdown=""

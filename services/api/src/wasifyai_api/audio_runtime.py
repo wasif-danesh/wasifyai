@@ -51,6 +51,7 @@ from wasifyai_platform_sdk import (
     VoiceEngineError,
     VoiceModel,
 )
+from wasifyai_platform_sdk.slots import Held
 
 log = logging.getLogger(__name__)
 
@@ -643,11 +644,24 @@ class AudioEngine:
         return out
 
     async def _call(self, model: VoiceModel, path: str, **kw: Any) -> tuple[httpx.Response, float]:
+        r, load_s, _ = await self._call_held(model, path, None, **kw)
+        return r, load_s
+
+    async def _call_held(
+        self, model: VoiceModel, path: str, beside_bytes: int | None, **kw: Any
+    ) -> tuple[httpx.Response, float, Held]:
+        """`_call`, and what the slot did: with `beside_bytes` the model may stay in memory next to
+        the chat model (a small speech model, dictation), when the two fit together."""
         install = self.install
         if install is None:
             raise VoiceEngineError("runtime_missing", "The speech runtime is not set up yet.")
-        hold = self.slot.hold("audio") if self.slot is not None else contextlib.nullcontext()
-        async with hold:
+        if self.slot is None:
+            hold: Any = contextlib.nullcontext()
+        elif beside_bytes is None:
+            hold = self.slot.hold("audio")
+        else:
+            hold = self.slot.hold("audio", beside_bytes=beside_bytes)
+        async with hold as held:
             url = await self.server.ensure(install, self._served())
             was_loaded = (await self.server.loaded()).get(model.id, False)
             t0 = time.monotonic()
@@ -667,29 +681,40 @@ class AudioEngine:
         if r.status_code >= 300:
             log.warning("audiocpp %s -> %s %s", path, r.status_code, r.text[:300])
             raise _friendly(r.status_code, r.text)
-        return r, (0.0 if was_loaded else elapsed)
+        return r, (0.0 if was_loaded else elapsed), held or Held()
 
     async def _synthesize(
-        self, model: VoiceModel, body: dict[str, Any], voice: str | None
+        self, model: VoiceModel, body: dict[str, Any], voice: str | None, *, beside: bool = False
     ) -> SpeechResult:
         t0 = time.monotonic()
-        r, load_s = await self._call(model, "/v1/audio/speech", json={"model": model.id, **body})
+        r, load_s, held = await self._call_held(
+            model, "/v1/audio/speech", self._ram_bytes(model) if beside else None,
+            json={"model": model.id, **body},
+        )  # fmt: skip
         wav = r.content
         seconds = _wav_seconds(wav)
         if seconds <= 0:
             raise VoiceEngineError("engine_failed", "The speech model returned no audio.")
         rate = _wav_rate(wav) or model.sample_rate
-        return SpeechResult(wav, rate, seconds, model.id, voice, load_s, time.monotonic() - t0)
+        return SpeechResult(
+            wav, rate, seconds, model.id, voice, load_s, time.monotonic() - t0, held.displaced
+        )
 
     async def speak(
-        self, model: VoiceModel, text: str, voice: str | None, options: dict[str, Any]
+        self,
+        model: VoiceModel,
+        text: str,
+        voice: str | None,
+        options: dict[str, Any],
+        *,
+        beside: bool = False,
     ) -> SpeechResult:
         body: dict[str, Any] = {"input": text}
         if voice:
             body["voice"] = voice
         if options:
             body["options"] = options
-        return await self._synthesize(model, body, voice)
+        return await self._synthesize(model, body, voice, beside=beside)
 
     async def design(
         self, model: VoiceModel, text: str, description: str, options: dict[str, Any]
@@ -893,13 +918,21 @@ class AudioEngine:
                 model, req, picture, voice, {k: v for k, v in files.items() if v is not None}
             )
 
+    def _ram_bytes(self, model: VoiceModel) -> int:
+        """What the model asks for in memory, by the catalogue (about, in bytes)."""
+        entry = next((e for e in self._entries() if e.id == model.id), None)
+        return int(float(getattr(entry, "approx_ram_gb", 0) or 3) * 1_000_000_000)
+
     async def transcribe(
-        self, model: VoiceModel, wav: bytes, options: dict[str, Any]
+        self, model: VoiceModel, wav: bytes, options: dict[str, Any], *, beside: bool = False
     ) -> TranscriptResult:
         t0 = time.monotonic()
         files = {"file": ("audio.wav", wav, "audio/wav")}
         data = {"model": model.id, **{k: str(v) for k, v in options.items()}}
-        r, _ = await self._call(model, "/v1/audio/transcriptions/details", files=files, data=data)
+        r, _, held = await self._call_held(
+            model, "/v1/audio/transcriptions/details",
+            self._ram_bytes(model) if beside else None, files=files, data=data,
+        )  # fmt: skip
         try:
             j = r.json()
         except ValueError:
@@ -912,8 +945,9 @@ class AudioEngine:
         seconds = float(j.get("timing", {}).get("audio_duration_ms", 0)) / 1000
         text = str(j.get("text", ""))
         return TranscriptResult(
-            text.strip(), tuple(_segments(words, text)), seconds, model.id, time.monotonic() - t0
-        )
+            text.strip(), tuple(_segments(words, text)), seconds, model.id,
+            time.monotonic() - t0, held.displaced,
+        )  # fmt: skip
 
     async def stop(self) -> bool:
         return await self.server.stop()

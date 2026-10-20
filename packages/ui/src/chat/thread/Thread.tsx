@@ -6,7 +6,7 @@ import { cn } from "../../cn";
 import { Button } from "../../components/button";
 import { Notice } from "../../components/notice";
 import type { ComposerOption } from "../composer-options";
-import { Composer, ExampleChip } from "./Composer";
+import { type AttachBox, Composer, ExampleChip } from "./Composer";
 import { AssistantMessage, UserMessage } from "./Message";
 import { Announcer } from "./announcer";
 
@@ -22,6 +22,8 @@ export type ThreadProps = {
   blockedReason?: string | null;
   /** The options bar of the box (Thinking, and in time Attach, Search and Mic). */
   options?: ComposerOption[];
+  /** Files attached to the next message: their chips, the picker, and what takes dropped and pasted files (ADR-0083). */
+  attach?: AttachBox;
   /** Title bar actions (rename, delete). */
   actions?: ReactNode;
   title?: string;
@@ -48,6 +50,7 @@ export function Thread({
   notices,
   blockedReason,
   options,
+  attach,
   actions,
   title,
   error,
@@ -105,7 +108,7 @@ export function Thread({
       {/* the same element in both states, so typing is never interrupted when the first answer starts */}
       <div key="composer" className={cn("grid shrink-0 gap-4 px-6", empty ? "" : "pt-2 pb-5")}>
         {notices ? <div className="mx-auto w-full max-w-3xl">{notices}</div> : null}
-        <Composer empty={empty} blockedReason={blockedReason} options={options} />
+        <Composer empty={empty} blockedReason={blockedReason} options={options} attach={attach} />
       </div>
 
       {empty ? (

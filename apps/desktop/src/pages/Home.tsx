@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // The home screen is the assistant (ADR-0057): the shared home (packages/ui) with this window's setup notice.
 import { AssistantHome, Button, Notice, useChatNext } from "@wasifyai/ui";
-import { assistantApi, client, voiceApi } from "../api";
+import { assistantApi, client, modelsApi, voiceApi } from "../api";
 import { images } from "../images";
 import { type Route, openChat, openNotebook } from "../router";
+import { getSpeechModel } from "../speech-model";
 import { useChatModel } from "../useChatModel";
 
 export function HomePage({
@@ -50,6 +51,8 @@ export function HomePage({
       assistant={assistantApi}
       images={images}
       tracks={(id) => voiceApi.track(id)}
+      voice={voiceApi}
+      getSpeechModel={(id, onProgress) => getSpeechModel(modelsApi, id, onProgress)}
       conversationId={conversationId}
       screen={next ? "next" : "classic"}
       onAdopt={onAdopt}

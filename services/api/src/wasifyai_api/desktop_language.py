@@ -56,6 +56,10 @@ class Selection:
     path: str | None = None  # kind == "file"
     note: str = ""  # something the person should know about this model, if anything
     thinking: bool = False  # the model's chat template can think (the window offers a switch)
+    # pictures (ADR-0083, CO2): a file model reads them with its projector (an `mmproj` file next
+    # to it, passed to llama-server); a model of a tool says so itself or is not known (None)
+    projector: str | None = None
+    vision: bool | None = False
     tool: str | None = None  # kind == "server"
     url: str | None = None
     model: str | None = None
@@ -81,6 +85,33 @@ async def ollama_can_think(url: str, model: str) -> bool:
     except (httpx.HTTPError, ValueError):
         return False
     return isinstance(caps, list) and "thinking" in caps
+
+
+def find_projector(model: Path) -> Path | None:
+    """The vision projector kept next to a model file (Hugging Face and LM Studio keep it in the
+    same folder, named `mmproj-...gguf`). The 16-bit one is preferred: it is the one measured."""
+    try:
+        found = sorted(
+            p for p in model.parent.iterdir() if p.is_file() and p.name.lower().startswith("mmproj")
+            and p.name.lower().endswith(".gguf")
+        )  # fmt: skip
+    except OSError:
+        return None
+    if not found:
+        return None
+    return next((p for p in found if "f16" in p.name.lower()), found[0])
+
+
+async def ollama_has(url: str, model: str, ability: str) -> bool:
+    """Does this model of a running Ollama list `ability` (`thinking`, `vision`) among its
+    abilities at `/api/show`? Any failure is "no"."""
+    try:
+        async with httpx.AsyncClient(timeout=3) as http:
+            res = await http.post(url.rstrip("/") + "/api/show", json={"model": model})
+        caps = res.json().get("capabilities") if res.status_code == 200 else None
+    except (httpx.HTTPError, ValueError):
+        return False
+    return isinstance(caps, list) and ability in caps
 
 
 def language_machine(base: Machine, backend: str | None) -> Machine:
@@ -109,6 +140,7 @@ class LanguageService:
         self.slot: Any = None  # the SlotManager, set when the worker is built
         self.selected: Selection | None = None
         self.probe_ollama = ollama_can_think  # a test can stand in for the running Ollama
+        self.probe_vision = lambda url, model: ollama_has(url, model, "vision")
 
     # ---- the choice ----------------------------------------------------------------------
 
@@ -123,7 +155,11 @@ class LanguageService:
             return
         # what a model can do is read again each start: a choice saved before the window knew about
         # thinking, or a model that was updated since, must not keep an old answer
-        self.selected = replace(self.selected, thinking=await self._can_think(self.selected))
+        self.selected = replace(
+            self.selected,
+            thinking=await self._can_think(self.selected),
+            **await self._can_see(self.selected),
+        )
 
     async def _save(self) -> None:
         value = self.selected.public() if self.selected else {}
@@ -144,6 +180,7 @@ class LanguageService:
             if has_template is False
             else ""
         )
+        projector = await asyncio.to_thread(find_projector, path)
         self.selected = Selection(
             "file",
             name,
@@ -151,6 +188,8 @@ class LanguageService:
             path=str(path),
             note=note,
             thinking=can_think(template),
+            projector=str(projector) if projector else None,
+            vision=projector is not None,
         )
         await self._save()
         await self.llama.stop()  # the next request starts the new model
@@ -164,11 +203,33 @@ class LanguageService:
             return await self.probe_ollama(sel.url, sel.model)
         return False
 
+    async def _can_see(self, sel: Selection) -> dict[str, Any]:
+        """Can the chosen model read pictures? A file: its projector is next to it (looked for again
+        at each start, so one added later is found). A model of Ollama: Ollama says so. Another
+        tool's model: not known (None), and the picture is tried."""
+        if sel.kind == "file" and sel.path:
+            projector = await asyncio.to_thread(find_projector, Path(sel.path))
+            return {
+                "projector": str(projector) if projector else None,
+                "vision": projector is not None,
+            }
+        if sel.kind == "server" and sel.tool == "ollama" and sel.url and sel.model:
+            return {"projector": None, "vision": await self.probe_vision(sel.url, sel.model)}
+        return {"projector": None, "vision": None}
+
     async def select_server(self, tool: str, url: str, model: str, context: int) -> None:
         sel = Selection(
-            "server", f"{model} ({tool})", _context(context), tool=tool, url=url, model=model
+            "server",
+            f"{model} ({tool})",
+            _context(context),
+            tool=tool,
+            url=url,
+            model=model,
+            vision=None,
         )
-        self.selected = replace(sel, thinking=await self._can_think(sel))
+        self.selected = replace(
+            sel, thinking=await self._can_think(sel), **await self._can_see(sel)
+        )
         await self._save()
         await self.llama.stop()
 
@@ -208,7 +269,13 @@ class LanguageService:
             if self.slot is not None:
                 await stack.enter_async_context(self.slot.hold("chat"))
             try:
-                url = await self.llama.ensure_running(Path(sel.path), context=sel.context)
+                has_projector = bool(sel.projector) and await asyncio.to_thread(
+                    Path(sel.projector or "").is_file
+                )
+                with_pictures = ("--mmproj", str(sel.projector)) if has_projector else ()
+                url = await self.llama.ensure_running(
+                    Path(sel.path), context=sel.context, extra_args=with_pictures
+                )
             except LlamaError as exc:
                 raise RunError(f"language_{exc.code}", exc.message) from None
             yield Route(url + "/v1", "", external=False)

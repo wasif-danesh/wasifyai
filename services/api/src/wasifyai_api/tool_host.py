@@ -78,6 +78,15 @@ class ApiToolHost:
             ctx.tenant_id, ctx.user_id, query.strip()[:300], max(1, min(limit, 8))
         )
 
+    def can_see(self) -> bool:
+        """Can the chat model in use read a picture? (False only when it is known it cannot: a
+        model whose abilities are not known is given the picture to try.)"""
+        language = getattr(self._app_state(), "desktop_language", None)
+        if language is None:
+            return True  # the hosted model decides; the provider says if it cannot
+        chosen = language.selected
+        return chosen is not None and chosen.vision is not False
+
     async def web_search(self, query: str, limit: int = 5) -> Any:
         web = getattr(self._app_state(), "web", None)
         if web is None:

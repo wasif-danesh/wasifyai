@@ -4,10 +4,12 @@ import {
   ActionBarPrimitive,
   AuiIf,
   MessagePrimitive,
+  type ReasoningMessagePartProps,
   type TextMessagePartProps,
   useAuiState,
 } from "@assistant-ui/react";
 import { Check, Copy } from "lucide-react";
+import { Reasoning } from "../Reasoning";
 import { useThreadEnv } from "./env";
 import { Markdown } from "./markdown/Markdown";
 import { UnknownTool, toolUIs } from "./tool-uis";
@@ -31,10 +33,15 @@ function AssistantText({ text }: TextMessagePartProps) {
   return <Markdown text={text} animating={animating} imageOrigins={imageOrigins} />;
 }
 
+function AssistantReasoning({ text, status }: ReasoningMessagePartProps) {
+  return <Reasoning text={text} running={status.type === "running"} />;
+}
+
 const NOTHING = () => null;
 
 const ASSISTANT_PARTS = {
   Text: AssistantText,
+  Reasoning: AssistantReasoning,
   Empty: NOTHING,
   tools: { by_name: toolUIs as never, Fallback: UnknownTool },
 };
@@ -51,13 +58,22 @@ export function UserMessage() {
 
 const ACTION = "rounded-md p-2 text-muted-foreground hover:bg-accent";
 
+function PendingNote() {
+  const { thinkingOn } = useThreadEnv();
+  return (
+    <output className="text-muted-foreground">
+      {thinkingOn ? "Thinking… this takes longer than usual." : "Thinking…"}
+    </output>
+  );
+}
+
 export function AssistantMessage() {
   return (
     <MessagePrimitive.Root className="grid grid-cols-1 gap-3">
       <AuiIf
         condition={(s) => s.message.status?.type === "running" && s.message.parts.length === 0}
       >
-        <output className="text-muted-foreground">Thinking…</output>
+        <PendingNote />
       </AuiIf>
       <MessagePrimitive.Parts components={ASSISTANT_PARTS} />
       <ActionBarPrimitive.Root hideWhenRunning className="-mt-1 flex">

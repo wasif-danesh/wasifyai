@@ -10,6 +10,8 @@ import {
   MusicToolCard,
   NotebookSearchCard,
   type ToolCardProps,
+  WebReadCard,
+  WebSearchCard,
 } from "../../ToolCard";
 import type { ToolArtifact, ToolResult } from "../convert";
 import { useThreadEnv } from "../env";
@@ -49,6 +51,8 @@ export const toolUIs = {
   make_music: adapt(MusicToolCard),
   search_creations: adapt(LibrarySearchCard),
   search_notebooks: adapt(NotebookSearchCard),
+  web_search: adapt(WebSearchCard),
+  web_read: adapt(WebReadCard),
   confirm_action: ConfirmActionCard,
 } as const;
 

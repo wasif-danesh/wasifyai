@@ -24,6 +24,11 @@ class FakeActionHost:
         self.notebook_error: str | None = None
         self.hits: list[dict[str, Any]] = []
         self.passages: list[dict[str, Any]] = []
+        self.web_searches: list[str] = []
+        self.web_reads: list[str] = []
+        self.web_response: Any = None  # a `web.SearchResponse`
+        self.web_page: Any = None  # a `web.WebPage`
+        self.web_error: Exception | None = None
         self.fact_values: dict[str, Any] = {"disk_free_bytes": 10_000_000_000}
         self._deps = deps
         self._scripts: dict[str, Script] = {}
@@ -56,6 +61,18 @@ class FakeActionHost:
     async def search_creations(self, query: str, limit: int = 6) -> list[dict[str, Any]]:
         self.searches.append(query)
         return self.hits[:limit]
+
+    async def web_search(self, query: str, limit: int = 5) -> Any:
+        self.web_searches.append(query)
+        if self.web_error:
+            raise self.web_error
+        return self.web_response
+
+    async def web_read(self, url: str) -> Any:
+        self.web_reads.append(url)
+        if self.web_error:
+            raise self.web_error
+        return self.web_page
 
     async def search_notebooks(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         self.notebook_searches.append(query)

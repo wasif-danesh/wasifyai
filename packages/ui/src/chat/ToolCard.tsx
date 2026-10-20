@@ -1,7 +1,7 @@
 "use client";
 
 import type { ChatPart, ImageSummary, ImagesApi } from "@wasifyai/client";
-import { BookOpen, ImageIcon, Music, Search } from "lucide-react";
+import { BookOpen, FileText, Globe, ImageIcon, Music, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../components/button";
 import { Spinner } from "../components/spinner";
@@ -280,6 +280,120 @@ export function NotebookSearchCard({ tool, images, tracks, onOpenCreation }: Too
   );
 }
 
+/** A web address that is safe to link to: http or https only, never a script or a file. */
+function webHref(url: unknown): string | null {
+  if (typeof url !== "string") return null;
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A link to a page on the internet: it opens in the person's own browser, never inside the app. */
+function SourceLink({ url, children }: { url: unknown; children: string }) {
+  const href = webHref(url);
+  if (!href) return <span className="min-w-0 truncate">{children}</span>;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer nofollow"
+      data-external=""
+      className="min-w-0 truncate font-medium underline underline-offset-4"
+    >
+      {children}
+    </a>
+  );
+}
+
+/** What a search of the web found: the sources, with their sites, so the answer can be checked. */
+export function WebSearchCard({ tool }: ToolCardProps) {
+  if (tool.status === "running") {
+    return (
+      <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
+        <Spinner /> Searching the web
+      </output>
+    );
+  }
+  if (tool.status !== "ok") {
+    return (
+      <p className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+        <Globe className="size-4 shrink-0" aria-hidden="true" />
+        {String(tool.output?.message ?? "The web could not be searched.")}
+      </p>
+    );
+  }
+  const results = Array.isArray(tool.output?.results)
+    ? (tool.output.results as { title: string; url: string; site: string; snippet?: string }[])
+    : [];
+  const via = typeof tool.output?.provider_title === "string" ? tool.output.provider_title : "";
+  return (
+    <div className="grid gap-2 rounded-lg border p-3 text-sm">
+      <p className="flex items-center gap-2 font-medium">
+        <Globe className="size-4" aria-hidden="true" />
+        {results.length
+          ? `Sources from the web${via ? ` (${via})` : ""}`
+          : "Nothing found on the web"}
+      </p>
+      {results.length ? (
+        <ol className="grid list-none gap-2 p-0">
+          {results.map((r) => (
+            <li key={r.url} className="grid gap-0.5">
+              <span className="flex items-center gap-2">
+                <SourceLink url={r.url}>{r.title}</SourceLink>
+                <span className="ms-auto shrink-0 text-muted-foreground text-xs">{r.site}</span>
+              </span>
+              {r.snippet ? (
+                <span className="line-clamp-2 text-muted-foreground text-xs">{r.snippet}</span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </div>
+  );
+}
+
+/** A page the assistant read: its title and site, a link to it, and the start of what it said. */
+export function WebReadCard({ tool }: ToolCardProps) {
+  if (tool.status === "running") {
+    return (
+      <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
+        <Spinner /> Reading a web page
+      </output>
+    );
+  }
+  if (tool.status !== "ok") {
+    return (
+      <p className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+        <FileText className="size-4 shrink-0" aria-hidden="true" />
+        {String(tool.output?.message ?? "That page could not be read.")}
+      </p>
+    );
+  }
+  const o = tool.output ?? {};
+  const title = String(o.title || o.site || "Web page");
+  return (
+    <div className="grid gap-1 rounded-lg border p-3 text-sm">
+      <p className="flex items-center gap-2">
+        <FileText className="size-4 shrink-0" aria-hidden="true" />
+        <SourceLink url={o.final_url ?? o.url}>{title}</SourceLink>
+        <span className="ms-auto shrink-0 text-muted-foreground text-xs">
+          {String(o.site ?? "")}
+        </span>
+      </p>
+      {o.excerpt ? (
+        <p className="line-clamp-3 text-muted-foreground text-xs">{String(o.excerpt)}</p>
+      ) : null}
+      {o.truncated ? (
+        <p className="text-muted-foreground text-xs">Only the start of this page was read.</p>
+      ) : null}
+    </div>
+  );
+}
+
 /** A tool the assistant used, as part of its answer: a picture being made and then shown, or what a
  * search found. */
 export function ToolCard(props: ToolCardProps) {
@@ -292,6 +406,10 @@ export function ToolCard(props: ToolCardProps) {
       return <LibrarySearchCard {...props} />;
     case "search_notebooks":
       return <NotebookSearchCard {...props} />;
+    case "web_search":
+      return <WebSearchCard {...props} />;
+    case "web_read":
+      return <WebReadCard {...props} />;
     default:
       return null;
   }

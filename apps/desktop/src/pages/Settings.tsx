@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { Button, useChatNext } from "@wasifyai/ui";
+import { Button, SearchSettings, useChatNext } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
-import { discoveryApi, hubApi } from "../api";
+import { assistantApi, discoveryApi, hubApi } from "../api";
 import { engineRepair, engineRestart } from "../engine";
 import { ImageEngineCard, LanguageEngineCard, UpdateBanner } from "../parts";
 
@@ -160,6 +160,8 @@ export function SettingsPage() {
       <FindingModels />
 
       <HubSwitch />
+
+      <SearchSettings assistant={assistantApi} />
 
       <Labs />
 

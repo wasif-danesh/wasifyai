@@ -71,11 +71,13 @@ class FakeTextProvider:
         binding: CapabilityBinding,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
+        thinking: bool = False,
     ) -> AsyncIterator[ChatChunk]:
         """A scripted conversation: `defaults.turns` is a list of turns, one per call (the last one
-        repeats). A turn is `{"text": "...", "tool_calls": [{"name": ..., "arguments": {...}}]}`."""
+        repeats). A turn is `{"text": "...", "tool_calls": [{"name": ..., "arguments": {...}}],
+        "reasoning": "..."}`; the reasoning is only said when the caller asked for thinking."""
         ctx = require_context()
-        self.chats.append({"messages": messages, "tools": tools})
+        self.chats.append({"messages": messages, "tools": tools, "thinking": thinking})
         turns: list[dict[str, Any]] = binding.defaults.get("turns") or [
             {"text": str(binding.defaults.get("reply", DEFAULT_REPLY))}
         ]
@@ -83,6 +85,9 @@ class FakeTextProvider:
         self._calls["chat"] = i + 1
         turn = turns[min(i, len(turns) - 1)]
         text = str(turn.get("text", ""))
+        if thinking:
+            for w in [w for w in str(turn.get("reasoning", "")).split(" ") if w]:
+                yield ChatChunk(reasoning=w + " ")
         for w in [w for w in text.split(" ") if w]:
             yield ChatChunk(text=w + " ")
         calls = turn.get("tool_calls") or []

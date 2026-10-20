@@ -1,10 +1,11 @@
 "use client";
 
-import type { AssistantApi, ImagesApi } from "@wasifyai/client";
+import type { AssistantApi, ChatOptions, ImagesApi } from "@wasifyai/client";
 import { Pencil, Trash2 } from "lucide-react";
-import { type ReactNode, Suspense, lazy, useEffect, useState } from "react";
+import { type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { ChatScreen, type ChatScreenProps } from "./ChatScreen";
 import type { TrackLookup } from "./ToolCard";
+import type { ComposerOptionsAvailable } from "./composer-options";
 import { conversationsChanged } from "./use-conversations";
 
 export function greeting(hour: number): string {
@@ -41,6 +42,10 @@ export type AssistantHomeProps = {
   blockedReason?: string | null;
   onNeedModel?: () => void;
   onOpenCreation?: (kind: string, id: string) => void;
+  /** Take the person to Settings, where the search service and its key are chosen (ADR-0083). */
+  onOpenSettings?: () => void;
+  /** Which options of the box the chat offers; by default what the engine says the model in use can do (ADR-0083). */
+  composerOptions?: ChatScreenProps["composerOptions"];
   /** Which chat screen to show: the one built on our own components (the default) or the new one on assistant-ui (Labs). */
   screen?: "classic" | "next";
 };
@@ -59,9 +64,58 @@ export function AssistantHome({
   blockedReason,
   onNeedModel,
   onOpenCreation,
+  onOpenSettings,
+  composerOptions,
   screen = "classic",
 }: AssistantHomeProps) {
   const [title, setTitle] = useState("");
+  // what the box can offer with the model in use (a Thinking switch only for a model that can think, a Search switch
+  // only when this engine can search at all)
+  const [offered, setOffered] = useState<ChatOptions | null>(null);
+  useEffect(() => {
+    let gone = false;
+    assistant
+      .options()
+      .then((o) => !gone && setOffered(o))
+      .catch(() => {});
+    return () => {
+      gone = true;
+    };
+  }, [assistant]);
+  const allowSearch = useCallback(async () => {
+    const st = await assistant.updateSearch({ consent: true });
+    const chosen = st.providers.find((p) => p.id === st.provider);
+    setOffered((o) =>
+      o?.search
+        ? {
+            ...o,
+            search: {
+              ...o.search,
+              consented: st.consented,
+              ready: st.consented && !(chosen?.needs_key && !chosen.key_set),
+            },
+          }
+        : o,
+    );
+  }, [assistant]);
+  const engineOptions = useMemo<ComposerOptionsAvailable>(() => {
+    const s = offered?.search;
+    return {
+      thinking: offered?.thinking,
+      search: s?.available
+        ? {
+            available: true,
+            consented: s.consented,
+            ready: s.ready,
+            providerTitle: s.provider_title,
+            consentText: s.consent_text,
+            needsKey: s.needs_key,
+            onAllow: allowSearch,
+            onOpenSettings,
+          }
+        : undefined,
+    };
+  }, [offered, allowSearch, onOpenSettings]);
   // the hour is read in the browser, so a page rendered on a server says the same as the person's clock
   const [hour, setHour] = useState<number | null>(null);
   useEffect(() => setHour(new Date().getHours()), []);
@@ -134,6 +188,7 @@ export function AssistantHome({
     blockedReason,
     onNeedModel,
     onOpenCreation,
+    composerOptions: composerOptions ?? engineOptions,
     title: conversationId ? title || "Chat" : undefined,
     actions: conversationId ? (
       <>

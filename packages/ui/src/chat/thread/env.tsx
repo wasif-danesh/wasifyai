@@ -12,6 +12,8 @@ export type ThreadEnv = {
   onOpenCreation?: (kind: string, id: string) => void;
   /** origins a markdown picture may load from (none by default) */
   imageOrigins?: string[];
+  /** Thinking is on for this chat: a pending answer says it takes longer */
+  thinkingOn?: boolean;
 };
 
 const Env = createContext<ThreadEnv | null>(null);

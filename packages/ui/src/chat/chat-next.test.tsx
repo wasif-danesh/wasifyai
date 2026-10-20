@@ -21,6 +21,13 @@ function runsThat(events: ParsedEvent[], inputs: object[] = []) {
 }
 
 const assistant: AssistantApi = {
+  options: async () => ({ thinking: false }),
+  searchStatus: async () => {
+    throw new Error("unused");
+  },
+  updateSearch: async () => {
+    throw new Error("unused");
+  },
   list: async () => [],
   get: async (id) => ({
     id,

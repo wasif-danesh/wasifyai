@@ -20,6 +20,7 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
+import httpx
 from openai import AsyncOpenAI
 from wasifyai_platform_sdk import ChatChunk, RunError
 from wasifyai_platform_sdk.config import CapabilityBinding
@@ -34,7 +35,7 @@ from wasifyai_platform_sdk.usage import (
     record_safely,
 )
 
-from wasifyai_api.desktop_discovery import gguf_has_chat_template
+from wasifyai_api.desktop_discovery import can_think, gguf_chat_template
 from wasifyai_api.desktop_fit import Fit, Machine, assess_fit, need_of_language
 from wasifyai_api.llama_server import LlamaError, LlamaServer
 from wasifyai_api.safeguards import SettingsStore
@@ -54,6 +55,7 @@ class Selection:
     context: int
     path: str | None = None  # kind == "file"
     note: str = ""  # something the person should know about this model, if anything
+    thinking: bool = False  # the model's chat template can think (the window offers a switch)
     tool: str | None = None  # kind == "server"
     url: str | None = None
     model: str | None = None
@@ -67,6 +69,18 @@ class Route:
     base_url: str  # an OpenAI-compatible base, ending in /v1
     model: str  # the model name to send ("" for the app's own server: it runs one model)
     external: bool
+
+
+async def ollama_can_think(url: str, model: str) -> bool:
+    """Does this model of a running Ollama say it can think? Ollama lists a model's abilities
+    (`completion`, `tools`, `vision`, `thinking`) at `/api/show`. Any failure is "no"."""
+    try:
+        async with httpx.AsyncClient(timeout=3) as http:
+            res = await http.post(url.rstrip("/") + "/api/show", json={"model": model})
+        caps = res.json().get("capabilities") if res.status_code == 200 else None
+    except (httpx.HTTPError, ValueError):
+        return False
+    return isinstance(caps, list) and "thinking" in caps
 
 
 def language_machine(base: Machine, backend: str | None) -> Machine:
@@ -94,6 +108,7 @@ class LanguageService:
         self.discovery = discovery  # DiscoveryService: found models and running servers
         self.slot: Any = None  # the SlotManager, set when the worker is built
         self.selected: Selection | None = None
+        self.probe_ollama = ollama_can_think  # a test can stand in for the running Ollama
 
     # ---- the choice ----------------------------------------------------------------------
 
@@ -105,6 +120,10 @@ class LanguageService:
             self.selected = Selection(**saved)
         except TypeError:
             self.selected = None
+            return
+        # what a model can do is read again each start: a choice saved before the window knew about
+        # thinking, or a model that was updated since, must not keep an old answer
+        self.selected = replace(self.selected, thinking=await self._can_think(self.selected))
 
     async def _save(self) -> None:
         value = self.selected.public() if self.selected else {}
@@ -116,7 +135,8 @@ class LanguageService:
         await self.llama.stop()
 
     async def select_file(self, path: Path, name: str, context: int) -> None:
-        has_template = await asyncio.to_thread(gguf_has_chat_template, path)
+        template = await asyncio.to_thread(gguf_chat_template, path)
+        has_template = None if template is None else bool(template)
         note = (
             "This file has no chat template of its own (Ollama keeps templates outside the "
             "file), so answers may look odd. A file from Hugging Face or LM Studio, or the same "
@@ -124,14 +144,31 @@ class LanguageService:
             if has_template is False
             else ""
         )
-        self.selected = Selection("file", name, _context(context), path=str(path), note=note)
+        self.selected = Selection(
+            "file",
+            name,
+            _context(context),
+            path=str(path),
+            note=note,
+            thinking=can_think(template),
+        )
         await self._save()
         await self.llama.stop()  # the next request starts the new model
 
+    async def _can_think(self, sel: Selection) -> bool:
+        """Can the chosen model think when asked? A file: its chat template takes the switch. A
+        model of Ollama: Ollama says so. Another tool's model: not known, so no switch."""
+        if sel.kind == "file" and sel.path:
+            return can_think(await asyncio.to_thread(gguf_chat_template, Path(sel.path)))
+        if sel.kind == "server" and sel.tool == "ollama" and sel.url and sel.model:
+            return await self.probe_ollama(sel.url, sel.model)
+        return False
+
     async def select_server(self, tool: str, url: str, model: str, context: int) -> None:
-        self.selected = Selection(
+        sel = Selection(
             "server", f"{model} ({tool})", _context(context), tool=tool, url=url, model=model
         )
+        self.selected = replace(sel, thinking=await self._can_think(sel))
         await self._save()
         await self.llama.stop()
 
@@ -245,19 +282,44 @@ class LocalTextProvider:
                     UsageEvent.for_context(ctx, LLM_OUTPUT_TOKENS, out_tokens, "tokens", **meta),
                 )
 
+    def _thinking_fields(self, external: bool, thinking: bool) -> dict[str, Any] | None:
+        """The request fields that switch thinking, for the model in use. The app's own
+        llama-server: the chat template's switch. A model of Ollama that can think: `think`
+        (honoured by Qwen3 and Gemma 4 style models) and `reasoning_effort` (the only switch of
+        gpt-oss, which always thinks, a little at "low": 0.7 s against 12 s for a sum). Other
+        tools' models: left alone."""
+        if not external:
+            return {"chat_template_kwargs": {"enable_thinking": thinking}}
+        sel = self._language.selected
+        if sel is not None and sel.tool == "ollama" and sel.thinking:
+            return {"think": thinking, "reasoning_effort": "medium" if thinking else "low"}
+        return None
+
     async def chat(
         self,
         capability: str,
         binding: CapabilityBinding,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
+        thinking: bool = False,
     ) -> AsyncIterator[ChatChunk]:
-        """A conversation turn on the chosen model, with the tools a graph offers it."""
+        """A conversation turn on the chosen model, with the tools a graph offers it. The app's
+        own llama-server is told whether to think, per request (a model that thinks does so by
+        default, which costs a thousand tokens for "what is 17 times 23"); a model of another tool
+        is left as it is, and its thinking, if it sends any, is passed on."""
         async with self._language.session() as route:
             label = self._language.selected.name if self._language.selected else ""
             client = AsyncOpenAI(base_url=route.base_url, api_key="none", max_retries=0)
+            extra_body = self._thinking_fields(route.external, thinking)
             async for chunk in stream_chat(
-                client, route.model, messages, tools, self._usage, capability, label
+                client,
+                route.model,
+                messages,
+                tools,
+                self._usage,
+                capability,
+                label,
+                extra_body=extra_body,
             ):
                 yield chunk
 

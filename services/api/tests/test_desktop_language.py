@@ -58,10 +58,20 @@ class H(http.server.BaseHTTPRequestHandler):
         n = int(self.headers.get("content-length", "0"))
         req = json.loads(self.rfile.read(n) or b"{}")
         said = f"[{model}] " + req["messages"][-1]["content"]
+        kwargs = req.get("chat_template_kwargs")
+        think = bool(kwargs and kwargs.get("enable_thinking"))
+        if kwargs is not None and not think:
+            said = "[told not to think] " + said
         if req.get("stream"):
             self.send_response(200)
             self.send_header("content-type", "text/event-stream")
             self.end_headers()
+            if think:  # llama.cpp names the thinking field `reasoning_content`
+                for word in ("hmm,", "let", "me", "see"):
+                    chunk = {"id": "c", "object": "chat.completion.chunk", "created": 0,
+                             "model": "m", "choices": [{"index": 0, "delta":
+                                                        {"reasoning_content": word + " "}}]}
+                    self.wfile.write(("data: " + json.dumps(chunk) + "\n\n").encode())
             for word in said.split(" "):
                 chunk = {"id": "c", "object": "chat.completion.chunk", "created": 0, "model": "m",
                          "choices": [{"index": 0, "delta": {"content": word + " "}}]}
@@ -381,3 +391,148 @@ def test_try_it_asks_the_chosen_model_and_says_what_is_missing(tmp_path):
         assert r.json()["text"] == "[m.gguf] hello there" and r.json()["seconds"] >= 0
         # stop it on the loop that started it, and say it is stopped
         assert c.post("/desktop/language-engine/stop").json() == {"stopped": True}
+
+
+# ---- thinking (ADR-0083, stage CO1) -----------------------------------------------------------
+
+
+def gguf_with_template(path: Path, template: str) -> Path:
+    """A valid header whose only keys are the architecture and a chat template."""
+
+    def s(v: str) -> bytes:
+        b = v.encode()
+        return len(b).to_bytes(8, "little") + b
+
+    kvs = (
+        s("general.architecture") + (8).to_bytes(4, "little") + s("qwen35")
+        + s("tokenizer.chat_template") + (8).to_bytes(4, "little") + s(template)
+    )  # fmt: skip
+    path.write_bytes(
+        b"GGUF" + (3).to_bytes(4, "little") + (0).to_bytes(8, "little") + (2).to_bytes(8, "little")
+        + kvs
+    )  # fmt: skip
+    return path
+
+
+async def test_a_model_whose_template_takes_the_thinking_switch_is_flagged(tmp_path):
+    from wasifyai_api.desktop_discovery import can_think, gguf_chat_template
+
+    svc, llama = await make(tmp_path)
+    try:
+        thinks = gguf_with_template(
+            tmp_path / "thinks.gguf", "{% if enable_thinking %}<think>{% endif %}"
+        )
+        assert gguf_chat_template(thinks) == "{% if enable_thinking %}<think>{% endif %}"
+        await svc.select_file(thinks, "Thinks", 4096)
+        assert svc.selected is not None and svc.selected.thinking is True
+        assert svc.selected.public()["thinking"] is True  # what the window reads
+
+        plain = gguf_with_template(tmp_path / "plain.gguf", "{{ messages }}")
+        await svc.select_file(plain, "Plain", 4096)
+        assert svc.selected is not None and svc.selected.thinking is False
+        await svc.select_server("lmstudio", "http://127.0.0.1:1234", "some-model", 8192)
+        assert svc.selected is not None and svc.selected.thinking is False  # not ours to switch
+    finally:
+        await llama.close()
+    assert can_think(None) is False and can_think("") is False
+
+
+async def test_the_app_tells_its_own_model_whether_to_think_and_passes_its_thinking_on(
+    tmp_path, ctx
+):
+    svc, llama = await make(tmp_path)
+    provider = LocalTextProvider(svc, InMemoryUsageRecorder())
+    binding = CapabilityBinding(provider="litellm", model="chat")
+    messages = [{"role": "user", "content": "hi"}]
+    try:
+        await svc.select_file(gguf(tmp_path), "Demo", 4096)
+        off = [c async for c in provider.chat("text.chat", binding, messages, None, False)]
+        assert "".join(c.text for c in off).startswith("[told not to think]")
+        assert not any(c.reasoning for c in off)
+        on = [c async for c in provider.chat("text.chat", binding, messages, None, True)]
+        assert "".join(c.reasoning for c in on).strip() == "hmm, let me see"
+        assert not "".join(c.text for c in on).startswith("[told not to think]")
+    finally:
+        await llama.close()
+
+
+def fake_ollama(abilities: dict[str, list[str]]):
+    """A tiny Ollama: `/api/show` lists what each model can do."""
+    import http.server
+    import threading
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            n = int(self.headers.get("content-length", "0"))
+            model = json.loads(self.rfile.read(n) or b"{}").get("model")
+            known = model in abilities
+            body = json.dumps(
+                {"capabilities": abilities[model]} if known else {"error": "not found"}
+            ).encode()
+            self.send_response(200 if known else 404)
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format, *args):  # noqa: A002
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_port}"
+
+
+async def test_ollama_models_that_can_think_get_the_switch_and_a_saved_choice_is_read_again(
+    tmp_path, ctx
+):
+    server, url = fake_ollama(
+        {"gpt-oss:20b": ["completion", "tools", "thinking"], "plain": ["completion"]}
+    )
+    try:
+        svc, llama = await make(tmp_path)
+        await svc.select_server("ollama", url, "gpt-oss:20b", 8192)
+        assert svc.selected is not None and svc.selected.thinking is True
+        await svc.select_server("ollama", url, "plain", 8192)
+        assert svc.selected.thinking is False
+        await svc.select_server("ollama", url, "missing", 8192)
+        assert svc.selected.thinking is False  # Ollama does not know it: no switch
+
+        # a choice saved before the window knew about thinking is read again when the app starts
+        store = InMemorySettingsStore()
+        await store.put(
+            "desktop.language",
+            {"kind": "server", "name": "gpt-oss:20b (ollama)", "context": 8192, "path": None,
+             "note": "", "tool": "ollama", "url": url, "model": "gpt-oss:20b"},
+            "window",
+        )  # fmt: skip
+        again = LanguageService(store, llama)
+        await again.load()
+        assert again.selected is not None and again.selected.thinking is True
+        await llama.close()
+    finally:
+        server.shutdown()
+
+
+async def test_the_switch_is_sent_the_way_each_kind_of_model_takes_it(tmp_path):
+    svc, llama = await make(tmp_path)
+    provider = LocalTextProvider(svc, InMemoryUsageRecorder())
+    server, url = fake_ollama({"gpt-oss:20b": ["thinking"]})
+    try:
+        await svc.select_file(gguf(tmp_path), "Demo", 4096)
+        assert provider._thinking_fields(False, True) == {
+            "chat_template_kwargs": {"enable_thinking": True}
+        }
+        assert provider._thinking_fields(False, False) == {
+            "chat_template_kwargs": {"enable_thinking": False}
+        }
+        await svc.select_server("ollama", url, "gpt-oss:20b", 8192)
+        assert provider._thinking_fields(True, True) == {
+            "think": True,
+            "reasoning_effort": "medium",
+        }
+        assert provider._thinking_fields(True, False) == {"think": False, "reasoning_effort": "low"}
+        await svc.select_server("lmstudio", "http://127.0.0.1:1234", "m", 8192)
+        assert provider._thinking_fields(True, True) is None  # not ours to switch
+    finally:
+        server.shutdown()
+        await llama.close()

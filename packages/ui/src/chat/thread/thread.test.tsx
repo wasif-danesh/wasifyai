@@ -14,6 +14,13 @@ const ev = (event: string, seq: number, data: Record<string, unknown> = {}): Par
   ({ event, data: { run_id: "r1", seq, ...data } }) as unknown as ParsedEvent;
 
 const assistant: AssistantApi = {
+  options: async () => ({ thinking: false }),
+  searchStatus: async () => {
+    throw new Error("unused");
+  },
+  updateSearch: async () => {
+    throw new Error("unused");
+  },
   list: async () => [],
   get: async () => {
     throw new Error("unused");

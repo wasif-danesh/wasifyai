@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { cn } from "../../cn";
 import { Button } from "../../components/button";
 import { Notice } from "../../components/notice";
+import type { ComposerOption } from "../composer-options";
 import { Composer, ExampleChip } from "./Composer";
 import { AssistantMessage, UserMessage } from "./Message";
 import { Announcer } from "./announcer";
@@ -19,6 +20,8 @@ export type ThreadProps = {
   /** Setup notices (no model chosen yet, and so on). */
   notices?: ReactNode;
   blockedReason?: string | null;
+  /** The options bar of the box (Thinking, and in time Attach, Search and Mic). */
+  options?: ComposerOption[];
   /** Title bar actions (rename, delete). */
   actions?: ReactNode;
   title?: string;
@@ -44,6 +47,7 @@ export function Thread({
   examples = [],
   notices,
   blockedReason,
+  options,
   actions,
   title,
   error,
@@ -101,7 +105,7 @@ export function Thread({
       {/* the same element in both states, so typing is never interrupted when the first answer starts */}
       <div key="composer" className={cn("grid shrink-0 gap-4 px-6", empty ? "" : "pt-2 pb-5")}>
         {notices ? <div className="mx-auto w-full max-w-3xl">{notices}</div> : null}
-        <Composer empty={empty} blockedReason={blockedReason} />
+        <Composer empty={empty} blockedReason={blockedReason} options={options} />
       </div>
 
       {empty ? (

@@ -48,7 +48,17 @@ class H(http.server.BaseHTTPRequestHandler):
         has_result = any(m["role"] == "tool" for m in msgs)
         last_user = [m for m in msgs if m["role"] == "user"][-1]["content"]
         events = []
-        if req.get("tools") and not has_result and "draw" in last_user.lower():
+        think = bool((req.get("chat_template_kwargs") or {}).get("enable_thinking"))
+        if think:  # llama.cpp names the thinking field `reasoning_content`
+            for w in ("pondering ", "the ", "question"):
+                events.append(chunk({"reasoning_content": w}))
+        names = [t["function"]["name"] for t in req.get("tools") or []]
+        if "web_search" in names and not has_result and "on the web" in last_user.lower():
+            fn = {"name": "web_search", "arguments": json.dumps({"query": "red fox facts"})}
+            events.append(chunk({"tool_calls": [{"index": 0, "id": "call_w", "type": "function",
+                                                 "function": fn}]}))
+            events.append(chunk({}, "tool_calls"))
+        elif req.get("tools") and not has_result and "draw" in last_user.lower():
             def call(name, a):
                 fn = {"name": name, "arguments": a}
                 return {"tool_calls": [{"index": 0, "id": "call_1", "type": "function",
@@ -98,8 +108,12 @@ def fake_gguf(path: Path) -> None:
         b = v.encode()
         return struct.pack("<Q", len(b)) + b
 
-    kvs = s("general.architecture") + struct.pack("<I", 8) + s("llama")
-    body = b"GGUF" + struct.pack("<IQQ", 3, 1, 1) + kvs
+    template = "{% if enable_thinking is defined %}<think>{% endif %}{{ messages }}"
+    kvs = (
+        s("general.architecture") + struct.pack("<I", 8) + s("llama")
+        + s("tokenizer.chat_template") + struct.pack("<I", 8) + s(template)
+    )  # fmt: skip
+    body = b"GGUF" + struct.pack("<IQQ", 3, 1, 2) + kvs
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(body + b"\0" * (2_000_000 - len(body)))
 
@@ -300,4 +314,106 @@ def test_the_window_names_the_run_and_the_two_messages_and_the_engine_keeps_thos
         r = c.post(f"/runs/{RUN}/cancel", headers=auth())
         assert r.status_code == 200 and r.json()["status"] == "done"
         assert c.post(f"/runs/{UID}/cancel", headers=auth()).status_code == 404
+        c.post("/desktop/language-engine/stop", headers=auth())
+
+
+def test_thinking_is_offered_for_a_model_that_can_think_and_streams_only_when_asked(data_dir):
+    """ADR-0083, stage CO1, on the desktop profile: the capability, the switch, the stored part."""
+    with TestClient(create_app()) as c:
+        none = c.get("/products/wasifyai-assistant/options", headers=auth()).json()
+        assert none["thinking"] is False  # nothing chosen yet
+        choose_the_model(c)
+        assert (
+            c.get("/products/wasifyai-assistant/options", headers=auth()).json()["thinking"] is True
+        )
+
+        quiet = ask(c, "Hello, what is a teapot?")
+        assert "reasoning" not in [e for e, _ in quiet]  # off by default: told not to think
+
+        events = ask_with(c, {"input": {"text": "And a cup?", "thinking": True}})
+        thought = "".join(d["text"] for e, d in events if e == "reasoning")
+        assert thought == "pondering the question"
+        names = [e for e, _ in events]
+        assert names.index("reasoning") < names.index("token") < names.index("done")
+        said = "".join(d["text"] for e, d in events if e == "token")
+        assert "pondering" not in said  # the thinking is not part of the answer
+
+        done = events[-1][1]["outputs"]
+        stored = c.get(
+            f"/products/wasifyai-assistant/conversations/{done['conversation_id']}", headers=auth()
+        ).json()["messages"]
+        reply = stored[-1]["parts"]
+        assert [p["type"] for p in reply] == ["reasoning", "text"]
+        assert reply[0]["text"] == "pondering the question"
+        c.post("/desktop/language-engine/stop", headers=auth())
+
+
+def test_web_search_is_off_until_allowed_then_cites_the_web_and_keeps_keys_encrypted(data_dir):
+    """ADR-0083, stage CO3, on the desktop profile (SQLite): consent, a search through the
+    assistant, the card's data, the stored conversation, and the key file."""
+    from wasifyai_platform_sdk.web import DuckDuckGoProvider
+
+    base = "/products/wasifyai-assistant"
+    with TestClient(create_app()) as c:
+        choose_the_model(c)
+        web = c.app.state.web  # type: ignore[attr-defined]
+        web._ddg = DuckDuckGoProvider(  # no real search is made by a test
+            min_gap_s=0,
+            run=lambda q, n: [
+                {"title": "Red fox", "href": "https://wiki.test/fox", "body": "Foxes are small."}
+            ],
+        )
+
+        opts = c.get(f"{base}/options", headers=auth()).json()["search"]
+        assert opts["available"] is True and opts["consented"] is False and opts["ready"] is False
+        assert opts["provider"] == "duckduckgo" and "DuckDuckGo" in opts["consent_text"]
+
+        # asked to search before anything was allowed: the tool says what to do, nothing is sent
+        body = {"input": {"text": "Look up red foxes on the web", "search": True}}
+        events = ask_with(c, body)
+        result = next(d for e, d in events if e == "tool_result")
+        assert result["name"] == "web_search" and result["status"] == "error"
+        assert "off" in result["output"]["message"]
+
+        st = c.put(f"{base}/search", json={"consent": True}, headers=auth()).json()
+        assert st["consented"] is True
+        events = ask_with(c, body)
+        names = [e for e, _ in events]
+        assert names.index("tool_call") < names.index("tool_result") < names.index("done")
+        result = next(d for e, d in events if e == "tool_result")
+        assert result["status"] == "ok"
+        assert result["output"]["results"][0] == {
+            "title": "Red fox", "url": "https://wiki.test/fox", "site": "wiki.test",
+            "snippet": "Foxes are small.",
+        }  # fmt: skip
+        done = events[-1][1]["outputs"]
+        stored = c.get(f"{base}/conversations/{done['conversation_id']}", headers=auth()).json()
+        calls = [p for m in stored["messages"] for p in m["parts"] if p["type"] == "tool_call"]
+        assert calls and calls[0]["name"] == "web_search"
+
+        # without Search switched on the model is not even offered the tool
+        quiet = ask_with(c, {"input": {"text": "Look up red foxes on the web"}})
+        assert "tool_call" not in [e for e, _ in quiet]
+
+        # a key is kept encrypted, in a file only this user can read, and is never answered
+        secret = "tvly-DESKTOP-KEY-0123456789"
+        st = c.put(
+            f"{base}/search",
+            json={"provider": "tavily", "key": {"provider": "tavily", "value": secret}},
+            headers=auth(),
+        ).json()
+        assert secret not in json.dumps(st)
+        assert next(p for p in st["providers"] if p["id"] == "tavily")["key_set"] is True
+        assert st["consented"] is False  # another service: asked again
+        assert secret not in json.dumps(c.get(f"{base}/search", headers=auth()).json())
+        keyfile = data_dir / "secrets.key"
+        assert keyfile.exists() and stat.S_IMODE(keyfile.stat().st_mode) == 0o600
+        import sqlite3
+
+        raw = (
+            sqlite3.connect(data_dir / "wasifyai.db")
+            .execute("SELECT value FROM system_settings WHERE key = 'web.search'")
+            .fetchone()[0]
+        )
+        assert secret not in raw and "tavily" in raw  # saved, and not in the clear
         c.post("/desktop/language-engine/stop", headers=auth())

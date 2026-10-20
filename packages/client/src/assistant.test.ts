@@ -76,6 +76,36 @@ describe("chatReducer", () => {
     expect(tools.map((t) => t.type === "tool" && t.progress)).toEqual([0.6, undefined]);
   });
 
+  it("keeps the model's thinking apart from its answer, in order", () => {
+    const s = run([
+      { type: "submitted", text: "hi", id: "u1" },
+      ev("reasoning", { text: "The person " }),
+      ev("reasoning", { text: "said hi." }),
+      ev("token", { text: "Hello" }),
+    ]);
+    expect(s.messages[1]?.parts).toEqual([
+      { type: "reasoning", text: "The person said hi." },
+      { type: "text", text: "Hello" },
+    ]);
+  });
+
+  it("shows stored thinking where it was, and a reload looks like the stream did", () => {
+    const messages = fromStored([
+      { id: "m1", seq: 1, role: "user", created_at: "", parts: [{ type: "text", text: "hi" }] },
+      {
+        id: "m2",
+        seq: 2,
+        role: "assistant",
+        created_at: "",
+        parts: [
+          { type: "reasoning", text: "Hmm." },
+          { type: "text", text: "Hello" },
+        ],
+      },
+    ]);
+    expect(messages[1]?.parts.map((p) => p.type)).toEqual(["reasoning", "text"]);
+  });
+
   it("goes back to work on the same reply when the connection is picked up again", () => {
     const s = run([
       { type: "submitted", text: "hi", id: "u1" },
@@ -192,6 +222,43 @@ describe("fromStored", () => {
 });
 
 describe("assistant api", () => {
+  it("asks what the chat box can offer with the model in use", async () => {
+    const calls: string[] = [];
+    const api = createAssistantApi({
+      async fetch(path) {
+        calls.push(path);
+        return new Response(JSON.stringify({ thinking: true }), { status: 200 });
+      },
+    });
+    expect(await api.options()).toEqual({ thinking: true });
+    expect(calls).toEqual(["/products/wasifyai-assistant/options"]);
+  });
+
+  it("reads and changes the web search settings, sending a key but never asking for one back", async () => {
+    const calls: { path: string; init?: RequestInit }[] = [];
+    const status = {
+      provider: "duckduckgo",
+      consented: true,
+      consent_text: "x",
+      can_save_keys: true,
+      providers: [],
+    };
+    const api = createAssistantApi({
+      async fetch(path, init) {
+        calls.push({ path, init });
+        return new Response(JSON.stringify(status), { status: 200 });
+      },
+    });
+    expect((await api.searchStatus()).consented).toBe(true);
+    await api.updateSearch({ provider: "tavily", key: { provider: "tavily", value: "tvly-1" } });
+    expect(calls[0]?.path).toBe("/products/wasifyai-assistant/search");
+    expect(calls[1]?.init?.method).toBe("PUT");
+    expect(JSON.parse(calls[1]?.init?.body as string)).toEqual({
+      provider: "tavily",
+      key: { provider: "tavily", value: "tvly-1" },
+    });
+  });
+
   it("lists, reads, renames and deletes", async () => {
     const calls: { path: string; init?: RequestInit }[] = [];
     const api = createAssistantApi({

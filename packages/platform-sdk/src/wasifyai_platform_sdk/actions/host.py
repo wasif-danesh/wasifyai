@@ -22,6 +22,15 @@ class ActionHost(Protocol):
 
     async def search_notebooks(self, query: str, limit: int = 5) -> list[dict[str, Any]]: ...
 
+    async def web_search(self, query: str, limit: int = 5) -> Any:
+        """Search the web with the provider the person chose (a `web.SearchResponse`); raises
+        `web.WebError` with a sentence for the person."""
+        ...
+
+    async def web_read(self, url: str) -> Any:
+        """Read one public web page (a `web.WebPage`); raises `web.WebError`."""
+        ...
+
     async def readiness(self, need: Need) -> Readiness:
         """Whether one thing an action requires is ready here."""
         ...

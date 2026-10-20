@@ -4,6 +4,7 @@
   the first search provider. **Stage CO0 is not started** (the owner said to hold it); new dependencies (`ddgs`, `trafilatura`) and
   the downloads are asked for when CO0 starts.
 - **Date:** 2026-10-19
+- **Update 2026-10-20:** CO0 and CO1 are done, and **CO3 (Search) is built** as decision 4 describes, with these concrete choices: `ddgs` (`backend="duckduckgo"` only, one search at a time, at least 4 s apart, a refusal said in words) is the default; Ollama, Tavily, Exa and Brave Search work with the person's own key behind the same seam; consent is **per service** (choosing another asks again); keys are encrypted at rest with a key file in the app's data folder (the keychain is a later step); the web tools are offered to the model only while Search is switched on for that message; `web_read` opens only addresses the person typed or a search returned; after the web is in a chat, anything that is not a plain read stops (taint rule, and the approval card is not in this screen yet). **Still open for the owner:** nothing for CO3: the dependencies and the DuckDuckGo position were decided the same day (see "Owner decisions on CO3" below).
 - **Depends on:** ADR-0082 (chat on assistant-ui; the primitives for attachments, dictation and reasoning), ADR-0057 (the
   assistant), ADR-0068 and ADR-0071 (actions, approvals, action cards), ADR-0070 (trust and the taint rule), ADR-0066 (our
   speech runtime), ADR-0078 (Qwen3.5-9B: reads pictures, thinks by default), ADR-0056 and ADR-0063 (the model slot, will it
@@ -134,6 +135,15 @@ What exists today (checked in the repo, 2026-10-19):
 4. The light-owner rule's memory limits on 16 and 32 GB Macs.
 5. PDF and Office text extraction without the notebooks reader installed.
 6. Whether web search should be available to agents under the same consent, or have its own.
+
+## Owner decisions on CO3 (2026-10-20)
+
+**A. Dependencies: approved.** `ddgs` 9.16.0 (MIT) and `trafilatura` 2.3.1 (Apache-2.0), as pinned in `packages/platform-sdk` and locked in `uv.lock`.
+
+**B. DuckDuckGo: stays the default, the terms risk is accepted.** The owner knows that DuckDuckGo's terms do not mention automated use, offer no search API and forbid
+"displaying" the service inside another service (CO0 section 5), and that `ddgs` is an unofficial scraper DuckDuckGo can block at any time. **When it stops working, the
+app tells the person in words to add a search key in Settings** and use another service (Ollama, Tavily, Exa or Brave Search): both the "busy" and the "could not be reached" messages say so.
+Counsel has not been asked; revisit before a public release if the risk changes.
 
 ## Not in v1
 

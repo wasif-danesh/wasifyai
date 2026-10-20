@@ -59,6 +59,14 @@ export {
 } from "./video/VideoWorkspace";
 export { VideoLibrary, type VideoLibraryProps } from "./video/VideoLibrary";
 export { ChatScreen, type ChatScreenProps } from "./chat/ChatScreen";
+export {
+  ComposerOptions,
+  useComposerOptions,
+  type ComposerOption,
+  type ComposerOptionsAvailable,
+} from "./chat/composer-options";
+export { Reasoning } from "./chat/Reasoning";
+export { SearchSettings, type SearchSettingsProps } from "./chat/SearchSettings";
 export { CHAT_NEXT_KEY, readChatNext, useChatNext, writeChatNext } from "./chat/labs";
 export { AssistantHome, type AssistantHomeProps, greeting } from "./chat/AssistantHome";
 export { conversationsChanged, useConversations } from "./chat/use-conversations";

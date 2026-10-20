@@ -38,6 +38,8 @@ export type UseAssistantChatOptions = {
   conversationId?: string | null;
   /** The turn finished: the conversation now has an id and a title (a new chat gets both). */
   onConversation?: (id: string, title: string) => void;
+  /** Extra fields for the next run's input (the options of the box: `{ thinking: true }`). */
+  runInput?: Record<string, unknown>;
 };
 
 /**
@@ -49,6 +51,7 @@ export function useAssistantChat({
   api,
   conversationId,
   onConversation,
+  runInput,
 }: UseAssistantChatOptions) {
   const [state, dispatchRaw] = useReducer(chatReducer, initialChat);
   const local = useRef(state);
@@ -56,6 +59,8 @@ export function useAssistantChat({
   const lastText = useRef("");
   const notify = useRef(onConversation);
   notify.current = onConversation;
+  const extra = useRef(runInput);
+  extra.current = runInput;
 
   const dispatch = useCallback((action: Parameters<typeof chatReducer>[1]) => {
     local.current = chatReducer(local.current, action);
@@ -82,7 +87,7 @@ export function useAssistantChat({
       const ctrl = new AbortController();
       abort.current = ctrl;
       dispatch({ type: "submitted", text: message, id: `u-${Date.now()}` });
-      const input: Record<string, string> = { text: message };
+      const input: Record<string, unknown> = { ...extra.current, text: message };
       if (local.current.conversationId) input.conversation_id = local.current.conversationId;
       const resting = () => local.current.phase !== "working";
       try {

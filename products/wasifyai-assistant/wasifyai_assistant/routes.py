@@ -39,6 +39,60 @@ class ConversationList(BaseModel):
     next_before: str | None
 
 
+class SearchOptions(BaseModel):
+    """Web search as the chat box sees it (ADR-0083): whether the Search button is there, and
+    what pressing it first has to ask."""
+
+    available: bool = False  # this engine can search at all
+    consented: bool = False  # the person allowed searching with the service named below
+    ready: bool = False  # allowed, and the service has its key
+    provider: str = ""
+    provider_title: str = ""
+    consent_text: str = ""
+    needs_key: bool = False  # the chosen service needs a key that is not saved yet
+
+
+class ChatOptions(BaseModel):
+    """What the chat box can offer with the model in use (ADR-0083)."""
+
+    thinking: bool  # the model can think when asked: the box gets a Thinking switch
+    search: SearchOptions = SearchOptions()
+
+
+class SearchProviderOut(BaseModel):
+    id: str
+    title: str
+    needs_key: bool
+    key_set: bool
+    key_url: str
+    sends_to: str
+    note: str
+
+
+class SearchStatus(BaseModel):
+    provider: str
+    consented: bool
+    consent_text: str
+    can_save_keys: bool
+    providers: list[SearchProviderOut]
+
+
+class SearchKey(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    provider: str = Field(max_length=40)
+    value: str = Field(max_length=400)
+
+
+class SearchUpdate(BaseModel):
+    """A change to web search settings. Keys are written, never read back."""
+
+    model_config = ConfigDict(extra="forbid")
+    provider: str | None = Field(default=None, max_length=40)
+    consent: bool | None = None
+    key: SearchKey | None = None
+    remove_key: str | None = Field(default=None, max_length=40)
+
+
 class Rename(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: str = Field(min_length=1, max_length=120)
@@ -50,6 +104,67 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
 
     def conversations() -> ConversationStore:
         return store or SqlConversationStore(deps.engine)
+
+    @router.get("/options", response_model=ChatOptions)
+    async def chat_options(identity: Identity = Depends(deps.identity)) -> ChatOptions:
+        """Which options of the box work with the model in use: on the desktop the model the person
+        chose (its chat template takes the thinking switch); on the web the chat alias, when its
+        settings say how to switch thinking (`thinking_options`)."""
+        language = getattr(deps.state, "desktop_language", None)
+        if language is not None:
+            chosen = language.selected
+            thinking = bool(chosen and chosen.thinking)
+        else:
+            caps = (getattr(deps.state, "caps", None) or {}).get(PRODUCT_ID)
+            try:
+                binding = caps.text._bound["chat"][0] if caps is not None else None
+            except (AttributeError, KeyError):
+                binding = None
+            thinking = bool(binding and binding.defaults.get("thinking_options"))
+        return ChatOptions(thinking=thinking, search=await search_options())
+
+    async def search_options() -> SearchOptions:
+        web = getattr(deps.state, "web", None)
+        if web is None:
+            return SearchOptions()
+        st = await web.status()
+        chosen = next(p for p in st["providers"] if p["id"] == st["provider"])
+        ready = (await web.readiness()).state == "ready"
+        return SearchOptions(
+            available=True,
+            consented=st["consented"],
+            ready=ready,
+            provider=chosen["id"],
+            provider_title=chosen["title"],
+            consent_text=st["consent_text"],
+            needs_key=chosen["needs_key"] and not chosen["key_set"],
+        )
+
+    @router.get("/search", response_model=SearchStatus)
+    async def search_status(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """The web search settings: which service, whether the person allowed it, which keys are
+        saved (never the keys)."""
+        web = getattr(deps.state, "web", None)
+        if web is None:
+            raise HTTPException(404, "Web search is not available here.")
+        return await web.status()
+
+    @router.put("/search", response_model=SearchStatus)
+    async def search_update(
+        body: SearchUpdate, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        web = getattr(deps.state, "web", None)
+        if web is None:
+            raise HTTPException(404, "Web search is not available here.")
+        try:
+            return await web.update(
+                provider=body.provider,
+                consent=body.consent,
+                key=(body.key.provider, body.key.value) if body.key else None,
+                remove_key=body.remove_key,
+            )
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from None
 
     @router.get("/conversations", response_model=ConversationList)
     async def list_conversations(

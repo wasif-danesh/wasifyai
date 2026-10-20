@@ -10,6 +10,7 @@ from typing import Any
 
 from wasifyai_platform_sdk import ToolUnavailable, VoiceEngineError, require_context
 from wasifyai_platform_sdk.actions import Need, Readiness
+from wasifyai_platform_sdk.web import WebError
 
 log = logging.getLogger(__name__)
 
@@ -77,6 +78,18 @@ class ApiToolHost:
             ctx.tenant_id, ctx.user_id, query.strip()[:300], max(1, min(limit, 8))
         )
 
+    async def web_search(self, query: str, limit: int = 5) -> Any:
+        web = getattr(self._app_state(), "web", None)
+        if web is None:
+            raise WebError("search_off", "Web search is not available here.")
+        return await web.search(query, limit)
+
+    async def web_read(self, url: str) -> Any:
+        web = getattr(self._app_state(), "web", None)
+        if web is None:
+            raise WebError("search_off", "Web search is not available here.")
+        return await web.read(url)
+
     # ---- what the action executor asks (ADR-0068) --------------------------------------------
 
     @property
@@ -116,6 +129,11 @@ class ApiToolHost:
             if not here:
                 return Readiness.unavailable("Notebooks are not available here.")
             return Readiness.ready()
+        if need.kind == "web":
+            web = getattr(state, "web", None)
+            if web is None:
+                return Readiness.unavailable("Web search is not available here.")
+            return await web.readiness()
         if need.kind == "chat":
             return Readiness.ready()  # a missing chat model is reported by the run itself
         return Readiness.unavailable(f"This computer cannot check {need}.")

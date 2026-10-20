@@ -86,6 +86,13 @@ files we ship with their licences recorded; the desktop never fetches fonts from
   address is a link, no picture loads unless its origin is allowed, diagrams use the strict level with no HTML labels. Code,
   maths and diagrams load on first use and work offline. The thread itself is not a live region (it would read every chunk);
   a hidden status says "The assistant is answering" and then "Answer ready", and the finished answer is read once from a log.
+  **The options bar** (`ComposerOptions`, ADR-0083) sits inside the box, left of Stop and Send: pill buttons with an icon and a word, off by default, pressed
+  = `accent` fill and a `primary` border, 32 px high (44 px on a touch screen), each named by what it does and why it is disabled. A button is there only when
+  it can work (Thinking only for a model that can think). **Thinking** is a closed `<details>` under the answer ("Thinking", with a spinner while it
+  arrives), plain text, never markup; while a thinking answer is pending the screen says it takes longer.
+  **Search** is a pill like Thinking. The first press shows a card (`accent` fill) that names the service and what is sent and has "Allow search" and "Not now"; a service
+  that needs a key says so and opens Settings. Under an answer that used the web, **source cards** list each result: the title as a link (opens in the person's own browser;
+  only http and https are links), the site at the end of the line and a two-line snippet in `muted-foreground`.
   Everything is a token; at 320 px nothing scrolls sideways (a wide table, code block or diagram scrolls inside its own frame).
 - **Teach (training):** a front door with three cards; three steps (add examples, check, train) then "use it"; the app picks the
   settings and shows "Quick" or "Better" and a time (ADR-0073).

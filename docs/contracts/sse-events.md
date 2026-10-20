@@ -1,7 +1,7 @@
 # SSE event contract
 
 Status: **Finalised (Phase 1)**. Changes need an ADR. Additive fields of ADR-0082 (accepted 2026-10-20): `job_progress.tool_call_id`,
-the run request's `run_id`, `POST /runs/{run_id}/cancel`, and the assistant's message ids (last section). The Pydantic models in `packages/contracts` (`wasifyai_contracts/events.py`) are the source of truth;
+the run request's `run_id`, `POST /runs/{run_id}/cancel`, the `reasoning` event, and the assistant's message ids and `thinking` option (last section). The Pydantic models in `packages/contracts` (`wasifyai_contracts/events.py`) are the source of truth;
 this doc describes them. TypeScript types are generated into `packages/contracts-ts` with
 `make contracts`.
 
@@ -51,6 +51,7 @@ Every `data` object includes:
 | `node` | A graph node starts or finishes | `node`, `status` (`started` \| `completed`), `label` (human-readable) |
 | `token` | LLM output streams | `node`, `text` (delta) |
 | `interrupt` | Graph pauses for the user | `interrupt_id`, `kind` (e.g. `approve_lyrics`), `payload` (editable data) |
+| `reasoning` | A model's thinking text streams (ADR-0082 decision 6, ADR-0083); only when thinking was asked for, or the model thinks anyway | `node`, `text` (delta). Shown collapsed under "Thinking"; stored as a `reasoning` part; **never sent back to the model as context** |
 | `tool_call` | The assistant calls a tool (ADR-0057) | `id`, `name`, `arguments` (object) |
 | `tool_result` | A tool call finished | `id` (same as its `tool_call`), `name`, `status` (`ok` \| `refused` \| `error`), `output` (a small reference: an image id, search hits; never a file) |
 | `job_progress` | Media job state changes | `job_id`, `capability`, `status` (`queued` \| `running` \| `completed` \| `failed`), `queue_position?`, `progress?` (0–1), `preview_url?`, `tool_call_id?` (the assistant's `tool_call` this job belongs to; without it a client gives the progress to the last tool still running) |
@@ -114,6 +115,17 @@ data: {"run_id":"…","thread_id":"…","seq":57,"ts":"…","outputs":{"title":"
   have the same ids. A turn can store several assistant rows (one with a tool call, then the tool's result, then the answer);
   the **first** assistant row of the turn gets `client_reply_id`, and it is the id a reload shows for the reply (the window
   folds the turn's rows into one message named by its first row).
+- **`thinking`** (bool, off by default, ADR-0078): the person switched Thinking on for this turn. The engine asks a model that can think to do so (for the
+  app's own llama-server, `chat_template_kwargs {"enable_thinking": ...}` on every request, so a model that thinks by default does not unless asked). A model's
+  thinking arrives as `reasoning` events and is stored as a `reasoning` part before the text it led to; it is not part of `reply` and is not given back to the model on the next turn.
+- **`search`** (bool, off by default, ADR-0083): the person switched web Search on for this turn. Only then is the model offered `web_search` and `web_read`; their results
+  arrive as ordinary `tool_call` / `tool_result` events (`output` carries the sources, titles, sites, addresses and snippets, or `{"message": ...}` when it failed) and are stored as
+  tool parts. Web text is untrusted: after it is in a conversation, an action that is not a plain read is refused in words.
+- **`GET` and `PUT /products/wasifyai-assistant/search`** read and change the search settings: `{provider, consented, consent_text, can_save_keys, providers[]}`; a `PUT` takes any of
+  `provider`, `consent`, `key {provider, value}`, `remove_key`. A key is written and never read back (only `key_set`). `404` where the engine has no web service.
+- **`GET /products/wasifyai-assistant/options`** answers `{"thinking": bool, "search": {...}}` (`search.available` false where the engine cannot search): the Search button needs
+  `available`; pressing it asks for consent first when `consented` is false. Also `{"thinking": bool}`: whether the model in use can think (desktop: the chosen file's chat template takes
+  `enable_thinking`, or the chosen model of Ollama says `thinking` at `/api/show`; web: the chat alias declares `thinking_options`). The window shows a Thinking switch only when it is true.
 - **`done.outputs`** also carries `user_message_id` and `assistant_message_id`: the ids the two messages were stored under
   (the chosen ones, or the engine's own when none were sent, or when the chosen ones were taken).
 - **Stop** keeps the words written so far as the reply (stored under `client_reply_id` when it is the turn's first assistant

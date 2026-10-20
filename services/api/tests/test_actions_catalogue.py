@@ -294,7 +294,7 @@ def test_a_new_product_adds_its_actions_with_one_registration():
     built = build_registry(reg, served=["wasifyai-train"])
     assert "train.start" in built and "library.list" in built  # beside the platform's own
     assert "train.start" not in build_registry(reg, served=[])  # not served: not exposed
-    assert json.loads(render(built))["actions"][-1]["id"] == "train.start"
+    assert "train.start" in [a["id"] for a in json.loads(render(built))["actions"]]
 
 
 def test_the_docs_describe_how_to_add_one():

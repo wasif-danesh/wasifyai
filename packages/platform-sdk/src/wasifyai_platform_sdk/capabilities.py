@@ -37,10 +37,12 @@ class ToolCall:
 
 @dataclass
 class ChatChunk:
-    """One piece of a chat answer: a text delta, or (once, at the end) the tool calls."""
+    """One piece of a chat answer: a text delta, a delta of the model's thinking (`reasoning`, never
+    part of the answer and never sent back as context), or (once, at the end) the tool calls."""
 
     text: str = ""
     tool_calls: list[ToolCall] = field(default_factory=list)
+    reasoning: str = ""
 
 
 class TextProvider(Protocol):
@@ -50,6 +52,7 @@ class TextProvider(Protocol):
         binding: CapabilityBinding,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
+        thinking: bool = False,
     ) -> AsyncIterator[ChatChunk]: ...
 
     def stream(
@@ -108,13 +111,20 @@ class TextCapabilities:
         return provider.stream(f"text.{name}", binding, system, prompt, schema)
 
     def chat(
-        self, name: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None
+        self,
+        name: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        *,
+        thinking: bool = False,
     ) -> AsyncIterator[ChatChunk]:
         """A conversation turn: OpenAI-style `messages` (system, user, assistant, tool) and,
         optionally, tool definitions. Yields text as it streams and the model's tool calls at the
-        end. Text only: a conversation with pictures is a later step."""
+        end. `thinking` asks a model that can think to do so (off by default, ADR-0078): its
+        thinking then arrives as `reasoning` chunks. Text only: a conversation with pictures is
+        a later step."""
         binding, provider = self._get(name)
-        return provider.chat(f"text.{name}", binding, messages, tools)
+        return provider.chat(f"text.{name}", binding, messages, tools, thinking)
 
     async def complete(
         self, name: str, system: str, prompt: Prompt, schema: dict[str, Any] | None = None

@@ -12,6 +12,7 @@ export type ToolArtifact = { progress?: number; jobStatus?: string; queuePositio
 
 export type LikePart =
   | { type: "text"; text: string }
+  | { type: "reasoning"; text: string }
   | {
       type: "tool-call";
       toolCallId: string;
@@ -75,7 +76,9 @@ export function toLikeMessage(m: ChatMessage): LikeMessage {
   return {
     id: m.id,
     role: "assistant",
-    content: m.parts.map((p) => (p.type === "text" ? { type: "text", text: p.text } : toolPart(p))),
+    content: m.parts.map((p) =>
+      p.type === "text" || p.type === "reasoning" ? { type: p.type, text: p.text } : toolPart(p),
+    ),
     status: m.streaming
       ? { type: "running" }
       : waiting

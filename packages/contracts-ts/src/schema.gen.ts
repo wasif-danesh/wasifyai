@@ -296,6 +296,50 @@ export interface paths {
         patch: operations["rename_conversation_products_wasifyai_assistant_conversations__conversation_id__patch"];
         trace?: never;
     };
+    "/products/wasifyai-assistant/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Chat Options
+         * @description Which options of the box work with the model in use: on the desktop the model the person
+         *     chose (its chat template takes the thinking switch); on the web the chat alias, when its
+         *     settings say how to switch thinking (`thinking_options`).
+         */
+        get: operations["chat_options_products_wasifyai_assistant_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-assistant/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Status
+         * @description The web search settings: which service, whether the person allowed it, which keys are
+         *     saved (never the keys).
+         */
+        get: operations["search_status_products_wasifyai_assistant_search_get"];
+        /** Search Update */
+        put: operations["search_update_products_wasifyai_assistant_search_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-image/images": {
         parameters: {
             query?: never;
@@ -1646,6 +1690,26 @@ export interface components {
             /** Folder Id */
             folder_id?: string | null;
         };
+        /**
+         * ChatOptions
+         * @description What the chat box can offer with the model in use (ADR-0083).
+         */
+        ChatOptions: {
+            /**
+             * @default {
+             *       "available": false,
+             *       "consent_text": "",
+             *       "consented": false,
+             *       "needs_key": false,
+             *       "provider": "",
+             *       "provider_title": "",
+             *       "ready": false
+             *     }
+             */
+            search: components["schemas"]["SearchOptions"];
+            /** Thinking */
+            thinking: boolean;
+        };
         /** ConfirmReader */
         ConfirmReader: {
             /** Confirm Bytes */
@@ -2176,6 +2240,38 @@ export interface components {
             /** Needs Key */
             needs_key: boolean;
         };
+        /**
+         * ReasoningEvent
+         * @description A model's thinking text, as it streams (ADR-0082 decision 6, ADR-0083). Only a turn that
+         *     asked for thinking has them (or a model that thinks whatever it is asked). It is shown
+         *     collapsed under "Thinking", stored as a `reasoning` part, and never sent back to the model as
+         *     context.
+         */
+        ReasoningEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event: "reasoning";
+            /** Node */
+            node: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Seq */
+            seq: number;
+            /** Text */
+            text: string;
+            /**
+             * Thread Id
+             * Format: uuid
+             */
+            thread_id: string;
+            /** Ts */
+            ts?: string;
+        };
         /** Rename */
         Rename: {
             /** Title */
@@ -2248,6 +2344,72 @@ export interface components {
             /** Score */
             score: number;
         };
+        /** SearchKey */
+        SearchKey: {
+            /** Provider */
+            provider: string;
+            /** Value */
+            value: string;
+        };
+        /**
+         * SearchOptions
+         * @description Web search as the chat box sees it (ADR-0083): whether the Search button is there, and
+         *     what pressing it first has to ask.
+         */
+        SearchOptions: {
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
+            /**
+             * Consent Text
+             * @default
+             */
+            consent_text: string;
+            /**
+             * Consented
+             * @default false
+             */
+            consented: boolean;
+            /**
+             * Needs Key
+             * @default false
+             */
+            needs_key: boolean;
+            /**
+             * Provider
+             * @default
+             */
+            provider: string;
+            /**
+             * Provider Title
+             * @default
+             */
+            provider_title: string;
+            /**
+             * Ready
+             * @default false
+             */
+            ready: boolean;
+        };
+        /** SearchProviderOut */
+        SearchProviderOut: {
+            /** Id */
+            id: string;
+            /** Key Set */
+            key_set: boolean;
+            /** Key Url */
+            key_url: string;
+            /** Needs Key */
+            needs_key: boolean;
+            /** Note */
+            note: string;
+            /** Sends To */
+            sends_to: string;
+            /** Title */
+            title: string;
+        };
         /** SearchResponse */
         SearchResponse: {
             /** Degraded */
@@ -2257,7 +2419,33 @@ export interface components {
             /** Results */
             results: components["schemas"]["SearchHit"][];
         };
-        SseEvent: components["schemas"]["NodeEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["InterruptEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["JobProgressEvent"] | components["schemas"]["ErrorEvent"] | components["schemas"]["DoneEvent"];
+        /** SearchStatus */
+        SearchStatus: {
+            /** Can Save Keys */
+            can_save_keys: boolean;
+            /** Consent Text */
+            consent_text: string;
+            /** Consented */
+            consented: boolean;
+            /** Provider */
+            provider: string;
+            /** Providers */
+            providers: components["schemas"]["SearchProviderOut"][];
+        };
+        /**
+         * SearchUpdate
+         * @description A change to web search settings. Keys are written, never read back.
+         */
+        SearchUpdate: {
+            /** Consent */
+            consent?: boolean | null;
+            key?: components["schemas"]["SearchKey"] | null;
+            /** Provider */
+            provider?: string | null;
+            /** Remove Key */
+            remove_key?: string | null;
+        };
+        SseEvent: components["schemas"]["NodeEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["ReasoningEvent"] | components["schemas"]["InterruptEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["JobProgressEvent"] | components["schemas"]["ErrorEvent"] | components["schemas"]["DoneEvent"];
         /** TestOutcome */
         TestOutcome: {
             /**
@@ -3092,6 +3280,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_options_products_wasifyai_assistant_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatOptions"];
+                };
+            };
+        };
+    };
+    search_status_products_wasifyai_assistant_search_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchStatus"];
+                };
+            };
+        };
+    };
+    search_update_products_wasifyai_assistant_search_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SearchUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchStatus"];
                 };
             };
             /** @description Validation Error */

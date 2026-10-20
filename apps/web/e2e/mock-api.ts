@@ -223,6 +223,10 @@ export async function mockApi(
       }
       if (rest === "/guide") return json(route, { guide: null, stale: false, ready: false });
     }
+    // what the chat box can offer with the model in use: nothing extra, unless a check says the model can think
+    if (path === "/products/wasifyai-assistant/options" && method === "GET") {
+      return json(route, { thinking: false });
+    }
     if (path === "/products/wasifyai-assistant/conversations" && method === "GET") {
       return json(route, { conversations: CHATS });
     }

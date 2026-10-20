@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, SkipValidation, model_validator
 Effect = Literal["read", "make", "change", "destroy"]
 Flag = Literal["costly", "leaves_device", "needs_consent", "private"]
 Surface = Literal["assistant", "mcp"]
-NeedKind = Literal["product", "model", "runtime", "notebooks", "chat"]
+NeedKind = Literal["product", "model", "runtime", "notebooks", "chat", "web"]
 
 ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 ORIGIN_PATTERN = re.compile(r"^(window|assistant|mcp:[A-Za-z0-9][A-Za-z0-9 ._-]{0,63})$")
@@ -41,7 +41,8 @@ def surface_of(origin: str) -> Surface | None:
 class Need(BaseModel):
     """Something that must be ready before an action can run. The host says whether it is:
     `product` (a product is served here), `model` (the model of a task, for example `speak`),
-    `runtime` (what runs models, for example `lipsync`), `notebooks`, `chat` (the chat model)."""
+    `runtime` (what runs models, for example `lipsync`), `notebooks`, `chat` (the chat model),
+    `web` (web search is allowed by the person and its provider is ready)."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -66,6 +67,7 @@ def need_runtime(name: str) -> Need:
 
 NOTEBOOKS = Need(kind="notebooks")
 CHAT = Need(kind="chat")
+WEB = Need(kind="web")
 
 
 class Readiness(BaseModel):

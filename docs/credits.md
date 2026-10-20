@@ -163,7 +163,7 @@ Weights have their own licences, recorded per model in `products/*/models.yaml` 
 | mlx, mlx-lm | `ml-explore/mlx`, `ml-explore/mlx-lm` | MIT | The Mac training and serving backends behind Unsloth |
 | Hugging Face Transformers | `huggingface/transformers` | Apache-2.0 | Behind the training component |
 | Qwen3.5-9B | Qwen (Hugging Face) | Apache-2.0 | The planned default chat and agent model (0078) |
-| `ddgs` (DuckDuckGo metasearch) and `trafilatura` | `deedy5/ddgs`, `adbar/trafilatura` | MIT, Apache-2.0 | Web search and page reading for the composer (0083, on hold; not yet added) |
+| `ddgs` (DuckDuckGo metasearch) and `trafilatura` | `deedy5/ddgs`, `adbar/trafilatura` | MIT, Apache-2.0 | Web search and page reading for the composer (0083, CO3; pinned in `packages/platform-sdk`) |
 
 ## 10. Inspired by, or read as a reference
 

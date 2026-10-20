@@ -35,6 +35,39 @@ fn engine_session(engine: State<'_, Engine>) -> Result<Session, String> {
     engine.session()
 }
 
+/// Whether this is an address the window may hand to the system browser: an ordinary web address,
+/// one word with no spaces or control characters (so it is one argument and nothing else).
+fn web_address_ok(url: &str) -> bool {
+    (url.starts_with("https://") || url.starts_with("http://"))
+        && url.len() <= 2000
+        && !url.chars().any(|c| c.is_control() || c.is_whitespace())
+}
+
+/// Open a web address in the person's own browser. The window's links (a source under an answer, a
+/// key's page in Settings) go here because the window itself does not open new windows. Only http
+/// and https, and the address is passed as one argument, never through a shell.
+#[tauri::command]
+fn open_external(url: String) -> Result<(), String> {
+    if !web_address_ok(&url) {
+        return Err("only web addresses can be opened".into());
+    }
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("open");
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut c = std::process::Command::new("rundll32");
+        c.arg("url.dll,FileProtocolHandler");
+        c
+    };
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut command = std::process::Command::new("xdg-open");
+    command
+        .arg(&url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("the browser could not be opened: {e}"))
+}
+
 #[tauri::command]
 fn engine_restart(engine: State<'_, Engine>) {
     engine.restart();
@@ -187,6 +220,7 @@ fn main() {
             engine_status,
             engine_session,
             engine_restart,
+            open_external,
             engine_repair,
             component_status,
             component_install,
@@ -229,4 +263,28 @@ fn main() {
             tauri::async_runtime::block_on(engine.stop());
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::web_address_ok;
+
+    #[test]
+    fn only_ordinary_web_addresses_are_opened() {
+        assert!(web_address_ok("https://example.com/a?b=c#d"));
+        assert!(web_address_ok("http://example.com"));
+        for bad in [
+            "",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "ftp://example.com",
+            "https://exa mple.com",
+            "https://example.com\nopen -a Calculator",
+            "-a Calculator",
+            "https:",
+        ] {
+            assert!(!web_address_ok(bad), "{bad:?}");
+        }
+        assert!(!web_address_ok(&format!("https://example.com/{}", "a".repeat(2000))));
+    }
 }

@@ -31,6 +31,8 @@ export type ThreadChatOptions = {
   conversationId?: string | null;
   /** The turn finished: the conversation now has an id and a title (a new chat gets both). */
   onConversation?: (id: string, title: string) => void;
+  /** Extra fields for the next run's input (the options of the box: `{ thinking: true }`). */
+  runInput?: Record<string, unknown>;
   /** How long a lost connection is tried again (for tests; the defaults are meant for people). */
   reconnect?: Pick<FollowOptions, "attempts" | "delay">;
 };
@@ -47,6 +49,7 @@ export function useThreadChat({
   api,
   conversationId,
   onConversation,
+  runInput,
   reconnect,
 }: ThreadChatOptions) {
   const [state, dispatchRaw] = useReducer(treeReducer, initialTree);
@@ -58,6 +61,8 @@ export function useThreadChat({
   // the clients are read when a turn runs, not when the hook renders, so a new object each render is harmless
   const clients = useRef({ runs, api });
   clients.current = { runs, api };
+  const extra = useRef(runInput);
+  extra.current = runInput;
   const pacing = useRef(reconnect);
   pacing.current = reconnect;
 
@@ -113,6 +118,7 @@ export function useThreadChat({
       const userId = newId();
       const replyId = newId();
       const input: Record<string, unknown> = {
+        ...extra.current,
         text: message,
         client_message_id: userId,
         client_reply_id: replyId,

@@ -31,6 +31,17 @@ class TokenEvent(_Envelope):
     text: str
 
 
+class ReasoningEvent(_Envelope):
+    """A model's thinking text, as it streams (ADR-0082 decision 6, ADR-0083). Only a turn that
+    asked for thinking has them (or a model that thinks whatever it is asked). It is shown
+    collapsed under "Thinking", stored as a `reasoning` part, and never sent back to the model as
+    context."""
+
+    event: Literal["reasoning"] = "reasoning"
+    node: str
+    text: str
+
+
 class InterruptEvent(_Envelope):
     event: Literal["interrupt"] = "interrupt"
     interrupt_id: str
@@ -86,6 +97,7 @@ class DoneEvent(_Envelope):
 SseEvent = Annotated[
     NodeEvent
     | TokenEvent
+    | ReasoningEvent
     | InterruptEvent
     | ToolCallEvent
     | ToolResultEvent

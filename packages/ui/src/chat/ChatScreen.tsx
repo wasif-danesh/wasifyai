@@ -6,7 +6,13 @@ import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Notice } from "../components/notice";
+import { Reasoning } from "./Reasoning";
 import { ToolCard, type TrackLookup } from "./ToolCard";
+import {
+  ComposerOptions,
+  type ComposerOptionsAvailable,
+  useComposerOptions,
+} from "./composer-options";
 import { Markdown } from "./markdown";
 import { useAssistantChat } from "./use-assistant-chat";
 
@@ -37,6 +43,8 @@ export type ChatScreenProps = {
   /** Title bar actions (rename, delete). */
   actions?: ReactNode;
   title?: string;
+  /** Which options of the box this screen can offer: a Thinking switch only for a model that can think (ADR-0083). */
+  composerOptions?: ComposerOptionsAvailable;
 };
 
 function Bubble({
@@ -44,11 +52,13 @@ function Bubble({
   images,
   tracks,
   onOpenCreation,
+  thinkingOn,
 }: {
   message: ChatMessage;
   images: ImagesApi;
   tracks?: TrackLookup;
   onOpenCreation?: (kind: string, id: string) => void;
+  thinkingOn?: boolean;
 }) {
   if (message.role === "user") {
     return (
@@ -62,11 +72,22 @@ function Bubble({
   const thinking = message.streaming && message.parts.length === 0;
   return (
     <div className="grid gap-3">
-      {thinking ? <output className="text-muted-foreground">Thinking…</output> : null}
+      {thinking ? (
+        <output className="text-muted-foreground">
+          {thinkingOn ? "Thinking… this takes longer than usual." : "Thinking…"}
+        </output>
+      ) : null}
       {message.parts.map((p, n) =>
         p.type === "text" ? (
           // biome-ignore lint/suspicious/noArrayIndexKey: the parts of a message only ever grow at the end
           <Markdown key={`t${n}`} text={p.text} />
+        ) : p.type === "reasoning" ? (
+          <Reasoning
+            // biome-ignore lint/suspicious/noArrayIndexKey: the parts of a message only ever grow at the end
+            key={`r${n}`}
+            text={p.text}
+            running={message.streaming && n === message.parts.length - 1}
+          />
         ) : (
           <ToolCard
             key={p.id}
@@ -100,12 +121,15 @@ export function ChatScreen({
   onNeedModel,
   actions,
   title,
+  composerOptions,
 }: ChatScreenProps) {
+  const options = useComposerOptions(conversationId, composerOptions);
   const { state, send, stop, retry } = useAssistantChat({
     runs,
     api: assistant,
     conversationId,
     onConversation,
+    runInput: options.runInput,
   });
   const [draft, setDraft] = useState("");
   const boxId = useId();
@@ -137,6 +161,7 @@ export function ChatScreen({
         submit();
       }}
     >
+      {options.notice}
       <div className="rounded-3xl border bg-card px-5 py-3 shadow-card focus-within:ring-[3px] focus-within:ring-ring/40">
         <label htmlFor={boxId} className="sr-only">
           Message
@@ -156,20 +181,23 @@ export function ChatScreen({
             }
           }}
         />
-        <div className="mt-1 flex items-center justify-end gap-2">
-          {working ? (
-            <Button type="button" variant="outline" size="sm" onClick={stop}>
-              <Square className="size-3.5" /> Stop
-            </Button>
-          ) : null}
-          <button
-            type="submit"
-            aria-label="Send"
-            disabled={!draft.trim() || working || Boolean(blockedReason)}
-            className="grid size-10 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
-          >
-            <ArrowUp className="size-5" />
-          </button>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <ComposerOptions options={options.bar} />
+          <div className="ms-auto flex items-center gap-2">
+            {working ? (
+              <Button type="button" variant="outline" size="sm" onClick={stop}>
+                <Square className="size-3.5" /> Stop
+              </Button>
+            ) : null}
+            <button
+              type="submit"
+              aria-label="Send"
+              disabled={!draft.trim() || working || Boolean(blockedReason)}
+              className="grid size-10 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
+            >
+              <ArrowUp className="size-5" />
+            </button>
+          </div>
         </div>
       </div>
       {blockedReason ? (
@@ -217,6 +245,7 @@ export function ChatScreen({
                 images={images}
                 tracks={tracks}
                 onOpenCreation={onOpenCreation}
+                thinkingOn={options.thinking}
               />
             ))}
             {state.error ? (

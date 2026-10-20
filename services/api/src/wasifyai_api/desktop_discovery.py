@@ -191,8 +191,9 @@ def read_gguf(path: Path) -> Header | None:
     )
 
 
-def gguf_has_chat_template(path: Path) -> bool | None:
-    """Does this GGUF carry its own chat template? None when the header cannot be read.
+def gguf_chat_template(path: Path) -> str | None:
+    """The chat template a GGUF carries: its text, "" when it has none, None when the header cannot
+    be read.
 
     The template sits after the tokenizer's big lists, so this walks the whole key list (lists are
     skipped, not loaded). Ollama keeps templates outside the file, so its blobs often have none: the
@@ -210,10 +211,22 @@ def gguf_has_chat_template(path: Path) -> bool | None:
                 (vtype,) = struct.unpack("<I", f.read(4))
                 value = _gguf_value(f, vtype)
                 if key == "tokenizer.chat_template":
-                    return bool(value)
+                    return str(value or "")
     except (OSError, struct.error, ValueError):
         return None
-    return False
+    return ""
+
+
+def gguf_has_chat_template(path: Path) -> bool | None:
+    """Does this GGUF carry its own chat template? None when the header cannot be read."""
+    template = gguf_chat_template(path)
+    return None if template is None else bool(template)
+
+
+def can_think(template: str | None) -> bool:
+    """Can a model with this chat template think when asked? Templates that take the switch
+    (Qwen3 and Qwen3.5, and others) read `enable_thinking`."""
+    return bool(template) and "enable_thinking" in str(template)
 
 
 def read_safetensors_header(path: Path) -> dict[str, Any] | None:

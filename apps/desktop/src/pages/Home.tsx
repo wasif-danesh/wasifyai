@@ -56,6 +56,7 @@ export function HomePage({
       onNewChat={() => openChat(null)}
       notices={notices}
       onNeedModel={() => go("models")}
+      onOpenSettings={() => go("settings")}
       onOpenCreation={(kind, id) => {
         if (kind === "image") go("library");
         else if (kind === "notebook") openNotebook(id);

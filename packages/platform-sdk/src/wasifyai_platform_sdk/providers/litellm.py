@@ -80,7 +80,12 @@ class LiteLLMTextProvider:
         binding: CapabilityBinding,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
+        thinking: bool = False,
     ) -> AsyncIterator[ChatChunk]:
+        # What a hosted model needs to think or not is a setting of its alias:
+        #   defaults: { thinking_options: { on: {...}, off: {...} } }  (extra request fields)
+        options = binding.defaults.get("thinking_options") or {}
+        extra_body = options.get("on" if thinking else "off")
         async for chunk in stream_chat(
             self._client,
             binding.model or "",
@@ -89,6 +94,7 @@ class LiteLLMTextProvider:
             self._usage,
             capability,
             binding.model,
+            extra_body=extra_body if isinstance(extra_body, dict) else None,
         ):
             yield chunk
 
@@ -115,6 +121,16 @@ class LiteLLMTextProvider:
         return [d.embedding for d in sorted(resp.data, key=lambda d: d.index)]
 
 
+def reasoning_of(delta: Any) -> str:
+    """The thinking text in a streamed delta, whichever name the server gives it."""
+    extra = getattr(delta, "model_extra", None) or {}
+    for name in ("reasoning_content", "reasoning"):
+        value = extra.get(name) if isinstance(extra, dict) else None
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
 async def stream_chat(
     client: AsyncOpenAI,
     model: str,
@@ -123,9 +139,13 @@ async def stream_chat(
     usage: UsageRecorder,
     capability: str,
     alias: str | None,
+    extra_body: dict[str, Any] | None = None,
 ) -> AsyncIterator[ChatChunk]:
     """Stream a chat turn from an OpenAI-compatible server: text deltas as they come, then the tool
-    calls once they are complete (the API sends them in pieces). Records token usage."""
+    calls once they are complete (the API sends them in pieces). A model's thinking arrives as
+    `reasoning` chunks (llama.cpp names the field `reasoning_content`, Ollama `reasoning`).
+    `extra_body` adds fields to the request (for llama.cpp: `chat_template_kwargs`). Records token
+    usage."""
     ctx = require_context()
     in_tokens = out_tokens = 0
     calls: dict[int, dict[str, str]] = {}
@@ -133,6 +153,8 @@ async def stream_chat(
         extra: dict[str, Any] = {}
         if tools:
             extra["tools"] = tools
+        if extra_body:
+            extra["extra_body"] = extra_body
         stream = await client.chat.completions.create(
             model=model,
             stream=True,
@@ -146,6 +168,8 @@ async def stream_chat(
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
+            if thought := reasoning_of(delta):
+                yield ChatChunk(reasoning=thought)
             if delta.content:
                 yield ChatChunk(text=delta.content)
             for tc in delta.tool_calls or []:

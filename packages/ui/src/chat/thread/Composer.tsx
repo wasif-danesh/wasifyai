@@ -3,6 +3,7 @@
 import { AuiIf, ComposerPrimitive, useAui } from "@assistant-ui/react";
 import { ArrowUp, Square } from "lucide-react";
 import { Button } from "../../components/button";
+import { type ComposerOption, ComposerOptions } from "../composer-options";
 
 const MAX_CHARS = 4000;
 
@@ -14,7 +15,13 @@ const MAX_CHARS = 4000;
 export function Composer({
   empty,
   blockedReason,
-}: { empty: boolean; blockedReason?: string | null }) {
+  options = [],
+}: {
+  empty: boolean;
+  blockedReason?: string | null;
+  /** the options bar: Thinking, and in time Attach, Search and Mic (ADR-0083) */
+  options?: ComposerOption[];
+}) {
   return (
     <ComposerPrimitive.Root className="mx-auto w-full max-w-3xl">
       <div className="rounded-3xl border bg-card px-5 py-3 shadow-card focus-within:ring-[3px] focus-within:ring-ring/40">
@@ -28,20 +35,23 @@ export function Composer({
           submitMode="enter"
           className="min-h-10 w-full resize-none bg-transparent py-1 text-lg outline-none placeholder:text-muted-foreground"
         />
-        <div className="mt-1 flex items-center justify-end gap-2">
-          <AuiIf condition={(s) => s.thread.isRunning}>
-            <ComposerPrimitive.Cancel asChild>
-              <Button type="button" variant="outline" size="sm">
-                <Square className="size-3.5" /> Stop
-              </Button>
-            </ComposerPrimitive.Cancel>
-          </AuiIf>
-          <ComposerPrimitive.Send
-            aria-label="Send"
-            className="grid size-10 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
-          >
-            <ArrowUp className="size-5" />
-          </ComposerPrimitive.Send>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <ComposerOptions options={options} />
+          <div className="ms-auto flex items-center gap-2">
+            <AuiIf condition={(s) => s.thread.isRunning}>
+              <ComposerPrimitive.Cancel asChild>
+                <Button type="button" variant="outline" size="sm">
+                  <Square className="size-3.5" /> Stop
+                </Button>
+              </ComposerPrimitive.Cancel>
+            </AuiIf>
+            <ComposerPrimitive.Send
+              aria-label="Send"
+              className="grid size-10 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
+            >
+              <ArrowUp className="size-5" />
+            </ComposerPrimitive.Send>
+          </div>
         </div>
       </div>
       {blockedReason ? (

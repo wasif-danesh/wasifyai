@@ -35,6 +35,11 @@ class FakeHost:
         self.searches: list[str] = []
         self.notebook_searches: list[str] = []
         self.notebook_error: str | None = None
+        self.web_searches: list[str] = []
+        self.web_reads: list[str] = []
+        self.web_response: Any = None  # a `web.SearchResponse`
+        self.web_page: Any = None  # a `web.WebPage`
+        self.web_error: Exception | None = None
         self.passages: list[dict[str, Any]] = [
             {"notebook_id": "nb-1", "notebook": "Budget", "document_id": "d-1",
              "title": "plan.md", "text": "The launch budget is 40,000 dollars."}
@@ -68,6 +73,18 @@ class FakeHost:
 
     def facts(self) -> dict[str, Any]:
         return {}
+
+    async def web_search(self, query: str, limit: int = 5) -> Any:
+        self.web_searches.append(query)
+        if self.web_error:
+            raise self.web_error
+        return self.web_response
+
+    async def web_read(self, url: str) -> Any:
+        self.web_reads.append(url)
+        if self.web_error:
+            raise self.web_error
+        return self.web_page
 
     async def search_notebooks(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         self.notebook_searches.append(query)

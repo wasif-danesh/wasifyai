@@ -337,6 +337,8 @@ def create_app(
             notebooks_here = desktop_profile or getattr(app.state, "notebooks_web", None)
             if notebooks_here and "wasifyai-notebooks" in served:
                 tools.add("search_notebooks")
+            if getattr(app.state, "web", None) is not None:
+                tools.update({"web_search", "web_read"})
             return tools
 
         # The action catalogue and its one executor (ADR-0068): the assistant runs its tools
@@ -501,6 +503,9 @@ def create_app(
             app.state.audio = desktop.audio  # the speech runtime (ADR-0066); products reach it here
             app.state.desktop_language = desktop.language
             app.state.desktop_hub = desktop.hub
+            if desktop.web is not None:  # web search: off until the person allows it (ADR-0083)
+                desktop.web.usage = recorder
+                app.state.web = desktop.web
             # notebooks keep their library under the app's data folder
             app.state.desktop_dir = desktop.settings.desktop_dir
             app.state.products_dir = Path(desktop.settings.products_dir)

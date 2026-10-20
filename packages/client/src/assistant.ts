@@ -16,6 +16,8 @@ export type ConversationSummary = {
 /** A stored message part (the engine's own shape). */
 export type StoredPart =
   | { type: "text"; text: string }
+  /** the model's thinking (ADR-0083); shown collapsed, never given back to the model */
+  | { type: "reasoning"; text: string }
   | { type: "tool_call"; id: string; name: string; arguments: Record<string, unknown> }
   | {
       type: "tool_result";
@@ -36,7 +38,54 @@ export type StoredMessage = {
 
 export type Conversation = ConversationSummary & { messages: StoredMessage[] };
 
+/** Web search as the chat box sees it (ADR-0083): whether there is a Search button, and what pressing it must ask. */
+export type SearchOptions = {
+  /** this engine can search at all */
+  available: boolean;
+  /** the person allowed searching with the service named below */
+  consented: boolean;
+  /** allowed, and the service has its key */
+  ready: boolean;
+  provider: string;
+  provider_title: string;
+  consent_text: string;
+  /** the chosen service needs a key that is not saved yet */
+  needs_key: boolean;
+};
+
+/** What the chat box can offer with the model in use (ADR-0083). */
+export type ChatOptions = { thinking: boolean; search?: SearchOptions };
+
+export type SearchProvider = {
+  id: string;
+  title: string;
+  needs_key: boolean;
+  key_set: boolean;
+  key_url: string;
+  sends_to: string;
+  note: string;
+};
+
+/** The web search settings. A key is written, never read back: only whether one is saved. */
+export type SearchStatus = {
+  provider: string;
+  consented: boolean;
+  consent_text: string;
+  can_save_keys: boolean;
+  providers: SearchProvider[];
+};
+
+export type SearchUpdate = {
+  provider?: string;
+  consent?: boolean;
+  key?: { provider: string; value: string };
+  remove_key?: string;
+};
+
 export type AssistantApi = {
+  options(): Promise<ChatOptions>;
+  searchStatus(): Promise<SearchStatus>;
+  updateSearch(update: SearchUpdate): Promise<SearchStatus>;
   list(limit?: number): Promise<ConversationSummary[]>;
   get(id: string): Promise<Conversation>;
   rename(id: string, title: string): Promise<ConversationSummary>;
@@ -52,6 +101,14 @@ export function createAssistantApi(transport: Transport): AssistantApi {
     return (await res.json()) as T;
   }
   return {
+    options: () => json<ChatOptions>(`/products/${ASSISTANT_PRODUCT}/options`),
+    searchStatus: () => json<SearchStatus>(`/products/${ASSISTANT_PRODUCT}/search`),
+    updateSearch: (update) =>
+      json<SearchStatus>(`/products/${ASSISTANT_PRODUCT}/search`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(update),
+      }),
     async list(limit = 30) {
       const page = await json<{ conversations: ConversationSummary[] }>(`${base}?limit=${limit}`);
       return page.conversations;
@@ -85,6 +142,8 @@ export type ToolApproval = {
 
 export type ChatPart =
   | { type: "text"; text: string }
+  /** the model's thinking, shown collapsed under "Thinking" */
+  | { type: "reasoning"; text: string }
   | {
       type: "tool";
       id: string;
@@ -167,6 +226,8 @@ export function fromStored(messages: StoredMessage[]): ChatMessage[] {
       }
       for (const p of m.parts) {
         if (p.type === "text" && p.text) current.parts.push({ type: "text", text: p.text });
+        if (p.type === "reasoning" && p.text)
+          current.parts.push({ type: "reasoning", text: p.text });
         if (p.type === "tool_call") {
           const r = results.get(p.id);
           current.parts.push({
@@ -272,6 +333,21 @@ function onEvent(state: ChatState, e: ParsedEvent): ChatState {
           if (tail && tail.type === "text")
             parts[parts.length - 1] = { ...tail, text: tail.text + text };
           else parts.push({ type: "text", text });
+          return { ...m, parts };
+        }),
+      };
+    }
+    case "reasoning": {
+      const text = String(data.text ?? "");
+      return {
+        ...base,
+        messages: withLast(base.messages, (m) => {
+          if (m.role !== "assistant") return m;
+          const parts = [...m.parts];
+          const tail = parts[parts.length - 1];
+          if (tail && tail.type === "reasoning")
+            parts[parts.length - 1] = { ...tail, text: tail.text + text };
+          else parts.push({ type: "reasoning", text });
           return { ...m, parts };
         }),
       };

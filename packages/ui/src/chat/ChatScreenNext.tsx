@@ -3,6 +3,7 @@
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { useEffect, useMemo } from "react";
 import type { ChatScreenProps } from "./ChatScreen";
+import { useComposerOptions } from "./composer-options";
 import { Thread } from "./thread/Thread";
 import { textOf } from "./thread/convert";
 import { ThreadEnvProvider } from "./thread/env";
@@ -30,15 +31,26 @@ export function ChatScreenNext({
   onNeedModel,
   actions,
   title,
+  composerOptions,
 }: ChatScreenProps) {
   // the markdown renderer is a separate chunk: fetch it now, while the person is still typing the first message
   useEffect(() => {
     void preloadMarkdown().catch(() => {});
   }, []);
-  const chat = useThreadChat({ runs, api: assistant, conversationId, onConversation });
+  const options = useComposerOptions(conversationId, composerOptions);
+  const chat = useThreadChat({
+    runs,
+    api: assistant,
+    conversationId,
+    onConversation,
+    runInput: options.runInput,
+  });
   const runtime = useChatRuntime(chat, { blocked: Boolean(blockedReason) });
   const { state } = chat;
-  const env = useMemo(() => ({ images, tracks, onOpenCreation }), [images, tracks, onOpenCreation]);
+  const env = useMemo(
+    () => ({ images, tracks, onOpenCreation, thinkingOn: options.thinking }),
+    [images, tracks, onOpenCreation, options.thinking],
+  );
   const last = state.chat.messages[state.chat.messages.length - 1];
   const lastAnswer = last && last.role === "assistant" ? textOf(last) : "";
 
@@ -49,8 +61,18 @@ export function ChatScreenNext({
           empty={state.chat.messages.length === 0 && state.chat.phase === "idle"}
           hero={hero}
           examples={examples}
-          notices={notices}
+          notices={
+            options.notice ? (
+              <>
+                {notices}
+                {options.notice}
+              </>
+            ) : (
+              notices
+            )
+          }
           blockedReason={blockedReason}
+          options={options.bar}
           actions={actions}
           title={title}
           error={state.chat.error}

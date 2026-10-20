@@ -20,6 +20,7 @@ from wasifyai_contracts import (
     InterruptEvent,
     JobProgressEvent,
     NodeEvent,
+    ReasoningEvent,
     TokenEvent,
     ToolCallEvent,
     ToolResultEvent,
@@ -252,6 +253,8 @@ class RunManager:
     async def _emit_custom(self, rec: RunRecord, chunk: dict[str, Any]) -> None:
         if chunk.get("type") == "token":
             await self._emit(rec, TokenEvent, node=chunk["node"], text=chunk["text"])
+        elif chunk.get("type") == "reasoning":
+            await self._emit(rec, ReasoningEvent, node=chunk["node"], text=chunk["text"])
         elif chunk.get("type") == "tool_call":
             await self._emit(
                 rec, ToolCallEvent, id=chunk["id"], name=chunk["name"], arguments=chunk["arguments"]

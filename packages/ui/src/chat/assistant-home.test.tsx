@@ -11,6 +11,13 @@ const images = {} as ImagesApi;
 
 function fakeAssistant(over: Partial<AssistantApi> = {}): AssistantApi {
   return {
+    options: vi.fn(async () => ({ thinking: false })),
+    searchStatus: vi.fn(async () => {
+      throw new Error("unused");
+    }),
+    updateSearch: vi.fn(async () => {
+      throw new Error("unused");
+    }),
     list: vi.fn(async () => [{ id: "c1", title: "Fox poem", created_at: "", updated_at: "" }]),
     get: vi.fn(async (id: string) => ({
       id,
@@ -42,6 +49,26 @@ describe("greeting", () => {
 });
 
 describe("AssistantHome", () => {
+  it.each([true, false])(
+    "offers the Thinking switch as the engine says the model can (%s)",
+    async (can) => {
+      render(
+        <AssistantHome
+          runs={runs}
+          assistant={fakeAssistant({ options: vi.fn(async () => ({ thinking: can })) })}
+          images={images}
+          conversationId={null}
+          onAdopt={() => {}}
+          onNewChat={() => {}}
+        />,
+      );
+      await screen.findByRole("heading", { level: 1 });
+      await waitFor(() =>
+        expect(screen.queryAllByRole("button", { name: /^Thinking/ })).toHaveLength(can ? 1 : 0),
+      );
+    },
+  );
+
   it("greets a new chat and offers examples, with no title bar", async () => {
     render(
       <AssistantHome

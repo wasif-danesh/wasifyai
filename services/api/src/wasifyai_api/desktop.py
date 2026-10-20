@@ -23,7 +23,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncEngine
-from wasifyai_platform_sdk import LocalFileStorage, RunStore, ScopedStorage
+from wasifyai_platform_sdk import LocalFileStorage, RunStore, ScopedStorage, SecretBox
 from wasifyai_platform_sdk.sqlite import (
     SqliteEventLog,
     SqliteJobQueue,
@@ -48,6 +48,7 @@ from wasifyai_api.llama_server import LlamaServer
 from wasifyai_api.runs import RunManager
 from wasifyai_api.safeguards import SettingsStore
 from wasifyai_api.sqlite_stores import SqliteIndexStore, SqliteSettingsStore, SqliteUserStore
+from wasifyai_api.web_search import WebService, load_or_create_key
 
 log = logging.getLogger("wasifyai_api.desktop")
 
@@ -78,6 +79,7 @@ class DesktopBackends:
     llama: LlamaServer | None = None
     language: LanguageService | None = None
     hub: HubService | None = None
+    web: WebService | None = None  # web search: the person's choices and keys (ADR-0083)
     audio: AudioEngine | None = None
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
@@ -155,7 +157,12 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     hub = HubService(SqliteSettingsStore(engine))
     hub.models, hub.language = models, language
     models.downloads._token = hub.client.token  # noqa: SLF001 - one place for the token
+    web = WebService(
+        SqliteSettingsStore(engine),
+        SecretBox(load_or_create_key(root / "secrets.key")),
+    )
     return DesktopBackends(
+        web=web,
         models=models,
         discovery=discovery,
         llama=llama,

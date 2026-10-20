@@ -99,6 +99,32 @@ describe("the Video Builder client", () => {
     ]);
   });
 
+  it("sends a description, a shape and a CSV file to be drafted, and saves nothing", async () => {
+    const reply = {
+      template: "chart",
+      fields: { title: "Sales" },
+      warnings: [],
+      summary: "Bar chart",
+    };
+    const { transport, calls } = fake(() => json(reply));
+    const api = createVideoBuilderApi(transport);
+    expect(
+      await api.draft({
+        prompt: "chart it",
+        attachment: { name: "s.csv", text: "a,1\nb,2" },
+        shape: "portrait",
+      }),
+    ).toEqual(reply);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.path).toBe("/products/wasifyai-video/builder/draft");
+    expect(calls[0]?.init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
+      prompt: "chart it",
+      attachment: { name: "s.csv", text: "a,1\nb,2" },
+      shape: "portrait",
+    });
+  });
+
   it("asks for the file kind a render should be made as", async () => {
     const { transport, calls } = fake(() => json({ id: "r1", status: "working", progress: 0 }));
     const api = createVideoBuilderApi(transport);

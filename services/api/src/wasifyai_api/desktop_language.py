@@ -306,6 +306,19 @@ def _context(value: int) -> int:
     return value if value in CONTEXTS else DEFAULT_CONTEXT
 
 
+def thinking_fields(sel: Any, external: bool, thinking: bool) -> dict[str, Any] | None:
+    """The request fields that switch thinking, for the model in use. The app's own
+    llama-server: the chat template's switch. A model of Ollama that can think: `think`
+    (honoured by Qwen3 and Gemma 4 style models) and `reasoning_effort` (the only switch of
+    gpt-oss, which always thinks, a little at "low": 0.7 s against 12 s for a sum). Other
+    tools' models: left alone."""
+    if not external:
+        return {"chat_template_kwargs": {"enable_thinking": thinking}}
+    if sel is not None and sel.tool == "ollama" and sel.thinking:
+        return {"think": thinking, "reasoning_effort": "medium" if thinking else "low"}
+    return None
+
+
 class LocalTextProvider:
     """`TextProvider` for the desktop: the chosen model, through the OpenAI chat API."""
 
@@ -371,17 +384,7 @@ class LocalTextProvider:
                 )
 
     def _thinking_fields(self, external: bool, thinking: bool) -> dict[str, Any] | None:
-        """The request fields that switch thinking, for the model in use. The app's own
-        llama-server: the chat template's switch. A model of Ollama that can think: `think`
-        (honoured by Qwen3 and Gemma 4 style models) and `reasoning_effort` (the only switch of
-        gpt-oss, which always thinks, a little at "low": 0.7 s against 12 s for a sum). Other
-        tools' models: left alone."""
-        if not external:
-            return {"chat_template_kwargs": {"enable_thinking": thinking}}
-        sel = self._language.selected
-        if sel is not None and sel.tool == "ollama" and sel.thinking:
-            return {"think": thinking, "reasoning_effort": "medium" if thinking else "low"}
-        return None
+        return thinking_fields(self._language.selected, external, thinking)
 
     async def chat(
         self,

@@ -166,3 +166,53 @@ is not built); automatic b-roll from a talking-head recording; a template store 
 - **Versions:** every change keeps the previous words (20 per project); Undo brings the last one back.
 - **Not done:** moderation of slot text when safeguards are on (decision 9: `caps.safeguards_on()` is not yet asked), the
   chat path (needs the MCP surface, A2), the looping preview clip (three stills are shown), spreadsheet (xlsx) input.
+
+## Amendment after MG1b (2026-10-21): the prompt box, lengths to 90 seconds
+
+- **Plain words, as the screen's first step.** Video Builder opens on a prompt box: the person says what to make (and may
+  attach a CSV file), the chosen chat model **only fills the fields** of a template, and the form opens filled in with what
+  was understood. Nothing is made until the person has checked the form and chosen Make the video; the exact-text check
+  still runs before anything is drawn. `POST /builder/draft` returns `{template, fields, warnings, summary}` and saves
+  nothing. It is a helper of the screen, not an action: a model that already holds the conversation calls `motion.make`
+  itself, and the catalogue stays inside ADR-0068's "about 40".
+- **Two small questions, not one big one.** First which template (a one-key schema), then that template's fields. A
+  union of every template's fields in one answer made a 4B model write the words and then blanks until it ran out of room.
+  Only the words are required; the length and the looks are optional and are **kept only when the request asks for them**
+  (a small model invents "square" and "paper"). An answer that stops before its closing brace is closed.
+- **Words stay the person's.** A word the person put in quotation marks must be in the form exactly, or the screen says so;
+  the rows of an attached CSV are read by the app (a header is skipped, the first number column is the value, `$1,200.5`
+  stays as written) and never pass through the model.
+- **Lengths.** 3 to 90 seconds for every template, 30 by default; the screen offers 30, 60 and 90 and a typed number.
+  Measured on an M5 Pro: 90 seconds takes 14 to 33 s to draw and about 2.0 to 2.3 GB, the same as 5 seconds, because the
+  pages are mostly still frames. Captions run 2 to 4 seconds a line, up to 90 seconds in all.
+- **Moderation (decision 9) is a refusal, not a check.** Video Builder is a desktop feature, where the safeguards are off
+  (ADR-0047). Where they are on, typed words are refused with a sentence, because no moderator reads them yet.
+- **Retry.** A browser that gave up once under load is tried once more for the check and for the drawing; a limit, a
+  refusal or a cancel is never tried again.
+
+## Correction after the first CI run (2026-10-21): FFmpeg is not the component's
+
+ADR-0077 and the build plan counted FFmpeg as "the app's own (`imageio-ffmpeg`)". It is not enough: HyperFrames needs
+**ffmpeg and ffprobe** (`imageio-ffmpeg` has no ffprobe) and looks for them on `PATH` and in `/opt/homebrew/bin`,
+`/usr/local/bin`, `/usr/bin` and `/bin`. It worked on the owner's Mac only because Homebrew's FFmpeg was installed; a fresh
+macOS CI runner failed every render with "ffprobe is required", and a person without FFmpeg would see "The video could not be
+made". Now: the engine looks for both tools, hands the render the exact paths it found (`HYPERFRAMES_FFMPEG_PATH`,
+`HYPERFRAMES_FFPROBE_PATH`), and when one is missing the screen says "Video Builder also needs FFmpeg (with ffprobe) ... run
+`brew install ffmpeg`" with a Check again button; every route and the catalogue's readiness say the same. CI installs it
+with Homebrew. **Owner decision still open:** ship FFmpeg with the component instead (npm `@ffmpeg-installer` and
+`@ffprobe-installer` packages, which HyperFrames also finds, or pinned static builds), which makes "set up" the whole job but
+adds a dependency and a licence to read (FFmpeg is LGPL or GPL depending on the build).
+
+**Resolved the same day (owner: "install the right version automatically; the licence does not matter").** The component now carries
+FFmpeg and ffprobe: the two npm packages `@ffmpeg-installer/ffmpeg` 1.1.0 and `@ffprobe-installer/ffprobe` 2.1.2 are in its lock
+(130 packages), and for darwin-arm64 they bring **FFmpeg 4.4** (a GPL, version 3 and nonfree static build with libx264,
+libx265, libvpx, libvpx-vp9, prores_ks, aac, libopus and VideoToolbox) and **ffprobe 4.4.1**, 24 MB downloaded and 54 MB on
+disk. HyperFrames finds them, and the engine names their paths in the render's environment. Their install script (`chmod`)
+does not run, so setup sets the executable bit and then checks that FFmpeg starts and lists the four encoders the templates
+need, and that ffprobe starts; a copy without them fails setup in words. The computer's own FFmpeg (Homebrew) is the fallback for
+a component set up before this change, which is "set up again" because its lock changed. The download is 318 MB now. Measured
+with only these tools (no Homebrew): everything passes, but **FFmpeg 4.4 draws about twice as slowly as the 8.1 the owner had**
+(a 90 second transparent WebM 53 s against 26 s, captions 65 s against 33 s; the 5 to 30 second videos 7 to 12 s). A newer
+pinned build (option C of `docs/spikes/video-builder-ffmpeg.md`) is the way to get the speed back if it matters. The licence
+is not a concern for now (owner), and the "nonfree" flag of this build means it must not be redistributed by us, only fetched
+by the person's own computer from npm, which is what the setup does; counsel can read it with D10.

@@ -19,7 +19,8 @@ import { Chip } from "../components/chip";
 import { JobMeter, WorkingCard } from "../components/create";
 import { Notice } from "../components/notice";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
-import { type Draft, blankDraft, fromDraft, lengths, missing, toDraft } from "./slots";
+import { PromptBox } from "./PromptBox";
+import { type Draft, blankDraft, fromDraft, lengths, missing, startFrom, toDraft } from "./slots";
 import { NEW, templateOf, useVideoBuilder } from "./use-video-builder";
 
 const INPUT =
@@ -32,7 +33,8 @@ const FORMAT_LABELS: Record<BuilderFormat, string> = {
   mov: "MOV, transparent",
 };
 // a grey chequerboard, so a see-through video can be seen to be see-through
-const CHEQUER = "repeating-conic-gradient(#8884 0% 25%, transparent 0% 50%) 50% / 24px 24px";
+const CHEQUER =
+  "repeating-conic-gradient(color-mix(in srgb, currentColor 25%, transparent) 0% 25%, transparent 0% 50%) 50% / 24px 24px";
 
 export type VideoBuilderProps = {
   api: VideoBuilderApi;
@@ -75,37 +77,41 @@ export function VideoBuilder({ api, videos, canSave = false, onOpenLibrary }: Vi
           onRetry={() => void b.refresh()}
         />
       ) : (
-        <div className="grid items-start gap-5 md:grid-cols-[16rem_1fr]">
-          <ProjectList
-            projects={state.projects}
-            catalogue={state.catalogue}
-            selected={state.selected}
-            onOpen={(id) => void b.open(id)}
-            onNew={() => void b.open(NEW)}
-          />
-          {state.selected ? (
-            <Editor
-              key={`${state.selected}:${state.project?.template ?? state.draft}`}
-              api={b}
-              videos={videos}
-              canSave={canSave}
-              onOpenLibrary={onOpenLibrary}
+        <>
+          {state.component.tools && !state.component.tools.ready ? (
+            <Notice
+              tone="warn"
+              title="One more thing is needed to make videos"
+              actions={<Button onClick={() => void b.refresh()}>Check again</Button>}
+            >
+              {state.component.tools.message}
+            </Notice>
+          ) : null}
+          <div className="grid items-start gap-5 md:grid-cols-[16rem_1fr]">
+            <ProjectList
+              projects={state.projects}
+              catalogue={state.catalogue}
+              selected={state.selected}
+              onOpen={(id) => void b.open(id)}
+              onNew={() => void b.open(NEW)}
             />
-          ) : (
-            <section className={cn(panel, "justify-items-start")}>
-              <h2 className="font-semibold text-lg">
-                {state.projects.length === 0 ? "Start your first video" : "Pick a project"}
-              </h2>
-              <p className="text-muted-foreground">
-                Pick what to make: an animated title, a quote, a bar chart from your numbers, a name
-                strap to lay over footage, or captions.
-              </p>
-              <Button type="button" onClick={() => void b.open(NEW)}>
-                <Plus className="size-4" /> Start a video
-              </Button>
-            </section>
-          )}
-        </div>
+            {state.selected ? (
+              <Editor
+                key={`${state.selected}:${state.project?.template ?? state.draft}`}
+                api={b}
+                videos={videos}
+                canSave={canSave}
+                onOpenLibrary={onOpenLibrary}
+              />
+            ) : (
+              <PromptBox
+                busy={state.drafting}
+                onSend={(request) => void b.draftFrom(request)}
+                onForm={() => void b.open(NEW)}
+              />
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -289,13 +295,31 @@ function FormField({ info, value, catalogue, onChange }: FieldProps) {
     return (
       <fieldset className={cn(field, "m-0 border-0 p-0")}>
         <legend className={cn(fieldLabel, "mb-1.5")}>{info.label}</legend>
-        <div className={chips}>
-          {lengths(info.min, info.max, Number(value)).map((n) => (
+        <div className={cn(chips, "items-center")}>
+          {lengths(info.min, info.max).map((n) => (
             <Chip key={n} aria-pressed={Number(value) === n} onClick={() => onChange(String(n))}>
               {n} seconds
             </Chip>
           ))}
+          <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            or
+            <input
+              id={id}
+              type="number"
+              inputMode="numeric"
+              min={info.min}
+              max={info.max}
+              aria-label={`${info.label} in seconds`}
+              className={cn(INPUT, "w-20 py-1")}
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+            />
+            seconds
+          </label>
         </div>
+        <p className={hint}>
+          From {info.min} to {info.max} seconds.
+        </p>
       </fieldset>
     );
   }
@@ -361,7 +385,7 @@ function Editor({
   onOpenLibrary?: () => void;
 }) {
   const { state } = api;
-  const { project, render, status, catalogue, stills, check } = state;
+  const { project, render, status, catalogue, stills, check, drafted } = state;
   const template = templateOf(state);
   const [draft, setDraft] = useState<Draft>({});
   const [format, setFormat] = useState<BuilderFormat | null>(null);
@@ -370,8 +394,11 @@ function Editor({
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => {
     if (!template) return;
-    setDraft(project ? toDraft(template, project.slots) : blankDraft(template));
-  }, [project, template]);
+    if (project) setDraft(toDraft(template, project.slots));
+    else if (drafted && drafted.template === template.id) {
+      setDraft(startFrom(template, drafted.fields));
+    } else setDraft(blankDraft(template));
+  }, [project, template, drafted]);
 
   if (!template) return null;
   const slots = fromDraft(template, draft);
@@ -429,6 +456,23 @@ function Editor({
           void keep();
         }}
       >
+        {!project && drafted && drafted.template === template.id ? (
+          <Notice
+            tone={drafted.warnings.length > 0 ? "warn" : "info"}
+            title={
+              drafted.warnings.length > 0
+                ? "Check these before you go on"
+                : "Here is what was understood"
+            }
+          >
+            <span className="block">{drafted.summary}</span>
+            {drafted.warnings.map((w) => (
+              <span key={w} className="block">
+                {w}
+              </span>
+            ))}
+          </Notice>
+        ) : null}
         {project ? (
           <p className={hint}>{template.title}</p>
         ) : (

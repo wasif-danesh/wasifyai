@@ -20,6 +20,7 @@ const BYTES = 287_600_345;
 function component(over: Partial<BuilderComponent> = {}): BuilderComponent {
   return {
     installed: false,
+    tools: { ready: true, message: "" },
     source: null,
     plan: {
       supported: true,
@@ -82,7 +83,7 @@ const common: FieldInfo[] = [
       { id: "square", label: "Square" },
     ],
   }),
-  text("seconds", "Length", { kind: "seconds", min: 3, max: 12, default: 5 }),
+  text("seconds", "Length", { kind: "seconds", min: 3, max: 90, default: 30 }),
   text("theme", "Look", {
     kind: "choice",
     default: "midnight",
@@ -171,7 +172,7 @@ function project(over: Partial<BuilderProject> = {}): BuilderProject {
       title: "Launch day",
       subtitle: "Here we go",
       shape: "landscape",
-      seconds: 5,
+      seconds: 30,
       theme: "sunrise",
       font: "sans",
     },
@@ -241,6 +242,12 @@ function api(over: Partial<VideoBuilderApi> = {}): VideoBuilderApi {
       .mockImplementation(async (_id, s) =>
         project({ slots: { ...project().slots, ...s }, title: String(s.title ?? "Launch day") }),
       ),
+    draft: vi.fn().mockResolvedValue({
+      template: "lower_third",
+      fields: { name: "Maya Chen", role: "Head of Design" },
+      warnings: [],
+      summary: "Lower third: name “Maya Chen”, role “Head of Design”",
+    }),
     undo: vi.fn().mockResolvedValue(project()),
     check: vi.fn().mockResolvedValue(OK_CHECK),
     remove: vi.fn().mockResolvedValue(undefined),
@@ -370,7 +377,7 @@ describe("writing and making a video", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: "5 seconds" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "30 seconds" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -381,19 +388,19 @@ describe("writing and making a video", () => {
     const user = userEvent.setup();
     const a = api({ list: vi.fn().mockResolvedValue([]) });
     render(<VideoBuilder api={a} />);
-    await user.click(await screen.findByRole("button", { name: "Start a video" }));
+    await user.click(await screen.findByRole("button", { name: "Or fill in the form yourself" }));
     expect(screen.getByRole("button", { name: "Make the video" })).toBeDisabled();
     expect(screen.getByText("Fill in the title to go on.")).toBeInTheDocument();
     await user.type(screen.getByLabelText("Title"), "Big day");
     await user.click(screen.getByRole("button", { name: /Forest/ }));
-    await user.click(screen.getByRole("button", { name: "8 seconds" }));
+    await user.click(screen.getByRole("button", { name: "60 seconds" }));
     await user.click(screen.getByRole("button", { name: /Portrait/ }));
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(a.create).toHaveBeenCalledWith("title", {
       title: "Big day",
       subtitle: "",
       shape: "portrait",
-      seconds: 8,
+      seconds: 60,
       theme: "forest",
       font: "sans",
     });
@@ -403,7 +410,7 @@ describe("writing and making a video", () => {
     const user = userEvent.setup();
     const a = api({ list: vi.fn().mockResolvedValue([]) });
     render(<VideoBuilder api={a} />);
-    await user.click(await screen.findByRole("button", { name: "Start a video" }));
+    await user.click(await screen.findByRole("button", { name: "Or fill in the form yourself" }));
     await user.click(screen.getByRole("button", { name: "Bar chart" }));
     expect(screen.getByText(/One per line: a label, a comma and a number/)).toBeInTheDocument();
     expect(screen.queryByLabelText(/A line under it/)).toBeNull();
@@ -452,7 +459,7 @@ describe("writing and making a video", () => {
         name: "Maya Chen",
         role: "Head of Design",
         shape: "landscape",
-        seconds: 5,
+        seconds: 30,
         theme: "midnight",
         font: "sans",
       },
@@ -555,6 +562,12 @@ describe("writing and making a video", () => {
     });
     const a = api({
       get: vi.fn().mockResolvedValue(changed),
+      draft: vi.fn().mockResolvedValue({
+        template: "lower_third",
+        fields: { name: "Maya Chen", role: "Head of Design" },
+        warnings: [],
+        summary: "Lower third: name “Maya Chen”, role “Head of Design”",
+      }),
       undo: vi.fn().mockResolvedValue(project()),
     });
     render(<VideoBuilder api={a} />);
@@ -742,6 +755,177 @@ describe("writing and making a video", () => {
     expect(
       within(alert).getByText("A video is already being made. Wait for it to finish."),
     ).toBeInTheDocument();
+  });
+});
+
+describe("FFmpeg, which a video needs", () => {
+  it("says what to install and offers to look again, while the form still works", async () => {
+    const user = userEvent.setup();
+    const missing = component({
+      installed: true,
+      tools: {
+        ready: false,
+        message:
+          "Video Builder also needs FFmpeg (with ffprobe). In Terminal run: brew install ffmpeg.",
+      },
+    });
+    const a = api({
+      component: vi
+        .fn()
+        .mockResolvedValueOnce(missing)
+        .mockResolvedValue(component({ installed: true })),
+    });
+    render(<VideoBuilder api={a} />);
+    expect(await screen.findByText("One more thing is needed to make videos")).toBeInTheDocument();
+    expect(screen.getByText(/brew install ffmpeg/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Describe what to make")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() =>
+      expect(screen.queryByText("One more thing is needed to make videos")).toBeNull(),
+    );
+  });
+
+  it("says nothing when it is there", async () => {
+    render(<VideoBuilder api={api()} />);
+    await screen.findByLabelText("Describe what to make");
+    expect(screen.queryByText("One more thing is needed to make videos")).toBeNull();
+  });
+});
+
+describe("saying what to make in your own words", () => {
+  const ask = 'Lower third for "Maya Chen", Head of Design';
+
+  it("opens on a prompt box and fills the form from what was said, making nothing", async () => {
+    const user = userEvent.setup();
+    const a = api({ list: vi.fn().mockResolvedValue([]) });
+    render(<VideoBuilder api={a} />);
+    expect(await screen.findByText("What should we make?")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Describe what to make"), ask);
+    await user.click(screen.getByRole("button", { name: "Fill in the form" }));
+    expect(a.draft).toHaveBeenCalledWith({ prompt: ask, attachment: undefined, shape: undefined });
+    expect(await screen.findByLabelText("Name")).toHaveValue("Maya Chen");
+    expect(screen.getByLabelText(/Role/)).toHaveValue("Head of Design");
+    expect(screen.getByText("Here is what was understood")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Lower third" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(a.create).not.toHaveBeenCalled();
+    expect(a.render).not.toHaveBeenCalled();
+  });
+
+  it("sends with Enter, keeps a new line for Shift+Enter and ignores an empty box", async () => {
+    const user = userEvent.setup();
+    const a = api({ list: vi.fn().mockResolvedValue([]) });
+    render(<VideoBuilder api={a} />);
+    const box = await screen.findByLabelText("Describe what to make");
+    await user.type(box, "{Enter}");
+    expect(a.draft).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Fill in the form" })).toBeDisabled();
+    await user.type(box, "A title{Shift>}{Enter}{/Shift}more");
+    expect(box).toHaveValue("A title\nmore");
+    await user.type(box, "{Enter}");
+    expect(a.draft).toHaveBeenCalledWith(expect.objectContaining({ prompt: "A title\nmore" }));
+  });
+
+  it("fills the box from an example and sends the shape that was picked", async () => {
+    const user = userEvent.setup();
+    const a = api({ list: vi.fn().mockResolvedValue([]) });
+    render(<VideoBuilder api={a} />);
+    await user.click(await screen.findByRole("button", { name: "Lower third" }));
+    expect(screen.getByLabelText("Describe what to make")).toHaveValue(ask);
+    await user.click(screen.getByRole("button", { name: "9:16" }));
+    expect(screen.getByRole("button", { name: "9:16" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "Fill in the form" }));
+    expect(a.draft).toHaveBeenCalledWith({ prompt: ask, attachment: undefined, shape: "portrait" });
+  });
+
+  it("reads a CSV file here and sends its text, so the rows are never retyped", async () => {
+    const user = userEvent.setup();
+    const a = api({ list: vi.fn().mockResolvedValue([]) });
+    render(<VideoBuilder api={a} />);
+    const file = new File(["Region,Sales\nNorth,$120\nSouth,95"], "sales.csv", {
+      type: "text/csv",
+    });
+    await user.upload(await screen.findByLabelText("Choose a CSV file"), file);
+    expect(await screen.findByText("sales.csv")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Fill in the form" })); // a file is enough
+    expect(a.draft).toHaveBeenCalledWith({
+      prompt: "",
+      attachment: { name: "sales.csv", text: "Region,Sales\nNorth,$120\nSouth,95" },
+      shape: undefined,
+    });
+  });
+
+  it("removes an attached file, and refuses one that is too big", async () => {
+    const user = userEvent.setup();
+    render(<VideoBuilder api={api({ list: vi.fn().mockResolvedValue([]) })} />);
+    const input = await screen.findByLabelText("Choose a CSV file");
+    await user.upload(input, new File(["a,1\nb,2"], "a.csv", { type: "text/csv" }));
+    await user.click(await screen.findByRole("button", { name: "Remove a.csv" }));
+    expect(screen.queryByText("a.csv")).toBeNull();
+    await user.upload(input, new File(["x".repeat(41_000)], "big.csv", { type: "text/csv" }));
+    expect(await screen.findByText(/too big for a chart/)).toBeInTheDocument();
+    expect(screen.queryByText("big.csv")).toBeNull();
+  });
+
+  it("shows what to check when the model changed a quoted word", async () => {
+    const user = userEvent.setup();
+    const a = api({
+      list: vi.fn().mockResolvedValue([]),
+      draft: vi.fn().mockResolvedValue({
+        template: "lower_third",
+        fields: { name: "Maya Chan" },
+        warnings: [
+          "“Maya Chen” is not in the form exactly as you wrote it. Check the words before you go on.",
+        ],
+        summary: "Lower third: name “Maya Chan”",
+      }),
+    });
+    render(<VideoBuilder api={a} />);
+    await user.type(await screen.findByLabelText("Describe what to make"), `${ask}{Enter}`);
+    expect(await screen.findByText("Check these before you go on")).toBeInTheDocument();
+    expect(
+      screen.getByText(/“Maya Chen” is not in the form exactly as you wrote it/),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toHaveValue("Maya Chan"); // still there to correct
+  });
+
+  it("says why a request could not be read and keeps the form one click away", async () => {
+    const user = userEvent.setup();
+    const a = api({
+      list: vi.fn().mockResolvedValue([]),
+      draft: vi.fn().mockRejectedValue(new Error("Choose a language model first.")),
+    });
+    render(<VideoBuilder api={a} />);
+    await user.type(await screen.findByLabelText("Describe what to make"), "A title{Enter}");
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText("Choose a language model first.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Describe what to make")).toHaveValue("A title");
+    await user.click(screen.getByRole("button", { name: "Or fill in the form yourself" }));
+    expect(await screen.findByLabelText("Title")).toBeInTheDocument();
+  });
+
+  it("offers 30, 60 and 90 seconds and any other length typed in", async () => {
+    const user = userEvent.setup();
+    const a = api({ list: vi.fn().mockResolvedValue([]) });
+    render(<VideoBuilder api={a} />);
+    await user.click(await screen.findByRole("button", { name: "Or fill in the form yourself" }));
+    expect(screen.getByRole("button", { name: "30 seconds" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    for (const n of [60, 90]) {
+      expect(screen.getByRole("button", { name: `${n} seconds` })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole("button", { name: "5 seconds" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "90 seconds" }));
+    expect(screen.getByLabelText("Length in seconds")).toHaveValue(90);
+    await user.clear(screen.getByLabelText("Length in seconds"));
+    await user.type(screen.getByLabelText("Length in seconds"), "45");
+    await user.type(screen.getByLabelText("Title"), "Hi");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(a.create).toHaveBeenCalledWith("title", expect.objectContaining({ seconds: 45 }));
   });
 });
 

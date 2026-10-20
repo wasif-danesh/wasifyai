@@ -140,8 +140,10 @@ class ApiToolHost:
                     "Video Builder is not available on this kind of computer yet."
                 )
             if not builder.ready():
+                why = builder.media_problem() if builder.install() is not None else None
                 return Readiness.needs_setup(
-                    "Set up Video Builder first (it is a download of a few hundred megabytes).",
+                    why
+                    or "Set up Video Builder first (it is a download of a few hundred megabytes).",
                     ui="video.builder",
                 )
             return Readiness.ready()

@@ -33,6 +33,7 @@ from wasifyai_video.builder.runtime import (
     index_composition,
     manager_for,
     store_for,
+    words_allowed,
 )
 
 PRODUCT_ID = "wasifyai-video"
@@ -172,8 +173,16 @@ def _created(found: dict[str, Any]) -> dict[str, Any]:
     }  # fmt: skip
 
 
+async def _allowed(state: Any) -> None:
+    try:
+        await words_allowed(state)
+    except Refused as e:
+        raise ActionRefused(e.code, e.message) from None
+
+
 async def _create_project(ctx: ActionContext, template: str, fields: dict[str, Any]):  # noqa: ANN202
     deps = need_deps(ctx)
+    await _allowed(deps.state)
     slots = templates.normalize_slots(template, fields)
     found = await asyncio.to_thread(
         store_for(deps.state).add_composition, ctx.actor.tenant_id, ctx.actor.user_id,
@@ -284,6 +293,7 @@ async def _make(p: MakeIn, ctx: ActionContext) -> Outcome:
 
 async def _revise(p: ReviseIn, ctx: ActionContext) -> Outcome:
     deps = need_deps(ctx)
+    await _allowed(deps.state)
     current = _found(ctx, p.composition_id)
     try:
         slots = templates.normalize_slots(current["template"], {**current["slots"], **p.fields})

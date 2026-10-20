@@ -43,7 +43,7 @@ earlier version is kept, and **Undo the last change** on the Video Builder scree
 
 ## Problems
 
-- **The length must be between 3 and 12 seconds** Choose a length in the range the message names.
+- **The length must be between 3 and 90 seconds** Choose a length in the range the message names.
 - **The project does not exist** It may have been deleted; open Video Builder to see what is left.
 - **The words on the screen are not exactly what you wrote** The change was kept but no video was
   made; change the words and try again, or choose Undo.

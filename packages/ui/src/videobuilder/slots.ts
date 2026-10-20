@@ -48,9 +48,19 @@ export function missing(template: TemplateInfo, draft: Draft): string | null {
   return null;
 }
 
-/** The lengths offered as buttons: a few spread through the range, and the current one. */
-export function lengths(min: number, max: number, current: number): number[] {
-  const steps = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 30, 48].filter((n) => n >= min && n <= max);
-  const all = steps.includes(current) || Number.isNaN(current) ? steps : [...steps, current];
-  return all.sort((a, b) => a - b);
+/** The lengths offered as buttons (a typed number covers every other length). */
+export const LENGTHS = [30, 60, 90];
+
+export function lengths(min: number, max: number): number[] {
+  return LENGTHS.filter((n) => n >= min && n <= max);
+}
+
+/** A starting form for a template, with what a description was understood as put in. */
+export function startFrom(template: TemplateInfo, fields: Record<string, string | number>): Draft {
+  const out = blankDraft(template);
+  for (const f of template.fields) {
+    const v = fields[f.id];
+    if (v !== undefined) out[f.id] = String(v);
+  }
+  return out;
 }

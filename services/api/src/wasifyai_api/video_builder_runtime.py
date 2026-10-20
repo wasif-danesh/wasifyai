@@ -166,6 +166,51 @@ def find_install(data_dir: Path, pins: Pins | None = None) -> VideoBuilderInstal
     return None
 
 
+# HyperFrames needs ffmpeg and ffprobe and brings neither. The component carries its own (two npm
+# packages of its lock: `@ffmpeg-installer/<platform>` and `@ffprobe-installer/<platform>`, FFmpeg
+# 4.4 builds with libx264, libvpx-vp9, prores_ks and aac); a computer's own (Homebrew's) is the
+# fallback for a component set up before they were added. With neither, the screen says so in words.
+MEDIA_TOOLS = ("ffmpeg", "ffprobe")
+MEDIA_BYTES = 24_100_000  # the two platform packages, part of the packages' size
+MEDIA_ENCODERS = ("libx264", "libvpx-vp9", "prores_ks", "aac")  # what the templates' files need
+MEDIA_DIRS = ("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin")
+MEDIA_HINT = (
+    "Video Builder needs FFmpeg (with ffprobe) and this copy of it does not have one. "
+    "In Terminal run: brew install ffmpeg. Then choose Check again."
+)
+
+
+def bundled_media_tool(install: "VideoBuilderInstall", name: str) -> Path:
+    """Where the component's own copy of `name` is, once set up."""
+    return install.app / "node_modules" / f"@{name}-installer" / platform_key() / name
+
+
+def find_media_tools(install: "VideoBuilderInstall | None" = None) -> dict[str, str]:
+    """The FFmpeg tools to use: name -> path (only the ones found). The component's own first,
+    then the computer's."""
+    found: dict[str, str] = {}
+    for name in MEDIA_TOOLS:
+        own = bundled_media_tool(install, name) if install is not None else None
+        path = (
+            str(own)
+            if own is not None and own.is_file() and os.access(own, os.X_OK)
+            else shutil.which(name)
+            or next((f"{d}/{name}" for d in MEDIA_DIRS if Path(f"{d}/{name}").is_file()), None)
+        )
+        if path:
+            found[name] = path
+    return found
+
+
+def make_media_tools_executable(install: "VideoBuilderInstall") -> None:
+    """The npm packages set the executable bit in an install script, and the component is
+    installed without scripts: set it here."""
+    for name in MEDIA_TOOLS:
+        path = bundled_media_tool(install, name)
+        if path.is_file():
+            path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
 def render_env(install: VideoBuilderInstall, extra: dict[str, str] | None = None) -> dict[str, str]:
     """The environment a component process runs in. It starts from nothing, not from the person's
     environment: no proxy settings, no tokens, no PATH entries that were not put here."""
@@ -180,6 +225,8 @@ def render_env(install: VideoBuilderInstall, extra: dict[str, str] | None = None
         **QUIET_ENV,
     }
     Path(env["TMPDIR"]).mkdir(parents=True, exist_ok=True)
+    for name, path in find_media_tools(install).items():  # the ones found, so the render uses these
+        env[f"HYPERFRAMES_{name.upper()}_PATH"] = path
     env.update(extra or {})
     return env
 
@@ -278,8 +325,11 @@ class VideoBuilderInstaller:
                  "bytes": self.pins.shell.size, "licence": self.pins.shell.licence,
                  "source": "googleapis.com (Chrome for Testing)"},
                 {"name": "HyperFrames and GSAP", "version": "0.8.171 and 3.15.0",
-                 "bytes": self.pins.packages_bytes,
+                 "bytes": self.pins.packages_bytes - MEDIA_BYTES,
                  "licence": "Apache-2.0 and the GSAP Standard no charge licence",
+                 "source": "registry.npmjs.org"},
+                {"name": "FFmpeg and ffprobe", "version": "4.4 and 4.4.1", "bytes": MEDIA_BYTES,
+                 "licence": "FFmpeg (a GPL build, run as separate programs)",
                  "source": "registry.npmjs.org"},
             ],
             "found": {"path": str(found.root)}
@@ -401,6 +451,16 @@ class VideoBuilderInstaller:
         if not ok:
             log.error("the hyperframes check failed: %s", text[-600:])
             raise InstallError("Video Builder did not start on this computer.")
+        make_media_tools_executable(install)  # the packages do this in an install script
+        ffmpeg, ffprobe = (bundled_media_tool(install, n) for n in MEDIA_TOOLS)
+        ok, text = await self.run([str(ffmpeg), "-hide_banner", "-encoders"], app, env, 60)
+        if not ok or any(f" {name} " not in text for name in MEDIA_ENCODERS):
+            log.error("the ffmpeg check failed: %s", text[-600:])
+            raise InstallError("FFmpeg for Video Builder did not start on this computer.")
+        ok, text = await self.run([str(ffprobe), "-version"], app, env, 60)
+        if not ok or "ffprobe version" not in text:
+            log.error("the ffprobe check failed: %s", text[-600:])
+            raise InstallError("ffprobe for Video Builder did not start on this computer.")
         ok, text = await self.run([str(install.shell), "--version"], app, env, 60)
         if not ok or "Chrome" not in text:
             log.error("the browser check failed: %s", text[-600:])

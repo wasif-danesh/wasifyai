@@ -52,6 +52,7 @@ FONT_FILES: dict[str, str] = {
     ),
 }
 FORMATS = ("mp4", "webm", "mov")
+MAX_SECONDS = 90  # the longest video a template makes (measured in docs/spikes/video-builder-v1.md)
 
 
 class SlotError(ValueError):
@@ -551,7 +552,13 @@ def _third_expected(s: dict[str, Any]) -> list[Expect]:
 
 
 def _captions_derive(s: dict[str, Any]) -> dict[str, Any]:
-    return {"seconds": max(2, int(s["per_line"]) * len(s["lines"]))}
+    seconds = max(2, int(s["per_line"]) * len(s["lines"]))
+    if seconds > MAX_SECONDS:
+        raise SlotError(
+            f"These captions would run {seconds} seconds; the longest is {MAX_SECONDS}. "
+            "Use fewer lines or a shorter time for each."
+        )
+    return {"seconds": seconds}
 
 
 def _captions_build(s: dict[str, Any], look: Look) -> tuple[str, str, str]:
@@ -599,7 +606,7 @@ TEMPLATES: dict[str, Template] = {
         fields=(
             Field("title", "text", "Title", required=True, max_chars=80),
             Field("subtitle", "text", "A line under it", max_chars=140, default=""),
-            *_common_fields((3, 12, 5)),
+            *_common_fields((3, MAX_SECONDS, 30)),
         ),
         build=_title_build,
         expected=_title_expected,
@@ -614,7 +621,7 @@ TEMPLATES: dict[str, Template] = {
         fields=(
             Field("quote", "longtext", "Quote", required=True, max_chars=220),
             Field("author", "text", "Who said it", max_chars=60, default=""),
-            *_common_fields((4, 15, 7), font="serif"),
+            *_common_fields((4, MAX_SECONDS, 30), font="serif"),
         ),
         build=_quote_build,
         expected=_quote_expected,
@@ -639,7 +646,7 @@ TEMPLATES: dict[str, Template] = {
                 maximum=8,
                 hint="One per line: a label, a comma and a number, like  Sales, 120",
             ),
-            *_common_fields((5, 15, 8)),
+            *_common_fields((5, MAX_SECONDS, 30)),
         ),
         build=_chart_build,
         expected=_chart_expected,
@@ -654,7 +661,7 @@ TEMPLATES: dict[str, Template] = {
         fields=(
             Field("name", "text", "Name", required=True, max_chars=60),
             Field("role", "text", "Role", max_chars=80, default=""),
-            *_common_fields((3, 10, 5)),
+            *_common_fields((3, MAX_SECONDS, 30)),
         ),
         build=_third_build,
         expected=_third_expected,
@@ -678,7 +685,7 @@ TEMPLATES: dict[str, Template] = {
                 required=True,
                 max_chars=90,
                 minimum=1,
-                maximum=12,
+                maximum=45,
                 hint="One caption per line",
             ),
             Field(
@@ -688,7 +695,7 @@ TEMPLATES: dict[str, Template] = {
                 default="3",
                 choices=(("2", "2 seconds"), ("3", "3 seconds"), ("4", "4 seconds")),
             ),
-            *[f for f in _common_fields((2, 48, 3)) if f.id != "seconds"],
+            *[f for f in _common_fields((2, MAX_SECONDS, 3)) if f.id != "seconds"],
         ),
         build=_captions_build,
         expected=_captions_expected,

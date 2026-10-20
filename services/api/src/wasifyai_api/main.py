@@ -504,6 +504,9 @@ def create_app(
             app.state.llama_server = desktop.llama
             app.state.audio = desktop.audio  # the speech runtime (ADR-0066); products reach it here
             app.state.video_builder = desktop.video_builder  # the render engine (ADR-0077)
+            if desktop.video_builder is not None:  # and the model it asks to fill a template
+                desktop.video_builder.language = desktop.language
+                desktop.video_builder.usage = recorder
             app.state.desktop_language = desktop.language
             app.state.desktop_vision = desktop.vision
             app.state.desktop_hub = desktop.hub

@@ -339,7 +339,7 @@ jobs:
 
   video-builder:
     # The Video Builder component as a person gets it (ADR-0077, V1a): the pinned downloads with every hash
-    # checked, then hostile compositions rendered through the real adapter with the real pinned browser (V1b).
+    # checked (FFmpeg and ffprobe come with it: the runner has none), then hostile compositions rendered through the real adapter with the real pinned browser (V1b).
     # Each page attacks while HyperFrames renders it; a service on loopback must hear nothing and the filter
     # must refuse what the page asks for. Apple-silicon macOS only: that is where the component is supported.
     runs-on: macos-latest
@@ -354,9 +354,7 @@ jobs:
       - name: Hostile compositions, the filter and the guard
         run: uv run pytest -s services/api/tests/test_video_builder_hostile.py services/api/tests/test_video_builder_sandbox.py services/api/tests/test_video_builder_runtime.py
       - name: The five templates, the exact-text check and the alpha files (MG1)
-        run: |
-          brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
-          uv run pytest -s services/api/tests/test_video_builder_templates.py
+        run: uv run pytest -s services/api/tests/test_video_builder_templates.py
 
   comfyui:
     # The optional image engine, as a person gets it: press "Set up image generation" (the window's

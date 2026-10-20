@@ -19,6 +19,7 @@ def test_the_window_is_told_what_setting_it_up_would_fetch(data_dir, monkeypatch
             "Node.js",
             "Chrome headless shell",
             "HyperFrames and GSAP",
+            "FFmpeg and ffprobe",
         }
         assert plan["bytes"] == sum(p["bytes"] for p in plan["parts"]) or not plan["supported"]
         assert state["progress"]["state"] == "idle"

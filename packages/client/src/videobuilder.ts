@@ -24,6 +24,8 @@ export type ComponentProgress = {
 /** What the setup card shows: is it there, what would it fetch, how far has it got. */
 export type BuilderComponent = {
   installed: boolean;
+  /** FFmpeg and ffprobe, which a video needs and the component does not bring; `message` says what to do */
+  tools: { ready: boolean; message: string };
   source: string | null;
   plan: {
     supported: boolean;
@@ -139,6 +141,23 @@ export type BuilderStatus = {
   busy: boolean;
 };
 
+/** What a description (and perhaps a CSV file) means: the template and the form text to start from. */
+export type BuilderDraft = {
+  template: string;
+  fields: Record<string, string | number>;
+  /** things to check before going on, in words (a quoted name that came back different, a missing title) */
+  warnings: string[];
+  /** one line: what was understood */
+  summary: string;
+};
+
+export type DraftRequest = {
+  prompt: string;
+  /** the text of a CSV file to chart; its rows are copied by the app, never by the model */
+  attachment?: { name: string; text: string };
+  shape?: BuilderShape;
+};
+
 export type LintFinding = { file: string; line: number; code: string; message: string };
 
 export type VideoBuilderApi = {
@@ -150,6 +169,8 @@ export type VideoBuilderApi = {
   templates(): Promise<TemplateCatalogue>;
   list(): Promise<BuilderProject[]>;
   get(id: string): Promise<BuilderProject>;
+  /** Turn a description into a template and its fields, with the chosen language model. Saves nothing. */
+  draft(request: DraftRequest): Promise<BuilderDraft>;
   create(template: string, slots: BuilderSlots): Promise<BuilderProject>;
   update(id: string, slots: BuilderSlots): Promise<BuilderProject>;
   /** Bring back the words as they were before the last change. */
@@ -197,6 +218,7 @@ export function createVideoBuilderApi(
     templates: () => json<TemplateCatalogue>(`${base}/templates`),
     list: async () => (await json<{ items: BuilderProject[] }>(`${base}/projects`)).items,
     get: (id) => json<BuilderProject>(`${base}/projects/${enc(id)}`),
+    draft: (request) => json<BuilderDraft>(`${base}/draft`, send("POST", request)),
     create: (template, slots) =>
       json<BuilderProject>(`${base}/projects`, send("POST", { template, slots })),
     update: (id, slots) =>

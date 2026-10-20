@@ -223,6 +223,7 @@ export {
 export {
   type BuilderComponent,
   type BuilderCheck,
+  type BuilderDraft,
   type BuilderFormat,
   type BuilderProject,
   type BuilderRender,
@@ -232,6 +233,7 @@ export {
   type BuilderTheme,
   type ComponentPart,
   type ComponentProgress,
+  type DraftRequest,
   type FieldInfo,
   type FieldKind,
   type LintFinding,

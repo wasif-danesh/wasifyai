@@ -18,6 +18,7 @@ from video_rig import mp4, png
 from wasifyai_platform_sdk import (
     Identity,
     RouteDeps,
+    RunError,
     ScopedStorage,
     memory_storage,
 )
@@ -172,10 +173,26 @@ class FakeEngine:
         self.inspected: list[dict[str, Any]] = []
         self.release = asyncio.Event()
         self.hold = False
+        self.answer: Any = None  # what the chat model says; None: there is no model
+        self.asked: list[str] = []
         self.installer = SimpleNamespace(supported=True)
 
     def ready(self) -> bool:
         return self.is_ready
+
+    async def complete(
+        self, system: str, prompt: str, schema: dict[str, Any], max_tokens: int = 800
+    ) -> str:
+        self.asked.append(prompt)
+        if self.answer is None:
+            raise RunError("no_language_model", "Choose a language model first.")
+        if isinstance(self.answer, str):
+            return self.answer
+        props = schema["properties"]
+        if set(props) == {"template"}:
+            return json.dumps({"template": self.answer["template"]})
+        empty = {k: (0 if v["type"] == "integer" else "") for k, v in props.items()}
+        return json.dumps({**empty, **self.answer["fields"]})
 
     def fit(self) -> dict[str, Any]:
         return {"verdict": self.verdict, "reason": f"It {self.verdict}."}
@@ -195,6 +212,8 @@ class FakeEngine:
     async def inspect(self, project: Path, spec: dict[str, Any]) -> dict[str, Any]:
         """Report what the page draws: what the template expects, unless `screen` says otherwise."""
         self.inspected.append(spec)
+        if self.mode == "flaky" and len(self.inspected) == 1:
+            return {"ok": False, "message": "The browser did not start.", "items": []}
         if self.mode == "no_check":
             return {"ok": False, "message": "The browser did not start.", "items": []}
         info = json.loads((project / "slots.json").read_text())
@@ -213,6 +232,11 @@ class FakeEngine:
 
     async def render(self, project: Path, output: Path, on_progress=None, extra_args=()):
         self.rendered.append((project, tuple(extra_args)))
+        if self.mode == "flaky" and len(self.rendered) == 1:
+            return SimpleNamespace(
+                ok=False, reason="failed", message="The video could not be made.", seconds=1.0,
+                peak_rss_bytes=2**20, blocked_count=0, log_tail="render_cancelled_parent_exited",
+            )  # fmt: skip
         if on_progress:
             for line in ("render 10%", "render 55%", "render 100%"):
                 on_progress(line)
@@ -393,8 +417,8 @@ def test_a_preview_is_a_still_made_once_and_kept(rig):
     assert r.content.startswith(b"\x89PNG") and rig.app_state.video_builder.snapshots == [1.5]
     again = rig.get(f"{BASE}/projects/{cid}/preview?at=1.5")
     assert again.content == r.content and rig.app_state.video_builder.snapshots == [1.5]  # once
-    rig.get(f"{BASE}/projects/{cid}/preview?at=12")
-    assert rig.app_state.video_builder.snapshots[-1] == 5.0  # not past the end
+    rig.get(f"{BASE}/projects/{cid}/preview?at=90")
+    assert rig.app_state.video_builder.snapshots[-1] == 30.0  # not past the end of 30 seconds
     assert rig.get(f"{BASE}/projects/{cid}/preview?at=99").status_code == 422
     rig.get(f"{BASE}/projects/{cid}/preview")  # no time given: the middle of the three
     assert rig.app_state.video_builder.snapshots[-1] == made["preview_times"][1]
@@ -420,6 +444,21 @@ def test_without_the_component_a_preview_a_check_and_a_render_say_what_to_do(rig
         assert r.status_code == 409 and r.json()["detail"]["code"] == "not_ready"
     r = rig.post(f"{BASE}/projects/{made['id']}/render")
     assert r.status_code == 409 and "Set it up first" in r.json()["detail"]["message"]
+
+
+def test_a_missing_ffmpeg_is_said_in_the_engines_own_words_everywhere(rig):
+    engine = rig.app_state.video_builder
+    engine.is_ready = False
+    engine.problem = lambda: "Video Builder also needs FFmpeg (with ffprobe)."  # type: ignore[attr-defined]
+    made = create(rig)
+    for call in (
+        lambda: rig.get(f"{BASE}/projects/{made['id']}/preview"),
+        lambda: rig.post(f"{BASE}/projects/{made['id']}/check"),
+        lambda: rig.post(f"{BASE}/projects/{made['id']}/render"),
+    ):
+        r = call()
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "not_ready"
+        assert "needs FFmpeg" in r.json()["detail"]["message"]
 
 
 def test_a_component_without_the_new_fonts_asks_to_be_set_up_again(rig):
@@ -450,7 +489,7 @@ def test_a_render_becomes_a_clip_of_the_library_that_search_and_export_know(rig)
     assert done["video_url"] and done["poster_url"]
     # the clip is in the video product's table, with its files, in its search index and in its list
     clip = rig.get(f"/products/wasifyai-video/videos/{done['video_id']}").json()
-    assert clip["status"] == "done" and clip["mode"] == "composition" and clip["seconds"] == 5
+    assert clip["status"] == "done" and clip["mode"] == "composition" and clip["seconds"] == 30
     assert clip["prompt"] == "Launch day. Wasify AI is here" and clip["width"] == 128
     assert rig.app_state.creation_index.items[done["video_id"]][0] == "video"
     listed = [v["id"] for v in rig.get("/products/wasifyai-video/videos").json()["videos"]]
@@ -542,6 +581,23 @@ def test_a_failed_or_stopped_render_says_why_and_keeps_no_clip(rig):
     assert rig.get("/products/wasifyai-video/videos").json()["videos"] == []
 
 
+def test_a_browser_that_gave_up_once_is_tried_once_more_for_the_check_and_for_the_drawing(rig):
+    engine = rig.app_state.video_builder
+    engine.mode = "flaky"
+    made = create(rig)
+    row = wait_for(rig, rig.post(f"{BASE}/projects/{made['id']}/render").json()["id"])
+    assert row["status"] == "done" and row["check"]["ok"] is True
+    assert len(engine.inspected) == 2 and len(engine.rendered) == 2
+
+
+def test_a_limit_or_a_refusal_is_not_tried_again(rig):
+    engine = rig.app_state.video_builder
+    engine.mode = "memory"
+    made = create(rig)
+    row = wait_for(rig, rig.post(f"{BASE}/projects/{made['id']}/render").json()["id"])
+    assert row["status"] == "failed" and len(engine.rendered) == 1
+
+
 def test_a_computer_that_cannot_fit_a_render_refuses_before_starting(rig):
     rig.app_state.video_builder.verdict = "too_big"
     made = create(rig)
@@ -569,6 +625,57 @@ def test_deleting_a_project_while_it_renders_stops_the_render_first(rig):
     assert rig.delete(f"{BASE}/projects/{made['id']}").status_code == 204
     assert rig.get(f"{BASE}/status").json()["busy"] is False
     assert rig.get("/products/wasifyai-video/videos").json()["videos"] == []
+
+
+def said(template: str, **fields: Any) -> dict[str, Any]:
+    return {"template": template, "fields": fields}
+
+
+def test_a_description_is_drafted_into_a_form_and_nothing_is_saved(rig):
+    rig.app_state.video_builder.answer = said("lower_third", name="Maya Chen", role="Head")
+    r = rig.post(f"{BASE}/draft", json={"prompt": 'Lower third for "Maya Chen", Head'})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["template"] == "lower_third" and out["fields"]["name"] == "Maya Chen"
+    assert out["warnings"] == [] and out["summary"].startswith("Lower third:")
+    assert rig.get(f"{BASE}/projects").json()["items"] == []  # drafting saves nothing
+
+
+def test_a_csv_is_read_by_the_app_and_a_bad_one_is_refused_in_words(rig):
+    rig.app_state.video_builder.answer = said("chart", title="Sales")
+    ok = {"prompt": "chart it", "attachment": {"name": "s.csv", "text": "a,1\nb,$2"}}
+    out = rig.post(f"{BASE}/draft", json=ok).json()
+    assert out["template"] == "chart" and out["fields"]["data"] == "a, 1\nb, $2"
+    bad = {"prompt": "", "attachment": {"name": "s.csv", "text": "a,1"}}
+    r = rig.post(f"{BASE}/draft", json=bad)
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "bad_file"
+    assert "at least two rows" in r.json()["detail"]["message"]
+
+
+def test_without_a_language_model_the_draft_says_what_to_do(rig):
+    r = rig.post(f"{BASE}/draft", json={"prompt": "a title"})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "no_language_model"
+    assert "Choose a language model" in r.json()["detail"]["message"]
+
+
+def test_a_description_the_model_cannot_answer_for_is_a_plain_422(rig):
+    rig.app_state.video_builder.answer = "not json"
+    r = rig.post(f"{BASE}/draft", json={"prompt": "a title"})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "bad_answer"
+
+
+def test_while_the_safeguards_are_on_typed_words_are_not_taken_at_all(rig):
+    class On:
+        async def enabled(self) -> bool:
+            return True
+
+    rig.app_state.safeguards = On()
+    rig.app_state.video_builder.answer = said("title", title="Hi")
+    made = rig.post(f"{BASE}/projects", json={"template": "title", "slots": {"title": "Hi"}})
+    for r in (made, rig.post(f"{BASE}/draft", json={"prompt": "a title"})):
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "safeguards_on"
+    assert rig.app_state.video_builder.asked == []  # the model never saw the words
+    rig.app_state.safeguards = None
 
 
 def test_where_there_is_no_component_the_routes_are_not_there(tmp_path):
@@ -716,18 +823,18 @@ async def test_motion_revise_changes_only_what_is_given_and_makes_it_again(arig)
     found = arig.store().get_composition("t1", "u1", cid)
     assert found["slots"]["theme"] == "paper" and found["slots"]["subtitle"] == "Here"
     assert len(arig.state.video_builder.rendered) == 2 and arig.store().version_count(cid) == 1
-    too_long = {"composition_id": cid, "fields": {"seconds": 99}}
+    too_long = {"composition_id": cid, "fields": {"seconds": 999}}
     bad = await arig.go("motion.revise", too_long, person_approved=True)
-    assert bad.status == "refused" and "between 3 and 12" in bad.text
+    assert bad.status == "refused" and "between 3 and 90" in bad.text
     assert arig.store().get_composition("t1", "u1", cid)["slots"]["theme"] == "paper"  # unchanged
     nothing = {"composition_id": "0" * 32, "fields": {}}
     assert (await arig.go("motion.revise", nothing, person_approved=True)).status == "refused"
 
 
 async def test_requests_the_product_cannot_take_are_refused_in_words(arig):
-    fields = {"template": "title", "fields": {"title": "Hi", "seconds": 99}}
+    fields = {"template": "title", "fields": {"title": "Hi", "seconds": 999}}
     r = await arig.go("video_builder.create", fields)
-    assert r.status == "refused" and "between 3 and 12 seconds" in r.text
+    assert r.status == "refused" and "between 3 and 90 seconds" in r.text
     gone = await arig.go("video_builder.render", {"composition_id": "0" * 32})
     assert gone.status == "refused" and "does not exist" in gone.text
     bad = await arig.go("video_builder.render", {"composition_id": "x"})
@@ -796,3 +903,15 @@ async def test_the_library_lists_renames_and_deletes_compositions(arig):
     deleted = await arig.go("library.delete", gone, person_approved=True)
     assert deleted.status == "ok" and cid in arig.unindexed
     assert (await arig.go("library.get", gone)).status == "refused"
+
+
+async def test_while_the_safeguards_are_on_the_actions_write_nothing(arig):
+    class On:
+        async def enabled(self) -> bool:
+            return True
+
+    arig.state.safeguards = On()
+    made = await arig.go("video_builder.create", {"template": "title", "fields": {"title": "Hi"}})
+    assert made.status == "refused" and "safeguards are on" in made.text
+    r = await arig.go("motion.make", {"template": "title", "fields": {"title": "Hi"}})
+    assert r.status == "refused" and arig.state.video_builder.rendered == []

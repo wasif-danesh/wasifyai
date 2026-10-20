@@ -4,11 +4,13 @@
 import type {
   BuilderCheck,
   BuilderComponent,
+  BuilderDraft,
   BuilderFormat,
   BuilderProject,
   BuilderRender,
   BuilderSlots,
   BuilderStatus,
+  DraftRequest,
   TemplateCatalogue,
   TemplateInfo,
   VideoBuilderApi,
@@ -27,6 +29,10 @@ export type BuilderState = {
   catalogue: TemplateCatalogue | null;
   /** the template a new draft is made with */
   draft: string;
+  /** what a description was understood as, until the person starts something else */
+  drafted: BuilderDraft | null;
+  /** a description is being read by the language model */
+  drafting: boolean;
   projects: BuilderProject[];
   /** the project open, `new` for a draft, or null */
   selected: string | null;
@@ -59,6 +65,8 @@ export function useVideoBuilder(api: VideoBuilderApi) {
     status: null,
     catalogue: null,
     draft: "title",
+    drafted: null,
+    drafting: false,
     projects: [],
     selected: null,
     project: null,
@@ -161,7 +169,7 @@ export function useVideoBuilder(api: VideoBuilderApi) {
   const open = useCallback(
     async (id: string | null, template?: string) => {
       revoke(state.stills);
-      const clear = { stills: [], check: null, error: null };
+      const clear = { stills: [], check: null, error: null, drafted: null };
       if (id === null || id === NEW) {
         patch({
           selected: id,
@@ -180,6 +188,30 @@ export function useVideoBuilder(api: VideoBuilderApi) {
       }
     },
     [api, patch, state.stills, state.draft],
+  );
+
+  /** Read a description (and a CSV file) with the language model and open the form filled in. */
+  const draftFrom = useCallback(
+    async (request: DraftRequest) => {
+      patch({ drafting: true, error: null });
+      try {
+        const drafted = await api.draft(request);
+        revoke(state.stills);
+        patch({
+          drafting: false,
+          drafted,
+          draft: drafted.template,
+          selected: NEW,
+          project: null,
+          render: null,
+          stills: [],
+          check: null,
+        });
+      } catch (e) {
+        patch({ drafting: false, error: say(e, "That could not be read. Try the form instead.") });
+      }
+    },
+    [api, patch, state.stills],
   );
 
   const chooseTemplate = useCallback(
@@ -205,6 +237,7 @@ export function useVideoBuilder(api: VideoBuilderApi) {
           projects,
           stills: [],
           check: null,
+          drafted: null,
           error: null,
         });
         return saved;
@@ -303,6 +336,7 @@ export function useVideoBuilder(api: VideoBuilderApi) {
     state,
     install,
     open,
+    draftFrom,
     chooseTemplate,
     save,
     undo,

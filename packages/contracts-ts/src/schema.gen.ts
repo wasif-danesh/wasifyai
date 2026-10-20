@@ -894,6 +894,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-video/builder/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Project
+         * @description What a description (and perhaps a CSV file) means as a template and its fields. Nothing
+         *     is saved: the window shows the form filled in, and the person checks it.
+         */
+        post: operations["draft_project_products_wasifyai_video_builder_draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-video/builder/projects": {
         parameters: {
             query?: never;
@@ -1900,6 +1921,19 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** Attachment */
+        Attachment: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+        };
         /** AttachmentResult */
         AttachmentResult: {
             /** Chars */
@@ -2129,6 +2163,17 @@ export interface components {
             thread_id: string;
             /** Ts */
             ts?: string;
+        };
+        /** DraftIn */
+        DraftIn: {
+            attachment?: components["schemas"]["Attachment"] | null;
+            /**
+             * Prompt
+             * @default
+             */
+            prompt: string;
+            /** Shape */
+            shape?: string | null;
         };
         /** EnhanceIn */
         EnhanceIn: {
@@ -5215,6 +5260,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    draft_project_products_wasifyai_video_builder_draft_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -10,7 +10,6 @@ Skipped unless a component is installed: set `WASIFYAI_VIDEO_BUILDER_HOME` to
 `<app data>/components/video-builder` (CI installs it with `scripts/ci-video-builder.py`)."""
 
 import json
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -22,8 +21,8 @@ from wasifyai_video.builder import check, projects, templates
 
 INSTALL = vb.find_install(Path("/nonexistent"))
 pytestmark = pytest.mark.skipif(
-    INSTALL is None or shutil.which("ffmpeg") is None,
-    reason="Video Builder is not installed (WASIFYAI_VIDEO_BUILDER_HOME) or there is no ffmpeg",
+    INSTALL is None or len(vb.find_media_tools(INSTALL)) < len(vb.MEDIA_TOOLS),
+    reason="Video Builder or FFmpeg (with ffprobe) is not installed",
 )
 
 SAMPLES: dict[str, dict[str, Any]] = {
@@ -84,9 +83,15 @@ async def checked(engine, folder: Path, template: str, slots: dict[str, Any]) ->
     return await check.run_check(engine, folder, template, slots)
 
 
+def tool(name: str) -> str:
+    """The component's own ffmpeg or ffprobe, as a render uses it (never the computer's)."""
+    assert INSTALL is not None
+    return vb.find_media_tools(INSTALL)[name]
+
+
 def probe(path: Path) -> dict[str, Any]:
     out = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_frames",
+        [tool("ffprobe"), "-v", "error", "-select_streams", "v:0", "-count_frames",
          "-show_entries", "stream=codec_name,width,height,pix_fmt,nb_read_frames:format=duration",
          "-of", "json", str(path)],
         capture_output=True, text=True, check=True,
@@ -96,7 +101,7 @@ def probe(path: Path) -> dict[str, Any]:
 
 def first_frame_rgba(path: Path, decoder: str | None = None) -> tuple[int, int, bytes]:
     info = probe(path)["streams"][0]
-    cmd = ["ffmpeg", "-v", "error"]
+    cmd = [tool("ffmpeg"), "-v", "error"]
     if decoder:
         cmd += ["-c:v", decoder]
     cmd += ["-i", str(path), "-frames:v", "1", "-pix_fmt", "rgba", "-f", "rawvideo", "-"]
@@ -221,3 +226,19 @@ async def test_the_opaque_templates_have_no_clear_pixels(tmp_path, engine):
     assert result.ok, result.message
     width, height, data = first_frame_rgba(out)
     assert min(alpha_of(width, height, data)) == 255
+
+
+# ---- the longest video ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(("template", "fmt"), [("title", "mp4"), ("lower_third", "webm")])
+async def test_a_90_second_video_is_made_in_a_minute_and_holds_the_same_memory(
+    tmp_path, engine, template, fmt
+):
+    folder, slots = write(tmp_path, engine, template, {**SAMPLES[template], "seconds": 90})
+    out = tmp_path / f"long.{fmt}"
+    result = await engine.render(folder, out, extra_args=("--format", fmt))
+    assert result.ok, result.message
+    assert abs(float(probe(out)["format"]["duration"]) - 90) < 0.5
+    assert result.seconds < 120  # measured 14 to 33 s on an M5 Pro; a slower Mac still has room
+    assert result.peak_rss_bytes < 3.5 * 2**30  # 2.0 to 2.3 GB measured at 30, 60 and 90 seconds

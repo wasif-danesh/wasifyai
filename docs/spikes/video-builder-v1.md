@@ -160,3 +160,50 @@ existing store, check gating, formats, `motion.make`/`motion.revise`, the librar
 
 Not done: moderation of slot text (ADR-0079 decision 9), the chat path (A2), a looping preview clip, the second-opinion
 picture model, Bengali in a font we ship, 16 and 32 GB Macs, the `video-builder` CI job on GitHub (now also runs the template tests).
+
+## MG1b: lengths to 90 seconds and the prompt box (measured 2026-10-21)
+
+**How long can a video be on this Mac** (M5 Pro, 64 GB; real renders through the sandbox):
+
+| Case | Draw time | Tree peak | File |
+|---|---|---|---|
+| title 30 s / 60 s / 90 s, 720p | 6.8 s / 10.1 s / 13.8 s | 2.04 / 1.99 / 2.03 GB | 0.3 / 0.7 / 0.9 MB |
+| quote 90 s, square 1080 | 16.5 s | 2.28 GB | 1.7 MB |
+| title 90 s, portrait | 14.3 s | 2.06 GB | 0.9 MB |
+| chart 90 s, square | 16.7 s | 2.23 GB | 1.3 MB |
+| lower third 90 s, WebM alpha | 25.9 s | 2.20 GB | 0.5 MB |
+| lower third 90 s, ProRes 4444 MOV | 18.1 s | 2.20 GB | **143.8 MB** |
+| captions 90 s (30 lines), WebM alpha | 33.1 s | 2.22 GB | 1.4 MB |
+
+Time grows slowly with length and memory not at all: the pages are mostly still frames. The ceiling of 90 seconds is a choice,
+not a limit of the Mac; the guard stays at 15 minutes and 4 GB. A busier page (video inside, 3D) is not what these templates are.
+
+**The prompt box with real models** (12 requests: names, a quote, a chart from numbers in the sentence, captions, `& < > "`,
+accented and Bengali text, a length and a shape; `Gemma 4 e4b` and `gpt-oss:20b` through Ollama, structured output):
+
+| Model | Right | Time per request | Misses |
+|---|---|---|---|
+| gemma4:e4b | 11 of 12 | 1.6 to 3.6 s | picked "lower third" for a Bengali name and a role (arguable) |
+| gpt-oss:20b | 10 of 12 | 1.4 to 2.8 s (8.7 s first) | left out "30 seconds" and "60 seconds" |
+
+Every quoted word came back exactly. The first version (one answer with every field of every template) failed 10 of 12 on
+gemma: it wrote the words, then blanks until it ran out of room, and filled looks nobody asked for. Two small questions and
+dropping unasked looks fixed it. These are 12 requests, not the MG0 measurement of ADR-0079 (about 20 requests on three tiers).
+
+Through the real desktop engine (app profile, the component installed, Ollama's `gemma4:e4b` chosen with `PUT /desktop/language`):
+draft 6.5 s (the model's first load), create, check passed, a transparent WebM drawn in 11.7 s and kept as a clip of Your videos.
+The CSV case drafted a chart whose rows came from the file. It also found two things now fixed: an unquoted `$1,200.5` was split
+into two cells, and one check failed to run once, right after the model had been used (it passed three times alone; both the
+check and the drawing are now tried once more).
+
+Not done: moderation of the words (refused instead while the safeguards are on), the MG0 half on three model tiers, the
+chat path (A2), spreadsheets, a looping preview, a progress picture of the draft beyond "Reading your request".
+
+## First CI run (2026-10-21): what it found
+
+Three failures, all real: (1) a test of the install plan assumed the machine running it was an Apple-silicon Mac (it is now
+pinned, with a test for the other case); (2) a raw hex colour in the chequerboard behind transparent previews broke
+`design:check` (now `color-mix` of the text colour); (3) **every render on the clean macOS runner failed because FFmpeg and
+ffprobe were not installed**: HyperFrames does not bring them and `imageio-ffmpeg` has no ffprobe, so the plan's "FFmpeg is the
+app's own" was wrong, and it was hidden on the owner's Mac by Homebrew. Fixed as in the ADR-0079 correction; shipping FFmpeg with
+the component is left to the owner.

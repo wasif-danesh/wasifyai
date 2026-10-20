@@ -34,7 +34,8 @@ in Your videos. It takes seconds to a minute for a short video and only one is m
 
 ## Needs
 
-- Video Builder set up (Video › Video Builder) and enough free memory (about 3 GB).
+- Video Builder set up (Video › Video Builder; FFmpeg is part of it) and enough free memory (about
+  3 GB).
 
 ## Examples
 
@@ -46,4 +47,6 @@ in Your videos. It takes seconds to a minute for a short video and only one is m
   and try again.
 - **A video is already being made** Wait for it to finish or cancel it.
 - **Not enough memory** Close other apps, or choose a shorter, smaller video.
+- **Video Builder needs FFmpeg** This should not happen: FFmpeg comes with Video Builder. If it does,
+  run `brew install ffmpeg` in Terminal, then choose Check again.
 - **Video Builder is not set up** Open **Video › Video Builder** and choose Set up.

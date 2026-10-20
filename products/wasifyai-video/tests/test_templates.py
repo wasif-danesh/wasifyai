@@ -59,7 +59,7 @@ def test_slots_are_refused_in_words_and_nothing_unknown_is_dropped():
         ("title", {"title": "ok", "shape": "wide"}, "must be one of"),
         ("title", {"title": "ok", "theme": "neon"}, "must be one of"),
         ("title", {"title": "ok", "font": "comic"}, "must be one of"),
-        ("title", {"title": "ok", "seconds": 2}, "between 3 and 12"),
+        ("title", {"title": "ok", "seconds": 2}, "between 3 and 90"),
         ("title", {"title": "ok", "seconds": "soon"}, "number of seconds"),
         ("title", {"title": "ok", "colour": "red"}, "no setting called colour"),
         ("title", {"title": "ok\x00"}, "cannot be shown"),
@@ -73,7 +73,8 @@ def test_slots_are_refused_in_words_and_nothing_unknown_is_dropped():
         ("chart", {"title": "T", "data": "\n".join(f"a{i}, {i}" for i in range(9))}, "at most 8"),
         ("lower_third", {"name": ""}, "Write a name"),
         ("captions", {"lines": ""}, "at least 1 line"),
-        ("captions", {"lines": "\n".join(["x"] * 13)}, "at most 12 lines"),
+        ("captions", {"lines": "\n".join(["x"] * 46)}, "at most 45 lines"),
+        ("captions", {"lines": "\n".join(["x"] * 31), "per_line": "3"}, "the longest is 90"),
         ("captions", {"lines": "x" * 91}, "too long"),
         ("captions", {"lines": "x", "per_line": "9"}, "must be one of"),
     )

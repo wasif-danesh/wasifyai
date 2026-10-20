@@ -25,7 +25,8 @@ library and you make the video from it. Video Builder is experimental.
 - `template`: title, quote, chart, lower_third or captions.
 - `fields`: The words and settings of that template (for a title: `title`, `subtitle`; for a chart:
   `title` and `data`, lines like `North, 120`; see Make a motion graphic for the rest). Every
-  template also takes `shape`, `seconds`, `theme` and `font`. Words are shown exactly as typed.
+  template also takes `shape`, `seconds` (3 to 90, 30 unless given), `theme` and `font`. Words are
+  shown exactly as typed.
 
 ## Limits
 
@@ -45,4 +46,4 @@ library and you make the video from it. Video Builder is experimental.
 ## Problems
 
 - **The title is too long** Shorten it to 80 characters or fewer.
-- **The length must be between 3 and 12 seconds** Choose a length in that range.
+- **The length must be between 3 and 90 seconds** Choose a length in that range.

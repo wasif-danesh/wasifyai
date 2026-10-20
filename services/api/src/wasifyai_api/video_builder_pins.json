@@ -16,11 +16,11 @@
   },
   "packages": {
     "lock": "video_builder/package-lock.json",
-    "lock_sha256": "a283f06544ab1bb85f60ef8a8d17ba6805e02ab1270a62c0df91db1d73595c33",
+    "lock_sha256": "c437422ab7aa1f47fcb06d93dde685cac8fc11b22a671d6fa89e81a3280df8b6",
     "package": "video_builder/package.json",
-    "package_sha256": "3f9cc1ed78ed2470df0276a0e03bb3e5bd5b017291a67cec54a99415377cb80f",
-    "bytes": 145000000,
-    "note": "128 packages; Apache-2.0, MIT, ISC, BSD, CC0, 0BSD, SIL OFL-1.1 (the two font packages), the gsap Standard no charge licence, and one LGPL-3.0-or-later prebuilt library (libvips inside sharp) that is used as shipped and not modified"
+    "package_sha256": "1ef87d3e4652390bbe049af6a53aea469dad320a283a5bad6ce192614cd26dd2",
+    "bytes": 170000000,
+    "note": "130 packages (two of them carry FFmpeg 4.4 and ffprobe 4.4.1 for darwin-arm64: a GPL build, run only as separate programs); Apache-2.0, MIT, ISC, BSD, CC0, 0BSD, SIL OFL-1.1 (the two font packages), the gsap Standard no charge licence, and one LGPL-3.0-or-later prebuilt library (libvips inside sharp) that is used as shipped and not modified"
   },
   "platforms": ["darwin-arm64"]
 }

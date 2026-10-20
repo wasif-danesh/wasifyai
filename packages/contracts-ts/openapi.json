@@ -137,6 +137,24 @@
         "title": "AttachOptions",
         "type": "object"
       },
+      "Attachment": {
+        "properties": {
+          "name": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Name",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "maxLength": 60000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "title": "Attachment",
+        "type": "object"
+      },
       "AttachmentResult": {
         "properties": {
           "chars": {
@@ -745,6 +763,40 @@
           "seq"
         ],
         "title": "DoneEvent",
+        "type": "object"
+      },
+      "DraftIn": {
+        "properties": {
+          "attachment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Attachment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prompt": {
+            "default": "",
+            "maxLength": 4000,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "shape": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shape"
+          }
+        },
+        "title": "DraftIn",
         "type": "object"
       },
       "EnhanceIn": {
@@ -6258,6 +6310,51 @@
         ]
       }
     },
+    "/products/wasifyai-video/builder/draft": {
+      "post": {
+        "description": "What a description (and perhaps a CSV file) means as a template and its fields. Nothing\nis saved: the window shows the form filled in, and the person checks it.",
+        "operationId": "draft_project_products_wasifyai_video_builder_draft_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Draft Project Products Wasifyai Video Builder Draft Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Draft Project",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
     "/products/wasifyai-video/builder/projects": {
       "get": {
         "operationId": "list_projects_products_wasifyai_video_builder_projects_get",
@@ -6609,7 +6706,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "maximum": 12.0,
+                  "maximum": 90.0,
                   "minimum": 0,
                   "type": "number"
                 },

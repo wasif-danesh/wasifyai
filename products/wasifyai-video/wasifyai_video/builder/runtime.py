@@ -14,9 +14,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from wasifyai_platform_sdk import Identity, RouteDeps, search_text
+from wasifyai_platform_sdk import Identity, RouteDeps, RunError, search_text
 
-from wasifyai_video.builder import check, projects, templates
+from wasifyai_video.builder import check, draft, projects, templates
 from wasifyai_video.builder.store import BuilderStore, NotFound
 from wasifyai_video.index import index_text
 from wasifyai_video.videos import VideoRecord, poster_of, video_store
@@ -40,11 +40,49 @@ class Refused(Exception):
         self.code, self.message = code, message
 
 
+def not_ready(engine: Any) -> str:
+    """Why the engine cannot draw now, in words (its own sentence when it has one)."""
+    why = getattr(engine, "problem", lambda: None)()
+    return why or "Video Builder is not set up yet. Set it up first."
+
+
 def engine_for(state: Any) -> Any:
     engine = getattr(state, "video_builder", None)
     if engine is None:
         raise NotAvailable("Video Builder is not available in this deployment.")
     return engine
+
+
+async def words_allowed(state: Any) -> None:
+    """Typed words are not moderated yet (ADR-0079 decision 9), and Video Builder is a desktop
+    feature, where the safeguards are off (ADR-0047). Where they are on, it refuses instead of
+    letting unchecked words through."""
+    guard = getattr(state, "safeguards", None)
+    if guard is not None and await guard.enabled():
+        raise Refused(
+            "safeguards_on",
+            "Video Builder cannot check typed words for safety yet, so it is off while the "
+            "safeguards are on.",
+        )
+
+
+async def make_draft(
+    deps: RouteDeps,
+    identity: Identity,
+    prompt: str,
+    attachment: dict[str, str] | None = None,
+    shape: str | None = None,
+) -> dict[str, Any]:
+    """The template and fields a description means (`draft.draft`), asked of the chosen chat
+    model; nothing is saved. Raises `Refused` with the sentence the person is shown."""
+    await words_allowed(deps.state)
+    try:
+        with deps.acting_as(identity, "wasifyai-video"):
+            return await draft.draft(engine_for(deps.state), prompt, attachment, shape)
+    except draft.DraftError as e:
+        raise Refused(e.code, e.message) from None
+    except RunError as e:
+        raise Refused(e.code, e.message) from None
 
 
 def root_for(state: Any) -> Path:
@@ -110,7 +148,7 @@ class RenderManager:
         engine = engine_for(state)
         store = store_for(state)
         if not engine.ready():
-            raise Refused("not_ready", "Video Builder is not set up yet. Set it up first.")
+            raise Refused("not_ready", not_ready(engine))
         if self.busy:
             raise Refused("busy", "A video is already being made. Wait for it to finish.")
         fit = engine.fit()
@@ -205,6 +243,13 @@ class RenderManager:
                 return
             self._stage[rid] = "drawing"
             result = await engine.render(folder, out, on_progress, ("--format", fmt))
+            if not result.ok and result.reason == "failed":
+                # the browser's own worker gave up (seen once under load, never when idle): one
+                # more try; a limit, a refusal or a cancel is never tried again
+                log.warning("a render failed, trying again: %s", getattr(result, "log_tail", ""))
+                self._progress.pop(rid, None)
+                last = 0.0
+                result = await engine.render(folder, out, on_progress, ("--format", fmt))
             if not result.ok:
                 status = "cancelled" if result.reason == "cancelled" else "failed"
                 store.finish_render(

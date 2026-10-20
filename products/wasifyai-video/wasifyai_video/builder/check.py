@@ -6,10 +6,13 @@ report is compared with the typed words, in plain sentences. A failed check is s
 quietly: the words are never retyped by a model, and a render does not start on a page that does
 not say them."""
 
+import logging
 import unicodedata
 from typing import Any
 
 from wasifyai_video.builder import templates
+
+log = logging.getLogger(__name__)
 
 MIN_OPACITY = 0.75  # the templates dim a second line to 0.8; a word still fading in is below this
 MIN_INK = 20  # pixels that change when the element is hidden: fewer means nothing is drawn
@@ -91,6 +94,9 @@ async def run_check(
     """The check of one composition: `{ok, checked, problems, message}`. `ok` is false when the page
     says something else, and also when the check itself could not be run (it is not skipped)."""
     report = await engine.inspect(folder, spec_for(template, slots))
+    if not report["ok"]:  # the browser did not start or died (seen once under load): once more
+        log.warning("the check could not be run, trying again: %s", report.get("log") or report)
+        report = await engine.inspect(folder, spec_for(template, slots))
     expected = len(templates.expected(template, slots))
     if not report["ok"]:
         return {"ok": False, "checked": 0, "problems": [], "message": (

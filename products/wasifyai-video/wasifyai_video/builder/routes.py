@@ -23,15 +23,18 @@ from wasifyai_video.builder.runtime import (
     add_to_search,
     engine_for,
     index_composition,
+    make_draft,
     manager_for,
+    not_ready,
     root_for,
     store_for,
+    words_allowed,
 )
 from wasifyai_video.builder.store import NothingToUndo
 from wasifyai_video.videos import video_store
 
 PRODUCT_ID = "wasifyai-video"
-PREVIEW_AT_MAX = 12.0
+PREVIEW_AT_MAX = float(templates.MAX_SECONDS)
 
 
 class ProjectIn(BaseModel):
@@ -45,6 +48,17 @@ class RenderIn(BaseModel):
 
 class ProjectPatch(BaseModel):
     slots: dict[str, Any]
+
+
+class Attachment(BaseModel):
+    name: str = Field("", max_length=200)
+    text: str = Field("", max_length=60_000)
+
+
+class DraftIn(BaseModel):
+    prompt: str = Field("", max_length=4000)
+    attachment: Attachment | None = None
+    shape: str | None = Field(None, max_length=20)
 
 
 def template_info() -> dict[str, Any]:
@@ -71,6 +85,12 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
 
     def refuse(e: Refused) -> HTTPException:
         return HTTPException(409, {"code": e.code, "message": e.message})
+
+    async def allowed() -> None:
+        try:
+            await words_allowed(deps.state)
+        except Refused as e:
+            raise refuse(e) from None
 
     def slots_or_422(template: str, raw: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -139,6 +159,20 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         guard()
         return template_info()
 
+    @router.post("/draft")
+    async def draft_project(
+        body: DraftIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """What a description (and perhaps a CSV file) means as a template and its fields. Nothing
+        is saved: the window shows the form filled in, and the person checks it."""
+        guard()
+        attachment = body.attachment.model_dump() if body.attachment else None
+        try:
+            return await make_draft(deps, identity, body.prompt, attachment, body.shape)
+        except Refused as e:
+            status = 422 if e.code in ("bad_draft", "bad_file") else 409
+            raise HTTPException(status, {"code": e.code, "message": e.message}) from None
+
     @router.get("/projects")
     async def list_projects(
         ids: str | None = Query(None, max_length=2000),
@@ -157,6 +191,7 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         body: ProjectIn, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
         guard()
+        await allowed()
         slots = slots_or_422(body.template, body.slots)
         found = await asyncio.to_thread(
             store_for(deps.state).add_composition,
@@ -176,6 +211,7 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         cid: str, body: ProjectPatch, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
         guard()
+        await allowed()
         current = composition(identity, cid)
         slots = slots_or_422(current["template"], {**current["slots"], **body.slots})
         found = await asyncio.to_thread(
@@ -211,9 +247,7 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         engine = engine_for(deps.state)
         found = composition(identity, cid)
         if not engine.ready():
-            raise HTTPException(
-                409, {"code": "not_ready", "message": "Video Builder is not set up yet."}
-            )
+            raise HTTPException(409, {"code": "not_ready", "message": not_ready(engine)})
         if manager_for(deps).busy:
             raise HTTPException(
                 409, {"code": "busy", "message": "A video is being made. Try again in a moment."}
@@ -250,9 +284,7 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         engine = engine_for(deps.state)
         found = composition(identity, cid)
         if not engine.ready():
-            raise HTTPException(
-                409, {"code": "not_ready", "message": "Video Builder is not set up yet."}
-            )
+            raise HTTPException(409, {"code": "not_ready", "message": not_ready(engine)})
         if at is None:
             at = templates.preview_times(found["template"], found["slots"])[1]
         at = min(at, float(found["slots"]["seconds"]))

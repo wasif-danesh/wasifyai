@@ -1,23 +1,30 @@
-# wasifyai
+# Wasify AI
 
-A self-hosted, cloud-portable platform for launching AI products quickly.
+Wasify AI is an AI app you run on your own computer, and a web twin of it. A **chat assistant** is the home
+screen; beside it are **images**, **video**, **voice** (text to speech, speech to text, music, dubbing,
+audiobooks, lip sync) and **notebooks** (chat with your own documents). Everything you make lands in one
+library, **My creations**, searchable by meaning in any language.
 
-The **platform core** provides the shared machinery every AI product needs: an API with
-streaming, a stateful agent runtime, a model gateway, GPU media workers, storage, and
-auth, monitoring, and (later) billing. Each **product** is a thin layer on top: a few
-LangGraph graphs, a Next.js UI and a config file.
+Under it is a reusable **platform core** (the repository is called `wasifyai`): an API with streaming, a
+stateful agent runtime, a model gateway, media workers, storage, auth and monitoring. Each **product** is a
+thin layer on top: a few LangGraph graphs, a config file and a screen.
 
-> **Status: prototype (v1 in progress).** Products run end to end: **images**, **video**, **notebooks**, and the
-> **voice** product (**text to speech**, **speech to text**, **music**, **audio tools**, **dubbing**, **audiobooks** and **lip sync**). Everything a user makes lands in one library,
-> **My creations**, searchable by meaning in any language. The whole system runs in containers and installs on
-> a local Kubernetes cluster from a Helm chart, with monitoring and alerts to Telegram. Next are staging on a
-> GPU box and a short GCP test, built with OpenTofu. See the [roadmap](docs/roadmap.md).
+> **Status (2026-10-20): v1 in progress, desktop first.** The desktop app (a Tauri window that starts the engine on
+> your computer) is the main target: Mac first, image first, English first. The same screens run as a web app
+> against the same engine in containers. This week the chat gained **edit and versions of a message**,
+> **cards that ask before the assistant makes something**, **file attachments** (pictures and documents), **web
+> search**, **Thinking**, **Mic dictation** and **read aloud**, and the **notebook chat** moved onto the same
+> chat engine. These are being tested by hand in the real window before anything new starts; next after that is
+> a simpler way to choose models. See the [roadmap](docs/roadmap.md).
 
 ## Contents
 
+- [What it looks like](#what-it-looks-like)
+- [What the chat can do](#what-the-chat-can-do)
 - [How it works](#how-it-works)
 - [Products](#products)
-- [Quick start](#quick-start) (including [what to install first](#before-you-start-manual-prerequisites))
+- [Run the desktop app](#run-the-desktop-app)
+- [Run the web app](#run-the-web-app) (including [what to install first](#before-you-start-manual-prerequisites))
 - [Monitoring](#monitoring)
 - [Using the API](#using-the-api)
 - [Project layout](#project-layout)
@@ -27,6 +34,53 @@ LangGraph graphs, a Next.js UI and a config file.
 - [Documentation](#documentation)
 - [Principles](#principles)
 - [Roadmap](#roadmap)
+
+## What it looks like
+
+The pictures below are the shared screens (the desktop window and the web app draw the same ones), taken from the
+web app against its test engine, so they show sample data. `README_SHOTS=1 pnpm --filter web exec playwright test
+e2e/readme-screens.spec.ts --project=desktop-light` makes them again.
+
+![Home: the assistant, with the options under the box: Attach, Thinking, Search and Mic](docs/images/screens/home.png)
+
+| A chat: a picture and a file attached, sources from the web, two versions of an answer | The assistant asks before it makes something |
+|---|---|
+| ![A chat with attachments, web sources and a version picker](docs/images/screens/chat.png) | ![A card that asks before making a picture](docs/images/screens/card.png) |
+
+| Files waiting in the box | On a phone |
+|---|---|
+| ![A picture and a PDF waiting to be sent](docs/images/screens/attach.png) | ![A chat on a phone, dark theme](docs/images/screens/phone.png) |
+
+| Notebooks: chat with your sources, citations, a Studio of outputs | Images |
+|---|---|
+| ![A notebook with its chat, citation pills and the Studio](docs/images/screens/notebook-chat.png) | ![Create images](docs/images/screens/images.png) |
+
+| Video | Voice (text to speech) |
+|---|---|
+| ![Make a video](docs/images/screens/video.png) | ![Text to speech](docs/images/screens/voice.png) |
+
+| Music | Notebooks |
+|---|---|
+| ![Create music](docs/images/screens/music.png) | ![Your notebooks](docs/images/screens/notebooks.png) |
+
+## What the chat can do
+
+| | |
+|---|---|
+| **Ask anything** | Answers stream in, with code, maths and diagrams; Stop and Try again; a conversation is kept and found again from Recents and from search. |
+| **Make things** | "Draw a red teapot" or "make a song" runs the image or music product and shows the result in the chat. |
+| **Edit and versions** | Edit a message of yours or press Answer again: the old version stays, and "2 / 3" arrows move between versions. The version you leave on screen is the one you come back to. |
+| **Cards that ask first** | After the assistant has read the web or a file you attached, anything it wants to make or change waits for your Go ahead; it cannot be talked into it by text it read. |
+| **Attach** | Pictures (the model needs its picture reader; the app offers it, with the size, and downloads only after you click) and documents (text, Markdown, CSV, HTML; PDF and Office with the document reader). Drag, paste or pick. |
+| **Search** | Off until you allow it. DuckDuckGo needs no account; Ollama, Tavily, Exa or Brave Search work with your own key. Sources are shown and open in your browser. |
+| **Thinking** | For models that can think: it shows its thinking, collapsed, and says it takes longer. Off by default. |
+| **Mic** | Press, speak, press again: your words land in the box. A speech model runs on your computer; audio is not kept. |
+| **Read aloud** | A button on each reply speaks it with a voice that runs on your computer. Nothing is saved. |
+| **Notebooks** | Chat with your own documents: citations you can open, a Studio for reports, study guides, decks and more. |
+
+The new chat is behind **Settings, Labs, "Try the new chat"** while it is tested; the usual chat stays the default.
+Design: [ADR-0082](docs/decisions/0082-chat-ui-on-assistant-ui.md) (the chat) and
+[ADR-0083](docs/decisions/0083-composer-options-attach-search-thinking-mic.md) (the options under the box).
 
 ## How it works
 
@@ -39,6 +93,21 @@ Browser ─► Next.js (UI + BFF) ─► FastAPI + LangGraph ─► LiteLLM ─�
 
 Prometheus, Alertmanager, Grafana and Loki watch all of it and alert to Telegram.
 ```
+
+That is the **web profile**. The **desktop profile** runs the same engine with the same products and screens, with
+the web's services replaced by local ones behind the same interfaces:
+
+```
+Tauri window (packages/ui) ─► engine on 127.0.0.1 (FastAPI + LangGraph, a token per launch)
+                                   ├─► SQLite (records, checkpoints, run events, job queue)
+                                   ├─► a folder of files (links signed per launch)
+                                   ├─► llama-server (the chat model, `--mmproj` for pictures) or Ollama / LM Studio
+                                   ├─► audio.cpp (speech, music, dubbing) and ComfyUI / the image engine, on demand
+                                   └─► the notebooks' document reader (a separate process), on demand
+```
+
+Product code never asks which profile it runs in ([desktop profile](docs/desktop-profile.md)). The chat screens live
+in `packages/ui` and talk to the engine through `packages/client`, so the web app and the window share them.
 
 1. The browser talks only to the **Next.js** app, which handles sign-in (Auth.js). Its route
    handlers (the BFF) check the session, attach a short-lived signed token, proxy to the API and
@@ -60,14 +129,61 @@ Prometheus, Alertmanager, Grafana and Loki watch all of it and alert to Telegram
 
 | Product | What it does |
 |---|---|
-| [`wasifyai-image`](products/wasifyai-image/README.md) | Text to image and image to image (FLUX.2 klein 4B) |
+| [`wasifyai-assistant`](products/wasifyai-assistant/) | The chat: conversations with a tree of message versions, tools that make things, cards that ask first, attachments, web search, Thinking |
+| [`wasifyai-image`](products/wasifyai-image/README.md) | Text to image and image to image (FLUX.2 klein 4B on the web; the desktop image engine) |
 | [`wasifyai-video`](products/wasifyai-video/README.md) | Text to video and image to video, 2 or 5 seconds (LTX-Video 2B), made in the background |
+| [`wasifyai-voice`](products/wasifyai-voice/README.md) | Text to speech, speech to text (and Mic dictation), music, audio tools, dubbing, audiobooks, lip sync, read aloud |
+| [`wasifyai-notebooks`](products/wasifyai-notebooks/) | Chat with your own documents: sources, citations, a Studio of outputs |
 
 A product is a folder under `products/` with its `product.yaml`, graphs, prompts and ComfyUI
 workflows. Adding a product adds no API endpoints: the graph registry exposes registered
 graphs through the same generic routes.
 
-## Quick start
+## Run the desktop app
+
+The desktop app is a small Rust shell ([Tauri 2](https://tauri.app)) that starts the engine (`services/api` in its
+desktop profile: SQLite, local files, a worker in the same process) and shows the window. Nothing listens on the
+network: the engine binds `127.0.0.1` and every call carries a token the shell made for that launch.
+
+**You need** (macOS is the tested platform): Homebrew, Apple's command line tools (`xcode-select --install`), and
+the Rust toolchain 1.89 or newer ([rustup](https://rustup.rs)). `make setup` installs the rest (`uv`, Node 22,
+`pnpm`) and the Python environment; it does not install Rust. About 15 GB of free disk and 16 GB of memory are
+comfortable for the default chat model (Qwen3.5 9B: about 5.7 GB to get, about 7 GB in memory). Windows and Linux
+are built and tested by CI but have not been used by hand.
+
+```bash
+git clone https://github.com/wasif-danesh/wasifyai.git && cd wasifyai
+make setup                                  # tools and the Python environment (.venv)
+pnpm --filter @wasifyai/desktop build       # the window's files (apps/desktop/dist)
+cd apps/desktop/src-tauri && cargo run      # the shell; it starts the engine from .venv
+```
+
+(After the first build, `touch build.rs` before `cargo run` if you change `Info.plist`: macOS reads the microphone
+text from it.) The window can also run on its own against a running engine: `pnpm --filter @wasifyai/desktop dev`
+(http://localhost:1420). A packaged, unsigned app with the engine bundle inside:
+`make engine-bundle && pnpm exec tauri build --config src-tauri/tauri.bundle.conf.json --bundles app`
+(run in `apps/desktop`).
+
+**The first time**
+
+1. The window opens on the assistant. In **Settings**, set up the **language engine** (it installs the model
+   runner, with the size shown) or, if you use Ollama or LM Studio, pick one of their models.
+2. In **Models**, under *Found on this computer* or *Discover*, choose a chat model. Qwen3.5 9B is the one the
+   assistant is tuned for and the one with a picture reader.
+3. Ask something. Optional extras, each with its size shown and downloaded only when you click: the image engine
+   (Settings), a speech model for Mic and Read aloud, the picture reader (the first time you attach a picture), the
+   document reader for PDF and Office files (the first time you add one to a notebook).
+4. **Settings, Labs, "Try the new chat"** turns on edit, versions, cards and the new notebook chat.
+
+Your data (database, files, models you fetched, logs) lives in the app data folder: on macOS
+`~/Library/Application Support/ai.wasifyai.desktop` (`logs/engine.log` is the first place to look when something
+fails). More: [desktop profile](docs/desktop-profile.md), [apps/desktop](apps/desktop/README.md). **Testing it by
+hand:** [desktop window checklist](docs/testing/desktop-window-checklist.md).
+
+## Run the web app
+
+The same screens as a web app, with the engine in containers (Postgres, Redis, object storage, the model gateway,
+a media worker):
 
 Do the [one-time prerequisites](#before-you-start-manual-prerequisites) for your platform, then
 two commands do everything else:
@@ -86,22 +202,6 @@ gateway, or the models on this machine (`scripts/web-local.sh`, [runbook](docs/r
 Sign-in is off by default (`AUTH_MODE=stub` in `.env.example`: everyone is the dev user). To turn it on,
 set `AUTH_MODE=jwt`, the two secrets and a provider's client id and secret: see
 [Sign-in in apps/web](apps/web/README.md#sign-in).
-
-![The WasifyAI Studio home page: a card for each product](docs/images/home.jpg)
-
-Inside a product the side panel is the navigation (the home page keeps its cards):
-
-| Create | Review the lyrics | Your song |
-|---|---|---|
-| ![Create a song, with the side panel](docs/images/create.jpg) | ![Review and edit the lyrics](docs/images/review.jpg) | ![A finished song](docs/images/song.jpg) |
-
-| Text to speech (Bengali) | My creations | The same, as a table |
-|---|---|---|
-| ![Text to speech in Bengali](docs/images/speech.jpg) | ![My creations as cards](docs/images/creations.jpg) | ![My creations as a sortable table](docs/images/creations-table.jpg) |
-
-The admin area uses the same components for its data tables (sorting, a filter box, paging):
-
-![The admin overview: usage tables](docs/images/admin.jpg)
 
 If `make` is not installed yet (common on a fresh Linux box), run the script directly. It
 installs `make` for you: `./scripts/setup.sh`, then `make dev`.
@@ -293,7 +393,14 @@ Without a valid token every route except `/health` answers `401`. Responses for 
 | `POST /products/{product_id}/runs` | Start a run; streams events. Body: `{"input": {...}, "thread_id"?: uuid}` |
 | `GET /runs/{run_id}/events` | Reconnect to a run; honours `Last-Event-ID` |
 | `POST /runs/{run_id}/resume` | Answer an `interrupt` (approve, edit); continues the stream. Body: `{"value": ...}` |
+| `POST /runs/{run_id}/cancel` | Stop a run (the Stop button) |
 | `GET /me` | The caller's user id, tenant and role |
+| `GET/PATCH/DELETE /products/wasifyai-assistant/conversations[/{id}]` | The assistant's conversations. `GET ...?tree=1` returns every version of every message; `PATCH {head_id}` says which version is on screen. Runs take `parent_message_id`, `regenerate`, `attachments`, `search`, `thinking` and `approvals` ([SSE contract](docs/contracts/sse-events.md)) |
+| `GET /products/wasifyai-assistant/options` | What the chat box can offer with the model in use: Thinking, Search, Attach (and the picture reader the app can fetch) |
+| `GET/PUT /products/wasifyai-assistant/search` | Web search settings: service, permission, keys (written, never read back) |
+| `POST /products/wasifyai-assistant/attachments` | A document for a chat message, read to text on the engine (pictures use the ordinary upload route) |
+| `POST /products/wasifyai-voice/dictation` | Mic: a 16 kHz mono WAV in, words out, nothing kept |
+| `GET /desktop/vision`, `POST /desktop/vision/download` | Desktop: the chosen model's picture reader, and fetching it after you agreed to the size |
 | `GET /admin/media`, `PUT /admin/media/{product}/{capability}`, `POST .../test`, `.../reset` | Admin only: choose which backend runs a product's media capability; keys are write-only |
 | `GET /admin/models`, `PUT /admin/models/{alias}`, `POST /admin/models/{alias}/test`, `/reset` | Admin only: see and change which provider and model serve each LiteLLM alias; keys are write-only |
 | `GET /admin/users`, `/admin/songs`, `/admin/usage?days=`, `/admin/audit` | Admin only (`403` for others): users, songs from all users, usage totals, the audit log. Listing users is itself audited |
@@ -328,15 +435,18 @@ http://localhost:8000/docs.
 
 ```
 wasifyai/
-├─ apps/web/                 # Next.js app (shadcn/ui, Tailwind, TanStack Table): product UIs, side panel, admin, BFF
+├─ apps/web/                 # Next.js app (shadcn/ui, Tailwind, TanStack Table): product UIs, side panel, admin, BFF; Playwright specs in e2e/
+├─ apps/desktop/             # the desktop app: Tauri 2 shell (Rust) and the window (Vite + React); AGPL-3.0, see its README
 ├─ services/
 │  ├─ api/                   # FastAPI + LangGraph runtime (graphs, runs, identity, migrations, metrics)
 │  ├─ media-worker/          # Redis consumer that drives ComfyUI
 │  └─ comfyui/               # ComfyUI container image (CPU by default, CUDA by build argument)
 ├─ packages/
+│  ├─ ui/                    # the screens the web app and the window share (chat on assistant-ui, notebooks, create screens), tokens only
+│  ├─ client/                # the typed engine client and the chat state (message tree, run follower)
 │  ├─ contracts/             # Pydantic models: SSE events and request bodies (source of truth)
 │  ├─ contracts-ts/          # TypeScript types generated from the OpenAPI schema
-│  └─ platform-sdk/          # Capabilities, providers, product config, storage, usage, graph registry
+│  └─ platform-sdk/          # Capabilities, providers, product config, storage, usage, actions, web access, graph registry
 ├─ products/
 │  ├─ hello/, media-demo/    # sample products: config only (used by the smoke tests)
 │  ├─ wasifyai-image/           # text to image and image to image
@@ -350,8 +460,9 @@ wasifyai/
 │  ├─ monitoring/            # values for the monitoring stack and the Alertmanager template
 │  ├─ kind/                  # local cluster config
 │  └─ argocd/                # Argo CD Application for staging
-├─ scripts/                  # setup, preflight, dev, kind, monitoring and install helpers
-├─ docs/                     # architecture, ADRs, contracts, runbooks, roadmap
+├─ design/                   # DESIGN.md: the single source of the look (colours, type, spacing), and its themes
+├─ scripts/                  # setup, preflight, dev, kind, monitoring, design and chat-bundle helpers
+├─ docs/                     # architecture, ADRs, contracts, runbooks, roadmap, spikes, the test checklist
 ├─ compose.yaml              # local dev stack
 └─ Makefile                  # setup, dev, test, lint, contracts, migrate, kind-*, monitoring-*
 ```
@@ -381,19 +492,38 @@ make test-comfyui       # opt-in: a real image, song and cover on your local Com
 make lint        # ruff, pyright, Biome, tsc
 make format      # ruff format + autofix
 make contracts   # regenerate TS types from the API's OpenAPI schema
-make setup       # one-time machine setup (see Quick start); setup-k8s adds kind/helm/kubectl
+make setup       # one-time machine setup (see Run the desktop app and Run the web app); setup-k8s adds kind/helm/kubectl
 make preflight   # read-only readiness check
 make dev / down  # start (with migrations) / stop the container stack
 make migrate     # alembic upgrade head only (Postgres on localhost)
 make helm-lint   # lint and render the chart with every overlay
 make kind-up / kind-test / kind-e2e / kind-down   # local Kubernetes (see above)
 make monitoring-up / monitoring-drill             # monitoring stack and fire drill
+make engine-bundle                                # the files the desktop app installs its engine from
+```
+
+The screens and the desktop app:
+
+```bash
+pnpm -r typecheck                                  # every TypeScript package
+pnpm --filter @wasifyai/ui exec vitest run         # the shared screens (jsdom); also client, web and desktop
+pnpm --filter web test:e2e:layout                  # the layout cases in Chromium against the test engine (CI runs these)
+pnpm --filter web test:e2e                         # also the screenshot cases (kept per operating system)
+pnpm design:check                                  # no hard-coded colours, sizes or radii; contrast of every token pair
+pnpm chat:bundle-check                             # the new chat's first screen stays within its size budget
+cd apps/desktop/src-tauri && cargo test            # the shell
+WASIFYAI_SMOKE=1 cargo run                         # the self-test: make an image in the real window, exit 0 or 1
 ```
 
 - **Tooling:** Python 3.12 with `uv`, `ruff`, `pyright`, `pytest`, Alembic. TypeScript with
   `pnpm`, Turborepo, Biome, Vitest, Next.js App Router in strict mode. UI: shadcn/ui (Radix) with Tailwind CSS, react-hook-form and Zod for forms, TanStack Table for data grids ([ADR-0045](docs/decisions/0045-ui-components.md)); `apps/web/app/tailwind.css` is the only stylesheet.
 - **Contracts:** Pydantic models are the source of truth. Never hand-edit
-  `packages/contracts-ts/src/schema.gen.ts`; run `make contracts`.
+  `packages/contracts-ts/src/schema.gen.ts`; run `make contracts` (it also writes `docs/contracts/actions.json`, the
+  catalogue of everything the app can do).
+- **The look:** `design/DESIGN.md` is the only source of colours, type and spacing; screens use tokens, and the lint
+  fails on anything hard-coded ([ADR-0081](docs/decisions/0081-design-system-from-design-md.md)).
+- **Features are actions:** anything a person or an agent can ask the app to do has an action, a help file and a
+  place in the menu ([how to add one](docs/actions.md)).
 - **Tests:** graph tests use a fake capability provider, so they need no GPU or network.
 - **Commits:** [Conventional Commits](https://www.conventionalcommits.org), scoped by area,
   e.g. `feat(api): ...`.
@@ -419,6 +549,12 @@ make monitoring-up / monitoring-drill             # monitoring stack and fire dr
 | Sign-in page says "No sign-in provider is set up" | Set a provider's `AUTH_<PROVIDER>_ID` and `_SECRET` in `.env`, or `AUTH_MODE=stub` for local work |
 | Sign-in fails with `redirect_uri_mismatch` or "Server error: problem with the server configuration" | Set `AUTH_URL=http://localhost:3000` and register `http://localhost:3000/api/auth/callback/<provider>` with the provider. In a container the server otherwise reports `0.0.0.0` |
 | API refuses to start: "AUTH_MODE=jwt needs API_AUTH_SECRET" | Put the same 32+ byte `API_AUTH_SECRET` (`openssl rand -hex 32`) in the API and web environment, or set `AUTH_MODE=stub` |
+| Desktop: `cargo run` says the Rust version is too old | Update the toolchain: `rustup update` (the shell needs 1.89 or newer) |
+| Desktop: the window opens but says the engine did not start | Open `~/Library/Application Support/ai.wasifyai.desktop/logs/engine.log`; "Repair the installation" in Settings rebuilds the engine's environment |
+| Desktop: Mic is silent or macOS never asked for the microphone | Run `touch apps/desktop/src-tauri/build.rs` and `cargo run` again (the permission text is read at build time); check System Settings, Privacy, Microphone |
+| Desktop: a picture is refused ("cannot look at pictures") | The chat model needs its picture reader. Attach the picture again and press Download in the card, or put the model's `mmproj` file next to it |
+| Desktop: web search says DuckDuckGo is busy or has not answered | DuckDuckGo limits automated searches. Wait a little, or add a key for Tavily, Exa, Brave or Ollama in Settings, Searching the web |
+| Playwright cases fail only when two runs overlap | They share `apps/web/e2e/results` and `.next`: run one at a time, or give each run its own `--output` |
 | `command not found` right after setup (Linux, WSL) | Tools are installed in `~/.local/bin`. Add it to your PATH (`export PATH="$HOME/.local/bin:$PATH"` in `~/.profile`) and reopen the shell |
 | `make kind-up` fails on Linux with rootless Podman | Enable cgroup delegation: [runbooks/linux-kind.md](docs/runbooks/linux-kind.md) |
 | WSL is slow or runs out of memory | Keep the repo under `~`, not `/mnt/c`, and raise the limit in `.wslconfig` ([docs/windows.md](docs/windows.md)) |
@@ -447,11 +583,18 @@ The same container images run everywhere. Only infrastructure and configuration 
 | [Home lab runbook](docs/runbooks/homelab-k3s.md) | k3s, Argo CD and Tailscale setup for staging |
 | [kind on Linux](docs/runbooks/linux-kind.md) | Rootless Podman prerequisites for the local cluster |
 | [Monitoring runbook](docs/runbooks/monitoring.md) | The stack, the alerts, where to look, fire drills |
+| [The desktop profile](docs/desktop-profile.md) | How the engine runs on one computer, what is built, how the shell and engine meet |
+| [Desktop window checklist](docs/testing/desktop-window-checklist.md) | What to try by hand in the real window, line by line |
+| [Chat on assistant-ui](docs/chat-ui-migration-plan.md) | The new chat: stages CU0 to CU4 as built, what is left |
+| [Chat box options](docs/composer-options-plan.md) and [spike report](docs/spikes/composer-co0.md) | Attach, Search, Thinking, Mic: what each does, measurements, what is not built |
+| [The action catalogue](docs/actions.md) | Everything the app can do, described once; how to add an action |
+| [Design system](design/DESIGN.md) | The look of every screen, in one file |
 | [Roadmap](docs/roadmap.md) | Build phases, checklists and planned work |
 | [Decisions](docs/decisions/README.md) | Architecture decision records (ADRs) |
 | [`wasifyai-image`](products/wasifyai-image/README.md) | Text to image and image to image |
 | [`wasifyai-video`](products/wasifyai-video/README.md) | Text to video and image to video |
 | [`apps/web`](apps/web/README.md) | The web app: components, side panel, styling, sign-in |
+| [`apps/desktop`](apps/desktop/README.md) | The desktop shell and window: commands, packaging, licence |
 
 ## Principles
 
@@ -463,7 +606,19 @@ The same container images run everywhere. Only infrastructure and configuration 
 
 ## Roadmap
 
-v1 is a working, deployable system, not a production launch. Four stages:
+**Where the work is now (2026-10-20).** The desktop app comes first.
+
+| Order | What | State |
+|---|---|---|
+| Now | Try everything that was built in the real desktop window and fix what breaks ([checklist](docs/testing/desktop-window-checklist.md)) | In progress |
+| Next | A simpler way to choose models, for each product and in the Models section, for people who are not technical (the way Unsloth Studio does it) | Next |
+| After | The assistant that guides and executes (action cards on the catalogue), the MCP server and client, agents, training, Video Builder, motion graphics, 3D | On hold; [phase 4 plan](docs/phase4-agent-plan.md), [phase 5 plan](docs/phase5-agent-training-video-builder-plan.md) |
+
+Built and waiting to be tried by hand: edit and versions, approval cards, attachments (and the picture reader), web
+search, Thinking, Mic, read aloud and the notebook chat on the new chat. Not built: best-passages cutting for long
+documents, a live check of DuckDuckGo's reliability, and checks in a signed macOS bundle.
+
+**The hosted v1 plan.** v1 is a working, deployable system, not a production launch. Four stages:
 
 | Stage | Goal | State |
 |---|---|---|
@@ -479,6 +634,7 @@ Details and checklists: [docs/roadmap.md](docs/roadmap.md).
 
 ## Licence
 
-Apache License 2.0, see [LICENSE](LICENSE). Third-party software and the AI models you download keep their own
+Apache License 2.0, see [LICENSE](LICENSE), except `apps/desktop` (the desktop shell), which is AGPL-3.0-only because
+it contains code imported from Unsloth Studio ([apps/desktop/LICENSE-AGPL](apps/desktop/LICENSE-AGPL)). Third-party software and the AI models you download keep their own
 licences, some of which restrict commercial use; they are listed in [NOTICE](NOTICE). Check the current terms of
 every model you enable.

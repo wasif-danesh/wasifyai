@@ -30,6 +30,7 @@ export function ChatScreenNext({
   notices,
   blockedReason,
   onOpenCreation,
+  onOpenSettings,
   onNeedModel,
   actions,
   title,
@@ -63,10 +64,11 @@ export function ChatScreenNext({
       images,
       tracks,
       onOpenCreation,
+      onOpenSettings,
       thinkingOn: options.thinking,
       onDecide: (approved: boolean) => void chat.answer(approved),
     }),
-    [images, tracks, onOpenCreation, options.thinking, chat.answer],
+    [images, tracks, onOpenCreation, onOpenSettings, options.thinking, chat.answer],
   );
   const last = state.chat.messages[state.chat.messages.length - 1];
   const lastAnswer = last && last.role === "assistant" ? textOf(last) : "";

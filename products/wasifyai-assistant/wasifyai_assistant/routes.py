@@ -62,6 +62,8 @@ class AttachOptions(BaseModel):
     images: bool | None = False  # the model reads pictures (None: not known, so try)
     documents: bool = False  # text, Markdown, CSV and HTML always; PDF and Office with the reader
     images_note: str = ""  # why a picture will not work, in words, when it will not
+    # the app can fetch the model's picture reader: what it is and how big (None: nothing to offer)
+    picture_reader: dict[str, Any] | None = None
 
 
 class ChatOptions(BaseModel):
@@ -148,8 +150,18 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
             images = bool(binding and "image" in getattr(binding, "inputs", []))
             why = "" if images else "The chat model in use does not read pictures."
         stored = getattr(deps.state, "uploads", None) is not None and deps.storage is not None
+        reader = None
+        vision = getattr(deps.state, "desktop_vision", None)
+        if stored and images is False and vision is not None:
+            found = await vision.status()
+            if found and found.get("state") in ("available", "downloading"):
+                reader = found
         attach = AttachOptions(
-            available=stored, images=images if stored else False, documents=stored, images_note=why
+            available=stored,
+            images=images if stored else False,
+            documents=stored,
+            images_note=why,
+            picture_reader=reader,
         )
         return ChatOptions(thinking=thinking, search=await search_options(), attach=attach)
 

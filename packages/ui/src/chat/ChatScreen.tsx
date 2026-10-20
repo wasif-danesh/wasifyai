@@ -41,6 +41,8 @@ export type ChatScreenProps = {
   blockedReason?: string | null;
   /** Open a creation in its own screen. */
   onOpenCreation?: (kind: string, id: string) => void;
+  /** Take the person to Settings (a search service that fails: add a key there). */
+  onOpenSettings?: () => void;
   /** Where a "No language model" error should send the person. */
   onNeedModel?: () => void;
   /** Title bar actions (rename, delete). */
@@ -55,12 +57,14 @@ function Bubble({
   images,
   tracks,
   onOpenCreation,
+  onOpenSettings,
   thinkingOn,
 }: {
   message: ChatMessage;
   images: ImagesApi;
   tracks?: TrackLookup;
   onOpenCreation?: (kind: string, id: string) => void;
+  onOpenSettings?: () => void;
   thinkingOn?: boolean;
 }) {
   if (message.role === "user") {
@@ -103,6 +107,7 @@ function Bubble({
             images={images}
             tracks={tracks}
             onOpenCreation={onOpenCreation}
+            onOpenSettings={onOpenSettings}
           />
         ),
       )}
@@ -127,6 +132,7 @@ export function ChatScreen({
   notices,
   blockedReason,
   onOpenCreation,
+  onOpenSettings,
   onNeedModel,
   actions,
   title,
@@ -164,7 +170,7 @@ export function ChatScreen({
 
   function submit() {
     const text = draft.trim();
-    if (!text || working || blockedReason || options.attach.busy) return;
+    if ((!text && !options.attach.count) || working || blockedReason || options.attach.busy) return;
     setDraft("");
     stick.current = true;
     void send(text);
@@ -214,7 +220,12 @@ export function ChatScreen({
             <button
               type="submit"
               aria-label="Send"
-              disabled={!draft.trim() || working || Boolean(blockedReason) || options.attach.busy}
+              disabled={
+                (!draft.trim() && !options.attach.count) ||
+                working ||
+                Boolean(blockedReason) ||
+                options.attach.busy
+              }
               className="grid size-10 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
             >
               <ArrowUp className="size-5" />
@@ -268,6 +279,7 @@ export function ChatScreen({
                   images={images}
                   tracks={tracks}
                   onOpenCreation={onOpenCreation}
+                  onOpenSettings={onOpenSettings}
                   thinkingOn={options.thinking}
                 />
               ))}

@@ -72,6 +72,7 @@ export {
   initialChat,
   type AssistantApi,
   type AttachOptions,
+  type PictureReader,
   type AttachmentInfo,
   type ChatOptions,
   type UploadedAttachment,

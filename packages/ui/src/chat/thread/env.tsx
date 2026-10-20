@@ -10,6 +10,8 @@ export type ThreadEnv = {
   images: ImagesApi;
   tracks?: TrackLookup;
   onOpenCreation?: (kind: string, id: string) => void;
+  /** Take the person to Settings (a search service that fails: add a key there) */
+  onOpenSettings?: () => void;
   /** origins a markdown picture may load from (none by default) */
   imageOrigins?: string[];
   /** Thinking is on for this chat: a pending answer says it takes longer */

@@ -1,0 +1,15 @@
+# Vision projectors (ADR-0083, stage CO2): the small file a chat model needs to read pictures, which llama.cpp loads beside the
+# model (`--mmproj`). Data, not code; review it like the catalogue. A model is matched by a piece of its file name (lower case);
+# every entry names the exact file, its size and its published SHA-256 (the Hugging Face `x-linked-etag`, checked against the copy
+# in this author's cache), so nothing is kept that does not match. Nothing is fetched until the person says yes, with the size shown.
+version: 1
+projectors:
+  - id: qwen3.5-9b
+    match: ["qwen3.5-9b", "qwen3_5-9b"]
+    title: Qwen3.5 9B picture reader
+    licence: Apache-2.0
+    source: huggingface.co
+    url: https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/mmproj-F16.gguf
+    name: mmproj-F16.gguf
+    size: 918166080
+    sha256: f70dc3509053962b0d0d3ee8a7eacebf5d60aa560cad78254ae8698516ae029f

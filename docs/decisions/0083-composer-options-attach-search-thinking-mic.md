@@ -143,7 +143,7 @@ What exists today (checked in the repo, 2026-10-19):
 
 **B. DuckDuckGo: stays the default, the terms risk is accepted.** The owner knows that DuckDuckGo's terms do not mention automated use, offer no search API and forbid
 "displaying" the service inside another service (CO0 section 5), and that `ddgs` is an unofficial scraper DuckDuckGo can block at any time. **When it stops working, the
-app tells the person in words to add a search key in Settings** and use another service (Ollama, Tavily, Exa or Brave Search): both the "busy" and the "could not be reached" messages say so.
+app tells the person in words to add a search key in Settings** and use another service (Ollama, Tavily, Exa or Brave Search): both the "busy" and the "could not be reached" messages say so; after three failures in a row the message says DuckDuckGo has not answered from this computer, and the search card has an Open Settings button.
 Counsel has not been asked; revisit before a public release if the risk changes.
 
 ## Not in v1

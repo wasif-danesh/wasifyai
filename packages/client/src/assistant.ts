@@ -89,6 +89,18 @@ export type AttachOptions = {
   documents: boolean;
   /** why a picture will not work, in words, when it will not */
   images_note: string;
+  /** the app can get this model's picture reader: what it is and how big (absent: nothing to offer) */
+  picture_reader?: PictureReader | null;
+};
+
+/** The picture reader of the chosen model (ADR-0083, CO2), which the app can fetch once the person agrees. */
+export type PictureReader = {
+  state: "available" | "downloading";
+  title: string;
+  licence: string;
+  from: string;
+  bytes: number;
+  download?: { status: string; bytes_done: number; bytes_total: number; error: string };
 };
 
 /** What the chat box can offer with the model in use (ADR-0083). */
@@ -139,6 +151,11 @@ export type AssistantApi = {
   updateSearch(update: SearchUpdate): Promise<SearchStatus>;
   /** Send a picture (PNG, JPEG, WebP) or a document to the engine to attach to the next message. Refused in words. */
   attach(file: Blob, name: string): Promise<UploadedAttachment>;
+  /** The picture reader of the chosen model (desktop): how it stands, and fetching it (the size the person was shown). */
+  pictureReader?: {
+    status(): Promise<PictureReader | { state: "ready" | "unavailable" } | null>;
+    start(bytes: number): Promise<void>;
+  };
   /** Take back a file that was sent but not used. Failures are not worth showing: the engine clears unused ones after a day. */
   unattach(id: string): Promise<void>;
   list(limit?: number): Promise<ConversationSummary[]>;
@@ -199,6 +216,21 @@ export function createAssistantApi(transport: Transport): AssistantApi {
         pages: r.pages ?? undefined,
         truncated: r.truncated,
       };
+    },
+    pictureReader: {
+      async status() {
+        const r = await json<{ vision: PictureReader | { state: "ready" | "unavailable" } | null }>(
+          "/desktop/vision",
+        );
+        return r.vision;
+      },
+      async start(bytes) {
+        await json<unknown>("/desktop/vision/download", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ bytes }),
+        });
+      },
     },
     async unattach(id) {
       try {

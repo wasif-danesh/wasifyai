@@ -42,6 +42,7 @@ from wasifyai_api.desktop_fit import assess_fit, need_declared, process_rss_byte
 from wasifyai_api.desktop_hub import HubService
 from wasifyai_api.desktop_language import LanguageService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
+from wasifyai_api.desktop_vision import VisionService
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
 from wasifyai_api.lipsync_runtime import LipSyncSidecar
 from wasifyai_api.llama_server import LlamaServer
@@ -78,6 +79,7 @@ class DesktopBackends:
     discovery: DiscoveryService | None = None
     llama: LlamaServer | None = None
     language: LanguageService | None = None
+    vision: VisionService | None = None  # the picture reader of the chosen chat model (ADR-0083)
     hub: HubService | None = None
     web: WebService | None = None  # web search: the person's choices and keys (ADR-0083)
     audio: AudioEngine | None = None
@@ -154,6 +156,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     discovery = DiscoveryService(SqliteSettingsStore(engine), models)
     language = LanguageService(SqliteSettingsStore(engine), llama, models, discovery)
     discovery.language = language
+    vision = VisionService(language, models)
     hub = HubService(SqliteSettingsStore(engine))
     hub.models, hub.language = models, language
     models.downloads._token = hub.client.token  # noqa: SLF001 - one place for the token
@@ -168,6 +171,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         llama=llama,
         audio=audio,
         language=language,
+        vision=vision,
         hub=hub,
         engine=engine,
         event_log=log_,

@@ -305,10 +305,11 @@ export function useComposerOptions(
       />
     ) : null;
   const notice: ReactNode =
-    searchNotice || dictation.notice ? (
+    searchNotice || dictation.notice || attach.notice ? (
       <>
         {searchNotice}
         {dictation.notice}
+        {attach.notice}
       </>
     ) : null;
 

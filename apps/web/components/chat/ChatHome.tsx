@@ -36,6 +36,7 @@ export function ChatHome({ conversationId }: { conversationId: string | null }) 
         screen={next ? "next" : "classic"}
         onAdopt={(id) => window.history.replaceState(null, "", `/chat/${id}`)}
         onNewChat={() => router.push("/")}
+        onOpenNotebooks={() => router.push("/notebooks")}
         onOpenCreation={(kind, id) => {
           const to = openCreation(kind, id);
           if (to) router.push(to);

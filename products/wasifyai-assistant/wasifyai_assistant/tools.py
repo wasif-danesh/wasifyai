@@ -256,9 +256,11 @@ def _web_outcome(result: ActionResult) -> ToolOutcome:
         message = result.setup.step
     else:
         message = result.text
+    # the code lets the card say what to do (a search service that fails: add a key in Settings)
+    out = {"message": message, **({"code": result.code} if result.code else {})}
     if result.status == "refused":
-        return ToolOutcome("refused", {"message": message}, message)
-    return ToolOutcome("error", {"message": message}, message)
+        return ToolOutcome("refused", out, message)
+    return ToolOutcome("error", out, message)
 
 
 async def call_tool(

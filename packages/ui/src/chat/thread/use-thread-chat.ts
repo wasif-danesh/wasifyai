@@ -161,7 +161,8 @@ export function useThreadChat({
   const send = useCallback(
     async (text: string, opts: { parentId?: string | null } = {}) => {
       const message = text.trim();
-      if (!message || local.current.chat.phase === "working") return;
+      // a file with no words is a message too (the engine names the chat after the file)
+      if ((!message && !files.current?.length) || local.current.chat.phase === "working") return;
       await closeCard();
       const parentId = opts.parentId === undefined ? local.current.headId : opts.parentId;
       const userId = newId();

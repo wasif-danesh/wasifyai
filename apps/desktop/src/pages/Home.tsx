@@ -60,6 +60,7 @@ export function HomePage({
       notices={notices}
       onNeedModel={() => go("models")}
       onOpenSettings={() => go("settings")}
+      onOpenNotebooks={() => go("notebooks")}
       onOpenCreation={(kind, id) => {
         if (kind === "image") go("library");
         else if (kind === "notebook") openNotebook(id);

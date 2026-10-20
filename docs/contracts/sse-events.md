@@ -146,7 +146,10 @@ data: {"run_id":"…","thread_id":"…","seq":57,"ts":"…","outputs":{"title":"
   (the hardened upload; answers `upload_id`), a document through `POST /products/wasifyai-assistant/attachments` (body = the file, `x-file-name` = its name, percent-encoded; answers `{id, kind, name, chars,
   pages, truncated}`; text, Markdown, CSV and HTML, and PDF and Office when the document reader is installed). The user message is stored with `attachment` parts `{kind, id, key, name, bytes}` and the
   uploads are consumed; a conversation read adds a short-lived `url` to a picture part. A picture for a model that cannot read pictures ends the run with `refused`, code `no_vision`, and stores nothing.
-  Attachments are untrusted text (see the next point). `GET .../options` also answers `attach: {available, images, documents, images_note}`.
+  Attachments are untrusted text (see the next point). `GET .../options` also answers `attach: {available, images, documents, images_note, picture_reader}`; `picture_reader`
+  `{state: "available" | "downloading", title, licence, from, bytes, download?}` appears when the chosen file model has no vision projector and the app can fetch one (desktop):
+  `GET /desktop/vision` answers `{vision: {state: "ready" | "unavailable" | "available" | "downloading", ...}}` and `POST /desktop/vision/download {bytes}` (the size the person was shown; `409` otherwise)
+  fetches it. A message may have attachments and no `text`; the chat is then named after the first file. A failed `web_search` / `web_read` result's `output` carries `{message, code}`.
 - **Read aloud (ADR-0083, CU3) is not a stream and not a run.** `POST /products/wasifyai-voice/read-aloud` takes JSON `{text, part}` (`text`: a reply as the model wrote it, 1 to 40,000
   characters; `part`: 0 to 7, default 0; unknown fields are refused) and answers one **passage** of it spoken: `{audio, part, parts, truncated, seconds, model, displaced}`. The engine turns the text into
   plain words (code blocks, addresses, tags, citations like `[1]`, table rules, control and bidirectional characters dropped; the text of links, headings and emphasis kept), cuts it at the ends of

@@ -503,6 +503,7 @@ def create_app(
             app.state.llama_server = desktop.llama
             app.state.audio = desktop.audio  # the speech runtime (ADR-0066); products reach it here
             app.state.desktop_language = desktop.language
+            app.state.desktop_vision = desktop.vision
             app.state.desktop_hub = desktop.hub
             if desktop.web is not None:  # web search: off until the person allows it (ADR-0083)
                 desktop.web.usage = recorder

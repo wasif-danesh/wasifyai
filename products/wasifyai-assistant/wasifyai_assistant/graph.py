@@ -377,7 +377,8 @@ def build_assistant_graph(
         return {
             "status": "working",
             "conversation_id": conv.id,
-            "text": text,
+            # a message with only a file has no words: the file's name names the chat
+            "text": text or (str(attached[0][1]["name"]) if attached else ""),
             "title": conv.title,
             "user_message_id": sent.id,
         }

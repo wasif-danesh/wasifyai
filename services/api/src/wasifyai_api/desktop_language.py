@@ -14,7 +14,7 @@ the engine itself found on a loopback address (desktop_discovery).
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -140,6 +140,8 @@ class LanguageService:
         self.slot: Any = None  # the SlotManager, set when the worker is built
         self.selected: Selection | None = None
         self.probe_ollama = ollama_can_think  # a test can stand in for the running Ollama
+        # a projector the app fetched for a model (desktop_vision), tried after its own folder
+        self.shelf_projector: Callable[[Path], Path | None] | None = None
         self.probe_vision = lambda url, model: ollama_has(url, model, "vision")
 
     # ---- the choice ----------------------------------------------------------------------
@@ -180,7 +182,7 @@ class LanguageService:
             if has_template is False
             else ""
         )
-        projector = await asyncio.to_thread(find_projector, path)
+        projector = await self._projector(path)
         self.selected = Selection(
             "file",
             name,
@@ -203,12 +205,31 @@ class LanguageService:
             return await self.probe_ollama(sel.url, sel.model)
         return False
 
+    async def _projector(self, model: Path) -> Path | None:
+        """The projector of a model file: beside it, else the one the app fetched for it."""
+        beside = await asyncio.to_thread(find_projector, model)
+        if beside is not None or self.shelf_projector is None:
+            return beside
+        return await asyncio.to_thread(self.shelf_projector, model)
+
+    async def refresh_projector(self) -> None:
+        """A projector appeared (it was fetched): tell the chosen model and restart its server."""
+        sel = self.selected
+        if sel is None or sel.kind != "file" or not sel.path:
+            return
+        seen = await self._can_see(sel)
+        if seen["projector"] == sel.projector and seen["vision"] == sel.vision:
+            return
+        self.selected = replace(sel, **seen)
+        await self._save()
+        await self.llama.stop()  # the next request starts it with the picture reader
+
     async def _can_see(self, sel: Selection) -> dict[str, Any]:
         """Can the chosen model read pictures? A file: its projector is next to it (looked for again
         at each start, so one added later is found). A model of Ollama: Ollama says so. Another
         tool's model: not known (None), and the picture is tried."""
         if sel.kind == "file" and sel.path:
-            projector = await asyncio.to_thread(find_projector, Path(sel.path))
+            projector = await self._projector(Path(sel.path))
             return {
                 "projector": str(projector) if projector else None,
                 "vision": projector is not None,

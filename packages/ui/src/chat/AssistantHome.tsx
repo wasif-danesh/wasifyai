@@ -57,6 +57,8 @@ export type AssistantHomeProps = {
   onOpenCreation?: (kind: string, id: string) => void;
   /** Take the person to Settings, where the search service and its key are chosen (ADR-0083). */
   onOpenSettings?: () => void;
+  /** Take the person to the notebooks (a document too long for the chat can be added to one). */
+  onOpenNotebooks?: () => void;
   /** Which options of the box the chat offers; by default what the engine says the model in use can do (ADR-0083). */
   composerOptions?: ChatScreenProps["composerOptions"];
   /**
@@ -85,6 +87,7 @@ export function AssistantHome({
   onNeedModel,
   onOpenCreation,
   onOpenSettings,
+  onOpenNotebooks,
   composerOptions,
   voice,
   getSpeechModel,
@@ -188,6 +191,35 @@ export function AssistantHome({
     if (!getSpeechModel) return undefined; // nothing here can fetch a model (the web): no button
     return { ...base, setup: setupFor(voiceReady.model, voiceReady.runtimeBytes, getSpeechModel) };
   }, [voice, voiceReady, getSpeechModel, setupFor]);
+  // the picture reader of the chosen model, when the app can get it: one click, then the options are read again
+  const reader = useMemo(() => {
+    const r = offered?.attach?.picture_reader;
+    const api = assistant.pictureReader;
+    if (!r || !api) return undefined;
+    return {
+      title: r.title,
+      licence: r.licence,
+      from: r.from,
+      bytes: r.bytes,
+      run: async (onProgress: (fraction: number | null) => void) => {
+        onProgress(null);
+        if (r.state !== "downloading") await api.start(r.bytes);
+        for (;;) {
+          const st = await api.status();
+          if (st?.state === "ready") break;
+          if (st?.state === "unavailable")
+            throw new Error("This model has no picture reader to get.");
+          if (st?.state === "downloading" && st.download) {
+            if (st.download.status === "failed") throw new Error(st.download.error);
+            const { bytes_done: done, bytes_total: total } = st.download;
+            onProgress(total ? done / total : null);
+          }
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+        setOffered(await assistant.options());
+      },
+    };
+  }, [offered, assistant]);
   const engineOptions = useMemo<ComposerOptionsAvailable>(() => {
     const s = offered?.search;
     const a = offered?.attach;
@@ -202,6 +234,8 @@ export function AssistantHome({
             imagesNote: a.images_note,
             upload: (file, name) => assistant.attach(file, name),
             discard: (id) => assistant.unattach(id),
+            pictureReader: reader,
+            onOpenNotebooks,
           }
         : undefined,
       thinking: offered?.thinking,
@@ -218,7 +252,7 @@ export function AssistantHome({
           }
         : undefined,
     };
-  }, [offered, allowSearch, onOpenSettings, mic, readAloud, assistant]);
+  }, [offered, allowSearch, onOpenSettings, onOpenNotebooks, mic, readAloud, assistant, reader]);
   // the hour is read in the browser, so a page rendered on a server says the same as the person's clock
   const [hour, setHour] = useState<number | null>(null);
   useEffect(() => setHour(new Date().getHours()), []);
@@ -291,6 +325,7 @@ export function AssistantHome({
     blockedReason,
     onNeedModel,
     onOpenCreation,
+    onOpenSettings,
     composerOptions: composerOptions ?? engineOptions,
     title: conversationId ? title || "Chat" : undefined,
     actions: conversationId ? (

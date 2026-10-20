@@ -120,6 +120,18 @@
             "default": "",
             "title": "Images Note",
             "type": "string"
+          },
+          "picture_reader": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Picture Reader"
           }
         },
         "title": "AttachOptions",
@@ -6978,7 +6990,7 @@
     },
     "/products/wasifyai-voice/read-aloud": {
       "post": {
-        "description": "One passage of a chat reply, spoken. Nothing is saved: the text is held for this request\nand the sound goes back in the answer (a WAV, base64), with no creation, no library row, no\nsearch entry, no file and no log of the words. The text is turned into plain words and cut at\nsentence ends (`read_aloud.passages`); ask for `part` 0, 1, 2 ... up to `parts`. The speech\nmodel may stay in memory beside the chat model when the two fit (`displaced` names whose model\nwas unloaded when they did not).",
+        "description": "One passage of a chat reply, spoken. Nothing is saved: the text is held for this request\nand the sound goes back in the answer (a WAV, base64), with no creation, no library row, no\nsearch entry, no file and no log of the words. The text is turned into plain words and cut\nat sentence ends (`read_aloud.passages`); ask for `part` 0, 1, 2 ... up to `parts`. The\nspeech model may stay in memory beside the chat model when the two fit (`displaced` names\nwhose model was unloaded when they did not).",
         "operationId": "read_aloud_passage_products_wasifyai_voice_read_aloud_post",
         "requestBody": {
           "content": {

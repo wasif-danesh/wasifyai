@@ -254,6 +254,30 @@ describe("the web cards", () => {
     expect(screen.getByText("Searching the web")).toBeInTheDocument();
   });
 
+  it("offers Open Settings when a search service does not answer, and not for other errors", async () => {
+    const onOpenSettings = vi.fn();
+    const failed = (code: string) =>
+      tool("web_search", {
+        status: "error",
+        output: { message: "DuckDuckGo has not answered.", code },
+      });
+    const { rerender } = render(
+      <ToolCard
+        images={images}
+        tool={failed("search_unreliable")}
+        onOpenSettings={onOpenSettings}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    rerender(
+      <ToolCard images={images} tool={failed("search_off")} onOpenSettings={onOpenSettings} />,
+    );
+    expect(screen.queryByRole("button", { name: "Open Settings" })).toBeNull();
+    rerender(<ToolCard images={images} tool={failed("search_busy")} />);
+    expect(screen.queryByRole("button", { name: "Open Settings" })).toBeNull(); // nowhere to go here
+  });
+
   it("shows a page that was read, its site and a note when only the start was read", () => {
     render(
       <ToolCard

@@ -745,6 +745,7 @@ async def test_a_search_that_fails_says_why_in_the_card_and_to_the_model(tmp_pat
     _, events = await rig.turn_with({"text": "fox", "search": True})
     result = next(e for e in events if e["type"] == "tool_result")
     assert result["status"] == "error" and "busy" in result["output"]["message"]
+    assert result["output"]["code"] == "search_busy"  # the card keys "Open Settings" on it
     assert "busy" in rig.model.chats[1]["messages"][-1]["content"]
 
 

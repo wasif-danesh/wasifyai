@@ -559,3 +559,74 @@ def test_documents_and_pictures_are_attached_kept_with_the_chat_and_deleted_with
         assert c.get(f"{base}/conversations/{cid2}", headers=auth()).status_code == 404
         assert c.get(link["url"].replace(BASE, "")).status_code == 404  # the picture went with it
         c.post("/desktop/language-engine/stop", headers=auth())
+
+
+def test_the_picture_reader_is_offered_with_its_size_fetched_only_when_confirmed_and_picked_up(
+    data_dir, monkeypatch
+):
+    """CO2 follow-up: a model without a projector can be given one from the shelf. Nothing is
+    fetched until the person confirms the exact size; the file must match its checksum."""
+    import hashlib
+
+    from wasifyai_api import desktop_vision
+
+    payload = b"GGUF" + b"\0" * 5000  # a stand-in for the 918 MB file
+    entry = desktop_vision.ProjectorEntry(
+        id="demo", match=("demo-q4",), title="Demo picture reader", licence="Apache-2.0",
+        source="huggingface.co", url="https://huggingface.co/x/y/resolve/main/mmproj-F16.gguf",
+        name="mmproj-F16.gguf", size=len(payload), sha256=hashlib.sha256(payload).hexdigest(),
+    )  # fmt: skip
+    monkeypatch.setattr(desktop_vision, "load_shelf", lambda path=desktop_vision.SHELF: [entry])
+    base = "/products/wasifyai-assistant"
+    with TestClient(create_app()) as c:
+        choose_the_model(c)
+        offered = c.get(f"{base}/options", headers=auth()).json()["attach"]
+        assert offered["images"] is False
+        assert offered["picture_reader"]["state"] == "available"
+        assert offered["picture_reader"]["bytes"] == len(payload)
+        assert offered["picture_reader"]["from"] == "huggingface.co"
+
+        # the size must be the one that was shown
+        wrong = c.post("/desktop/vision/download", json={"bytes": 1}, headers=auth())
+        assert wrong.status_code == 409
+        manager = c.app.state.desktop_models.downloads  # type: ignore[attr-defined]
+        assert manager.latest() is None  # nothing was fetched
+
+        # serve the stand-in instead of the network
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            def stream(self, method, url, headers=None):
+                class R:
+                    status_code = 200
+
+                    async def __aenter__(self):
+                        return self
+
+                    async def __aexit__(self, *a):
+                        return False
+
+                    async def aiter_bytes(self):
+                        yield payload
+
+                return R()
+
+        manager._client_factory = lambda: FakeClient()  # noqa: SLF001
+        started = c.post("/desktop/vision/download", json={"bytes": len(payload)}, headers=auth())
+        assert started.status_code == 200, started.text
+        state: dict = {}
+        for _ in range(100):
+            state = c.get("/desktop/vision", headers=auth()).json()["vision"]
+            if state["state"] == "ready":
+                break
+            time.sleep(0.05)
+        assert state["state"] == "ready"
+        shelf = data_dir / "models" / "projectors" / "demo" / "mmproj-F16.gguf"
+        assert shelf.is_file()  # under the app's own folder, not inside another tool's
+        after = c.get(f"{base}/options", headers=auth()).json()["attach"]
+        assert after["images"] is True and after["picture_reader"] is None
+        c.post("/desktop/language-engine/stop", headers=auth())

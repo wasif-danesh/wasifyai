@@ -92,7 +92,7 @@ export function useAssistantChat({
   const send = useCallback(
     async (text: string) => {
       const message = text.trim();
-      if (!message || local.current.phase === "working") return;
+      if ((!message && !files.current?.length) || local.current.phase === "working") return;
       lastText.current = message;
       abort.current?.abort();
       const ctrl = new AbortController();

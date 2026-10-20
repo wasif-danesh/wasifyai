@@ -161,3 +161,13 @@ async def test_after_a_file_is_attached_making_something_waits_for_the_persons_a
     )
     ask = await rig.paused()
     assert ask and ask["kind"] == "confirm_action" and host.runs == []  # the file cannot order it
+
+
+async def test_a_message_with_only_a_file_is_named_after_the_file(tmp_path, ctx):
+    rig = Rig(tmp_path, [{"text": "Notes about launch."}])
+    doc = await rig.attach("text", b"Launch is on Friday.")
+    state, _ = await rig.turn_with({"text": "", "attachments": [{"id": doc, "name": "launch.md"}]})
+    assert state["status"] == "done" and state["title"] == "launch.md"
+    rows = await rig.store.messages("t1", "u1", state["conversation_id"])
+    assert [p["type"] for p in rows[0].parts] == ["attachment"]  # no empty text part was stored
+    assert "Launch is on Friday." in str(rig.model.chats[0]["messages"][1]["content"])

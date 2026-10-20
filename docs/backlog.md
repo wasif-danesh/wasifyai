@@ -54,6 +54,7 @@ and deployment side and wait for it unless marked **blocks release**.
 | D9 | ~~Approve a 3D viewer dependency~~ approved 2026-10-18 (`<model-viewer>`, ADR-0080) | ADR-0080 decision 7 |
 | D10 | Spikes done 2026-10-19 (G0, T0, V0, TD0). Open decisions: DINOv3 route; `pixal3d.cpp` face-target patch; CI build of the pinned commit; AGPL reading by counsel; Qwen3.5-9B bf16 and Clef-flash downloads; Laya licence enquiry; V1 sandbox path and fonts | `docs/phase5-agent-training-video-builder-plan.md`, "Spike results" |
 | D11 | Not measured by the spikes: 16 and 32 GB Macs (9B training, 64k agent, 3D), Windows and Linux, rented NVIDIA GPUs, Q8_0 against original Pixal3D, model quality half of MG0, hosted agent run | the four spike reports |
+| D12 | Music video (ADR-0084, **Proposed** 2026-10-20): nine questions for the owner; stage MV0 (spike on this Mac: analysis tools and their licences, plan quality, LTX 0.9.5 image-to-video motion, MuseTalk on a sung voice) waits for the hold on new features to lift | ADR-0084, `docs/spikes/music-video-research.md` |
 
 ## C. Closed
 

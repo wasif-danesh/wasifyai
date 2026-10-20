@@ -39,12 +39,20 @@ export function toolOf(p: ToolCallMessagePartProps): Tool {
 
 function adapt(Card: ComponentType<ToolCardProps>) {
   function ToolUI(p: ToolCallMessagePartProps) {
-    const { images, tracks, onOpenCreation, onDecide } = useThreadEnv();
+    const { images, tracks, onOpenCreation, onOpenSettings, onDecide } = useThreadEnv();
     const tool = toolOf(p);
     // a call that waits for the person (or was just answered and is still running) shows its card, not its result
     if (tool.approval && tool.status === "running")
       return <ConfirmActionCard tool={tool} onDecide={onDecide} />;
-    return <Card tool={tool} images={images} tracks={tracks} onOpenCreation={onOpenCreation} />;
+    return (
+      <Card
+        tool={tool}
+        images={images}
+        tracks={tracks}
+        onOpenCreation={onOpenCreation}
+        onOpenSettings={onOpenSettings}
+      />
+    );
   }
   return ToolUI;
 }

@@ -1186,10 +1186,10 @@ export interface paths {
          * Read Aloud Passage
          * @description One passage of a chat reply, spoken. Nothing is saved: the text is held for this request
          *     and the sound goes back in the answer (a WAV, base64), with no creation, no library row, no
-         *     search entry, no file and no log of the words. The text is turned into plain words and cut at
-         *     sentence ends (`read_aloud.passages`); ask for `part` 0, 1, 2 ... up to `parts`. The speech
-         *     model may stay in memory beside the chat model when the two fit (`displaced` names whose model
-         *     was unloaded when they did not).
+         *     search entry, no file and no log of the words. The text is turned into plain words and cut
+         *     at sentence ends (`read_aloud.passages`); ask for `part` 0, 1, 2 ... up to `parts`. The
+         *     speech model may stay in memory beside the chat model when the two fit (`displaced` names
+         *     whose model was unloaded when they did not).
          */
         post: operations["read_aloud_passage_products_wasifyai_voice_read_aloud_post"];
         delete?: never;
@@ -1696,6 +1696,10 @@ export interface components {
              * @default
              */
             images_note: string;
+            /** Picture Reader */
+            picture_reader?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** AttachmentResult */
         AttachmentResult: {

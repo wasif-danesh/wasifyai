@@ -124,3 +124,59 @@ test("the chips in the box look right @visual", async ({ page }) => {
   await page.getByRole("textbox", { name: "Message" }).fill("What is in these?");
   await expect(page).toHaveScreenshot("attach-chips.png");
 });
+
+test("a picture for a model without its picture reader offers it, with the size, and attaches the picture once it is there @layout", async ({
+  page,
+}) => {
+  let have = false;
+  let started = 0;
+  await page.route("**/api/products/wasifyai-assistant/options", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        thinking: false,
+        attach: {
+          available: true,
+          images: have,
+          documents: true,
+          images_note: "No picture reader.",
+          picture_reader: have
+            ? null
+            : {
+                state: "available",
+                title: "Qwen3.5 9B picture reader",
+                licence: "Apache-2.0",
+                from: "huggingface.co",
+                bytes: 918166080,
+              },
+        },
+      }),
+    }),
+  );
+  await page.route("**/api/desktop/vision/download", (route) => {
+    started += 1;
+    have = true;
+    return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+  });
+  await page.route("**/api/desktop/vision", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ vision: { state: have ? "ready" : "available" } }),
+    }),
+  );
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: /^Attach/ })).toBeVisible();
+  await page
+    .getByLabel("Choose files to attach")
+    .setInputFiles([{ name: "pixel.png", mimeType: "image/png", buffer: PNG }]);
+  const card = page.getByRole("region", { name: "Get the picture reader" });
+  await expect(card).toContainText("918 MB");
+  await expect(card).toContainText("not sent anywhere");
+  expect(started).toBe(0); // nothing is fetched until the click
+  await noSideScroll(page);
+  await page.getByRole("button", { name: /^Download 918 MB/ }).click();
+  await expect(page.getByAltText("pixel.png")).toBeVisible({ timeout: 10000 });
+  expect(started).toBe(1);
+});

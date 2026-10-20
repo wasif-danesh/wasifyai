@@ -1,0 +1,421 @@
+"""The Video Builder component of the desktop (ADR-0077, stage V1a): the render engine, on request.
+
+    Pins            what is installed: a Node.js build, the Chrome headless shell for Testing and
+    the
+                    npm packages of `video_builder/package-lock.json`, each with a size and a
+                    SHA-256
+    VideoBuilderInstaller
+                    fetches them after the person saw the size and confirmed it, checks every hash,
+                    installs the packages from the lock (integrity hashes, no install scripts) and
+                    writes `state.json` last: that is what makes it installed
+    find_install    the installed component, when it still matches the pins
+    render_env      the environment a render runs in: no telemetry, no skills download, a home
+    folder
+                    of its own inside the component
+
+Everything lives in `<app data>/components/video-builder/`. Nothing else in the app needs it: with
+the
+component absent the feature shows one setup card (ADR-0077 decision 3). The sandbox a render runs
+in
+is `video_builder_sandbox.py`."""
+
+import asyncio
+import hashlib
+import json
+import logging
+import os
+import shutil
+import stat
+import tarfile
+import tempfile
+import zipfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import httpx
+
+from wasifyai_api.audio_runtime import InstallError, InstallProgress, platform_key
+
+log = logging.getLogger(__name__)
+
+PINS_FILE = Path(__file__).with_name("video_builder_pins.json")
+STATE_FILE = "state.json"
+MIN_FREE_BYTES = 2_000_000_000
+INSTALL_LIMIT_S = 900.0
+
+# set for every process the component starts (V0: the CLI asks npm and GitHub unless told not to,
+# and writes `~/.hyperframes` and `~/.cache/hyperframes` outside any per-app folder)
+QUIET_ENV = {
+    "HYPERFRAMES_NO_TELEMETRY": "1",
+    "HYPERFRAMES_SKIP_SKILLS": "1",
+    "DO_NOT_TRACK": "1",
+    "npm_config_update_notifier": "false",
+    "npm_config_fund": "false",
+    "npm_config_audit": "false",
+    "NO_COLOR": "1",
+}
+
+
+@dataclass(frozen=True)
+class Download:
+    version: str
+    url: str
+    size: int
+    sha256: str
+    licence: str
+
+
+@dataclass(frozen=True)
+class Pins:
+    node: Download
+    shell: Download
+    lock: Path
+    lock_sha256: str
+    package: Path
+    package_sha256: str
+    packages_bytes: int
+    platforms: tuple[str, ...]
+
+
+def _download(raw: dict[str, Any], what: str) -> Download:
+    url = str(raw["url"])
+    digest = str(raw["sha256"]).lower()
+    if not url.startswith("https://") or len(digest) != 64:
+        raise ValueError(f"the {what} pin needs an https URL and a SHA-256")
+    return Download(str(raw["version"]), url, int(raw["size"]), digest, str(raw["licence"]))
+
+
+def load_pins(path: Path = PINS_FILE) -> Pins:
+    raw = json.loads(path.read_text())
+    pk = raw["packages"]
+    for key in ("lock_sha256", "package_sha256"):
+        if len(str(pk[key])) != 64:
+            raise ValueError(f"the Video Builder package pin needs a SHA-256 ({key})")
+    return Pins(
+        _download(raw["node"], "Node.js"),
+        _download(raw["shell"], "browser"),
+        path.parent / str(pk["lock"]),
+        str(pk["lock_sha256"]).lower(),
+        path.parent / str(pk["package"]),
+        str(pk["package_sha256"]).lower(),
+        int(pk["bytes"]),
+        tuple(raw["platforms"]),
+    )
+
+
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for block in iter(lambda: f.read(1 << 22), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+@dataclass(frozen=True)
+class VideoBuilderInstall:
+    root: Path
+    node: Path  # the node binary
+    shell: Path  # the Chrome headless shell binary
+    cli: Path  # hyperframes' command line entry (a script run by node)
+    app: Path  # where node_modules is (and gsap, copied into each project)
+    source: str  # managed | env
+
+
+def component_root(data_dir: Path) -> Path:
+    return data_dir / "components" / "video-builder"
+
+
+def _layout(root: Path, source: str) -> VideoBuilderInstall:
+    return VideoBuilderInstall(
+        root=root,
+        node=root / "node" / "bin" / "node",
+        shell=root / "shell" / "chrome-headless-shell-mac-arm64" / "chrome-headless-shell",
+        cli=root / "app" / "node_modules" / "hyperframes" / "bin" / "hyperframes.mjs",
+        app=root / "app",
+        source=source,
+    )
+
+
+def find_install(data_dir: Path, pins: Pins | None = None) -> VideoBuilderInstall | None:
+    """The component this app installed, when it still matches the pins; else the copy named by
+    `WASIFYAI_VIDEO_BUILDER_HOME` (development and CI); None when there is none."""
+    pins = pins or load_pins()
+    root = component_root(data_dir)
+    try:
+        state = json.loads((root / STATE_FILE).read_text())
+        found = _layout(root, "managed")
+        if (
+            state.get("schema") == 1
+            and state.get("node") == pins.node.sha256
+            and state.get("shell") == pins.shell.sha256
+            and state.get("lock_sha256") == pins.lock_sha256
+            and found.node.is_file()
+            and found.shell.is_file()
+            and found.cli.is_file()
+        ):
+            return found
+    except (OSError, ValueError):
+        pass
+    env = os.environ.get("WASIFYAI_VIDEO_BUILDER_HOME")
+    if env:
+        home = Path(env).expanduser()
+        found = _layout(home, "env")
+        if found.node.is_file() and found.shell.is_file() and found.cli.is_file():
+            return found
+    return None
+
+
+def render_env(install: VideoBuilderInstall, extra: dict[str, str] | None = None) -> dict[str, str]:
+    """The environment a component process runs in. It starts from nothing, not from the person's
+    environment: no proxy settings, no tokens, no PATH entries that were not put here."""
+    home = install.root / "home"
+    home.mkdir(parents=True, exist_ok=True)
+    env = {
+        "HOME": str(home),
+        "XDG_CACHE_HOME": str(install.root / "cache"),
+        "TMPDIR": str(install.root / "tmp"),
+        "PATH": f"{install.node.parent}:/usr/bin:/bin",
+        "LANG": "en_US.UTF-8",
+        **QUIET_ENV,
+    }
+    Path(env["TMPDIR"]).mkdir(parents=True, exist_ok=True)
+    env.update(extra or {})
+    return env
+
+
+def uninstall(data_dir: Path) -> int:
+    """Remove the component; the number of bytes that came back."""
+    root = component_root(data_dir)
+    freed = 0
+    if root.is_dir():
+        for p in root.rglob("*"):
+            try:
+                if p.is_file() and not p.is_symlink():
+                    freed += p.stat().st_size
+            except OSError:
+                pass
+        shutil.rmtree(root, ignore_errors=True)
+    return freed
+
+
+# ---- installing it -------------------------------------------------------------------------------
+
+
+async def _run(
+    args: list[str], cwd: Path, env: dict[str, str], limit_s: float = 600
+) -> tuple[bool, str]:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *args, cwd=str(cwd), env=env, stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        )  # fmt: skip
+        out, _ = await asyncio.wait_for(proc.communicate(), limit_s)
+    except (OSError, TimeoutError):
+        return False, ""
+    return proc.returncode == 0, out.decode(errors="replace")
+
+
+def _unpack_tar(archive: Path, target: Path) -> None:
+    target.mkdir(parents=True)
+    with tarfile.open(archive) as t:
+        t.extractall(target, filter="data")  # refuses absolute paths, '..' and links outside
+
+
+def _unpack_zip(archive: Path, target: Path) -> None:
+    """Unzip, keeping the executable bit (zipfile drops it) and refusing paths outside the
+    target."""
+    target.mkdir(parents=True)
+    root = target.resolve()
+    with zipfile.ZipFile(archive) as z:
+        for info in z.infolist():
+            dest = (target / info.filename).resolve()
+            if root != dest and root not in dest.parents:
+                raise InstallError("The browser download holds a path outside its folder.")
+            z.extract(info, target)
+            mode = (info.external_attr >> 16) & 0o777
+            if mode and not info.is_dir():
+                dest.chmod(mode | stat.S_IRUSR)
+
+
+class VideoBuilderInstaller:
+    """Sets up the component. Nothing is fetched before the person has seen the size and confirmed
+    it."""
+
+    def __init__(self, data_dir: Path, pins: Pins | None = None, client_factory: Any = None):
+        self._data_dir = data_dir
+        self._root = component_root(data_dir)
+        self.pins = pins or load_pins()
+        self._client_factory = client_factory or (
+            lambda: httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(60, read=120))
+        )
+        self.progress = InstallProgress()
+        self._task: asyncio.Task[None] | None = None
+        self.run: Any = _run  # replaced in tests
+
+    @property
+    def supported(self) -> bool:
+        return platform_key() in self.pins.platforms
+
+    @property
+    def total_bytes(self) -> int:
+        return self.pins.node.size + self.pins.shell.size + self.pins.packages_bytes
+
+    @property
+    def running(self) -> bool:
+        return self._task is not None and not self._task.done()
+
+    def plan(self) -> dict[str, Any]:
+        found = find_install(self._data_dir, self.pins)
+        return {
+            "supported": self.supported,
+            "platform": platform_key(),
+            "bytes": self.total_bytes if self.supported else 0,
+            "parts": [
+                {"name": "Node.js", "version": self.pins.node.version, "bytes": self.pins.node.size,
+                 "licence": self.pins.node.licence, "source": "nodejs.org"},
+                {"name": "Chrome headless shell", "version": self.pins.shell.version,
+                 "bytes": self.pins.shell.size, "licence": self.pins.shell.licence,
+                 "source": "googleapis.com (Chrome for Testing)"},
+                {"name": "HyperFrames and GSAP", "version": "0.8.171 and 3.15.0",
+                 "bytes": self.pins.packages_bytes,
+                 "licence": "Apache-2.0 and the GSAP Standard no charge licence",
+                 "source": "registry.npmjs.org"},
+            ],
+            "found": {"path": str(found.root)}
+            if found is not None and found.source == "env"
+            else None,
+        }  # fmt: skip
+
+    def start(self, confirm_bytes: int) -> None:
+        if not self.supported:
+            raise InstallError(
+                "Video Builder is not available on this kind of computer yet "
+                "(it was measured on Apple-silicon Macs)."
+            )
+        if confirm_bytes != self.total_bytes:
+            raise InstallError("The download changed since it was shown. Look at it again.")
+        if self.running:
+            raise InstallError("Video Builder is already being set up.")
+        self.progress = InstallProgress("installing", "node", "Starting", 0, self.total_bytes)
+        self._task = asyncio.create_task(self._run_install())
+
+    def _say(self, step: str, message: str, done: int | None = None) -> None:
+        p = self.progress
+        self.progress = InstallProgress(
+            "installing", step, message, p.done_bytes if done is None else done, p.total_bytes
+        )
+
+    async def _run_install(self) -> None:
+        self._root.mkdir(parents=True, exist_ok=True)
+        stage = Path(tempfile.mkdtemp(prefix="stage-", dir=self._root))
+        try:
+            await asyncio.wait_for(self._install(stage), INSTALL_LIMIT_S)
+            self.progress = InstallProgress(
+                "ready", None, "Ready", self.total_bytes, self.total_bytes
+            )
+        except InstallError as e:
+            self.progress = InstallProgress("failed", self.progress.step, str(e))
+        except Exception:
+            log.exception("Video Builder did not install")
+            self.progress = InstallProgress(
+                "failed", self.progress.step, "Video Builder could not be set up. Try again."
+            )
+        finally:
+            shutil.rmtree(stage, ignore_errors=True)
+
+    async def _fetch(self, item: Download, to: Path, step: str, label: str, base: int) -> None:
+        digest, size = hashlib.sha256(), 0
+        self._say(step, label, base)
+        async with self._client_factory() as http, http.stream("GET", item.url) as r:
+            r.raise_for_status()
+            with to.open("wb") as f:
+                async for block in r.aiter_bytes(1 << 20):
+                    f.write(block)
+                    digest.update(block)
+                    size += len(block)
+                    self._say(step, label, base + size)
+        if size != item.size or digest.hexdigest() != item.sha256:
+            raise InstallError("A download did not match what was expected. Nothing was kept.")
+
+    async def _install(self, stage: Path) -> None:
+        pins = self.pins
+        free = await asyncio.to_thread(lambda: shutil.disk_usage(self._root).free)
+        if free < self.total_bytes * 2 + MIN_FREE_BYTES:
+            raise InstallError("There is not enough free disk space for Video Builder.")
+        if _sha256_file(pins.lock) != pins.lock_sha256 or _sha256_file(pins.package) != (
+            pins.package_sha256
+        ):
+            raise InstallError("The package list shipped with the app does not match its pin.")
+
+        node_tar = stage / "node.tar.gz"
+        await self._fetch(pins.node, node_tar, "node", "Getting Node.js", 0)
+        shell_zip = stage / "shell.zip"
+        await self._fetch(pins.shell, shell_zip, "browser", "Getting the browser", pins.node.size)
+
+        self._say("unpack", "Unpacking", pins.node.size + pins.shell.size)
+        node_dir, shell_dir = stage / "node-unpacked", stage / "shell"
+        await asyncio.to_thread(_unpack_tar, node_tar, node_dir)
+        await asyncio.to_thread(_unpack_zip, shell_zip, shell_dir)
+        tops = [p for p in node_dir.iterdir() if p.is_dir()]
+        if len(tops) != 1 or not (tops[0] / "bin" / "node").is_file():
+            raise InstallError("The Node.js download did not contain Node.js.")
+
+        # the old install goes first, so a failure never leaves one that looks whole
+        for name in (STATE_FILE, "node", "shell", "app"):
+            target = self._root / name
+            if target.is_dir():
+                shutil.rmtree(target)
+            elif target.exists():
+                target.unlink()
+        shutil.move(str(tops[0]), str(self._root / "node"))
+        shutil.move(str(shell_dir), str(self._root / "shell"))
+        install = _layout(self._root, "managed")
+        if not install.shell.is_file():
+            raise InstallError("The browser download did not contain the browser.")
+        # a file fetched here carries no quarantine flag, but clear one if it is there (V0: with the
+        # flag the browser hangs silently until Gatekeeper is satisfied)
+        await self.run(["/usr/bin/xattr", "-dr", "com.apple.quarantine", str(self._root / "shell")],
+                       self._root, {}, 60)  # fmt: skip
+
+        app = install.app
+        app.mkdir(parents=True)
+        shutil.copyfile(pins.package, app / "package.json")
+        shutil.copyfile(pins.lock, app / "package-lock.json")
+        env = render_env(install)
+        env["npm_config_cache"] = str(self._root / "cache" / "npm")
+        npm_cli = self._root / "node" / "lib" / "node_modules" / "npm" / "bin" / "npm-cli.js"
+        self._say(
+            "packages", "Installing the packages (a minute)", pins.node.size + pins.shell.size
+        )
+        ok, text = await self.run(
+            [str(install.node), str(npm_cli), "ci", "--ignore-scripts", "--no-audit", "--no-fund"],
+            app, env, 600,
+        )  # fmt: skip
+        if not ok:
+            log.error("npm ci failed: %s", text[-800:])
+            raise InstallError("The packages for Video Builder could not be installed.")
+
+        self._say("verify", "Checking that it starts", self.total_bytes - 1)
+        ok, text = await self.run([str(install.node), str(install.cli), "--version"], app, env, 120)
+        if not ok:
+            log.error("the hyperframes check failed: %s", text[-600:])
+            raise InstallError("Video Builder did not start on this computer.")
+        ok, text = await self.run([str(install.shell), "--version"], app, env, 60)
+        if not ok or "Chrome" not in text:
+            log.error("the browser check failed: %s", text[-600:])
+            raise InstallError("The browser for Video Builder did not start on this computer.")
+        shutil.rmtree(
+            self._root / "cache", ignore_errors=True
+        )  # npm's download cache is not needed
+        record = {
+            "schema": 1,
+            "node": pins.node.sha256,
+            "shell": pins.shell.sha256,
+            "lock_sha256": pins.lock_sha256,
+            "node_version": pins.node.version,
+            "browser": text.strip()[:80],
+        }
+        tmp = self._root / (STATE_FILE + ".part")
+        tmp.write_text(json.dumps(record))
+        tmp.replace(self._root / STATE_FILE)  # last: this is what makes it installed

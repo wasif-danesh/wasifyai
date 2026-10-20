@@ -26,6 +26,7 @@ export type Route =
   | "audiobook"
   | "video"
   | "animate"
+  | "videobuilder"
   | "videos";
 
 const PATHS: Record<Route, string> = {
@@ -51,6 +52,7 @@ const PATHS: Record<Route, string> = {
   audiobook: "/voice/audiobook",
   video: "/video/create",
   animate: "/video/animate",
+  videobuilder: "/video/builder",
   videos: "/video/library",
 };
 

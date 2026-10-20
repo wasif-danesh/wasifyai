@@ -230,6 +230,15 @@ concepts:
       - { lang: fr, text: "la voix chantée seule, sans l'accompagnement" }
       - { lang: en, text: "only the singing from the song without the instruments" }
       - { lang: es, text: "solo la voz de la cantante, sin la música" }
+  - id: title-card-launch
+    items:
+      - { kind: composition, lang: en, text: "Launch day. A title card that says the app is ready, white words on a deep blue gradient that slide up into place" }
+      - { kind: video, lang: es, text: "Día del lanzamiento. Una tarjeta de título animada, las palabras suben suavemente sobre un fondo degradado azul oscuro" }
+      - { kind: image, lang: de, text: "Ein Titelbild für den Starttag der App, weiße Schrift auf tiefblauem Farbverlauf, sauberes minimalistisches Design" }
+    queries:
+      - { lang: fr, text: "carte de titre animée pour le jour du lancement" }
+      - { lang: en, text: "an animated title screen announcing the launch" }
+      - { lang: pt, text: "tela de título animada anunciando o lançamento do aplicativo" }
 nomatch:
   - { lang: en, text: "a submarine exploring a deep sea trench" }
   - { lang: es, text: "una panadera amasando pan en la cocina" }

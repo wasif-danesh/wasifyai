@@ -144,3 +144,25 @@ is not built); automatic b-roll from a talking-head recording; a template store 
 - **Exact-text readback (decision 7):** reading the text from the DOM catches retyped text but **cannot be the only
   check**: the DOM still holds the text on frames that are visually empty, and it misses clipped descenders.
 - **Sandbox:** the ADR-0077 amendment applies; custom compositions (MG2) only run through the sandboxed render path.
+
+## Amendment after MG1 (2026-10-20; `docs/spikes/video-builder-v1.md`, "MG1")
+
+- **Built:** five templates (animated title, quote word by word, bar chart from CSV lines, lower third, captions), each a
+  vetted page with typed slots; `motion.make` (effect `make`) writes, checks and makes in one step, `motion.revise`
+  changes only the fields given and makes it again; both are in the catalogue with help files. The words go in verbatim
+  and are escaped text; there is no path from a model's text to markup.
+- **Exact-text check (decision 7), as V0 refined it:** the page is opened in the same sandboxed browser, the timeline is
+  seeked to a moment when each word is on the screen, and for each slot the script reports the drawn text, whether it is
+  visible, a pixel count that changes when the element is hidden (is anything really drawn), a pixel count that changes when
+  every clip is removed (is something cut off) and whether the letters are inside the safe margin. The product compares the
+  report with what was typed (Unicode NFC, runs of spaces folded, case kept) and says each failure in words. It runs
+  **before** the render; a check that cannot run is a failure, not a pass; nothing is silently fixed. The second opinion by
+  a picture-reading model (ADR-0078) is **not built**.
+- **Fonts:** Inter and Source Serif 4 (SIL OFL), variable Latin woff2 files from two pinned npm packages added to the lock
+  (128 packages, 145 MB of packages on disk). Other scripts (Bengali was tested) are drawn with the Mac's own fonts and pass
+  the same check; a script with no installed font would be drawn with a missing-glyph box, which the check does not see.
+- **Outputs:** MP4, WebM with alpha (VP9) and ProRes 4444 MOV, chosen per template (a lower third and captions are
+  transparent). A decoder must be told to keep the alpha of a WebM (libvpx-vp9); tests decode that way.
+- **Versions:** every change keeps the previous words (20 per project); Undo brings the last one back.
+- **Not done:** moderation of slot text when safeguards are on (decision 9: `caps.safeguards_on()` is not yet asked), the
+  chat path (needs the MCP surface, A2), the looping preview clip (three stills are shown), spreadsheet (xlsx) input.

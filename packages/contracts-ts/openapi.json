@@ -1903,6 +1903,37 @@
         "title": "PlanBook",
         "type": "object"
       },
+      "ProjectIn": {
+        "properties": {
+          "slots": {
+            "additionalProperties": true,
+            "title": "Slots",
+            "type": "object"
+          },
+          "template": {
+            "default": "title",
+            "maxLength": 40,
+            "title": "Template",
+            "type": "string"
+          }
+        },
+        "title": "ProjectIn",
+        "type": "object"
+      },
+      "ProjectPatch": {
+        "properties": {
+          "slots": {
+            "additionalProperties": true,
+            "title": "Slots",
+            "type": "object"
+          }
+        },
+        "required": [
+          "slots"
+        ],
+        "title": "ProjectPatch",
+        "type": "object"
+      },
       "ProviderView": {
         "properties": {
           "id": {
@@ -2004,6 +2035,18 @@
           "text"
         ],
         "title": "ReasoningEvent",
+        "type": "object"
+      },
+      "RenderIn": {
+        "properties": {
+          "format": {
+            "default": "mp4",
+            "maxLength": 8,
+            "title": "Format",
+            "type": "string"
+          }
+        },
+        "title": "RenderIn",
         "type": "object"
       },
       "ResumeRequest": {
@@ -6212,6 +6255,642 @@
         "summary": "Status",
         "tags": [
           "wasifyai-notebooks"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/projects": {
+      "get": {
+        "operationId": "list_projects_products_wasifyai_video_builder_projects_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Projects Products Wasifyai Video Builder Projects Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Projects",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      },
+      "post": {
+        "operationId": "create_project_products_wasifyai_video_builder_projects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Project Products Wasifyai Video Builder Projects Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Project",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/projects/{cid}": {
+      "delete": {
+        "operationId": "delete_project_products_wasifyai_video_builder_projects__cid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Project",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      },
+      "get": {
+        "operationId": "get_project_products_wasifyai_video_builder_projects__cid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Project Products Wasifyai Video Builder Projects  Cid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Project",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      },
+      "patch": {
+        "operationId": "update_project_products_wasifyai_video_builder_projects__cid__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Update Project Products Wasifyai Video Builder Projects  Cid  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Project",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/projects/{cid}/check": {
+      "post": {
+        "description": "The exact-text check: does the screen say what was typed (ADR-0079 decision 7).",
+        "operationId": "check_project_products_wasifyai_video_builder_projects__cid__check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Check Project Products Wasifyai Video Builder Projects  Cid  Check Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Project",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/projects/{cid}/lint": {
+      "post": {
+        "operationId": "lint_project_products_wasifyai_video_builder_projects__cid__lint_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Lint Project Products Wasifyai Video Builder Projects  Cid  Lint Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Lint Project",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/projects/{cid}/preview": {
+      "get": {
+        "description": "One still of the composition at `at` seconds, made in the same sandbox as a render.",
+        "operationId": "preview_products_wasifyai_video_builder_projects__cid__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "at",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 12.0,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "At"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/projects/{cid}/render": {
+      "post": {
+        "operationId": "start_render_products_wasifyai_video_builder_projects__cid__render_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RenderIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Start Render Products Wasifyai Video Builder Projects  Cid  Render Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Render",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/projects/{cid}/undo": {
+      "post": {
+        "description": "Bring back the version before the last change.",
+        "operationId": "undo_project_products_wasifyai_video_builder_projects__cid__undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Undo Project Products Wasifyai Video Builder Projects  Cid  Undo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Project",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/renders/{rid}": {
+      "get": {
+        "operationId": "get_render_products_wasifyai_video_builder_renders__rid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Render Products Wasifyai Video Builder Renders  Rid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Render",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/renders/{rid}/cancel": {
+      "post": {
+        "operationId": "cancel_render_products_wasifyai_video_builder_renders__rid__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cancel Render Products Wasifyai Video Builder Renders  Rid  Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Render",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/status": {
+      "get": {
+        "operationId": "status_products_wasifyai_video_builder_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Status Products Wasifyai Video Builder Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Status",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/templates": {
+      "get": {
+        "operationId": "list_templates_products_wasifyai_video_builder_templates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Templates Products Wasifyai Video Builder Templates Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Templates",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
         ]
       }
     },

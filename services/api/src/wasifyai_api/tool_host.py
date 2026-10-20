@@ -133,6 +133,18 @@ class ApiToolHost:
             if getattr(state, "desktop_models", None) is None:
                 return Readiness.unavailable("Models are managed in the desktop app.")
             return Readiness.ready()
+        if need.kind == "runtime" and need.name == "video-builder":
+            builder = getattr(state, "video_builder", None)
+            if builder is None or not builder.installer.supported:
+                return Readiness.unavailable(
+                    "Video Builder is not available on this kind of computer yet."
+                )
+            if not builder.ready():
+                return Readiness.needs_setup(
+                    "Set up Video Builder first (it is a download of a few hundred megabytes).",
+                    ui="video.builder",
+                )
+            return Readiness.ready()
         if need.kind == "notebooks":
             here = getattr(state, "desktop_dir", None) or getattr(state, "notebooks_web", None)
             if not here:

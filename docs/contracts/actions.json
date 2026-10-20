@@ -1326,7 +1326,8 @@
               "transcript",
               "voice",
               "lipsync",
-              "notebook"
+              "notebook",
+              "composition"
             ],
             "title": "Kind",
             "type": "string"
@@ -1408,7 +1409,8 @@
               "transcript",
               "voice",
               "lipsync",
-              "notebook"
+              "notebook",
+              "composition"
             ],
             "title": "Kind",
             "type": "string"
@@ -1485,7 +1487,8 @@
               "transcript",
               "voice",
               "lipsync",
-              "notebook"
+              "notebook",
+              "composition"
             ],
             "title": "Kind",
             "type": "string"
@@ -1604,7 +1607,8 @@
               "transcript",
               "voice",
               "lipsync",
-              "notebook"
+              "notebook",
+              "composition"
             ],
             "title": "Kind",
             "type": "string"
@@ -1725,7 +1729,8 @@
               "transcript",
               "voice",
               "lipsync",
-              "notebook"
+              "notebook",
+              "composition"
             ],
             "title": "Kind",
             "type": "string"
@@ -2492,6 +2497,309 @@
       ],
       "consent": "",
       "help": "docs/help/models.status.md"
+    },
+    {
+      "id": "motion.make",
+      "title": "Make a motion graphic",
+      "summary": "Make an animated title, quote, chart, lower third or captions.",
+      "description": "Make a finished animated graphic in one step: pick the template that fits the request and give its fields, with the person's words and numbers exactly as they typed them (never rewrite, correct or translate them). The page is built from a vetted template, the words on the screen are checked against what was given, and the video is saved to the library with the project, which stays editable. For overlays on footage use lower_third or captions with format webm (transparent). Use image.generate or video.generate for pictures of things. title: A title and a line under it, animated in on a colour you pick. Fields: title (text, up to 80 characters, required); subtitle (text, up to 140 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 12); theme (midnight/sunrise/forest/paper); font (sans/serif). quote: A quote that appears word by word, with who said it. Fields: quote (text, up to 220 characters, required); author (text, up to 60 characters); shape (landscape/portrait/square); seconds (seconds, 4 to 15); theme (midnight/sunrise/forest/paper); font (sans/serif). chart: Bars that grow, from your own numbers. Each number is shown exactly as you type it. Fields: title (text, up to 80 characters, required); data (lines like 'Sales, 120', up to 8); shape (landscape/portrait/square); seconds (seconds, 5 to 15); theme (midnight/sunrise/forest/paper); font (sans/serif). lower_third: A name strap for the bottom of a video. Transparent, to lay over footage. Fields: name (text, up to 60 characters, required); role (text, up to 80 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 10); theme (midnight/sunrise/forest/paper); font (sans/serif). captions: Your own words as captions, one after another. Transparent, to lay over footage. Fields: lines (one caption per line, up to 12 lines); per_line (2/3/4); shape (landscape/portrait/square); theme (midnight/sunrise/forest/paper); font (sans/serif).",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "template": {
+            "description": "Which template.",
+            "enum": [
+              "title",
+              "quote",
+              "chart",
+              "lower_third",
+              "captions"
+            ],
+            "title": "Template",
+            "type": "string"
+          },
+          "fields": {
+            "additionalProperties": true,
+            "description": "The words and settings of the template, exactly as they should be shown.",
+            "title": "Fields",
+            "type": "object"
+          },
+          "format": {
+            "default": "mp4",
+            "description": "mp4, or webm or mov (transparent) for overlays.",
+            "enum": [
+              "mp4",
+              "webm",
+              "mov"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "render": {
+            "default": true,
+            "description": "False to write the project without making the video.",
+            "title": "Render",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "template",
+          "fields"
+        ],
+        "title": "MakeIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "composition_id": {
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "template": {
+            "title": "Template",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "integer"
+          },
+          "video_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Id"
+          },
+          "video_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Uri"
+          },
+          "checked": {
+            "title": "Checked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "composition_id",
+          "product_id",
+          "uri",
+          "title",
+          "template",
+          "seconds",
+          "video_id",
+          "video_uri",
+          "checked"
+        ],
+        "title": "MotionOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "template": "lower_third",
+          "fields": {
+            "name": "Maya Chen",
+            "role": "Head of Design"
+          },
+          "format": "webm"
+        },
+        {
+          "template": "chart",
+          "fields": {
+            "title": "Sales by region",
+            "data": "North, 120\nSouth, 95\nEast, 150"
+          }
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        },
+        {
+          "kind": "runtime",
+          "name": "video-builder"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-video",
+      "ui": "video.builder",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/motion.make.md"
+    },
+    {
+      "id": "motion.revise",
+      "title": "Change a motion graphic",
+      "summary": "Change the words or the look of a motion graphic and make it again.",
+      "description": "Change an existing Video Builder project: give only the fields that change (the rest stay), and it is made again and checked. The earlier version can be brought back on the Video Builder screen. Use for requests like 'make the text bigger' (change the length or shape), 'use the forest look', or 'fix the typo'.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "composition_id": {
+            "description": "The video project, as returned when it was created.",
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "fields": {
+            "additionalProperties": true,
+            "description": "Only the fields to change.",
+            "title": "Fields",
+            "type": "object"
+          },
+          "format": {
+            "default": "mp4",
+            "description": "mp4, or webm or mov (transparent) for overlays.",
+            "enum": [
+              "mp4",
+              "webm",
+              "mov"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "render": {
+            "default": true,
+            "description": "False to change the project without making the video.",
+            "title": "Render",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "composition_id",
+          "fields"
+        ],
+        "title": "ReviseIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "composition_id": {
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "template": {
+            "title": "Template",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "integer"
+          },
+          "video_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Id"
+          },
+          "video_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Uri"
+          },
+          "checked": {
+            "title": "Checked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "composition_id",
+          "product_id",
+          "uri",
+          "title",
+          "template",
+          "seconds",
+          "video_id",
+          "video_uri",
+          "checked"
+        ],
+        "title": "MotionOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "composition_id": "0b7c1f9e000040008000000000000000",
+          "fields": {
+            "theme": "forest"
+          }
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        },
+        {
+          "kind": "runtime",
+          "name": "video-builder"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-video",
+      "ui": "video.builder",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/motion.revise.md"
     },
     {
       "id": "music.generate",
@@ -4017,6 +4325,325 @@
       ],
       "consent": "",
       "help": "docs/help/video.generate.md"
+    },
+    {
+      "id": "video_builder.create",
+      "title": "Write a video project",
+      "summary": "Start a video from a template, without making it yet.",
+      "description": "Create a Video Builder project from one of five templates and keep it in the library. Nothing is rendered; call video_builder.render to make the video, or use motion.make to do both at once. The words are shown exactly as given. title: A title and a line under it, animated in on a colour you pick. Fields: title (text, up to 80 characters, required); subtitle (text, up to 140 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 12); theme (midnight/sunrise/forest/paper); font (sans/serif). quote: A quote that appears word by word, with who said it. Fields: quote (text, up to 220 characters, required); author (text, up to 60 characters); shape (landscape/portrait/square); seconds (seconds, 4 to 15); theme (midnight/sunrise/forest/paper); font (sans/serif). chart: Bars that grow, from your own numbers. Each number is shown exactly as you type it. Fields: title (text, up to 80 characters, required); data (lines like 'Sales, 120', up to 8); shape (landscape/portrait/square); seconds (seconds, 5 to 15); theme (midnight/sunrise/forest/paper); font (sans/serif). lower_third: A name strap for the bottom of a video. Transparent, to lay over footage. Fields: name (text, up to 60 characters, required); role (text, up to 80 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 10); theme (midnight/sunrise/forest/paper); font (sans/serif). captions: Your own words as captions, one after another. Transparent, to lay over footage. Fields: lines (one caption per line, up to 12 lines); per_line (2/3/4); shape (landscape/portrait/square); theme (midnight/sunrise/forest/paper); font (sans/serif).",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "template": {
+            "default": "title",
+            "description": "Which template.",
+            "enum": [
+              "title",
+              "quote",
+              "chart",
+              "lower_third",
+              "captions"
+            ],
+            "title": "Template",
+            "type": "string"
+          },
+          "fields": {
+            "additionalProperties": true,
+            "description": "The words and settings of the template, exactly as they should be shown.",
+            "title": "Fields",
+            "type": "object"
+          }
+        },
+        "required": [
+          "fields"
+        ],
+        "title": "CreateIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "composition_id": {
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "template": {
+            "title": "Template",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "composition_id",
+          "product_id",
+          "uri",
+          "title",
+          "template",
+          "seconds"
+        ],
+        "title": "CompositionOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "template": "title",
+          "fields": {
+            "title": "Launch day",
+            "subtitle": "Wasify AI is here"
+          }
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-video",
+      "ui": "video.builder",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/video_builder.create.md"
+    },
+    {
+      "id": "video_builder.lint",
+      "title": "Check a video project",
+      "summary": "Check that a video project reaches nothing outside its own folder.",
+      "description": "Check a Video Builder project before rendering: the page must not load anything from the internet or from other folders. Returns the findings, if any.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "composition_id": {
+            "description": "The video project, as returned when it was created.",
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Composition Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "composition_id"
+        ],
+        "title": "CompositionIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "Finding": {
+            "properties": {
+              "file": {
+                "title": "File",
+                "type": "string"
+              },
+              "line": {
+                "title": "Line",
+                "type": "integer"
+              },
+              "code": {
+                "title": "Code",
+                "type": "string"
+              },
+              "message": {
+                "title": "Message",
+                "type": "string"
+              }
+            },
+            "required": [
+              "file",
+              "line",
+              "code",
+              "message"
+            ],
+            "title": "Finding",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "composition_id": {
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/$defs/Finding"
+            },
+            "title": "Findings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "composition_id",
+          "ok",
+          "findings"
+        ],
+        "title": "LintOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "composition_id": "0b7c1f9e000040008000000000000000"
+        }
+      ],
+      "effect": "read",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        },
+        {
+          "kind": "runtime",
+          "name": "video-builder"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-video",
+      "ui": "video.builder",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/video_builder.lint.md"
+    },
+    {
+      "id": "video_builder.render",
+      "title": "Make the video",
+      "summary": "Render a video project to a video in the library.",
+      "description": "Render a Video Builder project and save it to the person's library (Your videos). The words on the screen are checked against what was typed first; a page that does not say them is not rendered. It runs in a sandbox, takes seconds to a minute, and only one video is made at a time. Returns a job handle when it is not done within the wait. Lower thirds and captions can be made transparent (webm or mov).",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "composition_id": {
+            "description": "The video project, as returned when it was created.",
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "format": {
+            "default": "mp4",
+            "description": "mp4, or webm or mov (transparent) for a lower third or captions.",
+            "enum": [
+              "mp4",
+              "webm",
+              "mov"
+            ],
+            "title": "Format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "composition_id"
+        ],
+        "title": "RenderIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "composition_id": {
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "render_id": {
+            "title": "Render Id",
+            "type": "string"
+          },
+          "video_id": {
+            "title": "Video Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "integer"
+          },
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "checked": {
+            "title": "Checked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "composition_id",
+          "render_id",
+          "video_id",
+          "product_id",
+          "uri",
+          "seconds",
+          "format",
+          "checked"
+        ],
+        "title": "RenderOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "composition_id": "0b7c1f9e000040008000000000000000"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "costly"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        },
+        {
+          "kind": "runtime",
+          "name": "video-builder"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-video",
+      "ui": "video.builder",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/video_builder.render.md"
     },
     {
       "id": "voice.clone",

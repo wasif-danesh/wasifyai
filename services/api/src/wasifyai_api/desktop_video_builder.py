@@ -1,0 +1,175 @@
+"""The Video Builder component's routes for the window (ADR-0077, stage V1a): is it set up, what
+would setting it up fetch, set it up (after the person saw the size), remove it. The render itself
+comes in V1c; the sandbox it will run in is `video_builder_sandbox.py`."""
+
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
+from wasifyai_platform_sdk import Identity
+
+from wasifyai_api import video_builder_runtime as vb
+from wasifyai_api import video_builder_sandbox as sandbox
+from wasifyai_api.audio_runtime import InstallError
+from wasifyai_api.desktop_fit import GB, assess_fit, need_declared, read_machine
+from wasifyai_api.identity import get_identity
+
+# what a render holds, measured on the owner's Mac (docs/spikes/video-builder-v1.md): 0.6 GB for a
+# plain composition by `ps`, 1.8 to 3 GB by V0's sampler; the fit check uses the larger figure
+RENDER_NEED_GB = 3.0
+
+
+class VideoBuilderService:
+    """What the engine holds for Video Builder: the installer, and what is installed."""
+
+    def __init__(self, data_dir: Path) -> None:
+        self.data_dir = data_dir
+        self.installer = vb.VideoBuilderInstaller(data_dir)
+
+    def install(self) -> vb.VideoBuilderInstall | None:
+        return vb.find_install(self.data_dir, self.installer.pins)
+
+    def state(self) -> dict[str, Any]:
+        found = self.install()
+        return {
+            "installed": found is not None,
+            "source": found.source if found is not None else None,
+            "plan": self.installer.plan(),
+            "progress": self.installer.progress.public(),
+            # said in words on the setup card: what a render is and is not allowed to do
+            "sandbox": {
+                "network": "A video can reach nothing outside its own folder.",
+                "telemetry": "Nothing is sent anywhere while it runs.",
+            },
+        }
+
+    # ---- what the Video Builder product calls (it imports nothing from this package) ----------
+
+    def ready(self) -> bool:
+        return self.installer.supported and self.install() is not None
+
+    def fit(self) -> dict[str, Any]:
+        """Whether a render fits in the memory this computer has now (ADR-0063)."""
+        return assess_fit(need_declared(RENDER_NEED_GB), read_machine()).public()
+
+    def limits(self) -> sandbox.RenderLimits:
+        machine = read_machine()
+        total = machine.total_bytes or 16 * GB
+        # a render holds 2 to 3 GB: allow half the memory, between 3 GB and 8 GB
+        return sandbox.RenderLimits(rss_bytes=int(max(3 * GB, min(8 * GB, total // 2))))
+
+    def gsap(self) -> Path | None:
+        found = self.install()
+        path = found.app / "node_modules" / "gsap" / "dist" / "gsap.min.js" if found else None
+        return path if path is not None and path.is_file() else None
+
+    def fonts(self, wanted: dict[str, str]) -> dict[str, Path]:
+        """The open fonts the templates use: `wanted` maps the name a font is copied under to its
+        place in the component's npm packages; the ones that are there are returned."""
+        found = self.install()
+        if found is None:
+            return {}
+        out = {}
+        for name, rel in wanted.items():
+            path = found.app / "node_modules" / rel
+            if path.is_file():
+                out[name] = path
+        return out
+
+    async def inspect(self, project: Path, spec: dict[str, Any]) -> dict[str, Any]:
+        """What is drawn at the moments in `spec`, seen by the sandboxed browser (the product
+        compares it with the words that were typed)."""
+        found = self.install()
+        if found is None:
+            return {"ok": False, "message": "Video Builder is not set up yet.", "items": []}
+        result, report = await sandbox.run_check(found, project, spec)
+        if report is None:
+            why = result.message or "The check could not be run."
+            return {"ok": False, "message": why, "items": [], "log": result.log_tail[-400:]}
+        return {
+            "ok": True,
+            "message": "",
+            "items": report["items"],
+            "fonts": report.get("fonts", []),
+        }
+
+    def lint(self, project: Path) -> list[dict[str, Any]]:
+        return [
+            {"file": f.file, "line": f.line, "code": f.code, "message": f.message}
+            for f in sandbox.lint_project(project)
+        ]
+
+    async def render(
+        self,
+        project: Path,
+        output: Path,
+        on_progress: Callable[[str], None] | None = None,
+        extra_args: tuple[str, ...] = (),
+    ) -> sandbox.RenderResult:
+        found = self.install()
+        if found is None:
+            return sandbox.RenderResult(False, "unavailable", "Video Builder is not set up yet.")
+        return await sandbox.run_render(
+            found, project, output, limits=self.limits(), on_progress=on_progress,
+            extra_args=extra_args,
+        )  # fmt: skip
+
+    async def snapshot(self, project: Path, folder: Path, at: float) -> sandbox.RenderResult:
+        found = self.install()
+        if found is None:
+            return sandbox.RenderResult(False, "unavailable", "Video Builder is not set up yet.")
+        return await sandbox.run_snapshot(found, project, folder, at, limits=None)
+
+    def remove(self) -> int:
+        if self.installer.running:
+            raise InstallError("Video Builder is being set up. Wait for it to finish.")
+        return vb.uninstall(self.data_dir)
+
+
+router = APIRouter(prefix="/desktop/video-builder", tags=["desktop"])
+
+
+def _service(request: Request) -> VideoBuilderService:
+    service: VideoBuilderService | None = getattr(request.app.state, "video_builder", None)
+    if service is None:
+        raise HTTPException(404, "not available in this deployment")
+    return service
+
+
+class ConfirmInstall(BaseModel):
+    """What the person was shown and agreed to: the size of the download."""
+
+    confirm_bytes: int
+
+
+@router.get("")
+async def video_builder_state(
+    request: Request, _: Identity = Depends(get_identity)
+) -> dict[str, Any]:
+    return _service(request).state()
+
+
+@router.post("/install", status_code=202)
+async def install_video_builder(
+    body: ConfirmInstall, request: Request, _: Identity = Depends(get_identity)
+) -> dict[str, Any]:
+    service = _service(request)
+    try:
+        service.installer.start(body.confirm_bytes)
+    except InstallError as e:
+        raise HTTPException(409, str(e)) from None
+    return service.state()
+
+
+@router.post("/uninstall")
+async def uninstall_video_builder(
+    request: Request, _: Identity = Depends(get_identity)
+) -> dict[str, Any]:
+    service = _service(request)
+    try:
+        freed = service.remove()
+    except InstallError as e:
+        raise HTTPException(409, str(e)) from None
+    return {"freed_bytes": freed, **service.state()}

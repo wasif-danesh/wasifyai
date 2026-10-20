@@ -25,6 +25,7 @@ import { NotebookPage } from "./pages/Notebook";
 import { NotebooksPage } from "./pages/Notebooks";
 import { SettingsPage } from "./pages/Settings";
 import { VideoPage } from "./pages/Video";
+import { VideoBuilderPage } from "./pages/VideoBuilder";
 import { VideosPage } from "./pages/Videos";
 import { remembered } from "./remember";
 import { useRoute } from "./router";
@@ -166,6 +167,7 @@ export function Shell() {
           {route === "speechedit" ? <ToolPage tool="edit" {...voice} /> : null}
           {route === "video" ? <VideoPage mode="text" go={go} /> : null}
           {route === "animate" ? <VideoPage mode="image" go={go} /> : null}
+          {route === "videobuilder" ? <VideoBuilderPage go={go} /> : null}
           {route === "videos" ? <VideosPage go={go} /> : null}
           {route === "models" ? <ModelsPage /> : null}
           {route === "settings" ? <SettingsPage /> : null}

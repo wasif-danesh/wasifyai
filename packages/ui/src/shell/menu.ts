@@ -4,6 +4,7 @@
 // the same shape.
 import {
   BookOpen,
+  Clapperboard,
   FilePlus2,
   FileText,
   Film,
@@ -65,6 +66,7 @@ export const MENU_GROUPS: MenuGroupDef[] = [
       { id: "video.create", label: "Create", icon: Sparkles },
       { id: "video.animate", label: "Animate an image", icon: Film },
       { id: "video.extend", label: "Extend video", icon: Maximize2 },
+      { id: "video.builder", label: "Video Builder", icon: Clapperboard },
       { id: "video.library", label: "Your videos", icon: Library },
     ],
   },

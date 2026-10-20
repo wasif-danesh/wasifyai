@@ -21,6 +21,25 @@ describe("the window's side menu", () => {
     expect(at("home")("train")).toBeUndefined();
   });
 
+  it("shows Video Builder only while its Labs switch is on", () => {
+    const off = resolveItem("home", () => {}, { conversationId: null, notebook: null });
+    const on = resolveItem("home", () => {}, {
+      conversationId: null,
+      notebook: null,
+      videoBuilder: true,
+    });
+    expect(off("video.builder")).toEqual({ hidden: true });
+    const shown = on("video.builder");
+    expect(shown && !("hidden" in shown) ? shown.current : null).toBe(false);
+    const open = resolveItem("videobuilder", () => {}, {
+      conversationId: null,
+      notebook: null,
+      videoBuilder: true,
+    })("video.builder");
+    expect(open && !("hidden" in open) ? open.current : null).toBe(true);
+    expect(routePath("videobuilder")).toBe("/video/builder");
+  });
+
   it("points every item at a route that exists", () => {
     for (const [id, route] of Object.entries(ROUTES)) {
       expect(routePath(route), id).toBeTruthy();

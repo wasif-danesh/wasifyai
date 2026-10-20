@@ -164,3 +164,45 @@ milestone changed to the sandboxed render path.**
   decoder drops the alpha). Fonts must be shipped with templates: system fonts differ per machine.
 - **Not measured:** another Mac or 16 and 32 GB with a model resident, Docker, Windows and Linux, audio and video inputs,
   4K, HyperFrames Studio, CPU-time limits, WebRTC and service-worker escapes.
+
+## Amendment after V1a and V1b (2026-10-20; `docs/spikes/video-builder-v1.md`)
+
+The component and the sandboxed render path are built (engine side only; no screen, no render route yet: that is V1c).
+
+- **Decision 4 is met without forking HyperFrames.** The V0 open question ("can the producer's launch be replaced?") is answered: HyperFrames
+  starts the file named by `HYPERFRAMES_BROWSER_PATH`, so a **launcher script** drops the weakening flags (`--no-sandbox`, popup blocking off) and adds the
+  lock-down, and **refuses to start without a network filter**. The filter is a loopback proxy that forwards to one place, the render's own file server
+  (the first loopback port the browser asks for, which a composition cannot choose); everything else is closed and counted. A guard kills the whole process
+  tree on a wall-time limit, a stall limit, a memory limit or a cancel. With the real browser, every hostile case of V0 is stopped, a service on loopback hears
+  nothing (the localhost gap V0 left open is closed), and a normal render is byte-identical to the unsandboxed one. The OS-profile wrapper (option b) is not needed.
+- **Decision 3 (a managed component):** `<app data>/components/video-builder/` holds a pinned Node.js 22.23.1 (50 MB download), the pinned Chrome headless shell
+  152.0.7977.30 (97.5 MB) and the 126 npm packages of a lock with integrity hashes (`hyperframes` 0.8.171, `gsap` 3.15.0; no install scripts). The person sees
+  **288 MB** before the click; about 510 MB is used after. Telemetry and the skills download are off, the environment starts empty, `HOME` is inside the component.
+  The installed Chrome is not offered (owner, 2026-10-20: the plan's default). One of the 126 packages is **LGPL-3.0-or-later** (libvips, a prebuilt library inside
+  `sharp`, used as shipped and not modified): its notice is kept, and, on my reading of the LGPL (not legal advice), rule 12 is met: commercial use is allowed for an unmodified,
+  separately installed library. Have counsel confirm with the AGPL review already listed in the backlog (D10).
+- **Decision 8 (GSAP):** unchanged; GSAP is vendored into each project from the component's copy, never from a CDN, and the lint refuses any non-local URL before
+  HyperFrames' compiler (which downloads CDN scripts in Node) sees it.
+- **Still open for V1c and later:** the memory limit from the fit check; a quarantine flag inside the packaged app; WebRTC and service-worker escapes; Windows and Linux; a model
+  resident on small Macs. The browser's popup stays open until the render ends (behind the filter).
+
+## Amendment after V1c (2026-10-20; `docs/spikes/video-builder-v1.md`, `docs/desktop-profile.md`)
+
+The engine, the projects and the experimental screen are built; the first working Video Builder is one template (an animated title).
+
+- **Where it lives:** not a separate product package. It is a part of the **video product** (`products/wasifyai-video/wasifyai_video/builder/`), because what it makes
+  are videos: a render is a clip of Your videos (`mode = "composition"`), so listing, saving a copy, deleting and search needed nothing new. A project is its own
+  library kind, `composition`. A separate package can be split off later without changing the routes or the actions.
+- **One render at a time, a fit check first** (ADR-0063: a render needs about 3 GB; `too_big` refuses before anything starts), run through the sandbox of V1b, with
+  progress, a cancel that kills the whole tree, and a plain sentence for every way it can end. A render left running when the app closes is marked failed at the next start.
+- **The words are exact by construction (ADR-0079 decision 7, template path):** the title and the line go into the page as escaped text, never as markup and never inside
+  the script (a test parses the page with every hostile string and compares the title's text with what was typed). The page reads no clock and loads nothing from outside.
+- **ADR-0041 checklist:** index text (title and line), indexed on create, on change and rename, removed on delete (and its clips with it), one index source for clips and
+  compositions, an `ids=` filter on the list route, `composition` in `CreationKind` and the library kinds, a row in the search corpus (not run: it needs the stack).
+  **Not built:** a card and a filter in the web `/creations` page, because the feature is desktop only and the desktop has no creations page yet.
+- **Deletion** (the library action always asks): stops a render in progress, deletes the clips made from the project (files, rows, search), its folder and its row.
+- **Measured on the owner's Mac (M5 Pro, 64 GB):** setup 25 s; a 5 s 720p title previews in 4.3 s and renders in 7 to 9 s at about 2.3 GB; 12 s at 1080x1080 renders in
+  8 s; the numbers did not change with a 14 GB process holding memory beside it (64 GB is not a small Mac: 16 and 32 GB are still unmeasured).
+- **Not in V1c:** the moderation of slot text when safeguards are on (decision 9 of ADR-0079), shipped fonts and the other four templates (MG1), the `preview_frame` action
+  (MG1), the web, and the check of macOS quarantine inside the packaged app.
+

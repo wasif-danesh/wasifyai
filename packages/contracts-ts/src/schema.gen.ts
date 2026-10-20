@@ -894,6 +894,205 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-video/builder/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Projects */
+        get: operations["list_projects_products_wasifyai_video_builder_projects_get"];
+        put?: never;
+        /** Create Project */
+        post: operations["create_project_products_wasifyai_video_builder_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-video/builder/projects/{cid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Project */
+        get: operations["get_project_products_wasifyai_video_builder_projects__cid__get"];
+        put?: never;
+        post?: never;
+        /** Delete Project */
+        delete: operations["delete_project_products_wasifyai_video_builder_projects__cid__delete"];
+        options?: never;
+        head?: never;
+        /** Update Project */
+        patch: operations["update_project_products_wasifyai_video_builder_projects__cid__patch"];
+        trace?: never;
+    };
+    "/products/wasifyai-video/builder/projects/{cid}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Project
+         * @description The exact-text check: does the screen say what was typed (ADR-0079 decision 7).
+         */
+        post: operations["check_project_products_wasifyai_video_builder_projects__cid__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-video/builder/projects/{cid}/lint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lint Project */
+        post: operations["lint_project_products_wasifyai_video_builder_projects__cid__lint_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-video/builder/projects/{cid}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview
+         * @description One still of the composition at `at` seconds, made in the same sandbox as a render.
+         */
+        get: operations["preview_products_wasifyai_video_builder_projects__cid__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-video/builder/projects/{cid}/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Render */
+        post: operations["start_render_products_wasifyai_video_builder_projects__cid__render_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-video/builder/projects/{cid}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Project
+         * @description Bring back the version before the last change.
+         */
+        post: operations["undo_project_products_wasifyai_video_builder_projects__cid__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-video/builder/renders/{rid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Render */
+        get: operations["get_render_products_wasifyai_video_builder_renders__rid__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-video/builder/renders/{rid}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Render */
+        post: operations["cancel_render_products_wasifyai_video_builder_renders__rid__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-video/builder/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Status */
+        get: operations["status_products_wasifyai_video_builder_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-video/builder/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Templates */
+        get: operations["list_templates_products_wasifyai_video_builder_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-video/prompt/enhance": {
         parameters: {
             query?: never;
@@ -2381,6 +2580,25 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** ProjectIn */
+        ProjectIn: {
+            /** Slots */
+            slots?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Template
+             * @default title
+             */
+            template: string;
+        };
+        /** ProjectPatch */
+        ProjectPatch: {
+            /** Slots */
+            slots: {
+                [key: string]: unknown;
+            };
+        };
         /** ProviderView */
         ProviderView: {
             /** Id */
@@ -2438,6 +2656,14 @@ export interface components {
             thread_id: string;
             /** Ts */
             ts?: string;
+        };
+        /** RenderIn */
+        RenderIn: {
+            /**
+             * Format
+             * @default mp4
+             */
+            format: string;
         };
         /** ResumeRequest */
         ResumeRequest: {
@@ -4972,6 +5198,453 @@ export interface operations {
         };
     };
     status_products_wasifyai_notebooks_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    list_projects_products_wasifyai_video_builder_projects_get: {
+        parameters: {
+            query?: {
+                ids?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_project_products_wasifyai_video_builder_projects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_project_products_wasifyai_video_builder_projects__cid__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_project_products_wasifyai_video_builder_projects__cid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_project_products_wasifyai_video_builder_projects__cid__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_project_products_wasifyai_video_builder_projects__cid__check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lint_project_products_wasifyai_video_builder_projects__cid__lint_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_products_wasifyai_video_builder_projects__cid__preview_get: {
+        parameters: {
+            query?: {
+                at?: number | null;
+            };
+            header?: never;
+            path: {
+                cid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_render_products_wasifyai_video_builder_projects__cid__render_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RenderIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_project_products_wasifyai_video_builder_projects__cid__undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_render_products_wasifyai_video_builder_renders__rid__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_render_products_wasifyai_video_builder_renders__rid__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    status_products_wasifyai_video_builder_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    list_templates_products_wasifyai_video_builder_templates_get: {
         parameters: {
             query?: never;
             header?: never;

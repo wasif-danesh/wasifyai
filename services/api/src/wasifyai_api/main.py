@@ -75,6 +75,7 @@ from wasifyai_api.desktop_language import LocalTextProvider
 from wasifyai_api.desktop_lipsync import router as desktop_lipsync_router
 from wasifyai_api.desktop_llm import router as desktop_llm_router
 from wasifyai_api.desktop_models import router as desktop_models_router
+from wasifyai_api.desktop_video_builder import router as desktop_video_builder_router
 from wasifyai_api.graphs import default_registry
 from wasifyai_api.identity import get_identity
 from wasifyai_api.jobs_consumer import JobCompletionConsumer
@@ -502,6 +503,7 @@ def create_app(
             app.state.desktop_discovery = desktop.discovery
             app.state.llama_server = desktop.llama
             app.state.audio = desktop.audio  # the speech runtime (ADR-0066); products reach it here
+            app.state.video_builder = desktop.video_builder  # the render engine (ADR-0077)
             app.state.desktop_language = desktop.language
             app.state.desktop_vision = desktop.vision
             app.state.desktop_hub = desktop.hub
@@ -613,6 +615,7 @@ def create_app(
         app.include_router(desktop_models_router)
         app.include_router(desktop_audio_router)
         app.include_router(desktop_lipsync_router)
+        app.include_router(desktop_video_builder_router)
         app.include_router(desktop_discovery_router)
         app.include_router(desktop_llm_router)
         app.include_router(desktop_hub_router)

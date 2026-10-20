@@ -337,6 +337,27 @@ jobs:
           echo "--- self-test"; cat "$WASIFYAI_SMOKE_OUT" || true
           echo "--- installer log"; tail -n 40 "$WASIFYAI_DATA_DIR/logs/provision.log" || true
 
+  video-builder:
+    # The Video Builder component as a person gets it (ADR-0077, V1a): the pinned downloads with every hash
+    # checked, then hostile compositions rendered through the real adapter with the real pinned browser (V1b).
+    # Each page attacks while HyperFrames renders it; a service on loopback must hear nothing and the filter
+    # must refuse what the page asks for. Apple-silicon macOS only: that is where the component is supported.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-packages
+      - name: Install the component
+        run: |
+          home="$(uv run python scripts/ci-video-builder.py "$RUNNER_TEMP/video-builder-data" | tail -1)"
+          echo "WASIFYAI_VIDEO_BUILDER_HOME=$home" >> "$GITHUB_ENV"
+      - name: Hostile compositions, the filter and the guard
+        run: uv run pytest -s services/api/tests/test_video_builder_hostile.py services/api/tests/test_video_builder_sandbox.py services/api/tests/test_video_builder_runtime.py
+      - name: The five templates, the exact-text check and the alpha files (MG1)
+        run: |
+          brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
+          uv run pytest -s services/api/tests/test_video_builder_templates.py
+
   comfyui:
     # The optional image engine, as a person gets it: press "Set up image generation" (the window's
     # self-test does), then start the installed ComfyUI and ask it what device it found. No model is

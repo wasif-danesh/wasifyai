@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { Button, SearchSettings, useChatNext } from "@wasifyai/ui";
+import { Button, SearchSettings, useChatNext, useVideoBuilderLabs } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
 import { assistantApi, discoveryApi, hubApi } from "../api";
 import { engineRepair, engineRestart } from "../engine";
@@ -127,6 +127,7 @@ function HubSwitch() {
 /** Features still being tried (ADR-0082): off until the person turns them on, remembered on this computer. */
 function Labs() {
   const [chatNext, setChatNext] = useChatNext();
+  const [videoBuilder, setVideoBuilder] = useVideoBuilderLabs();
   return (
     <section className="grid gap-3" aria-label="Labs">
       <h2 className="font-semibold text-lg">Labs</h2>
@@ -137,6 +138,14 @@ function Labs() {
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={chatNext} onChange={(e) => setChatNext(e.target.checked)} />
         Try the new chat (code, maths and diagrams in answers)
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={videoBuilder}
+          onChange={(e) => setVideoBuilder(e.target.checked)}
+        />
+        Try Video Builder (write a title card as a video; adds Video › Video Builder to the menu)
       </label>
     </section>
   );

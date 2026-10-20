@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from wasifyai_platform_sdk import Identity, RouteDeps, build_enhance_router, parse_ids
 
 from wasifyai_video import prompts
+from wasifyai_video.builder.routes import build_builder_routes
 from wasifyai_video.guardrail import enhance_guard
 from wasifyai_video.videos import VideoRecord, VideoStore, video_store
 
@@ -45,6 +46,15 @@ class VideoPage(BaseModel):
     next_before: datetime | None  # pass as `before` to get the next page; null at the end
 
 
+MEDIA = {"mp4": "video/mp4", "webm": "video/webm", "mov": "video/quicktime"}
+
+
+def extension_of(video_key: str | None) -> str:
+    """The kind of file a clip is (Video Builder can make a transparent WebM or a MOV)."""
+    ext = (video_key or "").rsplit(".", 1)[-1].lower()
+    return ext if ext in MEDIA else "mp4"
+
+
 def file_name(prompt: str, ext: str) -> str:
     """A safe, readable file name from the prompt: letters, digits and hyphens only."""
     slug = re.sub(r"[^a-z0-9]+", "-", prompt.lower()).strip("-")[:48].strip("-") or "video"
@@ -69,6 +79,7 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
     """`store` is injectable for tests; production reads the shared database."""
     router = APIRouter(tags=[PRODUCT_ID])
     router.include_router(build_enhance_router(deps, PRODUCT_ID, prompts.load, enhance_guard))
+    router.include_router(build_builder_routes(deps))  # Video Builder (ADR-0077), desktop only
 
     def videos() -> VideoStore:
         return store or video_store(deps.engine)
@@ -131,7 +142,11 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
         except FileNotFoundError:
             raise HTTPException(404, "video not found") from None
         path = await asyncio.to_thread(
-            save_copy, Path(folder), file_name(video.prompt, ""), "mp4", data
+            save_copy,
+            Path(folder),
+            file_name(video.prompt, ""),
+            extension_of(video.video_key),
+            data,
         )
         return Exported(name=path.name, path=str(path))
 
@@ -148,11 +163,12 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
                 data = await deps.storage.get(video.video_key)
         except FileNotFoundError:
             raise HTTPException(404, "video not found") from None
+        ext = extension_of(video.video_key)
         return Response(
             data,
-            media_type="video/mp4",
+            media_type=MEDIA[ext],
             headers={
-                "Content-Disposition": f'attachment; filename="{file_name(video.prompt, "mp4")}"',
+                "Content-Disposition": f'attachment; filename="{file_name(video.prompt, ext)}"',
                 "Cache-Control": "private, no-store",
                 "X-Content-Type-Options": "nosniff",
             },

@@ -12,6 +12,7 @@ export const ROUTES: Record<string, Route> = {
   "images.library": "library",
   "video.create": "video",
   "video.animate": "animate",
+  "video.builder": "videobuilder",
   "video.library": "videos",
   "voice.speak": "speak",
   "voice.transcribe": "transcribe",
@@ -33,10 +34,12 @@ export const ROUTES: Record<string, Route> = {
 export function resolveItem(
   route: Route,
   go: (r: Route) => void,
-  opts: { conversationId: string | null; notebook: string | null },
+  opts: { conversationId: string | null; notebook: string | null; videoBuilder?: boolean },
 ): ItemResolver {
-  const { conversationId, notebook } = opts;
+  const { conversationId, notebook, videoBuilder = false } = opts;
   return (id): ItemView | undefined => {
+    // experimental: the menu item exists only while the Labs switch is on
+    if (id === "video.builder" && !videoBuilder) return { hidden: true };
     if (id === "chat") {
       return {
         current: route === "home" && !conversationId,

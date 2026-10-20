@@ -30,8 +30,11 @@ LIBRARY_KINDS = (
     "voice",
     "lipsync",
     "notebook",
+    "composition",
 )
-Kind = Literal["image", "video", "speech", "track", "transcript", "voice", "lipsync", "notebook"]
+Kind = Literal[
+    "image", "video", "speech", "track", "transcript", "voice", "lipsync", "notebook", "composition"
+]
 MAX_STATUS_LINES = 12
 MAX_WAIT = 50.0
 

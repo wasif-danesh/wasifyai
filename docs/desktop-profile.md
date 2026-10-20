@@ -704,6 +704,27 @@ each needs its licence and a measurement first), a smaller text encoder (the 8-b
 download by a third; its effect on the picture is not measured), sound for clips, clips longer than 5 seconds, and checking the
 finished clip (the known gap of images too).
 
+## Video Builder (ADR-0077, stages V1a to V1c and MG1; experimental, behind Labs)
+
+Videos written as an HTML page and drawn frame by frame on this computer, in a locked box. A person switches it on in
+**Settings › Labs**, which adds **Video › Video Builder**. Details and measurements: `docs/spikes/video-builder-v1.md`.
+
+| Piece | What |
+|---|---|
+| The component | `<app data>/components/video-builder/`: a pinned Node.js 22.23.1, the pinned Chrome headless shell 152.0.7977.30 and the 128 npm packages of a lock (`hyperframes` 0.8.171, `gsap` 3.15.0 and the two font packages). **293 MB** (288 MB before the fonts) is shown before the click, about 520 MB on disk, 25 s to set up here. `GET /desktop/video-builder`, `POST /install` (the size shown must be sent back), `POST /uninstall`. Apple-silicon Macs only: elsewhere the screen says so |
+| The sandbox | `video_builder_sandbox.py`: a launcher the render starts instead of the browser (drops `--no-sandbox` and popups allowed, refuses to start without the filter), a loopback proxy that forwards to the render's own file server only, a guard (wall, stall, memory limits, process-tree kill), a lint before the compiler |
+| The product | inside the video product (`wasifyai_video/builder/`): templates, `builder.db` (compositions and render rows) in `<app data>/video-builder/`, project folders, the render manager (one at a time, a fit check first), routes under `/products/wasifyai-video/builder/` |
+| What it makes | a **clip of Your videos** (a `videos` row with `mode = "composition"`, the same storage layout), so the library, export, search and delete already work. A project (a composition) is its own kind in the library and in search |
+| The templates | **Animated title, quote, bar chart (from CSV lines), lower third, captions**: typed fields, a shape, a length, four preset looks, Inter or Source Serif 4 (shipped, OFL). The words are escaped text in the page, never markup. A lower third and captions are transparent (WebM alpha, ProRes 4444 MOV, or MP4) |
+| The exact-text check | before anything is drawn the page is opened in the sandboxed browser and each word on the screen is compared with what was typed (text, visible, drawn, not cut off, inside the safe margin); a failure is said in words and nothing is made. `POST /builder/projects/{id}/check` runs it alone |
+| Actions | `motion.make` (write, check and make in one step), `motion.revise`, `video_builder.create`, `video_builder.lint`, `video_builder.render` (help files in `docs/help/`); `library.*` reaches the `composition` kind. Every change keeps a version; Undo brings the last back (20 kept) |
+| Measured here (M5 Pro, 64 GB) | a 5 s 720p title: preview 4.3 s, video 7 to 9 s; 12 s at 1080x1080: 8 s; the render holds about 2.3 GB (`ps` of its process tree); cancel stops it in 1.3 s with nothing left running |
+
+Measured with MG1: each template 7 to 10 s at 720p, tree peak 2.2 to 2.3 GB.
+
+Not built: the moderation of the words when safeguards are on (ADR-0079 decision 9), a card for projects in a web `/creations` page
+(the feature is desktop only), the quarantine check inside the packaged app, the chat path (needs A2), a looping preview clip.
+
 ## The self-test
 
 `WASIFYAI_SMOKE=1 cargo run` (in `apps/desktop/src-tauri`) starts the shell as usual; once the engine is ready

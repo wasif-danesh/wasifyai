@@ -52,6 +52,8 @@ export function resolveWebItem(
         return live("video") ? page("/video") : undefined;
       case "video.animate":
         return live("video") ? page("/video/animate") : undefined;
+      case "video.builder":
+        return { hidden: true }; // experimental, on the desktop only (ADR-0077)
       case "video.library":
         return live("video") ? page("/video/library", "/video/creations") : undefined;
       case "voice.speak":

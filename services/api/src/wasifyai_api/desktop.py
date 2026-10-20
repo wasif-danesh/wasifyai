@@ -42,6 +42,7 @@ from wasifyai_api.desktop_fit import assess_fit, need_declared, process_rss_byte
 from wasifyai_api.desktop_hub import HubService
 from wasifyai_api.desktop_language import LanguageService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
+from wasifyai_api.desktop_video_builder import VideoBuilderService
 from wasifyai_api.desktop_vision import VisionService
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
 from wasifyai_api.lipsync_runtime import LipSyncSidecar
@@ -83,6 +84,9 @@ class DesktopBackends:
     hub: HubService | None = None
     web: WebService | None = None  # web search: the person's choices and keys (ADR-0083)
     audio: AudioEngine | None = None
+    video_builder: VideoBuilderService | None = (
+        None  # the render engine, installed on request (ADR-0077)
+    )
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
     async def start(self, runs: RunManager) -> None:
@@ -170,6 +174,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         discovery=discovery,
         llama=llama,
         audio=audio,
+        video_builder=VideoBuilderService(settings.desktop_dir),
         language=language,
         vision=vision,
         hub=hub,

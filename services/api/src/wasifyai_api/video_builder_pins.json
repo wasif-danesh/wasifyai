@@ -1,0 +1,26 @@
+{
+  "comment": "The Video Builder component (ADR-0077, V1a): a pinned Node.js, the pinned Chrome headless shell for Testing, and the packages in video_builder/package-lock.json (hyperframes 0.8.171, gsap 3.15.0), each fetched only after the person has seen the size and confirmed it. Only Apple-silicon Macs are measured (docs/spikes/video-builder-v0.md); other systems say so in words.",
+  "node": {
+    "version": "22.23.1",
+    "url": "https://nodejs.org/dist/v22.23.1/node-v22.23.1-darwin-arm64.tar.gz",
+    "size": 50067502,
+    "sha256": "ef28d8fab2c0e4314522d4bb1b7173270aa3937e93b92cb7de79c112ac1fa953",
+    "licence": "MIT"
+  },
+  "shell": {
+    "version": "152.0.7977.30",
+    "url": "https://storage.googleapis.com/chrome-for-testing-public/152.0.7977.30/mac-arm64/chrome-headless-shell-mac-arm64.zip",
+    "size": 97532843,
+    "sha256": "1db16c16e72bedfa747ed01c207a3fe8ee7370c35f2094279eb8878c996e8c79",
+    "licence": "Chromium (BSD-3-Clause and bundled third-party licences, see LICENSE.headless_shell in the download)"
+  },
+  "packages": {
+    "lock": "video_builder/package-lock.json",
+    "lock_sha256": "a283f06544ab1bb85f60ef8a8d17ba6805e02ab1270a62c0df91db1d73595c33",
+    "package": "video_builder/package.json",
+    "package_sha256": "3f9cc1ed78ed2470df0276a0e03bb3e5bd5b017291a67cec54a99415377cb80f",
+    "bytes": 145000000,
+    "note": "128 packages; Apache-2.0, MIT, ISC, BSD, CC0, 0BSD, SIL OFL-1.1 (the two font packages), the gsap Standard no charge licence, and one LGPL-3.0-or-later prebuilt library (libvips inside sharp) that is used as shipped and not modified"
+  },
+  "platforms": ["darwin-arm64"]
+}

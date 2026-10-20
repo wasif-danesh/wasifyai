@@ -170,3 +170,10 @@ export {
   type MenuItemDef,
 } from "./shell/menu";
 export { type MenuLink, type Recents, SideMenu, type SideMenuProps } from "./shell/SideMenu";
+export { VideoBuilder, type VideoBuilderProps } from "./videobuilder/VideoBuilder";
+export {
+  VIDEO_BUILDER_KEY,
+  readVideoBuilder,
+  useVideoBuilderLabs,
+  writeVideoBuilder,
+} from "./videobuilder/labs";

@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 from wasifyai_platform_sdk.sqlite import create_sqlite_engine
-from wasifyai_video.index import SqliteVideoIndexSource, video_index_source
+from wasifyai_video.index import CombinedIndexSource, SqliteVideoIndexSource, video_index_source
 from wasifyai_video.videos import (
     STALE_AFTER,
     InMemoryVideoStore,
@@ -95,7 +95,10 @@ async def test_a_clip_that_stays_working_too_long_is_marked_failed(engine):
 
 async def test_the_factory_picks_the_store_by_the_database(engine):
     assert isinstance(video_store(engine), SqliteVideoStore)
-    assert isinstance(video_index_source(engine), SqliteVideoIndexSource)
+    # the clips and Video Builder's compositions are one source on the desktop
+    source = video_index_source(engine)
+    assert isinstance(source, CombinedIndexSource)
+    assert any(isinstance(s, SqliteVideoIndexSource) for s in source._sources)  # noqa: SLF001
 
 
 async def test_the_index_source_lists_only_finished_clips(engine):

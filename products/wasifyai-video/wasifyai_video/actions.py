@@ -18,7 +18,9 @@ from wasifyai_platform_sdk.actions import (
 )
 from wasifyai_platform_sdk.actions.helpers import need_deps, stage_picture
 
-from wasifyai_video.routes import file_name, save_copy
+from wasifyai_video.builder.actions import actions as builder_actions
+from wasifyai_video.builder.actions import library_kinds as builder_library_kinds
+from wasifyai_video.routes import extension_of, file_name, save_copy
 from wasifyai_video.schemas import MAX_PROMPT_CHARS
 from wasifyai_video.videos import VideoRecord, video_store
 
@@ -140,6 +142,7 @@ def actions() -> list[Action]:
                             check=_animate_check),
             ui="video.animate",
         ),
+        *builder_actions(),  # Video Builder (ADR-0077): videos written as HTML
     ]  # fmt: skip
 
 
@@ -199,11 +202,16 @@ async def _export(ctx: ActionContext, item_id: str, folder: Path) -> Path | None
             data = await deps.storage.get(video.video_key)
         except FileNotFoundError:
             return None
-    return await asyncio.to_thread(save_copy, folder, file_name(video.prompt, ""), "mp4", data)
+    return await asyncio.to_thread(
+        save_copy, folder, file_name(video.prompt, ""), extension_of(video.video_key), data
+    )
 
 
 def library_kinds() -> list[LibraryKind]:
-    return [LibraryKind("video", PRODUCT_ID, "video", _list, _get, _delete, None, _export)]
+    return [
+        LibraryKind("video", PRODUCT_ID, "video", _list, _get, _delete, None, _export),
+        *builder_library_kinds(),
+    ]
 
 
 __all__ = ["actions", "library_kinds"]

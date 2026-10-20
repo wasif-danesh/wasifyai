@@ -19,7 +19,13 @@ describe("the menu definition", () => {
     ]);
     const items = (id: string) => MENU_GROUPS.find((g) => g.id === id)?.items.map((i) => i.label);
     expect(items("notebook")).toEqual(["Create", "View Notebooks"]);
-    expect(items("video")).toEqual(["Create", "Animate an image", "Extend video", "Your videos"]);
+    expect(items("video")).toEqual([
+      "Create",
+      "Animate an image",
+      "Extend video",
+      "Video Builder",
+      "Your videos",
+    ]);
     expect(items("music")).toEqual(["Create", "Your music", "Lyrics", "Split into parts"]);
     expect(items("voice")).toHaveLength(8);
     const ids = MENU_GROUPS.flatMap((g) => g.items.map((i) => i.id));
@@ -57,7 +63,7 @@ describe("SideMenu", () => {
     const here = screen.getByRole("link", { name: /Your videos/ });
     expect(here).toHaveAttribute("href", "/video/library");
     expect(here).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("button", { name: /^Video/ })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Video" })).toHaveAttribute("aria-expanded", "true");
   });
 
   it("lets a person open another group while on a page, and follows them to the next page", async () => {

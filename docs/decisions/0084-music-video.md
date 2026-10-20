@@ -5,7 +5,7 @@
   and runs on the Mac only; the lip sync mark is removed everywhere, to be reviewed before release; a revenue-threshold licence such as
   LTX-2.x's may be a default; hosted is a later idea; the feature is Video › Music video behind Labs). **No question is open.** Nothing
   is built or started. **The roadmap's hold (2026-10-19) on spikes and new features stays:** stage MV0 does not start until bug fixing and the
-  simple model picker are done.
+  simple model picker are done, and **it runs after the WanGP spike W0 (ADR-0085, owner, 2026-10-20)**, which may leave the LTX-2.5 files for MV0 to reuse.
 - **Date:** 2026-10-20 (updated the same day, twice, with the owner's answers)
 - **Depends on:** ADR-0056 (one engine, two shells), ADR-0059 (ComfyUI image and video engine), ADR-0037 (video product, LTX-Video 2B
   0.9.5), ADR-0044 (lip sync, consent and mark) and ADR-0066 (descriptors, one adapter per runtime, honest states, MuseTalk as the

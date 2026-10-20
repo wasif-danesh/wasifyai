@@ -86,5 +86,6 @@
 | [0082](0082-chat-ui-on-assistant-ui.md) | The chat UI is built on assistant-ui (and streamdown), not on our own components; amends ADR-0057 decision 7 | Accepted (assistant-ui); other dependencies to approve in CU0 |
 | [0083](0083-composer-options-attach-search-thinking-mic.md) | The chat box gets Attach, Search (DuckDuckGo first), Thinking and Mic | Accepted (CO0 on hold) |
 | [0084](0084-music-video.md) | Music video: a song in, a plan you can edit, clips, a final cut; our own pipeline on our own parts (Maestro and AutoMV are references, not dependencies) | Proposed (all owner questions answered 2026-10-20; MV0 on hold) |
+| [0085](0085-wangp-evaluation-spike.md) | WanGP evaluation spike: can it make basic images, video and audio on the Mac better than what we run now? (comparison protocol, licence gate, decision rule) | Proposed (owner's answers recorded 2026-10-20; spike W0 on hold, runs before ADR-0084 MV0) |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

@@ -88,9 +88,15 @@ PAYLOADS = {
       return true;""",
     "alert": """alert("hello"); return true;""",
     "loop": """for (;;) {} return true;""",
+    # random bytes, not a constant: macOS compresses a page of ones, so a small runner's resident size
+    # never grew (the first CI run drew the whole video); a failed allocation is tried again
     "memory": """
       const keep = [];
-      for (;;) { keep.push(new Uint8Array(256 * 1024 * 1024).fill(1)); await new Promise((r) => setTimeout(r, 5)); }""",
+      const noise = (a) => { for (let o = 0; o < a.length; o += 65536) crypto.getRandomValues(a.subarray(o, o + 65536)); };
+      for (;;) {
+        try { const a = new Uint8Array(64 * 1024 * 1024); noise(a); keep.push(a); } catch (e) {}
+        await new Promise((r) => setTimeout(r, 5));
+      }""",
     # no clock in this one: the picture follows the timeline only, so two renders can match to the byte
     "control": """return undefined;""",
 }

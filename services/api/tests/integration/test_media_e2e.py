@@ -92,7 +92,10 @@ async def test_run_queues_a_job_the_worker_runs_and_the_graph_finishes(redis_con
     names = [e for e, _ in events]
     assert names[-1] == "done" and "interrupt" not in names and "error" not in names
     jobs = [d for e, d in events if e == "job_progress"]
-    assert [j["status"] for j in jobs][0] == "queued" and jobs[0]["queue_position"] == 1
+    # a fast worker can claim the job before the stream's first read: queued or already running
+    assert [j["status"] for j in jobs][0] in ("queued", "running")
+    if jobs[0]["status"] == "queued":
+        assert jobs[0]["queue_position"] == 1
     assert [j["status"] for j in jobs][-1] == "completed" and jobs[-1]["progress"] == 1.0
     running = [j["progress"] for j in jobs if j["status"] == "running"]
     assert running[0] == 0.0 and running == sorted(running)

@@ -13,7 +13,7 @@ import { useAssistantChat } from "./use-assistant-chat";
 const MAX_CHARS = 4000;
 
 export type ChatScreenProps = {
-  runs: Pick<RunClient, "startRun" | "watchRun">;
+  runs: Pick<RunClient, "startRun" | "watchRun"> & Partial<Pick<RunClient, "cancelRun">>;
   assistant: AssistantApi;
   images: ImagesApi;
   /** Reads a track the assistant made, to play it in the chat. */

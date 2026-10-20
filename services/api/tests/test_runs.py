@@ -273,3 +273,157 @@ async def test_a_child_run_that_takes_too_long_ends_with_a_plain_error(tmp_path)
     events = [e async for e in runs.run_child("slow", "t1", "u1", {}, timeout_s=0.3)]
     assert events[-1]["event"] == "error" and events[-1]["code"] == "timeout"
     await runs.aclose()
+
+
+# ---- a run id chosen by the client, and Stop (ADR-0082, stage CU1) ----------------------
+
+
+def test_a_run_id_chosen_by_the_client_is_the_runs_id(client, usage):
+    from uuid import uuid4
+
+    rid = str(uuid4())
+    body = {"input": {"message": "hi"}, "run_id": rid}
+    events = parse(client.post("/products/hello/runs", json=body).text)
+    assert {d["run_id"] for _, d in events} == {rid}
+    assert events[-1][0] == "done"
+
+
+def test_starting_again_under_the_same_run_id_is_the_same_run(client, usage):
+    from uuid import uuid4
+
+    rid = str(uuid4())
+    body = {"input": {"message": "hi"}, "run_id": rid}
+    first = parse(client.post("/products/hello/runs", json=body).text)
+    spent = len(usage.events)
+    again = parse(client.post("/products/hello/runs", json=body).text)
+    # the same events, replayed from the first; no second answer was made or paid for
+    assert [d["seq"] for _, d in again] == [d["seq"] for _, d in first]
+    assert "".join(d.get("text", "") for _, d in again) == "".join(
+        d.get("text", "") for _, d in first
+    )
+    assert len(usage.events) == spent
+
+
+def test_a_run_id_must_be_a_uuid(client):
+    r = client.post("/products/hello/runs", json={"input": {}, "run_id": "not-a-uuid"})
+    assert r.status_code == 422
+
+
+async def test_a_run_id_that_is_someone_elses_is_a_conflict(tmp_path):
+    from uuid import uuid4
+
+    from wasifyai_api.runs import RunIdTaken, RunManager
+    from wasifyai_platform_sdk import RunRecord
+
+    mgr = RunManager(InMemoryEventLog(), InMemoryRunStore(), {})
+    rid = uuid4()
+    mine = RunRecord(
+        run_id=str(rid), thread_id=str(uuid4()), product_id="hello", tenant_id="t", user_id="a"
+    )
+    assert await mgr.store.create(mine) is True
+    with pytest.raises(RunIdTaken):
+        await mgr.start("hello", "t", "b", None, {}, rid)  # another person
+    with pytest.raises(RunIdTaken):
+        await mgr.start("other-product", "t", "a", None, {}, rid)  # another product
+    again = await mgr.start("hello", "t", "a", None, {}, rid)  # the same person: the same run
+    assert again.run_id == str(rid)
+
+
+def test_stopping_a_run_that_is_over_is_not_an_error(client):
+    events = parse(client.post("/products/hello/runs", json={"input": {"message": "hi"}}).text)
+    run_id = events[0][1]["run_id"]
+    r = client.post(f"/runs/{run_id}/cancel")
+    assert r.status_code == 200 and r.json() == {"run_id": run_id, "status": "done"}
+
+
+def test_stopping_a_run_that_is_not_yours_is_a_404(client):
+    from uuid import uuid4
+
+    assert client.post(f"/runs/{uuid4()}/cancel").status_code == 404
+
+
+class SlowState(TypedDict, total=False):
+    said: str
+
+
+def _slow_graph(started: Any):
+    """A graph that writes a word every few milliseconds until it is stopped."""
+    import asyncio
+
+    from langgraph.config import get_stream_writer
+
+    def build(caps: Any, checkpointer: Any):
+        async def talk(state: SlowState) -> SlowState:
+            write = get_stream_writer()
+            started.set()
+            try:
+                for n in range(10_000):
+                    write({"type": "token", "node": "talk", "text": f"w{n} "})
+                    await asyncio.sleep(0.01)
+            except asyncio.CancelledError:
+                write({"type": "token", "node": "talk", "text": "(saved)"})
+                raise
+            return {"said": "never"}
+
+        g = StateGraph(SlowState)
+        g.add_node("talk", talk)
+        g.add_edge(START, "talk")
+        g.add_edge("talk", END)
+        return g.compile(checkpointer=checkpointer)
+
+    return build
+
+
+async def _running_manager(monkeypatch=None):
+    import asyncio
+
+    from wasifyai_api.runs import RunManager
+
+    started = asyncio.Event()
+    log, store = InMemoryEventLog(), InMemoryRunStore()
+    graph = _slow_graph(started)(None, InMemorySaver())
+    mgr = RunManager(log, store, {"slow": graph})
+    rec = await mgr.start("slow", "t", "u", None, {})
+    await asyncio.wait_for(started.wait(), 5)
+    await asyncio.sleep(0.05)
+    return mgr, log, store, rec
+
+
+async def test_stop_ends_the_run_where_it_is_and_closes_its_stream():
+    mgr, log, store, rec = await _running_manager()
+    assert (await mgr.cancel(rec)) == "cancelled"
+    events = await log.read("t", rec.run_id, 0, 10)
+    assert events[-1]["event"] == "error" and events[-1]["code"] == "cancelled"
+    assert events[-1]["retryable"] is False
+    assert (await store.get("t", rec.run_id)).status == "cancelled"  # type: ignore[union-attr]
+    assert mgr._by_run == {}  # the task is gone
+    seen = len(events)
+    # a second stop changes nothing, and nothing more is written by the run
+    assert (await mgr.cancel(rec)) == "cancelled"
+    import asyncio
+
+    await asyncio.sleep(0.1)
+    assert len(await log.read("t", rec.run_id, 0, 1000)) == seen
+    await mgr.aclose()
+
+
+async def test_stop_that_reaches_another_replica_is_noticed_by_the_one_running_the_graph(
+    monkeypatch,
+):
+    import asyncio
+
+    from wasifyai_api import runs as runs_module
+    from wasifyai_api.runs import RunManager
+
+    monkeypatch.setattr(runs_module, "CANCEL_CHECK_S", 0.05)
+    mgr, log, store, rec = await _running_manager()
+    elsewhere = RunManager(log, store, {})  # shares the log and the store, runs nothing
+    assert (await elsewhere.cancel(rec)) == "cancelled"
+    for _ in range(100):
+        if not mgr._by_run:
+            break
+        await asyncio.sleep(0.02)
+    assert mgr._by_run == {}, "the run kept going after it was stopped"
+    events = await log.read("t", rec.run_id, 0, 10_000)
+    assert [e["code"] for e in events if e["event"] == "error"] == ["cancelled"]
+    await mgr.aclose()

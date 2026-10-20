@@ -73,6 +73,20 @@ files we ship with their licences recorded; the desktop never fetches fonts from
 
 ## Screen patterns (written before the screens are built)
 
+- **Chat (the assistant; built on assistant-ui, ADR-0082, `packages/ui/src/chat/thread/`; behind Labs until it passes the parity
+  checklist):** a title bar (name, rename, delete) only for a saved chat; while empty, the greeting, the box and three
+  suggestions under it, which put their text in the box and never send; afterwards the thread (at most `max-w-3xl`, a gap
+  between messages) and the box at the bottom. **The box is one element for the whole chat** (Enter sends, Shift+Enter is a new
+  line, `dir="auto"`, up to 4,000 characters); while an answer arrives Stop sits beside Send, which waits. The person's message
+  is a right-aligned bubble in `accent`, text `dir="auto"`; the assistant's is plain text with no bubble. Under a finished
+  reply: Copy. "Thinking…" shows until the first word. A failure is a `Notice` (error) at the end of the thread with one button:
+  Try again, or Choose a model. A tool is a bordered card inside the reply (a picture being made, then the picture with "Open in
+  the library"; a music player; search results; a waiting question with `confirm_action`, which CU2 makes answerable). Markdown
+  is formatted by streamdown under the rules in `markdown/md-config.ts`: raw HTML is shown as text, only an absolute http(s)
+  address is a link, no picture loads unless its origin is allowed, diagrams use the strict level with no HTML labels. Code,
+  maths and diagrams load on first use and work offline. The thread itself is not a live region (it would read every chunk);
+  a hidden status says "The assistant is answering" and then "Answer ready", and the finished answer is read once from a log.
+  Everything is a token; at 320 px nothing scrolls sideways (a wide table, code block or diagram scrolls inside its own frame).
 - **Teach (training):** a front door with three cards; three steps (add examples, check, train) then "use it"; the app picks the
   settings and shows "Quick" or "Better" and a time (ADR-0073).
 - **Agent:** a goal box, starting points, a live feed, approvals as inline cards, Stop always visible, the result saved as a report.

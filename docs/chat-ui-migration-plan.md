@@ -2,7 +2,7 @@
 
 Written 2026-10-19 for ADR-0082 (Accepted for assistant-ui). The chat screens (the assistant home and conversation, and the
 notebook chat) move to `@assistant-ui/react` and `streamdown`, in stages, with the old screen kept until the new one has parity.
-Nothing here is built yet. Dependencies other than `@assistant-ui/react` are asked for at the start of CU0.
+**Status (2026-10-20): CU0 done; CU1 built behind the Labs switch (see "CU1 as built" below); CU2 onward not started.**
 
 ## What is replaced, what stays
 
@@ -37,12 +37,41 @@ Sizes: S under a week, M one to two weeks.
 
 | Stage | What | Size | Done when |
 |---|---|---|---|
-| **CU0** | **Spike and decision.** Ask the owner for the dependency approvals (sizes shown). Prototype `ExternalStoreRuntime` and `LocalRuntime` against a fake engine inside a scratch app, in both the Next.js app and the Vite window. Run the checklist below. Write `docs/spikes/chat-ui-cu0.md`; pick the runtime and the version | S | A table per checklist item, the runtime and version chosen, the bundle-size delta, a go or no-go on `streamdown` |
-| **CU1** | **Parity.** The new thread, composer, streaming text, markdown, stop, retry, copy; tool UIs (job card, search results) ported from `ToolCard`; the home composer and suggestions; tokens only; both apps; behind a Labs switch. Rewrite the tests around behaviour | M | The new screen passes the parity checklist (below) in the web app and the desktop window, in light, dark and phone width, and the Playwright screenshots are reviewed |
+| **CU0** | **Done 2026-10-20 (`docs/spikes/chat-ui-cu0.md`): ExternalStoreRuntime, 0.15.29, streamdown Go if hardened.** **Spike and decision.** Ask the owner for the dependency approvals (sizes shown). Prototype `ExternalStoreRuntime` and `LocalRuntime` against a fake engine inside a scratch app, in both the Next.js app and the Vite window. Run the checklist below. Write `docs/spikes/chat-ui-cu0.md`; pick the runtime and the version | S | A table per checklist item, the runtime and version chosen, the bundle-size delta, a go or no-go on `streamdown` |
+| **CU1** | **Built 2026-10-20, behind Labs; the owner checked it in the desktop window the same day (see "CU1 as built").** **Parity.** The new thread, composer, streaming text, markdown, stop, retry, copy; tool UIs (job card, search results) ported from `ToolCard`; the home composer and suggestions; tokens only; both apps; behind a Labs switch. Rewrite the tests around behaviour | M | The new screen passes the parity checklist (below) in the web app and the desktop window, in light, dark and phone width, and the Playwright screenshots are reviewed |
 | **CU2** | **Edit and branch, and action cards.** Server: message tree fields (additive migration and `ensure_columns`), a run's `parent_message_id`, a conversation read with the active path and sibling counts. UI: edit a message, regenerate, branch picker. The `confirm_action` card as a human-in-the-loop tool UI (with stage A2) | M | Edit and regenerate create branches that survive a reload; an approval card works and the result reaches the assistant |
 | **CU3** | **Attachments, dictation, read-aloud.** Image attachments for the multimodal model (upload hardening of ADR-0035); documents later through the notebooks reader. Dictation and read-aloud adapters on our own speech models (ADR-0066): opt-in, local, the download size shown | M | A picture can be attached and described; dictation fills the box; read-aloud speaks a reply, all locally |
 | **CU4** | **Notebook chat on the same primitives; reasoning part; switch the default and delete the old chat code** one release later | M | The notebook chat has scope chips and citation pills as before; "Thinking" shows for models that return it; the old `ChatScreen`, `ToolCard`, `markdown.tsx` are gone |
 | **CU5** | Optional: the thread list, compare mode, anything from Studio that earns its place | S | Only if wanted |
+
+## CU1 as built (2026-10-20)
+
+Where: `packages/ui/src/chat/ChatScreenNext.tsx` (the props of `ChatScreen`) and `packages/ui/src/chat/thread/` (`use-chat-runtime.ts` is the only
+file that imports assistant-ui's runtime API; `use-thread-chat.ts`, `convert.ts`, `Thread.tsx`, `Composer.tsx`, `Message.tsx`, `tool-uis/`,
+`markdown/`, `announcer.tsx`); `packages/client/src/chat-tree.ts` and `run-follower.ts`. The old `ChatScreen`, `ToolCard` (now also exported as
+four cards), `markdown.tsx` and `useAssistantChat` are untouched and remain the default.
+
+- **Labs switch.** Desktop: Settings, Labs, "Try the new chat". Web: `?chat=next` turns it on and `?chat=classic` off (remembered in the browser;
+  no visible control yet). `AssistantHome` takes `screen: "classic" | "next"`. The new screen is a lazy chunk.
+- **Weight.** The first screen of the new chat is **189 KB gzip** (budget 330 KB), because streamdown's core (144 KB gzip) is a lazy chunk fetched
+  right after the screen mounts; the plugins (code, maths, diagrams) are fetched on first use. `pnpm chat:bundle-check` (in CI) also fails on
+  `assistant-api.com` or `auiusercontent.com` anywhere in the build.
+- **Engine (additive, approved):** `job_progress.tool_call_id`, `run_id` on the run request (a repeated start under one id is the same run),
+  `POST /runs/{id}/cancel`, `client_message_id` and `client_reply_id` on the assistant's input, `user_message_id` and `assistant_message_id`
+  in `done.outputs`. See `docs/contracts/sse-events.md`.
+- **Not done (CU2):** edit, regenerate and the branch picker, `parent_message_id` and the tree read, the stored `interrupt` part and answering an
+  approval; attachments, dictation and read-aloud (CU3); notebook chat and reasoning (CU4).
+- **Tests.** The 11 `ChatScreen` cases run against the new thread (`chat-next.test.tsx`; only wiring changed); the thread's own cases
+  (`thread/thread.test.tsx`: Stop reaches the engine, a lost connection is picked up again and Try again does not send twice, the screen
+  reader, right to left, Copy); the permanent safety test (`thread/markdown-safety.test.tsx`, and in a browser
+  `apps/web/e2e/chat-next-safety.spec.ts` with a request tracker, a `__pwned` flag, diagrams and offline use); the parity checklist in
+  Chromium at 320 px, light, dark and right to left (`e2e/chat-next.spec.ts`); the desktop window's real policy
+  (`e2e/chat-csp.spec.ts`: no violation, no `unsafe-eval`, a hostile answer does nothing). `chat-tree`, `run-follower` and the engine fields
+  have their own tests on the in-memory, SQLite (desktop) and Redis (contract; needs a Redis) run stores.
+- **Real window (WKWebView), 2026-10-20:** the owner ran the desktop app with Labs on and reported that a prompt, a highlighted code block, a
+  diagram and a long answer with Stop all worked. A person checked it, no test did.
+- **Open:** VoiceOver was not run; the web profile's Postgres and
+  Redis were not available to run here (CI's integration job covers the contract).
 
 ## CU0 checklist (each item gets a measured answer)
 

@@ -35,17 +35,18 @@ class SqliteRunStore:
     async def _ready(self) -> None:
         await ensure_tables(self._engine, "runs", _DDL)
 
-    async def create(self, rec: RunRecord) -> None:
+    async def create(self, rec: RunRecord) -> bool:
         await self._ready()
         async with self._engine.begin() as conn:
-            await conn.execute(
+            res = await conn.execute(
                 text(
-                    f"INSERT OR REPLACE INTO runs ({_COLUMNS}) VALUES "
+                    f"INSERT OR IGNORE INTO runs ({_COLUMNS}) VALUES "
                     "(:run_id, :thread_id, :product_id, :tenant_id, :user_id, :status, "
                     ":awaiting, :waiting_job, :created_at)"
                 ),
                 rec.model_dump(),
             )
+            return bool(res.rowcount)
 
     async def get(self, tenant_id: str, run_id: str) -> RunRecord | None:
         await self._ready()

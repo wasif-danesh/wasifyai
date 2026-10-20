@@ -107,173 +107,192 @@ function MusicPlayer({
   );
 }
 
-/** A tool the assistant used, as part of its answer: a picture being made and then shown, or what a
- * search found. */
-export function ToolCard({ tool, images, tracks, onOpenCreation }: ToolCardProps) {
-  if (tool.name === "generate_image") {
-    if (tool.status === "running") {
-      const queued = tool.jobStatus === "queued";
-      const pct = typeof tool.progress === "number" ? Math.round(tool.progress * 100) : null;
-      return (
-        <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
-          <Spinner />
-          <span>
-            {queued
-              ? tool.queuePosition && tool.queuePosition > 1
-                ? `Waiting for a turn, place ${tool.queuePosition}`
-                : "Waiting for a turn"
-              : pct !== null && pct > 0
-                ? `Making your picture, ${pct}%`
-                : "Making your picture"}
-          </span>
-        </output>
-      );
-    }
-    if (tool.status === "ok" && typeof tool.output?.image_id === "string") {
-      const id = tool.output.image_id;
-      return (
-        <Picture
-          imageId={id}
-          images={images}
-          onOpen={onOpenCreation ? () => onOpenCreation("image", id) : undefined}
-        />
-      );
-    }
+/** A picture being made, then shown with a way to open it. */
+export function ImageToolCard({ tool, images, tracks, onOpenCreation }: ToolCardProps) {
+  if (tool.status === "running") {
+    const queued = tool.jobStatus === "queued";
+    const pct = typeof tool.progress === "number" ? Math.round(tool.progress * 100) : null;
+    return (
+      <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
+        <Spinner />
+        <span>
+          {queued
+            ? tool.queuePosition && tool.queuePosition > 1
+              ? `Waiting for a turn, place ${tool.queuePosition}`
+              : "Waiting for a turn"
+            : pct !== null && pct > 0
+              ? `Making your picture, ${pct}%`
+              : "Making your picture"}
+        </span>
+      </output>
+    );
+  }
+  if (tool.status === "ok" && typeof tool.output?.image_id === "string") {
+    const id = tool.output.image_id;
+    return (
+      <Picture
+        imageId={id}
+        images={images}
+        onOpen={onOpenCreation ? () => onOpenCreation("image", id) : undefined}
+      />
+    );
+  }
+  return (
+    <p className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+      <ImageIcon className="size-4 shrink-0" aria-hidden="true" />
+      {tool.status === "refused"
+        ? String(tool.output?.message ?? "That picture was not made.")
+        : "The picture could not be made."}
+    </p>
+  );
+}
+
+/** A piece of music being made, then a player. */
+export function MusicToolCard({ tool, images, tracks, onOpenCreation }: ToolCardProps) {
+  if (tool.status === "running") {
+    return (
+      <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
+        <Spinner /> Making your music
+      </output>
+    );
+  }
+  if (tool.status === "ok" && typeof tool.output?.track_id === "string") {
+    const id = tool.output.track_id;
+    return (
+      <MusicPlayer
+        trackId={id}
+        tracks={tracks}
+        onOpen={onOpenCreation ? () => onOpenCreation("track", id) : undefined}
+      />
+    );
+  }
+  return (
+    <p className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+      <Music className="size-4 shrink-0" aria-hidden="true" />
+      {tool.status === "refused"
+        ? String(tool.output?.message ?? "That music was not made.")
+        : "The music could not be made."}
+    </p>
+  );
+}
+
+/** What a search of the library found. */
+export function LibrarySearchCard({ tool, images, tracks, onOpenCreation }: ToolCardProps) {
+  if (tool.status === "running") {
+    return (
+      <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
+        <Spinner /> Looking through your library
+      </output>
+    );
+  }
+  const results = Array.isArray(tool.output?.results)
+    ? (tool.output.results as { kind: string; id: string; text?: string }[])
+    : [];
+  return (
+    <div className="grid gap-2 rounded-lg border p-3 text-sm">
+      <p className="flex items-center gap-2 font-medium">
+        <Search className="size-4" aria-hidden="true" />
+        {results.length ? `Found ${results.length} in your library` : "Nothing matched"}
+      </p>
+      {results.length ? (
+        <ul className="grid gap-1">
+          {results.map((r) => (
+            <li key={`${r.kind}-${r.id}`} className="flex items-center gap-2">
+              <span className="truncate">{r.text || r.id}</span>
+              <span className="text-muted-foreground text-xs">{r.kind}</span>
+              {onOpenCreation ? (
+                <button
+                  type="button"
+                  className="ms-auto text-xs underline underline-offset-4"
+                  onClick={() => onOpenCreation(r.kind, r.id)}
+                >
+                  Open
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/** What a search of the notebooks found. */
+export function NotebookSearchCard({ tool, images, tracks, onOpenCreation }: ToolCardProps) {
+  if (tool.status === "running") {
+    return (
+      <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
+        <Spinner /> Looking through your notebooks
+      </output>
+    );
+  }
+  if (tool.status !== "ok") {
     return (
       <p className="flex items-center gap-2 rounded-lg border p-3 text-sm">
-        <ImageIcon className="size-4 shrink-0" aria-hidden="true" />
-        {tool.status === "refused"
-          ? String(tool.output?.message ?? "That picture was not made.")
-          : "The picture could not be made."}
+        <BookOpen className="size-4 shrink-0" aria-hidden="true" />
+        {String(tool.output?.message ?? "Your notebooks could not be searched.")}
       </p>
     );
   }
-  if (tool.name === "make_music") {
-    if (tool.status === "running") {
-      return (
-        <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
-          <Spinner /> Making your music
-        </output>
-      );
-    }
-    if (tool.status === "ok" && typeof tool.output?.track_id === "string") {
-      const id = tool.output.track_id;
-      return (
-        <MusicPlayer
-          trackId={id}
-          tracks={tracks}
-          onOpen={onOpenCreation ? () => onOpenCreation("track", id) : undefined}
-        />
-      );
-    }
-    return (
-      <p className="flex items-center gap-2 rounded-lg border p-3 text-sm">
-        <Music className="size-4 shrink-0" aria-hidden="true" />
-        {tool.status === "refused"
-          ? String(tool.output?.message ?? "That music was not made.")
-          : "The music could not be made."}
+  const results = Array.isArray(tool.output?.results)
+    ? (tool.output.results as {
+        notebook_id: string;
+        notebook: string;
+        document_id: string;
+        title: string;
+        snippet?: string;
+      }[])
+    : [];
+  return (
+    <div className="grid gap-2 rounded-lg border p-3 text-sm">
+      <p className="flex items-center gap-2 font-medium">
+        <BookOpen className="size-4" aria-hidden="true" />
+        {results.length ? "From your notebooks" : "Nothing in your notebooks matched"}
       </p>
-    );
-  }
-  if (tool.name === "search_creations") {
-    if (tool.status === "running") {
-      return (
-        <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
-          <Spinner /> Looking through your library
-        </output>
-      );
-    }
-    const results = Array.isArray(tool.output?.results)
-      ? (tool.output.results as { kind: string; id: string; text?: string }[])
-      : [];
-    return (
-      <div className="grid gap-2 rounded-lg border p-3 text-sm">
-        <p className="flex items-center gap-2 font-medium">
-          <Search className="size-4" aria-hidden="true" />
-          {results.length ? `Found ${results.length} in your library` : "Nothing matched"}
-        </p>
-        {results.length ? (
-          <ul className="grid gap-1">
-            {results.map((r) => (
-              <li key={`${r.kind}-${r.id}`} className="flex items-center gap-2">
-                <span className="truncate">{r.text || r.id}</span>
-                <span className="text-muted-foreground text-xs">{r.kind}</span>
+      {results.length ? (
+        <ul className="grid gap-2">
+          {results.map((r) => (
+            <li
+              key={`${r.notebook_id}-${r.document_id}-${r.snippet ?? ""}`}
+              className="grid gap-0.5"
+            >
+              <span className="flex items-center gap-2">
+                <span className="min-w-0 truncate">{r.title}</span>
+                <span className="truncate text-muted-foreground text-xs">{r.notebook}</span>
                 {onOpenCreation ? (
                   <button
                     type="button"
-                    className="ms-auto text-xs underline underline-offset-4"
-                    onClick={() => onOpenCreation(r.kind, r.id)}
+                    className="ms-auto shrink-0 text-xs underline underline-offset-4"
+                    onClick={() => onOpenCreation("notebook", r.notebook_id)}
                   >
-                    Open
+                    Open notebook
                   </button>
                 ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
-    );
+              </span>
+              {r.snippet ? (
+                <span className="line-clamp-2 text-muted-foreground text-xs">{r.snippet}</span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/** A tool the assistant used, as part of its answer: a picture being made and then shown, or what a
+ * search found. */
+export function ToolCard(props: ToolCardProps) {
+  switch (props.tool.name) {
+    case "generate_image":
+      return <ImageToolCard {...props} />;
+    case "make_music":
+      return <MusicToolCard {...props} />;
+    case "search_creations":
+      return <LibrarySearchCard {...props} />;
+    case "search_notebooks":
+      return <NotebookSearchCard {...props} />;
+    default:
+      return null;
   }
-  if (tool.name === "search_notebooks") {
-    if (tool.status === "running") {
-      return (
-        <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
-          <Spinner /> Looking through your notebooks
-        </output>
-      );
-    }
-    if (tool.status !== "ok") {
-      return (
-        <p className="flex items-center gap-2 rounded-lg border p-3 text-sm">
-          <BookOpen className="size-4 shrink-0" aria-hidden="true" />
-          {String(tool.output?.message ?? "Your notebooks could not be searched.")}
-        </p>
-      );
-    }
-    const results = Array.isArray(tool.output?.results)
-      ? (tool.output.results as {
-          notebook_id: string;
-          notebook: string;
-          document_id: string;
-          title: string;
-          snippet?: string;
-        }[])
-      : [];
-    return (
-      <div className="grid gap-2 rounded-lg border p-3 text-sm">
-        <p className="flex items-center gap-2 font-medium">
-          <BookOpen className="size-4" aria-hidden="true" />
-          {results.length ? "From your notebooks" : "Nothing in your notebooks matched"}
-        </p>
-        {results.length ? (
-          <ul className="grid gap-2">
-            {results.map((r) => (
-              <li
-                key={`${r.notebook_id}-${r.document_id}-${r.snippet ?? ""}`}
-                className="grid gap-0.5"
-              >
-                <span className="flex items-center gap-2">
-                  <span className="min-w-0 truncate">{r.title}</span>
-                  <span className="truncate text-muted-foreground text-xs">{r.notebook}</span>
-                  {onOpenCreation ? (
-                    <button
-                      type="button"
-                      className="ms-auto shrink-0 text-xs underline underline-offset-4"
-                      onClick={() => onOpenCreation("notebook", r.notebook_id)}
-                    >
-                      Open notebook
-                    </button>
-                  ) : null}
-                </span>
-                {r.snippet ? (
-                  <span className="line-clamp-2 text-muted-foreground text-xs">{r.snippet}</span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
-    );
-  }
-  return null;
 }

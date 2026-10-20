@@ -68,7 +68,11 @@ class ConversationStore(Protocol):
         conversation_id: str,
         role: str,
         parts: list[dict[str, Any]],
-    ) -> Message: ...
+        message_id: str | None = None,
+    ) -> Message:
+        """Add a message. `message_id` is an id the client chose for it; it is used unless a message
+        with that id exists already (then the store makes one)."""
+        ...
 
     async def messages(
         self, tenant_id: str, user_id: str, conversation_id: str, limit: int = MAX_MESSAGES
@@ -210,10 +214,20 @@ class SqlConversationStore:
         conversation_id: str,
         role: str,
         parts: list[dict[str, Any]],
+        message_id: str | None = None,
     ) -> Message:
         await self._ready()
-        now, mid = now_iso(), str(uuid4())
+        now, mid = now_iso(), message_id or str(uuid4())
         async with self._engine.begin() as conn:
+            if (
+                message_id
+                and (
+                    await conn.execute(
+                        text("SELECT 1 FROM messages WHERE id = :id"), {"id": message_id}
+                    )
+                ).first()
+            ):
+                mid = str(uuid4())  # taken (by anyone): the client's id is only a wish
             seq = (
                 await conn.execute(
                     text(
@@ -311,12 +325,15 @@ class InMemoryConversationStore:
         conversation_id: str,
         role: str,
         parts: list[dict[str, Any]],
+        message_id: str | None = None,
     ) -> Message:
         c = self._mine(tenant_id, user_id, conversation_id)
         assert c is not None, "no such conversation"
         now = self._now()
         msgs = self._messages[conversation_id]
-        m = Message(str(uuid4()), conversation_id, len(msgs) + 1, role, parts, now)
+        taken = {x.id for ms in self._messages.values() for x in ms}
+        mid = message_id if message_id and message_id not in taken else str(uuid4())
+        m = Message(mid, conversation_id, len(msgs) + 1, role, parts, now)
         msgs.append(m)
         self._conversations[conversation_id] = (
             tenant_id, user_id, Conversation(c.id, c.title, c.created_at, now)

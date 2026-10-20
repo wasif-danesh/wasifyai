@@ -50,13 +50,33 @@ export function createRunClient(transport: Transport) {
   }
 
   return {
-    /** Start a run of a product's graph and follow its events until the stream ends. */
-    startRun(product: string, input: object, signal: AbortSignal, onEvent: OnEvent) {
+    /** Start a run of a product's graph and follow its events until the stream ends. With `runId` (a UUID the
+     * caller chose) the run has that id from the start, so a connection that breaks before the first event can still
+     * be re-attached; starting again with the same id attaches to that run instead of making a second one. */
+    startRun(
+      product: string,
+      input: object,
+      signal: AbortSignal,
+      onEvent: OnEvent,
+      runId?: string,
+    ) {
       return stream(
         `/products/${product}/runs`,
-        { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ input }), signal },
+        {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify(runId ? { input, run_id: runId } : { input }),
+          signal,
+        },
         onEvent,
       );
+    },
+
+    /** Ask the engine to stop a run (the Stop button). A run that already ended is not an error. */
+    async cancelRun(runId: string): Promise<void> {
+      const res = await request(`/runs/${runId}/cancel`, { method: "POST" });
+      if (!res.ok && res.status !== 404 && res.status !== 409)
+        throw new HttpError(res.status, await errorMessage(res));
     },
 
     /** Answer a run's interrupt (approve, edit) and follow it on. */

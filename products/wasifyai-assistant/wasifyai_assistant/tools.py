@@ -188,7 +188,11 @@ def outcome_of(name: str, result: ActionResult) -> ToolOutcome:
 
 
 async def run_tool(
-    name: str, arguments: dict[str, Any], executor: ActionExecutor, write: Writer
+    name: str,
+    arguments: dict[str, Any],
+    executor: ActionExecutor,
+    write: Writer,
+    tool_call_id: str | None = None,
 ) -> ToolOutcome:
     action_id = TOOL_ACTIONS.get(name)
     if action_id is None:
@@ -200,6 +204,8 @@ async def run_tool(
     def progress(ev: dict[str, Any]) -> None:
         if ev.get("event") == "job_progress":
             data = {k: ev[k] for k in PROGRESS_KEYS if ev.get(k) is not None}
+            if tool_call_id:  # two jobs in one turn each find their own card
+                data["tool_call_id"] = tool_call_id
             write({"type": "job_progress", "data": data})
 
     result = await executor.run_action(action_id, params, ORIGIN, policy=POLICY, on_event=progress)

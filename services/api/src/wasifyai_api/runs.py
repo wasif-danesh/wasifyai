@@ -7,6 +7,7 @@ Any replica can therefore resume a run, and any replica can serve its SSE stream
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncIterator, Coroutine
 from typing import Any
 from uuid import UUID, uuid4
@@ -37,6 +38,14 @@ from wasifyai_api.metrics import record_run
 
 log = logging.getLogger(__name__)
 
+# a stop that reached another replica is noticed at most this often (seconds) by the one running it
+CANCEL_CHECK_S = 1.0
+FINISHED = ("done", "error", "cancelled")
+
+
+class RunIdTaken(Exception):
+    """A client chose a run id that belongs to someone else (or to another product)."""
+
 
 class RunManager:
     def __init__(self, event_log: EventLog, store: RunStore, graphs: dict[str, Any]):
@@ -44,11 +53,17 @@ class RunManager:
         self.store = store
         self.graphs = graphs
         self._tasks: set[asyncio.Task] = set()
+        self._by_run: dict[str, asyncio.Task] = {}  # the runs executing in this process, by run id
 
-    def _spawn(self, coro: Coroutine[Any, Any, None]) -> None:
+    def _spawn(self, coro: Coroutine[Any, Any, None], run_id: str | None = None) -> None:
         task = asyncio.create_task(coro)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
+        if run_id:
+            self._by_run[run_id] = task
+            task.add_done_callback(
+                lambda t: self._by_run.pop(run_id, None) if self._by_run.get(run_id) is t else None
+            )
 
     async def aclose(self) -> None:
         for t in list(self._tasks):
@@ -62,17 +77,42 @@ class RunManager:
         user_id: str,
         thread_id: UUID | None,
         graph_input: dict[str, Any],
+        run_id: UUID | None = None,
     ) -> RunRecord:
+        """Start a run. With `run_id` (chosen by the client) a second start under the same id by
+        the same person is not a second run: it returns the first, whose events the caller
+        replays."""
         rec = RunRecord(
-            run_id=str(uuid4()),
+            run_id=str(run_id or uuid4()),
             thread_id=str(thread_id or uuid4()),
             product_id=product_id,
             tenant_id=tenant_id,
             user_id=user_id,
         )
-        await self.store.create(rec)
-        self._spawn(self._execute(rec, graph_input))
+        if not await self.store.create(rec):
+            existing = await self.store.get(tenant_id, rec.run_id)
+            if existing is None or existing.user_id != user_id or existing.product_id != product_id:
+                raise RunIdTaken(rec.run_id)
+            return existing
+        self._spawn(self._execute(rec, graph_input), rec.run_id)
         return rec
+
+    async def cancel(self, rec: RunRecord) -> str:
+        """Stop a run (the person pressed Stop). Returns the run's state now: the one it had if it
+        was over already, else `cancelled`. The graph stops where it is (the assistant keeps the
+        text it had written); its media jobs are not recalled. A closing `error` event with the
+        code `cancelled` ends the stream for anyone still reading it."""
+        current = await self.store.get(rec.tenant_id, rec.run_id)
+        if current is None or current.status in FINISHED:
+            return current.status if current else "cancelled"
+        await self.store.set_state(rec.tenant_id, rec.run_id, "cancelled")
+        task = self._by_run.get(rec.run_id)
+        if task is not None:
+            task.cancel()  # the run is here; on another replica its own loop notices the state
+            await asyncio.gather(task, return_exceptions=True)  # let it save what it had
+        record_run(rec.product_id, "cancelled")
+        await self._emit(rec, ErrorEvent, code="cancelled", message="Stopped.", retryable=False)
+        return "cancelled"
 
     async def run_child(
         self,
@@ -103,11 +143,11 @@ class RunManager:
 
     def resume(self, rec: RunRecord, value: Any) -> None:
         """Continue a run that was waiting for a user's answer."""
-        self._spawn(self._execute(rec, Command(resume=value)))
+        self._spawn(self._execute(rec, Command(resume=value)), rec.run_id)
 
     def resume_with_job(self, rec: RunRecord, result: dict[str, Any]) -> None:
         """Continue a run that was waiting for a media job; `result` is a JobResult dump."""
-        self._spawn(self._execute(rec, Command(resume=result)))
+        self._spawn(self._execute(rec, Command(resume=result)), rec.run_id)
 
     async def _emit(self, rec: RunRecord, cls: type, **kw: Any) -> None:
         event = cls(run_id=UUID(rec.run_id), thread_id=UUID(rec.thread_id), seq=0, **kw)
@@ -134,10 +174,18 @@ class RunManager:
                 thread_id=rec.thread_id,
             )
         )
+        checked = time.monotonic()
         try:
             async for mode, chunk in graph.astream(
                 graph_input, config, stream_mode=["custom", "updates"]
             ):
+                if (
+                    time.monotonic() - checked > CANCEL_CHECK_S
+                ):  # a stop may have come to another replica
+                    checked = time.monotonic()
+                    now = await self.store.get(rec.tenant_id, rec.run_id)
+                    if now is not None and now.status == "cancelled":
+                        raise asyncio.CancelledError
                 if mode == "custom":
                     await self._emit_custom(rec, chunk)
                 elif "__interrupt__" in chunk:

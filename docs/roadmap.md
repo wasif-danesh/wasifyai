@@ -4,7 +4,7 @@ Build a **walking skeleton** first: the thinnest slice through every layer, depl
 Kubernetes early. The riskiest assumptions are portability and the delivery pipeline, so
 prove them while the code is small.
 
-**ON HOLD (2026-10-19, by the owner): all spikes and new features, until the problems found in the owner's testing are fixed.** Specs and ADRs stay as written; nothing new starts. **Current focus (2026-10-18): the desktop app.** Next: `docs/phase4-agent-plan.md` (an MCP server, an MCP client and an
+**ON HOLD (2026-10-19, by the owner): all spikes and new features, until the problems found in the owner's testing are fixed. Exception, lifted 2026-10-20 by the owner: the chat UI on assistant-ui (spike CU0, then CU1).** Specs and ADRs stay as written; nothing new starts. **Current focus (2026-10-18): the desktop app.** Next: `docs/phase4-agent-plan.md` (an MCP server, an MCP client and an
 assistant that knows the product; ADR-0068 to ADR-0071, Accepted) and `docs/phase5-agent-training-video-builder-plan.md`
 (an agent on Hermes, training, Video Builder; ADR-0072 to ADR-0077, Proposed). **The chat box gets Attach, Search (DuckDuckGo first), Thinking and Mic (ADR-0083, Accepted, on hold until the owner says start; `docs/composer-options-plan.md`, CO0 spike first).** **The chat UI moves to assistant-ui (ADR-0082, Accepted 2026-10-19; plan `docs/chat-ui-migration-plan.md`, CU0 spike first).** **The design system (ADR-0081): DS0 to DS2 done 2026-10-19: `design/DESIGN.md` is the single source of the look and blue replaces violet; DS3 (catalogue, accessibility checks, content guide) is next.** What is unverified or open on the web side is in
 `docs/backlog.md`.

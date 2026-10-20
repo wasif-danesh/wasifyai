@@ -1,5 +1,13 @@
 export { HttpError, errorMessage, type Transport } from "./transport";
 export { parseSse, type ParsedEvent } from "./sse";
+export { newId } from "./ids";
+export {
+  followRun,
+  newRunFollow,
+  type FollowOptions,
+  type FollowOutcome,
+  type RunFollow,
+} from "./run-follower";
 export {
   createRunClient,
   type Approval,
@@ -71,8 +79,17 @@ export {
   type ConversationSummary,
   type StoredMessage,
   type StoredPart,
+  type ToolApproval,
   type ToolStatus,
 } from "./assistant";
+export {
+  initialTree,
+  pathTo,
+  treeReducer,
+  type TreeAction,
+  type TreeNode,
+  type TreeState,
+} from "./chat-tree";
 export {
   NOTEBOOKS_PRODUCT,
   askReducer,

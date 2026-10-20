@@ -30,7 +30,7 @@ async def handle_completion(runs: RunManager, store: RunStore, message: dict[str
     if not run_id:
         return True  # a job started outside a run
     rec = await store.get(tenant_id, run_id)
-    if rec is None or rec.status in ("done", "error"):
+    if rec is None or rec.status in ("done", "error", "cancelled"):
         return True
     if await store.take_waiting_job(tenant_id, run_id, job_id):
         runs.resume_with_job(rec, message["result"])

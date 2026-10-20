@@ -31,7 +31,7 @@ UPLOADS = Counter("wdai_uploads_total", "Uploads", ["kind", "outcome"])
 
 
 def record_run(product: str, outcome: str, code: str = "", refusal: str = "") -> None:
-    """One run stopped: `done`, `refused` or `error`."""
+    """One run stopped: `done`, `refused`, `cancelled` (the person pressed Stop) or `error`."""
     RUNS.labels(product, outcome).inc()
     if outcome == "error":
         RUN_ERRORS.labels(product, code or "unknown").inc()

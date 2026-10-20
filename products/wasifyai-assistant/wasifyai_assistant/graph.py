@@ -12,9 +12,11 @@ few times at most. Everything is saved as messages of the conversation, so a rel
 stream showed.
 """
 
+import asyncio
 import logging
 import re
 from typing import Any, Literal, TypedDict, cast
+from uuid import UUID
 
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
@@ -57,11 +59,25 @@ class AssistantState(TypedDict, total=False):
     title: str
     message_id: str
     reply: str
+    # ids the client chose for the two messages of the turn (so what it shows and what is stored
+    # agree), and the ids they were stored under
+    client_message_id: str
+    client_reply_id: str
+    user_message_id: str
+    assistant_message_id: str
 
 
 def _clean(value: object) -> str:
     text = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", str(value or ""))
     return text.strip()[: MAX_TEXT_CHARS + 1]
+
+
+def client_id(value: object) -> str | None:
+    """An id the client chose for a message: a UUID, in its usual spelling, or nothing."""
+    try:
+        return str(UUID(str(value))) if value else None
+    except ValueError:
+        return None
 
 
 def title_from(text: str) -> str:
@@ -156,10 +172,21 @@ def build_assistant_graph(caps: Capabilities, checkpointer: Any, store: Conversa
                 return refuse_with("not_found", "That conversation is not there any more.")
         else:
             conv = await store.create(ctx.tenant_id, ctx.user_id)
-        await store.add_message(
-            ctx.tenant_id, ctx.user_id, conv.id, "user", [{"type": "text", "text": text}]
+        sent = await store.add_message(
+            ctx.tenant_id,
+            ctx.user_id,
+            conv.id,
+            "user",
+            [{"type": "text", "text": text}],
+            message_id=client_id(state.get("client_message_id")),
         )
-        return {"status": "working", "conversation_id": conv.id, "text": text, "title": conv.title}
+        return {
+            "status": "working",
+            "conversation_id": conv.id,
+            "text": text,
+            "title": conv.title,
+            "user_message_id": sent.id,
+        }
 
     def after_check(state: AssistantState) -> str:
         return "refuse" if state.get("status") == "refused" else "run_turn"
@@ -173,6 +200,24 @@ def build_assistant_graph(caps: Capabilities, checkpointer: Any, store: Conversa
         conv_id = state["conversation_id"]
         tools = offered_tools(host())
         reply = ""
+        reply_id = client_id(state.get("client_reply_id"))
+        first_reply: str | None = (
+            None  # the turn's first assistant message: the one the client named
+        )
+
+        async def add_reply(parts: list[dict[str, Any]]) -> Any:
+            nonlocal first_reply
+            m = await store.add_message(
+                ctx.tenant_id,
+                ctx.user_id,
+                conv_id,
+                "assistant",
+                parts,
+                message_id=None if first_reply else reply_id,
+            )
+            first_reply = first_reply or m.id
+            return m
+
         for round_no in range(MAX_ROUNDS + 1):
             history = await store.messages(ctx.tenant_id, ctx.user_id, conv_id)
             allow_tools = tools if round_no < MAX_ROUNDS else None
@@ -187,6 +232,10 @@ def build_assistant_graph(caps: Capabilities, checkpointer: Any, store: Conversa
                     if chunk.tool_calls:
                         calls = chunk.tool_calls[:MAX_CALLS_PER_ROUND]
             except RunError:
+                raise
+            except asyncio.CancelledError:
+                if text.strip():  # the person pressed Stop: what was said stays in the conversation
+                    await add_reply([{"type": "text", "text": text.strip()}])
                 raise
             except Exception:
                 log.exception("the language model failed")
@@ -208,7 +257,7 @@ def build_assistant_graph(caps: Capabilities, checkpointer: Any, store: Conversa
                         "arguments": parse_arguments(c.arguments),
                     }
                 )  # fmt: skip
-            await store.add_message(ctx.tenant_id, ctx.user_id, conv_id, "assistant", parts)
+            await add_reply(parts)
             results: list[dict[str, Any]] = []
             for c in calls:
                 args = parse_arguments(c.arguments)
@@ -217,7 +266,7 @@ def build_assistant_graph(caps: Capabilities, checkpointer: Any, store: Conversa
                 if host() is None or executor is None:
                     outcome = ToolOutcome("error", text="Tools are not available here.")
                 else:
-                    outcome = await run_tool(c.name, args, executor, write)
+                    outcome = await run_tool(c.name, args, executor, write, c.id)
                 write(
                     {
                         "type": "tool_result", "id": c.id, "name": c.name,
@@ -233,10 +282,8 @@ def build_assistant_graph(caps: Capabilities, checkpointer: Any, store: Conversa
             await store.add_message(ctx.tenant_id, ctx.user_id, conv_id, "tool", results)
         if not reply:
             reply = "I could not finish that. Please try again."
-        msg = await store.add_message(
-            ctx.tenant_id, ctx.user_id, conv_id, "assistant", [{"type": "text", "text": reply}]
-        )
-        return {"reply": reply, "message_id": msg.id}
+        msg = await add_reply([{"type": "text", "text": reply}])
+        return {"reply": reply, "message_id": msg.id, "assistant_message_id": first_reply or msg.id}
 
     async def finalise(state: AssistantState) -> AssistantState:
         ctx = require_context()

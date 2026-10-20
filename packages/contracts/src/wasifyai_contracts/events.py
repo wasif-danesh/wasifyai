@@ -66,6 +66,8 @@ class JobProgressEvent(_Envelope):
     queue_position: int | None = None
     progress: float | None = Field(default=None, ge=0, le=1)
     preview_url: str | None = None
+    # the assistant's tool call this job belongs to, so two jobs in one turn each find their card
+    tool_call_id: str | None = None
 
 
 class ErrorEvent(_Envelope):
@@ -99,6 +101,9 @@ TERMINAL_EVENTS = ("done", "error")
 class RunRequest(BaseModel):
     input: dict[str, Any] = Field(default_factory=dict)
     thread_id: UUID | None = None
+    # A run id chosen by the client. A connection that breaks before the first event can then be
+    # picked up again, and starting again with the same id attaches to that run, not a second one.
+    run_id: UUID | None = None
 
 
 class ResumeRequest(BaseModel):

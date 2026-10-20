@@ -1,7 +1,10 @@
 # ADR-0082: The chat UI is built on assistant-ui (and streamdown), not on our own components
 
-- **Status:** Accepted (2026-10-19, by the owner) for **assistant-ui**. **Not yet approved:** the other dependencies named in
-  decision 8 (`streamdown` and its plugins, `katex`); they are asked for at the start of stage CU0.
+- **Status:** Accepted (2026-10-19, by the owner) for **assistant-ui**. **2026-10-20, after spike CU0, the owner approved as recommended:**
+  `ExternalStoreRuntime` with `@assistant-ui/react` 0.15.29; `streamdown` 2.7.1 with `@streamdown/code` 2.0.0, `@streamdown/math` 1.0.3,
+  `@streamdown/mermaid` 1.0.3 and `katex` 0.16.47 (hardened configuration, lazy plugins, about 15 MB of lazy chunks); the additive engine fields
+  `job_progress.tool_call_id`, `client_message_id`, `client_reply_id` and the two ids in `done.outputs`; a cancel call for Stop and a client-chosen
+  run id; a 330 KB gzip budget for the first chat screen. The branching fields wait for CU2.
 - **Date:** 2026-10-19
 - **Amends:** ADR-0057 decision 7 ("UI implementation is decided in a spike"). The spike's outcome, recorded in
   `docs/phase2-stage-d-plan.md` (D5, 2026-10-16), was "our own components, not `assistant-ui`". This ADR reverses it.
@@ -134,3 +137,34 @@ The owner wants the chat built on the same open-source project that Unsloth Stud
 
 Hosted thread storage, cloud sync, voice mode, model comparison, Studio's research mode, sharing, and any change to the engine's
 event contract beyond the optional `reasoning` part and the message-tree fields.
+
+## Amendment after spike CU0 (2026-10-20; report: `docs/spikes/chat-ui-cu0.md`)
+
+Measured in Chromium 156 against a fake engine; **the Tauri window (WKWebView) was not tested**. Verdict: **CU1 Go**, on the owner's
+approval of the items marked *owner*.
+
+- **Decision 2 resolved:** **`ExternalStoreRuntime` with a `messageRepository`** (our state is the only copy), `@assistant-ui/react` **0.15.29**
+  pinned exactly. `LocalRuntime` also passed every item but needs five workarounds for approvals, cannot report a branch switch and
+  swallows history-load errors; it stays the documented alternative. 0.12.28 (Studio's pin) works except it has no approval seam and
+  no branch-change callback. Releases are about daily, two names used are experimental: one adapter file imports the runtime API.
+- **Decision 3 refined:** a conversation read returns **all nodes** (`parent_id`, `head_id`, sibling ids), results are stored inside the
+  assistant node, runs take `parent_message_id`, `client_message_id`, `client_reply_id`, `done.outputs` returns the two ids, and
+  `PATCH {head_id}` saves the visible branch (CU2). CU1 needs only optional `job_progress.tool_call_id` and the client ids. *Owner:* these
+  are additive public API fields.
+- **Decision 4 resolved:** **streamdown 2.7.1 is Go only with a hardened configuration**: its defaults fail our rules (remote images are
+  fetched, raw `<b>` renders as HTML, diagram labels fetch pictures); mermaid `strict` alone is not enough (`htmlLabels: false`); plugins load
+  lazily; the safety page becomes a permanent test (network tracker, `__pwned` flag, non-http(s) links). Under the exact Tauri CSP there were no
+  violations and no `unsafe-eval`. The fallback if declined is our own renderer plus a small shiki plugin.
+- **Decision 5:** an `interrupt` becomes a tool call with an `approval`; the answer resumes the run; a reload keeps the pending card; a stored
+  `interrupt` part with `status` is persisted when the run pauses. What happens to a paused run nobody answers is **not decided**.
+- **Decision 8:** `assistant-cloud` made **0 requests** in every capture and runtime A's bundle does not contain it; `safe-content-frame` must
+  never render `SandboxHost` (hidden remote default). `radix-ui` must be aligned to **1.7.0** in `packages/ui` and `apps/web` first.
+  Dependencies and sizes: assistant-ui 82 packages 36 MB; streamdown 103 packages 14 MB; code plugin and shiki 15 MB; math and katex 7 MB;
+  mermaid 131 MB on disk (lazy); no copyleft (`dompurify` is MPL-2.0 OR Apache-2.0: use Apache-2.0).
+- **Weight:** first chat screen JavaScript **275 KB raw / 85 KB gzip today, 1,090 KB raw / 326 KB gzip after**, plus about 15 MB of lazy chunks
+  on disk. *Owner:* accept a 330 KB gzip budget for the web app and the 15 MB (or curate shiki languages first).
+- **Accessibility:** the library has **no live region**; we build the announcer; `dir="auto"` on the user bubble and the box.
+- **Open question 4:** keep our Recents list (no `RemoteThreadList`). **Open question 7** (notebook chat on the same thread) is not tested.
+- **Also found:** Stop does not stop the engine (needs a cancel call); a cut before the first event cannot be re-attached (needs a client-chosen
+  run id); the re-attach budget is about 5.4 s (a 7 s outage gives up): `run-follower.ts` fixes these in CU1.
+

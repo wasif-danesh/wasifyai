@@ -125,10 +125,14 @@ class Rig:
 
     async def turn(self, text: str, conversation_id: str | None = None) -> tuple[dict, list[dict]]:
         """Run one turn; return the final state and the custom events the run manager would emit."""
-        graph: Any = self.graph
         graph_input: dict[str, Any] = {"text": text}
         if conversation_id:
             graph_input["conversation_id"] = conversation_id
+        return await self.turn_with(graph_input)
+
+    async def turn_with(self, graph_input: dict[str, Any]) -> tuple[dict, list[dict]]:
+        """Run one turn with the whole run input (the ids a client chose, for one)."""
+        graph: Any = self.graph
         config = {"configurable": {"thread_id": f"th-{self._turns}"}}
         self._turns += 1
         final: dict[str, Any] = {}

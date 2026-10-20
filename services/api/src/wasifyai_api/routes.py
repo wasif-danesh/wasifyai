@@ -8,6 +8,7 @@ from wasifyai_contracts import TERMINAL_EVENTS, ResumeRequest, RunRequest, forma
 from wasifyai_platform_sdk import RunRecord
 
 from wasifyai_api.identity import Identity, get_identity
+from wasifyai_api.runs import RunIdTaken
 
 router = APIRouter()
 HEARTBEAT_S = 15
@@ -28,7 +29,7 @@ async def _stream(st: Any, rec: RunRecord, after: int) -> AsyncIterator[str]:
         if not events:
             current = await st.runs.store.get(rec.tenant_id, rec.run_id)
             last = await st.runs.log.last_seq(rec.tenant_id, rec.run_id)
-            if current and current.status in ("done", "error") and sent >= last:
+            if current and current.status in ("done", "error", "cancelled") and sent >= last:
                 return
             yield ": ping\n\n"
             continue
@@ -70,10 +71,20 @@ async def start_run(
     # served here: registered, and not left out by PRODUCTS_ENABLED
     if product_id not in st.registry.products() or product_id not in st.runs.graphs:
         raise HTTPException(404, "unknown product")
-    rec = await st.runs.start(
-        product_id, identity.tenant_id, identity.user_id, body.thread_id, body.input
-    )
-    return _sse(request, rec)
+    try:
+        rec = await st.runs.start(
+            product_id,
+            identity.tenant_id,
+            identity.user_id,
+            body.thread_id,
+            body.input,
+            body.run_id,
+        )
+    except RunIdTaken:
+        raise HTTPException(409, "that run id is already in use") from None
+    return _sse(
+        request, rec
+    )  # a repeated start under the same run id replays that run from its first event
 
 
 @router.get("/runs/{run_id}/events")
@@ -81,6 +92,15 @@ async def run_events(run_id: UUID, request: Request, identity: Identity = Depend
     rec = await _owned_run(request, run_id, identity)
     last = request.headers.get("last-event-id", "0")
     return _sse(request, rec, int(last) if last.isdigit() else 0)
+
+
+@router.post("/runs/{run_id}/cancel")
+async def cancel_run(run_id: UUID, request: Request, identity: Identity = Depends(get_identity)):
+    """Stop a run (the Stop button). A run that is already over is not an error: the answer says
+    how it ended."""
+    st: Any = _state(request)
+    rec = await _owned_run(request, run_id, identity)
+    return {"run_id": rec.run_id, "status": await st.runs.cancel(rec)}
 
 
 @router.post("/runs/{run_id}/resume")

@@ -247,3 +247,57 @@ def test_another_persons_conversation_is_not_reachable_through_a_run(data_dir):
         assert events[-1][0] == "done"
         assert events[-1][1]["outputs"]["status"] == "refused"
         c.post("/desktop/language-engine/stop", headers=auth())
+
+
+UID = "33333333-3333-4333-8333-333333333333"
+RID = "44444444-4444-4444-8444-444444444444"
+RUN = "55555555-5555-4555-8555-555555555555"
+
+
+def ask_with(c: TestClient, body: dict) -> list:
+    r = c.post("/products/wasifyai-assistant/runs", json=body, headers=auth())
+    assert r.status_code == 200, r.text
+    return parse(r.text)
+
+
+def test_the_window_names_the_run_and_the_two_messages_and_the_engine_keeps_those_names(data_dir):
+    """The additive fields of ADR-0082 stage CU1, on the desktop profile (SQLite)."""
+    with TestClient(create_app()) as c:
+        choose_the_model(c)
+        body = {
+            "input": {
+                "text": "Please draw a red teapot",
+                "client_message_id": UID,
+                "client_reply_id": RID,
+            },
+            "run_id": RUN,
+        }
+        events = ask_with(c, body)
+        assert {d["run_id"] for _, d in events} == {RUN}
+        done = events[-1][1]["outputs"]
+        assert done["user_message_id"] == UID and done["assistant_message_id"] == RID
+
+        # a job's progress says which tool call it is for
+        call = next(d for e, d in events if e == "tool_call")
+        progress = [d for e, d in events if e == "job_progress"]
+        assert progress and {p["tool_call_id"] for p in progress} == {call["id"]}
+
+        stored = c.get(
+            f"/products/wasifyai-assistant/conversations/{done['conversation_id']}", headers=auth()
+        ).json()["messages"]
+        assert [m["role"] for m in stored] == ["user", "assistant", "tool", "assistant"]
+        assert stored[0]["id"] == UID and stored[1]["id"] == RID
+
+        # starting again under the same run id is the same run: replayed, and nothing is said twice
+        again = ask_with(c, body)
+        assert [d["seq"] for _, d in again] == [d["seq"] for _, d in events]
+        after = c.get(
+            f"/products/wasifyai-assistant/conversations/{done['conversation_id']}", headers=auth()
+        ).json()["messages"]
+        assert len(after) == len(stored)
+
+        # Stop on a run that is over says how it ended; on one that does not exist it is a 404
+        r = c.post(f"/runs/{RUN}/cancel", headers=auth())
+        assert r.status_code == 200 and r.json()["status"] == "done"
+        assert c.post(f"/runs/{UID}/cancel", headers=auth()).status_code == 404
+        c.post("/desktop/language-engine/stop", headers=auth())

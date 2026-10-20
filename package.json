@@ -11,7 +11,8 @@
     "design:build": "node scripts/design/build-tokens.mjs",
     "design:use": "node scripts/design/build-tokens.mjs --use",
     "design:check": "node scripts/design/build-tokens.mjs --check && node scripts/design/check-tokens.mjs",
-    "design:swap-test": "node scripts/design/swap-test.mjs"
+    "design:swap-test": "node scripts/design/swap-test.mjs",
+    "chat:bundle-check": "node scripts/chat/check-bundle.mjs"
   },
   "devDependencies": {
     "turbo": "^2.3.0",

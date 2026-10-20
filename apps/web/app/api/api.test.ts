@@ -16,6 +16,7 @@ import {
   GET as videoGET,
 } from "./products/[productId]/videos/[videoId]/route";
 import { GET as videosGET } from "./products/[productId]/videos/route";
+import { POST as cancelPOST } from "./runs/[runId]/cancel/route";
 import { GET as eventsGET } from "./runs/[runId]/events/route";
 import { POST as resumePOST } from "./runs/[runId]/resume/route";
 
@@ -105,6 +106,28 @@ describe("answer a run", () => {
   it("only accepts real run ids", async () => {
     const res = await resumePOST(
       new Request("http://web/x", { method: "POST", body: "{}" }),
+      params({ runId: "../../health" }),
+    );
+    expect(res.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("stop a run", () => {
+  it("asks the API to stop that run", async () => {
+    fetchMock.mockResolvedValueOnce(Response.json({ run_id: RUN, status: "cancelled" }));
+    const res = await cancelPOST(
+      new Request("http://web/x", { method: "POST" }),
+      params({ runId: RUN }),
+    );
+    expect(res.status).toBe(200);
+    expect(upstreamUrl()).toMatch(new RegExp(`/runs/${RUN}/cancel$`));
+    expect(upstreamInit().method).toBe("POST");
+  });
+
+  it("only accepts real run ids", async () => {
+    const res = await cancelPOST(
+      new Request("http://web/x", { method: "POST" }),
       params({ runId: "../../health" }),
     );
     expect(res.status).toBe(400);

@@ -20,11 +20,17 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@assistant-ui/react": "0.15.29",
+    "@streamdown/code": "2.0.0",
+    "@streamdown/math": "1.0.3",
+    "@streamdown/mermaid": "1.0.3",
     "@wasifyai/client": "workspace:*",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "katex": "0.16.47",
     "lucide-react": "1.48.0",
-    "radix-ui": "1.6.7",
+    "radix-ui": "1.7.0",
+    "streamdown": "2.7.1",
     "tailwind-merge": "3.7.0"
   },
   "peerDependencies": {

@@ -9,6 +9,9 @@
    generated into tokens.generated.css; change them there, never here. */
 @import "./tokens.generated.css";
 
+/* streamdown (the new chat's markdown) styles itself with Tailwind classes that live in its files, not ours */
+@source "../node_modules/streamdown/dist";
+
 /* motion that is our own (the equaliser and progress animations); their durations are structure, not look */
 @theme {
   --animate-eq: eq 1.1s ease-in-out infinite alternate;

@@ -15,14 +15,18 @@ class RunRecord(BaseModel):
     product_id: str
     tenant_id: str
     user_id: str
-    status: str = "running"  # running | waiting_input | waiting_job | done | error
+    status: str = "running"  # running, waiting_input, waiting_job, done, error, cancelled
     awaiting: str | None = None  # interrupt id a user must answer
     waiting_job: str | None = None  # job id the graph is paused on
     created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class RunStore(Protocol):
-    async def create(self, rec: RunRecord) -> None: ...
+    async def create(self, rec: RunRecord) -> bool:
+        """Store a new run. False when a run with this id already exists for the tenant (a client
+        that chose its own run id started it twice): the record is left as it was."""
+        ...
+
     async def get(self, tenant_id: str, run_id: str) -> RunRecord | None: ...
     async def set_state(
         self,
@@ -45,8 +49,11 @@ class InMemoryRunStore:
     def __init__(self) -> None:
         self._runs: dict[tuple[str, str], RunRecord] = {}
 
-    async def create(self, rec: RunRecord) -> None:
+    async def create(self, rec: RunRecord) -> bool:
+        if (rec.tenant_id, rec.run_id) in self._runs:
+            return False
         self._runs[(rec.tenant_id, rec.run_id)] = rec
+        return True
 
     async def get(self, tenant_id: str, run_id: str) -> RunRecord | None:
         rec = self._runs.get((tenant_id, run_id))
@@ -95,11 +102,15 @@ class RedisRunStore:
         self._r = redis
         self._take = redis.register_script(_TAKE)
 
-    async def create(self, rec: RunRecord) -> None:
+    async def create(self, rec: RunRecord) -> bool:
         key = run_key(rec.tenant_id, rec.run_id)
+        # HSETNX on the id field is the claim: of two simultaneous starts under one id, one wins
+        if not await self._r.hsetnx(key, "run_id", rec.run_id):
+            return False
+        await self._r.expire(key, TTL_SECONDS)
         data = {k: ("" if v is None else v) for k, v in rec.model_dump().items()}
         await self._r.hset(key, mapping=cast(Any, data))
-        await self._r.expire(key, TTL_SECONDS)
+        return True
 
     async def get(self, tenant_id: str, run_id: str) -> RunRecord | None:
         raw: Any = await self._r.hgetall(run_key(tenant_id, run_id))

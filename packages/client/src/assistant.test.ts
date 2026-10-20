@@ -65,6 +65,31 @@ describe("chatReducer", () => {
     expect(tool && tool.type === "tool" && tool.progress).toBe(0.4);
   });
 
+  it("gives progress to the tool call it names, not to the last one running", () => {
+    const s = run([
+      { type: "submitted", text: "draw and search", id: "u1" },
+      ev("tool_call", { id: "job", name: "generate_image", arguments: {} }),
+      ev("tool_call", { id: "find", name: "search_creations", arguments: {} }),
+      ev("job_progress", { tool_call_id: "job", status: "running", progress: 0.6 }),
+    ]);
+    const tools = (s.messages[1]?.parts ?? []).filter((p) => p.type === "tool");
+    expect(tools.map((t) => t.type === "tool" && t.progress)).toEqual([0.6, undefined]);
+  });
+
+  it("goes back to work on the same reply when the connection is picked up again", () => {
+    const s = run([
+      { type: "submitted", text: "hi", id: "u1" },
+      ev("token", { text: "Par" }),
+      { type: "failed", message: "We lost the connection.", code: "connection_lost" },
+      { type: "resumed" },
+      ev("token", { text: "tial" }),
+    ]);
+    expect(s.phase).toBe("working");
+    expect(s.error).toBeNull();
+    expect(s.messages).toHaveLength(2);
+    expect(s.messages[1]).toMatchObject({ streaming: true, parts: [{ text: "Partial" }] });
+  });
+
   it("keeps what was said and says what went wrong when the run fails", () => {
     const s = run([
       { type: "submitted", text: "hi", id: "u1" },

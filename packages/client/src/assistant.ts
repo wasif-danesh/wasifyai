@@ -74,6 +74,15 @@ export function createAssistantApi(transport: Transport): AssistantApi {
 
 export type ToolStatus = "ok" | "refused" | "error";
 
+/** A tool call that waits for the person's answer (an `interrupt` event: the `confirm_action` card of ADR-0071). */
+export type ToolApproval = {
+  /** the interrupt's id */
+  id: string;
+  kind: string;
+  runId: string;
+  state: "pending" | "approved" | "declined";
+};
+
 export type ChatPart =
   | { type: "text"; text: string }
   | {
@@ -88,6 +97,8 @@ export type ChatPart =
       progress?: number;
       jobStatus?: string;
       queuePosition?: number;
+      /** set when the call is an interrupt waiting for an answer */
+      approval?: ToolApproval;
     };
 
 export type ChatMessage = {
@@ -126,7 +137,9 @@ export type ChatAction =
   | { type: "failed"; message: string; retryable?: boolean; code?: string }
   | { type: "loaded"; conversation: Conversation }
   | { type: "reset" }
-  | { type: "stopped" };
+  | { type: "stopped" }
+  /** the connection came back after a loss: the turn is running again (the same run, picked up where it was) */
+  | { type: "resumed" };
 
 /** A stored conversation as the screen shows it: tool calls and their results fold into the
  * assistant message that made them, so a reload looks like the stream did. */
@@ -214,6 +227,15 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     case "stopped":
       return { ...state, phase: "idle", messages: settle(state.messages) };
+    case "resumed":
+      return {
+        ...state,
+        phase: "working",
+        error: null,
+        messages: withLast(state.messages, (m) =>
+          m.role === "assistant" ? { ...m, streaming: true } : m,
+        ),
+      };
     case "failed":
       return {
         ...state,
@@ -276,9 +298,11 @@ function onEvent(state: ChatState, e: ParsedEvent): ChatState {
         ...base,
         messages: withLast(base.messages, (m) => {
           const parts = [...m.parts];
+          // a progress event names its tool call when the engine says which (parallel jobs); else the last running one
+          const callId = typeof data.tool_call_id === "string" ? data.tool_call_id : null;
           for (let i = parts.length - 1; i >= 0; i--) {
             const p = parts[i];
-            if (p && p.type === "tool" && p.status === "running") {
+            if (p && p.type === "tool" && p.status === "running" && (!callId || p.id === callId)) {
               parts[i] = {
                 ...p,
                 jobStatus: String(data.status ?? ""),

@@ -59,6 +59,7 @@ export {
 } from "./video/VideoWorkspace";
 export { VideoLibrary, type VideoLibraryProps } from "./video/VideoLibrary";
 export { ChatScreen, type ChatScreenProps } from "./chat/ChatScreen";
+export { CHAT_NEXT_KEY, readChatNext, useChatNext, writeChatNext } from "./chat/labs";
 export { AssistantHome, type AssistantHomeProps, greeting } from "./chat/AssistantHome";
 export { conversationsChanged, useConversations } from "./chat/use-conversations";
 export { ToolCard, type ToolCardProps } from "./chat/ToolCard";

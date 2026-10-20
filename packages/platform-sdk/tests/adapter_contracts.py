@@ -59,14 +59,26 @@ async def check_run_store(store, tenant: str) -> None:
     assert await store.get(tenant, run) is None
 
     rec = _record(tenant, run)
-    await store.create(rec)
+    assert await store.create(rec) is True
     got = await store.get(tenant, run)
     assert got is not None
     assert (got.run_id, got.thread_id, got.user_id, got.status) == (
         run, rec.thread_id, "u1", "running"
     )  # fmt: skip
     assert got.awaiting is None and got.waiting_job is None
+
+    # a client may choose the run id, so a second start under it must not replace the first run
+    again = _record(tenant, run).model_copy(update={"thread_id": str(uuid4()), "user_id": "u2"})
+    assert await store.create(again) is False
+    kept = await store.get(tenant, run)
+    assert kept is not None and (kept.thread_id, kept.user_id) == (rec.thread_id, "u1")
     assert await store.get(tenant + "-b", run) is None  # runs belong to their tenant
+
+    # a stop is a state of its own, and it is kept
+    other = str(uuid4())
+    await store.create(_record(tenant, other))
+    await store.set_state(tenant, other, "cancelled")
+    assert (await store.get(tenant, other)).status == "cancelled"  # type: ignore[union-attr]
 
     # an interrupt is answered once: the first taker gets it, the second gets nothing
     await store.set_state(tenant, run, "waiting_input", awaiting="int-1")

@@ -4,3 +4,6 @@ packages:
 allowBuilds:
   "@biomejs/biome": true
   esbuild: true
+# streamdown 2.7.1 (ADR-0082, spike CU0) is newer than the default release-age gate; it is the version that was tested.
+minimumReleaseAgeExclude:
+  - streamdown@2.7.1

@@ -1464,6 +1464,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Run
+         * @description Stop a run (the Stop button). A run that is already over is not an error: the answer says
+         *     how it ended.
+         */
+        post: operations["cancel_run_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{run_id}/events": {
         parameters: {
             query?: never;
@@ -1889,6 +1910,11 @@ export interface components {
              * Format: uuid
              */
             thread_id: string;
+            /**
+             * Tool Call Id
+             * @default null
+             */
+            tool_call_id: string | null;
             /** Ts */
             ts?: string;
         };
@@ -2168,6 +2194,8 @@ export interface components {
             input?: {
                 [key: string]: unknown;
             };
+            /** Run Id */
+            run_id?: string | null;
             /** Thread Id */
             thread_id?: string | null;
         };
@@ -5953,6 +5981,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_run_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
             };
             /** @description Validation Error */
             422: {

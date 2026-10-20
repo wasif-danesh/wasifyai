@@ -82,6 +82,10 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
 ### Stage A2. The assistant guides and proposes (M) — first thing the owner sees
 
 > **Note (2026-10-19, ADR-0082):** the chat UI moves to assistant-ui. Build A2's backend (help corpus, `propose_action`, `confirm_action`) as planned, but write its **cards as assistant-ui tool UIs** after chat stage CU1 (`docs/chat-ui-migration-plan.md`), not as new `ToolCard` code.
+> **Update (2026-10-20, CU1 built behind Labs):** tool UIs are registered by tool name in `packages/ui/src/chat/thread/tool-uis/index.tsx`
+> (`toolUIs`), and `confirm_action` already has a placeholder card there (`ConfirmActionCard`). An `interrupt` event already becomes a tool
+> part with an `approval` (`packages/client/src/chat-tree.ts`); what CU2 adds is answering it (`POST /runs/{id}/resume`), the stored
+> `interrupt` part, and the card itself. Write the action card as a new entry of `toolUIs`, using `ToolCallMessagePartProps.respondToApproval`.
 
 - The meta-tools (`how_to`, `app_status`, `propose_action`, `open_screen`), the help retrieval, the system prompt
   map generated from the catalogue.

@@ -48,6 +48,24 @@ describe("runs", () => {
     expect(JSON.parse(calls[0]?.init?.body as string)).toEqual({ input: { prompt: "a cat" } });
   });
 
+  it("starts a run under an id the caller chose", async () => {
+    const { client, calls } = setup(() => sse(frame(1, "done", { outputs: {} })));
+    await client.startRun("p", { text: "hi" }, new AbortController().signal, () => {}, "run-7");
+    expect(JSON.parse(calls[0]?.init?.body as string)).toEqual({
+      input: { text: "hi" },
+      run_id: "run-7",
+    });
+  });
+
+  it("asks the engine to stop a run, and does not mind a run that is already over", async () => {
+    const { client, calls } = setup(() => new Response(null, { status: 404 }));
+    await client.cancelRun("run-9");
+    expect(calls[0]?.path).toBe("/runs/run-9/cancel");
+    expect(calls[0]?.init?.method).toBe("POST");
+    const broken = setup(() => Response.json({ detail: "boom" }, { status: 500 }));
+    await expect(broken.client.cancelRun("run-9")).rejects.toMatchObject({ status: 500 });
+  });
+
   it("re-attaches from the last event it saw", async () => {
     const { client, calls } = setup(() => sse(frame(5, "done", { outputs: {} })));
     await client.watchRun("run-9", 4, new AbortController().signal, () => {});

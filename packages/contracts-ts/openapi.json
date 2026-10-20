@@ -984,6 +984,18 @@
             "title": "Thread Id",
             "type": "string"
           },
+          "tool_call_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tool Call Id"
+          },
           "ts": {
             "title": "Ts",
             "type": "string"
@@ -1772,6 +1784,18 @@
             "additionalProperties": true,
             "title": "Input",
             "type": "object"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
           },
           "thread_id": {
             "anyOf": [
@@ -7672,6 +7696,45 @@
         "tags": [
           "uploads"
         ]
+      }
+    },
+    "/runs/{run_id}/cancel": {
+      "post": {
+        "description": "Stop a run (the Stop button). A run that is already over is not an error: the answer says\nhow it ended.",
+        "operationId": "cancel_run_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Run"
       }
     },
     "/runs/{run_id}/events": {

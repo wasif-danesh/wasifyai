@@ -336,3 +336,107 @@ def test_the_model_is_only_told_about_tools_the_host_can_run():
         "search_creations",
     ]
     assert offered_tools(Limited(set())) is None
+
+
+# ---- ids the client chose, progress by tool call, Stop (ADR-0082, stage CU1) ----
+
+USER_ID = "11111111-1111-4111-8111-111111111111"
+REPLY_ID = "22222222-2222-4222-8222-222222222222"
+
+
+async def test_the_messages_are_stored_under_the_ids_the_client_chose(tmp_path, ctx):
+    rig = Rig(tmp_path, [{"text": "Hello there."}])
+    state, _ = await rig.turn_with(
+        {"text": "Hi", "client_message_id": USER_ID, "client_reply_id": REPLY_ID}
+    )
+    assert state["user_message_id"] == USER_ID and state["assistant_message_id"] == REPLY_ID
+    msgs = await rig.store.messages("t1", "u1", state["conversation_id"])
+    assert [(m.id, m.role) for m in msgs] == [(USER_ID, "user"), (REPLY_ID, "assistant")]
+
+
+async def test_the_reply_id_goes_to_the_first_assistant_message_of_the_turn(tmp_path, ctx):
+    host = FakeHost()
+    rig = Rig(
+        tmp_path,
+        [{"text": "Drawing.",
+          "tool_calls": [{"name": "generate_image", "arguments": {"prompt": "a fox"}}]},
+         {"text": "Done."}],
+        host,
+    )  # fmt: skip
+    state, _ = await rig.turn_with(
+        {"text": "draw", "client_message_id": USER_ID, "client_reply_id": REPLY_ID}
+    )
+    msgs = await rig.store.messages("t1", "u1", state["conversation_id"])
+    # the window folds a turn's rows into one message named by its first assistant row
+    assert [m.role for m in msgs] == ["user", "assistant", "tool", "assistant"]
+    assert msgs[1].id == REPLY_ID and state["assistant_message_id"] == REPLY_ID
+    assert msgs[3].id != REPLY_ID
+
+
+async def test_ids_that_are_not_ids_or_are_taken_are_only_wishes(tmp_path, ctx):
+    rig = Rig(tmp_path, [{"text": "One."}, {"text": "Two."}])
+    first, _ = await rig.turn_with(
+        {"text": "a", "client_message_id": "not-a-uuid", "client_reply_id": REPLY_ID}
+    )
+    assert (
+        first["user_message_id"] not in ("not-a-uuid", USER_ID)
+        and first["assistant_message_id"] == REPLY_ID
+    )
+    # the same ids again, in another turn: stored under fresh ids, and the turn still works
+    second, _ = await rig.turn_with(
+        {"text": "b", "conversation_id": first["conversation_id"], "client_reply_id": REPLY_ID}
+    )
+    assert second["status"] == "done" and second["assistant_message_id"] != REPLY_ID
+
+
+async def test_a_turn_without_ids_still_reports_the_ids_it_stored(tmp_path, ctx):
+    rig = Rig(tmp_path, [{"text": "Hello."}])
+    state, _ = await rig.turn("Hi")
+    msgs = await rig.store.messages("t1", "u1", state["conversation_id"])
+    assert (state["user_message_id"], state["assistant_message_id"]) == (msgs[0].id, msgs[1].id)
+
+
+async def test_job_progress_names_the_tool_call_it_belongs_to(tmp_path, ctx):
+    host = FakeHost()
+    rig = Rig(
+        tmp_path,
+        [{"tool_calls": [{"name": "generate_image", "arguments": {"prompt": "a fox"}}]},
+         {"text": "ok"}],
+        host,
+    )  # fmt: skip
+    _, events = await rig.turn("draw")
+    call = next(e for e in events if e["type"] == "tool_call")
+    progress = [e for e in events if e["type"] == "job_progress"]
+    assert progress and all(p["data"]["tool_call_id"] == call["id"] for p in progress)
+
+
+async def test_stopping_a_turn_keeps_the_words_said_so_far(tmp_path, ctx):
+    import asyncio
+
+    rig = Rig(tmp_path, [{"text": "One two three four five"}])
+    started = asyncio.Event()
+    real = rig.model.chat
+
+    async def slow(capability, binding, messages, tools=None):
+        count = 0
+        async for chunk in real(capability, binding, messages, tools):
+            yield chunk
+            count += 1
+            if count == 3:
+                started.set()
+                await asyncio.sleep(30)  # the person presses Stop here
+
+    rig.model.chat = slow
+    task = asyncio.create_task(
+        rig.turn_with({"text": "count", "client_message_id": USER_ID, "client_reply_id": REPLY_ID})
+    )
+    await asyncio.wait_for(started.wait(), 5)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    (conversation,) = await rig.store.recent("t1", "u1", 5)
+    msgs = await rig.store.messages("t1", "u1", conversation.id)
+    assert [(m.id, m.role, m.text().strip()) for m in msgs] == [
+        (USER_ID, "user", "count"),
+        (REPLY_ID, "assistant", "One two three"),
+    ]

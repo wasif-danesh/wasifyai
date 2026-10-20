@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // The window's side menu: the shared menu (packages/ui) in this window's frame, with what each item opens
 // (`menu.ts`), the recent chats, and the person and settings at the bottom.
-import { SideMenu, cn, useConversations, useVideoBuilderLabs } from "@wasifyai/ui";
+import { SideMenu, cn, useConversations, useModel3dLabs, useVideoBuilderLabs } from "@wasifyai/ui";
 import { PanelLeft, Settings } from "lucide-react";
 import { assistantApi } from "./api";
 import { resolveItem } from "./menu";
@@ -26,10 +26,11 @@ export function Sidebar({
 }) {
   const recents = useConversations(assistantApi);
   const [videoBuilder] = useVideoBuilderLabs();
+  const [model3d] = useModel3dLabs();
   return (
     <div className="h-full w-64 shrink-0 border-e bg-card/60">
       <SideMenu
-        resolve={resolveItem(route, go, { conversationId, notebook, videoBuilder })}
+        resolve={resolveItem(route, go, { conversationId, notebook, videoBuilder, model3d })}
         onSearch={() => go("library")}
         header={
           // room for the window's traffic-light buttons (the start padding), a place to drag the window by, and the

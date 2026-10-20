@@ -41,6 +41,7 @@ from wasifyai_api.desktop_discovery import DiscoveryService
 from wasifyai_api.desktop_fit import assess_fit, need_declared, process_rss_bytes
 from wasifyai_api.desktop_hub import HubService
 from wasifyai_api.desktop_language import LanguageService
+from wasifyai_api.desktop_model3d import Model3dService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
 from wasifyai_api.desktop_video_builder import VideoBuilderService
 from wasifyai_api.desktop_vision import VisionService
@@ -87,6 +88,7 @@ class DesktopBackends:
     video_builder: VideoBuilderService | None = (
         None  # the render engine, installed on request (ADR-0077)
     )
+    model3d: Model3dService | None = None  # the 3D engine, installed on request (ADR-0080)
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
     async def start(self, runs: RunManager) -> None:
@@ -175,6 +177,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         llama=llama,
         audio=audio,
         video_builder=VideoBuilderService(settings.desktop_dir),
+        model3d=Model3dService(settings.desktop_dir),
         language=language,
         vision=vision,
         hub=hub,
@@ -291,6 +294,8 @@ def _build_worker(d: DesktopBackends):
             await llama.stop()
 
         owners["chat"] = unload_chat
+    if d.model3d is not None:
+        owners["model3d"] = d.model3d.stop  # a 3D run holds about 19 GB: the biggest owner
     if d.audio is not None:
         owners["audio"] = d.audio.stop  # the speech runtime is another owner of the one slot
         if d.audio.lipsync_sidecar is not None:
@@ -311,6 +316,8 @@ def _build_worker(d: DesktopBackends):
         d.language.slot = slot
     if d.audio is not None:
         d.audio.slot = slot
+    if d.model3d is not None:
+        d.model3d.slot = slot
     processor = JobProcessor(
         ws,
         d.event_log,

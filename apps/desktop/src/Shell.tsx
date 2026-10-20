@@ -20,6 +20,7 @@ import { client, voiceApi } from "./api";
 import { CreatePage } from "./pages/Create";
 import { HomePage } from "./pages/Home";
 import { LibraryPage } from "./pages/Library";
+import { Model3dPage } from "./pages/Model3d";
 import { ModelsPage } from "./pages/Models";
 import { NotebookPage } from "./pages/Notebook";
 import { NotebooksPage } from "./pages/Notebooks";
@@ -168,6 +169,7 @@ export function Shell() {
           {route === "video" ? <VideoPage mode="text" go={go} /> : null}
           {route === "animate" ? <VideoPage mode="image" go={go} /> : null}
           {route === "videobuilder" ? <VideoBuilderPage go={go} /> : null}
+          {route === "model3d" ? <Model3dPage go={go} /> : null}
           {route === "videos" ? <VideosPage go={go} /> : null}
           {route === "models" ? <ModelsPage /> : null}
           {route === "settings" ? <SettingsPage /> : null}

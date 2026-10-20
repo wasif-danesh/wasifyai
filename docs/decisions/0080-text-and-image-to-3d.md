@@ -208,3 +208,42 @@ with the conditions below.
 - **Not done:** the Q8_0 quality against the original CUDA Pixal3D (needs an NVIDIA machine); a CI build of the pinned
   commit; a run on a rented GPU; MoGe-2 and NAF weights run; a 16 or 24 GB Mac; two requests at once on the server;
   multi-view at 1536 or from real photographs.
+
+## Amendment after TD1 and TD2 (2026-10-21; `docs/spikes/pixal3d-td1.md`)
+
+Built and tested: the component, the engine's 3D service, a product of its own, the creation kind, one action and the
+screen, behind Labs (Settings › Labs, then **Images › 3D model**). Decisions of the owner the same day: **the upstream prebuilt
+binary, pinned by hash** (not our own CI build yet), and real generations during the build.
+
+- **A process per run, not `trellis-server`.** The server loads its weights for every request anyway, has no progress and no
+  cancel, and keeps 2.5 GB after a job (TD0, section 6). The engine runs `trellis-cli` once for the cut-out
+  (`--bg-only`) and once for the 3D run (`--sv-image ... --res 1024 --atlas N`): progress is read from its output
+  (`[n/6]` stages and `[flow]` steps), cancelling kills the process group (a second or less), and the memory is free when it
+  exits. The run holds the one big-model slot (`model3d`), so the chat and image models are put away first.
+- **The component** (`model3d_runtime.py`, `model3d_pins.json`): the pinned release asset (2.4 MB, SHA-256), the single-view
+  weights bundle at its pinned revision (13 files, 8.09 GB, every size and SHA-256 recorded and checked against the live
+  servers) and the BiRefNet cut-out model (0.88 GB): **8.98 GB** in all, shown before the click. The weights use the resumable,
+  hash-checked downloader of the Models screen. The licence texts travel with the files (pixal3d.cpp's licence and notice, Meta's
+  DINOv3 agreement, byte-identical to the bundle's), and **"Built with DINOv3"** is on the setup card, the screen and each
+  model's recipe (`licence: conditional`).
+- **Product `wasifyai-model3d`** (its own package, desktop only): a SQLite store of pictures and models, the files under
+  `<app data>/model3d/`, one job at a time with progress and cancel, routes under `/products/wasifyai-model3d/m3d`. A model
+  is the creation kind **`model3d`** (searchable by its title and the words it was made from, a row in the search corpus).
+  A picture nobody made a model from is forgotten after 14 days.
+- **Picture checks, in words** (decision 3): after the cut-out, one object found, all of it in the picture, big enough, in the
+  middle, not several; a warning is said and the person goes on, a picture with no object stops. A picture that is already
+  see-through is not cut again. The person confirms that they may use the picture and that it is not a photo of a real person
+  who has not agreed (the likeness question of ADR-0073 decision 7).
+- **Detail** (decision 7, corrected after TD0): Light, Standard and Detailed are the atlas sizes 1024, 2048 and 4096; the face
+  target stays at one million triangles.
+- **Actions:** one, `model3d.generate` (costly, long, asks first), taking a picture of the library; listing, looking, renaming,
+  deleting, saving a copy and reading the file are the library's actions on the new kind. The catalogue's upper bound moves
+  from 45 to 50 (decision 9 listed five actions; six of them are the library's).
+- **The screen** (TD2): start from a picture or from words; from words the image engine makes four candidate pictures one
+  after another (the wrapper asks for "front view at eye level", TD0's correction), the person picks one; then the check, the
+  detail, the long run with its stages in plain words, and the result in a viewer with Save a copy, Make it again, Rename and
+  Delete. `<model-viewer>` 4.1.0 (Apache-2.0) is loaded when the first model is shown; the window's content security policy
+  allows `blob:` in `connect-src` so that it can read the model the window fetched (the engine's route needs the session).
+- **Not built:** four photos around an object (TD3), a turntable video (Video Builder), the 50k and 200k face targets (they need
+  a patch to `pixal3d.cpp`), our own CI build of the binary (the prebuilt is pinned; it runs without Metal's tensor API),
+  the web version (TD4), a card in the web library.

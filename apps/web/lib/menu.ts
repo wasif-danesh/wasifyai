@@ -54,6 +54,8 @@ export function resolveWebItem(
         return live("video") ? page("/video/animate") : undefined;
       case "video.builder":
         return { hidden: true }; // experimental, on the desktop only (ADR-0077)
+      case "images.model3d":
+        return { hidden: true }; // experimental, on the desktop only (ADR-0080)
       case "video.library":
         return live("video") ? page("/video/library", "/video/creations") : undefined;
       case "voice.speak":

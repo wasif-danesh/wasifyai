@@ -164,7 +164,9 @@ def test_the_export_says_everything_a_reviewer_needs(catalogue):
 
 def test_the_first_set_is_there(catalogue):
     ids = {a.id for a in catalogue}
-    assert 35 <= len(ids) <= 45  # "about 40" (ADR-0068 decision 7)
+    # "about 40" (ADR-0068 decision 7); 45 at motion graphics, 46 with 3D (ADR-0080 decision 9): a
+    # creation kind's list, look, rename, delete, save and read are the library's, not new actions
+    assert 35 <= len(ids) <= 50
     for expected in (
         "library.search", "library.list", "library.get", "library.export", "library.rename",
         "library.delete", "image.generate", "image.edit", "video.generate", "video.animate",

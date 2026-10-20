@@ -726,6 +726,21 @@ Measured with MG1: each template 7 to 10 s at 720p, tree peak 2.2 to 2.3 GB. Len
 Not built: the moderation of the words when safeguards are on (ADR-0079 decision 9), a card for projects in a web `/creations` page
 (the feature is desktop only), the quarantine check inside the packaged app, the chat path (needs A2), a looping preview clip.
 
+## 3D models (ADR-0080, stages TD1 and TD2; experimental, behind Labs)
+
+A 3D model made from a picture, or from words through a picture, on this computer. A person switches it on in **Settings › Labs**,
+which adds **Images › 3D model**. Details and measurements: `docs/spikes/pixal3d-td1.md`.
+
+| Piece | What |
+|---|---|
+| The component | `<app data>/components/model3d/`: the pinned `pixal3d.cpp` Metal build (`trellis-cli`), the Pixal3D single-view Q8_0 weights with the DINOv3 encoder and the BiRefNet cut-out model, **8.98 GB** shown before the click, resumable and hash-checked. `GET /desktop/model3d`, `POST /install` (the size shown must be sent back), `/install/cancel`, `/uninstall`. Apple-silicon Macs only |
+| The engine | `desktop_model3d.py`: one process of `trellis-cli` per run (the cut-out, then the 3D run); progress from its output, cancel by killing the process group, the one big-model slot held while it works; about 19 GB of memory, 5 to 25 minutes |
+| The product | `products/wasifyai-model3d`: pictures and models in `<app data>/model3d/model3d.db` and files beside it, one job at a time, routes under `/products/wasifyai-model3d/m3d`; a model is the creation kind `model3d` (search, library, rename, save a copy) |
+| The screen | start from a picture or from words (four candidates from the image engine), the picture checks in words and the cut-out, Light / Standard / Detailed, progress with stages, a viewer (`<model-viewer>`), Save a copy (GLB), Make it again |
+| Licence | "Built with DINOv3" on the setup card, the screen and each model; Meta's agreement and pixal3d.cpp's licence and notice travel with the files |
+
+Not built: four photos around an object, a turntable video, 50k and 200k face targets, our own CI build of the binary, the web version.
+
 ## The self-test
 
 `WASIFYAI_SMOKE=1 cargo run` (in `apps/desktop/src-tauri`) starts the shell as usual; once the engine is ready

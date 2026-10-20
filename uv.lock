@@ -10,6 +10,7 @@ members = [
     "wasifyai-contracts",
     "wasifyai-image",
     "wasifyai-media-worker",
+    "wasifyai-model3d",
     "wasifyai-notebooks",
     "wasifyai-platform-sdk",
     "wasifyai-video",
@@ -2872,6 +2873,7 @@ dependencies = [
 [package.optional-dependencies]
 desktop = [
     { name = "wasifyai-media-worker" },
+    { name = "wasifyai-model3d" },
     { name = "wasifyai-notebooks" },
     { name = "wasifyai-video" },
     { name = "wasifyai-voice" },
@@ -2896,6 +2898,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
     { name = "wasifyai-contracts", editable = "packages/contracts" },
     { name = "wasifyai-media-worker", marker = "extra == 'desktop'", editable = "services/media-worker" },
+    { name = "wasifyai-model3d", marker = "extra == 'desktop'", editable = "products/wasifyai-model3d" },
     { name = "wasifyai-notebooks", marker = "extra == 'desktop'", editable = "products/wasifyai-notebooks" },
     { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
     { name = "wasifyai-video", marker = "extra == 'desktop'", editable = "products/wasifyai-video" },
@@ -2983,6 +2986,25 @@ requires-dist = [
     { name = "wasifyai-contracts", editable = "packages/contracts" },
     { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
     { name = "websockets", specifier = ">=16.1.1" },
+]
+
+[[package]]
+name = "wasifyai-model3d"
+version = "0.0.0"
+source = { editable = "products/wasifyai-model3d" }
+dependencies = [
+    { name = "langgraph" },
+    { name = "pillow" },
+    { name = "pydantic" },
+    { name = "wasifyai-platform-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "langgraph", specifier = ">=0.6" },
+    { name = "pillow", specifier = ">=10" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
 ]
 
 [[package]]

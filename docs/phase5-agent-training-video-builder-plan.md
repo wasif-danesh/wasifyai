@@ -187,8 +187,8 @@ Sizes: S under a week, M one to two weeks, L two to four. Each ends with somethi
 | Stage | What | Size | Done when |
 |---|---|---|---|
 | **TD0** | **Done 2026-10-19, Go.** **Pixal3D-only spike** (owner's priority): run the pinned `pixal3d.cpp` Metal binary with the Pixal3D single-view and multi-view models on the owner's Mac at 1024 and 1536 (time, memory, failures); 20 inputs; Q8_0 against original quality; the **DINOv3** redistribution read and the weights-bundle licence; `pixal3d.cpp` NOTICE and vendored code read; build the same commit in CI; one run on a rented GPU. No TRELLIS.2 work | S to M | Descriptors with measured numbers, a default resolution, a go or no-go on the DINOv3 position |
-| **TD1** | Platform: the `model3d` component (installer, `trellis-server`, slot owner), creation kind (search, card, filter), `model3d.*` actions, the viewer (`<model-viewer>`, dependency approval first), tiers 2 and 3 through the runner | M | A GLB from a fixture engine in CI, shown and searchable |
-| **TD2** | The screen: from a picture, from words through four candidate pictures, input checks, cut-out preview, plain-words result | M | A mascot photo becomes a model on the Mac from one screen |
+| **TD1 (built 2026-10-21)** | Platform: the `model3d` component (installer, `trellis-server`, slot owner), creation kind (search, card, filter), `model3d.*` actions, the viewer (`<model-viewer>`, dependency approval first), tiers 2 and 3 through the runner | M | A GLB from a fixture engine in CI, shown and searchable |
+| **TD2 (built 2026-10-21)** | The screen: from a picture, from words through four candidate pictures, input checks, cut-out preview, plain-words result | M | A mascot photo becomes a model on the Mac from one screen |
 | **TD3** | Multi-view input; turntable video as a Video Builder template (WebGL in headless Chrome to verify) | S | Optional |
 | **TD4** | Our own GPU host for the web, once it exists (backlog B5) | L | Not scheduled |
 

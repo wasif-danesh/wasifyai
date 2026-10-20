@@ -24,6 +24,7 @@ CreationKind = Literal[
     "track",
     "voice",
     "composition",
+    "model3d",
 ]
 KINDS: tuple[str, ...] = (
     "song",
@@ -37,6 +38,7 @@ KINDS: tuple[str, ...] = (
     "track",  # a piece of music or an edit of one, made by the voice product (ADR-0066)
     "voice",  # a saved voice
     "composition",  # a Video Builder project (ADR-0077); its renders are `video`
+    "model3d",  # a 3D model (ADR-0080)
 )
 MAX_TEXT_CHARS = 6000  # what is embedded: more adds cost, not meaning
 

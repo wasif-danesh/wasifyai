@@ -1327,7 +1327,8 @@
               "voice",
               "lipsync",
               "notebook",
-              "composition"
+              "composition",
+              "model3d"
             ],
             "title": "Kind",
             "type": "string"
@@ -1410,7 +1411,8 @@
               "voice",
               "lipsync",
               "notebook",
-              "composition"
+              "composition",
+              "model3d"
             ],
             "title": "Kind",
             "type": "string"
@@ -1488,7 +1490,8 @@
               "voice",
               "lipsync",
               "notebook",
-              "composition"
+              "composition",
+              "model3d"
             ],
             "title": "Kind",
             "type": "string"
@@ -1608,7 +1611,8 @@
               "voice",
               "lipsync",
               "notebook",
-              "composition"
+              "composition",
+              "model3d"
             ],
             "title": "Kind",
             "type": "string"
@@ -1730,7 +1734,8 @@
               "voice",
               "lipsync",
               "notebook",
-              "composition"
+              "composition",
+              "model3d"
             ],
             "title": "Kind",
             "type": "string"
@@ -2145,6 +2150,129 @@
       ],
       "consent": "I confirm I may use this picture and this voice: the picture is artwork, a picture of me, or of someone who agreed; the voice is made here from words, my own, or one I have permission to use. The video is marked as AI-generated.",
       "help": "docs/help/lipsync.make.md"
+    },
+    {
+      "id": "model3d.generate",
+      "title": "Make a 3D model",
+      "summary": "Make a 3D model (a GLB file) from a picture in the library.",
+      "description": "Make a 3D model of the object in a picture of the library: the picture is cut out, checked, and turned into a textured model of about a million triangles (a GLB file) on this computer. It takes about 5 to 25 minutes and about 19 GB of memory, so it is made one at a time. A picture of one object, straight on at eye level on a plain background works best; glass, mirrors, thin parts and several objects do not come out well. To make a model from words, make the picture first with image.generate and pass it here.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "image_id": {
+            "description": "The picture of the library to make a model of: one object, straight on, on a plain background works best.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Image Id",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "description": "A name for the model.",
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          },
+          "prompt": {
+            "default": "",
+            "description": "The words the picture was made from.",
+            "maxLength": 1000,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "detail": {
+            "default": "standard",
+            "description": "The size of the texture: light, standard or detailed.",
+            "enum": [
+              "light",
+              "standard",
+              "detailed"
+            ],
+            "title": "Detail",
+            "type": "string"
+          },
+          "seed": {
+            "default": 42,
+            "description": "The same seed gives the same model.",
+            "maximum": 2147483647,
+            "minimum": 0,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "image_id"
+        ],
+        "title": "GenerateIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "integer"
+          },
+          "triangles_about": {
+            "title": "Triangles About",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "model_id",
+          "product_id",
+          "uri",
+          "title",
+          "seconds",
+          "triangles_about"
+        ],
+        "title": "GenerateOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "image_id": "0b7c1f9e-0000-4000-8000-000000000000"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "costly"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-model3d"
+        },
+        {
+          "kind": "runtime",
+          "name": "model3d"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-model3d",
+      "ui": "images.model3d",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/model3d.generate.md"
     },
     {
       "id": "models.download",

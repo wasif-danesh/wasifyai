@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@assistant-ui/react": "0.15.29",
+    "@google/model-viewer": "4.1.0",
     "@streamdown/code": "2.0.0",
     "@streamdown/math": "1.0.3",
     "@streamdown/mermaid": "1.0.3",

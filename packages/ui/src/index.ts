@@ -177,3 +177,6 @@ export {
   useVideoBuilderLabs,
   writeVideoBuilder,
 } from "./videobuilder/labs";
+export { Model3d, type Model3dProps } from "./model3d/Model3d";
+export type { CandidateApi } from "./model3d/Candidates";
+export { MODEL3D_KEY, readModel3d, useModel3dLabs, writeModel3d } from "./model3d/labs";

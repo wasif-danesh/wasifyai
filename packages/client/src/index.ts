@@ -244,3 +244,21 @@ export {
   createVideoBuilderApi,
   megabytes,
 } from "./videobuilder";
+export {
+  type Detail,
+  type Fit,
+  type MakeRequest,
+  type Model3d,
+  type Model3dApi,
+  type Model3dComponent,
+  type Model3dPart,
+  type Model3dProgress,
+  type Model3dStatus,
+  type ModelStatus,
+  type PictureCheck,
+  type PictureInput,
+  MODEL3D_PRODUCT_ID,
+  createModel3dApi,
+  gigabytes,
+  minutes,
+} from "./model3d";

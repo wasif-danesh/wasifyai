@@ -27,6 +27,7 @@ export type Route =
   | "video"
   | "animate"
   | "videobuilder"
+  | "model3d"
   | "videos";
 
 const PATHS: Record<Route, string> = {
@@ -53,6 +54,7 @@ const PATHS: Record<Route, string> = {
   video: "/video/create",
   animate: "/video/animate",
   videobuilder: "/video/builder",
+  model3d: "/images/3d",
   videos: "/video/library",
 };
 

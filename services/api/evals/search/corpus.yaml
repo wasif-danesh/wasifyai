@@ -239,6 +239,15 @@ concepts:
       - { lang: fr, text: "carte de titre animée pour le jour du lancement" }
       - { lang: en, text: "an animated title screen announcing the launch" }
       - { lang: pt, text: "tela de título animada anunciando o lançamento do aplicativo" }
+  - id: frog-mug-model
+    items:
+      - { kind: model3d, lang: en, text: "A ceramic mug shaped like a cartoon frog, green glaze, smiling face, one handle" }
+      - { kind: image, lang: fr, text: "Une tasse en céramique en forme de grenouille de dessin animé, glaçure verte, visage souriant" }
+      - { kind: speech, lang: de, text: "Ich habe einen Becher in Form eines grünen Frosches gekauft" }
+    queries:
+      - { lang: es, text: "un modelo 3D de una taza con forma de rana verde" }
+      - { lang: en, text: "3D model of a frog coffee cup" }
+      - { lang: bn, text: "সবুজ ব্যাঙের আকারের কফি মগের থ্রিডি মডেল" }
 nomatch:
   - { lang: en, text: "a submarine exploring a deep sea trench" }
   - { lang: es, text: "una panadera amasando pan en la cocina" }

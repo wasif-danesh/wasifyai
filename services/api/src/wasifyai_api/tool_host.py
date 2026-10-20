@@ -147,6 +147,18 @@ class ApiToolHost:
                     ui="video.builder",
                 )
             return Readiness.ready()
+        if need.kind == "runtime" and need.name == "model3d":
+            engine = getattr(state, "model3d", None)
+            if engine is None or not engine.installer.supported:
+                return Readiness.unavailable(
+                    "3D models are not available on this kind of computer yet."
+                )
+            if not engine.ready():
+                return Readiness.needs_setup(
+                    "Set up 3D first (a download of about 9 GB, shown before it starts).",
+                    ui="images.model3d",
+                )
+            return Readiness.ready()
         if need.kind == "notebooks":
             here = getattr(state, "desktop_dir", None) or getattr(state, "notebooks_web", None)
             if not here:

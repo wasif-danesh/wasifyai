@@ -31,9 +31,19 @@ LIBRARY_KINDS = (
     "lipsync",
     "notebook",
     "composition",
+    "model3d",
 )
 Kind = Literal[
-    "image", "video", "speech", "track", "transcript", "voice", "lipsync", "notebook", "composition"
+    "image",
+    "video",
+    "speech",
+    "track",
+    "transcript",
+    "voice",
+    "lipsync",
+    "notebook",
+    "composition",
+    "model3d",
 ]
 MAX_STATUS_LINES = 12
 MAX_WAIT = 50.0

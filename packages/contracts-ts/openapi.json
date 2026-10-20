@@ -1247,6 +1247,52 @@
         "title": "JobProgressEvent",
         "type": "object"
       },
+      "MakeIn": {
+        "properties": {
+          "detail": {
+            "default": "standard",
+            "maxLength": 12,
+            "title": "Detail",
+            "type": "string"
+          },
+          "input_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Input Id",
+            "type": "string"
+          },
+          "prompt": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "rights": {
+            "default": false,
+            "description": "The person says they may use the picture.",
+            "title": "Rights",
+            "type": "boolean"
+          },
+          "seed": {
+            "default": 42,
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "title": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_id"
+        ],
+        "title": "MakeIn",
+        "type": "object"
+      },
       "Me": {
         "properties": {
           "role": {
@@ -2087,6 +2133,21 @@
           "text"
         ],
         "title": "ReasoningEvent",
+        "type": "object"
+      },
+      "RenameIn": {
+        "properties": {
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "RenameIn",
         "type": "object"
       },
       "RenderIn": {
@@ -4509,6 +4570,618 @@
         "tags": [
           "wasifyai-image",
           "wasifyai-image"
+        ]
+      }
+    },
+    "/products/wasifyai-model3d/m3d/inputs": {
+      "post": {
+        "description": "A picture (PNG, JPEG or WebP, the file itself as the body). It is brought to a size the\nengine takes, cut out and looked at in the background; follow it with GET.",
+        "operationId": "add_input_products_wasifyai_model3d_m3d_inputs_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 200,
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add Input Products Wasifyai Model3D M3D Inputs Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Input",
+        "tags": [
+          "wasifyai-model3d"
+        ]
+      }
+    },
+    "/products/wasifyai-model3d/m3d/inputs/{input_id}": {
+      "delete": {
+        "operationId": "delete_input_products_wasifyai_model3d_m3d_inputs__input_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "input_id",
+            "required": true,
+            "schema": {
+              "title": "Input Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Input",
+        "tags": [
+          "wasifyai-model3d"
+        ]
+      },
+      "get": {
+        "operationId": "get_input_products_wasifyai_model3d_m3d_inputs__input_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "input_id",
+            "required": true,
+            "schema": {
+              "title": "Input Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Input Products Wasifyai Model3D M3D Inputs  Input Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Input",
+        "tags": [
+          "wasifyai-model3d"
+        ]
+      }
+    },
+    "/products/wasifyai-model3d/m3d/inputs/{input_id}/{which}": {
+      "get": {
+        "operationId": "input_picture_products_wasifyai_model3d_m3d_inputs__input_id___which__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "input_id",
+            "required": true,
+            "schema": {
+              "title": "Input Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "which",
+            "required": true,
+            "schema": {
+              "title": "Which",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Input Picture",
+        "tags": [
+          "wasifyai-model3d"
+        ]
+      }
+    },
+    "/products/wasifyai-model3d/m3d/models": {
+      "get": {
+        "operationId": "list_models_products_wasifyai_model3d_m3d_models_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Models Products Wasifyai Model3D M3D Models Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Models",
+        "tags": [
+          "wasifyai-model3d"
+        ]
+      },
+      "post": {
+        "operationId": "make_model_products_wasifyai_model3d_m3d_models_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MakeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Make Model Products Wasifyai Model3D M3D Models Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make Model",
+        "tags": [
+          "wasifyai-model3d"
+        ]
+      }
+    },
+    "/products/wasifyai-model3d/m3d/models/{model_id}": {
+      "delete": {
+        "operationId": "remove_model_products_wasifyai_model3d_m3d_models__model_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Model",
+        "tags": [
+          "wasifyai-model3d"
+        ]
+      },
+      "get": {
+        "operationId": "get_model_products_wasifyai_model3d_m3d_models__model_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Model Products Wasifyai Model3D M3D Models  Model Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Model",
+        "tags": [
+          "wasifyai-model3d"
+        ]
+      },
+      "patch": {
+        "operationId": "rename_model_products_wasifyai_model3d_m3d_models__model_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rename Model Products Wasifyai Model3D M3D Models  Model Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename Model",
+        "tags": [
+          "wasifyai-model3d"
+        ]
+      }
+    },
+    "/products/wasifyai-model3d/m3d/models/{model_id}/again": {
+      "post": {
+        "description": "Make it again from the same picture with the same seed: the same model, as a new one.",
+        "operationId": "make_again_products_wasifyai_model3d_m3d_models__model_id__again_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Make Again Products Wasifyai Model3D M3D Models  Model Id  Again Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make Again",
+        "tags": [
+          "wasifyai-model3d"
+        ]
+      }
+    },
+    "/products/wasifyai-model3d/m3d/models/{model_id}/cancel": {
+      "post": {
+        "operationId": "cancel_model_products_wasifyai_model3d_m3d_models__model_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cancel Model Products Wasifyai Model3D M3D Models  Model Id  Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Model",
+        "tags": [
+          "wasifyai-model3d"
+        ]
+      }
+    },
+    "/products/wasifyai-model3d/m3d/models/{model_id}/export": {
+      "post": {
+        "description": "Copy the model into the person's export folder (the desktop app sets one).",
+        "operationId": "export_model_products_wasifyai_model3d_m3d_models__model_id__export_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Exported"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Model",
+        "tags": [
+          "wasifyai-model3d"
+        ]
+      }
+    },
+    "/products/wasifyai-model3d/m3d/models/{model_id}/{which}": {
+      "get": {
+        "description": "`file` (the GLB), `thumb`, `source` (the picture it came from) or `cutout`.",
+        "operationId": "model_file_products_wasifyai_model3d_m3d_models__model_id___which__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "which",
+            "required": true,
+            "schema": {
+              "title": "Which",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Model File",
+        "tags": [
+          "wasifyai-model3d"
+        ]
+      }
+    },
+    "/products/wasifyai-model3d/m3d/status": {
+      "get": {
+        "operationId": "status_products_wasifyai_model3d_m3d_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Status Products Wasifyai Model3D M3D Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Status",
+        "tags": [
+          "wasifyai-model3d"
         ]
       }
     },

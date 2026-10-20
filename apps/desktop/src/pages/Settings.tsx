@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { Button, SearchSettings, useChatNext, useVideoBuilderLabs } from "@wasifyai/ui";
+import {
+  Button,
+  SearchSettings,
+  useChatNext,
+  useModel3dLabs,
+  useVideoBuilderLabs,
+} from "@wasifyai/ui";
 import { useEffect, useState } from "react";
 import { assistantApi, discoveryApi, hubApi } from "../api";
 import { engineRepair, engineRestart } from "../engine";
@@ -128,6 +134,7 @@ function HubSwitch() {
 function Labs() {
   const [chatNext, setChatNext] = useChatNext();
   const [videoBuilder, setVideoBuilder] = useVideoBuilderLabs();
+  const [model3d, setModel3d] = useModel3dLabs();
   return (
     <section className="grid gap-3" aria-label="Labs">
       <h2 className="font-semibold text-lg">Labs</h2>
@@ -146,6 +153,10 @@ function Labs() {
           onChange={(e) => setVideoBuilder(e.target.checked)}
         />
         Try Video Builder (write a title card as a video; adds Video › Video Builder to the menu)
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={model3d} onChange={(e) => setModel3d(e.target.checked)} />
+        Try 3D models (make a 3D model from a picture; adds Images › 3D model to the menu)
       </label>
     </section>
   );

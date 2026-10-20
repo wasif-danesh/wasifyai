@@ -4,6 +4,7 @@
 // the same shape.
 import {
   BookOpen,
+  Box,
   Clapperboard,
   FilePlus2,
   FileText,
@@ -55,6 +56,7 @@ export const MENU_GROUPS: MenuGroupDef[] = [
       { id: "images.extend", label: "Extend", icon: Maximize2 },
       { id: "images.upscale", label: "Upscale", icon: ZoomIn },
       { id: "images.reference", label: "Reference", icon: SquareStack },
+      { id: "images.model3d", label: "3D model", icon: Box },
       { id: "images.library", label: "Your images", icon: Library },
     ],
   },

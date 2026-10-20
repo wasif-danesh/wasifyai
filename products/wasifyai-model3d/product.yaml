@@ -1,0 +1,6 @@
+id: wasifyai-model3d
+# Make a 3D model from a picture, or from words through a picture (ADR-0080). The 3D engine, its
+# models and the picture check run on this computer and belong to the engine; this product keeps the
+# models, their files and their search entries, and asks the engine to make them. It has no
+# language-model capability of its own: the words become a picture in the image product.
+capabilities: {}

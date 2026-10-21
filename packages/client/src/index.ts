@@ -52,11 +52,13 @@ export {
   videoFlowReducer,
   type VideoFlowAction,
   type VideoFlowState,
+  type VideoMode,
   type VideoPhase,
   type VideoResult,
 } from "./video-flow";
 export {
   VIDEO_PRODUCT_ID,
+  canExtend,
   clipLength,
   createVideosApi,
   type VideoListOptions,

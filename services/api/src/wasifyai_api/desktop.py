@@ -311,7 +311,7 @@ def _build_worker(d: DesktopBackends):
 
     slot = SlotManager(owners, idle_unload_s=s.desktop_idle_unload_s, can_share=can_share)
     if models is not None:
-        models.sidecar, models.slot = sidecar, slot
+        models.attach(sidecar, slot)
     if d.language is not None:
         d.language.slot = slot
     if d.audio is not None:

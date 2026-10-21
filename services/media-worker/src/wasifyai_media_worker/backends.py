@@ -7,6 +7,7 @@ Remote backends run no GPU work here: the processor skips the GPU lock for them.
 import asyncio
 import base64
 import logging
+import mimetypes
 import time
 from typing import Any
 
@@ -116,7 +117,7 @@ class ComfyApiRunner:
             if self._headers
             else {},
             data={"type": "input", "overwrite": "true"},
-            files={"image": (name, data, "image/png")},
+            files={"image": (name, data, mimetypes.guess_type(name)[0] or "image/png")},
         )
         raise_for_backend(r)
         return str(r.json().get("name", name))

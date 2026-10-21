@@ -2,6 +2,7 @@
 
 import io
 import json
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -50,6 +51,18 @@ def mp4(size=(128, 96), frames=12) -> bytes:
         return out.read_bytes()
 
 
+def frame_count(clip: bytes) -> int:
+    """How many frames a clip has, as ffmpeg decodes them."""
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "clip.mp4"
+        src.write_bytes(clip)
+        report = subprocess.run(
+            [ffmpeg_path(), "-hide_banner", "-i", str(src), "-f", "null", "-"],
+            capture_output=True, text=True, check=True,
+        ).stderr  # fmt: skip
+    return int(re.findall(r"frame=\s*(\d+)", report)[-1])
+
+
 class Rig:
     def __init__(self, caps, sink, usage, raw, uploads):
         self.caps, self.sink, self.usage, self.raw, self.uploads = caps, sink, usage, raw, uploads
@@ -96,6 +109,7 @@ def make_rig(
                     },
                     "video.generate": {"provider": "fake"},
                     "video.animate": {"provider": "fake"},
+                    "video.extend": {"provider": "fake"},
                 },
                 "quotas": quotas if quotas is not None else {"videos_per_user_per_day": 5},
                 "uploads": {"image": {}},

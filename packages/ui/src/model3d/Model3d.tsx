@@ -15,6 +15,7 @@ import { Button } from "../components/button";
 import { Chip } from "../components/chip";
 import { JobMeter, WorkingCard } from "../components/create";
 import { Notice } from "../components/notice";
+import { Spinner } from "../components/spinner";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
 import { type CandidateApi, Candidates } from "./Candidates";
 import { ModelViewer } from "./ModelViewer";
@@ -363,12 +364,23 @@ function CheckStep({ m }: { m: Hook }) {
                 className="size-full object-contain"
               />
             ) : checking ? (
-              <output className={hint}>{input.stage || "Cutting out the object"}…</output>
+              <output className={cn(hint, "flex items-center gap-2.5")}>
+                <Spinner />
+                {input.stage || "Cutting out the object"}…
+              </output>
             ) : null}
           </div>
           <figcaption className={hint}>Is this the object? (cut out)</figcaption>
         </figure>
       </div>
+
+      {checking ? (
+        <JobMeter
+          title={input.stage || "Cutting out the object"}
+          text="This can take a minute"
+          label="Checking the picture"
+        />
+      ) : null}
 
       {input.status === "failed" ? (
         <Notice

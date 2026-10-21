@@ -15,6 +15,7 @@ export const ROUTES: Record<string, Route> = {
   "images.library": "library",
   "video.create": "video",
   "video.animate": "animate",
+  "video.extend": "extend",
   "video.builder": "videobuilder",
   "video.library": "videos",
   "voice.speak": "speak",

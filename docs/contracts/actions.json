@@ -4599,6 +4599,106 @@
       "help": "docs/help/video.animate.md"
     },
     {
+      "id": "video.extend",
+      "title": "Extend a video",
+      "summary": "Carry on a video of the library for about two more seconds.",
+      "description": "Make a video of the library longer: its last second starts a new part, which is joined on, so the motion carries on (about 1.7 seconds more, saved as a new video; the original stays). A video can be carried on until it is about 4 seconds long, and its picture gets a little softer each time. What the prompt says steers only weakly: describe what keeps happening, not a change of action. Takes minutes; returns a job handle when it is not done within the wait.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "video_id": {
+            "description": "The video to carry on.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Video Id",
+            "type": "string"
+          },
+          "prompt": {
+            "description": "What should keep happening, in English. The motion in the last second of the video carries on whatever this says: it describes, it does not change the action.",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "video_id",
+          "prompt"
+        ],
+        "title": "ExtendIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "video_id": {
+            "title": "Video Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "integer"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "video_id",
+          "product_id",
+          "uri",
+          "prompt",
+          "seconds",
+          "width",
+          "height"
+        ],
+        "title": "VideoOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "video_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "prompt": "the fox keeps walking through the snow"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "costly"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-video",
+      "ui": "video.extend",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/video.extend.md"
+    },
+    {
       "id": "video.generate",
       "title": "Make a video",
       "summary": "Make a short video clip from a description.",

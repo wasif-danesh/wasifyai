@@ -67,11 +67,20 @@ Gentle ordinary motion (a smile, hair in the wind, a walk) and camera moves are 
 fixed. **The finished clip is not screened yet**, and the picture and motion rules have only been checked on
 harmless pictures: unsafe-picture accuracy is unmeasured.
 
+## Extend video
+
+A third mode, `extend` (action `video.extend`, screen Video > Extend video): the last 9 frames of one of the
+person's clips start a new 49 frame clip, and the graph joins the old clip up to those frames with the whole
+new one (ffmpeg, frame exact), so a round adds 40 frames. The result is a new clip beside the original. A clip
+of more than 100 frames cannot be extended. The worker reads a job's inputs only from the person's uploads, so
+the graph copies the source to `uploads/extend-<id>.mp4` for the job and deletes the copy on every exit.
+Measurements and why this variant: `docs/spikes/video-extend-vx0.md`.
+
 ## Config
 
 `product.yaml`: capabilities `text.moderate`, `text.moderate_image`, `text.enhance`, `text.describe_image`,
-`video.generate` (`ltx-video-2b-t2v`) and `video.animate` (`ltx-video-2b-i2v`); `uploads.image.max_bytes`
-(10 MB); quota `videos_per_user_per_day: 5`; `enhance:` kinds.
+`video.generate` (`ltx-video-2b-t2v`), `video.animate` (`ltx-video-2b-i2v`) and `video.extend`
+(`ltx-video-2b-extend`); `uploads.image.max_bytes` (10 MB); quota `videos_per_user_per_day: 5`; `enhance:` kinds.
 
 ## Tests
 

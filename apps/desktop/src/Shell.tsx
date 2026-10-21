@@ -170,6 +170,7 @@ export function Shell() {
           {route === "speechedit" ? <ToolPage tool="edit" {...voice} /> : null}
           {route === "video" ? <VideoPage mode="text" go={go} /> : null}
           {route === "animate" ? <VideoPage mode="image" go={go} /> : null}
+          {route === "extend" ? <VideoPage mode="extend" go={go} /> : null}
           {route === "videobuilder" ? <VideoBuilderPage go={go} /> : null}
           {route === "model3d" ? <Model3dPage go={go} /> : null}
           {route === "videos" ? <VideosPage go={go} /> : null}

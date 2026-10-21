@@ -1,8 +1,8 @@
+import { HttpError, type Transport, errorMessage } from "./transport";
 // A person's finished videos, from the product's read routes (`/products/wasifyai-video/videos`):
 // list, search, open, save a copy, delete. The same routes serve the web app and the desktop window;
 // only the transport differs.
-import type { Mode } from "./image-flow";
-import { HttpError, type Transport, errorMessage } from "./transport";
+import type { VideoMode } from "./video-flow";
 
 export const VIDEO_PRODUCT_ID = "wasifyai-video";
 
@@ -11,7 +11,7 @@ export type VideoStatus = "working" | "done" | "failed";
 export type VideoSummary = {
   id: string;
   prompt: string;
-  mode: Mode;
+  mode: VideoMode;
   status: VideoStatus;
   seconds: number;
   created_at: string;
@@ -86,4 +86,12 @@ export function createVideosApi(transport: Transport, product = VIDEO_PRODUCT_ID
 /** The clip's length for a card: "2 s" or "5 s". */
 export function clipLength(seconds: number): string {
   return `${seconds} s`;
+}
+
+/**
+ * Whether a clip is short enough to be carried on (Extend video): the engine refuses a clip of more than
+ * 100 frames, and a clip that rounds to 5 seconds or more has more. The engine has the last word.
+ */
+export function canExtend(clip: { seconds: number }): boolean {
+  return clip.seconds <= 4;
 }

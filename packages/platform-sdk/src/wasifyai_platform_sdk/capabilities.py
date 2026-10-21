@@ -168,6 +168,10 @@ class MediaCapabilities:
         """Make a clip from a picture the user uploaded: pass its storage key as `image_key`."""
         return await self._run("animate", inputs)
 
+    async def extend(self, **inputs: Any) -> JobHandle:
+        """Carry on a clip: pass its copy in the user's uploads as `video_key`."""
+        return await self._run("extend", inputs)
+
     async def _run(self, verb: str, inputs: dict[str, Any]) -> JobHandle:
         name = f"{self._family}.{verb}"
         try:

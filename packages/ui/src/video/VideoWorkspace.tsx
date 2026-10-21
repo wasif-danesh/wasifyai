@@ -3,7 +3,9 @@
 import {
   type Mode,
   type RunClient,
+  type VideoMode,
   type VideoResult,
+  type VideoSummary,
   type VideosApi,
   clipLength,
 } from "@wasifyai/client";
@@ -20,6 +22,7 @@ import { type Picture, usePicture } from "../hooks/use-picture";
 import { usePictureEvents } from "../hooks/use-picture-events";
 import { VIDEO_PRODUCT, useVideoFlow } from "../hooks/use-video-flow";
 import { actions, chips, eyebrow, field, fieldLabel, panel } from "../styles";
+import { ExtendForm } from "./ExtendForm";
 
 export const MAX_VIDEO_PROMPT = 500;
 
@@ -50,11 +53,13 @@ const EXAMPLES: Record<Mode, string[]> = {
 
 /** What the form hands over: the picture is already uploaded (ADR-0039), so a run needs only its key. */
 export type VideoFormValue = {
-  mode: Mode;
+  mode: VideoMode;
   prompt: string;
   shape: string;
   seconds: number;
   picture: Picture | null;
+  /** Extend video: the clip of the library to carry on */
+  source?: VideoSummary;
 };
 
 function VideoForm({
@@ -65,7 +70,7 @@ function VideoForm({
   hint,
 }: {
   hint?: string;
-  mode: Mode;
+  mode: Mode; // the form of text to video and image to video; Extend video has its own
   client: Pick<RunClient, "uploadImage" | "deleteUpload" | "enhancePrompt">;
   onSubmit: (value: VideoFormValue) => void;
   initial?: Partial<Pick<VideoFormValue, "prompt" | "shape" | "seconds">>;
@@ -207,12 +212,12 @@ function jobText(job: { status: string; position?: number; progress?: number }):
 }
 
 export type VideoWorkspaceProps = {
-  /** `text`: a description; `image`: a picture and what should move. */
-  mode: Mode;
+  /** `text`: a description; `image`: a picture and what should move; `extend`: carry on one of your videos. */
+  mode: VideoMode;
   /** The app's client: starts the run, uploads the picture, enhances the prompt. Keep it the same object. */
   runs: RunClient;
-  /** For "Save a copy" of a finished clip. */
-  videos?: Pick<VideosApi, "exportCopy">;
+  /** For "Save a copy" of a finished clip, and (Extend video) the list of clips to choose from. */
+  videos?: Pick<VideosApi, "exportCopy" | "list">;
   /** Above the form: setup notices for this app (engine, model, memory). */
   notices?: ReactNode;
   /** When set, the form is shown but making is refused with this reason. */
@@ -259,6 +264,7 @@ export function VideoWorkspace({
       shape: value.shape,
       seconds: value.seconds,
       imageKey: value.picture?.key,
+      sourceId: value.source?.id,
     });
   };
 
@@ -298,21 +304,44 @@ export function VideoWorkspace({
               {blockedReason}
             </Notice>
           ) : null}
-          <VideoForm
-            mode={mode}
-            client={runs}
-            onSubmit={(v) => (blockedReason ? null : submit(v))}
-            initial={asked}
-            hint={hint}
-          />
+          {mode === "extend" ? (
+            videos ? (
+              <ExtendForm
+                videos={videos}
+                onSubmit={({ source, prompt }) =>
+                  blockedReason
+                    ? null
+                    : submit({
+                        mode: "extend",
+                        prompt,
+                        shape: "landscape",
+                        seconds: 2,
+                        picture: null,
+                        source,
+                      })
+                }
+                initial={asked?.source ? { source: asked.source, prompt: asked.prompt } : undefined}
+                hint={hint}
+              />
+            ) : null
+          ) : (
+            <VideoForm
+              mode={mode}
+              client={runs}
+              onSubmit={(v) => (blockedReason ? null : submit(v))}
+              initial={asked}
+              hint={hint}
+            />
+          )}
         </>
       ) : (
         <>
           {asked ? (
             <section className={panel} aria-label="Your request">
               <span className={eyebrow}>
-                {asked.mode === "image" ? "Your picture, brought to life" : "Your scene"} ·{" "}
-                {clipLength(asked.seconds)}
+                {asked.mode === "extend"
+                  ? "Your video, carried on"
+                  : `${asked.mode === "image" ? "Your picture, brought to life" : "Your scene"} · ${clipLength(asked.seconds)}`}
               </span>
               <p>{asked.prompt}</p>
             </section>

@@ -32,6 +32,7 @@ POSTER_PX = 480
 STALE_AFTER = timedelta(minutes=30)
 STALE_MESSAGE = "This took too long and was stopped. Please try again."
 FFMPEG_TIMEOUT_S = 60
+JOIN_TIMEOUT_S = 180
 
 
 @dataclass(frozen=True)
@@ -571,3 +572,39 @@ async def poster_of(mp4: bytes) -> tuple[int, int, bytes]:
             )
             raise PosterError("the poster could not be made")
         return int(match[1]), int(match[2]), out.read_bytes()
+
+
+class JoinError(Exception):
+    """ffmpeg could not join two clips. The details go to the log; the message is safe to show."""
+
+
+async def join_clips(source: bytes, extension: bytes, keep: int) -> bytes:
+    """The first `keep` frames of `source` followed by every frame of `extension`, as one MP4.
+    Both are LTX clips of the same size at 24 frames a second; the join is frame exact."""
+    exe = ffmpeg_path()
+    with tempfile.TemporaryDirectory(prefix="wasifyai-video-") as tmp:
+        a, b, out = Path(tmp) / "a.mp4", Path(tmp) / "b.mp4", Path(tmp) / "joined.mp4"
+        a.write_bytes(source)
+        b.write_bytes(extension)
+        graph = (
+            f"[0:v]trim=end_frame={keep},setpts=PTS-STARTPTS,fps=24[a];"
+            "[1:v]setpts=PTS-STARTPTS,fps=24[b];[a][b]concat=n=2:v=1:a=0[v]"
+        )
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                exe, "-hide_banner", "-y", "-i", str(a), "-i", str(b), "-filter_complex", graph,
+                "-map", "[v]", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18",
+                "-movflags", "+faststart", str(out),
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+            )  # fmt: skip
+            _, err = await asyncio.wait_for(proc.communicate(), JOIN_TIMEOUT_S)
+        except (OSError, TimeoutError) as exc:
+            log.error("ffmpeg could not join two clips: %s", type(exc).__name__)
+            raise JoinError("the clips could not be joined") from exc
+        if proc.returncode != 0 or not out.exists():
+            log.error(
+                "ffmpeg failed to join two clips (exit %s): %s",
+                proc.returncode, err.decode(errors="replace")[-300:],
+            )  # fmt: skip
+            raise JoinError("the clips could not be joined")
+        return out.read_bytes()

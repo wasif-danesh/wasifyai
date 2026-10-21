@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { HttpError, type Transport } from "./transport";
-import { clipLength, createVideosApi } from "./videos";
+import { canExtend, clipLength, createVideosApi } from "./videos";
 
 type Call = { path: string; init?: RequestInit };
 
@@ -77,5 +77,10 @@ describe("videos api", () => {
 
   it("names a length", () => {
     expect(clipLength(5)).toBe("5 s");
+  });
+
+  it("offers to carry on only the clips that are short enough", () => {
+    expect([2, 3, 4].map((seconds) => canExtend({ seconds }))).toEqual([true, true, true]);
+    expect([5, 6].map((seconds) => canExtend({ seconds }))).toEqual([false, false]);
   });
 });

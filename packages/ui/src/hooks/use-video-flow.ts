@@ -2,11 +2,11 @@
 
 import {
   HttpError,
-  type Mode,
   type ParsedEvent,
   type RunClient,
   type VideoFlowAction,
   type VideoFlowState,
+  type VideoMode,
   initialVideoState,
   isVideoResting,
   videoFlowReducer,
@@ -20,14 +20,18 @@ const MAX_RECONNECTS = 6;
 /** What the flow needs from the app's client: start a run and re-attach to one. */
 export type VideoFlowApi = Pick<RunClient, "startRun" | "watchRun">;
 
-/** `imageKey` is the key of a picture already uploaded (ADR-0039); text to video has none. */
+/**
+ * `imageKey` is the key of a picture already uploaded (ADR-0039); text to video has none. `sourceId` is the
+ * clip of the person's library to carry on (Extend video), which has no picture and no shape.
+ */
 export type VideoRequest = {
-  mode: Mode;
+  mode: VideoMode;
   prompt: string;
   /** a shape name (text to video only: a clip made from a picture keeps the picture's shape) */
   shape?: string;
   seconds: number;
   imageKey?: string;
+  sourceId?: string;
 };
 
 const sleep = (ms: number, signal: AbortSignal) =>
@@ -131,13 +135,22 @@ export function useVideoFlow(api: VideoFlowApi) {
         dispatch({ type: "failed", message: "Please choose a picture.", retryable: false });
         return;
       }
+      if (request.mode === "extend" && !request.sourceId) {
+        dispatch({ type: "failed", message: "Please choose a video.", retryable: false });
+        return;
+      }
       dispatch({ type: "submitted" });
-      const input = {
-        mode: request.mode,
-        prompt: request.prompt,
-        seconds: request.seconds,
-        ...(request.mode === "text" ? { shape: request.shape } : { image_key: request.imageKey }),
-      };
+      const input =
+        request.mode === "extend"
+          ? { mode: "extend", prompt: request.prompt, source_id: request.sourceId }
+          : {
+              mode: request.mode,
+              prompt: request.prompt,
+              seconds: request.seconds,
+              ...(request.mode === "text"
+                ? { shape: request.shape }
+                : { image_key: request.imageKey }),
+            };
       void follow((signal) => startRun(VIDEO_PRODUCT, input, signal, onEvent), ctrl.signal);
     },
     [dispatch, follow, onEvent, startRun],

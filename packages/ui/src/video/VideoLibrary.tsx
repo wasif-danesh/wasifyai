@@ -241,7 +241,9 @@ export function VideoLibrary({
             )}
             <p>{open.prompt}</p>
             <p className="text-muted-foreground text-sm">
-              {open.mode === "image" ? "From a picture" : "From text"} · {clipLength(open.seconds)}
+              {{ image: "From a picture", extend: "Carried on", text: "From text" }[open.mode] ??
+                "From text"}{" "}
+              · {clipLength(open.seconds)}
               {open.width && open.height ? ` · ${open.width}×${open.height}` : ""} ·{" "}
               {when(open.created_at)}
             </p>

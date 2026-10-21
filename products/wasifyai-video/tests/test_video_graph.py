@@ -159,7 +159,7 @@ async def exists_for(rig, user, rel):
 @pytest.mark.parametrize(
     ("input", "message"),
     [
-        ({"mode": "nope", "prompt": "x"}, "text to video or image to video"),
+        ({"mode": "nope", "prompt": "x"}, "what kind of video"),
         ({"mode": "text", "prompt": "   "}, "describe the video"),
         ({"mode": "text", "prompt": "x" * 501}, "under 500"),
         ({"mode": "text", "prompt": "x", "shape": "huge"}, "video shapes"),

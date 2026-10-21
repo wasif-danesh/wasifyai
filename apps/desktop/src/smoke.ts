@@ -223,6 +223,7 @@ export async function runSmoke(): Promise<void> {
       ["/voice/audiobook", "Audiobook"],
       ["/video/create", "Make a video"],
       ["/video/animate", "Animate a picture"],
+      ["/video/extend", "Extend a video"],
       ["/video/library", "Your videos"],
     ] as const) {
       window.location.hash = path;

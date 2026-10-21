@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Create and Animate (ADR-0037): a clip from words, or from a picture and what should move. The shared
-// workspace with this window's model chip and setup notices.
+// Create, Animate and Extend (ADR-0037): a clip from words, from a picture and what should move, or one of
+// your videos carried on. The shared workspace with this window's model chip and setup notices.
+import type { VideoMode } from "@wasifyai/client";
 import { Notice, VideoWorkspace, cn } from "@wasifyai/ui";
 import { FitBadge } from "../FitBadge";
 import { client } from "../api";
@@ -10,7 +11,19 @@ import { videos } from "../videos";
 
 const LINK = "underline underline-offset-4";
 
-export function VideoPage({ mode, go }: { mode: "text" | "image"; go: (r: Route) => void }) {
+const TITLES: Record<VideoMode, [string, string]> = {
+  text: ["Make a video", "Describe a scene and get a short clip. It is made on this computer."],
+  image: [
+    "Animate a picture",
+    "Choose a picture and say what should move. It is made on this computer.",
+  ],
+  extend: [
+    "Extend a video",
+    "Choose one of your videos and carry it on for about two more seconds. It is made on this computer.",
+  ],
+};
+
+export function VideoPage({ mode, go }: { mode: VideoMode; go: (r: Route) => void }) {
   const model = useModelOf("wasifyai-video");
   const engine = useImageEngine();
 
@@ -23,14 +36,8 @@ export function VideoPage({ mode, go }: { mode: "text" | "image"; go: (r: Route)
     <div className="grid gap-6 px-6 pt-10 pb-16">
       <header className="mx-auto grid w-full max-w-3xl gap-2">
         <div>
-          <h1 className="font-semibold text-2xl">
-            {mode === "text" ? "Make a video" : "Animate a picture"}
-          </h1>
-          <p className="text-muted-foreground">
-            {mode === "text"
-              ? "Describe a scene and get a short clip. It is made on this computer."
-              : "Choose a picture and say what should move. It is made on this computer."}
-          </p>
+          <h1 className="font-semibold text-2xl">{TITLES[mode][0]}</h1>
+          <p className="text-muted-foreground">{TITLES[mode][1]}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="font-medium">{model?.title ?? "Video model"}</span>

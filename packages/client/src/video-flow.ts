@@ -3,6 +3,9 @@
 import type { FlowError, Job, Mode } from "./image-flow";
 import type { ParsedEvent } from "./sse";
 
+/** How a clip was made: from words, from a picture, or by carrying on another clip (Extend video). */
+export type VideoMode = Mode | "extend";
+
 export type VideoPhase =
   | "idle"
   | "checking" // request sent, guardrail running
@@ -19,7 +22,7 @@ export type VideoResult = {
   height: number;
   seconds: number;
   prompt: string;
-  mode: Mode;
+  mode: VideoMode;
 };
 
 export type VideoFlowState = {
@@ -78,7 +81,9 @@ function applyEvent(state: VideoFlowState, name: string, d: Data): VideoFlowStat
       }
       return state;
     case "job_progress":
-      return d.capability === "video.generate" || d.capability === "video.animate"
+      return d.capability === "video.generate" ||
+        d.capability === "video.animate" ||
+        d.capability === "video.extend"
         ? { ...state, job: jobUpdate(state.job, d) }
         : state;
     case "done": {
@@ -106,7 +111,7 @@ function applyEvent(state: VideoFlowState, name: string, d: Data): VideoFlowStat
           height: num(out.height) ?? 0,
           seconds: num(out.seconds) ?? 0,
           prompt: str(out.prompt),
-          mode: out.mode === "image" ? "image" : "text",
+          mode: out.mode === "image" || out.mode === "extend" ? out.mode : "text",
         },
       };
     }

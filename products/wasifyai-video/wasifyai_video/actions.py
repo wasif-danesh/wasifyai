@@ -1,5 +1,6 @@
 """What the video product can do, for the action catalogue (ADR-0068): make a clip from words,
-make a picture of the library move, and the library's clips as a kind of creation."""
+make a picture of the library move, carry on a clip of the library, and the library's clips as a
+kind of creation."""
 
 import asyncio
 from pathlib import Path
@@ -21,7 +22,7 @@ from wasifyai_platform_sdk.actions.helpers import need_deps, stage_picture
 from wasifyai_video.builder.actions import actions as builder_actions
 from wasifyai_video.builder.actions import library_kinds as builder_library_kinds
 from wasifyai_video.routes import extension_of, file_name, save_copy
-from wasifyai_video.schemas import MAX_PROMPT_CHARS
+from wasifyai_video.schemas import MAX_EXTENDABLE_FRAMES, MAX_PROMPT_CHARS
 from wasifyai_video.videos import VideoRecord, video_store
 
 PRODUCT_ID = "wasifyai-video"
@@ -47,6 +48,17 @@ class AnimateIn(Strict):
         min_length=1, max_length=MAX_PROMPT_CHARS, description="What should move, in English."
     )
     seconds: Literal[2, 5] = Field(2, description="How long the clip is.")
+
+
+class ExtendIn(Strict):
+    video_id: str = Field(min_length=1, max_length=64, description="The video to carry on.")
+    prompt: str = Field(
+        min_length=1, max_length=MAX_PROMPT_CHARS,
+        description=(
+            "What should keep happening, in English. The motion in the last second of the video "
+            "carries on whatever this says: it describes, it does not change the action."
+        ),
+    )  # fmt: skip
 
 
 class VideoOut(BaseModel):
@@ -105,6 +117,31 @@ def _animate_result(outputs: dict, p: AnimateIn) -> Outcome | None:
     return _made(outputs, p.prompt)
 
 
+async def _source(ctx: ActionContext, video_id: str) -> VideoRecord:
+    found = await video_store(need_deps(ctx).engine).get(
+        ctx.actor.tenant_id, ctx.actor.user_id, video_id
+    )
+    if found is None or found.status != "done" or not found.video_key:
+        raise ActionRefused("not_found", "That video is not in the library.")
+    if found.frames > MAX_EXTENDABLE_FRAMES:
+        raise ActionRefused(
+            "clip_too_long", "That video is as long as it can get. Choose a shorter one."
+        )
+    return found
+
+
+async def _extend_check(p: ExtendIn, ctx: ActionContext) -> None:
+    await _source(ctx, p.video_id)
+
+
+def _extend_input(p: ExtendIn, ctx: ActionContext) -> dict:
+    return {"mode": "extend", "prompt": p.prompt, "source_id": p.video_id}
+
+
+def _extend_result(outputs: dict, p: ExtendIn) -> Outcome | None:
+    return _made(outputs, p.prompt)
+
+
 def actions() -> list[Action]:
     return [
         Action(
@@ -141,6 +178,26 @@ def actions() -> list[Action]:
             bind=RunBinding(PRODUCT_ID, "video", _animate_input, _animate_result,
                             check=_animate_check),
             ui="video.animate",
+        ),
+        Action(
+            id="video.extend", title="Extend a video",
+            summary="Carry on a video of the library for about two more seconds.",
+            description=(
+                "Make a video of the library longer: its last second starts a new part, which is "
+                "joined on, so the motion carries on (about 1.7 seconds more, saved as a new "
+                "video; the original stays). A video can be carried on until it is about 4 "
+                "seconds long, and its picture gets a little softer each time. What the prompt "
+                "says steers only weakly: describe what keeps happening, not a change of "
+                "action. Takes minutes; returns a job handle when it is not done within the wait."
+            ),
+            input=ExtendIn, output=VideoOut,
+            examples=({"video_id": "0b7c1f9e-0000-4000-8000-000000000000",
+                       "prompt": "the fox keeps walking through the snow"},),
+            effect="make", flags=("costly",), requires=(need_product(PRODUCT_ID),), long=True,
+            product=PRODUCT_ID,
+            bind=RunBinding(PRODUCT_ID, "video", _extend_input, _extend_result,
+                            check=_extend_check),
+            ui="video.extend",
         ),
         *builder_actions(),  # Video Builder (ADR-0077): videos written as HTML
     ]  # fmt: skip

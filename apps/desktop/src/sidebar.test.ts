@@ -10,7 +10,7 @@ const at = (route: Route, notebook: string | null = null, conversationId: string
 describe("the window's side menu", () => {
   it("opens a screen for everything that is built and marks the rest as soon", () => {
     const soon = ids.filter((id) => at("home")(id) === undefined);
-    expect(soon).toEqual(["video.extend"]);
+    expect(soon).toEqual([]); // every item of the groups opens a screen; only Train is still to come
     expect(at("home")("train")).toBeUndefined();
   });
 

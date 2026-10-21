@@ -314,6 +314,7 @@ describe("starting from a picture", () => {
     render(<Model3d api={a} />);
     await user.upload(await screen.findByLabelText("Choose a picture"), file());
     expect(await screen.findByText("Cutting out the object…")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Checking the picture" })).toBeInTheDocument();
     expect(
       await screen.findByText("The cut-out did not work.", undefined, { timeout: 3000 }),
     ).toBeInTheDocument();

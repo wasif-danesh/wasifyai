@@ -175,7 +175,7 @@ export function SideMenu({
         ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="mt-2 grid gap-0.5">
           {entry(CHAT_ITEM, false)}
 
@@ -231,9 +231,9 @@ export function SideMenu({
                 {recents.empty ?? "No chats yet"}
               </div>
             ) : (
-              <ul className="grid gap-0.5" aria-label="Recent chats">
+              <ul className="grid grid-cols-[minmax(0,1fr)] gap-0.5" aria-label="Recent chats">
                 {recents.items.map((c) => (
-                  <li key={c.id}>
+                  <li key={c.id} className="min-w-0">
                     <button
                       type="button"
                       title={c.title}

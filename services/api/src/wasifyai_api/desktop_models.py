@@ -344,6 +344,12 @@ class ModelsService:
         )
         self._tell_sidecar()
 
+    def attach(self, sidecar: Any, slot: Any) -> None:
+        """The worker is built after `load`, so the folders a person chose earlier reach the image
+        engine here; without this it would look only in the app's own folder."""
+        self.sidecar, self.slot = sidecar, slot
+        self._tell_sidecar()
+
     def _tell_sidecar(self) -> None:
         if self.sidecar is not None:
             self.sidecar.set_model_dirs(self.models_dir, self.extra_dirs)

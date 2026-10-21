@@ -238,6 +238,31 @@ async def test_the_users_picture_is_read_from_their_prefix_and_uploaded_to_temp(
     assert graph["5"]["inputs"]["image"] == "wasifyai-uploaded.png [temp]"
 
 
+async def test_a_clip_to_carry_on_is_uploaded_as_an_mp4_the_loader_can_read(comfy):
+    base, fake = comfy
+    rig = Rig(ComfyRunner(ComfyClient(base), 10))
+    clip = b"\x00\x00\x00 ftypisom" + b"the-users-clip"
+    await rig.storage.put(object_key("t1", "p1", "u1", "uploads/extend-a.mp4"), clip)
+    graph = {
+        "90": {"class_type": "LoadVideo", "inputs": {"file": "wasifyai-JOB1-video.mp4"}},
+        "10": {"class_type": "SaveImage", "inputs": {}},
+    }
+    job_ = job(graph).model_copy(
+        update={
+            "job_id": "JOB1",
+            "capability": "video.extend",
+            "inputs": {"prompt": "x", "video_key": "uploads/extend-a.mp4"},
+        }
+    )
+    result = await rig.p.process(job_)
+    assert result.status == "completed"
+    content_type, body = fake.uploads[0]
+    assert clip in body and b'filename="wasifyai-JOB1-video.mp4"' in body
+    assert b"Content-Type: video/mp4" in body
+    # the workflow loads it by whatever reference the engine gave (the fake always says .png)
+    assert fake.submitted[0]["prompt"]["90"]["inputs"]["file"] == "wasifyai-uploaded.png [temp]"
+
+
 async def test_another_users_picture_is_never_read(comfy):
     base, fake = comfy
     rig = Rig(ComfyRunner(ComfyClient(base), 10))

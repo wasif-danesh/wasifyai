@@ -1,0 +1,22 @@
+workflow: ltx-video-2b-extend.json
+licence: "LTX-Video 2B v0.9.5: Open RAIL-M (March 2025), commercial use allowed with use restrictions that must reach users (ADR-0037). Later LTX weights use a different licence; do not swap them in without a new check"
+notes: >
+  Extend video (docs/spikes/video-extend-vx0.md, variant B1). The last 9 frames of the person's clip
+  are the start of a new 49 frame clip: `LoadVideo`, `GetVideoComponents` and `ImageFromBatch` pick
+  them, and `LTXVImgToVideo` takes the 9 frames as its image (it encodes a batch and fills the first
+  latent frames, held at full strength), so the motion carries on. The clip's own size is used, so
+  there is no size input. `from_frame` is the index of the first of the 9 frames: the clip's frame
+  count minus 9. The new clip repeats those 9 frames first; the graph keeps the original up to
+  `from_frame` and appends the whole new clip. A changed prompt steers the next part only weakly.
+models:
+  - checkpoints/ltx-video-2b-v0.9.5.safetensors
+  - text_encoders/t5xxl_fp16.safetensors
+inputs:
+  prompt: { node: "6", field: text }
+  seed: { node: "72", field: noise_seed }
+  steps: { node: "71", field: steps }
+  length: { node: "77", field: length }
+  video: { node: "90", field: file }
+  from_frame: { node: "92", field: batch_index }
+outputs:
+  video: { node: "81", type: video }

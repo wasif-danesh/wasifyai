@@ -34,6 +34,7 @@ describe("router", () => {
       "audiobook",
       "video",
       "animate",
+      "extend",
       "videos",
     ] as const) {
       expect(parseHash(`#${routePath(r)}`)).toBe(r);

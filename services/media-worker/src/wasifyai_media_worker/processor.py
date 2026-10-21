@@ -250,6 +250,7 @@ class JobProcessor:
             ("image", "image_key", "picture"),
             ("image2", "image2_key", "picture"),
             ("mask", "mask_key", "mask"),
+            ("video", "video_key", "clip"),
             ("audio", "audio_key", "recording"),
         ):
             key = job.inputs.get(field)

@@ -7,14 +7,18 @@
         v
       refuse
 
-Two modes: `text` (a description, a shape and a length) and `image` (an uploaded picture, a
-description of the motion and a length). Graph code names capabilities (`text.moderate`,
-`text.moderate_image`, `video.generate`, `video.animate`), never models or workflow node IDs.
+Three modes: `text` (a description, a shape and a length), `image` (an uploaded picture, a
+description of the motion and a length) and `extend` (one of the person's clips and what should
+keep happening: the last frames of the clip start a new clip and the two are joined, see
+docs/spikes/video-extend-vx0.md). Graph code names capabilities (`text.moderate`,
+`text.moderate_image`, `video.generate`, `video.animate`, `video.extend`), never models or workflow
+node IDs.
 
 The clip's row is created when the job starts, with status "working", so the site can show "being
 made" on any page while the user explores it. The finished clip, a failure or a refusal ends it.
 The uploaded picture is deleted as soon as it is no longer needed: when the request is refused,
-when the job fails, and when the clip is saved."""
+when the job fails, and when the clip is saved. An extension works on a temporary copy of the source
+clip in the user's uploads (the worker reads only from there); that is deleted the same way."""
 
 import logging
 import re
@@ -41,19 +45,24 @@ from wasifyai_video.index import index_text
 from wasifyai_video.schemas import (
     DEFAULT_SECONDS,
     DEFAULT_SHAPE,
+    EXTEND_FRAMES,
     FPS,
     LENGTHS,
+    MAX_EXTENDABLE_FRAMES,
     MAX_PROMPT_CHARS,
+    OVERLAP_FRAMES,
     SHAPES,
 )
 from wasifyai_video.videos import (
     VIDEO_CREATED,
     InMemoryVideoStore,
+    JoinError,
     PosterError,
     Quota,
     UsageQuota,
     VideoRecord,
     VideoStore,
+    join_clips,
     poster_of,
     video_store,
 )
@@ -63,6 +72,11 @@ log = logging.getLogger(__name__)
 Status = Literal["working", "done", "refused", "failed"]
 BUSY = "You already have a video being made. It will be in My creations when it's ready."
 FAILED = "Your video couldn't be made. Please try again."
+NOT_EXTENDABLE = "Please choose one of your finished videos to carry on."
+TOO_LONG = (
+    "This video is as long as it can get. Choose a shorter one, or make a new video. "
+    "Each time a video is carried on its picture gets a little softer."
+)
 
 
 class VideoState(TypedDict, total=False):
@@ -72,6 +86,11 @@ class VideoState(TypedDict, total=False):
     shape: str
     seconds: int
     image_key: str
+    source_id: str  # extend: the clip to carry on
+    # extend: what the check found about it, and the temporary copy the worker reads
+    source_video_key: str
+    keep_frames: int
+    temp_key: str
     # job and result
     video_id: str
     job_id: str
@@ -142,11 +161,22 @@ def build_video_graph(
             pass
         await uploads.consume(record)
 
+    async def discard_temp(key: str | None) -> None:
+        """Delete the temporary copy of a clip that is being carried on. Safe when it is gone."""
+        if not key:
+            return
+        assert caps.storage is not None
+        try:
+            await caps.storage.delete(key)
+        except FileNotFoundError:
+            pass
+
     async def fail_clip(state: VideoState, message: str = FAILED) -> None:
         """The clip will not be made: tell the row, and do not keep the user's picture."""
         if video_id := state.get("video_id"):
             await videos.fail(require_context().tenant_id, video_id, message)
         await discard_upload(state.get("image_key"))
+        await discard_temp(state.get("temp_key"))
 
     # ---- guardrail ----------------------------------------------------------------------
 
@@ -161,11 +191,15 @@ def build_video_graph(
             }
         )
         mode = state.get("mode")
-        if mode not in ("text", "image"):
-            return refuse_with("invalid_request", "Please choose text to video or image to video.")
+        if mode not in ("text", "image", "extend"):
+            return refuse_with("invalid_request", "Please choose what kind of video to make.")
         prompt = _clean(state.get("prompt"), MAX_PROMPT_CHARS + 1)
         if not prompt:
-            what = "describe the video" if mode == "text" else "say what should move"
+            what = {
+                "text": "describe the video",
+                "image": "say what should move",
+                "extend": "say what should keep happening",
+            }[mode]
             return refuse_with("invalid_request", f"Please {what} you would like.")
         if len(prompt) > MAX_PROMPT_CHARS:
             return refuse_with(
@@ -175,7 +209,7 @@ def build_video_graph(
         if mode == "text" and (state.get("shape") or DEFAULT_SHAPE) not in SHAPES:
             return refuse_with("invalid_request", "Please choose one of the video shapes.")
         seconds = state.get("seconds", DEFAULT_SECONDS)
-        if seconds not in LENGTHS:
+        if mode != "extend" and seconds not in LENGTHS:
             return refuse_with("invalid_request", "Please choose a length of 2 or 5 seconds.")
         if mode == "image" and (not key or await find_upload(key) is None):
             return refuse_with("invalid_request", "Please upload your picture again.")
@@ -187,6 +221,20 @@ def build_video_graph(
             "image_key": key if mode == "image" else "",
             "status": "working",
         }
+        if mode == "extend":
+            ctx = require_context()
+            source = await videos.get(ctx.tenant_id, ctx.user_id, str(state.get("source_id") or ""))
+            if source is None or source.status != "done" or not source.video_key:
+                return refuse_with("invalid_request", NOT_EXTENDABLE)
+            if source.mode not in ("text", "image", "extend") or source.frames < OVERLAP_FRAMES:
+                return refuse_with("invalid_request", NOT_EXTENDABLE)
+            if source.frames > MAX_EXTENDABLE_FRAMES:
+                return refuse_with("clip_too_long", TOO_LONG)
+            keep = source.frames - OVERLAP_FRAMES
+            out["source_id"] = source.id
+            out["source_video_key"] = source.video_key
+            out["keep_frames"] = keep
+            out["seconds"] = round((keep + EXTEND_FRAMES) / FPS)
 
         async def refused(code: str, message: str) -> VideoState:
             await discard_upload(key if mode == "image" else None)
@@ -199,7 +247,11 @@ def build_video_graph(
 
         if not await caps.safeguards_on():  # ADR-0047: no moderation while they are off
             return out
-        kind = "video description" if mode == "text" else "animation description"
+        kind = {
+            "text": "video description",
+            "image": "animation description",
+            "extend": "description of how a video carries on",
+        }[mode]
         verdict = await guardrail.judge_text(caps, kind, prompt)
         if not verdict.allowed:
             return await refused(verdict.category, guardrail.refusal_message(verdict.category))
@@ -228,6 +280,8 @@ def build_video_graph(
             raise RunError("busy", BUSY)
         ctx = require_context()
         seconds, edit = state["seconds"], state["mode"] == "image"
+        extend = state["mode"] == "extend"
+        frames = state["keep_frames"] + EXTEND_FRAMES if extend else LENGTHS[seconds]
         video_id = str(uuid4())
         await videos.add(
             VideoRecord(
@@ -241,7 +295,7 @@ def build_video_graph(
                 status="working",
                 prompt=state["prompt"],
                 seconds=seconds,
-                frames=LENGTHS[seconds],
+                frames=frames,
                 fps=FPS,
             )
         )
@@ -255,8 +309,23 @@ def build_video_graph(
             }
         )
         seed = secrets.randbelow(2**31)
+        temp_key = ""
         try:
-            if edit:
+            if extend:
+                # the worker reads a job's inputs only from the user's uploads: a copy of the clip
+                temp_key = f"uploads/extend-{uuid4()}.mp4"
+                assert caps.storage is not None
+                await caps.storage.put(
+                    temp_key, await caps.storage.get(state["source_video_key"]), "video/mp4"
+                )
+                handle = await caps.video.extend(
+                    prompt=state["prompt"],
+                    video_key=temp_key,
+                    from_frame=state["keep_frames"],
+                    length=EXTEND_FRAMES,
+                    seed=seed,
+                )
+            elif edit:
                 handle = await caps.video.animate(
                     prompt=state["prompt"],
                     image_key=state["image_key"],
@@ -273,9 +342,15 @@ def build_video_graph(
                     seed=seed,
                 )
         except Exception:
-            await fail_clip({"video_id": video_id, "image_key": state.get("image_key", "")})
+            await fail_clip(
+                {
+                    "video_id": video_id,
+                    "image_key": state.get("image_key", ""),
+                    "temp_key": temp_key,
+                }
+            )
             raise
-        return {"video_id": video_id, "job_id": handle.job_id}
+        return {"video_id": video_id, "job_id": handle.job_id, "temp_key": temp_key}
 
     async def await_job_node(state: VideoState) -> VideoState:
         try:
@@ -295,15 +370,27 @@ def build_video_graph(
         try:
             # Final layout {tenant}/wasifyai-video/{user}/{video_id}/video.mp4; the worker's jobs/
             # paths are temporary.
-            video_key = await caps.storage.move(state["result_key"], f"{video_id}/video.mp4")
+            if state["mode"] == "extend":
+                # the old clip up to the frames the new one repeats, then the new clip, as one file
+                joined = await join_clips(
+                    await caps.storage.get(state["source_video_key"]),
+                    await caps.storage.get(state["result_key"]),
+                    state["keep_frames"],
+                )
+                video_key = f"{video_id}/video.mp4"
+                await caps.storage.put(video_key, joined, "video/mp4")
+                await caps.storage.delete(state["result_key"])
+            else:
+                video_key = await caps.storage.move(state["result_key"], f"{video_id}/video.mp4")
             width, height, poster = await poster_of(await caps.storage.get(video_key))
             poster_key = f"{video_id}/poster.jpg"
             await caps.storage.put(poster_key, poster, "image/jpeg")
             await videos.finish(ctx.tenant_id, video_id, width, height, video_key, poster_key)
-        except PosterError:
+        except (PosterError, JoinError):
             await fail_clip(state)
             raise RunError("video_failed", FAILED, retryable=True) from None
         await discard_upload(state.get("image_key"))  # the user's original is not kept
+        await discard_temp(state.get("temp_key"))
         await caps.index_creation("video", video_id, index_text(state["prompt"]))  # ADR-0041
         await caps.record_usage(
             VIDEO_CREATED,

@@ -82,7 +82,7 @@ class Rig:
         finally:
             reset_context(token)
 
-    async def keep(self, status="done", prompt="waves on a beach") -> None:
+    async def keep(self, status="done", prompt="waves on a beach", frames=49) -> None:
         async with self.as_user():
             await self.state.storage.put(f"{VIDEO_ID}/video.mp4", b"mp4-bytes", "video/mp4")
             await self.state.storage.put(f"{VIDEO_ID}/poster.jpg", b"jpeg", "image/jpeg")
@@ -90,7 +90,7 @@ class Rig:
             VideoRecord(
                 id=VIDEO_ID, tenant_id="t1", product_id="wasifyai-video", user_id="u1",
                 thread_id=None, run_id=None, mode="text", status=status, prompt=prompt,
-                seconds=2, frames=49, fps=24, width=768, height=512,
+                seconds=2, frames=frames, fps=24, width=768, height=512,
                 video_key=f"{VIDEO_ID}/video.mp4", poster_key=f"{VIDEO_ID}/poster.jpg",
             )
         )  # fmt: skip
@@ -165,6 +165,32 @@ async def test_a_picture_of_the_library_is_set_moving(rig):
     assert await rig.state.uploads.find("t1", "wasifyai-video", "u1", graph_input["image_key"])
     ghost = await rig.go("video.animate", {"image_id": "ghost", "prompt": "x"})
     assert (ghost.status, ghost.code) == ("refused", "not_found")
+
+
+async def test_a_video_of_the_library_is_carried_on(rig):
+    await rig.keep()
+    rig.host.script("wasifyai-video", finished(video_id="vid-3", seconds=4))
+    r = await rig.go("video.extend", {"video_id": VIDEO_ID, "prompt": "the waves keep rolling"})
+    assert r.ok and r.output["seconds"] == 4
+    assert rig.host.runs == [
+        ("wasifyai-video",
+         {"mode": "extend", "prompt": "the waves keep rolling", "source_id": VIDEO_ID})
+    ]  # fmt: skip
+    action = rig.ex.registry.get("video.extend")
+    assert action and action.long and "costly" in action.flags and action.ui == "video.extend"
+
+
+async def test_only_a_finished_video_that_is_not_too_long_can_be_carried_on(rig):
+    ghost = await rig.go("video.extend", {"video_id": "ghost", "prompt": "x"})
+    assert (ghost.status, ghost.code) == ("refused", "not_found")
+    await rig.keep(status="working")
+    working = await rig.go("video.extend", {"video_id": VIDEO_ID, "prompt": "x"})
+    assert working.code == "not_found"
+    await rig.store.delete("t1", "u1", VIDEO_ID)
+    await rig.keep(frames=129)
+    long = await rig.go("video.extend", {"video_id": VIDEO_ID, "prompt": "x"})
+    assert (long.status, long.code) == ("refused", "clip_too_long")
+    assert rig.host.runs == []
 
 
 async def test_clips_are_listed_exported_and_deleted_but_not_while_being_made(rig, tmp_path):

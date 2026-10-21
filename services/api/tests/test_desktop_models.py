@@ -353,6 +353,29 @@ def test_a_download_needs_the_exact_list_the_person_confirmed(tmp_path, origin):
         assert c.delete("/desktop/models/demo").json() == {"removed": 3}
 
 
+def test_saved_folders_reach_an_engine_built_after_they_were_loaded(tmp_path, origin):
+    store = InMemorySettingsStore()
+    asyncio.run(
+        store.put(
+            "desktop.model_folders",
+            {"models_dir": str(tmp_path / "models"), "extra_dirs": [str(tmp_path / "shared")]},
+            "window",
+        )
+    )
+    svc = ModelsService([entry(origin)], tmp_path / "models", (), store)
+    asyncio.run(svc.load())  # the worker does not exist yet
+
+    class Sidecar:
+        dirs = None
+
+        def set_model_dirs(self, models_dir, extra):
+            self.dirs = (models_dir, extra)
+
+    sidecar = Sidecar()
+    svc.attach(sidecar, object())
+    assert sidecar.dirs == (tmp_path / "models", (tmp_path / "shared",))
+
+
 def test_the_folders_can_be_changed_and_are_remembered(tmp_path, origin):
     store = InMemorySettingsStore()
     svc = ModelsService([entry(origin)], tmp_path / "models", (), store)

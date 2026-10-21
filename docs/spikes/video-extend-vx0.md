@@ -65,3 +65,11 @@ not follow a change of action well. So the screen must not promise that the prom
 Memory (the guide adds one 9-frame VAE encode, expected small; peak for a plain clip was about 13 GB); a 5 s extension (only 2 s clips
 were run); clips from other sources (a phone video would be a different size and rate); the 8-bit text encoder; whether the two chained
 rounds look better with a different seed; audio (the clips have none).
+
+## Update 2026-10-21 (owner): lengths and no ceiling
+
+The product no longer offers 2 second clips or Extend with a 49 frame part (ADR-0037, amendment). Clips are 5 or 8 seconds and
+Extend adds a part of 121 or 193 frames (9 of them repeated), on a clip of any length; the engine is given only the last
+24 frames of a long clip. Measured in the app on the 64 GB Mac (half precision, 768x512, 30 steps): an 8 second clip
+(193 frames) took **471 s** to sample. The ceiling of 100 frames described above was a guard I chose, not a limit of the model.
+

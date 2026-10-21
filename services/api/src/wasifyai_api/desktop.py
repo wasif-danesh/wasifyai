@@ -262,6 +262,9 @@ def _build_worker(d: DesktopBackends):
         metrics_port=0,
         ollama_base_url="",
         unload_llm=False,
+        # on this computer a long clip may take most of an hour; the person can stop it (the web
+        # keeps the shorter limit of a shared GPU)
+        job_timeout_s=3600,
     )
     http = httpx.AsyncClient(timeout=30)
     sidecar = ComfySidecar(SidecarConfig(s.desktop_dir, s.models_dir, s.extra_model_dirs))

@@ -4,9 +4,9 @@ capabilities:
   text.moderate_image: { provider: litellm, model: multimodal, inputs: [text, image] }
   text.enhance:        { provider: litellm, model: prompt-enhancer }
   text.describe_image: { provider: litellm, model: multimodal, inputs: [text, image] }
-  video.generate:      { provider: comfyui, workflow: ltx-video-2b-t2v, defaults: { width: 768, height: 512, length: 49, steps: 30 } }
-  video.animate:       { provider: comfyui, workflow: ltx-video-2b-i2v, defaults: { length: 49, steps: 30 } }
-  video.extend:        { provider: comfyui, workflow: ltx-video-2b-extend, defaults: { length: 49, steps: 30 } }
+  video.generate:      { provider: comfyui, workflow: ltx-video-2b-t2v, defaults: { width: 768, height: 512, length: 121, steps: 30 } }
+  video.animate:       { provider: comfyui, workflow: ltx-video-2b-i2v, defaults: { length: 121, steps: 30 } }
+  video.extend:        { provider: comfyui, workflow: ltx-video-2b-extend, defaults: { length: 121, steps: 30 } }
 quotas:
   videos_per_user_per_day: 5
 uploads:

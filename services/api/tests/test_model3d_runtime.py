@@ -475,6 +475,8 @@ async def test_a_run_that_takes_too_long_is_stopped(service, tmp_path, monkeypat
 async def test_without_the_component_a_run_says_to_set_it_up(tmp_path, monkeypatch):
     monkeypatch.delenv("WASIFYAI_MODEL3D_HOME", raising=False)
     svc = dm.Model3dService(tmp_path)
+    # the pins list the computers 3D runs on (the Mac): elsewhere the answer is another sentence
+    monkeypatch.setattr(type(svc.installer), "supported", property(lambda self: True))
     assert svc.ready() is False and "not set up" in (svc.problem() or "")
     res = await svc.generate(tmp_path / "c.png", tmp_path / "m.glb")
     assert not res.ok and res.reason == "missing"

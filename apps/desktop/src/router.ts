@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // A router small enough to need no library: the window has a handful of screens, addressed by the URL
 // hash (which a webview keeps across reloads and needs no server for).
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type Route =
   | "home"
@@ -169,3 +169,43 @@ export function openNotebook(id: string | null): void {
 export function newNotebook(): void {
   window.location.hash = notebookPath(NEW_NOTEBOOK);
 }
+
+/** The screens visited so far, and where the person is among them (for the back and forward arrows). */
+export type Visits = { list: string[]; at: number };
+
+/** The visits after the address becomes `now`: a step back or forward when it is the neighbour, else a new visit. */
+export function visit(v: Visits, now: string): Visits {
+  if (v.list[v.at - 1] === now) return { list: v.list, at: v.at - 1 };
+  if (v.list[v.at + 1] === now) return { list: v.list, at: v.at + 1 };
+  if (v.list[v.at] === now) return v;
+  return { list: [...v.list.slice(0, v.at + 1), now], at: v.at + 1 };
+}
+
+/**
+ * Whether the window can go back or forward through the screens the person has been to, for the arrows in its top
+ * bar (the window has no browser buttons). The Navigation API says when the web view has it; otherwise the
+ * visits are counted here.
+ */
+export function useHistoryButtons(): { back: boolean; forward: boolean } {
+  const visits = useRef<Visits>({ list: [window.location.hash || "#/"], at: 0 });
+  const [state, setState] = useState({ back: false, forward: false });
+  useEffect(() => {
+    const nav = (window as unknown as { navigation?: EventTarget & NavigationLike }).navigation;
+    if (nav && typeof nav.canGoBack === "boolean") {
+      const read = () => setState({ back: nav.canGoBack, forward: nav.canGoForward });
+      read();
+      nav.addEventListener("currententrychange", read);
+      return () => nav.removeEventListener("currententrychange", read);
+    }
+    const onChange = () => {
+      visits.current = visit(visits.current, window.location.hash || "#/");
+      const { list, at } = visits.current;
+      setState({ back: at > 0, forward: at < list.length - 1 });
+    };
+    window.addEventListener("hashchange", onChange);
+    return () => window.removeEventListener("hashchange", onChange);
+  }, []);
+  return state;
+}
+
+type NavigationLike = { canGoBack: boolean; canGoForward: boolean };

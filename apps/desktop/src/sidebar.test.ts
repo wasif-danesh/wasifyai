@@ -1,6 +1,6 @@
 import { MENU_GROUPS } from "@wasifyai/ui";
 import { describe, expect, it, vi } from "vitest";
-import { ROUTES, resolveItem } from "./menu";
+import { ROUTES, resolveItem, routeTitle } from "./menu";
 import { type Route, routePath } from "./router";
 
 const ids = MENU_GROUPS.flatMap((g) => g.items.map((i) => i.id));
@@ -69,5 +69,21 @@ describe("the window's side menu", () => {
     if (!v || "hidden" in v) throw new Error("no view");
     v.onSelect?.();
     expect(go).toHaveBeenCalledWith("animate");
+  });
+});
+
+describe("the title the top bar shows when a screen gives none", () => {
+  it("is the menu's own words for every screen that has a menu item", () => {
+    expect(routeTitle("create")).toBe("Images: Create");
+    expect(routeTitle("extend")).toBe("Video: Extend video");
+    expect(routeTitle("speak")).toBe("Voice: Text to speech");
+    expect(routeTitle("models")).toBe("Models");
+    expect(routeTitle("settings")).toBe("Settings");
+  });
+
+  it("names every screen: none falls back to the app's name", () => {
+    for (const route of new Set(Object.values(ROUTES))) {
+      expect(routeTitle(route)).not.toBe("Wasify AI");
+    }
   });
 });

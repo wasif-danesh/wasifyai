@@ -45,10 +45,8 @@ from wasifyai_video.index import index_text
 from wasifyai_video.schemas import (
     DEFAULT_SECONDS,
     DEFAULT_SHAPE,
-    EXTEND_FRAMES,
     FPS,
     LENGTHS,
-    MAX_EXTENDABLE_FRAMES,
     MAX_PROMPT_CHARS,
     OVERLAP_FRAMES,
     SHAPES,
@@ -77,10 +75,6 @@ Status = Literal["working", "done", "refused", "failed"]
 BUSY = "You already have a video being made. It will be in My creations when it's ready."
 FAILED = "Your video couldn't be made. Please try again."
 NOT_EXTENDABLE = "Please choose one of your finished videos to carry on."
-TOO_LONG = (
-    "This video is as long as it can get. Choose a shorter one, or make a new video. "
-    "Each time a video is carried on its picture gets a little softer."
-)
 
 
 class VideoState(TypedDict, total=False):
@@ -96,6 +90,7 @@ class VideoState(TypedDict, total=False):
     source_mode: str
     source_frames: int
     keep_frames: int
+    new_frames: int
     temp_key: str
     # job and result
     video_id: str
@@ -215,8 +210,9 @@ def build_video_graph(
         if mode == "text" and (state.get("shape") or DEFAULT_SHAPE) not in SHAPES:
             return refuse_with("invalid_request", "Please choose one of the video shapes.")
         seconds = state.get("seconds", DEFAULT_SECONDS)
-        if mode != "extend" and seconds not in LENGTHS:
-            return refuse_with("invalid_request", "Please choose a length of 2 or 5 seconds.")
+        if seconds not in LENGTHS:
+            lengths = " or ".join(str(n) for n in LENGTHS)
+            return refuse_with("invalid_request", f"Please choose a length of {lengths} seconds.")
         if mode == "image" and (not key or await find_upload(key) is None):
             return refuse_with("invalid_request", "Please upload your picture again.")
         out: VideoState = {
@@ -237,16 +233,14 @@ def build_video_graph(
                 or source.frames < OVERLAP_FRAMES
             ):
                 return refuse_with("invalid_request", NOT_EXTENDABLE)
-            # a clip the person added has not been through the model: its length is theirs to choose
-            if source.mode != "import" and source.frames > MAX_EXTENDABLE_FRAMES:
-                return refuse_with("clip_too_long", TOO_LONG)
             keep = source.frames - OVERLAP_FRAMES
             out["source_id"] = source.id
             out["source_video_key"] = source.video_key
             out["source_mode"] = source.mode
             out["source_frames"] = source.frames
             out["keep_frames"] = keep
-            out["seconds"] = round((keep + EXTEND_FRAMES) / FPS)
+            out["new_frames"] = LENGTHS[seconds]  # the new part, which repeats the nine first
+            out["seconds"] = round((keep + LENGTHS[seconds]) / FPS)  # the whole clip
 
         async def refused(code: str, message: str) -> VideoState:
             await discard_upload(key if mode == "image" else None)
@@ -304,7 +298,7 @@ def build_video_graph(
         ctx = require_context()
         seconds, edit = state["seconds"], state["mode"] == "image"
         extend = state["mode"] == "extend"
-        frames = state["keep_frames"] + EXTEND_FRAMES if extend else LENGTHS[seconds]
+        frames = state["keep_frames"] + state["new_frames"] if extend else LENGTHS[seconds]
         video_id = str(uuid4())
         await videos.add(
             VideoRecord(
@@ -349,7 +343,7 @@ def build_video_graph(
                     prompt=state["prompt"],
                     video_key=temp_key,
                     from_frame=from_frame,
-                    length=EXTEND_FRAMES,
+                    length=state["new_frames"],
                     seed=seed,
                 )
             elif edit:

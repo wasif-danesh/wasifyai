@@ -8,6 +8,7 @@ import {
   parseHash,
   parseNotebook,
   routePath,
+  visit,
 } from "./router";
 
 describe("router", () => {
@@ -68,5 +69,25 @@ describe("router", () => {
     expect(parseHash("#/notebooks/9f3c")).toBe("notebook");
     expect(parseHash("#/notebooks")).toBe("notebooks");
     expect(notebookPath(null)).toBe("/notebooks");
+  });
+});
+
+describe("the back and forward arrows", () => {
+  const walk = (...hashes: string[]) =>
+    hashes.reduce((v, h) => visit(v, h), { list: ["#/"], at: 0 });
+
+  it("count the screens visited, and step back and forward through them", () => {
+    let v = walk("#/images/create", "#/video/create");
+    expect(v).toEqual({ list: ["#/", "#/images/create", "#/video/create"], at: 2 });
+    v = visit(v, "#/images/create"); // back
+    expect(v.at).toBe(1);
+    v = visit(v, "#/video/create"); // forward
+    expect(v.at).toBe(2);
+    v = visit(visit(v, "#/images/create"), "#/models"); // somewhere new drops what was ahead
+    expect(v).toEqual({ list: ["#/", "#/images/create", "#/models"], at: 2 });
+  });
+
+  it("do not count the same screen twice", () => {
+    expect(walk("#/models", "#/models").list).toEqual(["#/", "#/models"]);
   });
 });

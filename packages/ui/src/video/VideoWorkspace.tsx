@@ -33,10 +33,10 @@ export const VIDEO_SHAPES = [
   { id: "square", label: "Square", hint: "1:1" },
 ] as const;
 
-/** Clips are 2 or 5 seconds; a longer one does not fit the time a job may take (ADR-0037). */
+/** Clips are 5 or 8 seconds (owner, 2026-10-21): the engine decides what is too long, not this list. */
 export const VIDEO_LENGTHS = [
-  { seconds: 2, label: "2 seconds", note: "quick" },
-  { seconds: 5, label: "5 seconds", note: "takes about four times as long" },
+  { seconds: 5, label: "5 seconds", note: "a few minutes" },
+  { seconds: 8, label: "8 seconds", note: "takes about twice as long" },
 ] as const;
 
 const EXAMPLES: Record<Mode, string[]> = {
@@ -79,7 +79,7 @@ function VideoForm({
   const id = useId();
   const [prompt, setPrompt] = useState(initial?.prompt ?? "");
   const [shape, setShape] = useState(initial?.shape ?? "landscape");
-  const [seconds, setSeconds] = useState<number>(initial?.seconds ?? 2);
+  const [seconds, setSeconds] = useState<number>(initial?.seconds ?? 5);
   const pic = usePicture(VIDEO_PRODUCT, client);
   const { dragging } = usePictureEvents((file) => {
     if (mode === "image") void pic.choose(file);
@@ -189,7 +189,8 @@ function VideoForm({
         </Button>
         <span className="text-muted-foreground">
           {mode === "image" ? "The clip keeps the shape of your picture. " : ""}
-          {hint ?? "A 2 second clip takes about a minute on a fast Mac."}
+          {hint ??
+            "A 5 second clip takes a few minutes on a fast Mac, and an 8 second one about twice as long."}
         </span>
       </div>
     </form>
@@ -313,19 +314,23 @@ export function VideoWorkspace({
             videos ? (
               <ExtendForm
                 videos={videos}
-                onSubmit={({ source, prompt }) =>
+                onSubmit={({ source, prompt, seconds }) =>
                   blockedReason
                     ? null
                     : submit({
                         mode: "extend",
                         prompt,
                         shape: "landscape",
-                        seconds: 2,
+                        seconds,
                         picture: null,
                         source,
                       })
                 }
-                initial={asked?.source ? { source: asked.source, prompt: asked.prompt } : undefined}
+                initial={
+                  asked?.source
+                    ? { source: asked.source, prompt: asked.prompt, seconds: asked.seconds }
+                    : undefined
+                }
                 hint={hint}
               />
             ) : null

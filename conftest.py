@@ -64,7 +64,7 @@ def _watch() -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    if not (os.environ.get("CI") or os.environ.get("WASIFYAI_TEST_WATCHDOG")):
+    if not _enabled():
         return
     _state["started"] = time.monotonic()
     threading.Thread(target=_watch, name="test-watchdog", daemon=True).start()
@@ -77,5 +77,22 @@ def pytest_runtest_protocol(item: pytest.Item):
     _state["test"] = None
 
 
-def pytest_sessionfinish(session: pytest.Session) -> None:
+def _enabled() -> bool:
+    return bool(os.environ.get("CI") or os.environ.get("WASIFYAI_TEST_WATCHDOG"))
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     _state["finished"] = time.monotonic()
+    _state["exitstatus"] = int(exitstatus)
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    """The last hook, after the summary is printed: leave the process now, on CI. Something a test
+    leaves behind (a thread nobody joins, a library's exit handler) must not keep a finished run
+    from ending."""
+    status = _state.get("exitstatus")
+    if not _enabled() or status is None:
+        return
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(int(status))

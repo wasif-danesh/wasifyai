@@ -58,7 +58,6 @@ export {
 } from "./video-flow";
 export {
   VIDEO_PRODUCT_ID,
-  canExtend,
   clipLength,
   createVideosApi,
   type VideoListOptions,

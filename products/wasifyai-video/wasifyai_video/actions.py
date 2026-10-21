@@ -22,7 +22,7 @@ from wasifyai_platform_sdk.actions.helpers import need_deps, stage_picture
 from wasifyai_video.builder.actions import actions as builder_actions
 from wasifyai_video.builder.actions import library_kinds as builder_library_kinds
 from wasifyai_video.routes import extension_of, file_name, save_copy
-from wasifyai_video.schemas import MAX_EXTENDABLE_FRAMES, MAX_PROMPT_CHARS
+from wasifyai_video.schemas import MAX_PROMPT_CHARS
 from wasifyai_video.videos import VideoRecord, video_store
 
 PRODUCT_ID = "wasifyai-video"
@@ -39,7 +39,7 @@ class GenerateIn(Strict):
         description="What happens in the clip, in clear concrete words, in English.",
     )  # fmt: skip
     shape: Shape = Field("landscape", description="The shape of the picture.")
-    seconds: Literal[2, 5] = Field(2, description="How long the clip is.")
+    seconds: Literal[5, 8] = Field(5, description="How long the clip is.")
 
 
 class AnimateIn(Strict):
@@ -47,7 +47,7 @@ class AnimateIn(Strict):
     prompt: str = Field(
         min_length=1, max_length=MAX_PROMPT_CHARS, description="What should move, in English."
     )
-    seconds: Literal[2, 5] = Field(2, description="How long the clip is.")
+    seconds: Literal[5, 8] = Field(5, description="How long the clip is.")
 
 
 class ExtendIn(Strict):
@@ -59,6 +59,7 @@ class ExtendIn(Strict):
             "carries on whatever this says: it describes, it does not change the action."
         ),
     )  # fmt: skip
+    seconds: Literal[5, 8] = Field(5, description="How much is added: about 5 or about 8 seconds.")
 
 
 class VideoOut(BaseModel):
@@ -123,10 +124,6 @@ async def _source(ctx: ActionContext, video_id: str) -> VideoRecord:
     )
     if found is None or found.status != "done" or not found.video_key:
         raise ActionRefused("not_found", "That video is not in the library.")
-    if found.mode != "import" and found.frames > MAX_EXTENDABLE_FRAMES:
-        raise ActionRefused(
-            "clip_too_long", "That video is as long as it can get. Choose a shorter one."
-        )
     return found
 
 
@@ -135,7 +132,7 @@ async def _extend_check(p: ExtendIn, ctx: ActionContext) -> None:
 
 
 def _extend_input(p: ExtendIn, ctx: ActionContext) -> dict:
-    return {"mode": "extend", "prompt": p.prompt, "source_id": p.video_id}
+    return {"mode": "extend", "prompt": p.prompt, "source_id": p.video_id, "seconds": p.seconds}
 
 
 def _extend_result(outputs: dict, p: ExtendIn) -> Outcome | None:
@@ -148,7 +145,7 @@ def actions() -> list[Action]:
             id="video.generate", title="Make a video",
             summary="Make a short video clip from a description.",
             description=(
-                "Make a short video clip (2 or 5 seconds) from a description and save it to the "
+                "Make a short video clip (5 or 8 seconds) from a description and save it to the "
                 "person's library. It takes minutes on this computer and only one clip is made "
                 "at a time, so it returns a job handle when it is not done within the wait. To "
                 "set a picture moving, use video.animate."
@@ -166,7 +163,7 @@ def actions() -> list[Action]:
             id="video.animate", title="Animate a picture",
             summary="Make a picture of the library move.",
             description=(
-                "Turn a picture the person has in the library into a short clip (2 or 5 seconds) "
+                "Turn a picture the person has in the library into a short clip (5 or 8 seconds) "
                 "by saying what should move. Takes minutes; returns a job handle when it is not "
                 "done within the wait."
             ),
@@ -181,12 +178,13 @@ def actions() -> list[Action]:
         ),
         Action(
             id="video.extend", title="Extend a video",
-            summary="Carry on a video of the library for about two more seconds.",
+            summary="Carry on a video of the library for about 5 or 8 more seconds.",
             description=(
                 "Make a video of the library longer: its last second starts a new part, which is "
-                "joined on, so the motion carries on (about 1.7 seconds more, saved as a new "
-                "video; the original stays). A video can be carried on until it is about 4 "
-                "seconds long, and its picture gets a little softer each time. What the prompt "
+                "joined on, so the motion carries on (about 5 or 8 seconds more, saved as a new "
+                "video; the original stays). It works on a video of any length, and its picture "
+                "gets a little softer each time it is carried on, so two or three rounds is a "
+                "sensible stop. What the prompt "
                 "says steers only weakly: describe what keeps happening, not a change of "
                 "action. Takes minutes; returns a job handle when it is not done within the wait."
             ),

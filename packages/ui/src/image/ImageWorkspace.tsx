@@ -25,6 +25,7 @@ import { IMAGE_PRODUCT, useImageFlow } from "../hooks/use-image-flow";
 import { usePicture } from "../hooks/use-picture";
 import { usePictureEvents } from "../hooks/use-picture-events";
 import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../save";
+import { PageHeader } from "../window-bar";
 import { MAX_PROMPT, SIZES } from "./ImageForm";
 import { MaskPainter, type MaskPainterHandle } from "./MaskPainter";
 
@@ -384,10 +385,7 @@ export function ImageWorkspace({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header
-        data-tauri-drag-region
-        className="flex h-14 shrink-0 items-center justify-between gap-4 border-b px-6 pt-1"
-      >
+      <PageHeader className="flex h-14 shrink-0 items-center justify-between gap-4 border-b px-6 pt-1">
         <div className="flex items-center gap-2 ps-2 text-sm">{header}</div>
         <div className="flex items-center gap-1 text-sm">
           <span className="rounded-full bg-accent px-3 py-1.5 font-medium">{COPY[mode].tab}</span>
@@ -401,7 +399,7 @@ export function ImageWorkspace({
             </button>
           ) : null}
         </div>
-      </header>
+      </PageHeader>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto md:grid-cols-[minmax(19rem,28rem)_minmax(0,1fr)] md:overflow-visible">
         <section

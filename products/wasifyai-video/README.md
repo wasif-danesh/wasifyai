@@ -5,8 +5,8 @@ Status: **working** ([ADR-0037](../../docs/decisions/0037-video-product.md),
 [ADR-0039](../../docs/decisions/0039-picture-input.md)).
 
 A signed-in user makes a short clip from a description (**text to video**) or from one uploaded picture
-plus a description of what moves (**image to video**), on LTX-Video 2B v0.9.5 through ComfyUI. Clips are 2
-or 5 seconds (49 or 121 frames at 24 fps). Text to video is landscape 768x512, portrait 512x768 or square
+plus a description of what moves (**image to video**), on LTX-Video 2B v0.9.5 through ComfyUI. Clips are 5
+or 8 seconds (121 or 193 frames at 24 fps; the choice is `LENGTHS` in `schemas.py`). Text to video is landscape 768x512, portrait 512x768 or square
 512x512; image to video keeps the picture's shape.
 
 ## Flow
@@ -22,7 +22,7 @@ or 5 seconds (49 or 121 frames at 24 fps). Text to video is landscape 768x512, p
    (moves the MP4, makes a poster from its first frame, marks the row `done`, deletes the uploaded picture).
 5. The user does not have to wait on the page. `GET /videos?status=working` shows what is being made; the
    header badge polls it every 10 seconds while something is working, and a notice says when a clip is ready.
-   A row stuck in `working` for 30 minutes is marked `failed`.
+   A row stuck in `working` for 90 minutes is marked `failed`.
 6. `GET /videos`, `GET/DELETE /videos/{id}` and `/videos/{id}/download` serve My creations (`/creations`) and
    `/video/creations/{id}`. A clip still being made cannot be deleted.
 
@@ -44,11 +44,13 @@ Both ComfyUIs share the GPU and the worker's GPU id, so jobs still run one at a 
 |---|---|
 | 2 s | about 3 minutes |
 | 5 s | 7.5 minutes |
-| 8 s | 15 minutes (not offered: the job limit is 20 minutes) |
-| 10 s | 21.6 minutes (not offered) |
+| 8 s | 15 minutes |
+| 10 s | 21.6 minutes (not offered yet) |
 
-Image to video at 2 s took 95-140 s with the real workflow files. The worker's job limit is
-`JOB_TIMEOUT_S` (1200 s).
+These are the fp32 times; half precision is about 2.5 times faster (see the desktop notes). Image to video
+at 2 s took 95-140 s with the real workflow files. The worker's job limit is `JOB_TIMEOUT_S` (1200 s on
+the web); the desktop uses 3600 s, and a clip can be stopped. A row stuck in `working` for 90 minutes is
+marked `failed`.
 
 ## Models and licences
 

@@ -29,7 +29,7 @@ export function VideoScreen({ mode }: { mode: "text" | "image" }) {
         runs={webClient}
         videos={webVideos}
         downloadHref={(r) => videoDownload({ videoId: r.videoId })}
-        hint="Takes about 3 minutes for 2 seconds and 8 for 5. You can explore the site while it's made."
+        hint="Takes a few minutes for 5 seconds and about twice as long for 8. You can explore the site while it's made."
         onMaking={making}
         onOpenLibrary={() => router.push("/video/library")}
       />

@@ -7,8 +7,10 @@ import pytest
 from test_video_graph import Story, exists  # noqa: I001
 from video_rig import frame_count, make_rig, mp4, verdict
 from wasifyai_platform_sdk import JobFailed, RunError, object_key
-from wasifyai_video.schemas import EXTEND_FRAMES, MAX_EXTENDABLE_FRAMES, OVERLAP_FRAMES
+from wasifyai_video.schemas import LENGTHS, OVERLAP_FRAMES
 from wasifyai_video.videos import FixedQuota, InMemoryVideoStore, VideoRecord, join_clips
+
+NEW = LENGTHS[5]  # the new part of a five second extension
 
 
 async def make_source(rig, store, frames=49, status="done", mode="text", vid="src-1"):
@@ -43,20 +45,20 @@ async def test_the_new_clip_starts_from_the_last_frames_and_is_joined_on(tmp_pat
     (job,) = rig.sink.submitted
     assert job.capability == "video.extend"
     assert job.prompt["from_frame"] == 49 - OVERLAP_FRAMES == 40
-    assert job.prompt["length"] == EXTEND_FRAMES and job.prompt["prompt"] == "the fox keeps walking"
+    assert job.prompt["length"] == NEW and job.prompt["prompt"] == "the fox keeps walking"
     temp = job.prompt["video_key"]  # the worker reads only the user's uploads
     assert temp.startswith("uploads/extend-") and temp.endswith(".mp4")
     assert await exists(rig, temp)
     row = next(v for v in store.videos if v.id != vid)
-    assert (row.status, row.mode, row.frames, row.seconds) == ("working", "extend", 89, 4)
+    assert (row.status, row.mode, row.frames, row.seconds) == ("working", "extend", 40 + NEW, 7)
 
-    await s.finish_job(data=mp4(frames=EXTEND_FRAMES))
+    await s.finish_job(data=mp4(frames=NEW))
     final = s.state
-    assert final["status"] == "done" and final["mode"] == "extend" and final["seconds"] == 4
+    assert final["status"] == "done" and final["mode"] == "extend" and final["seconds"] == 7
     joined = await rig.raw.get(
         object_key("t1", "wasifyai-video", "u1", f"{final['video_id']}/video.mp4")
     )
-    assert frame_count(joined) == 40 + EXTEND_FRAMES  # 40 kept, the whole new clip
+    assert frame_count(joined) == 40 + NEW  # 40 kept, the whole new clip
     assert not await exists(rig, temp) and not await exists(rig, f"jobs/{job.job_id}/video.mp4")
     assert await exists(rig, f"{vid}/video.mp4")  # the original stays
     assert {v.id for v in store.videos} == {vid, final["video_id"]}
@@ -64,31 +66,43 @@ async def test_the_new_clip_starts_from_the_last_frames_and_is_joined_on(tmp_pat
     assert created.meta["mode"] == "extend"
 
 
-async def test_a_clip_that_was_extended_can_be_extended_once_more(tmp_path, ctx):
+async def test_a_longer_extension_can_be_asked_for_and_the_new_part_is_that_long(tmp_path, ctx):
     rig, store = make_rig(tmp_path), InMemoryVideoStore()
-    vid = await make_source(rig, store, frames=89, mode="extend")
+    vid = await make_source(rig, store, frames=49)
+    s = await Story(rig, videos=store).start(
+        {"mode": "extend", "prompt": "the fox keeps walking", "source_id": vid, "seconds": 8}
+    )
+    (job,) = rig.sink.submitted
+    assert job.prompt["length"] == LENGTHS[8] == 193
+    await s.finish_job(data=mp4(frames=LENGTHS[8]))
+    row = next(v for v in store.videos if v.id == s.state["video_id"])
+    assert (row.frames, s.state["seconds"]) == (40 + 193, 10)
+
+
+@pytest.mark.parametrize("seconds", [2, 6, 10])
+async def test_only_the_lengths_that_are_offered_can_be_asked_for(tmp_path, ctx, seconds):
+    rig, store = make_rig(tmp_path), InMemoryVideoStore()
+    vid = await make_source(rig, store)
+    s = await Story(rig, videos=store).start(
+        {"mode": "extend", "prompt": "x", "source_id": vid, "seconds": seconds}
+    )
+    assert s.state["status"] == "refused" and "5 or 8 seconds" in s.state["refusal"]["message"]
+    assert rig.sink.submitted == []
+
+
+@pytest.mark.parametrize("frames", [89, 121, 300])
+async def test_a_clip_of_any_length_can_be_carried_on_again_and_again(tmp_path, ctx, frames):
+    """No cap on the length (owner, 2026-10-21): the engine is given only the last second."""
+    rig, store = make_rig(tmp_path), InMemoryVideoStore()
+    vid = await make_source(rig, store, frames=frames, mode="extend")
     s = await start(rig, store, vid)
     (job,) = rig.sink.submitted
-    # a longer clip is given to the engine as its last second only: nine frames from its 24
     assert job.prompt["from_frame"] == 24 - OVERLAP_FRAMES
-    assert (
-        frame_count(
-            await rig.raw.get(object_key("t1", "wasifyai-video", "u1", job.prompt["video_key"]))
-        )
-        == 24
-    )
-    await s.finish_job(data=mp4(frames=EXTEND_FRAMES))
+    sent = await rig.raw.get(object_key("t1", "wasifyai-video", "u1", job.prompt["video_key"]))
+    assert frame_count(sent) == 24
+    await s.finish_job(data=mp4(frames=NEW))
     row = next(v for v in store.videos if v.id == s.state["video_id"])
-    assert row.frames == 129 and s.state["seconds"] == 5
-
-
-@pytest.mark.parametrize("frames", [MAX_EXTENDABLE_FRAMES + 1, 121, 129])
-async def test_a_clip_that_is_already_long_is_refused_and_nothing_is_copied(tmp_path, ctx, frames):
-    rig, store = make_rig(tmp_path), InMemoryVideoStore()
-    vid = await make_source(rig, store, frames=frames)
-    s = await start(rig, store, vid)
-    assert s.state["status"] == "refused" and s.state["refusal"]["code"] == "clip_too_long"
-    assert rig.sink.submitted == [] and rig.asked() == [] and len(store.videos) == 1
+    assert row.frames == frames - OVERLAP_FRAMES + NEW
 
 
 @pytest.mark.parametrize("which", ["missing", "working", "someone-else"])
@@ -200,11 +214,11 @@ async def test_a_video_the_person_added_can_be_carried_on_whatever_its_length(tm
     temp = object_key("t1", "wasifyai-video", "u1", job.prompt["video_key"])
     assert frame_count(await rig.raw.get(temp)) == 24  # only the end goes to the engine
     assert len(rig.picture_checks()) == 1  # its last frame was looked at, as a picture is
-    await s.finish_job(data=mp4(frames=EXTEND_FRAMES))
+    await s.finish_job(data=mp4(frames=NEW))
     row = next(v for v in store.videos if v.id == s.state["video_id"])
-    assert (row.mode, row.frames) == ("extend", 191 + EXTEND_FRAMES)
+    assert (row.mode, row.frames) == ("extend", 191 + NEW)
     joined = await rig.raw.get(object_key("t1", "wasifyai-video", "u1", f"{row.id}/video.mp4"))
-    assert frame_count(joined) == 191 + EXTEND_FRAMES
+    assert frame_count(joined) == 191 + NEW
     assert not await exists(rig, job.prompt["video_key"])
 
 

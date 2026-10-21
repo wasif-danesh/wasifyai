@@ -106,12 +106,12 @@ async def test_text_to_video_from_description_to_saved_clip(tmp_path, ctx, shape
     assert created[0].meta["seconds"] == seconds
 
 
-async def test_the_defaults_are_landscape_and_two_seconds(tmp_path, ctx):
+async def test_the_defaults_are_landscape_and_five_seconds(tmp_path, ctx):
     rig = make_rig(tmp_path)
     await Story(rig).start({"mode": "text", "prompt": "a fox"})
     job = rig.sink.submitted[0]
     assert (job.prompt["width"], job.prompt["height"]) == SHAPES["landscape"]
-    assert job.prompt["length"] == LENGTHS[2]
+    assert job.prompt["length"] == LENGTHS[5] == 121
 
 
 # ---- image to video ----------------------------------------------------------------------
@@ -163,7 +163,8 @@ async def exists_for(rig, user, rel):
         ({"mode": "text", "prompt": "   "}, "describe the video"),
         ({"mode": "text", "prompt": "x" * 501}, "under 500"),
         ({"mode": "text", "prompt": "x", "shape": "huge"}, "video shapes"),
-        ({"mode": "text", "prompt": "x", "seconds": 10}, "2 or 5 seconds"),
+        ({"mode": "text", "prompt": "x", "seconds": 10}, "5 or 8 seconds"),
+        ({"mode": "text", "prompt": "x", "seconds": 2}, "5 or 8 seconds"),
     ],
 )
 async def test_bad_input_is_refused_before_any_model_is_asked(tmp_path, ctx, input, message):

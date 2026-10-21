@@ -142,3 +142,24 @@ on the 64 GB Apple-silicon Mac with ComfyUI 0.40 and the files already used abov
 - The same two workflows run unchanged; clips are kept in SQLite (`SqliteVideoStore`).
 - **Not chosen, on licence:** the distilled 2B (0.9.8) would need far fewer steps, but it comes under the later LTX
   licence (paid above USD 10M revenue), which this ADR avoids. It stays an option for a later decision.
+
+## Amendment 2026-10-21 (owner): clips of 5 and 8 seconds, no ceiling on Extend
+
+The decision above offers 2 or 5 seconds because 8 and 10 second clips did not fit a 20 minute job limit on the Mac
+the measurements were made on. The owner rejected that as a product rule: a computer with a strong GPU must not be held
+to what one Mac can do, 2 seconds is too short to judge the model by, and the person can stop a clip that takes too
+long. So:
+
+1. **The lengths offered are 5 seconds (121 frames) and 8 seconds (193 frames), 5 by default.** 2 seconds is no longer
+   offered. `LENGTHS` in `wasifyai_video/schemas.py` is the one place that lists them; 10 seconds (241 frames) is one line
+   when it is wanted. Clips already made at 2 seconds stay in the library.
+2. **The limits follow the computer, not the Mac we measured on.** The desktop's job limit is 3600 seconds (it was 1200),
+   and a row stuck in "working" is marked failed after 90 minutes (it was 30). The web profile keeps `JOB_TIMEOUT_S`
+   (1200 s) for a shared GPU and can raise it by environment. Memory for 8 second clips is not measured on 16 and 32 GB
+   Macs; the fit check still decides whether the model runs.
+3. **Extend video (docs/spikes/video-extend-vx0.md) has no ceiling on the clip's length** and takes the same two lengths
+   for the part it adds (about 5 or 8 seconds). The engine is given only the last second of a long clip.
+
+The "8 and 10 second clips are not offered until the hardware or the timeout allows them" sentence of the decision is
+replaced by this amendment.
+

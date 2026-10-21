@@ -111,7 +111,7 @@ async def rig(tmp_path):
 
 
 def finished(**out: Any) -> list[dict]:
-    done = {"status": "done", "seconds": 2, "width": 768, "height": 512} | out
+    done = {"status": "done", "seconds": 5, "width": 768, "height": 512} | out
     return [{"event": "done", "outputs": done}]
 
 
@@ -122,11 +122,11 @@ async def test_a_video_is_made_and_it_may_take_a_while(rig):
         "video_id", "product_id", "uri", "prompt", "seconds", "width", "height",
     }  # fmt: skip
     assert r.text == (
-        'The video was made (2 seconds, 768x512) from "waves on a beach" and saved to the library.'
+        'The video was made (5 seconds, 768x512) from "waves on a beach" and saved to the library.'
     )
     assert rig.host.runs == [
         ("wasifyai-video", {"mode": "text", "prompt": "waves on a beach", "shape": "portrait",
-                            "seconds": 2})
+                            "seconds": 5})
     ]  # fmt: skip
     action = rig.ex.registry.get("video.generate")
     assert action and action.long and "costly" in action.flags
@@ -138,7 +138,12 @@ async def test_the_second_asks_before_a_costly_make_when_the_person_chose_to_be_
 
 
 async def test_a_request_the_product_cannot_take_is_refused_in_words(rig):
-    for params in ({"prompt": "x", "seconds": 7}, {"prompt": "x", "shape": "wide"}, {"prompt": ""}):
+    for params in (
+        {"prompt": "x", "seconds": 2},
+        {"prompt": "x", "seconds": 7},
+        {"prompt": "x", "shape": "wide"},
+        {"prompt": ""},
+    ):
         r = await rig.go("video.generate", params)
         assert (r.status, r.code) == ("refused", "invalid_input"), params
     assert rig.host.runs == []
@@ -170,27 +175,33 @@ async def test_a_picture_of_the_library_is_set_moving(rig):
 async def test_a_video_of_the_library_is_carried_on(rig):
     await rig.keep()
     rig.host.script("wasifyai-video", finished(video_id="vid-3", seconds=4))
-    r = await rig.go("video.extend", {"video_id": VIDEO_ID, "prompt": "the waves keep rolling"})
+    r = await rig.go(
+        "video.extend", {"video_id": VIDEO_ID, "prompt": "the waves keep rolling", "seconds": 8}
+    )
     assert r.ok and r.output["seconds"] == 4
     assert rig.host.runs == [
         ("wasifyai-video",
-         {"mode": "extend", "prompt": "the waves keep rolling", "source_id": VIDEO_ID})
+         {"mode": "extend", "prompt": "the waves keep rolling", "source_id": VIDEO_ID,
+          "seconds": 8})
     ]  # fmt: skip
+    await rig.go("video.extend", {"video_id": VIDEO_ID, "prompt": "go on"})
+    assert rig.host.runs[-1][1]["seconds"] == 5  # five seconds unless asked otherwise
     action = rig.ex.registry.get("video.extend")
     assert action and action.long and "costly" in action.flags and action.ui == "video.extend"
 
 
-async def test_only_a_finished_video_that_is_not_too_long_can_be_carried_on(rig):
+async def test_only_a_finished_video_can_be_carried_on_whatever_its_length(rig):
     ghost = await rig.go("video.extend", {"video_id": "ghost", "prompt": "x"})
     assert (ghost.status, ghost.code) == ("refused", "not_found")
     await rig.keep(status="working")
     working = await rig.go("video.extend", {"video_id": VIDEO_ID, "prompt": "x"})
     assert working.code == "not_found"
-    await rig.store.delete("t1", "u1", VIDEO_ID)
-    await rig.keep(frames=129)
-    long = await rig.go("video.extend", {"video_id": VIDEO_ID, "prompt": "x"})
-    assert (long.status, long.code) == ("refused", "clip_too_long")
     assert rig.host.runs == []
+    await rig.store.delete("t1", "u1", VIDEO_ID)
+    await rig.keep(frames=300)  # no cap on the length
+    rig.host.script("wasifyai-video", finished(video_id="vid-9"))
+    long = await rig.go("video.extend", {"video_id": VIDEO_ID, "prompt": "x"})
+    assert long.ok
 
 
 async def test_clips_are_listed_exported_and_deleted_but_not_while_being_made(rig, tmp_path):

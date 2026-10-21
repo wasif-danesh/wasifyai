@@ -22,7 +22,7 @@ Turn a picture of your library into a short clip by saying what should move.
 
 - `image_id`: The picture.
 - `prompt`: What should move.
-- `seconds`: 2 or 5.
+- `seconds`: 5 or 8 (5 unless you say otherwise).
 
 ## Limits
 

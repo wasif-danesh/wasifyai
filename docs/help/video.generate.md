@@ -9,7 +9,7 @@ Action: `video.generate`
 
 ## What it is for
 
-Make a short video clip (2 or 5 seconds) from a description.
+Make a short video clip (5 or 8 seconds) from a description.
 
 ## Steps in the app
 
@@ -22,7 +22,7 @@ Make a short video clip (2 or 5 seconds) from a description.
 
 - `prompt`: What happens in the clip.
 - `shape`: landscape, portrait or square.
-- `seconds`: 2 or 5.
+- `seconds`: 5 or 8 (5 unless you say otherwise).
 
 ## Limits
 

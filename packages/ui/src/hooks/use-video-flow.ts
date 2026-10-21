@@ -142,7 +142,12 @@ export function useVideoFlow(api: VideoFlowApi) {
       dispatch({ type: "submitted" });
       const input =
         request.mode === "extend"
-          ? { mode: "extend", prompt: request.prompt, source_id: request.sourceId }
+          ? {
+              mode: "extend",
+              prompt: request.prompt,
+              source_id: request.sourceId,
+              seconds: request.seconds,
+            }
           : {
               mode: request.mode,
               prompt: request.prompt,

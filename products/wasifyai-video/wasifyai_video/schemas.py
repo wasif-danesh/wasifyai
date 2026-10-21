@@ -16,19 +16,19 @@ SHAPES: dict[str, tuple[int, int]] = {
 DEFAULT_SHAPE = "landscape"
 
 FPS = 24
-# seconds -> frames (LTX wants a multiple of 8 plus one). 8 and 10 seconds do not fit the worker's
-# time limit on the Mac (ADR-0037).
-LENGTHS: dict[int, int] = {2: 49, 5: 121}
-DEFAULT_SECONDS = 2
+# seconds -> frames (LTX wants a multiple of 8 plus one). The lengths offered are 5 and 8 seconds
+# (owner, 2026-10-21): 2 seconds is too short to judge a model by, and a faster computer than the
+# Mac we measured on (ADR-0037) must not be held to a short clip. Add a length here to offer it; the
+# worker's limit on the desktop is an hour, and a clip can be stopped.
+LENGTHS: dict[int, int] = {5: 121, 8: 193}
+DEFAULT_SECONDS = 5
 
 # Extend video (docs/spikes/video-extend-vx0.md): the last OVERLAP_FRAMES frames of a clip start a
-# new clip of EXTEND_FRAMES frames, which repeats them first. The clip is kept up to those frames
-# and the whole new clip follows, so each round adds EXTEND_FRAMES - OVERLAP_FRAMES (40) frames,
-# 1.7 seconds. A clip of more than MAX_EXTENDABLE_FRAMES cannot be extended again: a 2 second clip
-# can be extended twice (49, 89, 129), a 5 second one not at all. The picture softens each round.
+# new clip of LENGTHS[seconds] frames, which repeats them first. The clip is kept up to those frames
+# and the whole new clip follows, so a round adds LENGTHS[seconds] - OVERLAP_FRAMES frames (112 or
+# 184: about 5 or 8 seconds). Any clip can be extended, however long; the picture softens a little
+# each round, which the screen says.
 OVERLAP_FRAMES = 9  # LTX wants 8 * n + 1
-EXTEND_FRAMES = LENGTHS[2]
-MAX_EXTENDABLE_FRAMES = 100
 
 CATEGORIES = [
     "ok",

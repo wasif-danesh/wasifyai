@@ -1,7 +1,7 @@
 """Clips: storage, the daily quota, the one-at-a-time rule and the poster picture.
 
 A row exists from the moment a run starts (status "working") so that the site can show "being made"
-on any page (ADR-0037). A row that stays "working" for over half an hour belongs to a run that died;
+on any page (ADR-0037). A row that stays "working" for 90 minutes belongs to a run that died;
 it is marked "failed" the next time anyone reads the table."""
 
 import asyncio
@@ -29,7 +29,7 @@ log = logging.getLogger(__name__)
 
 VIDEO_CREATED = "video.created"
 POSTER_PX = 480
-STALE_AFTER = timedelta(minutes=30)
+STALE_AFTER = timedelta(minutes=90)  # a long clip on a slow computer takes most of an hour
 STALE_MESSAGE = "This took too long and was stopped. Please try again."
 FFMPEG_TIMEOUT_S = 60
 JOIN_TIMEOUT_S = 180

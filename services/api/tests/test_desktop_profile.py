@@ -423,7 +423,7 @@ def test_a_video_is_made_end_to_end_on_the_desktop_profile(data_dir):
         r = c.post(
             "/products/wasifyai-video/runs",
             json={
-                "input": {"mode": "text", "prompt": "a red fox walks through snow", "seconds": 2}
+                "input": {"mode": "text", "prompt": "a red fox walks through snow", "seconds": 5}
             },
             headers=auth(),
         )
@@ -431,7 +431,7 @@ def test_a_video_is_made_end_to_end_on_the_desktop_profile(data_dir):
         events = parse(r.text)
         assert [e for e, _ in events][-1] == "done", events[-1]
         done = events[-1][1]["outputs"]
-        assert done["status"] == "done" and done["seconds"] == 2
+        assert done["status"] == "done" and done["seconds"] == 5
 
         listing = c.get("/products/wasifyai-video/videos", headers=auth()).json()
         assert [v["id"] for v in listing["videos"]] == [done["video_id"]]

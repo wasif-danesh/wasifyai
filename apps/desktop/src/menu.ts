@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // What each item of the shared side menu opens in this window (packages/ui, `MENU_GROUPS`). An item that is
 // not listed here is not built on the desktop yet and shows as "Soon".
-import type { ItemResolver, ItemView } from "@wasifyai/ui";
+import { type ItemResolver, type ItemView, MENU_GROUPS } from "@wasifyai/ui";
 import { type Route, newNotebook, openChat } from "./router";
 
 /** The screen each item opens. */
@@ -67,4 +67,23 @@ export function resolveItem(
     if (!target) return undefined;
     return { current: route === target, onSelect: () => go(target) };
   };
+}
+
+const OTHER_TITLES: Partial<Record<Route, string>> = {
+  home: "New chat",
+  notebooks: "Notebooks",
+  notebook: "Notebook",
+  library: "Library",
+  models: "Models",
+  settings: "Settings",
+};
+
+/** What the top bar of the window says for a screen that gives no title of its own. */
+export function routeTitle(route: Route): string {
+  const id = Object.keys(ROUTES).find((k) => ROUTES[k] === route);
+  for (const group of MENU_GROUPS) {
+    const item = group.items.find((i) => i.id === id);
+    if (item) return `${group.label}: ${item.label}`;
+  }
+  return OTHER_TITLES[route] ?? "Wasify AI";
 }

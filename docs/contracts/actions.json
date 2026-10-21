@@ -4492,7 +4492,7 @@
       "id": "video.animate",
       "title": "Animate a picture",
       "summary": "Make a picture of the library move.",
-      "description": "Turn a picture the person has in the library into a short clip (2 or 5 seconds) by saying what should move. Takes minutes; returns a job handle when it is not done within the wait.",
+      "description": "Turn a picture the person has in the library into a short clip (5 or 8 seconds) by saying what should move. Takes minutes; returns a job handle when it is not done within the wait.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -4511,11 +4511,11 @@
             "type": "string"
           },
           "seconds": {
-            "default": 2,
+            "default": 5,
             "description": "How long the clip is.",
             "enum": [
-              2,
-              5
+              5,
+              8
             ],
             "title": "Seconds",
             "type": "integer"
@@ -4601,8 +4601,8 @@
     {
       "id": "video.extend",
       "title": "Extend a video",
-      "summary": "Carry on a video of the library for about two more seconds.",
-      "description": "Make a video of the library longer: its last second starts a new part, which is joined on, so the motion carries on (about 1.7 seconds more, saved as a new video; the original stays). A video can be carried on until it is about 4 seconds long, and its picture gets a little softer each time. What the prompt says steers only weakly: describe what keeps happening, not a change of action. Takes minutes; returns a job handle when it is not done within the wait.",
+      "summary": "Carry on a video of the library for about 5 or 8 more seconds.",
+      "description": "Make a video of the library longer: its last second starts a new part, which is joined on, so the motion carries on (about 5 or 8 seconds more, saved as a new video; the original stays). It works on a video of any length, and its picture gets a little softer each time it is carried on, so two or three rounds is a sensible stop. What the prompt says steers only weakly: describe what keeps happening, not a change of action. Takes minutes; returns a job handle when it is not done within the wait.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -4619,6 +4619,16 @@
             "minLength": 1,
             "title": "Prompt",
             "type": "string"
+          },
+          "seconds": {
+            "default": 5,
+            "description": "How much is added: about 5 or about 8 seconds.",
+            "enum": [
+              5,
+              8
+            ],
+            "title": "Seconds",
+            "type": "integer"
           }
         },
         "required": [
@@ -4702,7 +4712,7 @@
       "id": "video.generate",
       "title": "Make a video",
       "summary": "Make a short video clip from a description.",
-      "description": "Make a short video clip (2 or 5 seconds) from a description and save it to the person's library. It takes minutes on this computer and only one clip is made at a time, so it returns a job handle when it is not done within the wait. To set a picture moving, use video.animate.",
+      "description": "Make a short video clip (5 or 8 seconds) from a description and save it to the person's library. It takes minutes on this computer and only one clip is made at a time, so it returns a job handle when it is not done within the wait. To set a picture moving, use video.animate.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -4725,11 +4735,11 @@
             "type": "string"
           },
           "seconds": {
-            "default": 2,
+            "default": 5,
             "description": "How long the clip is.",
             "enum": [
-              2,
-              5
+              5,
+              8
             ],
             "title": "Seconds",
             "type": "integer"

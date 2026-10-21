@@ -21,7 +21,7 @@ const TITLES: Record<PageMode, [string, string]> = {
   ],
   extend: [
     "Extend a video",
-    "Choose one of your videos and carry it on for about two more seconds. It is made on this computer.",
+    "Choose one of your videos, or add one from this computer, and carry it on for five or eight more seconds. It is made on this computer.",
   ],
 };
 

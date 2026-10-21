@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { cn } from "../../cn";
 import { Button } from "../../components/button";
 import { Notice } from "../../components/notice";
+import { PageHeader } from "../../window-bar";
 import type { ComposerOption } from "../composer-options";
 import { type AttachBox, Composer, ExampleChip } from "./Composer";
 import { AssistantMessage, UserMessage } from "./Message";
@@ -62,13 +63,14 @@ export function Thread({
   return (
     <ThreadPrimitive.Root className="flex h-full min-h-0 flex-col">
       {title || actions ? (
-        <header
-          data-tauri-drag-region
+        <PageHeader
           className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-6 pt-1"
+          pageOnly={<div className="flex items-center gap-1">{actions}</div>}
         >
-          <h1 className="min-w-0 truncate ps-2 font-medium text-sm">{title}</h1>
-          <div className="flex items-center gap-1">{actions}</div>
-        </header>
+          <h1 className="pointer-events-none min-w-0 flex-1 truncate ps-2 font-medium text-sm">
+            {title}
+          </h1>
+        </PageHeader>
       ) : null}
 
       {empty ? (

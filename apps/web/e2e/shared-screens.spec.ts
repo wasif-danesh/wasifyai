@@ -186,11 +186,15 @@ test("the home page is the assistant; a first answer gives the chat its address 
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   const box = page.getByRole("textbox");
+  // The first Enter can arrive before the page can use it, so the question is sent again, but only while it is not
+  // on the screen yet: a slow first answer must not turn into a second question and a second answer.
   await expect(async () => {
-    await box.fill("What is a fox?");
-    await box.press("Enter");
-    await expect(page.getByText(/small, quick wild dog/)).toBeVisible({ timeout: 1500 });
-  }).toPass({ timeout: 10_000 });
+    if ((await page.getByText("What is a fox?", { exact: true }).count()) === 0) {
+      await box.fill("What is a fox?");
+      await box.press("Enter");
+    }
+    await expect(page.getByText(/small, quick wild dog/).first()).toBeVisible({ timeout: 3000 });
+  }).toPass({ timeout: 30_000 });
   await expect(page).toHaveURL(/\/chat\/0f3c1a52-7a49-4d1e-9a31-8f1d5b6c7d80$/);
   await noSideScroll(page);
 });

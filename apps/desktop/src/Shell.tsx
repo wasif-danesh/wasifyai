@@ -7,16 +7,18 @@ import {
   LyricsPage,
   MusicPage,
   SpeakPage,
+  TitleBar,
   ToolPage,
   TracksPage,
   TranscribePage,
   VoicesPage,
+  WindowBarProvider,
   presetOf,
 } from "@wasifyai/ui";
-import { PanelLeft } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { client, voiceApi } from "./api";
+import { routeTitle } from "./menu";
 import { CreatePage } from "./pages/Create";
 import { HomePage } from "./pages/Home";
 import { LibraryPage } from "./pages/Library";
@@ -29,7 +31,7 @@ import { VideoPage } from "./pages/Video";
 import { VideoBuilderPage } from "./pages/VideoBuilder";
 import { VideosPage } from "./pages/Videos";
 import { remembered } from "./remember";
-import { useRoute } from "./router";
+import { useHistoryButtons, useRoute } from "./router";
 
 const COLLAPSED_KEY = "wasifyai:sidebar-collapsed";
 
@@ -53,6 +55,23 @@ export function Shell() {
     adoptNotebook,
   } = useRoute();
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  const history = useHistoryButtons();
+  // the top bar of the window: where a screen's header goes, and whether one has taken it
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const [claims, setClaims] = useState(0);
+  const bar = useMemo(
+    () =>
+      slot
+        ? {
+            target: slot,
+            claim: () => {
+              setClaims((n) => n + 1);
+              return () => setClaims((n) => n - 1);
+            },
+          }
+        : null,
+    [slot],
+  );
   // what every voice screen is given: this window's engine, its remembered choices, its navigation
   const voice = { api: voiceApi, runs: client, remembered, go, place: "device" as const };
   // an image whose recipe was sent to Create ("make it again"); used once, then forgotten
@@ -87,97 +106,93 @@ export function Shell() {
   };
 
   return (
-    <div
-      data-menu-collapsed={collapsed}
-      className="flex h-dvh overflow-hidden bg-background text-foreground"
-    >
-      {collapsed ? null : (
-        <Sidebar
-          route={route}
-          go={go}
-          onCollapse={() => set(true)}
-          conversationId={conversationId}
-          notebook={notebook}
+    <WindowBarProvider bar={bar}>
+      <div
+        data-menu-collapsed={collapsed}
+        className="flex h-dvh flex-col overflow-hidden bg-background text-foreground"
+      >
+        <TitleBar
+          menuOpen={!collapsed}
+          onToggleMenu={() => set(!collapsed)}
+          canGoBack={history.back}
+          canGoForward={history.forward}
+          title={routeTitle(route)}
+          showTitle={claims === 0}
+          slot={setSlot}
         />
-      )}
-      <div className="relative flex min-w-0 flex-1 flex-col">
-        <div data-tauri-drag-region className="absolute inset-x-0 top-0 z-10 h-2.5" />
-        {collapsed ? (
-          <button
-            type="button"
-            aria-label="Show the side menu"
-            className="absolute start-20 top-2 z-20 rounded-md p-1.5 text-muted-foreground hover:bg-accent"
-            onClick={() => set(false)}
-          >
-            <PanelLeft className="size-4" />
-          </button>
-        ) : null}
-        <main id="main" className="min-h-0 flex-1 overflow-auto">
-          {route === "home" ? (
-            <HomePage key={chatKey} go={go} conversationId={conversationId} onAdopt={adopt} />
-          ) : null}
-          {route === "create" ? (
-            <CreatePage
-              key={`create-${again?.id ?? ""}`}
-              mode="text"
-              go={go}
-              preset={again ? presetOf(again) : null}
-              onEditThis={(image) => {
-                setEditSource({ url: image.image_url, name: `${image.id}.png` });
-                go("edit");
-              }}
-            />
-          ) : null}
-          {route === "edit" ? (
-            <CreatePage
-              key={`edit-${editSource?.url ?? ""}`}
-              mode="image"
-              go={go}
-              source={editSource}
-            />
-          ) : null}
-          {route === "reference" ? <CreatePage mode="reference" go={go} /> : null}
-          {route === "inpaint" ? <CreatePage mode="inpaint" go={go} /> : null}
-          {route === "library" ? (
-            <LibraryPage
-              go={go}
-              onRunAgain={(image) => {
-                setAgain(image);
-                go("create");
-              }}
-            />
-          ) : null}
-          {route === "notebooks" ? <NotebooksPage /> : null}
-          {route === "notebook" && notebook ? (
-            <NotebookPage
-              key={`notebook-${chatKey}`}
-              notebook={notebook}
-              onAdopt={adoptNotebook}
-              goModels={() => go("models")}
-            />
-          ) : null}
-          {route === "speak" ? <SpeakPage {...voice} /> : null}
-          {route === "transcribe" ? <TranscribePage {...voice} /> : null}
-          {route === "voices" ? <VoicesPage {...voice} /> : null}
-          {route === "music" ? <MusicPage {...voice} /> : null}
-          {route === "tracks" ? <TracksPage {...voice} /> : null}
-          {route === "lyrics" ? <LyricsPage {...voice} /> : null}
-          {route === "lipsync" ? <LipSyncPage {...voice} /> : null}
-          {route === "audiobook" ? <AudiobookPage {...voice} /> : null}
-          {route === "dub" ? <DubPage {...voice} /> : null}
-          {route === "separate" ? <ToolPage tool="separate" {...voice} /> : null}
-          {route === "convert" ? <ToolPage tool="convert" {...voice} /> : null}
-          {route === "speechedit" ? <ToolPage tool="edit" {...voice} /> : null}
-          {route === "video" ? <VideoPage mode="text" go={go} /> : null}
-          {route === "animate" ? <VideoPage mode="image" go={go} /> : null}
-          {route === "extend" ? <VideoPage mode="extend" go={go} /> : null}
-          {route === "videobuilder" ? <VideoBuilderPage go={go} /> : null}
-          {route === "model3d" ? <Model3dPage go={go} /> : null}
-          {route === "videos" ? <VideosPage go={go} /> : null}
-          {route === "models" ? <ModelsPage /> : null}
-          {route === "settings" ? <SettingsPage /> : null}
-        </main>
+        <div className="flex min-h-0 flex-1">
+          {collapsed ? null : (
+            <Sidebar route={route} go={go} conversationId={conversationId} notebook={notebook} />
+          )}
+          <div className="relative flex min-w-0 flex-1 flex-col">
+            <main id="main" className="min-h-0 flex-1 overflow-auto">
+              {route === "home" ? (
+                <HomePage key={chatKey} go={go} conversationId={conversationId} onAdopt={adopt} />
+              ) : null}
+              {route === "create" ? (
+                <CreatePage
+                  key={`create-${again?.id ?? ""}`}
+                  mode="text"
+                  go={go}
+                  preset={again ? presetOf(again) : null}
+                  onEditThis={(image) => {
+                    setEditSource({ url: image.image_url, name: `${image.id}.png` });
+                    go("edit");
+                  }}
+                />
+              ) : null}
+              {route === "edit" ? (
+                <CreatePage
+                  key={`edit-${editSource?.url ?? ""}`}
+                  mode="image"
+                  go={go}
+                  source={editSource}
+                />
+              ) : null}
+              {route === "reference" ? <CreatePage mode="reference" go={go} /> : null}
+              {route === "inpaint" ? <CreatePage mode="inpaint" go={go} /> : null}
+              {route === "library" ? (
+                <LibraryPage
+                  go={go}
+                  onRunAgain={(image) => {
+                    setAgain(image);
+                    go("create");
+                  }}
+                />
+              ) : null}
+              {route === "notebooks" ? <NotebooksPage /> : null}
+              {route === "notebook" && notebook ? (
+                <NotebookPage
+                  key={`notebook-${chatKey}`}
+                  notebook={notebook}
+                  onAdopt={adoptNotebook}
+                  goModels={() => go("models")}
+                />
+              ) : null}
+              {route === "speak" ? <SpeakPage {...voice} /> : null}
+              {route === "transcribe" ? <TranscribePage {...voice} /> : null}
+              {route === "voices" ? <VoicesPage {...voice} /> : null}
+              {route === "music" ? <MusicPage {...voice} /> : null}
+              {route === "tracks" ? <TracksPage {...voice} /> : null}
+              {route === "lyrics" ? <LyricsPage {...voice} /> : null}
+              {route === "lipsync" ? <LipSyncPage {...voice} /> : null}
+              {route === "audiobook" ? <AudiobookPage {...voice} /> : null}
+              {route === "dub" ? <DubPage {...voice} /> : null}
+              {route === "separate" ? <ToolPage tool="separate" {...voice} /> : null}
+              {route === "convert" ? <ToolPage tool="convert" {...voice} /> : null}
+              {route === "speechedit" ? <ToolPage tool="edit" {...voice} /> : null}
+              {route === "video" ? <VideoPage mode="text" go={go} /> : null}
+              {route === "animate" ? <VideoPage mode="image" go={go} /> : null}
+              {route === "extend" ? <VideoPage mode="extend" go={go} /> : null}
+              {route === "videobuilder" ? <VideoBuilderPage go={go} /> : null}
+              {route === "model3d" ? <Model3dPage go={go} /> : null}
+              {route === "videos" ? <VideosPage go={go} /> : null}
+              {route === "models" ? <ModelsPage /> : null}
+              {route === "settings" ? <SettingsPage /> : null}
+            </main>
+          </div>
+        </div>
       </div>
-    </div>
+    </WindowBarProvider>
   );
 }

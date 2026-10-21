@@ -1,10 +1,11 @@
 "use client";
 
-import { type VideoSummary, type VideosApi, canExtend, clipLength } from "@wasifyai/client";
+import { type VideoSummary, type VideosApi, clipLength } from "@wasifyai/client";
 import { Upload } from "lucide-react";
 import { type ChangeEvent, type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
+import { Chip } from "../components/chip";
 import { PromptField } from "../components/create";
 import { Notice } from "../components/notice";
 import { Spinner } from "../components/spinner";
@@ -18,11 +19,17 @@ const EXAMPLES = [
 ];
 
 /** What the form hands over: the clip to carry on and what should keep happening. */
-export type ExtendValue = { source: VideoSummary; prompt: string };
+export type ExtendValue = { source: VideoSummary; prompt: string; seconds: number };
+
+/** How much is added: the new part is 5 or 8 seconds long and repeats the clip's last 9 frames first. */
+export const EXTEND_LENGTHS = [
+  { seconds: 5, label: "About 5 seconds", note: "a few minutes" },
+  { seconds: 8, label: "About 8 seconds", note: "takes about twice as long" },
+] as const;
 
 /**
  * Carry on one of the person's videos (Extend video): choose a finished clip or add a video file from this
- * computer, say what should keep happening, and about two more seconds are made from its last second. The
+ * computer, say what should keep happening, and 5 or 8 more seconds are made from its last second. The
  * words of a clip made here fill in from its own; they steer only weakly: the movement of the last second
  * carries on, and the form says so.
  */
@@ -34,7 +41,7 @@ export function ExtendForm({
 }: {
   videos: Pick<VideosApi, "list"> & Partial<Pick<VideosApi, "importVideo">>;
   onSubmit: (value: ExtendValue) => void;
-  initial?: { source: VideoSummary; prompt: string };
+  initial?: { source: VideoSummary; prompt: string; seconds?: number };
   hint?: string;
 }) {
   const id = useId();
@@ -42,10 +49,10 @@ export function ExtendForm({
   const [next, setNext] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [hidden, setHidden] = useState(false); // some of the person's clips are too long to carry on
   const [source, setSource] = useState<VideoSummary | null>(initial?.source ?? null);
   const [prompt, setPrompt] = useState(initial?.prompt ?? "");
   const [edited, setEdited] = useState(Boolean(initial));
+  const [seconds, setSeconds] = useState<number>(initial?.seconds ?? 5);
   const [adding, setAdding] = useState(false);
   const [addProblem, setAddProblem] = useState<string | null>(null);
   const picker = useRef<HTMLInputElement>(null);
@@ -55,8 +62,7 @@ export function ExtendForm({
     setFailed(false);
     try {
       const page = await videos.list({ limit: 24, before, status: "done" });
-      const fit = page.videos.filter((v) => canExtend(v) && v.video_url);
-      if (fit.length < page.videos.length) setHidden(true);
+      const fit = page.videos.filter((v) => v.video_url);
       setClips((old) => [...(before ? (old ?? []) : []), ...fit]);
       setNext(page.next_before);
     } catch {
@@ -103,7 +109,7 @@ export function ExtendForm({
 
   function submit(e?: FormEvent) {
     e?.preventDefault();
-    if (valid && source) onSubmit({ source, prompt: trimmed });
+    if (valid && source) onSubmit({ source, prompt: trimmed, seconds });
   }
 
   return (
@@ -161,9 +167,7 @@ export function ExtendForm({
         ) : null}
         {clips && clips.length === 0 && !failed ? (
           <p className="text-muted-foreground">
-            {hidden && !next
-              ? "Your videos are all too long to carry on. A video can be carried on until it is about 4 seconds long."
-              : "You have no videos to carry on yet. Add one from your computer, or make one in Create."}
+            You have no videos to carry on yet. Add one from your computer, or make one in Create.
           </p>
         ) : null}
         {clips && clips.length > 0 ? (
@@ -207,11 +211,6 @@ export function ExtendForm({
             </Button>
           </div>
         ) : null}
-        {hidden && clips && clips.length > 0 ? (
-          <span className="text-muted-foreground text-sm">
-            Videos longer than about 4 seconds are not shown: they cannot be carried on.
-          </span>
-        ) : null}
       </fieldset>
 
       <PromptField
@@ -231,16 +230,32 @@ export function ExtendForm({
         onSubmit={submit}
       />
 
+      <fieldset className={cn(field, "m-0 border-0 p-0")}>
+        <legend className={cn(fieldLabel, "mb-1.5")}>How much to add</legend>
+        <div className="flex flex-wrap gap-2">
+          {EXTEND_LENGTHS.map((l) => (
+            <Chip
+              key={l.seconds}
+              aria-pressed={seconds === l.seconds}
+              onClick={() => setSeconds(l.seconds)}
+            >
+              {l.label} <span className="opacity-70">{l.note}</span>
+            </Chip>
+          ))}
+        </div>
+      </fieldset>
+
       <div className="flex flex-wrap items-center gap-4">
         <Button type="submit" size="lg" disabled={!valid}>
           Carry on my video
         </Button>
         <span className="text-muted-foreground">
-          {hint ?? "About 2 seconds are added, and it takes about as long as a 2 second video."}
+          {hint ?? "It takes about as long as a clip of the same length."}
         </span>
       </div>
       <p className="m-0 text-muted-foreground text-sm">
-        The new video is saved beside the original. Its picture gets a little softer each time.
+        The new video is saved beside the original. Its picture gets a little softer each time a
+        video is carried on, so two or three rounds is a sensible stop.
       </p>
     </form>
   );

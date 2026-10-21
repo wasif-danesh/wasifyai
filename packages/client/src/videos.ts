@@ -97,16 +97,7 @@ export function createVideosApi(transport: Transport, product = VIDEO_PRODUCT_ID
   };
 }
 
-/** The clip's length for a card: "2 s" or "5 s". */
+/** The clip's length for a card: "5 s". */
 export function clipLength(seconds: number): string {
   return `${seconds} s`;
-}
-
-/**
- * Whether a clip can be carried on (Extend video). One the model made must be short: the engine refuses
- * more than 100 frames, and a clip that rounds to 5 seconds or more has more. A video the person added
- * can be any length the engine took. The engine has the last word.
- */
-export function canExtend(clip: { seconds: number; mode?: string }): boolean {
-  return clip.mode === "import" || clip.seconds <= 4;
 }

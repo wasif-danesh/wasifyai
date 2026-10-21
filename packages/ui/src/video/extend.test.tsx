@@ -53,18 +53,35 @@ const ready = done({
 });
 
 describe("Extend video", () => {
-  it("asks for the finished clips and shows only the ones that can be carried on", async () => {
+  it("asks for the finished clips and shows them all, whatever their length", async () => {
     const videos = api([
       clip(),
       clip({ id: "v3", prompt: "Waves on a beach", seconds: 4 }),
-      clip({ id: "v9", prompt: "A long walk", seconds: 5 }),
+      clip({ id: "v9", prompt: "A long walk", seconds: 8 }),
     ]);
     render(<VideoWorkspace mode="extend" runs={client} videos={videos} />);
     expect(await screen.findByRole("button", { name: /red fox walks/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /waves on a beach/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /a long walk/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /a long walk/i })).toBeInTheDocument(); // no cap
     expect(videos.list).toHaveBeenCalledWith(expect.objectContaining({ status: "done" }));
-    expect(screen.getByText(/longer than about 4 seconds are not shown/i)).toBeInTheDocument();
+    expect(screen.queryByText(/not shown/i)).toBeNull();
+  });
+
+  it("asks how much to add, five seconds unless said otherwise, and sends it", async () => {
+    fetchMock.mockResolvedValueOnce(sse([node("check_request"), node("generate_video"), ready]));
+    const user = userEvent.setup();
+    render(<VideoWorkspace mode="extend" runs={client} videos={api([clip()])} />);
+    await user.click(await screen.findByRole("button", { name: /red fox walks/i }));
+    expect(screen.getByRole("button", { name: /about 5 seconds/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await user.click(screen.getByRole("button", { name: /about 8 seconds/i }));
+    expect(screen.getByText(/two or three rounds is a sensible stop/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /carry on my video/i }));
+    await screen.findByText(/saved in your videos/i);
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.input).toMatchObject({ mode: "extend", source_id: "v1", seconds: 8 });
   });
 
   it("fills in the words from the chosen clip, keeps the person's own words, and sends the clip's id", async () => {
@@ -98,6 +115,7 @@ describe("Extend video", () => {
       mode: "extend",
       prompt: "the fox keeps walking",
       source_id: "v1",
+      seconds: 5,
     });
     expect(document.querySelector("video")).toHaveAttribute(
       "src",
@@ -175,6 +193,7 @@ describe("Extend video", () => {
       mode: "extend",
       prompt: "the people keep walking",
       source_id: "v7",
+      seconds: 5,
     });
   });
 

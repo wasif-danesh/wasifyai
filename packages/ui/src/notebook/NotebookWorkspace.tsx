@@ -22,6 +22,7 @@ import {
 } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
+import { PageHeader } from "../window-bar";
 import { AddSources } from "./AddSources";
 import { SourceGuide } from "./SourceGuide";
 import { type Highlight, SourceViewer } from "./SourceViewer";
@@ -236,10 +237,7 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header
-        data-tauri-drag-region
-        className="flex h-14 shrink-0 items-center gap-3 border-b px-5 pt-1 [[data-menu-collapsed=true]_&]:ps-32"
-      >
+      <PageHeader className="flex h-14 shrink-0 items-center gap-3 border-b px-5 pt-1">
         {props.onBack ? (
           <Button type="button" variant="ghost" size="sm" onClick={props.onBack}>
             Notebooks
@@ -261,7 +259,7 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
           className="min-w-0 flex-1 truncate rounded-md bg-transparent px-2 py-1 font-medium text-lg outline-none hover:bg-accent focus:bg-accent"
         />
         <span className="hidden text-muted-foreground text-sm sm:inline">{label}</span>
-      </header>
+      </PageHeader>
 
       <div className="flex shrink-0 gap-1 border-b p-2 lg:hidden" role="tablist" aria-label="Panes">
         {tab("sources", "Sources")}

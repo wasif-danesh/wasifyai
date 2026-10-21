@@ -10,8 +10,8 @@ Action: `video.extend`
 ## What it is for
 
 Make a video longer. Its last second starts a new part, and the two are joined, so the movement carries
-on. About 1.7 seconds are added. The result is a new video; the original stays. The video can be one of
-your library or a video file you add from your computer.
+on. You choose how much is added: about 5 or about 8 seconds. The result is a new video; the original
+stays. The video can be one of your library or a video file you add from your computer.
 
 ## Steps in the app
 
@@ -21,24 +21,24 @@ your library or a video file you add from your computer.
    not changed.
 3. Say what should keep happening. The words of a video made here are filled in from its own; change
    them if you like.
-4. Choose Carry on my video.
+4. Choose how much to add (about 5 or about 8 seconds).
+5. Choose Carry on my video.
 
 ## Fields
 
 - `video_id`: The video to carry on.
 - `prompt`: What should keep happening.
+- `seconds`: How much is added: 5 or 8 (5 unless you say otherwise).
 
 ## Limits
 
 - 500 characters.
-- A video made here can be extended until it is about 4 seconds long, so a 2 second video twice. A 5
-  second video made here cannot be extended. A video you added can be any length up to 30 seconds.
-- An added video is made at the size the model uses (the longer side at most 768), 24 frames a second,
-  without sound. It must be under 200 MB.
-- The picture gets a little softer each time.
+- There is no limit on the length of the video, and a video can be carried on again and again. The picture gets a
+  little softer each time, so two or three rounds is a sensible stop.
 - What you write steers only weakly. The movement of the last second carries on whatever it says.
 - One clip at a time.
-
+- An added video is made at the size the model uses (the longer side at most 768), 24 frames a second,
+  without sound. It must be under 200 MB.
 ## Needs
 
 - The video engine (Models).
@@ -50,6 +50,5 @@ your library or a video file you add from your computer.
 ## Problems
 
 - **Not in the library** Choose a video that still exists and is finished.
-- **As long as it can get** Choose a shorter video, or make a new one.
 - **Not a video this app can read** Try an MP4 or MOV file.
 - **Longer than 30 seconds** Cut the video shorter first.

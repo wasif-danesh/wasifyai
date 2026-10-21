@@ -41,14 +41,31 @@ jobs:
       # The step has a time limit of its own: a step that is stopped keeps its log (a whole job that is cancelled
       # does not), and `-v` has printed the name of the test that was running. `faulthandler_timeout` prints where
       # every thread is stuck when one test runs over 5 minutes.
+      # Every run since the Video Builder commit (f7e3da8) has hung here with no log: the runner stops answering and
+      # neither a step nor a job limit fires. scripts/ci/guard.sh watches the memory, writes a snapshot every 30 s and, when
+      # it runs low, stops the tests (with every thread's stack) so the log survives; both files are uploaded below.
       - name: Tests
         timeout-minutes: 15
-        run: uv run pytest -v -o faulthandler_timeout=300
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=300 2>&1 | tee "$RUNNER_TEMP/pytest.log"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-test-log
+          path: |
+            ${{ runner.temp }}/pytest.log
+            ${{ runner.temp }}/resources.txt
+            ${{ runner.temp }}/test-watchdog.txt
+          if-no-files-found: ignore
       - if: failure() || cancelled()
         name: Where a hung test stopped
         shell: bash
         run: |
           cat "$RUNNER_TEMP/test-watchdog.txt" 2>/dev/null || echo "the watchdog did not stop anything"
+          echo "=== the machine, last snapshots"
+          tail -40 "$RUNNER_TEMP/resources.txt" 2>/dev/null || echo "no snapshots"
           echo "=== processes still running"
           ps -eo pid,ppid,stat,etime,args --forest | head -60
   web:

@@ -166,7 +166,6 @@ export function Shell() {
                   key={`notebook-${chatKey}`}
                   notebook={notebook}
                   onAdopt={adoptNotebook}
-                  goModels={() => go("models")}
                 />
               ) : null}
               {route === "speak" ? <SpeakPage {...voice} /> : null}

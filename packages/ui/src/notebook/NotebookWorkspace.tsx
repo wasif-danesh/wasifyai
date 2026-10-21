@@ -238,11 +238,6 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader className="flex h-14 shrink-0 items-center gap-3 border-b px-5 pt-1">
-        {props.onBack ? (
-          <Button type="button" variant="ghost" size="sm" onClick={props.onBack}>
-            Notebooks
-          </Button>
-        ) : null}
         <input
           aria-label="Notebook name"
           value={draftTitle}

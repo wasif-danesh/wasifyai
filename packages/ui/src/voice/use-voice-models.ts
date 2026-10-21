@@ -2,6 +2,7 @@
 
 import type { AudioRuntime, VoiceApi, VoiceModelInfo, VoiceTask } from "@wasifyai/client";
 import { useCallback, useEffect, useState } from "react";
+import { useChoicesVersion } from "../models";
 
 /** The models for one task with their state, and the speech runtime. While the runtime is being set up
  * it looks again every second, so the dropdown changes by itself when it is done. */
@@ -24,9 +25,12 @@ export function useVoiceModels(api: VoiceApi, task: VoiceTask) {
     }
   }, [api, task]);
 
+  // a model chosen or downloaded in the picker changes what is ready
+  const version = useChoicesVersion();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the version is the trigger
   useEffect(() => {
     void reload();
-  }, [reload]);
+  }, [reload, version]);
 
   const installing = runtime?.install.state === "installing";
   useEffect(() => {

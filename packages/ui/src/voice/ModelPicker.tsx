@@ -3,6 +3,7 @@
 import type { VoiceModelInfo, VoiceTask } from "@wasifyai/client";
 import { cn } from "../cn";
 import { Label } from "../components/label";
+import { ModelSelect, groupOfTask, useChoicesFor } from "../models";
 import { formatBytes } from "../notebook/format";
 import { COMMERCIAL_TEXT, costLine, modelOption, stateText } from "./format";
 
@@ -27,7 +28,23 @@ export function ModelPicker({
   onGetModel?: (id: string) => void;
   disabled?: boolean;
 }) {
+  // in the app window the same button and panel as every other group (ADR-0086); on the web, the plain list
+  const choices = useChoicesFor(groupOfTask(task), task);
   const chosen = models.find((m) => m.id === value) ?? null;
+  if (choices) {
+    return (
+      <div className="grid justify-items-start gap-2">
+        <Label htmlFor={`model-${task}`}>Model</Label>
+        <ModelSelect
+          group={groupOfTask(task)}
+          api={choices}
+          value={value}
+          disabled={disabled}
+          onChanged={(id) => id && onChange(id)}
+        />
+      </div>
+    );
+  }
   const warn = chosen && (chosen.commercial_use === "no" || chosen.commercial_use === "unreviewed");
   return (
     <div className="grid gap-2">
@@ -93,4 +110,11 @@ export function ModelPicker({
       ) : null}
     </div>
   );
+}
+
+/** What a screen says under its main button while the chosen model is not on the computer. */
+export function NotReadyText({ task, seeAbove }: { task: string; seeAbove?: boolean }) {
+  const choices = useChoicesFor(groupOfTask(task), task);
+  if (choices) return "Download the model first: use the Model button above.";
+  return seeAbove ? "Set this model up first (see above)." : "Set this model up first.";
 }

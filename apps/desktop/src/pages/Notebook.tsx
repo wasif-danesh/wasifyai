@@ -1,9 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // One notebook (or a new one, a draft that is saved when its first source is added): sources, the
 // conversation and Studio.
-import { Button, NotebookWorkspace, Notice, SetupCard } from "@wasifyai/ui";
+import {
+  Button,
+  ModelSelect,
+  type ModelSelectHandle,
+  NotebookWorkspace,
+  SetupCard,
+  useChoicesFor,
+} from "@wasifyai/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { client, notebooksApi } from "../api";
+import { ChatStart } from "../choices/ChatStart";
 import { images } from "../images";
 import { useNotebookSetup } from "../notebook-setup";
 import { NEW_NOTEBOOK, openNotebook } from "../router";
@@ -14,12 +22,10 @@ const DRAFT_TITLE = "Untitled notebook";
 export function NotebookPage({
   notebook,
   onAdopt,
-  goModels,
 }: {
   /** the id from the address, or `new` */
   notebook: string;
   onAdopt: (id: string) => void;
-  goModels: () => void;
 }) {
   const [savedId, setSavedId] = useState<string | null>(
     notebook === NEW_NOTEBOOK ? null : notebook,
@@ -30,6 +36,8 @@ export function NotebookPage({
   const titleRef = useRef(title);
   titleRef.current = title;
   const model = useChatModel();
+  const choices = useChoicesFor("chat");
+  const picker = useRef<ModelSelectHandle>(null);
   const setup = useNotebookSetup();
 
   // an existing notebook: read it (which also marks it opened)
@@ -94,19 +102,7 @@ export function NotebookPage({
   const notices = (
     <div className="grid gap-3">
       {pending ? <SetupCard items={setup.items} onStart={(id) => void setup.start(id)} /> : null}
-      {model.chosen === false ? (
-        <Notice
-          tone="info"
-          title="Choose a chat model"
-          actions={
-            <Button type="button" onClick={goModels}>
-              Open Models
-            </Button>
-          }
-        >
-          Answers are written by the chat model on this computer.
-        </Notice>
-      ) : null}
+      {model.chosen === false ? <ChatStart picker={picker} /> : null}
     </div>
   );
 
@@ -121,16 +117,10 @@ export function NotebookPage({
       notices={pending || model.chosen === false ? notices : undefined}
       searchReady={setup.searchReady}
       chatModelChosen={model.chosen}
-      chip={
-        model.name ? (
-          <span className="rounded-full border px-2.5 py-1 text-muted-foreground text-xs">
-            {model.name}
-          </span>
-        ) : undefined
-      }
+      chip={<ModelSelect group="chat" api={choices} handleRef={picker} />}
       imageUrl={async (id) => (await images.get(id)).image_url}
       saveImage={(id, path) => images.exportCopy(id, path)}
-      onNeedModel={goModels}
+      onNeedModel={() => picker.current?.open()}
       onBack={() => openNotebook(null)}
     />
   );

@@ -407,7 +407,12 @@ The recommended model on the hub shelf is the one that scores best here.
 
 ## The model hub (ADR-0064, stage D2b)
 
-Models has two tabs. **On device** is the app's models, the chat model and what other tools left here.
+Models is a page of nine cards (Chat, Images, Video, Voice, Listening, Music, Faces, Documents, 3D), each with the model in
+use, the one picker every screen has ("Select image model", ...) and Remove (ADR-0086). Choosing a model that is on the
+computer uses it; choosing one that is not opens a dialog with the engine and the files, the total, the time, the licence and
+where they come from, and "Download and use" does the lot. The window composes this from the routes below
+(`apps/desktop/src/choices/`); the picker itself (`packages/ui/src/models/`) knows no engine. **Advanced** keeps the model folders,
+the files other tools left here and Discover. The first time, the chat card offers the model that suits the computer's memory.
 **Discover** finds open models on Hugging Face and fetches one. The window never contacts the internet: the
 engine does (`desktop_hub.py`, `/desktop/hub/...`), only after the person agrees (Settings has the switch), and a
 download is only started from the exact files and size the person confirmed, re-checked against the repository at
@@ -556,7 +561,7 @@ model from a list. Evidence: `docs/spikes/voice-v0.md`, `docs/phase2-voice-plan.
 | Runtime | `wasifyai_api/audio_runtime.py`, pins in `audio_pins.json` | installer (size and SHA-256 shown first, confirm to download, unpacked safely, checked by running `--version`), or "use the copy already on this computer" (same tag, same hash); one `audiocpp_server` with every model that is present, lazy loading, one model in memory, loopback; the `audio` owner of the one slot (starting it stops a resident chat model, and the reverse) |
 | Routes | `GET /desktop/audio`, `GET /desktop/audio/models?task=`, `POST /desktop/audio/install` (`confirm_bytes`), `/use-found`, `/stop`; `GET /desktop/models?task=` filters the catalogue | model states: ready, needs the runtime, not on this computer, not available |
 | Product | `wasifyai-voice`: graph `speak` (a run), `/speeches`, `/transcripts` (upload, list, get, rename, delete, export txt, srt, vtt) | `voice.db` and files in the app's storage; speeches and transcripts are in My creations search (kinds `speech`, `transcript`) |
-| Window | Voice menu: Text to speech, Speech to text | model list with licence badge, cost line, state and "Get it in Models"; voice list; options made from the descriptor; setup card for the runtime; a made-before list; a transcript with times and Save as text or subtitles |
+| Window | Voice menu: Text to speech, Speech to text | model button ("Select ... model") with its dialog; voice list; options made from the descriptor; setup card for the runtime; a made-before list; a transcript with times and Save as text or subtitles |
 
 Rules in the code: a request is checked against the descriptor before it is sent (an unknown option or voice is
 refused in words, because the runtime answers a mistake with HTTP 500 and may ignore an option silently); the

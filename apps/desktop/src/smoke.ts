@@ -5,6 +5,7 @@
 // DOM a person would, so CORS, the content security policy and the signed file link are all exercised.
 import { invoke } from "@tauri-apps/api/core";
 import { notebooksApi } from "./api";
+import { gate } from "./choices/use-ready";
 
 const PROMPT = "a red ceramic teapot on a wooden table";
 const TIMEOUT_MS = 90_000;
@@ -38,6 +39,7 @@ function type(el: HTMLTextAreaElement, text: string) {
 }
 
 export async function runSmoke(): Promise<void> {
+  gate.open = true; // a fresh computer has no model: the placeholder engine makes the picture
   try {
     // the home screen is the assistant (ADR-0057): say hello and wait for an answer or a plain error
     // (with no chat model chosen, as on a fresh computer, the error says what to do)
@@ -120,19 +122,10 @@ export async function runSmoke(): Promise<void> {
         ? text
         : null;
     });
-    // Discover asks before it contacts anyone (ADR-0064), and the recommended list needs no network
-    const discover = await until("the Discover tab", () =>
-      [...document.querySelectorAll('[role="tab"]')].find((b) => b.textContent === "Discover"),
-    );
-    (discover as HTMLElement).click();
+    // the hub's recommended list needs no network (ADR-0064), and Advanced holds it
     await until("the recommended models", () =>
       document.body.textContent?.includes("Recommended to start with"),
     );
-    (
-      [...document.querySelectorAll('[role="tab"]')].find((b) => b.textContent === "On device") as
-        | HTMLElement
-        | undefined
-    )?.click();
     await until("the result of the look", () => {
       const text = document.body.textContent ?? "";
       return /Looked (just now|\d+ minutes? ago)|No models from other tools|Looking is turned off/.test(
@@ -195,9 +188,7 @@ export async function runSmoke(): Promise<void> {
       window.location.hash = path;
       await until(`the ${label} screen`, () =>
         model
-          ? [...document.querySelectorAll("select option")].some((o) =>
-              o.textContent?.startsWith(model),
-            )
+          ? document.querySelector('button[aria-haspopup="dialog"]')
             ? true
             : null
           : document.body.textContent?.includes("Describe a voice")
@@ -205,10 +196,10 @@ export async function runSmoke(): Promise<void> {
             : null,
       );
       if (!model) continue;
-      const needs = document.body.textContent ?? "";
-      if (!needs.includes("Set up speech") && !needs.includes("Licence")) {
-        throw new Error(`the ${label} screen shows neither the runtime setup nor the licence`);
-      }
+      // every screen that needs a model has the one button (ADR-0086)
+      await until(`the model button on the ${label} screen`, () =>
+        document.querySelector('button[aria-haspopup="dialog"]'),
+      );
     }
 
     // Your music and Lyrics open without a model and say what they are for.

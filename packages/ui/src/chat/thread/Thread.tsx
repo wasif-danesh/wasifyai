@@ -28,6 +28,8 @@ export type ThreadProps = {
   /** Title bar actions (rename, delete). */
   actions?: ReactNode;
   title?: string;
+  /** The model picker, in the title bar (the window's; ADR-0086). */
+  model?: ReactNode;
   /** The turn went wrong. */
   error: { code: string; message: string; retryable: boolean } | null;
   onRetry: () => void;
@@ -54,6 +56,7 @@ export function Thread({
   attach,
   actions,
   title,
+  model,
   error,
   onRetry,
   onNeedModel,
@@ -62,14 +65,17 @@ export function Thread({
 }: ThreadProps) {
   return (
     <ThreadPrimitive.Root className="flex h-full min-h-0 flex-col">
-      {title || actions ? (
+      {title || actions || model ? (
         <PageHeader
           className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-6 pt-1"
           pageOnly={<div className="flex items-center gap-1">{actions}</div>}
         >
-          <h1 className="pointer-events-none min-w-0 flex-1 truncate ps-2 font-medium text-sm">
-            {title}
-          </h1>
+          {title ? (
+            <h1 className="pointer-events-none min-w-0 flex-1 truncate ps-2 font-medium text-sm">
+              {title}
+            </h1>
+          ) : null}
+          {model}
         </PageHeader>
       ) : null}
 

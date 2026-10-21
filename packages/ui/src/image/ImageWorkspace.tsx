@@ -118,6 +118,8 @@ export type ImageWorkspaceProps = {
   downloadHref?: (image: ImageSummary) => string;
   /** Why making an image is not possible right now (for example: the model cannot fit). */
   blockedReason?: string | null;
+  /** Asked before an image is made; false stops it (the window opens its model picker when none is ready). */
+  beforeMake?: () => boolean;
   /** Styles (LoRAs) the image engine can apply now. */
   loras?: LoraOption[];
   /** Styles one click away (their folder is not read yet), with `onUseLora` to do it. */
@@ -173,6 +175,7 @@ export function ImageWorkspace({
   canSave = false,
   downloadHref,
   blockedReason = null,
+  beforeMake,
   loras = [],
   availableLoras = [],
   onUseLora,
@@ -299,8 +302,8 @@ export function ImageWorkspace({
   );
 
   const generate = useCallback(() => {
-    if (valid && !working) void begin(trimmed, size, seed, styles);
-  }, [valid, working, begin, trimmed, size, seed, styles]);
+    if (valid && !working && (beforeMake?.() ?? true)) void begin(trimmed, size, seed, styles);
+  }, [valid, working, begin, trimmed, size, seed, styles, beforeMake]);
 
   const shown: ImageSummary | null =
     picked ??

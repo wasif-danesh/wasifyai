@@ -16,7 +16,7 @@ import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
 import { EditTrack } from "./EditTrack";
 import { LyricsWriter } from "./LyricsWriter";
-import { ModelPicker } from "./ModelPicker";
+import { ModelPicker, NotReadyText } from "./ModelPicker";
 import { OptionFields } from "./OptionFields";
 import { RuntimeCard } from "./RuntimeCard";
 import { TrackList } from "./TrackList";
@@ -176,7 +176,7 @@ export function MusicWorkspace({
     if (working || (t.mode !== "song" && t.mode !== "sfx")) return;
     const m = models.find((x) => x.id === t.model_id);
     if (!m || m.state !== "ready") {
-      setProblem(`${m?.title ?? "That model"} is not ready: get it in Models first.`);
+      setProblem(`${m?.title ?? "That model"} is not ready. Choose a model that is ready.`);
       return;
     }
     setModelId(m.id);
@@ -397,7 +397,7 @@ export function MusicWorkspace({
         )}
         {!ready && chosen ? (
           <span className="text-muted-foreground text-sm">
-            Set this model up first (see above).
+            <NotReadyText task="music" seeAbove />
           </span>
         ) : null}
       </div>

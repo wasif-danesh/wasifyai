@@ -19,6 +19,7 @@ import { Label } from "../components/label";
 import { Bar } from "../components/progress-bar";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
+import { useChoicesFor } from "../models";
 import { formatBytes } from "../notebook/format";
 import { fileNameFor, useSaveCopy } from "../save";
 import { ModelPicker } from "./ModelPicker";
@@ -62,8 +63,11 @@ function EngineCard({
 }) {
   const [asking, setAsking] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // in the app window the model's own dialog sets the engine up with it (ADR-0086)
+  const inDialog = useChoicesFor("faces") !== null;
   if (engine.installed) return null;
   const { plan, install } = engine;
+  if (inDialog && plan.supported) return null;
   const working = install.state === "installing";
   async function go() {
     setAsking(false);

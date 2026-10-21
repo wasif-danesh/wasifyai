@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { useChoicesVersion } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
 import { languageApi } from "./api";
 
@@ -8,6 +9,9 @@ export function useChatModel(): { chosen: boolean | null; name: string } {
     chosen: null,
     name: "",
   });
+  // a model chosen or downloaded in the picker changes the answer
+  const version = useChoicesVersion();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the version is the trigger
   useEffect(() => {
     let gone = false;
     languageApi
@@ -17,6 +21,6 @@ export function useChatModel(): { chosen: boolean | null; name: string } {
     return () => {
       gone = true;
     };
-  }, []);
+  }, [version]);
   return state;
 }

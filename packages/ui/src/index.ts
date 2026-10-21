@@ -183,3 +183,4 @@ export {
 } from "./save";
 export { PageHeader, type WindowBar, WindowBarProvider } from "./window-bar";
 export { TITLE_BAR_PX, TitleBar } from "./title-bar";
+export * from "./models";

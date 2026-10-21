@@ -41,6 +41,8 @@ export type ChatScreenProps = {
   /** Title bar actions (rename, delete). */
   actions?: ReactNode;
   title?: string;
+  /** The model picker, in the title bar (the window's; ADR-0086). */
+  model?: ReactNode;
   /** Which options of the box this screen can offer: a Thinking switch only for a model that can think (ADR-0083). */
   composerOptions?: ComposerOptionsAvailable;
 };
@@ -65,6 +67,7 @@ export function ChatScreen({
   onNeedModel,
   actions,
   title,
+  model,
   composerOptions,
 }: ChatScreenProps) {
   // the markdown renderer is a separate chunk: fetch it now, while the person is still typing the first message
@@ -128,6 +131,7 @@ export function ChatScreen({
             attach={options.attach}
             actions={actions}
             title={title}
+            model={model}
             error={state.chat.error}
             onRetry={chat.retry}
             onNeedModel={onNeedModel}

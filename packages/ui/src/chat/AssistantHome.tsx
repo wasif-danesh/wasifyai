@@ -50,6 +50,8 @@ export type AssistantHomeProps = {
   onNewChat: () => void;
   /** Setup notices (no model chosen yet, and so on). */
   notices?: ReactNode;
+  /** The model picker, in the title bar (the window's; ADR-0086). */
+  modelPicker?: ReactNode;
   blockedReason?: string | null;
   onNeedModel?: () => void;
   onOpenCreation?: (kind: string, id: string) => void;
@@ -79,6 +81,7 @@ export function AssistantHome({
   onAdopt,
   onNewChat,
   notices,
+  modelPicker,
   blockedReason,
   onNeedModel,
   onOpenCreation,
@@ -317,6 +320,7 @@ export function AssistantHome({
     hero,
     examples: conversationId ? [] : EXAMPLES,
     notices,
+    model: modelPicker,
     blockedReason,
     onNeedModel,
     onOpenCreation,

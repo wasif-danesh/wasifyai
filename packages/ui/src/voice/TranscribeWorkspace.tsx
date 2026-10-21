@@ -6,7 +6,7 @@ import { Button } from "../components/button";
 import { Label } from "../components/label";
 import { Spinner } from "../components/spinner";
 import { fileNameFor, useSaveCopy } from "../save";
-import { ModelPicker } from "./ModelPicker";
+import { ModelPicker, NotReadyText } from "./ModelPicker";
 import { RuntimeCard } from "./RuntimeCard";
 import { clock, pickModel } from "./format";
 import { useVoiceModels } from "./use-voice-models";
@@ -154,7 +154,9 @@ export function TranscribeWorkspace({
               Choose a recording
             </Button>
             {!ready && chosen ? (
-              <p className="text-muted-foreground text-sm">Set this model up first (see above).</p>
+              <p className="text-muted-foreground text-sm">
+                <NotReadyText task="transcribe" seeAbove />
+              </p>
             ) : null}
           </>
         )}

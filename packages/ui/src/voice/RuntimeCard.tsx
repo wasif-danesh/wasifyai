@@ -4,6 +4,7 @@ import type { AudioRuntime, VoiceApi } from "@wasifyai/client";
 import { useState } from "react";
 import { Button } from "../components/button";
 import { Bar } from "../components/progress-bar";
+import { useChoicesFor } from "../models";
 import { formatBytes } from "../notebook/format";
 
 /**
@@ -21,8 +22,11 @@ export function RuntimeCard({
 }) {
   const [asking, setAsking] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // in the app window the model's own dialog sets the speech engine up with it (ADR-0086)
+  const inDialog = useChoicesFor("voice") !== null;
   if (runtime.installed) return null;
   const { plan, install } = runtime;
+  if (inDialog && plan.supported) return null;
   const working = install.state === "installing";
   const run = async (what: () => Promise<unknown>) => {
     setProblem(null);

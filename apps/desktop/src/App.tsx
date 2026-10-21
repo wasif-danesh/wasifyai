@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { PageHero, SaveAsProvider, page } from "@wasifyai/ui";
+import { ModelChoicesProvider, PageHero, SaveAsProvider, page } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
 import { Shell } from "./Shell";
 import { transport } from "./api";
+import { choicesSource } from "./choices";
 import { COMFYUI, type EngineStatus, LLAMACPP, engineStatus, onEngineStatus } from "./engine";
 import { EngineState } from "./parts";
 import { saveAs } from "./save-as";
@@ -47,7 +48,9 @@ export function App() {
   if (status.state === "ready") {
     return (
       <SaveAsProvider value={saveAs}>
-        <Shell />
+        <ModelChoicesProvider source={choicesSource}>
+          <Shell />
+        </ModelChoicesProvider>
       </SaveAsProvider>
     );
   }

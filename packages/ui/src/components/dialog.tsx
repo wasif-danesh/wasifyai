@@ -9,7 +9,7 @@ import { Button } from "./button";
  * The desktop window cannot show `window.confirm` or `window.prompt` (its web view has no handler for
  * them, so they answer "no" at once), so every question to the person goes through these.
  */
-function Modal({
+export function Modal({
   label,
   onClose,
   children,

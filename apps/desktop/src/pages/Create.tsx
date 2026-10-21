@@ -1,14 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Create, Edit, Reference and Inpaint: the shared two-panel screen with this window's model chip and setup notices.
 import type { ImageMode, ImageSummary } from "@wasifyai/client";
-import { ImageWorkspace, Notice, type WorkspacePreset, cn } from "@wasifyai/ui";
-import { useEffect, useState } from "react";
-import { FitBadge } from "../FitBadge";
+import {
+  ImageWorkspace,
+  ModelSelect,
+  type ModelSelectHandle,
+  Notice,
+  type WorkspacePreset,
+  useChoicesFor,
+} from "@wasifyai/ui";
+import { useEffect, useRef, useState } from "react";
 import { client, discoveryApi, lorasApi } from "../api";
+import { useGroupReady } from "../choices/use-ready";
 import { useImageEngine, useModelOf } from "../engine-hooks";
 import { images } from "../images";
 import type { LoraList } from "../loras";
-import type { ModelEntry } from "../models";
 import type { Route } from "../router";
 
 function useLoras(): [LoraList, () => void] {
@@ -45,63 +51,23 @@ export function CreatePage({
   const engine = useImageEngine();
   const [loras, refreshLoras] = useLoras();
 
-  const header = (
-    <>
-      <span className="font-medium">{model?.title ?? "Image model"}</span>
-      {model ? (
-        <span
-          className={cn(
-            "rounded-full border px-2 py-0.5 text-xs",
-            model.status === "ready" ? "text-ok" : "text-muted-foreground",
-          )}
-        >
-          {model.status === "ready" ? "ready" : "not downloaded"}
-        </span>
-      ) : null}
-      {model?.fit ? <FitBadge fit={model.fit} /> : null}
-    </>
-  );
+  // "Select image model": the model in use, or the way to get one (ADR-0086)
+  const choices = useChoicesFor("images");
+  const picker = useRef<ModelSelectHandle>(null);
+  const { ensure } = useGroupReady(choices, picker);
+  const header = <ModelSelect group="images" api={choices} handleRef={picker} />;
 
   // only a real model can be too big: the placeholder engine runs anywhere
   const real = engine?.state === "installed";
   const tooBig = real && model?.fit?.verdict === "too_big";
   const tight = real && model?.fit?.verdict === "tight";
 
-  const notices = (
-    <>
-      {tight && model?.fit ? (
-        <Notice tone="warn" title="This computer is tight on memory">
-          {model.fit.reason}
-        </Notice>
-      ) : null}
-      {engine?.state === "not_installed" ? (
-        <Notice tone="info" title="Placeholder pictures">
-          Real images need the image engine set up once.{" "}
-          <button
-            type="button"
-            className="underline underline-offset-4"
-            onClick={() => go("settings")}
-          >
-            Open Settings
-          </button>
-          .
-        </Notice>
-      ) : null}
-      {model && model.status !== "ready" && engine?.state === "installed" ? (
-        <Notice tone="warn" title="The model is not on this computer yet">
-          Get it in{" "}
-          <button
-            type="button"
-            className="underline underline-offset-4"
-            onClick={() => go("models")}
-          >
-            Models
-          </button>{" "}
-          before making real images.
-        </Notice>
-      ) : null}
-    </>
-  );
+  const notices =
+    tight && model?.fit ? (
+      <Notice tone="warn" title="This computer is tight on memory">
+        {model.fit.reason}
+      </Notice>
+    ) : null;
 
   return (
     <ImageWorkspace
@@ -110,6 +76,7 @@ export function CreatePage({
       images={images}
       header={header}
       notices={notices}
+      beforeMake={ensure}
       preset={preset}
       onOpenLibrary={() => go("library")}
       loras={loras.ready.map((l) => ({ id: l.id, name: l.name, title: l.title, size: l.size }))}

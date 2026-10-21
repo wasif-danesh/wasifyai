@@ -1,6 +1,6 @@
 # ADR-0064: A model hub: discover open-weight models and see what is on the device
 
-- **Status:** Accepted (2026-10-15), with the owner's answers recorded at the end (all recommended)
+- **Status:** Accepted (2026-10-15), with the owner's answers recorded at the end (all recommended). **Decision 1 (two tabs) is superseded by ADR-0086**: Discover moves under "More models" of the model picker and under Advanced on the Models page
 - **Date:** 2026-10-15
 - **Depends on:** ADR-0056 (profiles, provisioning), ADR-0059 (models folder, downloads), ADR-0062 (engine per
   capability), ADR-0063 (found models, fit check), ADR-0057 (assistant; its model picker uses this hub)

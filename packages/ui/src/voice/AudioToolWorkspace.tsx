@@ -17,7 +17,7 @@ import { Button } from "../components/button";
 import { Label } from "../components/label";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
-import { ModelPicker } from "./ModelPicker";
+import { ModelPicker, NotReadyText } from "./ModelPicker";
 import { RuntimeCard } from "./RuntimeCard";
 import { clock, pickModel } from "./format";
 import { useVoiceModels } from "./use-voice-models";
@@ -432,7 +432,7 @@ export function AudioToolWorkspace({
         ) : null}
         {!ready && chosen ? (
           <span className="text-muted-foreground text-sm">
-            Set this model up first (see above).
+            <NotReadyText task={tool} seeAbove />
           </span>
         ) : null}
       </div>

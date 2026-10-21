@@ -18,7 +18,13 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 # Models the stack needs, derived from the single source of truth (the API's model defaults).
 required_models() {
-  grep -vE '^[[:space:]]*#' "$ROOT/services/api/src/wasifyai_api/model_defaults.yaml" | grep -oE '(ollama(_chat)?|openai)/[^[:space:]]+' | sed -E 's#^(ollama(_chat)?|openai)/##' | sort -u
+  # Only models served by the local Ollama: an alias counts when its `api_base` is an Ollama one. Hosted
+  # aliases (`openai/tts-1`, `openai/whisper-1`) have no Ollama api_base and are not pulled.
+  grep -vE '^[[:space:]]*#' "$ROOT/services/api/src/wasifyai_api/model_defaults.yaml" |
+    awk '
+      /^[[:space:]]*model:/ { m = $2; next }
+      /^[[:space:]]*api_base:.*OLLAMA/ && m != "" { print m; m = "" }
+    ' | sed -E 's#^(ollama(_chat)?|openai)/##' | sort -u
 }
 
 ollama_up() { curl -fsS -m 3 "$OLLAMA_URL/api/tags" >/dev/null 2>&1; }

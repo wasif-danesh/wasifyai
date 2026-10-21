@@ -14,7 +14,7 @@ import { Label } from "../components/label";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
 import { fileNameFor, useSaveCopy } from "../save";
-import { ModelPicker } from "./ModelPicker";
+import { ModelPicker, NotReadyText } from "./ModelPicker";
 import { OptionFields } from "./OptionFields";
 import { RuntimeCard } from "./RuntimeCard";
 import { clock, groupVoices, pickModel, voiceLabel } from "./format";
@@ -246,7 +246,7 @@ export function SpeakWorkspace({
         ) : null}
         {!ready && chosen ? (
           <span className="text-muted-foreground text-sm">
-            Set this model up first (see above).
+            <NotReadyText task="speak" seeAbove />
           </span>
         ) : null}
       </div>

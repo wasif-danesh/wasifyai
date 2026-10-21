@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // The home screen is the assistant (ADR-0057): the shared home (packages/ui) with this window's setup notice.
-import { AssistantHome, Button, Notice } from "@wasifyai/ui";
+import { AssistantHome, ModelSelect, type ModelSelectHandle, useChoicesFor } from "@wasifyai/ui";
+import { useRef } from "react";
 import { assistantApi, client, modelsApi, voiceApi } from "../api";
+import { ChatStart } from "../choices/ChatStart";
 import { images } from "../images";
 import { type Route, openChat, openNotebook } from "../router";
 import { getSpeechModel } from "../speech-model";
-import { useChatModel } from "../useChatModel";
 
 export function HomePage({
   go,
@@ -16,33 +17,8 @@ export function HomePage({
   conversationId: string | null;
   onAdopt: (id: string) => void;
 }) {
-  const model = useChatModel();
-
-  const notices =
-    model.chosen === false ? (
-      <Notice
-        tone="info"
-        title="Choose a chat model"
-        actions={
-          <>
-            <Button
-              type="button"
-              onClick={() => {
-                window.location.hash = "/models?tab=discover";
-              }}
-            >
-              Get a recommended model
-            </Button>
-            <Button type="button" variant="outline" onClick={() => go("models")}>
-              Use one I have
-            </Button>
-          </>
-        }
-      >
-        Wasify AI answers with a model that runs on this computer. Pick one you already have, or get
-        one in Discover.
-      </Notice>
-    ) : null;
+  const choices = useChoicesFor("chat");
+  const picker = useRef<ModelSelectHandle>(null);
 
   return (
     <AssistantHome
@@ -55,8 +31,9 @@ export function HomePage({
       conversationId={conversationId}
       onAdopt={onAdopt}
       onNewChat={() => openChat(null)}
-      notices={notices}
-      onNeedModel={() => go("models")}
+      notices={<ChatStart picker={picker} />}
+      modelPicker={<ModelSelect group="chat" api={choices} handleRef={picker} />}
+      onNeedModel={() => picker.current?.open()}
       onOpenSettings={() => go("settings")}
       onOpenNotebooks={() => go("notebooks")}
       onOpenCreation={(kind, id) => {

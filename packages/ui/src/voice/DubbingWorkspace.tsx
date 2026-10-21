@@ -20,7 +20,7 @@ import { Button } from "../components/button";
 import { Label } from "../components/label";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
-import { ModelPicker } from "./ModelPicker";
+import { ModelPicker, NotReadyText } from "./ModelPicker";
 import { clock, pickModel } from "./format";
 import { useVoiceModels } from "./use-voice-models";
 
@@ -473,7 +473,9 @@ export function DubbingWorkspace({
               </span>
             ) : null}
             {!ready && chosen ? (
-              <span className="text-muted-foreground text-sm">Set this model up first.</span>
+              <span className="text-muted-foreground text-sm">
+                <NotReadyText task="dub" />
+              </span>
             ) : null}
           </div>
         </fieldset>

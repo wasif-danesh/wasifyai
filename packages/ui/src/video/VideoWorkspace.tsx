@@ -224,6 +224,8 @@ export type VideoWorkspaceProps = {
   notices?: ReactNode;
   /** When set, the form is shown but making is refused with this reason. */
   blockedReason?: string | null;
+  /** Asked before a clip is made; false stops it (the window opens its model picker when none is ready). */
+  beforeMake?: () => boolean;
   /** Whether "Save a copy" is on offer. */
   canSave?: boolean;
   /** Where a finished clip can be downloaded from (the web app): "Download" is offered when given. */
@@ -242,6 +244,7 @@ export function VideoWorkspace({
   videos,
   notices,
   blockedReason = null,
+  beforeMake,
   canSave = false,
   downloadHref,
   hint,
@@ -258,6 +261,7 @@ export function VideoWorkspace({
   const working = phase === "checking" || phase === "making";
 
   const submit = (value: VideoFormValue) => {
+    if (beforeMake && !beforeMake()) return;
     setAsked(value);
     setSaved(null);
     setProblem(null);

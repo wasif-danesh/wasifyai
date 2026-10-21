@@ -9,13 +9,14 @@ import {
   minutes,
 } from "@wasifyai/client";
 import { Library, Save, Trash2, Upload } from "lucide-react";
-import { type DragEvent, useId, useState } from "react";
+import { type DragEvent, useEffect, useId, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Chip } from "../components/chip";
 import { JobMeter, WorkingCard } from "../components/create";
 import { Notice } from "../components/notice";
 import { Spinner } from "../components/spinner";
+import { ModelSelect, useChoicesFor, useChoicesVersion } from "../models";
 import { fileNameFor, savedText, useSaveCopy } from "../save";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
 import { type CandidateApi, Candidates } from "./Candidates";
@@ -55,6 +56,18 @@ export type Model3dProps = {
 export function Model3d({ api, images, canSave = false, onOpenLibrary }: Model3dProps) {
   const m = useModel3d(api);
   const { state } = m;
+  // in the app window the same button as every other model: its dialog says what 3D needs and sets it up (ADR-0086)
+  const choices = useChoicesFor("three_d");
+  const version = useChoicesVersion();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the version is the trigger
+  useEffect(() => {
+    if (version > 0) void m.refresh();
+  }, [version]);
+  const picking =
+    choices !== null &&
+    state.component !== null &&
+    state.component.plan.supported &&
+    state.component.progress.state !== "installing";
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-5 p-[clamp(1rem,3vw,2rem)]">
       <header className="grid gap-1.5">
@@ -74,6 +87,20 @@ export function Model3d({ api, images, canSave = false, onOpenLibrary }: Model3d
 
       {state.loading ? (
         <output className="text-muted-foreground">Looking at 3D…</output>
+      ) : !state.component?.installed && picking ? (
+        <section
+          aria-label="Choose a 3D model"
+          className="grid gap-3 rounded-2xl border bg-card p-5"
+        >
+          <h2 className="m-0 font-semibold text-lg">Choose a 3D model</h2>
+          <p className="m-0 text-muted-foreground">
+            Making a 3D model needs a model on this computer. Select it to see what it needs and
+            download it.
+          </p>
+          <div>
+            <ModelSelect group="three_d" api={choices} />
+          </div>
+        </section>
       ) : !state.component?.installed ? (
         <SetupCard
           component={state.component}

@@ -2,14 +2,19 @@
 // Create, Animate and Extend (ADR-0037): a clip from words, from a picture and what should move, or one of
 // your videos carried on. The shared workspace with this window's model chip and setup notices.
 import type { VideoMode } from "@wasifyai/client";
-import { Notice, VideoWorkspace, cn } from "@wasifyai/ui";
-import { FitBadge } from "../FitBadge";
+import {
+  ModelSelect,
+  type ModelSelectHandle,
+  Notice,
+  VideoWorkspace,
+  useChoicesFor,
+} from "@wasifyai/ui";
+import { useRef } from "react";
 import { client } from "../api";
+import { useGroupReady } from "../choices/use-ready";
 import { useImageEngine, useModelOf } from "../engine-hooks";
 import type { Route } from "../router";
 import { videos } from "../videos";
-
-const LINK = "underline underline-offset-4";
 
 type PageMode = Exclude<VideoMode, "import">;
 
@@ -28,6 +33,10 @@ const TITLES: Record<PageMode, [string, string]> = {
 export function VideoPage({ mode, go }: { mode: PageMode; go: (r: Route) => void }) {
   const model = useModelOf("wasifyai-video");
   const engine = useImageEngine();
+  // "Select video model": the model in use, or the way to get one (ADR-0086)
+  const choices = useChoicesFor("video");
+  const picker = useRef<ModelSelectHandle>(null);
+  const { ensure } = useGroupReady(choices, picker);
 
   // only a real model can be too big: the placeholder engine runs anywhere
   const real = engine?.state === "installed";
@@ -42,18 +51,7 @@ export function VideoPage({ mode, go }: { mode: PageMode; go: (r: Route) => void
           <p className="text-muted-foreground">{TITLES[mode][1]}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-medium">{model?.title ?? "Video model"}</span>
-          {model ? (
-            <span
-              className={cn(
-                "rounded-full border px-2 py-0.5 text-xs",
-                model.status === "ready" ? "text-ok" : "text-muted-foreground",
-              )}
-            >
-              {model.status === "ready" ? "ready" : "not downloaded"}
-            </span>
-          ) : null}
-          {model?.fit ? <FitBadge fit={model.fit} /> : null}
+          <ModelSelect group="video" api={choices} handleRef={picker} />
         </div>
       </header>
       <VideoWorkspace
@@ -65,32 +63,13 @@ export function VideoPage({ mode, go }: { mode: PageMode; go: (r: Route) => void
         blockedReason={
           tooBig && model?.fit ? `${model.title} will not fit. ${model.fit.reason}` : null
         }
+        beforeMake={ensure}
         notices={
-          <>
-            {tight && model?.fit ? (
-              <Notice tone="warn" title="This computer is tight on memory">
-                {model.fit.reason}
-              </Notice>
-            ) : null}
-            {engine?.state === "not_installed" ? (
-              <Notice tone="info" title="Placeholder clips">
-                Real videos need the image engine set up once.{" "}
-                <button type="button" className={LINK} onClick={() => go("settings")}>
-                  Open Settings
-                </button>
-                .
-              </Notice>
-            ) : null}
-            {model && model.status !== "ready" && engine?.state === "installed" ? (
-              <Notice tone="warn" title="The model is not on this computer yet">
-                Get it in{" "}
-                <button type="button" className={LINK} onClick={() => go("models")}>
-                  Models
-                </button>{" "}
-                before making real videos ({Math.round(model.bytes_missing / 1e9)} GB to get).
-              </Notice>
-            ) : null}
-          </>
+          tight && model?.fit ? (
+            <Notice tone="warn" title="This computer is tight on memory">
+              {model.fit.reason}
+            </Notice>
+          ) : null
         }
       />
     </div>

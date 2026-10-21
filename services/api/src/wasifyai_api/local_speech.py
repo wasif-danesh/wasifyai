@@ -95,6 +95,10 @@ class CombinedSpeechEngine:
 
     async def close(self) -> None:
         await self.hosted.stop()
+        local_close = getattr(self.local, "close", None)
+        if local_close is not None:  # a remote engine closes itself
+            await local_close()
+            return
         await self.local.server.close()
         if self.local.lipsync_sidecar is not None:
             await self.local.lipsync_sidecar.close()

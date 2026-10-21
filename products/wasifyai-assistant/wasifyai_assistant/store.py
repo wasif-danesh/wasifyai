@@ -286,7 +286,7 @@ class SqlConversationStore:
                 text(
                     "SELECT id, title, created_at, updated_at FROM conversations "
                     "WHERE tenant_id = :t AND product_id = :p AND user_id = :u "
-                    "AND (:before IS NULL OR updated_at < :before) "
+                    "AND (CAST(:before AS TEXT) IS NULL OR updated_at < :before) "
                     "ORDER BY updated_at DESC, id DESC LIMIT :n"
                 ),
                 {"t": tenant_id, "p": PRODUCT_ID, "u": user_id, "before": before, "n": limit},

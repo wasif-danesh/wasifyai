@@ -1,3 +1,4 @@
+from wasifyai_platform_sdk import speech_wire
 from wasifyai_platform_sdk.capabilities import (
     Capabilities,
     CapabilityNotConfigured,
@@ -13,6 +14,14 @@ from wasifyai_platform_sdk.config import (
     load_product_config,
 )
 from wasifyai_platform_sdk.context import RunContext, require_context, reset_context, set_context
+from wasifyai_platform_sdk.engine_jobs import (
+    EngineError,
+    EngineJob,
+    EngineOutcome,
+    EngineQueue,
+    EngineUnavailable,
+    EngineWorkerInfo,
+)
 from wasifyai_platform_sdk.enhance import (
     ENHANCED,
     EnhanceRefused,
@@ -204,7 +213,14 @@ __all__ = [
     "EventLog",
     "InMemoryEventLog",
     "RedisEventLog",
+    "EngineError",
+    "EngineJob",
+    "EngineOutcome",
+    "EngineQueue",
+    "EngineUnavailable",
+    "EngineWorkerInfo",
     "RedisJobSink",
+    "speech_wire",
     "JobError",
     "JobFailed",
     "JobOutput",

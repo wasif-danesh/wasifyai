@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from wasifyai_contracts import SseEvent
 from wasifyai_platform_sdk import (
     CapabilityBinding,
+    EngineQueue,
     EventLog,
     GraphRegistry,
     InMemoryJobSink,
@@ -446,7 +447,14 @@ def create_app(
         )
         app.state.engine = db
         app.state.storage = store
-        if not desktop and store is not None and db is not None:
+        # a product is served when it is part of this deployment: its folder is in the products
+        # directory
+        if (
+            not desktop
+            and store is not None
+            and db is not None
+            and (pdir / "wasifyai-voice").is_dir()
+        ):
             try:
                 from wasifyai_voice.pgstore import PostgresVoiceStore
 
@@ -460,7 +468,7 @@ def create_app(
                     PostgresVoiceStore, settings.database_url, schema=settings.voice_schema
                 )
                 hosted = None
-                if settings.voice_engine in ("hosted", "both"):
+                if settings.voice_engine in ("hosted", "both", "worker"):
                     models_file = Path(
                         settings.voice_models_file or pdir / "wasifyai-voice" / "hosted-models.yaml"
                     )
@@ -469,8 +477,25 @@ def create_app(
                         settings.litellm_base_url,
                         settings.litellm_api_key,
                     )
-                if settings.voice_engine == "hosted":
+                if settings.voice_engine == "hosted" or (
+                    settings.voice_engine == "worker" and conn is None
+                ):
                     app.state.audio = hosted
+                elif settings.voice_engine == "worker" and conn is not None:
+                    # the desktop's capabilities run on engine workers (ADR-0087); the hosted models
+                    # answer too. Nothing is offered from a worker until one is running.
+                    from wasifyai_api.desktop_models import load_catalogue
+                    from wasifyai_api.local_speech import CombinedSpeechEngine
+                    from wasifyai_api.remote_speech import RemoteSpeechEngine
+
+                    voice_models = {
+                        e.id: e.voice
+                        for e in load_catalogue(Path(pdir), ["wasifyai-voice"])
+                        if e.voice is not None
+                    }
+                    remote = RemoteSpeechEngine(EngineQueue(conn), store.backing, voice_models)
+                    remote.start()
+                    app.state.audio = CombinedSpeechEngine(remote, hosted)
                 else:
                     from wasifyai_api.local_speech import CombinedSpeechEngine, build_local_engine
 
@@ -478,7 +503,12 @@ def create_app(
                     app.state.audio = (
                         CombinedSpeechEngine(local, hosted) if hosted is not None else local
                     )
-        if not desktop and store is not None and db is not None:
+        if (
+            not desktop
+            and store is not None
+            and db is not None
+            and (pdir / "wasifyai-notebooks").is_dir()
+        ):
             try:
                 from wasifyai_notebooks.runtime import WebSetup
             except ImportError:  # notebooks are not part of this build

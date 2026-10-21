@@ -79,10 +79,11 @@ class Settings(BaseSettings):
     # by alias; until the gateway has the aliases (`voice-speak`, `voice-transcribe`) pointed at
     # provider models, the models list says they are not available.
     voice_schema: str = "voice"
-    # what answers speech: hosted (the gateway's speech routes), local (the models in
-    # DESKTOP_DATA_DIR, as the desktop app runs them) or both; local and both are for a service on a
-    # machine that has the models
-    voice_engine: Literal["hosted", "local", "both"] = "hosted"
+    # what answers speech: hosted (the gateway's speech routes); worker (the default: engine workers
+    # run the desktop's capabilities, ADR-0087, and the hosted models answer too); local (the models
+    # in DESKTOP_DATA_DIR run inside this process, as the desktop app does) or both (hosted and
+    # local); local and both are for a service on a machine that has the models
+    voice_engine: Literal["hosted", "local", "both", "worker"] = "worker"
     voice_models_file: str = ""  # your own descriptors; default: the product's file
 
     @model_validator(mode="after")

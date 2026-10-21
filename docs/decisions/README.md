@@ -88,5 +88,6 @@
 | [0084](0084-music-video.md) | Music video: a song in, a plan you can edit, clips, a final cut; our own pipeline on our own parts (Maestro and AutoMV are references, not dependencies) | Proposed (all owner questions answered 2026-10-20; MV0 on hold) |
 | [0085](0085-wangp-evaluation-spike.md) | WanGP evaluation spike: can it make basic images, video and audio on the Mac better than what we run now? (comparison protocol, licence gate, decision rule) | Proposed (owner's answers recorded 2026-10-20; spike W0 on hold, runs before ADR-0084 MV0) |
 | [0086](0086-one-simple-model-picker.md) | One simple way to choose, get and use a model | Accepted |
+| [0087](0087-engine-workers-run-the-desktops-capabilities-for-the-web.md) | Engine workers run the desktop's capabilities for the web | Accepted for P0 and P1 |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

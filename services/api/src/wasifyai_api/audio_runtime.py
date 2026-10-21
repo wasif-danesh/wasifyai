@@ -543,6 +543,11 @@ class AudioEngine:
         self.lipsync_sidecar = lipsync  # LipSyncSidecar: MuseTalk, an optional component (V5)
         self.slot: Any = None  # the SlotManager; set when the worker is built
 
+    @property
+    def models_service(self) -> Any:
+        """The catalogue and the downloads (the engine worker fetches models through it)."""
+        return self._models
+
     # ---- state ---------------------------------------------------------------------------
 
     @property

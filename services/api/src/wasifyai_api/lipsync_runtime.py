@@ -419,6 +419,9 @@ class LipSyncSidecar:
         env = {
             **os.environ, "MUSETALK_DIR": str(install.src), "PYTORCH_ENABLE_MPS_FALLBACK": "1",
             "PYTHONNOUSERSITE": "1", "PYTHONUNBUFFERED": "1",
+            # torch compiles the face finder with a C++ build that does not quote a folder with a
+            # space in its name (macOS "Application Support"); the eager model is as fast here
+            "TORCHDYNAMO_DISABLE": "1",
         }  # fmt: skip
         if install.torch_home is not None:
             env["TORCH_HOME"] = str(install.torch_home)

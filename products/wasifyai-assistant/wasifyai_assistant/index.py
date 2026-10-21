@@ -27,7 +27,8 @@ class ConversationIndexSource:
                 await conn.execute(
                     text(
                         "SELECT id, tenant_id, user_id, title FROM conversations "
-                        "WHERE product_id = :p AND (:a IS NULL OR id > :a) ORDER BY id LIMIT :n"
+                        "WHERE product_id = :p AND (CAST(:a AS TEXT) IS NULL OR id > :a) "
+                        "ORDER BY id LIMIT :n"
                     ),
                     {"p": PRODUCT_ID, "a": after, "n": limit},
                 )

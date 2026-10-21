@@ -8,6 +8,7 @@ members = [
     "wasifyai-api",
     "wasifyai-assistant",
     "wasifyai-contracts",
+    "wasifyai-engine-worker",
     "wasifyai-image",
     "wasifyai-media-worker",
     "wasifyai-model3d",
@@ -2937,6 +2938,25 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "pydantic", specifier = ">=2.9" }]
+
+[[package]]
+name = "wasifyai-engine-worker"
+version = "0.0.0"
+source = { editable = "services/engine-worker" }
+dependencies = [
+    { name = "pydantic-settings" },
+    { name = "redis" },
+    { name = "wasifyai-api" },
+    { name = "wasifyai-platform-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "redis", specifier = ">=5" },
+    { name = "wasifyai-api", editable = "services/api" },
+    { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
+]
 
 [[package]]
 name = "wasifyai-image"

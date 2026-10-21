@@ -83,3 +83,29 @@ Everything made is kept in Postgres and the containers' object storage, not in t
 
 The cloud GPU host itself (the local models above are for development; a deployment with `VOICE_ENGINE=local` needs a
 machine with them and their memory), moderation and quotas for speech, and a load test.
+
+
+## The engine worker: Music, Voices, Change a voice, Edit speech, Dub, Audiobook, Split and Lip sync (ADR-0087)
+
+Hosted models give the web Text to speech and Speech to text. The rest of the voice menu runs on an **engine worker**: the
+desktop engine's speech runtime behind a job loop. A screen is linked in the web menu when a live worker lists a *ready* model for it.
+
+**On a Mac (development, a home lab).** `make dev` starts the worker in the background when the desktop app's data folder exists
+(`make worker` runs it in a terminal; `scripts/worker.sh stop|logs`). It uses the models and the speech runtime the desktop app set
+up, so quit the desktop app while the worker makes something. `WORKER_DATA_DIR` picks another folder.
+
+**Getting a model onto the worker's machine** (until the admin screen of stage P5 exists):
+
+```bash
+scripts/worker.sh models                 # every speech model, its state here and its size
+scripts/worker.sh models htdemucs        # fetch one (the same code and checks as the desktop app's Models page)
+```
+
+The web menu shows the new screens within a few seconds of a model becoming ready (the API reads the worker list every 3 seconds).
+
+**Checking.** `GET /products/wasifyai-voice/models` lists what the workers list, with their state; the worker's log says
+`worker <name>: ... ready models: [...]` at start and one line per job. If nothing is listed, the worker is not running or cannot
+reach Redis (`REDIS_URL`) or storage (`STORAGE_*`).
+
+**Not here yet:** a worker on a Linux GPU host and its Helm values (stage P7), and the lip sync engine's own environment, which is
+set up in the desktop app for now.

@@ -145,8 +145,9 @@ Selected by environment wiring, not product config (one bucket per environment):
 | `NOTEBOOKS_EMBED_MODEL`, `NOTEBOOKS_EMBED_DIMENSION` | The gateway alias that serves the notebooks' search (default `creation-embedder`, 1024); it uses `LITELLM_BASE_URL` and `LITELLM_API_KEY` |
 | `NOTEBOOKS_MODELS_DIR` | Only without a gateway: the folder holding `embeddings/` (the local search model) |
 | `VOICE_SCHEMA` | Web profile: the Postgres schema of speech (default `voice`). Speech is always on; there is no switch. Until the gateway aliases `voice-speak` and `voice-transcribe` are bound to a provider (admin Models page), the hosted speech models are listed as not available |
-| `VOICE_ENGINE` | `hosted` (default), `local` or `both`: what answers speech. `local` is the desktop's runtime (audio.cpp, the lip sync component) over the models in `DESKTOP_DATA_DIR` (and `DESKTOP_MODELS_DIR`, `DESKTOP_EXTRA_MODEL_DIRS`), for a service on a machine that has them, such as a Mac; the web only uses what is ready there, setting up and fetching stay in the desktop app. `both` lists both and prefers a local model when one is ready. `scripts/web-local.sh` runs the whole stack this way |
+| `VOICE_ENGINE` | `worker` (default), `hosted`, `local` or `both`: `worker` runs the desktop's speech capabilities on engine workers (ADR-0087: `make worker`, the `engine-worker` service) and also lists the hosted models; nothing from a worker is offered until one is running. `hosted`, `local` or `both`: what answers speech. `local` is the desktop's runtime (audio.cpp, the lip sync component) over the models in `DESKTOP_DATA_DIR` (and `DESKTOP_MODELS_DIR`, `DESKTOP_EXTRA_MODEL_DIRS`), for a service on a machine that has them, such as a Mac; the web only uses what is ready there, setting up and fetching stay in the desktop app. `both` lists both and prefers a local model when one is ready. `scripts/web-local.sh` runs the whole stack this way |
 | `VOICE_MODELS_FILE` | The descriptors of the hosted models (default `products/wasifyai-voice/hosted-models.yaml`). Each names a gateway alias; `voice-speak` and `voice-transcribe` must be bound in the gateway to the provider's speech and transcription models (OpenRouter or similar). The text and recordings are sent to that provider |
+| `WORKER_ID`, `WORKER_JOB_TIMEOUT_S` | The engine worker (`services/engine-worker`, ADR-0087): its name in the list of workers (default: the machine's name and process id) and how long one job may run (default 3600 s). It reads `REDIS_URL` and the `STORAGE_*` settings like the media worker, and the engine's own `DESKTOP_DATA_DIR` for the models and runtimes it runs. `scripts/worker.sh` sets them for a Mac running `make dev` |
 
 Keys are always `{tenant_id}/{product_id}/{user_id}/{path}`. For GCS, S3 and Azure Blob the same
 interface applies (`obstore`); the adapter for each is a constructor in
@@ -256,3 +257,4 @@ in `product.yaml`, open a PR. No Python changes.
 
 If runtime switching is needed (A/B tests, per-tenant models), the same schema can be stored
 in Postgres and layered on top of `product.yaml`. Not needed for the MVP.
+

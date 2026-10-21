@@ -1,7 +1,7 @@
 CONTAINER_ENGINE ?= podman
 export CONTAINER_ENGINE
 
-.PHONY: engine-bundle reader-locks test-comfyui test-integration setup setup-k8s preflight dev down logs migrate test lint format contracts helm-lint kind-up kind-test kind-e2e kind-down monitoring-up monitoring-drill monitoring-drill-meta urls
+.PHONY: worker engine-bundle reader-locks test-comfyui test-integration setup setup-k8s preflight dev down logs migrate test lint format contracts helm-lint kind-up kind-test kind-e2e kind-down monitoring-up monitoring-drill monitoring-drill-meta urls
 setup:
 	./scripts/setup.sh
 setup-k8s:
@@ -12,7 +12,10 @@ dev:
 	./scripts/dev.sh
 logs:
 	$(CONTAINER_ENGINE) compose logs -f
+worker:   # the engine worker on this machine, in this terminal (make dev starts one in the background on a Mac)
+	./scripts/worker.sh run
 down:
+	-./scripts/worker.sh stop
 	$(CONTAINER_ENGINE) compose down
 migrate:
 	cd services/api && uv run alembic upgrade head   # needs postgres on localhost:5432

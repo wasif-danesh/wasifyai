@@ -1,6 +1,7 @@
 "use client";
 
 import { webImages, webNotebooks } from "@/lib/library";
+import { NEW_NOTEBOOK } from "@/lib/notebook-ids";
 import { webClient } from "@/lib/run-client";
 import type { NotebookSummary } from "@wasifyai/client";
 import { Button, NotebookList, NotebookPlaceProvider, NotebookWorkspace } from "@wasifyai/ui";
@@ -8,7 +9,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export const NEW_NOTEBOOK = "new";
 const DRAFT_TITLE = "Untitled notebook";
 
 /** View Notebooks: the person's notebooks as cards (the shared screen, also the desktop's). */

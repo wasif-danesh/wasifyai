@@ -246,8 +246,9 @@ Postgres (CI has the Postgres service; a machine without one skips the Postgres 
   with the document reader (still a program of its own), cuts, embeds and indexes it, and writes the result. A source a worker
   lost is failed after 30 minutes untouched (a reading may take 15), by whichever worker notices; the desktop, with one
   reader, still fails every interrupted source at start.
-- **Switch.** `NOTEBOOKS_ENABLED=true` (web profile only; off by default) lets the engine serve notebooks from Postgres and object
-  storage. Off, the routes answer 503 as before, so nothing is offered whose worker is not running. The worker takes the same
+- **Switch (removed 2026-10-21, owner: no feature switches).** The web profile always serves notebooks from Postgres and object
+  storage; the worker is part of the stack (`compose.yaml`, the Helm chart). The first design had `NOTEBOOKS_ENABLED=true` (off by
+  default, routes answering 503) so nothing was offered whose worker was not running. The worker takes the same
   database and storage settings as the engine, plus `NOTEBOOKS_MODELS_DIR` and `NOTEBOOKS_READER_DIR` on its machine.
 - The tests of the routes, the studio files and the reading run against both homes (the routes tests also against folders and
   objects); the web setup is tested end to end on Postgres and in-memory storage (stored by the engine's program, read by a

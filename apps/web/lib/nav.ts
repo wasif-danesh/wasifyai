@@ -4,6 +4,9 @@ import { VOICE_SCREENS, isVoiceScreen } from "./voice-screens";
 /** The product pages beside Create (`/image/edit`, `/video/library`) and what the breadcrumb calls them. */
 const SUBPAGES: Record<string, string> = {
   edit: "Edit",
+  inpaint: "Inpaint",
+  reference: "Reference",
+  extend: "Extend video",
   animate: "Animate a picture",
   library: "Library",
 };

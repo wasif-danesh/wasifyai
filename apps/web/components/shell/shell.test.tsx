@@ -14,16 +14,11 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
-function panel(isAdmin = false, notebooks = false, voice = false) {
+function panel(isAdmin = false) {
   render(
     <TooltipProvider>
       <SidebarProvider>
-        <AppSidebar
-          isAdmin={isAdmin}
-          footer={<span>Ada</span>}
-          notebooks={notebooks}
-          voice={voice}
-        />
+        <AppSidebar isAdmin={isAdmin} footer={<span>Ada</span>} />
       </SidebarProvider>
     </TooltipProvider>,
   );
@@ -33,7 +28,7 @@ describe("the side panel", () => {
   it("is the desktop's menu: the groups in order, with the page's group open", () => {
     path = "/voice/speak";
     query = "";
-    panel(false, false, true);
+    panel(false);
     for (const name of ["Notebook", "Images", "Video", "Voice", "Music"]) {
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
     }
@@ -160,7 +155,7 @@ describe("the side panel", () => {
   it("opens the shared speech screens when the voice product is on", async () => {
     path = "/voice/speak";
     query = "";
-    panel(false, false, true);
+    panel(false);
     expect(screen.getByRole("link", { name: /Text to speech/ })).toHaveAttribute(
       "href",
       "/voice/speak",

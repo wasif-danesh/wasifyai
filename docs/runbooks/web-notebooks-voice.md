@@ -1,22 +1,18 @@
 # Runbook: notebooks and speech on the web profile
 
 For staging and production (a cloud GPU host, models from a hosted provider; decisions of 2026-10-18 in
-`docs/phase3-web-parity-plan.md`). Both products are **off** until switched on in the Helm values.
+`docs/phase3-web-parity-plan.md`). Both products are **always on** (no switches, owner 2026-10-21): the API serves them, the web app shows them, and the chart
+runs the notebooks worker.
 
 ## What each needs
 
 | | Notebooks | Speech (voice) |
 |---|---|---|
-| Switch | `notebooks.enabled=true` | `voice.enabled=true` |
 | Needs | Postgres with pgvector, object storage, the **worker** (`<registry>/wasifyai-notebooks`), the gateway alias `creation-embedder` | Postgres, object storage, the gateway aliases `voice-speak` and `voice-transcribe` |
 | Pods | API, web, **notebooks-worker** | API, web |
 | Sends to a third party | the text of sources, to the embedder and the chat model the aliases point at | the text to speak and the recordings to read, to the speech provider |
 
-The chart passes `NOTEBOOKS_ENABLED` and `VOICE_ENABLED` to the API **and** the web app (the web app uses them for the
-menu and for sending the older speech pages to the new ones). Setting them on only one of the two gives a menu that
-lies; the chart cannot do that, a hand-made deployment can.
-
-## Switching on
+## Setting up
 
 1. Check the images exist: `api`, `web` and `wasifyai-notebooks` (CI builds all three; the worker image is the large one
    because it holds the document reader and its models: about 3 GB).
@@ -25,16 +21,14 @@ lies; the chart cannot do that, a hand-made deployment can.
    test (it speaks a word, and reads a second of silence). `creation-embedder` must be a 1024-dimension multilingual
    embedder (the default is bge-m3). If it changes dimension, set `notebooks.embedDimension`; stored vectors of another
    size are not searched.
-3. Put both on in the environment's values and sync:
+3. Turn the safeguards on for a public deployment (quotas on notebooks apply only while they are on) and sync:
 
    ```yaml
-   notebooks: { enabled: true }
-   voice: { enabled: true }
-   safeguards: { forceOn: true }   # quotas on notebooks (sources, bytes) apply only while safeguards are on
+   safeguards: { forceOn: true }
    ```
 
 4. Check: the API log says nothing about "is not installed"; `kubectl get deploy -l app.kubernetes.io/component=notebooks-worker`
-   is ready; in the web app the Notebook and Voice menu items open (not "Soon"); add a small PDF to a notebook and see it
+   is ready; in the web app the Notebook and Voice menu items open (a voice screen is linked when a ready model can do it, so until the aliases are bound only the screens the models allow show); add a small PDF to a notebook and see it
    go from reading to ready; speak a sentence.
 
 ## Running it

@@ -31,6 +31,8 @@ fi
 
 step "Building images"
 IMAGES=("api:services/api" "media-worker:services/media-worker" "web:apps/web")
+# the notebooks worker holds the document reader: the large image, and its name is the product's
+IMAGES+=("wasifyai-notebooks:products/wasifyai-notebooks")
 [ "$MODE" = "full" ] && IMAGES+=("comfyui:services/comfyui")
 for pair in "${IMAGES[@]}"; do
   name="${pair%%:*}"; dir="${pair##*:}"

@@ -73,11 +73,6 @@ type VoiceClip = {
   picture_url?: string;
 };
 
-/** Whether this deployment keeps speech, music and video in the voice product (`VOICE_ENABLED`). */
-export function voiceOn(): boolean {
-  return process.env.VOICE_ENABLED === "true";
-}
-
 export function speechFromVoice(s: VoiceSpeech): SpeechCard {
   return {
     id: s.id,

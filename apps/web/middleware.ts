@@ -21,7 +21,7 @@ const MOVED: Record<string, string> = {
 };
 
 export default function middleware(req: NextRequest, event: NextFetchEvent) {
-  const to = process.env.VOICE_ENABLED === "true" ? MOVED[req.nextUrl.pathname] : undefined;
+  const to = MOVED[req.nextUrl.pathname];
   if (to) return NextResponse.redirect(new URL(to, req.nextUrl.origin));
   if (!authEnabled()) return NextResponse.next();
   return (guard as unknown as (r: NextRequest, e: NextFetchEvent) => Promise<Response>)(req, event);

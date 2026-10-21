@@ -43,12 +43,12 @@ web:
     requests: { cpu: 50m, memory: 128Mi }
     limits: { memory: 512Mi }
 
-# Products that run only on the web profile (docs/phase3-web-parity-plan.md). Off until the pieces they need are
-# there: notebooks need the worker below and the gateway's `creation-embedder` alias; voice needs the gateway's
-# `voice-speak` and `voice-transcribe` aliases bound to a speech provider in the admin Models page (the provider
-# receives the text and the recordings). Both need object storage and the platform Postgres (with pgvector).
+# Products of the web profile (docs/phase3-web-parity-plan.md). They are always on, with no switch: notebooks need the
+# worker below and the gateway's `creation-embedder` alias; voice needs the gateway's `voice-speak` and
+# `voice-transcribe` aliases bound to a speech provider in the admin Models page (the provider receives the text and
+# the recordings; until they are bound the speech models say they are not available). Both need object storage and
+# the platform Postgres (with pgvector).
 notebooks:
-  enabled: false
   schema: notebooks
   embedModel: creation-embedder
   embedDimension: 1024
@@ -60,7 +60,6 @@ notebooks:
       requests: { cpu: 250m, memory: 1Gi }
       limits: { memory: 4Gi }
 voice:
-  enabled: false
   schema: voice
   modelsFile: ""        # your own descriptors; empty = the product's hosted-models.yaml
 

@@ -20,7 +20,6 @@ spec:
           env:
             - { name: API_BASE_URL, value: "http://{{ .Release.Name }}-api:8000" }
             {{- include "wasifyai.webAuthEnv" . | nindent 12 }}
-            {{- include "wasifyai.productsEnv" . | nindent 12 }}
           readinessProbe:
             httpGet: { path: /, port: http }
             periodSeconds: 5

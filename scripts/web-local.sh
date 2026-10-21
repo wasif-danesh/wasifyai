@@ -38,7 +38,6 @@ export STORAGE_ENDPOINT="http://localhost:8333"
 export STORAGE_PUBLIC_ENDPOINT="http://localhost:8333"
 export AUTH_MODE="${AUTH_MODE:-stub}"
 # speech from the models on this Mac, and hosted ones too where the gateway has them (VOICE_ENGINE=both)
-export VOICE_ENABLED=true
 export VOICE_ENGINE="${VOICE_ENGINE:-local}"
 export DESKTOP_DATA_DIR="$DATA_DIR"
 

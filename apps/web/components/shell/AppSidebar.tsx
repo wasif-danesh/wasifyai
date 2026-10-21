@@ -15,27 +15,21 @@ import type { ReactNode } from "react";
 export function AppSidebar({
   isAdmin,
   footer,
-  notebooks = false,
-  voice = false,
 }: {
   isAdmin: boolean;
   footer: ReactNode;
-  /** notebooks are on in this deployment (`NOTEBOOKS_ENABLED`) */
-  notebooks?: boolean;
-  /** the voice product is on in this deployment (`VOICE_ENABLED`) */
-  voice?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const show = useSearchParams()?.get("show") ?? null;
   const chats = useConversations(webAssistant);
-  const voiceScreens = useVoiceOffer(voice);
+  const voiceScreens = useVoiceOffer();
   const chatId = /^\/chat\/([\w-]+)$/.exec(pathname)?.[1];
   return (
     <Sidebar collapsible="offcanvas">
       <SidebarContent className="gap-0 overflow-hidden">
         <SideMenu
-          resolve={resolveWebItem(pathname, show, { notebooks, voice, voiceScreens })}
+          resolve={resolveWebItem(pathname, show, { voiceScreens })}
           link={Link}
           brandHref="/"
           recents={{

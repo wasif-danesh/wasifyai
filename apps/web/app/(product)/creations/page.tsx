@@ -7,7 +7,6 @@ import {
   speechFromVoice,
   trackFromVoice,
   transcriptFromVoice,
-  voiceOn,
 } from "@/lib/voice-cards";
 import type { ImagePage, VideoPage } from "@wasifyai/contracts";
 import type { Metadata } from "next";
@@ -19,9 +18,7 @@ const FILTERS = ["songs", "images", "videos", "speeches", "transcripts", "lipsyn
 
 type Items<T> = { items: T[] };
 const voiceList = <T,>(kind: string): Promise<Items<T>> =>
-  voiceOn()
-    ? apiGet<Items<T>>(`/products/wasifyai-voice/${kind}?limit=100`)
-    : Promise.resolve({ items: [] });
+  apiGet<Items<T>>(`/products/wasifyai-voice/${kind}?limit=100`);
 
 export default async function Creations({
   searchParams,

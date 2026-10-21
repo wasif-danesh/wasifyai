@@ -1,7 +1,7 @@
 // The products shown on the home page: one entry per card. Adding a product to the app is one
 // entry here plus its own area under /<id>. `soon` cards show a "Coming soon" tag and link to a
 // plain "Coming soon" page until the product is built (each has an ADR that designs it). Music, speech and lip
-// sync are screens of the voice product (`/voice/<screen>`), which are there when `VOICE_ENABLED`.
+// sync are screens of the voice product (`/voice/<screen>`), which are always there.
 export type Product = {
   id: "music" | "image" | "video" | "text-to-speech" | "speech-to-text" | "lip-sync";
   title: string;
@@ -100,17 +100,7 @@ export const PRODUCTS: Product[] = [
   },
 ];
 
-/** The cards that lead to the voice product's screens: shown only where the voice product is on. */
-export const VOICE_BACKED: Product["id"][] = [
-  "music",
-  "text-to-speech",
-  "speech-to-text",
-  "lip-sync",
-];
-
-/** The products to show: those backed by the voice product only when it is on. */
-export function currentProducts(
-  voiceOn: boolean = process.env.VOICE_ENABLED === "true",
-): Product[] {
-  return PRODUCTS.filter((p) => voiceOn || !VOICE_BACKED.includes(p.id));
+/** The products to show: all of them (the voice product is always on). */
+export function currentProducts(): Product[] {
+  return PRODUCTS;
 }

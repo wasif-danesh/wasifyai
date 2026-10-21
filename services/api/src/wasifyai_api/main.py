@@ -446,14 +446,14 @@ def create_app(
         )
         app.state.engine = db
         app.state.storage = store
-        if not desktop and settings.voice_enabled and store is not None and db is not None:
+        if not desktop and store is not None and db is not None:
             try:
                 from wasifyai_voice.pgstore import PostgresVoiceStore
 
                 from wasifyai_api.hosted_speech import HostedSpeechEngine, load_hosted_models
             except ImportError:  # the voice product is not part of this build
                 logging.getLogger("wasifyai_api").warning(
-                    "VOICE_ENABLED is set but the voice product is not installed"
+                    "the voice product is not installed: no speech on the web"
                 )
             else:
                 app.state.voice_store = await asyncio.to_thread(
@@ -478,12 +478,12 @@ def create_app(
                     app.state.audio = (
                         CombinedSpeechEngine(local, hosted) if hosted is not None else local
                     )
-        if not desktop and settings.notebooks_enabled and store is not None and db is not None:
+        if not desktop and store is not None and db is not None:
             try:
                 from wasifyai_notebooks.runtime import WebSetup
             except ImportError:  # notebooks are not part of this build
                 logging.getLogger("wasifyai_api").warning(
-                    "NOTEBOOKS_ENABLED is set but the notebooks product is not installed"
+                    "the notebooks product is not installed: no notebooks on the web"
                 )
             else:
                 app.state.notebooks_web = WebSetup(

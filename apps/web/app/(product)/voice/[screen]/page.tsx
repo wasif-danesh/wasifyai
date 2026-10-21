@@ -12,6 +12,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function VoicePage({ params }: Props) {
   const { screen } = await params;
-  if (process.env.VOICE_ENABLED !== "true" || !isVoiceScreen(screen)) notFound();
+  if (!isVoiceScreen(screen)) notFound();
   return <VoiceScreen screen={screen} />;
 }

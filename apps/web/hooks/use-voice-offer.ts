@@ -8,10 +8,10 @@ let known: VoiceScreenName[] | null = null;
 
 /** The voice screens this deployment can run, asked of the service once per page load. Nothing is offered
  * until it answers, and nothing if it cannot (the menu then shows those items as "Soon"). */
-export function useVoiceOffer(enabled: boolean): readonly VoiceScreenName[] {
+export function useVoiceOffer(): readonly VoiceScreenName[] {
   const [offer, setOffer] = useState<readonly VoiceScreenName[]>(known ?? []);
   useEffect(() => {
-    if (!enabled || known) return;
+    if (known) return;
     let alive = true;
     webVoice
       .models()
@@ -23,6 +23,6 @@ export function useVoiceOffer(enabled: boolean): readonly VoiceScreenName[] {
     return () => {
       alive = false;
     };
-  }, [enabled]);
+  }, []);
   return offer;
 }

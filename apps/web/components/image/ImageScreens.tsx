@@ -3,6 +3,7 @@
 import { putHandoff, takeHandoff } from "@/lib/handoff";
 import { imageDownload, webImages } from "@/lib/library";
 import { webClient } from "@/lib/run-client";
+import type { ImageMode } from "@wasifyai/client";
 import { ImageLibrary, ImageWorkspace, type WorkspacePreset, presetOf } from "@wasifyai/ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -12,9 +13,9 @@ const EDIT = "image-edit";
 
 type Start = { preset: WorkspacePreset | null; source: { url: string; name: string } | null };
 
-/** Create and Edit: the shared two-panel screen (also the desktop's), talking to the BFF. A recipe sent from
+/** Create, Edit, Inpaint and Reference: the shared two-panel screen (also the desktop's), talking to the BFF. A recipe sent from
  * the library ("Make it again") or a result sent to Edit arrives through the tab's session storage. */
-export function ImageScreen({ mode }: { mode: "text" | "image" }) {
+export function ImageScreen({ mode }: { mode: ImageMode }) {
   const router = useRouter();
   const [start, setStart] = useState<Start | null>(null);
   useEffect(() => {

@@ -13,6 +13,7 @@ import { Button } from "../components/button";
 import { Label } from "../components/label";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
+import { fileNameFor, useSaveCopy } from "../save";
 import { ModelPicker } from "./ModelPicker";
 import { OptionFields } from "./OptionFields";
 import { RuntimeCard } from "./RuntimeCard";
@@ -123,14 +124,17 @@ export function SpeakWorkspace({
     setSpeeches((list) => list.filter((s) => s.id !== id));
   }
 
+  const saveCopy = useSaveCopy();
   async function save(s: Speech) {
-    const blob = await api.downloadSpeech(s.id);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${s.text.slice(0, 40).replace(/[^\w -]+/g, "_") || "speech"}.wav`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setProblem(null);
+    try {
+      await saveCopy({
+        name: fileNameFor(s.text.slice(0, 40), "wav", "speech"),
+        blob: () => api.downloadSpeech(s.id),
+      });
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "That could not be saved.");
+    }
   }
 
   if (error) {

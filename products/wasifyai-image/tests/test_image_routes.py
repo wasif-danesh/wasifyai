@@ -190,6 +190,15 @@ def test_export_copies_the_file_and_never_overwrites(client, tmp_path):
     assert second["name"] == "image-number-2-2.png" and saved.exists()
 
 
+def test_export_writes_where_the_save_as_box_chose(client, tmp_path):
+    chosen = tmp_path / "Pictures" / "mine.png"
+    chosen.parent.mkdir()
+    r = client.post(f"{BASE}/{uid(2)}/export", json={"path": str(chosen)})
+    assert r.status_code == 200 and r.json()["path"] == str(chosen) and chosen.read_bytes()
+    bad = client.post(f"{BASE}/{uid(2)}/export", json={"path": str(tmp_path / "x" / "y.png")})
+    assert bad.status_code == 422 and "does not exist" in bad.json()["detail"]
+
+
 def test_export_is_only_for_the_owner_and_only_where_a_folder_is_set(client):
     other = client.post(f"{BASE}/{uid(2)}/export", headers={"x-user": "someone-else"})
     assert other.status_code == 404

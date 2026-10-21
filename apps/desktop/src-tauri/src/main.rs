@@ -215,6 +215,8 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main_window(app);
         }))
+        // the system's Save As box for "Save a copy" (nothing else of the plugin is allowed)
+        .plugin(tauri_plugin_dialog::init())
         .manage(engine.clone())
         .invoke_handler(tauri::generate_handler![
             engine_status,
@@ -241,6 +243,7 @@ fn main() {
             let input = engine::Input {
                 data_dir,
                 resource_dir: app.path().resource_dir().ok(),
+                download_dir: app.path().download_dir().ok(),
             };
             app.manage(comfyui::Components::new(input.clone()));
             app.manage(llamacpp::Components::new(input.clone()));

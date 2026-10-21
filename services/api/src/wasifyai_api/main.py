@@ -76,6 +76,7 @@ from wasifyai_api.desktop_lipsync import router as desktop_lipsync_router
 from wasifyai_api.desktop_llm import router as desktop_llm_router
 from wasifyai_api.desktop_model3d import router as desktop_model3d_router
 from wasifyai_api.desktop_models import router as desktop_models_router
+from wasifyai_api.desktop_save import router as desktop_save_router
 from wasifyai_api.desktop_video_builder import router as desktop_video_builder_router
 from wasifyai_api.graphs import default_registry
 from wasifyai_api.identity import get_identity
@@ -622,6 +623,7 @@ def create_app(
         app.include_router(desktop_lipsync_router)
         app.include_router(desktop_video_builder_router)
         app.include_router(desktop_model3d_router)
+        app.include_router(desktop_save_router)
         app.include_router(desktop_discovery_router)
         app.include_router(desktop_llm_router)
         app.include_router(desktop_hub_router)

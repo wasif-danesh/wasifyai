@@ -1,7 +1,8 @@
 "use client";
 
 import { type VideoSummary, type VideosApi, canExtend, clipLength } from "@wasifyai/client";
-import { type FormEvent, useEffect, useId, useState } from "react";
+import { Upload } from "lucide-react";
+import { type ChangeEvent, type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { PromptField } from "../components/create";
@@ -20,9 +21,10 @@ const EXAMPLES = [
 export type ExtendValue = { source: VideoSummary; prompt: string };
 
 /**
- * Carry on one of the person's videos (Extend video): choose a finished clip, say what should keep happening,
- * and about two more seconds are made from its last second. The words fill in from the clip's own and steer
- * only weakly: the movement of the last second carries on, and the form says so.
+ * Carry on one of the person's videos (Extend video): choose a finished clip or add a video file from this
+ * computer, say what should keep happening, and about two more seconds are made from its last second. The
+ * words of a clip made here fill in from its own; they steer only weakly: the movement of the last second
+ * carries on, and the form says so.
  */
 export function ExtendForm({
   videos,
@@ -30,7 +32,7 @@ export function ExtendForm({
   initial,
   hint,
 }: {
-  videos: Pick<VideosApi, "list">;
+  videos: Pick<VideosApi, "list"> & Partial<Pick<VideosApi, "importVideo">>;
   onSubmit: (value: ExtendValue) => void;
   initial?: { source: VideoSummary; prompt: string };
   hint?: string;
@@ -44,6 +46,9 @@ export function ExtendForm({
   const [source, setSource] = useState<VideoSummary | null>(initial?.source ?? null);
   const [prompt, setPrompt] = useState(initial?.prompt ?? "");
   const [edited, setEdited] = useState(Boolean(initial));
+  const [adding, setAdding] = useState(false);
+  const [addProblem, setAddProblem] = useState<string | null>(null);
+  const picker = useRef<HTMLInputElement>(null);
 
   async function load(before?: string | null) {
     setLoading(true);
@@ -68,7 +73,29 @@ export function ExtendForm({
 
   function choose(clip: VideoSummary) {
     setSource(clip);
-    if (!edited) setPrompt(clip.prompt.slice(0, MAX_PROMPT));
+    // a clip made here has the words that made it; a file the person added only has its name
+    if (!edited) setPrompt(clip.mode === "import" ? "" : clip.prompt.slice(0, MAX_PROMPT));
+  }
+
+  async function add(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // the same file can be chosen again
+    if (!file || !videos.importVideo) return;
+    setAdding(true);
+    setAddProblem(null);
+    try {
+      const clip = await videos.importVideo(file);
+      setClips((old) => [clip, ...(old ?? [])]);
+      choose(clip);
+    } catch (err) {
+      setAddProblem(
+        err instanceof Error && err.message
+          ? err.message
+          : "That video could not be added. Try another file.",
+      );
+    } finally {
+      setAdding(false);
+    }
   }
 
   const trimmed = prompt.trim();
@@ -83,6 +110,37 @@ export function ExtendForm({
     <form className={cn(panel, "gap-6")} onSubmit={submit}>
       <fieldset className={cn(field, "m-0 border-0 p-0")}>
         <legend className={cn(fieldLabel, "mb-1.5")}>Which video should carry on?</legend>
+        {videos.importVideo ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              ref={picker}
+              type="file"
+              accept="video/*,.mp4,.mov,.m4v,.webm,.mkv"
+              className="sr-only"
+              tabIndex={-1}
+              aria-label="Choose a video file"
+              onChange={(e) => void add(e)}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={adding}
+              onClick={() => picker.current?.click()}
+            >
+              {adding ? <Spinner /> : <Upload className="size-4" />} Add a video from this computer
+            </Button>
+            <span className="text-muted-foreground text-sm" aria-live="polite">
+              {adding
+                ? "Adding your video… this takes a moment."
+                : "Up to 30 seconds. It is made to fit the model; the original is not changed."}
+            </span>
+          </div>
+        ) : null}
+        {addProblem ? (
+          <Notice tone="error" title="That video could not be added">
+            {addProblem}
+          </Notice>
+        ) : null}
         {clips === null && !failed ? (
           <p className="flex items-center gap-2 text-muted-foreground">
             <Spinner /> Looking for your videos…
@@ -105,7 +163,7 @@ export function ExtendForm({
           <p className="text-muted-foreground">
             {hidden && !next
               ? "Your videos are all too long to carry on. A video can be carried on until it is about 4 seconds long."
-              : "You have no videos to carry on yet. Make one in Create or Animate a picture first."}
+              : "You have no videos to carry on yet. Add one from your computer, or make one in Create."}
           </p>
         ) : null}
         {clips && clips.length > 0 ? (

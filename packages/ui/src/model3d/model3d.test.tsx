@@ -460,7 +460,7 @@ describe("checking and making", () => {
     expect(screen.getByText(/It took about 10 minutes/)).toBeInTheDocument();
     expect(screen.getByText(/not watertight/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Save a copy/ }));
-    expect(a.exportCopy).toHaveBeenCalledWith("m".repeat(32));
+    expect(a.exportCopy).toHaveBeenCalledWith("m".repeat(32), undefined);
     expect(await screen.findByText("Saved as frog-mug.glb in Downloads.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Library/ }));
     expect(onOpenLibrary).toHaveBeenCalled();

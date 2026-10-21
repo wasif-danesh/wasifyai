@@ -123,6 +123,42 @@ describe("the sources tree", () => {
     expect([...second]).toEqual(["s3"]);
   });
 
+  it("renames and removes in boxes of the page, never with window.confirm or window.prompt", async () => {
+    // the app window has neither: they answer "no" at once
+    vi.stubGlobal("confirm", () => {
+      throw new Error("window.confirm is not available in the app window");
+    });
+    vi.stubGlobal("prompt", () => {
+      throw new Error("window.prompt is not available in the app window");
+    });
+    const p = pane();
+    await userEvent.click(screen.getByLabelText("Rename s3.pdf"));
+    const field = screen.getByLabelText("Name");
+    expect(field).toHaveProperty("value", "s3.pdf");
+    await userEvent.clear(field);
+    await userEvent.type(field, "budget.pdf{Enter}");
+    expect(p.onRename).toHaveBeenCalledWith(expect.objectContaining({ id: "s3" }), "budget.pdf");
+
+    await userEvent.click(screen.getByLabelText("Remove s3.pdf"));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(p.onRemove).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByLabelText("Remove s3.pdf"));
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(p.onRemove).toHaveBeenCalledWith(expect.objectContaining({ id: "s3" }));
+
+    await userEvent.click(screen.getByLabelText("Remove folder Reports"));
+    expect(screen.getByText(/and the 2 sources in it/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(p.onRemoveFolder).toHaveBeenCalledWith(expect.objectContaining({ id: "f1" }));
+    await userEvent.click(screen.getByLabelText("Rename Reports"));
+    await userEvent.type(screen.getByLabelText("Name"), "Reports 2025{Enter}"); // the name starts selected
+    expect(p.onRenameFolder).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "f1" }),
+      "Reports 2025",
+    );
+    vi.unstubAllGlobals();
+  });
+
   it("shows a half-ticked folder as mixed", () => {
     pane({ unticked: new Set(["s1"]) });
     const box = screen.getByLabelText("Use everything in Reports") as HTMLInputElement;

@@ -69,7 +69,14 @@ async def test_a_clip_that_was_extended_can_be_extended_once_more(tmp_path, ctx)
     vid = await make_source(rig, store, frames=89, mode="extend")
     s = await start(rig, store, vid)
     (job,) = rig.sink.submitted
-    assert job.prompt["from_frame"] == 80
+    # a longer clip is given to the engine as its last second only: nine frames from its 24
+    assert job.prompt["from_frame"] == 24 - OVERLAP_FRAMES
+    assert (
+        frame_count(
+            await rig.raw.get(object_key("t1", "wasifyai-video", "u1", job.prompt["video_key"]))
+        )
+        == 24
+    )
     await s.finish_job(data=mp4(frames=EXTEND_FRAMES))
     row = next(v for v in store.videos if v.id == s.state["video_id"])
     assert row.frames == 129 and s.state["seconds"] == 5
@@ -182,3 +189,36 @@ async def test_a_job_that_cannot_be_queued_leaves_no_copy_and_no_working_row(tmp
 async def test_the_join_keeps_the_first_frames_and_all_of_the_new_clip():
     joined = await join_clips(mp4(frames=30), mp4(frames=20), keep=21)
     assert frame_count(joined) == 41
+
+
+async def test_a_video_the_person_added_can_be_carried_on_whatever_its_length(tmp_path, ctx):
+    rig, store = make_rig(tmp_path), InMemoryVideoStore()
+    vid = await make_source(rig, store, frames=200, mode="import")  # more than a made clip may be
+    s = await start(rig, store, vid, prompt="the people keep walking")
+    (job,) = rig.sink.submitted
+    assert job.prompt["from_frame"] == 24 - OVERLAP_FRAMES
+    temp = object_key("t1", "wasifyai-video", "u1", job.prompt["video_key"])
+    assert frame_count(await rig.raw.get(temp)) == 24  # only the end goes to the engine
+    assert len(rig.picture_checks()) == 1  # its last frame was looked at, as a picture is
+    await s.finish_job(data=mp4(frames=EXTEND_FRAMES))
+    row = next(v for v in store.videos if v.id == s.state["video_id"])
+    assert (row.mode, row.frames) == ("extend", 191 + EXTEND_FRAMES)
+    joined = await rig.raw.get(object_key("t1", "wasifyai-video", "u1", f"{row.id}/video.mp4"))
+    assert frame_count(joined) == 191 + EXTEND_FRAMES
+    assert not await exists(rig, job.prompt["video_key"])
+
+
+async def test_an_added_clip_that_the_moderator_refuses_is_not_carried_on(tmp_path, ctx):
+    rig = make_rig(tmp_path, moderate_image=[verdict(False, "minors")])
+    store = InMemoryVideoStore()
+    vid = await make_source(rig, store, frames=49, mode="import")
+    s = await start(rig, store, vid)
+    assert s.state["status"] == "refused" and s.state["refusal"]["code"] == "minors"
+    assert rig.sink.submitted == [] and len(store.videos) == 1
+
+
+async def test_a_clip_the_model_made_is_not_looked_at_again(tmp_path, ctx):
+    rig, store = make_rig(tmp_path), InMemoryVideoStore()
+    vid = await make_source(rig, store, frames=49, mode="text")
+    await start(rig, store, vid)
+    assert rig.picture_checks() == []

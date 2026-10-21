@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../components/button";
 import { Label } from "../components/label";
 import { Spinner } from "../components/spinner";
+import { fileNameFor, useSaveCopy } from "../save";
 import { ModelPicker } from "./ModelPicker";
 import { RuntimeCard } from "./RuntimeCard";
 import { clock, pickModel } from "./format";
@@ -69,14 +70,17 @@ export function TranscribeWorkspace({
     setOpen(await api.transcript(id));
   }
 
+  const saveCopy = useSaveCopy();
   async function save(t: Transcript, format: TranscriptFormat) {
-    const blob = await api.exportTranscript(t.id, format);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${t.title.replace(/[^\w -]+/g, "_") || "transcript"}.${format}`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setProblem(null);
+    try {
+      await saveCopy({
+        name: fileNameFor(t.title, format, "transcript"),
+        blob: () => api.exportTranscript(t.id, format),
+      });
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "That could not be saved.");
+    }
   }
 
   async function remove(id: string) {

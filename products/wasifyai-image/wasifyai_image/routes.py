@@ -10,7 +10,15 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict
-from wasifyai_platform_sdk import Identity, RouteDeps, build_enhance_router, parse_ids
+from wasifyai_platform_sdk import (
+    Identity,
+    RouteDeps,
+    SaveRefused,
+    SaveTo,
+    build_enhance_router,
+    parse_ids,
+    write_to_path,
+)
 
 from wasifyai_image import prompts
 from wasifyai_image.guardrail import enhance_guard
@@ -137,11 +145,14 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
             return await summary(image)
 
     @router.post("/images/{image_id}/export", response_model=Exported)
-    async def export_image(image_id: str, identity: Identity = Depends(deps.identity)) -> Exported:
-        """Copy the image into the person's export folder (the desktop app sets one; a webview
-        cannot save a file by itself). Never overwrites: a second copy gets a number."""
+    async def export_image(
+        image_id: str, body: SaveTo | None = None, identity: Identity = Depends(deps.identity)
+    ) -> Exported:
+        """Copy the image to the place the person chose in the Save As box (`path`), or into the
+        export folder when there is none: a webview cannot save a file by itself. The folder never
+        overwrites: a second copy gets a number."""
         folder = getattr(deps.state, "export_dir", None)
-        if folder is None or deps.storage is None:
+        if (folder is None and not (body and body.path)) or deps.storage is None:
             raise HTTPException(404, "saving to a folder is not available here")
         image = await images().get(identity.tenant_id, identity.user_id, image_id)
         if image is None:
@@ -152,9 +163,18 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
         except FileNotFoundError:
             raise HTTPException(404, "image not found") from None
         ext = image.image_key.rsplit(".", 1)[-1].lower()
-        path = await asyncio.to_thread(
-            save_copy, Path(folder), file_name(image.prompt, ""), ext, data
-        )
+        if body and body.path:
+            try:
+                path = await asyncio.to_thread(
+                    write_to_path, body.path, data, getattr(deps.state, "desktop_dir", None)
+                )
+            except SaveRefused as exc:
+                raise HTTPException(422, str(exc)) from None
+        else:
+            assert folder is not None  # the check above: no path means a folder
+            path = await asyncio.to_thread(
+                save_copy, Path(folder), file_name(image.prompt, ""), ext, data
+            )
         return Exported(name=path.name, path=str(path))
 
     @router.get("/images/{image_id}/download")

@@ -17,6 +17,9 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  Loader2,
+  Maximize2,
+  Minimize2,
   RotateCw,
   X,
 } from "lucide-react";
@@ -507,7 +510,21 @@ export type OutputViewerProps = {
   imageUrl?: (id: string) => Promise<string>;
   /** The calls that give an audio overview its voices (absent where there is no speech engine). */
   overview?: OverviewControl;
+  /** A line under the header: where a copy was saved, or why it could not be. */
+  notice?: ReactNode;
+  /** A copy is being saved: the save button waits. */
+  saving?: boolean;
+  /** The pane is wide now; a button in the header toggles it. */
+  wide?: boolean;
+  onToggleWide?: () => void;
 };
+
+/** The infographic's picture (made by the image product), if this output has one. */
+export function pictureOf(output: NotebookOutput): string | null {
+  if (output.format !== "infographic" || !output.data) return null;
+  const id = (output.data as InfographicData).image_id;
+  return typeof id === "string" && id ? id : null;
+}
 
 /** One output opened: the right viewer for its format, and the file to save. */
 export function OutputViewer({
@@ -517,6 +534,10 @@ export function OutputViewer({
   actions,
   imageUrl,
   overview,
+  notice,
+  saving,
+  wide,
+  onToggleWide,
 }: OutputViewerProps) {
   let content: ReactNode;
   if (output.status !== "ready") {
@@ -559,19 +580,36 @@ export function OutputViewer({
         <h2 className="min-w-0 flex-1 truncate font-medium text-sm" title={output.title}>
           {output.title || "Untitled"}
         </h2>
-        {output.has_file && onDownload ? (
+        {onDownload && (output.has_file || pictureOf(output)) ? (
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label={`Save ${output.file_name ?? "the file"}`}
+            aria-label={
+              output.has_file ? `Save ${output.file_name ?? "the file"}` : "Save the picture"
+            }
+            title={output.has_file ? "Save the file" : "Save the picture"}
+            disabled={saving}
             onClick={onDownload}
           >
-            <Download />
+            {saving ? <Loader2 className="animate-spin" /> : <Download />}
+          </Button>
+        ) : null}
+        {onToggleWide ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={wide ? "Make the Studio narrower" : "Make the Studio wider"}
+            title={wide ? "Narrower" : "Wider"}
+            onClick={onToggleWide}
+          >
+            {wide ? <Minimize2 /> : <Maximize2 />}
           </Button>
         ) : null}
         {actions}
       </header>
+      {notice ? <div className="border-b px-4 py-2 text-sm">{notice}</div> : null}
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4">
         <div className="grid grid-cols-[minmax(0,1fr)]">{content}</div>
       </div>

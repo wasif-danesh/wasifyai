@@ -77,6 +77,9 @@ pub struct LaunchConfig {
     pub products_dir: PathBuf,
     pub data_dir: PathBuf,
     pub image_engine: String,
+    /// The operating system's own Downloads folder, where the engine saves a copy when nothing asks
+    /// the person for a place (the assistant's export action). `None` leaves the engine's default.
+    pub download_dir: Option<PathBuf>,
 }
 
 /// What the shell noticed about this run, for the evidence documents and the self-test's report.
@@ -239,6 +242,8 @@ pub struct Input {
     pub data_dir: PathBuf,
     /// Where the app's bundled files are (the engine bundle sits in `engine-bundle` under it).
     pub resource_dir: Option<PathBuf>,
+    /// The operating system's Downloads folder, as the system names it (it can be moved).
+    pub download_dir: Option<PathBuf>,
 }
 
 /// What to do before the engine can start.
@@ -324,6 +329,7 @@ fn plan(input: &Input, repair: bool) -> Result<Plan, String> {
         products_dir,
         data_dir: data_dir.clone(),
         image_engine: image_engine.clone(),
+        download_dir: input.download_dir.clone(),
     };
 
     if let Some(p) = std::env::var_os("WASIFYAI_ENGINE_PYTHON") {
@@ -539,6 +545,12 @@ async fn run_once(
         .kill_on_drop(true);
     if let Some(uv) = managed_uv(&cfg.data_dir) {
         cmd.env("WASIFYAI_UV", uv);
+    }
+    // a folder set in the shell's own environment (for tests) wins over the system's
+    if std::env::var_os("WASIFYAI_EXPORT_DIR").is_none() {
+        if let Some(dir) = &cfg.download_dir {
+            cmd.env("WASIFYAI_EXPORT_DIR", dir);
+        }
     }
     #[cfg(unix)]
     cmd.process_group(0); // its own group, so the whole tree can be signalled

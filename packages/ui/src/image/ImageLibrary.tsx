@@ -6,6 +6,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Notice } from "../components/notice";
+import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../save";
 import { RecipeList } from "./ImageWorkspace";
 
 export type ImageLibraryProps = {
@@ -44,6 +45,7 @@ export function ImageLibrary({
   const [open, setOpen] = useState<ImageSummary | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const saveCopy = useSaveCopy();
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(
@@ -118,8 +120,15 @@ export function ImageLibrary({
   }
 
   async function save(img: ImageSummary) {
-    const done = await run(() => api.exportCopy(img.id), "The image could not be saved.");
-    if (done) setMessage(`Saved as ${done.name} in Downloads.`);
+    const done = await run(
+      () =>
+        saveCopy({
+          name: fileNameFor(img.prompt, extensionOf(img.image_url, "png"), "image"),
+          copy: (path) => api.exportCopy(img.id, path),
+        }),
+      "The image could not be saved.",
+    );
+    if (done) setMessage(savedText(done));
   }
 
   async function remove(img: ImageSummary) {

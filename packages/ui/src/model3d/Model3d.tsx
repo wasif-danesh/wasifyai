@@ -16,6 +16,7 @@ import { Chip } from "../components/chip";
 import { JobMeter, WorkingCard } from "../components/create";
 import { Notice } from "../components/notice";
 import { Spinner } from "../components/spinner";
+import { fileNameFor, savedText, useSaveCopy } from "../save";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
 import { type CandidateApi, Candidates } from "./Candidates";
 import { ModelViewer } from "./ModelViewer";
@@ -509,13 +510,18 @@ function ModelStep({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [name, setName] = useState<string | null>(null);
   const nameId = useId();
+  const save = useSaveCopy();
   if (!model) return null;
 
   async function saveCopy() {
     setProblem(null);
     try {
-      const done = await api.exportCopy((model as Model).id);
-      setSaved(`Saved as ${done.name} in Downloads.`);
+      const m3 = model as Model;
+      const done = await save({
+        name: fileNameFor(m3.title, "glb", "model"),
+        copy: (path) => api.exportCopy(m3.id, path),
+      });
+      if (done) setSaved(savedText(done));
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "The model could not be saved.");
     }

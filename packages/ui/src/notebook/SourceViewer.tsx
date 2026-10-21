@@ -5,6 +5,7 @@ import { ArrowLeft, Download } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Markdown } from "../chat/markdown";
 import { Button } from "../components/button";
+import { useSaveCopy } from "../save";
 
 export type Highlight = {
   start: number | null;
@@ -80,16 +81,11 @@ export function SourceViewer({
     mark.current?.scrollIntoView?.({ block: "center" });
   }, [source]);
 
+  const saveCopy = useSaveCopy();
   async function download() {
     if (!source) return;
     try {
-      const blob = await api.original(notebookId, source.id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = source.title;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      await saveCopy({ name: source.title, blob: () => api.original(notebookId, source.id) });
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "The file could not be saved.");
     }

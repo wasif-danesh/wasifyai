@@ -5,21 +5,44 @@ opened any time (the links themselves expire after an hour). A clip still being 
 no files yet; the site polls `GET /videos?status=working` to show "being made" on any page."""
 
 import asyncio
+import logging
 import re
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel
-from wasifyai_platform_sdk import Identity, RouteDeps, build_enhance_router, parse_ids
+from wasifyai_platform_sdk import (
+    Identity,
+    RouteDeps,
+    SaveRefused,
+    SaveTo,
+    build_enhance_router,
+    parse_ids,
+    write_to_path,
+)
 
 from wasifyai_video import prompts
 from wasifyai_video.builder.routes import build_builder_routes
 from wasifyai_video.guardrail import enhance_guard
-from wasifyai_video.videos import VideoRecord, VideoStore, video_store
+from wasifyai_video.index import index_text
+from wasifyai_video.schemas import FPS
+from wasifyai_video.videos import (
+    ClipError,
+    PosterError,
+    VideoRecord,
+    VideoStore,
+    import_clip,
+    poster_of,
+    video_store,
+)
 
+log = logging.getLogger(__name__)
 PRODUCT_ID = "wasifyai-video"
+MAX_IMPORT_BYTES = 200 * 1024 * 1024
 
 
 class VideoSummary(BaseModel):
@@ -118,6 +141,71 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
             items = [await summary(v) for v in page]
         return VideoPage(videos=items, next_before=page[-1].created_at if more and page else None)
 
+    @router.post("/videos/import", response_model=VideoSummary, status_code=201)
+    async def import_video(
+        file: UploadFile = File(...),  # noqa: B008
+        identity: Identity = Depends(deps.identity),
+    ) -> VideoSummary:
+        """Add a video file of the person's to their library, made to fit the model (H.264, 24
+        frames a second, a multiple of 32 on each side, at most 30 seconds, no sound or tags), so
+        it can be carried on in Extend video. ffmpeg decodes it: the file is never kept as sent."""
+        if deps.storage is None:
+            raise HTTPException(503, "file storage is not available")
+        limiter = getattr(deps.state, "upload_limiter", None)
+        if limiter is not None and not await limiter.allow(identity.tenant_id, identity.user_id):
+            raise HTTPException(429, "Too many uploads. Please wait a while and try again.")
+        with tempfile.TemporaryDirectory(prefix="wasifyai-video-") as tmp:
+            source, out = Path(tmp) / "added", Path(tmp) / "clip.mp4"
+            size = 0
+            with source.open("wb") as f:  # to disk in pieces: a video can be large
+                while chunk := await file.read(1024 * 1024):
+                    size += len(chunk)
+                    if size > MAX_IMPORT_BYTES:
+                        raise HTTPException(
+                            413,
+                            f"That file is too large. The limit is {MAX_IMPORT_BYTES // 2**20} MB.",
+                        )
+                    await asyncio.to_thread(f.write, chunk)
+            if not size:
+                raise HTTPException(422, "No file was sent.")
+            try:
+                width, height, frames = await import_clip(source, out)
+                data = await asyncio.to_thread(out.read_bytes)
+                _, _, poster = await poster_of(data)
+            except (ClipError, PosterError) as exc:
+                raise HTTPException(422, str(exc)) from None
+        video_id = str(uuid4())
+        title = re.sub(r"\s+", " ", re.sub(r"[_\-\x00-\x1f]+", " ", Path(file.filename or "").stem))
+        title = title.strip()[:120] or "My video"
+        with deps.acting_as(identity, PRODUCT_ID):
+            await deps.storage.put(f"{video_id}/video.mp4", data, "video/mp4")
+            await deps.storage.put(f"{video_id}/poster.jpg", poster, "image/jpeg")
+        await videos().add(
+            VideoRecord(
+                id=video_id, tenant_id=identity.tenant_id, product_id=PRODUCT_ID,
+                user_id=identity.user_id, thread_id=None, run_id=None, mode="import",
+                status="working", prompt=title, seconds=max(1, round(frames / FPS)),
+                frames=frames, fps=FPS,
+            )
+        )  # fmt: skip
+        await videos().finish(
+            identity.tenant_id, video_id, width, height, f"{video_id}/video.mp4",
+            f"{video_id}/poster.jpg",
+        )  # fmt: skip
+        index = getattr(deps.state, "creation_index", None)  # found in search at once (ADR-0041)
+        if index is not None:
+            try:
+                await index.index(
+                    identity.tenant_id, PRODUCT_ID, identity.user_id, "video", video_id,
+                    index_text(title),
+                )  # fmt: skip
+            except Exception:
+                log.warning("the added video could not be put in search", exc_info=True)
+        made = await videos().get(identity.tenant_id, identity.user_id, video_id)
+        assert made is not None
+        with deps.acting_as(identity, PRODUCT_ID):
+            return await summary(made)
+
     @router.get("/videos/{video_id}", response_model=VideoSummary)
     async def get_video(video_id: str, identity: Identity = Depends(deps.identity)) -> VideoSummary:
         video = await videos().get(identity.tenant_id, identity.user_id, video_id)
@@ -127,11 +215,14 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
             return await summary(video)
 
     @router.post("/videos/{video_id}/export", response_model=Exported)
-    async def export_video(video_id: str, identity: Identity = Depends(deps.identity)) -> Exported:
-        """Copy the clip into the person's export folder (the desktop app sets one; a webview
-        cannot save a file by itself). Never overwrites: a second copy gets a number."""
+    async def export_video(
+        video_id: str, body: SaveTo | None = None, identity: Identity = Depends(deps.identity)
+    ) -> Exported:
+        """Copy the clip to the place the person chose in the Save As box (`path`), or into the
+        export folder when there is none: a webview cannot save a file by itself. The folder never
+        overwrites: a second copy gets a number."""
         folder = getattr(deps.state, "export_dir", None)
-        if folder is None or deps.storage is None:
+        if (folder is None and not (body and body.path)) or deps.storage is None:
             raise HTTPException(404, "saving to a folder is not available here")
         video = await videos().get(identity.tenant_id, identity.user_id, video_id)
         if video is None or video.status != "done" or not video.video_key:
@@ -141,13 +232,22 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
                 data = await deps.storage.get(video.video_key)
         except FileNotFoundError:
             raise HTTPException(404, "video not found") from None
-        path = await asyncio.to_thread(
-            save_copy,
-            Path(folder),
-            file_name(video.prompt, ""),
-            extension_of(video.video_key),
-            data,
-        )
+        if body and body.path:
+            try:
+                path = await asyncio.to_thread(
+                    write_to_path, body.path, data, getattr(deps.state, "desktop_dir", None)
+                )
+            except SaveRefused as exc:
+                raise HTTPException(422, str(exc)) from None
+        else:
+            assert folder is not None  # the check above: no path means a folder
+            path = await asyncio.to_thread(
+                save_copy,
+                Path(folder),
+                file_name(video.prompt, ""),
+                extension_of(video.video_key),
+                data,
+            )
         return Exported(name=path.name, path=str(path))
 
     @router.get("/videos/{video_id}/download")

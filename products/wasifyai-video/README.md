@@ -74,7 +74,11 @@ person's clips start a new 49 frame clip, and the graph joins the old clip up to
 new one (ffmpeg, frame exact), so a round adds 40 frames. The result is a new clip beside the original. A clip
 of more than 100 frames cannot be extended. The worker reads a job's inputs only from the person's uploads, so
 the graph copies the source to `uploads/extend-<id>.mp4` for the job and deletes the copy on every exit.
-Measurements and why this variant: `docs/spikes/video-extend-vx0.md`.
+A video file of the person's own can be carried on too: `POST /videos/import` (multipart, at most 200 MB)
+has ffmpeg make it H.264, 24 frames a second, a multiple of 32 on each side (the longer side at most 768),
+no sound, at most 30 seconds, and saves it as a clip with `mode` `import`; its last frame is moderated like a
+picture, and only its last second goes to the engine. Measurements and why this variant:
+`docs/spikes/video-extend-vx0.md`.
 
 ## Config
 

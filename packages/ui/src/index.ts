@@ -172,3 +172,12 @@ export { type MenuLink, type Recents, SideMenu, type SideMenuProps } from "./she
 export { VideoBuilder, type VideoBuilderProps } from "./videobuilder/VideoBuilder";
 export { Model3d, type Model3dProps } from "./model3d/Model3d";
 export type { CandidateApi } from "./model3d/Candidates";
+export {
+  type Saved,
+  type SaveAs,
+  SaveAsProvider,
+  extensionOf,
+  fileNameFor,
+  savedText,
+  useSaveCopy,
+} from "./save";

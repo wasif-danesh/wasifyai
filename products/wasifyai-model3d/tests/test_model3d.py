@@ -481,6 +481,17 @@ def test_a_model_is_renamed_and_found_by_its_new_name(rig):
     assert rig.patch(f"{BASE}/models/{started['id']}", json={"title": ""}).status_code == 422
 
 
+def test_a_copy_is_saved_where_the_save_as_box_chose(rig, tmp_path_factory):
+    started = make(rig, ready_picture(rig)["id"], title="Frog mug").json()
+    wait(rig, f"/models/{started['id']}", lambda m: m["status"] == "done")
+    chosen = tmp_path_factory.mktemp("Desktop") / "mine.glb"  # not in the app's own folder
+    r = rig.post(f"{BASE}/models/{started['id']}/export", json={"path": str(chosen)})
+    assert r.status_code == 200 and chosen.read_bytes() == b"glTF42"
+    inside = rig.app_state.desktop_dir / "stolen.glb"  # the app's own data is never written
+    bad = rig.post(f"{BASE}/models/{started['id']}/export", json={"path": str(inside)})
+    assert bad.status_code == 422 and "belongs to the app" in bad.json()["detail"]
+
+
 def test_a_copy_is_saved_to_the_export_folder_and_never_replaces_a_file(rig):
     started = make(rig, ready_picture(rig)["id"], title="Frog mug").json()
     wait(rig, f"/models/{started['id']}", lambda m: m["status"] == "done")

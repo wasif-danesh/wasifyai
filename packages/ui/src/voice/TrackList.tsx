@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Spinner } from "../components/spinner";
+import { fileNameFor, useSaveCopy } from "../save";
 import { clock } from "./format";
 
 const FORMAT_LABEL = { wav: "WAV", mp3: "MP3", m4a: "M4A" } as const;
@@ -84,16 +85,14 @@ export function TrackList({
       .catch(() => undefined);
   }, [api]);
 
+  const saveCopy = useSaveCopy();
   async function save(t: Track, format: "wav" | "mp3" | "m4a") {
     setProblem(null);
     try {
-      const blob = await api.downloadTrack(t.id, format);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${t.title.replace(/[^\w -]+/g, "_") || "music"}.${format}`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await saveCopy({
+        name: fileNameFor(t.title, format, "music"),
+        blob: () => api.downloadTrack(t.id, format),
+      });
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "That could not be saved.");
     }

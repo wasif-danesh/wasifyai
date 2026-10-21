@@ -416,6 +416,39 @@ def test_outputs_are_listed_read_downloaded_renamed_stopped_and_deleted(api):
     assert c.get(f"notebooks/{nid}/artifacts/{made['id']}").status_code == 404
 
 
+def test_an_outputs_file_is_copied_to_the_export_folder_when_there_is_one(api, tmp_path):
+    c, runtime, *_ = api
+    nid = c.post("notebooks", json={}).json()["id"]
+    made = runtime.store.create_artifact("t1", "u1", nid, fmt="word", prompt="", source_ids=[])
+    runtime.files_for("t1", "u1").put_bytes(artifact_key(nid, made["id"], "plan.docx"), b"PK-doc")
+    runtime.store.finish_artifact(
+        "t1", "u1", nid, made["id"], title="Plan", body="# Plan", data=None,
+        file_name="plan.docx", file_mime="application/octet-stream",
+    )  # fmt: skip
+    path = f"notebooks/{nid}/artifacts/{made['id']}/export"
+    assert c.post(path).status_code == 404  # no export folder: the web has none
+    State.export_dir = tmp_path / "exports"  # type: ignore[attr-defined]
+    try:
+        first = c.post(path)
+        second = c.post(path)  # a copy never replaces a file
+        assert first.json()["name"] == "plan.docx" and second.json()["name"] == "plan-2.docx"
+        assert (tmp_path / "exports" / "plan.docx").read_bytes() == b"PK-doc"
+        chosen = tmp_path / "Documents" / "mine.docx"
+        chosen.parent.mkdir()
+        mine = c.post(path, json={"path": str(chosen)})
+        assert mine.json()["path"] == str(chosen) and chosen.read_bytes() == b"PK-doc"
+        elsewhere = c.post(path, json={"path": str(tmp_path / "no" / "x.docx")})
+        assert elsewhere.status_code == 422
+        assert c.post(path, headers={"x-user": "u2"}).status_code == 404
+        report = runtime.store.create_artifact(
+            "t1", "u1", nid, fmt="report", prompt="", source_ids=[]
+        )
+        none = c.post(f"notebooks/{nid}/artifacts/{report['id']}/export")
+        assert none.status_code == 404  # no file to copy
+    finally:
+        del State.export_dir  # type: ignore[attr-defined]
+
+
 def test_the_guide_route_reads_what_the_graph_saved_and_says_when_it_is_stale(api):
     c, runtime, *_ = api
     nb = c.post("notebooks", json={}).json()
@@ -477,6 +510,8 @@ def _every_notebook_route(c, nid):
         ("delete", "/notebooks/{nid}/artifacts/{aid}", f"notebooks/{nid}/artifacts/nope", {}),
         ("get", "/notebooks/{nid}/artifacts/{aid}/file", f"notebooks/{nid}/artifacts/nope/file",
          {}),
+        ("post", "/notebooks/{nid}/artifacts/{aid}/export",
+         f"notebooks/{nid}/artifacts/nope/export", {}),
         ("post", "/notebooks/{nid}/artifacts/{aid}/voices",
          f"notebooks/{nid}/artifacts/nope/voices", {"json": {}}),
         ("get", "/notebooks/{nid}/artifacts/{aid}/voices", f"notebooks/{nid}/artifacts/nope/voices",

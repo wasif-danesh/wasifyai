@@ -48,7 +48,8 @@ export type ImagesApi = {
   remove(id: string): Promise<void>;
   setFavourite(id: string, favourite: boolean): Promise<ImageSummary>;
   /** Save a copy into the person's folder; only the desktop engine offers it. */
-  exportCopy(id: string): Promise<{ name: string; path: string }>;
+  /** Save a copy: at `path` (chosen in the system's Save As box), or into the engine's export folder. */
+  exportCopy(id: string, path?: string): Promise<{ name: string; path: string }>;
 };
 
 export function createImagesApi(transport: Transport, product = IMAGE_PRODUCT_ID): ImagesApi {
@@ -98,9 +99,10 @@ export function createImagesApi(transport: Transport, product = IMAGE_PRODUCT_ID
         body: JSON.stringify({ favourite }),
       }),
 
-    exportCopy: (id) =>
+    exportCopy: (id, path) =>
       json<{ name: string; path: string }>(`${base}/${encodeURIComponent(id)}/export`, {
         method: "POST",
+        ...(path ? { headers: JSON_HEADERS, body: JSON.stringify({ path }) } : {}),
       }),
   };
 }

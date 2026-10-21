@@ -318,6 +318,15 @@ export function createNotebooksApi(transport: Transport) {
       if (!res.ok) throw new HttpError(res.status, await errorMessage(res));
       return res.blob();
     },
+    /**
+     * Save a copy of the output's file: at `path` (chosen in the system's Save As box), or into the engine's
+     * export folder. The desktop window cannot download a file by itself.
+     */
+    exportOutput: (id: string, oid: string, path?: string) =>
+      json<{ name: string; path: string }>(
+        `${nb(id)}/artifacts/${encodeURIComponent(oid)}/export`,
+        send("POST", path ? { path } : undefined),
+      ),
     async outputFile(id: string, oid: string): Promise<Blob> {
       const res = await request(`${nb(id)}/artifacts/${encodeURIComponent(oid)}/file`);
       if (!res.ok) throw new HttpError(res.status, await errorMessage(res));

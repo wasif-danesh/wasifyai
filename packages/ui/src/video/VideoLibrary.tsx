@@ -7,6 +7,7 @@ import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Notice } from "../components/notice";
 import { Spinner } from "../components/spinner";
+import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../save";
 
 export type VideoLibraryProps = {
   videos: VideosApi;
@@ -36,6 +37,7 @@ export function VideoLibrary({
 }: VideoLibraryProps) {
   const [items, setItems] = useState<VideoSummary[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
+  const saveCopy = useSaveCopy();
   const [query, setQuery] = useState("");
   const [searched, setSearched] = useState<string | null>(null);
   const [open, setOpen] = useState<VideoSummary | null>(null);
@@ -96,8 +98,11 @@ export function VideoLibrary({
     setError(null);
     setMessage(null);
     try {
-      const done = await api.exportCopy(video.id);
-      setMessage(`Saved as ${done.name} in Downloads.`);
+      const done = await saveCopy({
+        name: fileNameFor(video.prompt, extensionOf(video.video_url ?? "", "mp4"), "video"),
+        copy: (path) => api.exportCopy(video.id, path),
+      });
+      if (done) setMessage(savedText(done));
     } catch (e) {
       setError(e instanceof Error ? e.message : "The video could not be saved.");
     }
@@ -241,8 +246,12 @@ export function VideoLibrary({
             )}
             <p>{open.prompt}</p>
             <p className="text-muted-foreground text-sm">
-              {{ image: "From a picture", extend: "Carried on", text: "From text" }[open.mode] ??
-                "From text"}{" "}
+              {{
+                image: "From a picture",
+                extend: "Carried on",
+                import: "Added from your computer",
+                text: "From text",
+              }[open.mode] ?? "From text"}{" "}
               · {clipLength(open.seconds)}
               {open.width && open.height ? ` · ${open.width}×${open.height}` : ""} ·{" "}
               {when(open.created_at)}

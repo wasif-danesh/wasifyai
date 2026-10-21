@@ -442,8 +442,9 @@ export interface paths {
         put?: never;
         /**
          * Export Image
-         * @description Copy the image into the person's export folder (the desktop app sets one; a webview
-         *     cannot save a file by itself). Never overwrites: a second copy gets a number.
+         * @description Copy the image to the place the person chose in the Save As box (`path`), or into the
+         *     export folder when there is none: a webview cannot save a file by itself. The folder never
+         *     overwrites: a second copy gets a number.
          */
         post: operations["export_image_products_wasifyai_image_images__image_id__export_post"];
         delete?: never;
@@ -610,7 +611,8 @@ export interface paths {
         put?: never;
         /**
          * Export Model
-         * @description Copy the model into the person's export folder (the desktop app sets one).
+         * @description Copy the model to the place the person chose in the Save As box (`path`), or into the
+         *     export folder when there is none.
          */
         post: operations["export_model_products_wasifyai_model3d_m3d_models__model_id__export_post"];
         delete?: never;
@@ -757,6 +759,28 @@ export interface paths {
         put?: never;
         /** Cancel Artifact */
         post: operations["cancel_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-notebooks/notebooks/{nid}/artifacts/{aid}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export Artifact
+         * @description Copy the output's file to the place the person chose in the Save As box (`path`), or
+         *     into the export folder when there is none: the desktop window cannot save a file by itself
+         *     (it has no download handler). The folder never overwrites; a copy gets a number.
+         */
+        post: operations["export_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__export_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1335,6 +1359,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-video/videos/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Video
+         * @description Add a video file of the person's to their library, made to fit the model (H.264, 24
+         *     frames a second, a multiple of 32 on each side, at most 30 seconds, no sound or tags), so
+         *     it can be carried on in Extend video. ffmpeg decodes it: the file is never kept as sent.
+         */
+        post: operations["import_video_products_wasifyai_video_videos_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-video/videos/{video_id}": {
         parameters: {
             query?: never;
@@ -1389,8 +1435,9 @@ export interface paths {
         put?: never;
         /**
          * Export Video
-         * @description Copy the clip into the person's export folder (the desktop app sets one; a webview
-         *     cannot save a file by itself). Never overwrites: a second copy gets a number.
+         * @description Copy the clip to the place the person chose in the Save As box (`path`), or into the
+         *     export folder when there is none: a webview cannot save a file by itself. The folder never
+         *     overwrites: a second copy gets a number.
          */
         post: operations["export_video_products_wasifyai_video_videos__video_id__export_post"];
         delete?: never;
@@ -2233,6 +2280,11 @@ export interface components {
             /** Title */
             title?: string | null;
         };
+        /** Body_import_video_products_wasifyai_video_videos_import_post */
+        Body_import_video_products_wasifyai_video_videos_import_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_products_wasifyai_notebooks_notebooks__nid__documents_upload_post */
         Body_upload_products_wasifyai_notebooks_notebooks__nid__documents_upload_post: {
             /** Files */
@@ -2962,6 +3014,15 @@ export interface components {
             enabled: boolean;
             /** Forced */
             forced: boolean;
+        };
+        /**
+         * SaveTo
+         * @description The optional body of an export route: where to write. Without it the engine's own export
+         *     folder is used (the assistant has no Save As box to ask).
+         */
+        SaveTo: {
+            /** Path */
+            path?: string | null;
         };
         /** Search */
         Search: {
@@ -4214,7 +4275,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SaveTo"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -4639,7 +4704,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SaveTo"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -5045,6 +5114,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nid: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SaveTo"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -6482,6 +6589,39 @@ export interface operations {
             };
         };
     };
+    import_video_products_wasifyai_video_videos_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_video_products_wasifyai_video_videos_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_video_products_wasifyai_video_videos__video_id__get: {
         parameters: {
             query?: never;
@@ -6582,7 +6722,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SaveTo"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

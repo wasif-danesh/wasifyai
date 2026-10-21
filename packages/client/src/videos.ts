@@ -35,7 +35,12 @@ export type VideosApi = {
   get(id: string): Promise<VideoSummary>;
   remove(id: string): Promise<void>;
   /** Save a copy into the person's folder; only the desktop engine offers it. */
-  exportCopy(id: string): Promise<{ name: string; path: string }>;
+  exportCopy(id: string, path?: string): Promise<{ name: string; path: string }>;
+  /**
+   * Add a video file from the person's computer to their videos. The engine makes it fit the model (size,
+   * 24 frames a second, up to 30 seconds, no sound) and answers with the new video.
+   */
+  importVideo(file: File): Promise<VideoSummary>;
 };
 
 export function createVideosApi(transport: Transport, product = VIDEO_PRODUCT_ID): VideosApi {
@@ -76,10 +81,19 @@ export function createVideosApi(transport: Transport, product = VIDEO_PRODUCT_ID
       }
     },
 
-    exportCopy: (id) =>
+    exportCopy: (id, path) =>
       json<{ name: string; path: string }>(`${base}/${encodeURIComponent(id)}/export`, {
         method: "POST",
+        ...(path
+          ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ path }) }
+          : {}),
       }),
+
+    importVideo(file) {
+      const form = new FormData();
+      form.append("file", file);
+      return json<VideoSummary>(`${base}/import`, { method: "POST", body: form });
+    },
   };
 }
 
@@ -89,9 +103,10 @@ export function clipLength(seconds: number): string {
 }
 
 /**
- * Whether a clip is short enough to be carried on (Extend video): the engine refuses a clip of more than
- * 100 frames, and a clip that rounds to 5 seconds or more has more. The engine has the last word.
+ * Whether a clip can be carried on (Extend video). One the model made must be short: the engine refuses
+ * more than 100 frames, and a clip that rounds to 5 seconds or more has more. A video the person added
+ * can be any length the engine took. The engine has the last word.
  */
-export function canExtend(clip: { seconds: number }): boolean {
-  return clip.seconds <= 4;
+export function canExtend(clip: { seconds: number; mode?: string }): boolean {
+  return clip.mode === "import" || clip.seconds <= 4;
 }

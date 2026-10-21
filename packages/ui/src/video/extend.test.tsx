@@ -35,6 +35,7 @@ function api(videos: VideoSummary[], over: Partial<VideosApi> = {}) {
   return {
     list: vi.fn().mockResolvedValue({ videos, next_before: null }),
     exportCopy: vi.fn().mockResolvedValue({ name: "fox.mp4", path: "/Downloads/fox.mp4" }),
+    importVideo: vi.fn(),
     ...over,
   };
 }
@@ -138,5 +139,58 @@ describe("Extend video", () => {
     await user.click(screen.getByRole("button", { name: /carry on my video/i }));
     expect(await screen.findByText(/as long as it can get/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /carry on my video/i })).toBeInTheDocument();
+  });
+
+  it("adds a video file of the person's own, chooses it, and carries it on whatever its length", async () => {
+    fetchMock.mockResolvedValueOnce(sse([node("check_request"), node("generate_video"), ready]));
+    const added = clip({
+      id: "v7",
+      prompt: "holiday clip",
+      mode: "import",
+      seconds: 12, // longer than a clip the model made may be
+      poster_url: "http://127.0.0.1:1/files/v7.jpg",
+    });
+    const importVideo = vi.fn().mockResolvedValue(added);
+    const user = userEvent.setup();
+    render(
+      <VideoWorkspace
+        mode="extend"
+        runs={client}
+        videos={api([clip()], { importVideo })}
+        canSave
+      />,
+    );
+    expect(await screen.findByRole("button", { name: /red fox walks/i })).toBeInTheDocument();
+    const file = new File(["x"], "holiday_clip.mp4", { type: "video/mp4" });
+    await user.upload(screen.getByLabelText("Choose a video file"), file);
+    expect(importVideo).toHaveBeenCalledWith(file);
+    const card = await screen.findByRole("button", { name: /holiday clip/i });
+    expect(card).toHaveAttribute("aria-pressed", "true"); // chosen at once
+    expect(screen.getByRole("textbox")).toHaveValue(""); // the file's name is not what it is about
+    await user.type(screen.getByRole("textbox"), "the people keep walking");
+    await user.click(screen.getByRole("button", { name: /carry on my video/i }));
+    await screen.findByText(/saved in your videos/i);
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.input).toEqual({
+      mode: "extend",
+      prompt: "the people keep walking",
+      source_id: "v7",
+    });
+  });
+
+  it("says why a file could not be added and leaves the list as it was", async () => {
+    const importVideo = vi
+      .fn()
+      .mockRejectedValue(new Error("That video is longer than 30 seconds. Try a shorter one."));
+    const user = userEvent.setup();
+    render(<VideoWorkspace mode="extend" runs={client} videos={api([clip()], { importVideo })} />);
+    await screen.findByRole("button", { name: /red fox walks/i });
+    await user.upload(
+      screen.getByLabelText("Choose a video file"),
+      new File(["x"], "long.mp4", { type: "video/mp4" }),
+    );
+    expect(await screen.findByText(/longer than 30 seconds/i)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /red fox walks/i })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /add a video from this computer/i })).toBeEnabled();
   });
 });

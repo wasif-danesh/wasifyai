@@ -125,7 +125,7 @@ export type Model3dApi = {
   remove(id: string): Promise<void>;
   /** The model's GLB, a thumbnail, or the picture it came from, as an object URL. */
   fileUrl(id: string, which: "file" | "thumb" | "source" | "cutout"): Promise<string>;
-  exportCopy(id: string): Promise<{ name: string; path: string }>;
+  exportCopy(id: string, path?: string): Promise<{ name: string; path: string }>;
 };
 
 export function createModel3dApi(transport: Transport, product = MODEL3D_PRODUCT_ID): Model3dApi {
@@ -185,8 +185,11 @@ export function createModel3dApi(transport: Transport, product = MODEL3D_PRODUCT
     rename: (id, title) => json<Model3d>(`${base}/models/${enc(id)}`, send("PATCH", { title })),
     remove: (id) => del(`${base}/models/${enc(id)}`),
     fileUrl: (id, which) => objectUrl(`${base}/models/${enc(id)}/${which}`),
-    exportCopy: (id) =>
-      json<{ name: string; path: string }>(`${base}/models/${enc(id)}/export`, { method: "POST" }),
+    exportCopy: (id, path) =>
+      json<{ name: string; path: string }>(
+        `${base}/models/${enc(id)}/export`,
+        send("POST", path ? { path } : undefined),
+      ),
   };
 }
 

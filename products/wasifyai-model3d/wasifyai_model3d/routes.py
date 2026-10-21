@@ -10,7 +10,14 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from wasifyai_platform_sdk import Identity, RouteDeps, parse_ids
+from wasifyai_platform_sdk import (
+    Identity,
+    RouteDeps,
+    SaveRefused,
+    SaveTo,
+    copy_to_path,
+    parse_ids,
+)
 
 from wasifyai_model3d import files, pictures
 from wasifyai_model3d.runtime import (
@@ -279,19 +286,31 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         return model_out(row)
 
     @router.post("/models/{model_id}/export", response_model=Exported)
-    async def export_model(model_id: str, identity: Identity = Depends(deps.identity)) -> Exported:
-        """Copy the model into the person's export folder (the desktop app sets one)."""
+    async def export_model(
+        model_id: str, body: SaveTo | None = None, identity: Identity = Depends(deps.identity)
+    ) -> Exported:
+        """Copy the model to the place the person chose in the Save As box (`path`), or into the
+        export folder when there is none."""
         guard()
         folder = getattr(deps.state, "export_dir", None)
-        if folder is None:
+        if folder is None and not (body and body.path):
             raise HTTPException(404, "saving to a folder is not available here")
         row = model_or_404(identity, model_id)
         if row["status"] != "done":
             raise HTTPException(404, "not made yet")
         source = file_of(identity, "models", model_id, "model.glb")
-        path = await asyncio.to_thread(
-            files.save_copy, Path(folder), files.file_stem(row["title"]), source
-        )
+        if body and body.path:
+            try:
+                path = await asyncio.to_thread(
+                    copy_to_path, body.path, source, getattr(deps.state, "desktop_dir", None)
+                )
+            except SaveRefused as exc:
+                raise HTTPException(422, str(exc)) from None
+        else:
+            assert folder is not None  # the check above: no path means a folder
+            path = await asyncio.to_thread(
+                files.save_copy, Path(folder), files.file_stem(row["title"]), source
+            )
         return Exported(name=path.name, path=str(path))
 
     @router.delete("/models/{model_id}", status_code=204)

@@ -479,6 +479,20 @@
         "title": "Body_import_track_products_wasifyai_voice_tracks_import_post",
         "type": "object"
       },
+      "Body_import_video_products_wasifyai_video_videos_import_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_video_products_wasifyai_video_videos_import_post",
+        "type": "object"
+      },
       "Body_upload_products_wasifyai_notebooks_notebooks__nid__documents_upload_post": {
         "properties": {
           "files": {
@@ -2246,6 +2260,24 @@
           "forced"
         ],
         "title": "SafeguardsStatus",
+        "type": "object"
+      },
+      "SaveTo": {
+        "description": "The optional body of an export route: where to write. Without it the engine's own export\nfolder is used (the assistant has no Save As box to ask).",
+        "properties": {
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          }
+        },
+        "title": "SaveTo",
         "type": "object"
       },
       "Search": {
@@ -4494,7 +4526,7 @@
     },
     "/products/wasifyai-image/images/{image_id}/export": {
       "post": {
-        "description": "Copy the image into the person's export folder (the desktop app sets one; a webview\ncannot save a file by itself). Never overwrites: a second copy gets a number.",
+        "description": "Copy the image to the place the person chose in the Save As box (`path`), or into the\nexport folder when there is none: a webview cannot save a file by itself. The folder never\noverwrites: a second copy gets a number.",
         "operationId": "export_image_products_wasifyai_image_images__image_id__export_post",
         "parameters": [
           {
@@ -4507,6 +4539,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SaveTo"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -5075,7 +5124,7 @@
     },
     "/products/wasifyai-model3d/m3d/models/{model_id}/export": {
       "post": {
-        "description": "Copy the model into the person's export folder (the desktop app sets one).",
+        "description": "Copy the model to the place the person chose in the Save As box (`path`), or into the\nexport folder when there is none.",
         "operationId": "export_model_products_wasifyai_model3d_m3d_models__model_id__export_post",
         "parameters": [
           {
@@ -5088,6 +5137,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SaveTo"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -5665,6 +5731,79 @@
           }
         },
         "summary": "Cancel Artifact",
+        "tags": [
+          "wasifyai-notebooks"
+        ]
+      }
+    },
+    "/products/wasifyai-notebooks/notebooks/{nid}/artifacts/{aid}/export": {
+      "post": {
+        "description": "Copy the output's file to the place the person chose in the Save As box (`path`), or\ninto the export folder when there is none: the desktop window cannot save a file by itself\n(it has no download handler). The folder never overwrites; a copy gets a number.",
+        "operationId": "export_artifact_products_wasifyai_notebooks_notebooks__nid__artifacts__aid__export_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "nid",
+            "required": true,
+            "schema": {
+              "title": "Nid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "aid",
+            "required": true,
+            "schema": {
+              "title": "Aid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SaveTo"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Export Artifact Products Wasifyai Notebooks Notebooks  Nid  Artifacts  Aid  Export Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Artifact",
         "tags": [
           "wasifyai-notebooks"
         ]
@@ -7810,6 +7949,48 @@
         ]
       }
     },
+    "/products/wasifyai-video/videos/import": {
+      "post": {
+        "description": "Add a video file of the person's to their library, made to fit the model (H.264, 24\nframes a second, a multiple of 32 on each side, at most 30 seconds, no sound or tags), so\nit can be carried on in Extend video. ffmpeg decodes it: the file is never kept as sent.",
+        "operationId": "import_video_products_wasifyai_video_videos_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_video_products_wasifyai_video_videos_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Video",
+        "tags": [
+          "wasifyai-video"
+        ]
+      }
+    },
     "/products/wasifyai-video/videos/{video_id}": {
       "delete": {
         "description": "Delete a clip (or dismiss a failed one): its files first, then the record. A clip still\nbeing made cannot be deleted: its job is running.",
@@ -7929,7 +8110,7 @@
     },
     "/products/wasifyai-video/videos/{video_id}/export": {
       "post": {
-        "description": "Copy the clip into the person's export folder (the desktop app sets one; a webview\ncannot save a file by itself). Never overwrites: a second copy gets a number.",
+        "description": "Copy the clip to the place the person chose in the Save As box (`path`), or into the\nexport folder when there is none: a webview cannot save a file by itself. The folder never\noverwrites: a second copy gets a number.",
         "operationId": "export_video_products_wasifyai_video_videos__video_id__export_post",
         "parameters": [
           {
@@ -7942,6 +8123,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SaveTo"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {

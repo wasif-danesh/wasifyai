@@ -21,6 +21,7 @@ import { PictureInput } from "../components/picture-input";
 import { type Picture, usePicture } from "../hooks/use-picture";
 import { usePictureEvents } from "../hooks/use-picture-events";
 import { VIDEO_PRODUCT, useVideoFlow } from "../hooks/use-video-flow";
+import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../save";
 import { actions, chips, eyebrow, field, fieldLabel, panel } from "../styles";
 import { ExtendForm } from "./ExtendForm";
 
@@ -213,11 +214,11 @@ function jobText(job: { status: string; position?: number; progress?: number }):
 
 export type VideoWorkspaceProps = {
   /** `text`: a description; `image`: a picture and what should move; `extend`: carry on one of your videos. */
-  mode: VideoMode;
+  mode: Exclude<VideoMode, "import">;
   /** The app's client: starts the run, uploads the picture, enhances the prompt. Keep it the same object. */
   runs: RunClient;
   /** For "Save a copy" of a finished clip, and (Extend video) the list of clips to choose from. */
-  videos?: Pick<VideosApi, "exportCopy" | "list">;
+  videos?: Pick<VideosApi, "exportCopy" | "list"> & Partial<Pick<VideosApi, "importVideo">>;
   /** Above the form: setup notices for this app (engine, model, memory). */
   notices?: ReactNode;
   /** When set, the form is shown but making is refused with this reason. */
@@ -251,6 +252,7 @@ export function VideoWorkspace({
   const [asked, setAsked] = useState<VideoFormValue | undefined>();
   const [saved, setSaved] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const saveCopy = useSaveCopy();
   const { phase } = state;
   const working = phase === "checking" || phase === "making";
 
@@ -272,8 +274,11 @@ export function VideoWorkspace({
     if (!videos) return;
     setProblem(null);
     try {
-      const done = await videos.exportCopy(result.videoId);
-      setSaved(`Saved as ${done.name} in Downloads.`);
+      const done = await saveCopy({
+        name: fileNameFor(result.prompt, extensionOf(result.videoUrl, "mp4"), "video"),
+        copy: (path) => videos.exportCopy(result.videoId, path),
+      });
+      if (done) setSaved(savedText(done));
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "The video could not be saved.");
     }

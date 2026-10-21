@@ -20,6 +20,7 @@ import { Bar } from "../components/progress-bar";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
 import { formatBytes } from "../notebook/format";
+import { fileNameFor, useSaveCopy } from "../save";
 import { ModelPicker } from "./ModelPicker";
 import { clock, pickModel } from "./format";
 import { useVoiceModels } from "./use-voice-models";
@@ -277,15 +278,14 @@ export function LipSyncWorkspace({
     }
   }
 
+  const saveCopy = useSaveCopy();
   async function save(c: Clip) {
+    setProblem(null);
     try {
-      const blob = await api.downloadClip(c.id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${c.title.replace(/[^\w -]+/g, "_") || "video"}.mp4`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await saveCopy({
+        name: fileNameFor(c.title, "mp4", "video"),
+        blob: () => api.downloadClip(c.id),
+      });
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "That could not be saved.");
     }

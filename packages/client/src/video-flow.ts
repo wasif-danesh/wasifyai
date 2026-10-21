@@ -3,8 +3,11 @@
 import type { FlowError, Job, Mode } from "./image-flow";
 import type { ParsedEvent } from "./sse";
 
-/** How a clip was made: from words, from a picture, or by carrying on another clip (Extend video). */
-export type VideoMode = Mode | "extend";
+/**
+ * How a clip was made: from words, from a picture, by carrying on another clip (Extend video), or it is a
+ * video file the person added from their computer.
+ */
+export type VideoMode = Mode | "extend" | "import";
 
 export type VideoPhase =
   | "idle"
@@ -111,7 +114,10 @@ function applyEvent(state: VideoFlowState, name: string, d: Data): VideoFlowStat
           height: num(out.height) ?? 0,
           seconds: num(out.seconds) ?? 0,
           prompt: str(out.prompt),
-          mode: out.mode === "image" || out.mode === "extend" ? out.mode : "text",
+          mode:
+            out.mode === "image" || out.mode === "extend" || out.mode === "import"
+              ? out.mode
+              : "text",
         },
       };
     }

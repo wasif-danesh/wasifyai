@@ -24,6 +24,7 @@ import { Spinner } from "../components/spinner";
 import { IMAGE_PRODUCT, useImageFlow } from "../hooks/use-image-flow";
 import { usePicture } from "../hooks/use-picture";
 import { usePictureEvents } from "../hooks/use-picture-events";
+import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../save";
 import { MAX_PROMPT, SIZES } from "./ImageForm";
 import { MaskPainter, type MaskPainterHandle } from "./MaskPainter";
 
@@ -193,6 +194,7 @@ export function ImageWorkspace({
   const [made, setMade] = useState<ImageSummary | null>(null);
   const [recipeOpen, setRecipeOpen] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
+  const saveCopy = useSaveCopy();
   const [problem, setProblem] = useState<string | null>(null);
   const { dragging } = usePictureEvents((file) => {
     // a dropped or pasted picture goes to the first free place
@@ -368,8 +370,11 @@ export function ImageWorkspace({
     setProblem(null);
     setSaved(null);
     try {
-      const out = await images.exportCopy(image.id);
-      setSaved(`Saved as ${out.name} in Downloads.`);
+      const out = await saveCopy({
+        name: fileNameFor(image.prompt, extensionOf(image.image_url, "png"), "image"),
+        copy: (path) => images.exportCopy(image.id, path),
+      });
+      if (out) setSaved(savedText(out));
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "The image could not be saved.");
     }

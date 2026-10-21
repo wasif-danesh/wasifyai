@@ -17,7 +17,15 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
-from wasifyai_platform_sdk import Identity, RouteDeps, VoiceEngineError
+from wasifyai_platform_sdk import (
+    Identity,
+    RouteDeps,
+    SaveRefused,
+    SaveTo,
+    VoiceEngineError,
+    write_to_path,
+)
+from wasifyai_platform_sdk.actions.helpers import save_copy
 from wasifyai_platform_sdk.search import search_text
 
 from wasifyai_notebooks import hardening
@@ -542,6 +550,41 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
             art["file_mime"] or "application/octet-stream", art["file_name"],
             "the file is no longer here",
         )  # fmt: skip
+
+    @router.post("/notebooks/{nid}/artifacts/{aid}/export")
+    async def export_artifact(
+        nid: str, aid: str, body: SaveTo | None = None, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, str]:
+        """Copy the output's file to the place the person chose in the Save As box (`path`), or
+        into the export folder when there is none: the desktop window cannot save a file by itself
+        (it has no download handler). The folder never overwrites; a copy gets a number."""
+        folder = getattr(deps.state, "export_dir", None)
+        if folder is None and not (body and body.path):
+            raise HTTPException(404, "saving to a folder is not available here")
+        r = rt()
+        art = await call(r.store.get_artifact, identity.tenant_id, identity.user_id, nid, aid)
+        if not art["file_name"]:
+            raise HTTPException(404, "this output has no file")
+        data = await asyncio.to_thread(
+            r.files_for(identity.tenant_id, identity.user_id).read_bytes,
+            artifact_key(nid, aid, art["file_name"]),
+        )
+        if data is None:
+            raise HTTPException(404, "the file is no longer here")
+        if body and body.path:
+            try:
+                path = await asyncio.to_thread(
+                    write_to_path, body.path, data, getattr(deps.state, "desktop_dir", None)
+                )
+            except SaveRefused as exc:
+                raise HTTPException(422, str(exc)) from None
+        else:
+            assert folder is not None  # the check above: no path means a folder
+            stem, _, ext = str(art["file_name"]).rpartition(".")
+            path = await asyncio.to_thread(
+                save_copy, Path(folder), stem or str(art["file_name"]), ext or "bin", data
+            )
+        return {"name": path.name, "path": str(path)}
 
     # ---- the audio overview's voices (ADR-0066, V2) ------------------------------------------
 

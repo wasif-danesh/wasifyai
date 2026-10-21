@@ -33,6 +33,10 @@ STALE_AFTER = timedelta(minutes=30)
 STALE_MESSAGE = "This took too long and was stopped. Please try again."
 FFMPEG_TIMEOUT_S = 60
 JOIN_TIMEOUT_S = 180
+IMPORT_TIMEOUT_S = 300
+IMPORT_MAX_SECONDS = 30  # a longer file is refused: it would take long to read and hold much memory
+IMPORT_BOX = 768  # the longer side of an added video after it is made to fit the model
+TAIL_FRAMES = 24  # what the engine is given of a long clip: one second, enough for the nine it uses
 
 
 @dataclass(frozen=True)
@@ -607,4 +611,114 @@ async def join_clips(source: bytes, extension: bytes, keep: int) -> bytes:
                 proc.returncode, err.decode(errors="replace")[-300:],
             )  # fmt: skip
             raise JoinError("the clips could not be joined")
+        return out.read_bytes()
+
+
+class ClipError(Exception):
+    """A video file that cannot be used. The message is in words for the person."""
+
+
+_DURATION = re.compile(r"Duration:\s*(\d+):(\d{2}):(\d{2}(?:\.\d+)?)")
+_FRAMES = re.compile(r"frame=\s*(\d+)")
+
+
+async def _run_ffmpeg(args: list[str], limit_s: float) -> tuple[int, str]:
+    """ffmpeg with no input from the keyboard and a time limit; its report and exit status."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            ffmpeg_path(), "-hide_banner", "-nostdin", *args,
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+        )  # fmt: skip
+        _, err = await asyncio.wait_for(proc.communicate(), limit_s)
+    except TimeoutError:
+        proc.kill()  # type: ignore[possibly-undefined]
+        raise ClipError("That video took too long to read. Try a shorter one.") from None
+    except OSError as exc:
+        log.error("ffmpeg could not start: %s", type(exc).__name__)
+        raise ClipError("Videos cannot be read on this computer.") from exc
+    return proc.returncode or 0, err.decode(errors="replace")
+
+
+async def count_frames(path: Path) -> int:
+    """How many frames a clip has, as ffmpeg decodes them."""
+    _, report = await _run_ffmpeg(["-i", str(path), "-f", "null", "-"], FFMPEG_TIMEOUT_S * 3)
+    found = _FRAMES.findall(report)
+    if not found:
+        raise ClipError("That video could not be read.")
+    return int(found[-1])
+
+
+def fit_size(width: int, height: int) -> tuple[int, int]:
+    """The size an added video is made: multiples of 32 (which LTX needs), the longer side at most
+    IMPORT_BOX, about the size the model makes its own clips."""
+    f = min(1.0, IMPORT_BOX / max(width, height))
+    return max(64, int(width * f) // 32 * 32), max(64, int(height * f) // 32 * 32)
+
+
+async def import_clip(source: Path, out: Path) -> tuple[int, int, int]:
+    """Make a video file of the person's into a clip the engine can carry on: H.264 at 24 frames a
+    second, no sound and no tags, a multiple of 32 on each side, at most IMPORT_MAX_SECONDS long.
+    Returns its width, height and frame count. The file is decoded by ffmpeg, never trusted."""
+    rc, report = await _run_ffmpeg(
+        ["-i", str(source)], FFMPEG_TIMEOUT_S
+    )  # no output: it only reads
+    size, length = _SIZE.search(report), _DURATION.search(report)
+    if not size or not length:
+        log.info("an added file was not a readable video (exit %s)", rc)
+        raise ClipError("That file is not a video this app can read. Try an MP4 or MOV file.")
+    seconds = int(length[1]) * 3600 + int(length[2]) * 60 + float(length[3])
+    if seconds > IMPORT_MAX_SECONDS:
+        raise ClipError(
+            f"That video is longer than {IMPORT_MAX_SECONDS} seconds. Try a shorter one."
+        )
+    if seconds < 0.5:
+        raise ClipError("That video is too short. It needs to be at least half a second.")
+    w, h = fit_size(int(size[1]), int(size[2]))
+    rc, report = await _run_ffmpeg(
+        ["-y", "-i", str(source), "-map", "0:v:0", "-an", "-sn", "-dn", "-map_metadata", "-1",
+         "-vf", f"fps=24,scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-movflags", "+faststart",
+         str(out)],
+        IMPORT_TIMEOUT_S,
+    )  # fmt: skip
+    if rc != 0 or not await asyncio.to_thread(out.exists):
+        log.error("ffmpeg could not make an added video fit (exit %s): %s", rc, report[-300:])
+        raise ClipError("That video could not be read. Try another file.")
+    frames = await count_frames(out)
+    if frames < OVERLAP_MIN_FRAMES:
+        raise ClipError("That video is too short to carry on.")
+    return w, h, frames
+
+
+OVERLAP_MIN_FRAMES = 9  # what the engine takes of a clip's end: a clip needs at least that
+
+
+async def last_frame(mp4: bytes) -> bytes:
+    """The last frame of a clip as a JPEG, for the check of what a person added (ADR-0047)."""
+    with tempfile.TemporaryDirectory(prefix="wasifyai-video-") as tmp:
+        src, out = Path(tmp) / "clip.mp4", Path(tmp) / "last.jpg"
+        src.write_bytes(mp4)
+        await _run_ffmpeg(
+            ["-y", "-sseof", "-0.3", "-i", str(src), "-update", "1", "-q:v", "4", str(out)],
+            FFMPEG_TIMEOUT_S,
+        )
+        if not await asyncio.to_thread(out.exists):
+            raise ClipError("That video could not be read.")
+        return out.read_bytes()
+
+
+async def tail_of(mp4: bytes, frames: int, total: int) -> bytes:
+    """The last `frames` frames of a clip of `total` frames as a new clip: all the engine needs of a
+    long one, so it does not have to hold every frame of it in memory."""
+    with tempfile.TemporaryDirectory(prefix="wasifyai-video-") as tmp:
+        src, out = Path(tmp) / "clip.mp4", Path(tmp) / "tail.mp4"
+        src.write_bytes(mp4)
+        rc, report = await _run_ffmpeg(
+            ["-y", "-i", str(src), "-vf", f"select='gte(n,{total - frames})',setpts=N/(24*TB)",
+             "-r", "24", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "14", str(out)],
+            FFMPEG_TIMEOUT_S * 2,
+        )  # fmt: skip
+        if rc != 0 or not await asyncio.to_thread(out.exists):
+            log.error("ffmpeg could not cut the end of a clip (exit %s): %s", rc, report[-300:])
+            raise ClipError("That video could not be read.")
         return out.read_bytes()

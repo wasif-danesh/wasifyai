@@ -129,6 +129,7 @@ export function NotebookPage({
         ) : undefined
       }
       imageUrl={async (id) => (await images.get(id)).image_url}
+      saveImage={(id, path) => images.exportCopy(id, path)}
       onNeedModel={goModels}
       onBack={() => openNotebook(null)}
     />

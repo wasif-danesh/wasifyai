@@ -123,7 +123,7 @@ async def _source(ctx: ActionContext, video_id: str) -> VideoRecord:
     )
     if found is None or found.status != "done" or not found.video_key:
         raise ActionRefused("not_found", "That video is not in the library.")
-    if found.frames > MAX_EXTENDABLE_FRAMES:
+    if found.mode != "import" and found.frames > MAX_EXTENDABLE_FRAMES:
         raise ActionRefused(
             "clip_too_long", "That video is as long as it can get. Choose a shorter one."
         )

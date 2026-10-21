@@ -11,6 +11,7 @@ import type {
   VoiceModelInfo,
 } from "@wasifyai/client";
 import { describe, expect, it, vi } from "vitest";
+import { SaveAsProvider } from "../save";
 import { MusicWorkspace } from "./MusicWorkspace";
 import { SpeakWorkspace } from "./SpeakWorkspace";
 import { TrackList } from "./TrackList";
@@ -333,6 +334,40 @@ describe("speech to text", () => {
     await user.click(await screen.findByText("Board meeting"));
     await user.click(await screen.findByRole("button", { name: "Save .srt" }));
     expect(exportTranscript).toHaveBeenCalledWith("t1", "srt");
+  });
+
+  it("in the app window asks where to save a transcript and writes it there, or does nothing on cancel", async () => {
+    const exportTranscript = vi.fn(async () => new Blob(["1\n00:00"]));
+    const write = vi.fn(async (path: string) => ({ name: "board-meeting.srt", path }));
+    const choose = vi.fn<(name: string) => Promise<string | null>>(
+      async () => "/Users/me/Documents/b.srt",
+    );
+    const user = userEvent.setup();
+    render(
+      <SaveAsProvider value={{ choose, write }}>
+        <TranscribeWorkspace
+          api={api({
+            models: vi.fn(async () => [asr()]),
+            transcripts: vi.fn(async () => [transcript({ segments: [] })]),
+            transcript: vi.fn(async () => transcript()),
+            exportTranscript,
+          })}
+        />
+      </SaveAsProvider>,
+    );
+    await user.click(await screen.findByText("Board meeting"));
+    await user.click(await screen.findByRole("button", { name: "Save .srt" }));
+    expect(choose).toHaveBeenCalledWith("board-meeting.srt");
+    await waitFor(() =>
+      expect(write).toHaveBeenCalledWith("/Users/me/Documents/b.srt", expect.any(Blob)),
+    );
+    choose.mockResolvedValueOnce(null); // the person cancels the box: nothing is fetched or written
+    exportTranscript.mockClear();
+    write.mockClear();
+    await user.click(screen.getByRole("button", { name: "Save .srt" }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(exportTranscript).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
   });
 
   it("says why a recording could not be read", async () => {

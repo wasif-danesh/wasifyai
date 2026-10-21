@@ -3,6 +3,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type VideoSummary, type VideosApi, createRunClient } from "@wasifyai/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SaveAsProvider } from "../save";
 import { done, node, sse } from "../test-utils";
 import { VideoLibrary } from "./VideoLibrary";
 import { VideoWorkspace } from "./VideoWorkspace";
@@ -51,6 +52,7 @@ function api(over: Partial<VideosApi> = {}): VideosApi {
     get: vi.fn(),
     remove: vi.fn().mockResolvedValue(undefined),
     exportCopy: vi.fn().mockResolvedValue({ name: "a-red-fox.mp4", path: "/Downloads/a.mp4" }),
+    importVideo: vi.fn(),
     ...over,
   };
 }
@@ -90,7 +92,7 @@ describe("VideoWorkspace", () => {
     expect(player).toHaveAttribute("poster", "http://127.0.0.1:1/files/v1.jpg");
 
     await user.click(screen.getByRole("button", { name: /save a copy/i }));
-    expect(videos.exportCopy).toHaveBeenCalledWith("v1");
+    expect(videos.exportCopy).toHaveBeenCalledWith("v1", undefined);
     expect(await screen.findByText("Saved as a-red-fox.mp4 in Downloads.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /your videos/i }));
     expect(openLibrary).toHaveBeenCalled();
@@ -166,7 +168,7 @@ describe("VideoLibrary", () => {
     expect(screen.getByText(/From text · 2 s · 768×512/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /save a copy/i }));
-    expect(videos.exportCopy).toHaveBeenCalledWith("v1");
+    expect(videos.exportCopy).toHaveBeenCalledWith("v1", undefined);
 
     await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(videos.remove).not.toHaveBeenCalled(); // asks first
@@ -174,6 +176,34 @@ describe("VideoLibrary", () => {
     expect(videos.remove).toHaveBeenCalledWith("v1");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(await screen.findByText("No videos yet.")).toBeInTheDocument();
+  });
+
+  it("in the app window asks where to save the clip, with a name from its words, and writes it there", async () => {
+    const videos = api({
+      list: vi.fn().mockResolvedValue({ videos: [clip()], next_before: null }),
+      exportCopy: vi.fn(async (_id: string, path?: string) => ({
+        name: "fox.mp4",
+        path: path ?? "",
+      })),
+    });
+    const choose = vi.fn<(name: string) => Promise<string | null>>(
+      async () => "/Users/me/Movies/fox.mp4",
+    );
+    const user = userEvent.setup();
+    render(
+      <SaveAsProvider value={{ choose, write: vi.fn() }}>
+        <VideoLibrary videos={videos} canSave />
+      </SaveAsProvider>,
+    );
+    await user.click(await screen.findByRole("button", { name: /open: a red fox/i }));
+    await user.click(screen.getByRole("button", { name: /save a copy/i }));
+    expect(choose).toHaveBeenCalledWith("a-red-fox-in-the-snow.mp4");
+    expect(videos.exportCopy).toHaveBeenCalledWith("v1", "/Users/me/Movies/fox.mp4");
+    expect((await screen.findAllByText("Saved as fox.mp4 in Movies.")).length).toBeGreaterThan(0);
+    choose.mockResolvedValueOnce(null); // cancelled: nothing more is saved
+    await user.click(screen.getByRole("button", { name: /save a copy/i }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(videos.exportCopy).toHaveBeenCalledTimes(1);
   });
 
   it("shows a clip being made and a failed one, and looks again while one is being made", async () => {

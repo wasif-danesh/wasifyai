@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import FastAPI, Header
 from fastapi.testclient import TestClient
+from video_rig import frame_count, mp4
 from wasifyai_platform_sdk import (
     Identity,
     RouteDeps,
@@ -140,6 +141,21 @@ def test_export_copies_a_finished_clip_and_never_overwrites(client, tmp_path):
     assert second["name"] == "clip-number-1-2.mp4" and saved.exists()
 
 
+def test_export_writes_where_the_save_as_box_chose_and_says_so_when_it_cannot(client, tmp_path):
+    put(client, "u1", f"{uid(1)}/video.mp4", b"MP4DATA")
+    chosen = tmp_path / "Movies" / "my-fox.mp4"
+    chosen.parent.mkdir()
+    r = client.post(f"{BASE}/{uid(1)}/export", json={"path": str(chosen)})
+    assert r.status_code == 200 and r.json() == {"name": "my-fox.mp4", "path": str(chosen)}
+    assert chosen.read_bytes() == b"MP4DATA"
+    assert not (tmp_path / "Downloads").exists()  # the folder of the assistant was not used
+    gone = client.post(f"{BASE}/{uid(1)}/export", json={"path": str(tmp_path / "nope" / "a.mp4")})
+    assert gone.status_code == 422 and "does not exist" in gone.json()["detail"]
+    del client.app.state.export_dir  # no export folder, but a chosen path still works
+    again = client.post(f"{BASE}/{uid(1)}/export", json={"path": str(chosen)})
+    assert again.status_code == 200
+
+
 def test_export_is_for_the_owner_a_finished_clip_and_only_where_a_folder_is_set(client):
     put(client, "u1", f"{uid(1)}/video.mp4", b"x")
     assert client.post(f"{BASE}/{uid(1)}/export", headers={"x-user": "other"}).status_code == 404
@@ -185,3 +201,81 @@ def test_file_names_are_safe():
     assert file_name("A fox! In the snow...", "mp4") == "a-fox-in-the-snow.mp4"
     assert file_name("../../etc/passwd", "mp4") == "etc-passwd.mp4"
     assert file_name("", "mp4") == "video.mp4"
+
+
+# ---- adding a video of the person's own -------------------------------------------------------
+
+
+def stored(client, rel: str, user: str = "u1") -> bytes:
+    async def go() -> bytes:
+        token = set_context(RunContext("t1", "wasifyai-video", user))
+        try:
+            return await client.app.state.storage.get(rel)
+        finally:
+            reset_context(token)
+
+    return asyncio.run(go())
+
+
+class Indexed:
+    def __init__(self) -> None:
+        self.items: dict[str, str] = {}
+
+    async def index(self, tenant, product, user, kind, item_id, text) -> None:
+        self.items[item_id] = f"{kind}:{text}"
+
+
+def test_a_video_file_is_added_to_the_library_made_to_fit_and_found_in_search(client):
+    client.app.state.creation_index = Indexed()
+    r = client.post(
+        f"{BASE}/import", files={"file": ("holiday_clip-1.mp4", mp4((200, 150), 24), "video/mp4")}
+    )
+    assert r.status_code == 201, r.text
+    made = r.json()
+    # multiples of 32 on each side, the shape kept to within a crop, one second at 24 a second
+    assert (made["width"], made["height"], made["seconds"]) == (192, 128, 1)
+    assert made["mode"] == "import" and made["status"] == "done"
+    assert made["prompt"] == "holiday clip 1"  # the file's name, made readable
+    clip = stored(client, f"{made['id']}/video.mp4")
+    assert frame_count(clip) == 24 and stored(client, f"{made['id']}/poster.jpg")
+    assert client.app.state.creation_index.items[made["id"]] == "video:holiday clip 1"
+    ids = [v["id"] for v in client.get(BASE).json()["videos"]]
+    assert made["id"] in ids
+    assert made["id"] not in [
+        v["id"] for v in client.get(BASE, headers={"x-user": "someone-else"}).json()["videos"]
+    ]
+
+
+def test_a_small_clip_keeps_its_size_and_a_big_one_is_brought_down(client):
+    small = client.post(
+        f"{BASE}/import", files={"file": ("a.mp4", mp4((128, 96), 24), "video/mp4")}
+    )
+    assert (small.json()["width"], small.json()["height"]) == (128, 96)
+    big = client.post(
+        f"{BASE}/import", files={"file": ("b.mp4", mp4((1920, 1080), 12 + 12), "video/mp4")}
+    )
+    assert (big.json()["width"], big.json()["height"]) == (768, 416)  # 768 x 432, down to 32s
+
+
+@pytest.mark.parametrize(
+    ("name", "data", "message"),
+    [
+        ("notes.txt", b"just some text, not a video at all", "not a video"),
+        ("empty.mp4", b"", "No file was sent"),
+    ],
+)
+def test_a_file_that_is_not_a_video_is_refused_in_words(client, name, data, message):
+    r = client.post(f"{BASE}/import", files={"file": (name, data, "video/mp4")})
+    assert r.status_code == 422 and message in r.json()["detail"]
+    assert [v["id"] for v in client.get(BASE).json()["videos"]] == [uid(3), uid(4), uid(2), uid(1)]
+
+
+def test_a_video_longer_than_thirty_seconds_is_refused(client):
+    long = mp4((64, 64), 24 * 31)
+    r = client.post(f"{BASE}/import", files={"file": ("long.mp4", long, "video/mp4")})
+    assert r.status_code == 422 and "longer than 30 seconds" in r.json()["detail"]
+
+
+def test_a_video_of_a_moment_is_refused(client):
+    r = client.post(f"{BASE}/import", files={"file": ("blink.mp4", mp4((64, 64), 4), "video/mp4")})
+    assert r.status_code == 422 and "too short" in r.json()["detail"]

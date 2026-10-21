@@ -18,6 +18,7 @@ import { Button } from "../components/button";
 import { Chip } from "../components/chip";
 import { JobMeter, WorkingCard } from "../components/create";
 import { Notice } from "../components/notice";
+import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../save";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
 import { PromptBox } from "./PromptBox";
 import { type Draft, blankDraft, fromDraft, lengths, missing, startFrom, toDraft } from "./slots";
@@ -392,6 +393,7 @@ function Editor({
   const [saved, setSaved] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const save = useSaveCopy();
   useEffect(() => {
     if (!template) return;
     if (project) setDraft(toDraft(template, project.slots));
@@ -438,8 +440,15 @@ function Editor({
     if (!videos) return;
     setProblem(null);
     try {
-      const done = await videos.exportCopy(videoId);
-      setSaved(`Saved as ${done.name} in Downloads.`);
+      const done = await save({
+        name: fileNameFor(
+          project?.title || template?.title || "video",
+          extensionOf(render?.video_url ?? "", "mp4"),
+          "video",
+        ),
+        copy: (path) => videos.exportCopy(videoId, path),
+      });
+      if (done) setSaved(savedText(done));
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "The video could not be saved.");
     }

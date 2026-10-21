@@ -11,7 +11,9 @@ import { videos } from "../videos";
 
 const LINK = "underline underline-offset-4";
 
-const TITLES: Record<VideoMode, [string, string]> = {
+type PageMode = Exclude<VideoMode, "import">;
+
+const TITLES: Record<PageMode, [string, string]> = {
   text: ["Make a video", "Describe a scene and get a short clip. It is made on this computer."],
   image: [
     "Animate a picture",
@@ -23,7 +25,7 @@ const TITLES: Record<VideoMode, [string, string]> = {
   ],
 };
 
-export function VideoPage({ mode, go }: { mode: VideoMode; go: (r: Route) => void }) {
+export function VideoPage({ mode, go }: { mode: PageMode; go: (r: Route) => void }) {
   const model = useModelOf("wasifyai-video");
   const engine = useImageEngine();
 

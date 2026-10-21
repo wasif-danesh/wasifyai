@@ -18,10 +18,13 @@ import {
   Table2,
   Trash2,
 } from "lucide-react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import { type ComponentType, useMemo, useRef, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
-import { OutputViewer } from "./OutputViewers";
+import { ConfirmDialog, NameDialog } from "../components/dialog";
+import { type Saved, fileNameFor, savedText, useSaveCopy } from "../save";
+import { OutputViewer, pictureOf } from "./OutputViewers";
 import { FORMAT_LABEL, STUDIO_TILES, making } from "./outputs";
 import { useNotebookPlace } from "./place";
 import { useOutputs } from "./use-outputs";
@@ -52,19 +55,36 @@ export type StudioPaneProps = {
   scopeLabel: string;
   /** A fresh link to a picture of the image product (an infographic). */
   imageUrl?: (id: string) => Promise<string>;
+  /**
+   * Save a picture of the library into the person's folder (the desktop window cannot download a file
+   * by itself). Where it is absent (the web) the picture is fetched and saved by the browser.
+   */
+  saveImage?: (imageId: string, path?: string) => Promise<Saved>;
+  /** The Studio is wide now, and a button toggles it (the workspace owns the width). */
+  wide?: boolean;
+  onToggleWide?: () => void;
 };
+
+type Ask = { kind: "rename" | "delete"; output: NotebookOutput };
+type Note = { tone: "ok" | "error"; text: string };
 
 /**
  * What a notebook makes from its sources: tiles for the formats, a short brief, and the list of
  * what was made, opened in place. Outputs are made on this computer by the chat model.
  */
 export function StudioPane(props: StudioPaneProps) {
-  const { api, runs, notebookId, documentIds, blockedReason, scopeLabel, imageUrl } = props;
+  const { api, runs, notebookId, documentIds, blockedReason, scopeLabel, imageUrl, saveImage } =
+    props;
   const studio = useOutputs(api, runs, notebookId);
   const hosted = useNotebookPlace() === "hosted";
   const [brief, setBrief] = useState<StudioFormat | null>(null);
   const [focus, setFocus] = useState("");
   const [open, setOpen] = useState<NotebookOutput | null>(null);
+  const [asking, setAsking] = useState<Ask | null>(null);
+  const [note, setNote] = useState<Note | null>(null);
+  const [saving, setSaving] = useState<string | null>(null); // the output being copied: one at a time
+  const saveCopy = useSaveCopy();
+  const copying = useRef(false); // set at once, before the screen has drawn the waiting button
 
   async function create(format: StudioFormat, prompt: string) {
     setBrief(null);
@@ -74,6 +94,7 @@ export function StudioPane(props: StudioPaneProps) {
 
   async function view(o: NotebookOutput) {
     if (!notebookId) return;
+    setNote(null); // what was said about another output is not about this one
     try {
       setOpen(await api.output(notebookId, o.id));
     } catch {
@@ -81,18 +102,47 @@ export function StudioPane(props: StudioPaneProps) {
     }
   }
 
+  /**
+   * Keep a copy: in the app window the person chooses where in the system's Save As box and the engine writes
+   * it there; on the web the browser saves it. The picture of an infographic is a picture of the library,
+   * not a file of the output.
+   */
   async function save(o: NotebookOutput) {
-    if (!notebookId) return;
+    if (!notebookId || copying.current) return;
+    copying.current = true;
+    setNote(null);
+    setSaving(o.id);
     try {
-      const blob = await api.outputFile(notebookId, o.id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = o.file_name ?? "output";
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      // the list does not carry an infographic's data, so read the output to find its picture
+      const full = o.format === "infographic" && !o.data ? await api.output(notebookId, o.id) : o;
+      const picture = pictureOf(full);
+      if (o.format === "infographic" && !picture) throw new Error("no picture");
+      const done = picture
+        ? await saveCopy({
+            name: fileNameFor(o.title, "png", "infographic"),
+            copy: saveImage ? (path) => saveImage(picture, path) : undefined,
+            blob: imageUrl
+              ? async () => {
+                  const res = await fetch(await imageUrl(picture));
+                  if (!res.ok) throw new Error("picture");
+                  return res.blob();
+                }
+              : undefined,
+          })
+        : await saveCopy({
+            name: o.file_name ?? fileNameFor(o.title, "bin", "output"),
+            copy: hosted ? undefined : (path) => api.exportOutput(notebookId, o.id, path),
+            blob: () => api.outputFile(notebookId, o.id),
+          });
+      if (done) setNote({ tone: "ok", text: savedText(done) });
     } catch {
-      // the list shows nothing new: the file may be gone
+      setNote({
+        tone: "error",
+        text: "It could not be saved. The file may be gone: try making it again.",
+      });
+    } finally {
+      copying.current = false;
+      setSaving(null);
     }
   }
 
@@ -121,10 +171,23 @@ export function StudioPane(props: StudioPaneProps) {
     return (
       <OutputViewer
         output={{ ...open, ...(current ?? {}), body: open.body, data: open.data }}
-        onBack={() => setOpen(null)}
+        onBack={() => {
+          setNote(null);
+          setOpen(null);
+        }}
         onDownload={() => void save(open)}
         imageUrl={imageUrl}
         overview={overview}
+        wide={props.wide}
+        onToggleWide={props.onToggleWide}
+        saving={saving === open.id}
+        notice={
+          note ? (
+            <output className={note.tone === "error" ? "text-destructive" : "text-ok"}>
+              {note.text}
+            </output>
+          ) : null
+        }
       />
     );
   }
@@ -132,9 +195,31 @@ export function StudioPane(props: StudioPaneProps) {
   const blocked = blockedReason ?? null;
   return (
     <section aria-label="Studio" className="flex h-full min-h-0 flex-col">
-      <header className="border-b px-4 py-3">
-        <h2 className="font-medium text-sm">Studio</h2>
+      <header className="flex items-center gap-2 border-b px-4 py-3">
+        <h2 className="min-w-0 flex-1 font-medium text-sm">Studio</h2>
+        {props.onToggleWide ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={props.wide ? "Make the Studio narrower" : "Make the Studio wider"}
+            title={props.wide ? "Narrower" : "Wider"}
+            onClick={props.onToggleWide}
+          >
+            {props.wide ? <Minimize2 /> : <Maximize2 />}
+          </Button>
+        ) : null}
       </header>
+      {note ? (
+        <output
+          className={cn(
+            "block border-b px-4 py-2 text-sm",
+            note.tone === "error" ? "text-destructive" : "text-ok",
+          )}
+        >
+          {note.text}
+        </output>
+      ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3">
         <ul className="grid grid-cols-2 gap-2 [&>li]:min-w-0">
           {STUDIO_TILES.map((t) => {
@@ -270,23 +355,25 @@ export function StudioPane(props: StudioPaneProps) {
                         variant="ghost"
                         size="icon-xs"
                         aria-label={`Rename ${o.title}`}
-                        onClick={() => {
-                          const next = window.prompt("Name this output", o.title)?.trim();
-                          if (next && next !== o.title) void studio.rename(o.id, next);
-                        }}
+                        title="Rename"
+                        onClick={() => setAsking({ kind: "rename", output: o })}
                       >
                         <Pencil />
                       </Button>
                     ) : null}
-                    {o.has_file ? (
+                    {o.has_file || o.format === "infographic" ? (
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-xs"
-                        aria-label={`Save ${o.file_name}`}
+                        aria-label={
+                          o.has_file ? `Save ${o.file_name}` : `Save the picture of ${o.title}`
+                        }
+                        title={o.has_file ? "Save a copy" : "Save the picture"}
+                        disabled={saving !== null}
                         onClick={() => void save(o)}
                       >
-                        <FileDown />
+                        {saving === o.id ? <Loader2 className="animate-spin" /> : <FileDown />}
                       </Button>
                     ) : null}
                     {!making(o) ? (
@@ -295,10 +382,8 @@ export function StudioPane(props: StudioPaneProps) {
                         variant="ghost"
                         size="icon-xs"
                         aria-label={`Delete ${o.title || "this output"}`}
-                        onClick={() => {
-                          if (window.confirm(`Delete “${o.title || FORMAT_LABEL[o.format]}”?`))
-                            void studio.remove(o.id);
-                        }}
+                        title="Delete"
+                        onClick={() => setAsking({ kind: "delete", output: o })}
                       >
                         <Trash2 />
                       </Button>
@@ -319,6 +404,31 @@ export function StudioPane(props: StudioPaneProps) {
           the left.
         </p>
       </div>
+      {asking?.kind === "rename" ? (
+        <NameDialog
+          title="Rename this output"
+          label="Name"
+          initial={asking.output.title}
+          onSubmit={(name) => {
+            void studio.rename(asking.output.id, name);
+            setNote(null);
+            setAsking(null);
+          }}
+          onCancel={() => setAsking(null)}
+        />
+      ) : null}
+      {asking?.kind === "delete" ? (
+        <ConfirmDialog
+          title="Delete this output?"
+          message={`“${asking.output.title || FORMAT_LABEL[asking.output.format]}” will be deleted from this notebook.`}
+          onConfirm={() => {
+            void studio.remove(asking.output.id);
+            setNote(null);
+            setAsking(null);
+          }}
+          onCancel={() => setAsking(null)}
+        />
+      ) : null}
     </section>
   );
 }

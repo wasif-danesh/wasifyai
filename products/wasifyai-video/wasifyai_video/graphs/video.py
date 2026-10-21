@@ -54,7 +54,9 @@ from wasifyai_video.schemas import (
     SHAPES,
 )
 from wasifyai_video.videos import (
+    TAIL_FRAMES,
     VIDEO_CREATED,
+    ClipError,
     InMemoryVideoStore,
     JoinError,
     PosterError,
@@ -63,7 +65,9 @@ from wasifyai_video.videos import (
     VideoRecord,
     VideoStore,
     join_clips,
+    last_frame,
     poster_of,
+    tail_of,
     video_store,
 )
 
@@ -89,6 +93,8 @@ class VideoState(TypedDict, total=False):
     source_id: str  # extend: the clip to carry on
     # extend: what the check found about it, and the temporary copy the worker reads
     source_video_key: str
+    source_mode: str
+    source_frames: int
     keep_frames: int
     temp_key: str
     # job and result
@@ -226,13 +232,19 @@ def build_video_graph(
             source = await videos.get(ctx.tenant_id, ctx.user_id, str(state.get("source_id") or ""))
             if source is None or source.status != "done" or not source.video_key:
                 return refuse_with("invalid_request", NOT_EXTENDABLE)
-            if source.mode not in ("text", "image", "extend") or source.frames < OVERLAP_FRAMES:
+            if (
+                source.mode not in ("text", "image", "extend", "import")
+                or source.frames < OVERLAP_FRAMES
+            ):
                 return refuse_with("invalid_request", NOT_EXTENDABLE)
-            if source.frames > MAX_EXTENDABLE_FRAMES:
+            # a clip the person added has not been through the model: its length is theirs to choose
+            if source.mode != "import" and source.frames > MAX_EXTENDABLE_FRAMES:
                 return refuse_with("clip_too_long", TOO_LONG)
             keep = source.frames - OVERLAP_FRAMES
             out["source_id"] = source.id
             out["source_video_key"] = source.video_key
+            out["source_mode"] = source.mode
+            out["source_frames"] = source.frames
             out["keep_frames"] = keep
             out["seconds"] = round((keep + EXTEND_FRAMES) / FPS)
 
@@ -261,6 +273,17 @@ def build_video_graph(
             verdict = await guardrail.judge_picture(caps, prompt, picture)
             if not verdict.allowed:
                 return await refused(verdict.category, guardrail.refusal_message(verdict.category))
+        if mode == "extend" and out.get("source_mode") == "import":
+            # what the person added is looked at like any picture they bring: its last frame, which
+            # is what the new part grows from
+            assert caps.storage is not None
+            try:
+                frame = await last_frame(await caps.storage.get(out["source_video_key"]))
+            except (ClipError, FileNotFoundError):
+                return refuse_with("invalid_request", NOT_EXTENDABLE)
+            verdict = await guardrail.judge_picture(caps, prompt, frame)
+            if not verdict.allowed:
+                return refuse_with(verdict.category, guardrail.refusal_message(verdict.category))
         return out
 
     def after_check(state: VideoState) -> str:
@@ -315,13 +338,17 @@ def build_video_graph(
                 # the worker reads a job's inputs only from the user's uploads: a copy of the clip
                 temp_key = f"uploads/extend-{uuid4()}.mp4"
                 assert caps.storage is not None
-                await caps.storage.put(
-                    temp_key, await caps.storage.get(state["source_video_key"]), "video/mp4"
-                )
+                clip = await caps.storage.get(state["source_video_key"])
+                from_frame = state["keep_frames"]
+                if state["source_frames"] > 3 * TAIL_FRAMES:
+                    # only the end is needed, and the engine holds every frame it is given in memory
+                    clip = await tail_of(clip, TAIL_FRAMES, state["source_frames"])
+                    from_frame = TAIL_FRAMES - OVERLAP_FRAMES
+                await caps.storage.put(temp_key, clip, "video/mp4")
                 handle = await caps.video.extend(
                     prompt=state["prompt"],
                     video_key=temp_key,
-                    from_frame=state["keep_frames"],
+                    from_frame=from_frame,
                     length=EXTEND_FRAMES,
                     seed=seed,
                 )

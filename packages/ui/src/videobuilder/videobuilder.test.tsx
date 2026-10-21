@@ -627,7 +627,7 @@ describe("writing and making a video", () => {
     ).toBeInTheDocument();
     expect(document.querySelector("video")).toHaveAttribute("src", "http://127.0.0.1:1/v.mp4");
     await user.click(screen.getByRole("button", { name: /Save a copy/ }));
-    expect(videos.exportCopy).toHaveBeenCalledWith("v1");
+    expect(videos.exportCopy).toHaveBeenCalledWith("v1", undefined);
     expect(await screen.findByText("Saved as launch-day.mp4 in Downloads.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Your videos/ }));
     expect(onOpenLibrary).toHaveBeenCalled();

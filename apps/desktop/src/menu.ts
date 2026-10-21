@@ -9,6 +9,8 @@ export const ROUTES: Record<string, Route> = {
   "notebook.list": "notebooks",
   "images.create": "create",
   "images.edit": "edit",
+  "images.reference": "reference",
+  "images.inpaint": "inpaint",
   "images.model3d": "model3d",
   "images.library": "library",
   "video.create": "video",

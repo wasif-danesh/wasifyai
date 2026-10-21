@@ -34,6 +34,16 @@ def png(size=(640, 480), colour=(30, 120, 200)) -> bytes:
     return out.getvalue()
 
 
+def mask_png(size=(640, 480), box=(100, 100, 300, 250)) -> bytes:
+    """A painted area: white inside `box` (None: nothing painted), black elsewhere."""
+    out = io.BytesIO()
+    mask = Image.new("L", size, 0)
+    if box:
+        mask.paste(255, box)
+    mask.save(out, "PNG")
+    return out.getvalue()
+
+
 class Rig:
     def __init__(self, caps, sink, usage, raw, uploads):
         self.caps, self.sink, self.usage, self.raw, self.uploads = caps, sink, usage, raw, uploads
@@ -83,6 +93,8 @@ def make_rig(
                     },
                     "image.generate": {"provider": "fake"},
                     "image.edit": {"provider": "fake"},
+                    "image.reference": {"provider": "fake"},
+                    "image.inpaint": {"provider": "fake"},
                 },
                 "quotas": quotas if quotas is not None else {"images_per_user_per_day": 20},
                 "uploads": {"image": {}},

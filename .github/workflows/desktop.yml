@@ -70,6 +70,10 @@ jobs:
           services/api/tests/test_desktop_profile.py
           services/api/tests/test_local_embedder.py
           products/wasifyai-image/tests/test_image_sqlite.py
+      - if: failure()
+        name: Where the watchdog stopped a hung test
+        shell: bash
+        run: cat "$RUNNER_TEMP/test-watchdog.txt" 2>/dev/null || echo "the watchdog did not stop anything"
 
   shell:
     strategy:
@@ -344,6 +348,9 @@ jobs:
     # Each page attacks while HyperFrames renders it; a service on loopback must hear nothing and the filter
     # must refuse what the page asks for. Apple-silicon macOS only: that is where the component is supported.
     runs-on: macos-latest
+    timeout-minutes: 60   # about 25 minutes: the 90 second renders take 7 minutes each here (no GPU)
+    env:
+      WASIFYAI_SESSION_TIMEOUT_S: "3000"   # the watchdog in conftest.py: this job's tests run longer than the others'
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -356,6 +363,10 @@ jobs:
         run: uv run pytest -s services/api/tests/test_video_builder_hostile.py services/api/tests/test_video_builder_sandbox.py services/api/tests/test_video_builder_runtime.py
       - name: The five templates, the exact-text check and the alpha files (MG1)
         run: uv run pytest -s services/api/tests/test_video_builder_templates.py
+      - if: failure()
+        name: Where the watchdog stopped a hung test
+        shell: bash
+        run: cat "$RUNNER_TEMP/test-watchdog.txt" 2>/dev/null || echo "the watchdog did not stop anything"
 
   comfyui:
     # The optional image engine, as a person gets it: press "Set up image generation" (the window's

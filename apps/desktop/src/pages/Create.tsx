@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Create and Edit: the shared two-panel screen with this window's model chip and setup notices.
-import type { ImageSummary } from "@wasifyai/client";
+// Create, Edit, Reference and Inpaint: the shared two-panel screen with this window's model chip and setup notices.
+import type { ImageMode, ImageSummary } from "@wasifyai/client";
 import { ImageWorkspace, Notice, type WorkspacePreset, cn } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
 import { FitBadge } from "../FitBadge";
@@ -35,7 +35,7 @@ export function CreatePage({
   onEditThis,
   source,
 }: {
-  mode: "text" | "image";
+  mode: ImageMode;
   go: (r: Route) => void;
   preset?: WorkspacePreset | null;
   onEditThis?: (image: ImageSummary) => void;

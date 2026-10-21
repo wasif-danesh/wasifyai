@@ -10,21 +10,16 @@ const at = (route: Route, notebook: string | null = null, conversationId: string
 describe("the window's side menu", () => {
   it("opens a screen for everything that is built and marks the rest as soon", () => {
     const soon = ids.filter((id) => at("home")(id) === undefined);
-    expect(soon).toEqual([
-      "images.transform",
-      "images.inpaint",
-      "images.extend",
-      "images.upscale",
-      "images.reference",
-      "video.extend",
-    ]);
+    expect(soon).toEqual(["video.extend"]);
     expect(at("home")("train")).toBeUndefined();
   });
 
-  it("shows Video Builder and 3D models in the menu, and marks the page being shown", () => {
+  it("shows the screens that are built, and marks the page being shown", () => {
     for (const [id, route, path] of [
       ["video.builder", "videobuilder", "/video/builder"],
       ["images.model3d", "model3d", "/images/3d"],
+      ["images.reference", "reference", "/images/reference"],
+      ["images.inpaint", "inpaint", "/images/inpaint"],
     ] as const) {
       const shown = at("home")(id);
       expect(shown && !("hidden" in shown) ? shown.current : null, id).toBe(false);

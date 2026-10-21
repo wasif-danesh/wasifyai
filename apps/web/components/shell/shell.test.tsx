@@ -71,7 +71,7 @@ describe("the side panel", () => {
     query = "";
     panel();
     expect(screen.getByRole("link", { name: /Edit/ })).toHaveAttribute("href", "/image/edit");
-    const soon = screen.getByRole("button", { name: /Transform/ });
+    const soon = screen.getByRole("button", { name: /Inpaint/ });
     expect(soon).toBeDisabled();
     expect(within(soon).getByText("Soon")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Notebook/ })).toBeInTheDocument();

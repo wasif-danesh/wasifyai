@@ -12,6 +12,7 @@ from typing import Any
 
 import httpx
 from wasifyai_platform_sdk import (
+    PICTURE_SLOTS,
     JobRequest,
     MediaBinding,
     MediaBindingStore,
@@ -86,9 +87,10 @@ class ComfyApiRunner:
         self, job: JobRequest, on_progress: ProgressFn, files: InputFiles | None = None
     ) -> Files:
         graph = job.prompt
-        if files and "image" in files:
-            name = input_image_name(job.job_id)
-            graph = use_picture(graph, name, await self._upload(name, files["image"]))
+        for slot in PICTURE_SLOTS:
+            if files and slot in files:
+                name = input_image_name(job.job_id, slot)
+                graph = use_picture(graph, name, await self._upload(name, files[slot]))
         r = await self._http.post(
             f"{self._base}/api/v2/jobs", json={"workflow": graph}, headers=self._headers
         )

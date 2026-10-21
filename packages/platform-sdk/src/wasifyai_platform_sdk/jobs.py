@@ -25,10 +25,16 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def input_image_name(job_id: str) -> str:
+# The pictures a job can take, by slot: the job's input `<slot>_key` names the user's upload, and
+# the workflow map has an input of the same name. `image` is the picture to change (Edit, Inpaint)
+# or the first reference; `image2` the second reference; `mask` the area to change, white on black.
+PICTURE_SLOTS = ("image", "image2", "mask")
+
+
+def input_image_name(job_id: str, slot: str = "image") -> str:
     """The file name an input picture goes by on the backend for this job. The API puts it in the
     workflow before the job exists; the worker uploads the user's picture under it."""
-    return f"wasifyai-{job_id}.png"
+    return f"wasifyai-{job_id}.png" if slot == "image" else f"wasifyai-{job_id}-{slot}.png"
 
 
 class JobRequest(BaseModel):

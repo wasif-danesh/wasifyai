@@ -1,7 +1,7 @@
 // A person's finished images, from the product's read routes (`/products/wasifyai-image/images`):
 // list, search, open, favourite, save a copy, delete. The same routes serve the web app and the
 // desktop window; only the transport differs.
-import type { Mode } from "./image-flow";
+import type { ImageMode } from "./image-flow";
 import { HttpError, type Transport, errorMessage } from "./transport";
 
 export const IMAGE_PRODUCT_ID = "wasifyai-image";
@@ -12,7 +12,7 @@ export type LoraChoice = { name: string; weight: number };
 /** What made an image (versioned). `size` is null for an edit: it keeps the picture's own size. */
 export type ImageRecipe = {
   v: number;
-  mode: Mode;
+  mode: ImageMode;
   prompt: string;
   size: string | null;
   width: number;
@@ -25,7 +25,7 @@ export type ImageRecipe = {
 export type ImageSummary = {
   id: string;
   prompt: string;
-  mode: Mode;
+  mode: ImageMode;
   width: number;
   height: number;
   created_at: string;

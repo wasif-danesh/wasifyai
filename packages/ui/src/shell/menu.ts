@@ -28,7 +28,6 @@ import {
   Users,
   Video,
   Volume2,
-  ZoomIn,
 } from "lucide-react";
 
 export type MenuItemDef = { id: string; label: string; icon: LucideIcon };
@@ -51,10 +50,7 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     items: [
       { id: "images.create", label: "Create", icon: Sparkles },
       { id: "images.edit", label: "Edit", icon: Pencil },
-      { id: "images.transform", label: "Transform", icon: Shuffle },
       { id: "images.inpaint", label: "Inpaint", icon: Paintbrush },
-      { id: "images.extend", label: "Extend", icon: Maximize2 },
-      { id: "images.upscale", label: "Upscale", icon: ZoomIn },
       { id: "images.reference", label: "Reference", icon: SquareStack },
       { id: "images.model3d", label: "3D model", icon: Box },
       { id: "images.library", label: "Your images", icon: Library },

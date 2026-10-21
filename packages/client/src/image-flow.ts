@@ -4,6 +4,14 @@ import type { ParsedEvent } from "./sse";
 
 export type Mode = "text" | "image";
 
+/**
+ * What an image was made by: from words, an edit of a picture, a new picture from two (`reference`), or a
+ * change of a painted area (`inpaint`). Video has the first two only (`Mode`).
+ */
+export type ImageMode = Mode | "reference" | "inpaint";
+const IMAGE_MODES: readonly ImageMode[] = ["text", "image", "reference", "inpaint"];
+const modeOf = (v: unknown): ImageMode => IMAGE_MODES.find((m) => m === v) ?? "text";
+
 export type Phase =
   | "idle"
   | "checking" // request sent, guardrail running
@@ -22,7 +30,7 @@ export type ImageResult = {
   width: number;
   height: number;
   prompt: string;
-  mode: Mode;
+  mode: ImageMode;
 };
 
 export type FlowError = { code: string; message: string; retryable: boolean };
@@ -110,7 +118,7 @@ function applyEvent(state: FlowState, name: string, d: Data): FlowState {
           width: num(out.width) ?? 0,
           height: num(out.height) ?? 0,
           prompt: str(out.prompt),
-          mode: out.mode === "image" ? "image" : "text",
+          mode: modeOf(out.mode),
         },
       };
     }

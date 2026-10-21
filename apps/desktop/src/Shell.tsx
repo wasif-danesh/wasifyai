@@ -136,6 +136,8 @@ export function Shell() {
               source={editSource}
             />
           ) : null}
+          {route === "reference" ? <CreatePage mode="reference" go={go} /> : null}
+          {route === "inpaint" ? <CreatePage mode="inpaint" go={go} /> : null}
           {route === "library" ? (
             <LibraryPage
               go={go}

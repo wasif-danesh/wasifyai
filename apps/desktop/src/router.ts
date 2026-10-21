@@ -7,6 +7,8 @@ export type Route =
   | "home"
   | "create"
   | "edit"
+  | "reference"
+  | "inpaint"
   | "library"
   | "models"
   | "settings"
@@ -34,6 +36,8 @@ const PATHS: Record<Route, string> = {
   home: "/",
   create: "/images/create",
   edit: "/images/edit",
+  reference: "/images/reference",
+  inpaint: "/images/inpaint",
   library: "/library",
   models: "/models",
   settings: "/settings",

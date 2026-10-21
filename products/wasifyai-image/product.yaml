@@ -6,6 +6,8 @@ capabilities:
   text.describe_image: { provider: litellm, model: multimodal, inputs: [text, image] }
   image.generate:      { provider: comfyui, workflow: flux2-klein-4b, defaults: { width: 1024, height: 1024 } }
   image.edit:          { provider: comfyui, workflow: flux2-klein-4b-edit }
+  image.reference:     { provider: comfyui, workflow: flux2-klein-4b-reference, defaults: { width: 1024, height: 1024 } }
+  image.inpaint:       { provider: comfyui, workflow: flux2-klein-4b-inpaint }
 quotas:
   images_per_user_per_day: 20
 uploads:

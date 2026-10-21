@@ -8,6 +8,7 @@ from typing import Any, Protocol
 
 import httpx
 from wasifyai_platform_sdk import (
+    PICTURE_SLOTS,
     EventLog,
     JobError,
     JobOutput,
@@ -91,9 +92,10 @@ class ComfyRunner:
         self, job: JobRequest, on_progress: ProgressFn, files: InputFiles | None = None
     ) -> Files:
         graph = job.prompt
-        if files and "image" in files:
-            name = input_image_name(job.job_id)
-            graph = use_picture(graph, name, await self._client.upload_image(name, files["image"]))
+        for slot in PICTURE_SLOTS:
+            if files and slot in files:
+                name = input_image_name(job.job_id, slot)
+                graph = use_picture(graph, name, await self._client.upload_image(name, files[slot]))
         outputs = await self._client.run(graph, job.job_id, on_progress, self._timeout)
         produced: Files = {}
         for name, spec in job.outputs.items():
@@ -246,6 +248,8 @@ class JobProcessor:
         found: InputFiles = {}
         for name, field, noun in (
             ("image", "image_key", "picture"),
+            ("image2", "image2_key", "picture"),
+            ("mask", "mask_key", "mask"),
             ("audio", "audio_key", "recording"),
         ):
             key = job.inputs.get(field)

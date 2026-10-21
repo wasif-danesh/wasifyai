@@ -1,8 +1,12 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterEach } from "vitest";
 
 afterEach(() => cleanup());
+
+// The chat is a lazy chunk (assistant-ui, streamdown): its first load can take longer than the default 1 s
+// wait when the machine is busy, and a test that looks for its text would then fail without a bug.
+configure({ asyncUtilTimeout: 5000 });
 
 // jsdom has no layout, so the few browser APIs the chat thread (assistant-ui) reads are stubbed
 if (typeof window !== "undefined") {

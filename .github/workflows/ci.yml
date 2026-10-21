@@ -36,9 +36,13 @@ jobs:
         run: cd services/api && uv run alembic upgrade head
       # Integration tests for Postgres/pgvector and the Redis media pipeline (with a stub worker)
       # run here; the storage, LiteLLM and ComfyUI ones skip themselves.
-      # a normal run takes about 4 minutes; the cap sends Ctrl+C, so a test that hangs is named in the log
-      # (with where it was stuck) instead of the job running for hours
-      - run: timeout -s INT -k 60 25m uv run pytest -v
+      # a normal run takes about 4 minutes. conftest.py has a watchdog: a test that hangs ends the run by itself and
+      # the next step prints which test and where it was stuck (a cancelled job loses its log)
+      - run: uv run pytest -v
+      - if: failure()
+        name: Where the watchdog stopped a hung test
+        shell: bash
+        run: cat "$RUNNER_TEMP/test-watchdog.txt" 2>/dev/null || echo "the watchdog did not stop anything"
   web:
     runs-on: ubuntu-latest
     steps:

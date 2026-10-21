@@ -5,7 +5,8 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 MAX_PROMPT_CHARS = 500
-Mode = Literal["text", "image"]
+Mode = Literal["text", "image", "reference", "inpaint"]
+MODES: tuple[Mode, ...] = ("text", "image", "reference", "inpaint")
 
 # size name -> (width, height). Multiples of 16, which FLUX.2 needs; about one megapixel each.
 SIZES: dict[str, tuple[int, int]] = {

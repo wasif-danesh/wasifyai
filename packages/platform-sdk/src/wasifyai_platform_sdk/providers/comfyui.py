@@ -10,10 +10,19 @@ from uuid import uuid4
 
 from wasifyai_platform_sdk.config import CapabilityBinding
 from wasifyai_platform_sdk.context import require_context
-from wasifyai_platform_sdk.jobs import JobHandle, JobRequest, JobSink, input_image_name
+from wasifyai_platform_sdk.jobs import (
+    PICTURE_SLOTS,
+    JobHandle,
+    JobRequest,
+    JobSink,
+    input_image_name,
+)
 from wasifyai_platform_sdk.workflows import Workflow
 
-RESERVED_INPUTS = {"image_key", "loras"}  # for the job, not for the workflow
+RESERVED_INPUTS = {
+    *(f"{slot}_key" for slot in PICTURE_SLOTS),
+    "loras",
+}  # for the job, not the workflow
 MAX_LORAS = 8
 
 
@@ -49,13 +58,15 @@ class ComfyUIProvider:
         wf = self._workflow(binding.workflow or "")
         job_id = str(uuid4())
         merged = {**binding.defaults, **inputs}
-        # `image_key` names the user's uploaded picture. It goes to the worker, which uploads the
-        # picture under a per-job name; the workflow's picture input gets that name here.
+        # `image_key` (and `image2_key`, `mask_key`) name the user's uploaded pictures. They go to
+        # the worker, which uploads each picture under a per-job name; the workflow's input of the
+        # same slot name gets that name here.
         workflow_inputs = {k: v for k, v in merged.items() if k not in RESERVED_INPUTS}
-        if merged.get("image_key"):
-            if "image" not in wf.map.inputs:
-                raise ValueError(f"workflow {wf.name!r} has no picture input")
-            workflow_inputs["image"] = input_image_name(job_id)
+        for slot in PICTURE_SLOTS:
+            if merged.get(f"{slot}_key"):
+                if slot not in wf.map.inputs:
+                    raise ValueError(f"workflow {wf.name!r} has no picture input {slot!r}")
+                workflow_inputs[slot] = input_image_name(job_id, slot)
         loras = _loras(merged.get("loras"))
         if loras and not wf.accepts_loras:
             raise ValueError(f"workflow {wf.name!r} does not take LoRAs")

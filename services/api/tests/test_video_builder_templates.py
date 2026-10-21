@@ -10,6 +10,7 @@ Skipped unless a component is installed: set `WASIFYAI_VIDEO_BUILDER_HOME` to
 `<app data>/components/video-builder` (CI installs it with `scripts/ci-video-builder.py`)."""
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -240,5 +241,6 @@ async def test_a_90_second_video_is_made_in_a_minute_and_holds_the_same_memory(
     result = await engine.render(folder, out, extra_args=("--format", fmt))
     assert result.ok, result.message
     assert abs(float(probe(out)["format"]["duration"]) - 90) < 0.5
-    assert result.seconds < 120  # measured 14 to 33 s on an M5 Pro; a slower Mac still has room
+    # 14 to 33 s on an M5 Pro (a slower Mac has room); a CI runner has no GPU: about 7 minutes
+    assert result.seconds < (900 if os.environ.get("CI") else 120)
     assert result.peak_rss_bytes < 3.5 * 2**30  # 2.0 to 2.3 GB measured at 30, 60 and 90 seconds

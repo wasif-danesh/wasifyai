@@ -1,0 +1,30 @@
+workflow: flux2-klein-4b-inpaint.json
+licence: "Apache-2.0 per the FLUX.2 [klein] 4B model card (ADR-0019). The 9B variant is licensed differently and is not used"
+notes: >
+  Change only a painted area of a picture. There is no inpainting model for klein, so this is the Edit workflow
+  on a copy of the picture with the painted area filled white, told to "fill the white area with ..."; the result
+  is then pasted back through the mask, so every pixel outside it stays as it was (a grown, softened copy of the
+  mask makes the join). Chosen over a latent noise mask (patchy or ghost results) in docs/spikes/image-ir0.md.
+  The picture is scaled to about one megapixel (in multiples of 16); the mask is brought to the same size.
+  The mask is white where the change goes. The worker uploads the picture and the mask under per-job names and the
+  API writes those names into the LoadImage and LoadImageMask nodes.
+models:
+  - diffusion_models/flux-2-klein-4b.safetensors
+  - text_encoders/qwen_3_4b.safetensors
+  - vae/flux2-vae.safetensors
+inputs:
+  prompt: { node: "4", field: text }
+  seed: { node: "25", field: noise_seed }
+  steps: { node: "23", field: steps }
+  image: { node: "6", field: image }
+  mask: { node: "9", field: image }
+outputs:
+  image: { node: "30", type: image }
+# LoRAs (ADR-0051): the diffusion model's output goes through up to three model-only LoRA loaders
+# before the guider. A klein LoRA patches the diffusion model; the text encoder is not patched.
+lora_chain:
+  loader: LoraLoaderModelOnly
+  max: 3
+  from: { node: "1", output: 0 }
+  to:
+    - { node: "26", field: model }

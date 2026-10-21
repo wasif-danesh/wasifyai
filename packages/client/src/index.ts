@@ -29,6 +29,7 @@ export {
   type ImageResult,
   type Job,
   type JobStatus,
+  type ImageMode,
   type Mode,
   type Phase,
 } from "./image-flow";

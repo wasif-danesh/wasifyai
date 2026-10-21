@@ -156,6 +156,14 @@ class MediaCapabilities:
         """Change a picture the user uploaded: pass its storage key as `image_key`."""
         return await self._run("edit", inputs)
 
+    async def reference(self, **inputs: Any) -> JobHandle:
+        """Make a new picture from two the user uploaded (`image_key`, `image2_key`), at a size."""
+        return await self._run("reference", inputs)
+
+    async def inpaint(self, **inputs: Any) -> JobHandle:
+        """Change only a painted area of a picture: `image_key` and `mask_key` (white = change)."""
+        return await self._run("inpaint", inputs)
+
     async def animate(self, **inputs: Any) -> JobHandle:
         """Make a clip from a picture the user uploaded: pass its storage key as `image_key`."""
         return await self._run("animate", inputs)

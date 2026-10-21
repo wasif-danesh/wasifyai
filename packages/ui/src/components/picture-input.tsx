@@ -9,16 +9,21 @@ import { Button } from "./button";
 import { Label } from "./label";
 import { Bar } from "./progress-bar";
 
+const DEFAULT_LABEL = "Your picture";
+
 /**
  * The picture field shared by the products that take one (ADR-0039): a button to choose, a place to drop,
  * paste handled by the form (see `usePictureEvents`), a preview and Replace / Remove. Presentational: the
- * state and the upload live in `usePicture`.
+ * state and the upload live in `usePicture`. `label` names the field when a form has more than one ("Picture 1");
+ * `preview={false}` leaves the picture to the form (the painter of Inpaint shows it).
  */
 export function PictureInput({
   picture,
   status,
   error,
   dragging = false,
+  label = DEFAULT_LABEL,
+  preview = true,
   onChoose,
   onRemove,
   onCancel,
@@ -27,6 +32,8 @@ export function PictureInput({
   status: "idle" | "uploading" | "error";
   error: string | null;
   dragging?: boolean;
+  label?: string;
+  preview?: boolean;
   onChoose: (file: File) => void;
   onRemove: () => void;
   onCancel: () => void;
@@ -38,7 +45,7 @@ export function PictureInput({
   return (
     <div className={field}>
       <Label asChild className={fieldLabel}>
-        <span>Your picture</span>
+        <span>{label}</span>
       </Label>
       <input
         ref={input}
@@ -46,7 +53,7 @@ export function PictureInput({
         className="sr-only"
         type="file"
         accept={ACCEPTED_TYPES.join(",")}
-        aria-label="Your picture"
+        aria-label={label}
         aria-describedby={`${id}-hint`}
         tabIndex={-1}
         onChange={(e) => {
@@ -61,14 +68,20 @@ export function PictureInput({
           className="grid justify-items-start gap-[0.6rem]"
           data-uploading={uploading || undefined}
         >
-          <img
-            className={cn(
-              "max-h-64 max-w-[min(100%,22rem)] rounded-lg border object-contain",
-              uploading && "opacity-60",
-            )}
-            src={picture.previewUrl}
-            alt="Preview of your upload"
-          />
+          {preview ? (
+            <img
+              className={cn(
+                "max-h-64 max-w-[min(100%,22rem)] rounded-lg border object-contain",
+                uploading && "opacity-60",
+              )}
+              src={picture.previewUrl}
+              alt={
+                label === DEFAULT_LABEL
+                  ? "Preview of your upload"
+                  : `Preview of ${label.toLowerCase()}`
+              }
+            />
+          ) : null}
           <div className={actions}>
             <Button
               type="button"

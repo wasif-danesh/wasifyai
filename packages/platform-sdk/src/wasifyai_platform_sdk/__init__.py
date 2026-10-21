@@ -24,6 +24,7 @@ from wasifyai_platform_sdk.eventlog import EventLog, InMemoryEventLog, RedisEven
 from wasifyai_platform_sdk.identity import Identity
 from wasifyai_platform_sdk.jobqueue import RedisJobSink
 from wasifyai_platform_sdk.jobs import (
+    PICTURE_SLOTS,
     InMemoryJobSink,
     JobError,
     JobFailed,
@@ -145,6 +146,7 @@ __all__ = [
     "LipSyncRequest",
     "LipSyncResult",
     "check_lipsync",
+    "PICTURE_SLOTS",
     "input_image_name",
     "UPLOAD_CREATED",
     "InMemoryUploadLimiter",

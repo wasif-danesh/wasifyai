@@ -261,7 +261,7 @@ disabled with the **Soon** pill, so the menu keeps its final shape (as above).
 |---|---|---|---|
 | *New chat* | (single item) | assistant (ADR-0057) | yes |
 | **Notebook** | Create, View Notebooks | `wasifyai-notebooks` (ADR-0065) | stage E |
-| **Images** | Create, Edit, Transform, Inpaint, Extend, Upscale, Reference, Your images | ComfyUI | Create, Edit |
+| **Images** | Create, Edit, Inpaint, Reference, 3D model, Your images (Transform, Extend and Upscale were taken out of the menu 2026-10-21; `docs/spikes/unsloth-image-workflows.md`) | ComfyUI | Create, Edit, Inpaint, Reference (2026-10-21) |
 | **Video** | Create, Animate an image, Extend video, Your videos | `wasifyai-video` on ComfyUI (`video.generate`, `video.animate`); LTX-Video 2B (V8) | Create, Animate an image, Your videos; Extend video Soon |
 | **Voice** | Text to speech, Speech to text, Lip sync, Voices | `wasifyai-voice` on audio.cpp (ADR-0066); lip sync is MuseTalk, an optional sidecar | all built (V1 to V5) |
 | **Music** | Create, Your music, Lyrics | `wasifyai-voice` on audio.cpp (ADR-0066, V3); the ComfyUI ACE-Step workflow and `text.lyrics` later | Create and Your music built; Lyrics Soon |
@@ -294,6 +294,23 @@ without one the graph draws it, so the recipe always holds the seed that made th
 
 The recipe does not name the model: the graph asks for a capability. The same seed gives the same picture on the
 same installed model. `docs/phase2-stage-b-plan.md` has the decisions.
+
+### Reference and Inpaint (built 2026-10-21; `docs/image-inpaint-reference-plan.md`, `docs/spikes/image-ir0.md`)
+
+Both run on FLUX.2 klein 4B through ComfyUI; no new model.
+
+- **Reference** (*Images › Reference*, action `image.reference`): two pictures and a prompt make a new picture at a size the person
+  chooses. Workflow `flux2-klein-4b-reference`: the Edit mechanism with a second reference, each picture scaled to half a megapixel
+  (about 70 s instead of 100 to 120 s at a full megapixel, with both subjects still recognisable). Exactly two pictures.
+- **Inpaint** (*Images › Inpaint*, action `image.inpaint`): the person paints the area (brush, eraser, rectangle, or a rectangle by
+  numbers for the keyboard) and says what to put there. Workflow `flux2-klein-4b-inpaint`: klein has no inpainting model, so the
+  Edit workflow runs on a copy of the picture with the area filled white ("fill the white area with ..."), and the result is pasted back
+  through the mask: **outside the mask the picture is identical to the last pixel** (tested: two runs with different prompts and seeds
+  agree on all 916,567 pixels outside the grown mask). The picture is worked on at about one megapixel. The model sometimes ignores a
+  small area. The agent's `image.inpaint` takes a rectangle (shares of the picture) because an agent cannot paint.
+- Each takes up to three uploads per run (`image`, `image2`, `mask`; `PICTURE_SLOTS` in the SDK); the graph deletes all of them on every
+  way out. The mask is uploaded when the person presses Generate and is checked (not empty, not nearly all of the picture, the
+  picture's shape) before any GPU work.
 
 ### Styles (LoRAs), Vary and Edit this result
 
@@ -752,7 +769,7 @@ exercised. It needs the engine environment (`.venv`).
 ## What is not done
 
 - **Gallery extras.** Collections, tags and bulk actions are not built; the model id is not in the recipe yet.
-- **Menu entries marked "Soon"**: Transform, Inpaint, Extend, Upscale, Reference, Extend video, Train; Projects and
+- **Menu entries marked "Soon"**: Extend video, Train; Projects and
   Recents (they need the assistant and projects, ADR-0057). The home "Ask anything" box does not answer.
 - **Other screens** (music, speech, ...) still live in `apps/web`; the image and video screens are shared (`packages/ui`).
 - **Schema changes.** Each adapter creates its tables on first use (`CREATE TABLE IF NOT EXISTS`). There is no

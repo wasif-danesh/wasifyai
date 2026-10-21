@@ -974,6 +974,267 @@
       "help": "docs/help/image.generate.md"
     },
     {
+      "id": "image.inpaint",
+      "title": "Change part of a picture",
+      "summary": "Change only a rectangle of a library picture; the rest stays as it is.",
+      "description": "Change one area of a picture of the library and leave every pixel outside it as it was. Give the area as a rectangle (shares of the picture's width and height) and say what to put there. It saves a new picture and keeps the original. The model sometimes ignores a small area; a larger one works better. Use image.edit to change the whole picture.",
+      "input": {
+        "$defs": {
+          "Region": {
+            "additionalProperties": false,
+            "description": "A rectangle on the picture, as shares of its width and height (0 is the left or top edge).",
+            "properties": {
+              "left": {
+                "description": "Where it starts, from the left edge.",
+                "maximum": 1,
+                "minimum": 0,
+                "title": "Left",
+                "type": "number"
+              },
+              "top": {
+                "description": "Where it starts, from the top edge.",
+                "maximum": 1,
+                "minimum": 0,
+                "title": "Top",
+                "type": "number"
+              },
+              "width": {
+                "description": "How wide it is.",
+                "exclusiveMinimum": 0,
+                "maximum": 1,
+                "title": "Width",
+                "type": "number"
+              },
+              "height": {
+                "description": "How tall it is.",
+                "exclusiveMinimum": 0,
+                "maximum": 1,
+                "title": "Height",
+                "type": "number"
+              }
+            },
+            "required": [
+              "left",
+              "top",
+              "width",
+              "height"
+            ],
+            "title": "Region",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "image_id": {
+            "description": "The picture to change.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Image Id",
+            "type": "string"
+          },
+          "prompt": {
+            "description": "What to put in the area, in English.",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "region": {
+            "$ref": "#/$defs/Region",
+            "description": "The area to change, as a rectangle. Everything outside it stays as it is."
+          }
+        },
+        "required": [
+          "image_id",
+          "prompt",
+          "region"
+        ],
+        "title": "InpaintIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "image_id": {
+            "title": "Image Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "image_id",
+          "product_id",
+          "uri",
+          "prompt",
+          "width",
+          "height"
+        ],
+        "title": "ImageOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "image_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "prompt": "a white coffee cup with steam",
+          "region": {
+            "left": 0.6,
+            "top": 0.55,
+            "width": 0.3,
+            "height": 0.35
+          }
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-image"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-image",
+      "ui": "images.inpaint",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/image.inpaint.md"
+    },
+    {
+      "id": "image.reference",
+      "title": "Make a picture from two pictures",
+      "summary": "Make a new picture from a description and two library pictures.",
+      "description": "Make a new picture from two pictures of the library and a description that says what to take from each (\"the cat from picture 1 on the chair from picture 2\"). The pictures are used in order, the originals stay, and the new picture is saved to the library. Use image.edit to change one picture, image.generate for a picture from words alone.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "image_ids": {
+            "description": "Two pictures of the library, in order: picture 1 and picture 2.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Image Ids",
+            "type": "array"
+          },
+          "prompt": {
+            "description": "What to make from them, in English: \"the cat from picture 1 on the chair from picture 2\".",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "size": {
+            "default": "square",
+            "description": "The shape of the new picture.",
+            "enum": [
+              "square",
+              "landscape",
+              "portrait",
+              "wide",
+              "tall"
+            ],
+            "title": "Size",
+            "type": "string"
+          }
+        },
+        "required": [
+          "image_ids",
+          "prompt"
+        ],
+        "title": "ReferenceIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "image_id": {
+            "title": "Image Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "image_id",
+          "product_id",
+          "uri",
+          "prompt",
+          "width",
+          "height"
+        ],
+        "title": "ImageOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "image_ids": [
+            "0b7c1f9e-0000-4000-8000-000000000000",
+            "0b7c1f9e-0000-4000-8000-000000000001"
+          ],
+          "prompt": "the cat from picture 1 sitting on the chair from picture 2",
+          "size": "wide"
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-image"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-image",
+      "ui": "images.reference",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/image.reference.md"
+    },
+    {
       "id": "job.cancel",
       "title": "Stop a long job",
       "summary": "Stop a job that can still be stopped.",

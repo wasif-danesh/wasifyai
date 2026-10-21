@@ -242,8 +242,8 @@ async def test_one_bad_answer_is_retried(tmp_path, ctx):
         ({"mode": "image", "prompt": "", "image_key": "uploads/x.png"}, "say what to change"),
         ({"mode": "text", "prompt": "x" * 501}, "under 500"),
         ({"mode": "text", "prompt": "a fox", "size": "huge"}, "image sizes"),
-        ({"mode": "video", "prompt": "a fox"}, "text to image or image to image"),
-        ({"prompt": "a fox"}, "text to image or image to image"),
+        ({"mode": "video", "prompt": "a fox"}, "what kind of picture to make"),
+        ({"prompt": "a fox"}, "what kind of picture to make"),
     ],
 )
 async def test_invalid_requests_are_refused_without_calling_a_model(tmp_path, ctx, data, fragment):

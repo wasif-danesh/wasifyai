@@ -4,7 +4,7 @@ import {
   type FlowAction,
   type FlowState,
   HttpError,
-  type Mode,
+  type ImageMode,
   type ParsedEvent,
   type RunClient,
   flowReducer,
@@ -20,12 +20,17 @@ const MAX_RECONNECTS = 6;
 /** What the flow needs from the app's client: start a run and re-attach to one. */
 export type ImageFlowApi = Pick<RunClient, "startRun" | "watchRun">;
 
-/** `imageKey` is the key of a picture already uploaded (ADR-0039); text to image has none. */
+/**
+ * `imageKey` is the key of a picture already uploaded (ADR-0039); text to image has none. Reference takes
+ * a second (`image2Key`) and a size; inpaint takes the painted area, uploaded as a picture (`maskKey`).
+ */
 export type ImageRequest = {
-  mode: Mode;
+  mode: ImageMode;
   prompt: string;
   size?: string;
   imageKey?: string;
+  image2Key?: string;
+  maskKey?: string;
   /** Make the same picture again: the seed a recipe kept (text to image only). */
   seed?: number;
   /** Styles (LoRAs) to apply, by name and strength. */
@@ -129,17 +134,28 @@ export function useImageFlow(api: ImageFlowApi) {
       abort.current = ctrl;
       lastRequest.current = request;
       remember(null);
-      if (request.mode === "image" && !request.imageKey) {
-        dispatch({ type: "failed", message: "Please choose a picture.", retryable: false });
+      const { mode } = request;
+      const lacking =
+        mode !== "text" && !request.imageKey
+          ? "Please choose a picture."
+          : mode === "reference" && !request.image2Key
+            ? "Please choose two pictures."
+            : mode === "inpaint" && !request.maskKey
+              ? "Please paint the part you want to change."
+              : null;
+      if (lacking) {
+        dispatch({ type: "failed", message: lacking, retryable: false });
         return;
       }
       dispatch({ type: "submitted" });
       const input = {
-        mode: request.mode,
+        mode,
         prompt: request.prompt,
-        ...(request.mode === "text"
-          ? { size: request.size, ...(request.seed !== undefined ? { seed: request.seed } : {}) }
-          : { image_key: request.imageKey }),
+        ...(mode === "text" || mode === "reference" ? { size: request.size } : {}),
+        ...(mode === "text" && request.seed !== undefined ? { seed: request.seed } : {}),
+        ...(mode !== "text" ? { image_key: request.imageKey } : {}),
+        ...(mode === "reference" ? { image2_key: request.image2Key } : {}),
+        ...(mode === "inpaint" ? { mask_key: request.maskKey } : {}),
         ...(request.loras && request.loras.length > 0 ? { loras: request.loras } : {}),
       };
       void follow((signal) => startRun(IMAGE_PRODUCT, input, signal, onEvent), ctrl.signal);

@@ -91,7 +91,7 @@ These are the places where a licence asks for more than "keep the notice". Items
 | Auth.js | `nextauthjs/next-auth` | ISC | Sign-in on the web |
 | Vite | `vitejs/vite` | MIT | The desktop window's build |
 | openapi-typescript | `openapi-ts/openapi-typescript` | MIT | Generates the TypeScript API types |
-| assistant-ui | `assistant-ui/assistant-ui` | MIT | The chat thread runtime and primitives (ADR-0082; Built in CU1, behind a Labs switch) |
+| assistant-ui | `assistant-ui/assistant-ui` | MIT | The chat thread runtime and primitives (ADR-0082) |
 | streamdown and plugins | `vercel/streamdown` | Apache-2.0 (npm; GitHub shows "Other") | Streaming markdown in the new chat, hardened (ADR-0082) |
 | KaTeX, Mermaid, Shiki | `KaTeX/KaTeX`, `mermaid-js/mermaid`, `shikijs/shiki` | MIT | Math, diagrams and code highlighting, loaded lazily |
 

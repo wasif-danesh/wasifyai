@@ -1,11 +1,10 @@
 import { type Page, expect, test } from "@playwright/test";
 import { mockApi } from "./mock-api";
 
-// Read aloud under a reply (ADR-0083, CU3), on the usual chat and the new one (Labs), in a real browser: the speaker button, the
+// Read aloud under a reply (ADR-0083, CU3), on the chat, in a real browser: the speaker button, the
 // request it posts, a real sound played by the page's audio element, the status in words, Stop, and no sideways scroll at phone width.
 // The engine's answer is scripted: a short real WAV. `@layout` cases run in CI.
 
-const KEY = "wasifyai.labs.chat-next";
 const ID = "0f3c1a52-7a49-4d1e-9a31-8f1d5b6c7d81";
 const REPLY =
   "A fox in the snow, **quiet** and bright. Then it ran. [Read more](https://example.com/x)";
@@ -31,15 +30,8 @@ function tone(seconds = 0.4): string {
   return buf.toString("base64");
 }
 
-async function setup(page: Page, next: boolean) {
+async function setup(page: Page) {
   await mockApi(page);
-  await page.addInitScript(
-    ([k, on]) => {
-      if (on) localStorage.setItem(k as string, "1");
-      else localStorage.removeItem(k as string);
-    },
-    [KEY, next],
-  );
   await page.route("**/api/products/wasifyai-assistant/options", (route) =>
     route.fulfill({ json: { thinking: false } }),
   );
@@ -84,13 +76,11 @@ async function noSideScroll(page: Page) {
 const start = (page: Page) => page.getByRole("button", { name: "Read this reply aloud" });
 const stop = (page: Page) => page.getByRole("button", { name: "Stop reading aloud" });
 
-for (const next of [false, true]) {
-  const which = next ? "the new chat" : "the usual chat";
-
-  test(`${which}: nothing plays by itself; a press reads the reply passage by passage and then stops @layout`, async ({
+test.describe("the chat", () => {
+  test("nothing plays by itself; a press reads the reply passage by passage and then stops @layout", async ({
     page,
   }) => {
-    await setup(page, next);
+    await setup(page);
     const posted: { text: string; part: number }[] = [];
     await page.route("**/api/products/wasifyai-voice/read-aloud", async (route) => {
       const body = JSON.parse(route.request().postData() ?? "{}");
@@ -123,10 +113,10 @@ for (const next of [false, true]) {
     await noSideScroll(page);
   });
 
-  test(`${which}: the status is in words, Stop ends it, and a refusal is a sentence @layout`, async ({
+  test("the status is in words, Stop ends it, and a refusal is a sentence @layout", async ({
     page,
   }) => {
-    await setup(page, next);
+    await setup(page);
     let mode: "slow" | "refuse" = "slow";
     await page.route("**/api/products/wasifyai-voice/read-aloud", async (route) => {
       if (mode === "refuse") {
@@ -168,4 +158,4 @@ for (const next of [false, true]) {
     await alert.getByRole("button", { name: "Close" }).click();
     await expect(alert).toBeHidden();
   });
-}
+});

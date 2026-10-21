@@ -16,7 +16,6 @@ test("a model's answer cannot run, load or link anything it should not @layout",
   page,
 }) => {
   await mockApi(page);
-  await page.addInitScript(() => localStorage.setItem("wasifyai.labs.chat-next", "1"));
   const frame = (seq: number, event: string, data: object) =>
     `id: ${seq}\nevent: ${event}\ndata: ${JSON.stringify({ run_id: RUN, thread_id: "t", seq, ts: "", ...data })}\n\n`;
   await page.route("**/api/products/wasifyai-assistant/runs", (route) =>

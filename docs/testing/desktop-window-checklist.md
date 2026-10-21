@@ -18,7 +18,6 @@ cd apps/desktop/src-tauri && touch build.rs && cargo run
 (`touch build.rs` makes sure the microphone permission text is in the build.)
 
 - [ ] 0.1 The window opens and the engine starts (the greeting shows, no error banner).
-- [ ] 0.2 **Settings, Labs: switch on "Try the new chat".** Lines 1 to 9 use the new chat. Switch it off to try the usual chat in section 10.
 - [ ] 0.3 A chat model is chosen (Models, Found on this computer). Use Qwen3.5 9B if you have it; it is the one with a picture reader.
 
 ## 1. Chat basics (new chat)
@@ -89,21 +88,16 @@ This card appears only when the chat holds text from outside (a web page or an a
 - [ ] 7.3 Read a long answer with code and a link in it: the code and link are not read out letter by letter.
 - [ ] 7.4 Reading aloud leaves nothing in the library (check Voice / Library).
 
-## 8. Notebook chat (Labs on)
+## 8. Notebook chat
 
 - [ ] 8.1 Open a notebook with sources and ask a question. The answer has numbered pills; click one: the passage opens.
 - [ ] 8.2 "Searched N sources" shows, and **Save as note** works.
-- [ ] 8.3 Stop and Try again work. Switch Labs off: the usual notebook chat comes back with the same conversation.
+- [ ] 8.3 Stop and Try again work. Close the notebook and open it again: the same conversation is there.
 
 ## 9. The Settings page
 
-- [ ] 9.1 "Searching the web", "Labs", "Finding models" all render; nothing overlaps at a narrow width.
+- [ ] 9.1 "Searching the web", "Finding models" all render; nothing overlaps at a narrow width.
 - [ ] 9.2 Every button on the page does something or says why it cannot.
-
-## 10. The usual chat (Labs off)
-
-- [ ] 10.1 Ask a question, stop one, try again after turning the network off for a moment.
-- [ ] 10.2 Attach a file and a picture; dictate; search. They work here too (edit and versions are only in the new chat).
 
 ## 11. Accessibility and looks
 

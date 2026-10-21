@@ -188,8 +188,8 @@ describe("answers with citations", () => {
         scope="2 sources"
       />,
     );
-    expect(screen.getByText(/Searched 2 sources, found 3 passages/)).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: /Source 1: budget.pdf/ }));
+    expect(await screen.findByText(/Searched 2 sources, found 3 passages/)).toBeTruthy();
+    await userEvent.click(await screen.findByRole("button", { name: /Source 1: budget.pdf/ }));
     expect(onOpen).toHaveBeenCalledWith(citation);
     expect(screen.getByText("[7]")).toBeTruthy(); // not a passage of this answer: plain text
   });
@@ -536,8 +536,8 @@ describe("a notebook", () => {
       );
     }
     render(<Harness />);
-    // a draft: the add-sources screen, and nothing to ask yet
-    expect(screen.getByText("Let’s start your notebook")).toBeTruthy();
+    // a draft: the add-sources screen, and nothing to ask yet (the chat is a separate chunk, so wait for it)
+    expect(await screen.findByText("Let’s start your notebook")).toBeTruthy();
     expect(screen.getAllByText("Add a source first.").length).toBeGreaterThan(0); // chat and Studio
     fireEvent.change(screen.getByLabelText("Choose files"), {
       target: { files: [new File(["x"], "budget.pdf")] },

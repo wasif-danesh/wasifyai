@@ -9,6 +9,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from wasifyai_platform_sdk import UploadLimiter, UsageEvent, UsageRecorder
+from wasifyai_platform_sdk.search import CreationKind
 from wasifyai_platform_sdk.usage import record_safely
 
 from wasifyai_api.creation_index import PLATFORM, CreationIndex, long_enough
@@ -19,18 +20,7 @@ SEARCHED = "creation.searched"
 
 
 class SearchHit(BaseModel):
-    kind: Literal[
-        "song",
-        "image",
-        "video",
-        "speech",
-        "transcript",
-        "lipsync",
-        "conversation",
-        "notebook",
-        "track",
-        "voice",
-    ]
+    kind: CreationKind
     product_id: str
     id: str
     score: float
@@ -47,19 +37,7 @@ class SearchResponse(BaseModel):
 async def search_creations(
     request: Request,
     q: str = Query(min_length=1, max_length=200),
-    kind: Literal[
-        "song",
-        "image",
-        "video",
-        "speech",
-        "transcript",
-        "lipsync",
-        "conversation",
-        "notebook",
-        "track",
-        "voice",
-    ]
-    | None = None,
+    kind: CreationKind | None = None,
     limit: int = Query(20, ge=1, le=50),
     identity: Identity = Depends(get_identity),
 ) -> SearchResponse:

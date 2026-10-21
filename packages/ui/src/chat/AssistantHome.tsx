@@ -13,7 +13,7 @@ import {
 } from "@wasifyai/client";
 import { Pencil, Trash2 } from "lucide-react";
 import { type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
-import { ChatScreen, type ChatScreenProps } from "./ChatScreen";
+import type { ChatScreenProps } from "./ChatScreen";
 import type { TrackLookup } from "./ToolCard";
 import type { ComposerOptionsAvailable } from "./composer-options";
 import { startRecording } from "./dictation/recorder";
@@ -28,10 +28,8 @@ export function greeting(hour: number): string {
   return "Good evening";
 }
 
-// The new chat is a separate chunk: it brings assistant-ui and streamdown, which a person who has not turned it on never needs.
-const ChatScreenNext = lazy(() =>
-  import("./ChatScreenNext").then((m) => ({ default: m.ChatScreenNext })),
-);
+// The chat is a separate chunk: it brings assistant-ui and streamdown, so the first paint does not wait for them.
+const ChatScreen = lazy(() => import("./ChatScreen").then((m) => ({ default: m.ChatScreen })));
 
 const EXAMPLES = [
   "Draw a lighthouse at sunrise",
@@ -68,8 +66,6 @@ export type AssistantHomeProps = {
   voice?: VoiceApi;
   /** Fetch the speech model (desktop only: the web has no models to fetch). Reports how far it is, 0 to 1. */
   getSpeechModel?: (modelId: string, onProgress: (fraction: number) => void) => Promise<void>;
-  /** Which chat screen to show: the one built on our own components (the default) or the new one on assistant-ui (Labs). */
-  screen?: "classic" | "next";
 };
 
 /** The assistant is the home screen (ADR-0057): a greeting and "Ask anything", then the conversation, with
@@ -91,7 +87,6 @@ export function AssistantHome({
   composerOptions,
   voice,
   getSpeechModel,
-  screen = "classic",
 }: AssistantHomeProps) {
   const [title, setTitle] = useState("");
   // what the box can offer with the model in use (a Thinking switch only for a model that can think, a Search switch
@@ -350,11 +345,9 @@ export function AssistantHome({
     ) : undefined,
   };
 
-  return screen === "next" ? (
+  return (
     <Suspense fallback={null}>
-      <ChatScreenNext {...shared} />
+      <ChatScreen {...shared} />
     </Suspense>
-  ) : (
-    <ChatScreen {...shared} />
   );
 }

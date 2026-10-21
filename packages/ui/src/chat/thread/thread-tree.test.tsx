@@ -4,7 +4,7 @@ import { act, render, renderHook, screen, waitFor, within } from "@testing-libra
 import userEvent from "@testing-library/user-event";
 import type { AssistantApi, Conversation, ImagesApi, OnEvent, ParsedEvent } from "@wasifyai/client";
 import { describe, expect, it, vi } from "vitest";
-import { ChatScreenNext } from "../ChatScreenNext";
+import { ChatScreen } from "../ChatScreen";
 import { useThreadChat } from "./use-thread-chat";
 
 const ev = (event: string, seq: number, data: Record<string, unknown> = {}): ParsedEvent =>
@@ -163,7 +163,7 @@ describe("the new thread", () => {
   it("shows which version of an answer is on screen, and moves between them", async () => {
     const a = api();
     const user = userEvent.setup();
-    render(<ChatScreenNext runs={runs()} assistant={a} images={images} conversationId="c1" />);
+    render(<ChatScreen runs={runs()} assistant={a} images={images} conversationId="c1" />);
     expect(await screen.findByText("text of a2b")).toBeInTheDocument();
     const pickers = screen.getAllByRole("group", { name: "Versions of this message" });
     expect(pickers).toHaveLength(1); // only the answer has more than one version
@@ -178,7 +178,7 @@ describe("the new thread", () => {
     const inputs: object[] = [];
     const user = userEvent.setup();
     render(
-      <ChatScreenNext runs={runs(inputs)} assistant={api()} images={images} conversationId="c1" />,
+      <ChatScreen runs={runs(inputs)} assistant={api()} images={images} conversationId="c1" />,
     );
     await screen.findByText("text of a2b");
     const edits = screen.getAllByRole("button", { name: "Edit message" });
@@ -201,7 +201,7 @@ describe("the new thread", () => {
     const inputs: object[] = [];
     const user = userEvent.setup();
     render(
-      <ChatScreenNext runs={runs(inputs)} assistant={api()} images={images} conversationId="c1" />,
+      <ChatScreen runs={runs(inputs)} assistant={api()} images={images} conversationId="c1" />,
     );
     await screen.findByText("text of a2b");
     const buttons = screen.getAllByRole("button", { name: "Answer again" });

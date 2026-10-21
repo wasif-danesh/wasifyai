@@ -2,6 +2,8 @@
 
 Written 2026-10-19 for ADR-0082 (Accepted for assistant-ui). The chat screens (the assistant home and conversation, and the
 notebook chat) move to `@assistant-ui/react` and `streamdown`, in stages, with the old screen kept until the new one has parity.
+**Update (2026-10-21, owner): the Labs switch and the old chat are gone.** The owner asked for one chat and no switches. `ChatScreenNext` is now `ChatScreen` and `NotebookChatNext` is `NotebookChat`; the old `ChatScreen`, `NotebookChat`, `useAssistantChat` and `chat/labs.ts` are deleted, and so are the Settings checkbox and the web `?chat=` choice. What follows is the history as it was written, so "the usual chat", "behind Labs" and the old file names describe 2026-10-20. The parity checklist was not run before the switch went; `docs/testing/desktop-window-checklist.md` is the place to run it.
+
 **Status (2026-10-20): CU0 done; CU1 built behind the Labs switch (see "CU1 as built" below); CU2 built the same day (see "CU2 as built"); CU4's notebook chat and reasoning part built behind the same switch (see "CU4 as built"; switching the default and deleting the old code are still to do, one release later); CU3 (attachments, dictation, read-aloud) is built separately and is complete (see "CU3 read-aloud as built"); CU5 not started.**
 
 ## What is replaced, what stays

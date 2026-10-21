@@ -5,13 +5,11 @@ import { mockApi } from "./mock-api";
 // real browser. The engine is the mock of mock-api.ts; the saved conversation below is a tree with a second version of an
 // answer, or with a parked card. `@layout` cases run in CI; the pictures (`@visual`) are kept per operating system.
 
-const KEY = "wasifyai.labs.chat-next";
 const ID = "0f3c1a52-7a49-4d1e-9a31-8f1d5b6c7d80";
 const RUN = "5b6c1c1e-0000-4000-8000-000000000009";
 
 test.beforeEach(async ({ page }) => {
   await mockApi(page);
-  await page.addInitScript((k) => localStorage.setItem(k, "1"), KEY);
 });
 
 const row = (id: string, seq: number, role: string, parent: string | null, parts: object[]) => ({

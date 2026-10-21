@@ -16,7 +16,7 @@ computer and nothing is sent anywhere. 3D models are experimental.
 
 ## Steps in the app
 
-1. Open **Images › 3D model** (switch it on first in Settings, under Labs). The first time, choose
+1. Open **Images › 3D model** The first time, choose
    Download and set up: it shows the size (about 9 GB) before it starts.
 2. Choose a picture, or choose Words, describe the object and choose Make 4 pictures, then Use this
    picture on the one you like.

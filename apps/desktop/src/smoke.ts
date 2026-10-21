@@ -75,6 +75,8 @@ export async function runSmoke(): Promise<void> {
       const img = document.querySelector<HTMLImageElement>(`figure img[alt="${PROMPT}"]`);
       return img?.complete && img.naturalWidth > 0 ? img : null;
     });
+    // read now: the screen re-renders on the way to the second picture, and an element it let go of can read 0x0
+    const firstSize = `${picture.naturalWidth}x${picture.naturalHeight}`;
     if (!picture.src.startsWith("http://127.0.0.1:") || !picture.src.includes("/files/")) {
       throw new Error(`the picture did not come from the engine: ${picture.src}`);
     }
@@ -101,12 +103,14 @@ export async function runSmoke(): Promise<void> {
       const img = document.querySelector<HTMLImageElement>(`figure img[alt="${PROMPT}"]`);
       return img?.complete && img.naturalWidth > 0 && img.src !== picture.src ? img : null;
     });
+    const secondSize = `${again.naturalWidth}x${again.naturalHeight}`;
     await until("the second recipe", buttonNamed(/Make it again/));
     const seedAgain = await readSeed();
     if (seedAgain !== seed) throw new Error(`the seed changed: ${seed} then ${seedAgain}`);
-    const size = `${again.naturalWidth}x${again.naturalHeight}`;
-    if (size !== `${picture.naturalWidth}x${picture.naturalHeight}`) {
-      throw new Error(`the second picture has another size: ${size}`);
+    if (secondSize !== firstSize) {
+      throw new Error(
+        `the second picture has another size: ${secondSize}, the first was ${firstSize}`,
+      );
     }
     // the Models screen lists what other tools left here (ADR-0063): the first scan finishes by itself
     window.location.hash = "/models";

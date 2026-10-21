@@ -11,7 +11,6 @@ import type {
 } from "@wasifyai/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatScreen } from "../ChatScreen";
-import { ChatScreenNext } from "../ChatScreenNext";
 import { createPlayer } from "./player";
 import { type ReadAloudControl, languageNames } from "./use-read-aloud";
 
@@ -90,7 +89,7 @@ function control(over: Partial<ReadAloudControl> = {}) {
   return { c, speak, ...fp };
 }
 
-type Screen = typeof ChatScreen | typeof ChatScreenNext;
+type Screen = typeof ChatScreen;
 async function shown(S: Screen, c: ReadAloudControl | undefined, ...replies: string[]) {
   const runs = runsReplying(...(replies.length ? replies : [REPLY]));
   const user = userEvent.setup();
@@ -111,10 +110,8 @@ async function ask(user: ReturnType<typeof userEvent.setup>, words = "Hi") {
 
 beforeEach(() => localStorage.clear());
 
-describe.each([
-  ["classic", ChatScreen],
-  ["next", ChatScreenNext],
-] as const)("read aloud on the %s chat", (_name, S) => {
+describe("read aloud on the chat", () => {
+  const S = ChatScreen;
   it("has no button where the engine has no voice to offer", async () => {
     const { user } = await shown(S, undefined);
     await ask(user);

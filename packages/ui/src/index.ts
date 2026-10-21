@@ -58,7 +58,7 @@ export {
   type VideoWorkspaceProps,
 } from "./video/VideoWorkspace";
 export { VideoLibrary, type VideoLibraryProps } from "./video/VideoLibrary";
-export { ChatScreen, type ChatScreenProps } from "./chat/ChatScreen";
+export type { ChatScreenProps } from "./chat/ChatScreen";
 export {
   ComposerOptions,
   useComposerOptions,
@@ -67,14 +67,13 @@ export {
 } from "./chat/composer-options";
 export { Reasoning } from "./chat/Reasoning";
 export { SearchSettings, type SearchSettingsProps } from "./chat/SearchSettings";
-export { CHAT_NEXT_KEY, readChatNext, useChatNext, writeChatNext } from "./chat/labs";
 export { AssistantHome, type AssistantHomeProps, greeting } from "./chat/AssistantHome";
 export { conversationsChanged, useConversations } from "./chat/use-conversations";
 export { ToolCard, type ToolCardProps } from "./chat/ToolCard";
 export { Markdown, inline, parseBlocks } from "./chat/markdown";
-export { type UseAssistantChatOptions, useAssistantChat } from "./chat/use-assistant-chat";
 export { AddSources, SOURCE_ACCEPT, SOURCE_TYPES } from "./notebook/AddSources";
-export { NotebookChat, CitationPill, type NotebookChatProps } from "./notebook/NotebookChat";
+export { CitationPill } from "./notebook/CitationPill";
+export type { NotebookChatProps } from "./notebook/NotebookChat";
 export { NotebookList, type NotebookListProps } from "./notebook/NotebookList";
 export {
   NotebookWorkspace,
@@ -171,12 +170,5 @@ export {
 } from "./shell/menu";
 export { type MenuLink, type Recents, SideMenu, type SideMenuProps } from "./shell/SideMenu";
 export { VideoBuilder, type VideoBuilderProps } from "./videobuilder/VideoBuilder";
-export {
-  VIDEO_BUILDER_KEY,
-  readVideoBuilder,
-  useVideoBuilderLabs,
-  writeVideoBuilder,
-} from "./videobuilder/labs";
 export { Model3d, type Model3dProps } from "./model3d/Model3d";
 export type { CandidateApi } from "./model3d/Candidates";
-export { MODEL3D_KEY, readModel3d, useModel3dLabs, writeModel3d } from "./model3d/labs";

@@ -247,3 +247,9 @@ binary, pinned by hash** (not our own CI build yet), and real generations during
 - **Not built:** four photos around an object (TD3), a turntable video (Video Builder), the 50k and 200k face targets (they need
   a patch to `pixal3d.cpp`), our own CI build of the binary (the prebuilt is pinned; it runs without Metal's tensor API),
   the web version (TD4), a card in the web library.
+
+## Amendment: no Labs switch (2026-10-21, owner)
+
+Decision 1's "behind Labs" is withdrawn. **Images › 3D model** is always in the desktop menu; the screen keeps its "experimental"
+label, and nothing is released before the owner's own testing. The owner's reason: a switch is a second way to get lost in the app and
+adds a state to test and to explain. The key `wasifyai.labs.model3d` is no longer read.

@@ -78,7 +78,7 @@ e2e/readme-screens.spec.ts --project=desktop-light` makes them again.
 | **Read aloud** | A button on each reply speaks it with a voice that runs on your computer. Nothing is saved. |
 | **Notebooks** | Chat with your own documents: citations you can open, a Studio for reports, study guides, decks and more. |
 
-The new chat is behind **Settings, Labs, "Try the new chat"** while it is tested; the usual chat stays the default.
+The chat is built on assistant-ui (edit, versions, code, maths and diagrams in answers, approval cards).
 Design: [ADR-0082](docs/decisions/0082-chat-ui-on-assistant-ui.md) (the chat) and
 [ADR-0083](docs/decisions/0083-composer-options-attach-search-thinking-mic.md) (the options under the box).
 
@@ -173,7 +173,6 @@ text from it.) The window can also run on its own against a running engine: `pnp
 3. Ask something. Optional extras, each with its size shown and downloaded only when you click: the image engine
    (Settings), a speech model for Mic and Read aloud, the picture reader (the first time you attach a picture), the
    document reader for PDF and Office files (the first time you add one to a notebook).
-4. **Settings, Labs, "Try the new chat"** turns on edit, versions, cards and the new notebook chat.
 
 Your data (database, files, models you fetched, logs) lives in the app data folder: on macOS
 `~/Library/Application Support/ai.wasifyai.desktop` (`logs/engine.log` is the first place to look when something

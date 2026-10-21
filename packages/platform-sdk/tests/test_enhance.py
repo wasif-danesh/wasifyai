@@ -75,7 +75,7 @@ class Rig:
         app.state.caps = {"demo": self.caps}
         app.state.uploads = InMemoryUploadStore()
         app.state.storage = self.storage
-        app.state.enhance_limiter = InMemoryUploadLimiter(per_hour)
+        app.state.enhance_limiter = InMemoryUploadLimiter(per_hour, clock=lambda: 0.0)
         deps_r = RouteDeps(app.state, who)
         loader = {"p_text": "TEXT SYSTEM", "p_edit": "EDIT SYSTEM"}.__getitem__
         app.include_router(

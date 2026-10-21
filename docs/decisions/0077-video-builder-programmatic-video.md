@@ -206,3 +206,8 @@ The engine, the projects and the experimental screen are built; the first workin
 - **Not in V1c:** the moderation of slot text when safeguards are on (decision 9 of ADR-0079), shipped fonts and the other four templates (MG1), the `preview_frame` action
   (MG1), the web, and the check of macOS quarantine inside the packaged app.
 
+## Amendment: no Labs switch (2026-10-21, owner)
+
+Decision 10's "behind a Labs switch" is withdrawn for Video Builder (and so for Motion Graphics in ADR-0079). **Video › Video Builder**
+is always in the desktop menu; the screen keeps its "experimental" label and nothing is released before the owner's own testing. The
+key `wasifyai.labs.video-builder` is no longer read.

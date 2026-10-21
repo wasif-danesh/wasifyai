@@ -2312,7 +2312,9 @@
               "conversation",
               "notebook",
               "track",
-              "voice"
+              "voice",
+              "composition",
+              "model3d"
             ],
             "title": "Kind",
             "type": "string"
@@ -3831,7 +3833,9 @@
                     "conversation",
                     "notebook",
                     "track",
-                    "voice"
+                    "voice",
+                    "composition",
+                    "model3d"
                   ],
                   "type": "string"
                 },

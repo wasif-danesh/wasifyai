@@ -8,7 +8,6 @@ import type { AssistantApi, ImagesApi, OnEvent } from "@wasifyai/client";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatScreen } from "../ChatScreen";
-import { ChatScreenNext } from "../ChatScreenNext";
 import { useComposerOptions } from "../composer-options";
 import { MicError, micProblem } from "./recorder";
 import { type MicControl, clock, joinDictation } from "./use-dictation";
@@ -138,10 +137,8 @@ describe("useComposerOptions", () => {
   });
 });
 
-describe.each([
-  ["the usual chat", ChatScreen],
-  ["the new chat", ChatScreenNext],
-])("%s", (_name, Screen) => {
+describe("the chat", () => {
+  const Screen = ChatScreen;
   const box = () => screen.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement;
   const open = (mic: MicControl | undefined, run = runs()) => {
     render(<Screen runs={run} assistant={assistant} images={images} composerOptions={{ mic }} />);

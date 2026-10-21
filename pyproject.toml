@@ -50,4 +50,6 @@ extraPaths = ["products/wasifyai-image/tests", "products/wasifyai-video/tests", 
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# a single test over 10 minutes dumps every thread's stack to the log (the slowest real one is about 2)
+faulthandler_timeout = 600
 testpaths = ["services", "packages", "products"]

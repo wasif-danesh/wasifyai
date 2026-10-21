@@ -1,25 +1,18 @@
 "use client";
 
-import type { AssistantApi, ChatMessage, ImagesApi, RunClient } from "@wasifyai/client";
-import { ArrowUp, Square } from "lucide-react";
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
-import { cn } from "../cn";
-import { Button } from "../components/button";
-import { Notice } from "../components/notice";
-import { Reasoning } from "./Reasoning";
-import { ToolCard, type TrackLookup } from "./ToolCard";
-import { MessageAttachments } from "./attachments/AttachmentChip";
-import {
-  ComposerOptions,
-  type ComposerOptionsAvailable,
-  useComposerOptions,
-} from "./composer-options";
-import { joinDictation } from "./dictation/use-dictation";
-import { Markdown } from "./markdown";
-import { ReadAloudBar, ReadAloudProvider, useReadAloud } from "./read-aloud/use-read-aloud";
-import { useAssistantChat } from "./use-assistant-chat";
-
-const MAX_CHARS = 4000;
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import type { AssistantApi, ImagesApi, RunClient } from "@wasifyai/client";
+import { type ReactNode, useEffect, useMemo, useRef } from "react";
+import type { TrackLookup } from "./ToolCard";
+import { type ComposerOptionsAvailable, useComposerOptions } from "./composer-options";
+import { ReadAloudProvider, useReadAloud } from "./read-aloud/use-read-aloud";
+import { DictationBridge, type DictationTarget } from "./thread/DictationBridge";
+import { Thread } from "./thread/Thread";
+import { textOf } from "./thread/convert";
+import { ThreadEnvProvider } from "./thread/env";
+import { preloadMarkdown } from "./thread/markdown/Markdown";
+import { useChatRuntime } from "./thread/use-chat-runtime";
+import { useThreadChat } from "./thread/use-thread-chat";
 
 export type ChatScreenProps = {
   runs: Pick<RunClient, "startRun" | "watchRun"> & Partial<Pick<RunClient, "cancelRun">>;
@@ -52,73 +45,9 @@ export type ChatScreenProps = {
   composerOptions?: ComposerOptionsAvailable;
 };
 
-function Bubble({
-  message,
-  images,
-  tracks,
-  onOpenCreation,
-  onOpenSettings,
-  thinkingOn,
-}: {
-  message: ChatMessage;
-  images: ImagesApi;
-  tracks?: TrackLookup;
-  onOpenCreation?: (kind: string, id: string) => void;
-  onOpenSettings?: () => void;
-  thinkingOn?: boolean;
-}) {
-  if (message.role === "user") {
-    const files = message.parts.flatMap((p) => (p.type === "attachment" ? [p.file] : []));
-    return (
-      <div className="grid justify-items-end gap-2">
-        <MessageAttachments files={files} />
-        <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-accent px-4 py-2.5">
-          {message.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}
-        </p>
-      </div>
-    );
-  }
-  const thinking = message.streaming && message.parts.length === 0;
-  const said = message.streaming
-    ? ""
-    : message.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
-  return (
-    <div className="grid gap-3">
-      {thinking ? (
-        <output className="text-muted-foreground">
-          {thinkingOn ? "Thinking… this takes longer than usual." : "Thinking…"}
-        </output>
-      ) : null}
-      {message.parts.map((p, n) =>
-        p.type === "attachment" ? null : p.type === "text" ? (
-          // biome-ignore lint/suspicious/noArrayIndexKey: the parts of a message only ever grow at the end
-          <Markdown key={`t${n}`} text={p.text} />
-        ) : p.type === "reasoning" ? (
-          <Reasoning
-            // biome-ignore lint/suspicious/noArrayIndexKey: the parts of a message only ever grow at the end
-            key={`r${n}`}
-            text={p.text}
-            running={message.streaming && n === message.parts.length - 1}
-          />
-        ) : (
-          <ToolCard
-            key={p.id}
-            tool={p}
-            images={images}
-            tracks={tracks}
-            onOpenCreation={onOpenCreation}
-            onOpenSettings={onOpenSettings}
-          />
-        ),
-      )}
-      <ReadAloudBar id={message.id} text={said} />
-    </div>
-  );
-}
-
 /**
- * The assistant's chat (ADR-0057): a thread, a box, tool cards, stop and try again. It knows nothing
- * of the desktop or the web; the app supplies the clients, the greeting and the places to go.
+ * The assistant's chat (ADR-0057, on assistant-ui since ADR-0082): a thread, a box, tool cards, stop, edit and versions. It knows
+ * nothing of the desktop or the web; the app supplies the clients, the greeting and the places to go.
  */
 export function ChatScreen({
   runs,
@@ -128,7 +57,7 @@ export function ChatScreen({
   conversationId,
   onConversation,
   hero,
-  examples = [],
+  examples,
   notices,
   blockedReason,
   onOpenCreation,
@@ -138,15 +67,16 @@ export function ChatScreen({
   title,
   composerOptions,
 }: ChatScreenProps) {
-  const [draft, setDraft] = useState("");
-  const input = useRef<HTMLTextAreaElement>(null);
+  // the markdown renderer is a separate chunk: fetch it now, while the person is still typing the first message
+  useEffect(() => {
+    void preloadMarkdown().catch(() => {});
+  }, []);
+  const dictated: DictationTarget = useRef(null);
+  const options = useComposerOptions(conversationId, composerOptions, (text) =>
+    dictated.current?.(text),
+  );
   const readAloud = useReadAloud(composerOptions?.readAloud);
-  // words from the microphone go after what is in the box, which stays the person's to change and send
-  const options = useComposerOptions(conversationId, composerOptions, (text) => {
-    setDraft((d) => joinDictation(d, text).slice(0, MAX_CHARS));
-    input.current?.focus();
-  });
-  const { state, send, stop, retry } = useAssistantChat({
+  const chat = useThreadChat({
     runs,
     api: assistant,
     conversationId,
@@ -155,183 +85,57 @@ export function ChatScreen({
     attachedFiles: options.attach.files,
     onSend: options.attach.clear,
   });
-  const boxId = useId();
-  const scroller = useRef<HTMLDivElement>(null);
-  const stick = useRef(true);
-  const empty = state.messages.length === 0 && state.phase === "idle";
-  const working = state.phase === "working";
-
-  // follow the answer as it grows, unless the person scrolled up to read
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the thread's length and text are the trigger
-  useEffect(() => {
-    const el = scroller.current;
-    if (stick.current && el) el.scrollTop = el.scrollHeight;
-  }, [state.messages, state.phase]);
-
-  function submit() {
-    const text = draft.trim();
-    if ((!text && !options.attach.count) || working || blockedReason || options.attach.busy) return;
-    setDraft("");
-    stick.current = true;
-    void send(text);
-  }
-
-  const box = (
-    <form
-      className="mx-auto w-full max-w-3xl"
-      onSubmit={(e) => {
-        e.preventDefault();
-        submit();
-      }}
-      {...options.attach.dropProps}
-    >
-      {options.notice}
-      <div className="rounded-3xl border bg-card px-5 py-3 shadow-card focus-within:ring-[3px] focus-within:ring-ring/40">
-        {options.attach.chips}
-        {options.attach.picker}
-        <label htmlFor={boxId} className="sr-only">
-          Message
-        </label>
-        <textarea
-          id={boxId}
-          onPaste={options.attach.onPaste}
-          ref={input}
-          rows={empty ? 3 : 1}
-          maxLength={MAX_CHARS}
-          value={draft}
-          placeholder="Ask anything"
-          className="max-h-48 min-h-10 w-full resize-none bg-transparent py-1 text-lg outline-none placeholder:text-muted-foreground"
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-        />
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <ComposerOptions options={options.bar} />
-          <div className="ms-auto flex items-center gap-2">
-            {working ? (
-              <Button type="button" variant="outline" size="sm" onClick={stop}>
-                <Square className="size-3.5" /> Stop
-              </Button>
-            ) : null}
-            <button
-              type="submit"
-              aria-label="Send"
-              disabled={
-                (!draft.trim() && !options.attach.count) ||
-                working ||
-                Boolean(blockedReason) ||
-                options.attach.busy
-              }
-              className="grid size-10 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
-            >
-              <ArrowUp className="size-5" />
-            </button>
-          </div>
-        </div>
-      </div>
-      {blockedReason ? (
-        <output className="mt-2 block text-center text-muted-foreground text-sm">
-          {blockedReason}
-        </output>
-      ) : null}
-    </form>
+  // a file still going up is not sent without: the message waits until it is there
+  const runtime = useChatRuntime(chat, {
+    blocked: Boolean(blockedReason) || options.attach.busy,
+  });
+  const { state } = chat;
+  const env = useMemo(
+    () => ({
+      images,
+      tracks,
+      onOpenCreation,
+      onOpenSettings,
+      thinkingOn: options.thinking,
+      onDecide: (approved: boolean) => void chat.answer(approved),
+    }),
+    [images, tracks, onOpenCreation, onOpenSettings, options.thinking, chat.answer],
   );
+  const last = state.chat.messages[state.chat.messages.length - 1];
+  const lastAnswer = last && last.role === "assistant" ? textOf(last) : "";
 
   return (
-    <ReadAloudProvider value={readAloud}>
-      <div className="flex h-full min-h-0 flex-col">
-        {title || actions ? (
-          <header
-            data-tauri-drag-region
-            className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-6 pt-1"
-          >
-            <h1 className="min-w-0 truncate ps-2 font-medium text-sm">{title}</h1>
-            <div className="flex items-center gap-1">{actions}</div>
-          </header>
-        ) : null}
-
-        {empty ? (
-          <div
-            key="hero"
-            className="grid min-h-0 flex-1 content-end justify-items-center gap-8 overflow-auto px-8 pb-8"
-          >
-            {hero}
-          </div>
-        ) : (
-          <div
-            key="thread"
-            ref={scroller}
-            className="min-h-0 flex-1 overflow-auto px-6 py-6"
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-            }}
-          >
-            <div className={cn("mx-auto grid w-full max-w-3xl gap-6")} aria-live="polite">
-              {state.messages.map((m) => (
-                <Bubble
-                  key={m.id}
-                  message={m}
-                  images={images}
-                  tracks={tracks}
-                  onOpenCreation={onOpenCreation}
-                  onOpenSettings={onOpenSettings}
-                  thinkingOn={options.thinking}
-                />
-              ))}
-              {state.error ? (
-                <Notice
-                  tone="error"
-                  title="That did not work"
-                  actions={
-                    state.error.code === "no_language_model" && onNeedModel ? (
-                      <Button type="button" onClick={onNeedModel}>
-                        Choose a model
-                      </Button>
-                    ) : state.error.retryable ? (
-                      <Button type="button" variant="outline" onClick={retry}>
-                        Try again
-                      </Button>
-                    ) : undefined
-                  }
-                >
-                  {state.error.message}
-                </Notice>
-              ) : null}
-            </div>
-          </div>
-        )}
-
-        {/* the same element in both states, so typing is never interrupted when the first answer starts */}
-        <div key="composer" className={cn("grid shrink-0 gap-4 px-6", empty ? "" : "pt-2 pb-5")}>
-          {notices ? <div className="mx-auto w-full max-w-3xl">{notices}</div> : null}
-          {box}
-        </div>
-
-        {empty ? (
-          <div key="examples" className="min-h-0 flex-1 px-8 pt-4">
-            {examples.length ? (
-              <ul className="mx-auto flex max-w-3xl flex-wrap justify-center gap-2">
-                {examples.map((ex) => (
-                  <li key={ex}>
-                    <button
-                      type="button"
-                      className="rounded-full border px-3 py-1.5 text-muted-foreground text-sm hover:bg-accent"
-                      onClick={() => setDraft(ex)}
-                    >
-                      {ex}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    </ReadAloudProvider>
+    <AssistantRuntimeProvider runtime={runtime}>
+      <DictationBridge target={dictated} />
+      <ReadAloudProvider value={readAloud}>
+        <ThreadEnvProvider value={env}>
+          <Thread
+            empty={state.chat.messages.length === 0 && state.chat.phase === "idle"}
+            hero={hero}
+            examples={examples}
+            notices={
+              options.notice ? (
+                <>
+                  {notices}
+                  {options.notice}
+                </>
+              ) : (
+                notices
+              )
+            }
+            blockedReason={blockedReason}
+            options={options.bar}
+            attach={options.attach}
+            actions={actions}
+            title={title}
+            error={state.chat.error}
+            onRetry={chat.retry}
+            onNeedModel={onNeedModel}
+            working={state.chat.phase === "working"}
+            lastAnswer={lastAnswer}
+          />
+        </ThreadEnvProvider>
+      </ReadAloudProvider>
+    </AssistantRuntimeProvider>
   );
 }

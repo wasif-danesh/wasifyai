@@ -251,6 +251,28 @@ async def test_a_page_that_hangs_the_render_is_stopped_and_cleaned_up(
     assert not leftover_processes()
 
 
+def physical_memory() -> int:
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (ValueError, OSError, AttributeError):
+        return 0
+
+
+async def test_a_render_over_the_memory_limit_is_stopped_and_cleaned_up(tmp_path, canary, secret):
+    # the guard itself, on any machine: a plain render holds about 0.6 GB with a GPU and 1.9 GB without one (CI)
+    limit = 256 * 1024**2
+    result = await render(
+        tmp_path, "control", canary, secret, wall_s=120, stall_s=60, rss_bytes=limit
+    )
+    assert not result.ok and result.reason == "memory", (result.reason, result.log_tail)
+    assert result.peak_rss_bytes < limit + 1024**3  # the overshoot of a 25 to 40 ms poll
+    assert not leftover_processes()
+
+
+@pytest.mark.skipif(
+    physical_memory() < 12 * 1024**3,
+    reason="the page needs room to eat: on a 7 GB CI runner the browser never got past 1.9 GB and the render finished",
+)
 async def test_a_page_that_eats_memory_is_stopped_near_the_limit(tmp_path, canary, secret):
     limit = 3 * 1024**3  # a normal render holds about 2 GB (V0)
     result = await render(

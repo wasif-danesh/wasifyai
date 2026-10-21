@@ -11,7 +11,7 @@ and are estimates. Evidence: `docs/spikes/video-builder-v0.md` (V0, measured on 
 **Possible: yes.** V0 showed the render engine works on this Mac (a 60 s video in about 45 s, 2 to 3 GB, byte-identical output, transparent video included), and
 the first motion graphics (the template path) need no model-written code.
 
-**Without any trouble: no, and it is better to say where the trouble is now.** Everything below is additive (a Labs feature, an optional component, no
+**Without any trouble: no, and it is better to say where the trouble is now.** Everything below is additive (an experimental feature, an optional component, no
 change to an existing screen or to any Accepted ADR), so the existing app cannot break because of it. The real risks are inside the new part:
 
 | Trouble spot | Why it matters | How the plan handles it |
@@ -57,7 +57,7 @@ Approve the dependency table above; choose the sandbox path (**recommended: (a) 
 
 - `video_builder_pins.json` and `video_builder_runtime.py` (like `musetalk_pins.json` and `lipsync_runtime.py`): download with progress and SHA-256, unpack, install the
   hashed npm tree with the pinned Node offline from a cached tarball set (no registry call at install), set telemetry/skills/home variables, a `status()` with plain-words reasons.
-- The Tauri/engine downloads **without a quarantine flag**; test in the real app on this Mac. Setup card in **Video › Video Builder** (Labs), size and licence first.
+- The Tauri/engine downloads **without a quarantine flag**; test in the real app on this Mac. Setup card in **Video › Video Builder**, size and licence first.
 - **Done when:** the component installs from nothing, `status()` says ready, a **network log shows zero requests outside the download hosts during install and during a
   render**, `~/.hyperframes` is untouched, and a smoke render of the V0 simple title works on this Mac. Unit tests for hash and pin failures; uninstall removes it all and says how many MB came back.
 
@@ -77,7 +77,7 @@ Approve the dependency table above; choose the sandbox path (**recommended: (a) 
 
 - `VideoBuilderEngine` (create project, lint, preview frame, render with progress and cancel, list assets), project folders under the app data, the product package
   (`wasifyai-video-builder`) registered like other products, **one render at a time**, a fit check before a render, `video_builder.render`, `video_builder.preview_frame`, `video_builder.lint`.
-- The screen (under **Video › Video Builder**, Labs, "experimental" banner): a project list, a preview player, Render with progress and Cancel, "Save a copy", a read-only code view. Design tokens only (ADR-0081), plain words.
+- The screen (under **Video › Video Builder**, "experimental" label): a project list, a preview player, Render with progress and Cancel, "Save a copy", a read-only code view. Design tokens only (ADR-0081), plain words.
 - Creations: kinds `composition` and `video` (render), with the full ADR-0041 checklist (index text, `caps.index_creation`, `unindex`, `IndexSource`, `ids=` filter, card and filter, `CreationKind`, eval corpus row), deletion that removes the project and its renders (asks first).
 - Catalogue (ADR-0068): help files, `ui` pointers, `docs/contracts/actions.json`, executor tests.
 - **Done when:** a template renders from the screen in the real app on this Mac, a hostile composition from the corpus fails with a plain message and nothing escapes, cancel stops within a few seconds and frees memory, memory and time are measured **with a model resident** and recorded in `desktop-profile.md`, and the library finds the render by its text.
@@ -101,7 +101,7 @@ Total to the first working motion graphics: about **17 days** (V1a 3, V1b 4, V1c
 
 - Each stage ends with unit tests, a real run on the owner's Mac, docs (this plan, `desktop-profile.md`, the help files), the search checklist where it creates something, and `git add` with a one-line commit message. No commits by us.
 - Nothing is downloaded without a click that shows size and licence; nothing is installed without the owner's yes to the dependency table.
-- Everything stays behind the Labs switch and off by default; with the component absent the feature shows one setup card and nothing else in the app changes.
+- The screen is always in the menu, labelled experimental (no Labs switch, owner 2026-10-21); with the component absent the feature shows one setup card and nothing else in the app changes.
 - If V1b fails to find a safe path, the work stops there and the owner decides; no screen is built on an unsandboxed render.
 
 ## Questions for the owner (before V1a)

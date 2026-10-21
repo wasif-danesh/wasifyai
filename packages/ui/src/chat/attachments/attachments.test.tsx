@@ -15,7 +15,6 @@ import type {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AssistantHome } from "../AssistantHome";
 import { ChatScreen } from "../ChatScreen";
-import { ChatScreenNext } from "../ChatScreenNext";
 import { type AttachControl, MAX_ATTACHMENTS, useAttachments } from "./use-attachments";
 
 const images = { get: async () => ({}) } as unknown as ImagesApi;
@@ -217,10 +216,7 @@ function runsRecording(inputs: object[]) {
   };
 }
 
-describe.each([
-  ["the usual chat", "classic"],
-  ["the new chat", "next"],
-] as const)("%s", (_name, screenKind) => {
+describe("the chat", () => {
   const home = (assistant: AssistantApi, inputs: object[] = []) =>
     render(
       <AssistantHome
@@ -230,7 +226,6 @@ describe.each([
         conversationId={null}
         onAdopt={() => {}}
         onNewChat={() => {}}
-        screen={screenKind}
       />,
     );
 
@@ -375,28 +370,18 @@ describe("a saved message with attachments", () => {
     ],
   };
 
-  it.each([
-    ["the usual chat", ChatScreen],
-    ["the new chat", ChatScreenNext],
-  ] as const)(
-    "is shown on %s: a picture from its link, a document by name, the words as text",
-    async (_n, Screen) => {
-      const assistant = { ...assistantWith(OFFER), get: async () => saved };
-      render(
-        <Screen
-          runs={runsRecording([])}
-          assistant={assistant}
-          images={images}
-          conversationId="c9"
-        />,
-      );
-      expect(await screen.findByText("A fox and a plan.")).toBeInTheDocument();
-      const picture = screen.getByAltText("fox.png");
-      expect(picture).toHaveAttribute("src", "https://files.test/fox.png");
-      expect(screen.getByText("plan.md")).toBeInTheDocument();
-      expect(screen.getByText("What is in these?")).toBeInTheDocument();
-    },
-  );
+  it("is shown: a picture from its link, a document by name, the words as text", async () => {
+    const Screen = ChatScreen;
+    const assistant = { ...assistantWith(OFFER), get: async () => saved };
+    render(
+      <Screen runs={runsRecording([])} assistant={assistant} images={images} conversationId="c9" />,
+    );
+    expect(await screen.findByText("A fox and a plan.")).toBeInTheDocument();
+    const picture = screen.getByAltText("fox.png");
+    expect(picture).toHaveAttribute("src", "https://files.test/fox.png");
+    expect(screen.getByText("plan.md")).toBeInTheDocument();
+    expect(screen.getByText("What is in these?")).toBeInTheDocument();
+  });
 });
 
 describe("the picture reader", () => {
@@ -534,7 +519,6 @@ describe("the picture reader", () => {
         conversationId={null}
         onAdopt={() => {}}
         onNewChat={() => {}}
-        screen="next"
       />,
     );
     await screen.findByRole("button", { name: /^Attach/ });

@@ -11,11 +11,9 @@ import type {
 import { isWorking } from "@wasifyai/client";
 import { Plus } from "lucide-react";
 import { type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
-import { useChatNext } from "../chat/labs";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { AddSources } from "./AddSources";
-import { NotebookChat } from "./NotebookChat";
 import { SourceGuide } from "./SourceGuide";
 import { type Highlight, SourceViewer } from "./SourceViewer";
 import { SourcesPane } from "./SourcesPane";
@@ -25,9 +23,9 @@ import { useGuide } from "./use-guide";
 import { useNotebookChat } from "./use-notebook-chat";
 import { useNotebookSources } from "./use-notebook-sources";
 
-// the chat on assistant-ui (ADR-0082, CU4), a separate chunk fetched only when Labs has it on
-const NotebookChatNext = lazy(() =>
-  import("./NotebookChatNext").then((m) => ({ default: m.NotebookChatNext })),
+// the chat on assistant-ui (ADR-0082) is a separate chunk, so the notebook's lists and sources show before it arrives
+const NotebookChat = lazy(() =>
+  import("./NotebookChat").then((m) => ({ default: m.NotebookChat })),
 );
 
 type PaneName = "sources" | "chat" | "studio";
@@ -74,8 +72,6 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
   const [draftTitle, setDraftTitle] = useState(title);
   useEffect(() => setDraftTitle(title), [title]);
 
-  const [chatNext] = useChatNext(); // Settings, Labs: the new chat is off until asked for
-  const ChatView = chatNext ? NotebookChatNext : NotebookChat;
   const chat = useNotebookChat({
     runs,
     api,
@@ -308,7 +304,7 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
             </div>
           ) : null}
           <Suspense fallback={null}>
-            <ChatView
+            <NotebookChat
               state={chat.state}
               onSend={(text) => void chat.send(text, scope)}
               onStop={chat.stop}

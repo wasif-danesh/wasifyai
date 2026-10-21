@@ -83,10 +83,10 @@ class FakeAudio {
   removeAttribute() {}
 }
 
-// The new chat is a separate chunk (AssistantHome loads it lazily). Loading assistant-ui took longer than the default wait on a slow
-// Windows runner, so the first "next" test found an empty page. Load it once here, with room to do so.
+// The chat is a separate chunk (AssistantHome loads it lazily). Loading assistant-ui took longer than the default wait on a slow
+// Windows runner, so the first test found an empty page. Load it once here, with room to do so.
 beforeAll(async () => {
-  await import("../ChatScreenNext");
+  await import("../ChatScreen");
 }, 60_000);
 
 beforeEach(() => {
@@ -115,14 +115,14 @@ async function reply(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByText("A short answer.");
 }
 
-describe.each(["classic", "next"] as const)("the home screen (%s chat)", (screenName) => {
+describe("the home screen", () => {
   it("offers Read aloud on a reply when a voice is ready, and reads it with the voice", async () => {
     const voice = voiceThat(
       () => [kokoro()],
       () => runtime(true),
     );
     const user = userEvent.setup();
-    home({ screen: screenName, voice });
+    home({ voice });
     await reply(user);
     await user.click(await screen.findByRole("button", { name: "Read this reply aloud" }));
     await waitFor(() => expect(FakeAudio.played).toBeGreaterThan(0));
@@ -131,7 +131,7 @@ describe.each(["classic", "next"] as const)("the home screen (%s chat)", (screen
 
   it("has no Read aloud without a speech client or without a text-to-speech model", async () => {
     const user = userEvent.setup();
-    const { unmount } = home({ screen: screenName });
+    const { unmount } = home();
     await reply(user);
     expect(screen.queryByRole("button", { name: /read this reply/i })).toBeNull();
     unmount();
@@ -139,7 +139,7 @@ describe.each(["classic", "next"] as const)("the home screen (%s chat)", (screen
       () => [],
       () => HOSTED_RUNTIME,
     );
-    home({ screen: screenName, voice });
+    home({ voice });
     await reply(user);
     await waitFor(() => expect(voice.models).toHaveBeenCalledWith("speak"));
     expect(screen.queryByRole("button", { name: /read this reply/i })).toBeNull();
@@ -151,7 +151,7 @@ describe.each(["classic", "next"] as const)("the home screen (%s chat)", (screen
       () => runtime(false),
     );
     const user = userEvent.setup();
-    home({ screen: screenName, voice });
+    home({ voice });
     await reply(user);
     await waitFor(() => expect(voice.models).toHaveBeenCalledWith("speak"));
     expect(screen.queryByRole("button", { name: /read this reply/i })).toBeNull();
@@ -173,7 +173,7 @@ describe.each(["classic", "next"] as const)("the home screen (%s chat)", (screen
       have = true;
     });
     const user = userEvent.setup();
-    home({ screen: screenName, voice, getSpeechModel });
+    home({ voice, getSpeechModel });
     await reply(user);
     await user.click(await screen.findByRole("button", { name: "Read this reply aloud" }));
     const card = await screen.findByRole("region", { name: "Set up read aloud" });

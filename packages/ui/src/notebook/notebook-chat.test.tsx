@@ -13,10 +13,9 @@ import type {
   ParsedEvent,
 } from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CHAT_NEXT_KEY } from "../chat/labs";
 import { ADVERSARIAL } from "../chat/thread/markdown/adversarial";
 import type { NotebookChatProps } from "./NotebookChat";
-import { NotebookChatNext } from "./NotebookChatNext";
+import { NotebookChat } from "./NotebookChat";
 import { NotebookWorkspace } from "./NotebookWorkspace";
 
 const citation = {
@@ -58,7 +57,7 @@ function chat(over: Partial<NotebookChatProps> = {}) {
     scope: "2 of 3 sources",
     ...over,
   };
-  return { props, ...render(<NotebookChatNext {...props} />) };
+  return { props, ...render(<NotebookChat {...props} />) };
 }
 
 /** streamdown loads on demand; until it has, the text is shown as it is. */
@@ -124,7 +123,7 @@ describe("the box", () => {
     const { rerender, props } = chat({ state: idle, onSend });
     await userEvent.type(screen.getByLabelText("Ask about your sources"), "Who is the CEO?{Enter}");
     expect(onSend).toHaveBeenCalledWith("Who is the CEO?");
-    rerender(<NotebookChatNext {...props} scope="" blockedReason="Add a source first." />);
+    rerender(<NotebookChat {...props} scope="" blockedReason="Add a source first." />);
     await userEvent.type(screen.getByLabelText("Ask about your sources"), "x{Enter}");
     expect(onSend).toHaveBeenCalledTimes(1);
     expect(screen.getByText("Add a source first.")).toBeTruthy();
@@ -157,7 +156,7 @@ describe("the box", () => {
         "Summarise it",
       ),
     );
-    rerender(<NotebookChatNext {...props} draftSeed={{ text: "Who is the CEO?", id: 2 }} />);
+    rerender(<NotebookChat {...props} draftSeed={{ text: "Who is the CEO?", id: 2 }} />);
     await waitFor(() =>
       expect((screen.getByLabelText("Ask about your sources") as HTMLTextAreaElement).value).toBe(
         "Who is the CEO?",
@@ -176,9 +175,7 @@ describe("an empty notebook, a waiting answer and a failed one", () => {
     const { rerender, props } = chat({ state: idle, guide: <p>The guide</p> });
     expect(screen.getByText("The guide")).toBeTruthy();
     expect(screen.getByText(/Answers cite the passages they came from/)).toBeTruthy();
-    rerender(
-      <NotebookChatNext {...props} guide={undefined} empty={<p>Add your first source</p>} />,
-    );
+    rerender(<NotebookChat {...props} guide={undefined} empty={<p>Add your first source</p>} />);
     expect(screen.getByText("Add your first source")).toBeTruthy();
     expect(screen.queryByText(/Answers cite the passages/)).toBeNull();
     expect(screen.getByLabelText("Ask about your sources")).toBeTruthy(); // the box stays
@@ -210,7 +207,7 @@ describe("an empty notebook, a waiting answer and a failed one", () => {
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(onRetry).toHaveBeenCalled();
     rerender(
-      <NotebookChatNext
+      <NotebookChat
         {...props}
         state={{
           ...state,
@@ -232,7 +229,7 @@ describe("an empty notebook, a waiting answer and a failed one", () => {
     });
     expect(screen.getByText("The assistant is answering.")).toBeTruthy();
     rerender(
-      <NotebookChatNext
+      <NotebookChat
         {...props}
         state={{
           ...idle,
@@ -379,9 +376,8 @@ function workspace(events: ParsedEvent[]) {
   return { api, inputs };
 }
 
-describe("the notebook with the new chat switched on in Labs", () => {
+describe("the notebook workspace chat", () => {
   it("asks, shows the thinking and the search, makes a pill that opens the passage, and keeps a note", async () => {
-    localStorage.setItem(CHAT_NEXT_KEY, "1");
     const { api, inputs } = workspace([
       ev("tool_call", { id: "c", name: "search_sources", arguments: { sources: 1 } }, 2),
       ev("tool_result", { id: "c", name: "search_sources", output: { hits: [{}] } }, 3),

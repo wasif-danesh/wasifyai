@@ -2989,7 +2989,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "song" | "image" | "video" | "speech" | "transcript" | "lipsync" | "conversation" | "notebook" | "track" | "voice";
+            kind: "song" | "image" | "video" | "speech" | "transcript" | "lipsync" | "conversation" | "notebook" | "track" | "voice" | "composition" | "model3d";
             /**
              * Match
              * @enum {string}
@@ -3751,7 +3751,7 @@ export interface operations {
         parameters: {
             query: {
                 q: string;
-                kind?: ("song" | "image" | "video" | "speech" | "transcript" | "lipsync" | "conversation" | "notebook" | "track" | "voice") | null;
+                kind?: ("song" | "image" | "video" | "speech" | "transcript" | "lipsync" | "conversation" | "notebook" | "track" | "voice" | "composition" | "model3d") | null;
                 limit?: number;
             };
             header?: never;

@@ -5,12 +5,10 @@ import { NOTEBOOK_ID, mockApi } from "./mock-api";
 // "Thinking" in a real browser, at 320 px, light, dark and right to left. The engine is the mock of mock-api.ts plus the scripted
 // run below. `@layout` cases run in CI; the pictures (`@visual`) are kept per operating system.
 
-const KEY = "wasifyai.labs.chat-next";
 const RUN = "5b6c1c1e-0000-4000-8000-000000000002";
 
 test.beforeEach(async ({ page }) => {
   await mockApi(page);
-  await page.addInitScript((k) => localStorage.setItem(k, "1"), KEY);
 });
 
 type Ev = [event: string, data: Record<string, unknown>];

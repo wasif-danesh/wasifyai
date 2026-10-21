@@ -73,8 +73,7 @@ files we ship with their licences recorded; the desktop never fetches fonts from
 
 ## Screen patterns (written before the screens are built)
 
-- **Chat (the assistant; built on assistant-ui, ADR-0082, `packages/ui/src/chat/thread/`; behind Labs until it passes the parity
-  checklist):** a title bar (name, rename, delete) only for a saved chat; while empty, the greeting, the box and three
+- **Chat (the assistant; built on assistant-ui, ADR-0082, `packages/ui/src/chat/thread/`):** a title bar (name, rename, delete) only for a saved chat; while empty, the greeting, the box and three
   suggestions under it, which put their text in the box and never send; afterwards the thread (at most `max-w-3xl`, a gap
   between messages) and the box at the bottom. **The box is one element for the whole chat** (Enter sends, Shift+Enter is a new
   line, `dir="auto"`, up to 4,000 characters); while an answer arrives Stop sits beside Send, which waits. The person's message
@@ -110,7 +109,7 @@ files we ship with their licences recorded; the desktop never fetches fonts from
   messages have a pencil ("Edit message") that opens an edit box in place (Cancel, Send), and replies have "Answer again". **The confirm card** (`ConfirmActionCard`) is an
   `accent` panel, 28 rem wide at most: the action's name, a line, up to four parameters as plain text, then "Go ahead" and "Not now"; once answered it says what happened.
   Everything is a token; at 320 px nothing scrolls sideways (a wide table, code block or diagram scrolls inside its own frame).
-- **Notebook chat (the same thread primitives, ADR-0082 stage CU4; behind the same Labs switch):** the old layout kept: a slim bar above the thread
+- **Notebook chat (the same thread primitives, ADR-0082 stage CU4):** the old layout kept: a slim bar above the thread
   (conversation switcher, "New chat"), then, while empty, the add-sources screen or the guide and one line ("Ask a question about your sources. Answers cite the passages
   they came from."), then the box. **The box** is the assistant's with two differences: it is named and says "Ask about your sources", and its bar starts with the
   **scope** ("12 of 14 sources, 2 being read", `text-xs`, `muted-foreground`, truncates) and carries the model chip before Stop and Send; no options bar. An answer is

@@ -5,7 +5,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AssistantApi, ImageSummary, ImagesApi, OnEvent, ParsedEvent } from "@wasifyai/client";
 import { describe, expect, it, vi } from "vitest";
-import { ChatScreenNext } from "./ChatScreenNext";
+import { ChatScreen } from "./ChatScreen";
 
 const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
   ({ event, data: { run_id: "r1", seq: 1, ...data } }) as unknown as ParsedEvent;
@@ -79,7 +79,7 @@ const images = {
   get: async () => image,
 } as unknown as ImagesApi;
 
-describe("ChatScreenNext", () => {
+describe("ChatScreen", () => {
   it("sends on Enter, shows the answer as it arrives, and keeps Shift+Enter for a new line", async () => {
     const inputs: object[] = [];
     const runs = runsThat(
@@ -93,7 +93,7 @@ describe("ChatScreenNext", () => {
     const onConversation = vi.fn();
     const user = userEvent.setup();
     render(
-      <ChatScreenNext
+      <ChatScreen
         runs={runs}
         assistant={assistant}
         images={images}
@@ -130,7 +130,7 @@ describe("ChatScreenNext", () => {
       inputs,
     );
     const user = userEvent.setup();
-    render(<ChatScreenNext runs={runs} assistant={assistant} images={images} />);
+    render(<ChatScreen runs={runs} assistant={assistant} images={images} />);
     const box = screen.getByRole("textbox", { name: "Message" });
     await user.type(box, "one{Enter}");
     await waitFor(() => expect(inputs).toHaveLength(1));
@@ -154,7 +154,7 @@ describe("ChatScreenNext", () => {
     const onOpen = vi.fn();
     const user = userEvent.setup();
     render(
-      <ChatScreenNext runs={runs} assistant={assistant} images={images} onOpenCreation={onOpen} />,
+      <ChatScreen runs={runs} assistant={assistant} images={images} onOpenCreation={onOpen} />,
     );
     await user.type(screen.getByRole("textbox", { name: "Message" }), "draw a teapot{Enter}");
     const pic = await screen.findByRole("img", { name: "a red teapot" });
@@ -188,7 +188,7 @@ describe("ChatScreenNext", () => {
     const onOpen = vi.fn();
     const user = userEvent.setup();
     render(
-      <ChatScreenNext runs={runs} assistant={assistant} images={images} onOpenCreation={onOpen} />,
+      <ChatScreen runs={runs} assistant={assistant} images={images} onOpenCreation={onOpen} />,
     );
     await user.type(screen.getByRole("textbox", { name: "Message" }), "my budget?{Enter}");
     expect(await screen.findByText("From your notebooks")).toBeInTheDocument();
@@ -210,7 +210,7 @@ describe("ChatScreenNext", () => {
       ev("done", { outputs: { status: "done", conversation_id: "c1", title: "x" } }),
     ]);
     const user = userEvent.setup();
-    render(<ChatScreenNext runs={runs} assistant={assistant} images={images} />);
+    render(<ChatScreen runs={runs} assistant={assistant} images={images} />);
     await user.type(screen.getByRole("textbox", { name: "Message" }), "look{Enter}");
     expect(
       await screen.findByText("The search model is not on this computer yet."),
@@ -233,7 +233,7 @@ describe("ChatScreenNext", () => {
     const onOpen = vi.fn();
     const user = userEvent.setup();
     render(
-      <ChatScreenNext
+      <ChatScreen
         runs={runs}
         assistant={assistant}
         images={images}
@@ -256,7 +256,7 @@ describe("ChatScreenNext", () => {
       ev("done", { outputs: { status: "done", conversation_id: "c1", title: "Song" } }),
     ]);
     const user = userEvent.setup();
-    render(<ChatScreenNext runs={runs} assistant={assistant} images={images} />);
+    render(<ChatScreen runs={runs} assistant={assistant} images={images} />);
     await user.type(screen.getByRole("textbox", { name: "Message" }), "make a song{Enter}");
     expect(await screen.findByText("The music could not be made.")).toBeInTheDocument();
   });
@@ -272,12 +272,7 @@ describe("ChatScreenNext", () => {
     const onNeedModel = vi.fn();
     const user = userEvent.setup();
     render(
-      <ChatScreenNext
-        runs={runs}
-        assistant={assistant}
-        images={images}
-        onNeedModel={onNeedModel}
-      />,
+      <ChatScreen runs={runs} assistant={assistant} images={images} onNeedModel={onNeedModel} />,
     );
     await user.type(screen.getByRole("textbox", { name: "Message" }), "hello{Enter}");
     expect(await screen.findByText("No language model is chosen yet.")).toBeInTheDocument();
@@ -290,7 +285,7 @@ describe("ChatScreenNext", () => {
       ev("error", { code: "language_failed", message: "It did not answer.", retryable: true }),
     ]);
     const user = userEvent.setup();
-    render(<ChatScreenNext runs={runs} assistant={assistant} images={images} />);
+    render(<ChatScreen runs={runs} assistant={assistant} images={images} />);
     await user.type(screen.getByRole("textbox", { name: "Message" }), "hello{Enter}");
     await user.click(await screen.findByRole("button", { name: "Try again" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(2));
@@ -300,7 +295,7 @@ describe("ChatScreenNext", () => {
     const runs = runsThat([]);
     const user = userEvent.setup();
     render(
-      <ChatScreenNext
+      <ChatScreen
         runs={runs}
         assistant={assistant}
         images={images}
@@ -315,12 +310,7 @@ describe("ChatScreenNext", () => {
 
   it("opens a saved conversation", async () => {
     render(
-      <ChatScreenNext
-        runs={runsThat([])}
-        assistant={assistant}
-        images={images}
-        conversationId="c5"
-      />,
+      <ChatScreen runs={runsThat([])} assistant={assistant} images={images} conversationId="c5" />,
     );
     expect(await screen.findByText("Earlier question")).toBeInTheDocument();
     // the bold word is its own element; which element a renderer uses for it is not what matters here

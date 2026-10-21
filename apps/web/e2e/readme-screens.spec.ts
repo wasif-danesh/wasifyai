@@ -11,7 +11,6 @@ import { mockApi } from "./mock-api";
 // the chat looks, and look at the pictures before committing them.
 
 const OUT = join(__dirname, "..", "..", "..", "docs", "images", "screens");
-const KEY = "wasifyai.labs.chat-next";
 const ID = "0f3c1a52-7a49-4d1e-9a31-8f1d5b6c7d80";
 const RUN = "5b6c1c1e-0000-4000-8000-0000000000aa";
 const SCENE = Buffer.from(
@@ -24,7 +23,6 @@ test.skip(!process.env.README_SHOTS, "writes the README pictures only when READM
 test.beforeEach(async ({ page }) => {
   mkdirSync(OUT, { recursive: true });
   await mockApi(page);
-  await page.addInitScript((k) => localStorage.setItem(k, "1"), KEY);
   await page.route("https://files.test/scene.png", (route) =>
     route.fulfill({ status: 200, contentType: "image/png", body: SCENE }),
   );

@@ -4,7 +4,6 @@ import { mockApi } from "./mock-api";
 // Attaching files in the chat box (ADR-0083, stage CO2) in a real browser, on the new chat: the picker, the chips in the box, what the
 // run is told and what the sent message shows. The engine is the mock of mock-api.ts plus the answers below.
 
-const KEY = "wasifyai.labs.chat-next";
 const RUN = "5b6c1c1e-0000-4000-8000-00000000000a";
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
@@ -13,7 +12,6 @@ const PNG = Buffer.from(
 
 test.beforeEach(async ({ page }) => {
   await mockApi(page);
-  await page.addInitScript((k) => localStorage.setItem(k, "1"), KEY);
   await page.route("**/api/products/wasifyai-assistant/options", (route) =>
     route.fulfill({
       status: 200,

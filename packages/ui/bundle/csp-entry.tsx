@@ -2,7 +2,7 @@
 // desktop window's real policy. `?hostile=1` answers with the adversarial message, otherwise with a harmless one that uses everything
 // (code, maths, a diagram). Not part of the app.
 import { createRoot } from "react-dom/client";
-import { ChatScreenNext } from "../src/chat/ChatScreenNext";
+import { ChatScreen } from "../src/chat/ChatScreen";
 import { ADVERSARIAL } from "../src/chat/thread/markdown/adversarial";
 
 const GOOD = [
@@ -36,6 +36,4 @@ const assistant = { list: async () => [], get: async () => ({}) } as never;
 
 const root = document.getElementById("root");
 if (root)
-  createRoot(root).render(
-    <ChatScreenNext runs={runs} assistant={assistant} images={{} as never} />,
-  );
+  createRoot(root).render(<ChatScreen runs={runs} assistant={assistant} images={{} as never} />);

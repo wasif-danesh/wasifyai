@@ -21,42 +21,17 @@ describe("the window's side menu", () => {
     expect(at("home")("train")).toBeUndefined();
   });
 
-  it("shows Video Builder only while its Labs switch is on", () => {
-    const off = resolveItem("home", () => {}, { conversationId: null, notebook: null });
-    const on = resolveItem("home", () => {}, {
-      conversationId: null,
-      notebook: null,
-      videoBuilder: true,
-    });
-    expect(off("video.builder")).toEqual({ hidden: true });
-    const shown = on("video.builder");
-    expect(shown && !("hidden" in shown) ? shown.current : null).toBe(false);
-    const open = resolveItem("videobuilder", () => {}, {
-      conversationId: null,
-      notebook: null,
-      videoBuilder: true,
-    })("video.builder");
-    expect(open && !("hidden" in open) ? open.current : null).toBe(true);
-    expect(routePath("videobuilder")).toBe("/video/builder");
-  });
-
-  it("shows 3D models only while their Labs switch is on", () => {
-    const off = resolveItem("home", () => {}, { conversationId: null, notebook: null });
-    const on = resolveItem("home", () => {}, {
-      conversationId: null,
-      notebook: null,
-      model3d: true,
-    });
-    expect(off("images.model3d")).toEqual({ hidden: true });
-    const shown = on("images.model3d");
-    expect(shown && !("hidden" in shown) ? shown.current : null).toBe(false);
-    const open = resolveItem("model3d", () => {}, {
-      conversationId: null,
-      notebook: null,
-      model3d: true,
-    })("images.model3d");
-    expect(open && !("hidden" in open) ? open.current : null).toBe(true);
-    expect(routePath("model3d")).toBe("/images/3d");
+  it("shows Video Builder and 3D models in the menu, and marks the page being shown", () => {
+    for (const [id, route, path] of [
+      ["video.builder", "videobuilder", "/video/builder"],
+      ["images.model3d", "model3d", "/images/3d"],
+    ] as const) {
+      const shown = at("home")(id);
+      expect(shown && !("hidden" in shown) ? shown.current : null, id).toBe(false);
+      const open = at(route)(id);
+      expect(open && !("hidden" in open) ? open.current : null, id).toBe(true);
+      expect(routePath(route)).toBe(path);
+    }
   });
 
   it("points every item at a route that exists", () => {

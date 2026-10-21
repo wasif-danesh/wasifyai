@@ -15,7 +15,7 @@ library and you make the video from it. Video Builder is experimental.
 
 ## Steps in the app
 
-1. Open **Video › Video Builder** (switch it on first in Settings, under Labs).
+1. Open **Video › Video Builder**.
 2. Choose New video, then what to make.
 3. Fill in the form: the words, and the shape, length, look and letters.
 4. Choose Preview to see three stills, then Make the video.

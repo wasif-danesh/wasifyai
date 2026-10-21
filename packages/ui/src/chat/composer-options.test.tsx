@@ -5,7 +5,6 @@ import userEvent from "@testing-library/user-event";
 import type { AssistantApi, ImagesApi, OnEvent, ParsedEvent } from "@wasifyai/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatScreen } from "./ChatScreen";
-import { ChatScreenNext } from "./ChatScreenNext";
 import { useComposerOptions } from "./composer-options";
 
 const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
@@ -117,10 +116,8 @@ describe("useComposerOptions", () => {
   });
 });
 
-describe.each([
-  ["the usual chat", ChatScreen],
-  ["the new chat", ChatScreenNext],
-])("%s", (_name, Screen) => {
+describe("the chat", () => {
+  const Screen = ChatScreen;
   it("has no Thinking button for a model that cannot think", () => {
     render(<Screen runs={runsThat([])} assistant={assistant} images={images} />);
     expect(screen.queryByRole("button", { name: /^Thinking/ })).toBeNull();

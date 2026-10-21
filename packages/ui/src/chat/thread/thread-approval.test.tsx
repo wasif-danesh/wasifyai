@@ -5,7 +5,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AssistantApi, Conversation, ImagesApi, OnEvent, ParsedEvent } from "@wasifyai/client";
 import { describe, expect, it, vi } from "vitest";
-import { ChatScreenNext } from "../ChatScreenNext";
+import { ChatScreen } from "../ChatScreen";
 
 const ev = (event: string, seq: number, data: Record<string, unknown> = {}): ParsedEvent =>
   ({ event, data: { run_id: "r9", seq, ...data } }) as unknown as ParsedEvent;
@@ -111,7 +111,7 @@ function runs(resumed: object[] = [], started: object[] = []) {
 
 describe("the confirm card", () => {
   it("comes back after a reload with what will be made, as plain text", async () => {
-    render(<ChatScreenNext runs={runs()} assistant={api()} images={images} conversationId="c1" />);
+    render(<ChatScreen runs={runs()} assistant={api()} images={images} conversationId="c1" />);
     const card = await screen.findByRole("region", { name: "Make a picture" });
     expect(card).toHaveTextContent("a fox in <b>snow</b>"); // shown as text, never as markup
     expect(card.querySelector("b")).toBeNull();
@@ -122,7 +122,7 @@ describe("the confirm card", () => {
     const resumed: object[] = [];
     const user = userEvent.setup();
     render(
-      <ChatScreenNext runs={runs(resumed)} assistant={api()} images={images} conversationId="c1" />,
+      <ChatScreen runs={runs(resumed)} assistant={api()} images={images} conversationId="c1" />,
     );
     await user.click(await screen.findByRole("button", { name: "Go ahead" }));
     await waitFor(() => expect(resumed).toEqual([{ approved: true }]));
@@ -135,7 +135,7 @@ describe("the confirm card", () => {
     const resumed: object[] = [];
     const user = userEvent.setup();
     render(
-      <ChatScreenNext runs={runs(resumed)} assistant={api()} images={images} conversationId="c1" />,
+      <ChatScreen runs={runs(resumed)} assistant={api()} images={images} conversationId="c1" />,
     );
     await user.click(await screen.findByRole("button", { name: "Not now" }));
     await waitFor(() => expect(resumed).toEqual([{ approved: false }]));
@@ -146,7 +146,7 @@ describe("the confirm card", () => {
     const started: object[] = [];
     const user = userEvent.setup();
     render(
-      <ChatScreenNext
+      <ChatScreen
         runs={runs(resumed, started)}
         assistant={api()}
         images={images}

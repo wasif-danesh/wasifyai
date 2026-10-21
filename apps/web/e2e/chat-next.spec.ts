@@ -5,12 +5,10 @@ import { mockApi } from "./mock-api";
 // docs/chat-ui-migration-plan.md run against it in a real browser: the engine is the mock of mock-api.ts plus the scripted
 // answers below. `@layout` cases run in CI; the pictures (`@visual`) are kept per operating system.
 
-const KEY = "wasifyai.labs.chat-next";
 const RUN = "5b6c1c1e-0000-4000-8000-000000000001";
 
 test.beforeEach(async ({ page }) => {
   await mockApi(page);
-  await page.addInitScript((k) => localStorage.setItem(k, "1"), KEY);
 });
 
 type Ev = [event: string, data: Record<string, unknown>];
@@ -303,21 +301,6 @@ test("right-to-left text is laid out right to left, in the bubble and in the ans
   const answer = page.getByText("مرحبا بك في هذا العالم الجميل", { exact: true }).first();
   await expect(answer).toHaveCSS("direction", "rtl");
   await noSideScroll(page);
-});
-
-test("the usual chat is still the default, and ?chat=next turns the new one on @layout", async ({
-  page,
-}) => {
-  await page.addInitScript((k) => localStorage.removeItem(k), KEY);
-  await page.goto("/");
-  await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
-  // the new chat's box has a log region for the screen reader, the usual one has a live thread instead
-  await expect(page.getByRole("log")).toHaveCount(0);
-  await page.goto("/?chat=next");
-  await expect(page.getByRole("log")).toHaveCount(1);
-  await page.goto("/?chat=classic");
-  await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
-  await expect(page.getByRole("log")).toHaveCount(0);
 });
 
 test("the new chat looks right, empty and answered @visual", async ({ page }) => {

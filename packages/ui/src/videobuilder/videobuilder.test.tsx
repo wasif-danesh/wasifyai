@@ -13,7 +13,6 @@ import type {
 } from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { VideoBuilder } from "./VideoBuilder";
-import { VIDEO_BUILDER_KEY, readVideoBuilder, writeVideoBuilder } from "./labs";
 
 const BYTES = 287_600_345;
 
@@ -926,16 +925,5 @@ describe("saying what to make in your own words", () => {
     await user.type(screen.getByLabelText("Title"), "Hi");
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(a.create).toHaveBeenCalledWith("title", expect.objectContaining({ seconds: 45 }));
-  });
-});
-
-describe("the Labs switch", () => {
-  it("is off until the person turns it on, and remembers", () => {
-    expect(readVideoBuilder()).toBe(false);
-    writeVideoBuilder(true);
-    expect(localStorage.getItem(VIDEO_BUILDER_KEY)).toBe("1");
-    expect(readVideoBuilder()).toBe(true);
-    writeVideoBuilder(false);
-    expect(readVideoBuilder()).toBe(false);
   });
 });

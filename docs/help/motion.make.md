@@ -18,7 +18,7 @@ in your library so you can change it. Video Builder is experimental.
 
 ## Steps in the app
 
-1. Open **Video › Video Builder** (switch it on first in Settings, under Labs).
+1. Open **Video › Video Builder**.
 2. Say what to make in your own words, for example `Lower third for "Maya Chen", Head of Design`,
    and press the arrow. You can attach a CSV file to chart, and pick a shape. The form opens filled
    in, with what was understood; check anything it flags. (Or choose "Or fill in the form

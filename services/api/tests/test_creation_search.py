@@ -273,8 +273,8 @@ def search_app(monkeypatch, tmp_path):
     store = InMemoryIndexStore()
     usage = InMemoryUsageRecorder()
     app = mem_app(
-        hello_registry(), tmp_path, usage, search_limiter=InMemoryUploadLimiter(4),
-        creation_embedder=fake_embed, index_store=store,
+        hello_registry(), tmp_path, usage, creation_embedder=fake_embed, index_store=store,
+        search_limiter=InMemoryUploadLimiter(4, clock=lambda: 0.0),
     )  # fmt: skip
     with TestClient(app) as client:
         client.index = app.state.creation_index  # type: ignore[attr-defined]
@@ -320,6 +320,30 @@ def test_the_route_returns_ranked_references_and_counts_the_search(search_app):
     assert [h["id"] for h in only_images["results"]] == ["id-2"]
     events = [e for e in search_app.usage.events if e.kind == "creation.searched"]
     assert len(events) == 2 and events[0].quantity == 1 and events[0].product_id == "platform"
+
+
+def test_every_kind_the_index_knows_can_come_back_through_the_route(search_app):
+    """A kind added to the SDK's list but not to the route's would fail every search that found one
+    (the response is validated), and could not be asked for by `kind`."""
+    import asyncio
+
+    from wasifyai_platform_sdk.search import KINDS
+
+    asyncio.run(
+        put(
+            search_app,
+            *(
+                item(n, "blue teapot", user="dev-user", tenant="dev-tenant", kind=kind)
+                for n, kind in enumerate(KINDS)
+            ),
+        )
+    )
+    everything = search_app.get("/creations/search", params={"q": "blue teapot", "limit": 50})
+    assert everything.status_code == 200
+    assert {h["kind"] for h in everything.json()["results"]} == set(KINDS)
+    for kind in ("model3d", "composition"):
+        only = search_app.get("/creations/search", params={"q": "blue teapot", "kind": kind})
+        assert only.status_code == 200 and [h["kind"] for h in only.json()["results"]] == [kind]
 
 
 def test_the_route_validates_and_limits(search_app):

@@ -168,3 +168,11 @@ approval of the items marked *owner*.
 - **Also found:** Stop does not stop the engine (needs a cancel call); a cut before the first event cannot be re-attached (needs a client-chosen
   run id); the re-attach budget is about 5.4 s (a 7 s outage gives up): `run-follower.ts` fixes these in CU1.
 
+## Amendment: one chat, no Labs switch (2026-10-21, owner)
+
+Decision 11 ("gradual and reversible": a Labs setting, the new chat as the default after a parity checklist, the old code deleted a
+release later) is replaced. The owner asked for the app to stay simple: **the new chat is the only chat**, in the assistant and in the
+notebooks. The old `ChatScreen`, `NotebookChat`, `useAssistantChat` and the Labs switch (the desktop checkbox, the web `?chat=next`)
+are deleted; `ChatScreenNext` and `NotebookChatNext` took the plain names. The parity checklist was not run first; it is kept as the
+desktop test list (`docs/testing/desktop-window-checklist.md`). The old text renderer (`chat/markdown.tsx`) stays, because the
+notebook's source and output viewers use it. Reverting is a `git revert` of that commit, not a setting.

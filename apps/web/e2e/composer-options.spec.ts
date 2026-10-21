@@ -1,10 +1,9 @@
 import { type Page, expect, test } from "@playwright/test";
 import { mockApi } from "./mock-api";
 
-// The options of the chat box (ADR-0083, stage CO1): Thinking, on the usual chat and on the new one (Labs). The mock engine says the
+// The options of the chat box (ADR-0083, stage CO1): Thinking. The mock engine says the
 // model can think; the answers are scripted. `@layout` cases run in CI; the pictures (`@visual`) are kept per operating system.
 
-const KEY = "wasifyai.labs.chat-next";
 const RUN = "5b6c1c1e-0000-4000-8000-000000000001";
 
 type Ev = [event: string, data: Record<string, unknown>];
@@ -19,15 +18,8 @@ const DONE: Ev = [
   },
 ];
 
-async function setup(page: Page, next: boolean, canThink = true) {
+async function setup(page: Page, canThink = true) {
   await mockApi(page);
-  await page.addInitScript(
-    ([k, on]) => {
-      if (on) localStorage.setItem(k as string, "1");
-      else localStorage.removeItem(k as string);
-    },
-    [KEY, next],
-  );
   await page.route("**/api/products/wasifyai-assistant/options", (route) =>
     route.fulfill({ json: { thinking: canThink } }),
   );
@@ -59,20 +51,18 @@ async function noSideScroll(page: Page) {
   expect(wide, "the page scrolls sideways").toBeLessThanOrEqual(1);
 }
 
-for (const next of [false, true]) {
-  const which = next ? "the new chat" : "the usual chat";
-
-  test(`${which}: no Thinking button for a model that cannot think @layout`, async ({ page }) => {
-    await setup(page, next, false);
+test.describe("the chat", () => {
+  test("no Thinking button for a model that cannot think @layout", async ({ page }) => {
+    await setup(page, false);
     await page.goto("/");
     await expect(box(page)).toBeVisible();
     await expect(page.getByRole("button", { name: /^Thinking/ })).toHaveCount(0);
   });
 
-  test(`${which}: Thinking is off until pressed, then the message asks for it and the reasoning is collapsed @layout`, async ({
+  test("Thinking is off until pressed, then the message asks for it and the reasoning is collapsed @layout", async ({
     page,
   }) => {
-    await setup(page, next);
+    await setup(page);
     const seen: { input?: Record<string, unknown> }[] = [];
     await answers(
       page,
@@ -104,12 +94,12 @@ for (const next of [false, true]) {
   });
 
   for (const scheme of ["light", "dark"] as const) {
-    test(`${which}, ${scheme}, 320 px: the bar fits and nothing scrolls sideways @layout`, async ({
+    test(`${scheme}, 320 px: the bar fits and nothing scrolls sideways @layout`, async ({
       page,
     }) => {
       await page.emulateMedia({ colorScheme: scheme });
       await page.setViewportSize({ width: 320, height: 640 });
-      await setup(page, next);
+      await setup(page);
       await answers(page, [["token", { node: "agent", text: "ok" }], DONE]);
       await page.goto("/");
       await expect(thinkingButton(page)).toBeVisible();
@@ -124,21 +114,21 @@ for (const next of [false, true]) {
     });
   }
 
-  test(`${which} looks right with the options bar @visual`, async ({ page }) => {
-    await setup(page, next);
+  test("looks right with the options bar @visual", async ({ page }) => {
+    await setup(page);
     await page.goto("/");
     await expect(thinkingButton(page)).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(300);
     await thinkingButton(page).click();
-    await expect(page).toHaveScreenshot(`options-${next ? "next" : "usual"}-on.png`);
+    await expect(page).toHaveScreenshot("options-next-on.png");
   });
-}
+});
 
 test("the choice is remembered for the conversation, and a stored thought is shown collapsed @layout", async ({
   page,
 }) => {
-  await setup(page, false);
+  await setup(page);
   await page.goto("/");
   await thinkingButton(page).click();
   await page.reload();

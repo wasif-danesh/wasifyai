@@ -9,6 +9,7 @@ concurrency:
 jobs:
   python:
     runs-on: ubuntu-latest
+    timeout-minutes: 40   # a normal run is about 8 minutes, with the checks before the tests
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -35,7 +36,9 @@ jobs:
         run: cd services/api && uv run alembic upgrade head
       # Integration tests for Postgres/pgvector and the Redis media pipeline (with a stub worker)
       # run here; the storage, LiteLLM and ComfyUI ones skip themselves.
-      - run: uv run pytest -v
+      # a normal run takes about 4 minutes; the cap sends Ctrl+C, so a test that hangs is named in the log
+      # (with where it was stuck) instead of the job running for hours
+      - run: timeout -s INT -k 60 25m uv run pytest -v
   web:
     runs-on: ubuntu-latest
     steps:

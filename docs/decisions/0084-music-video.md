@@ -3,7 +3,7 @@
 - **Status:** Proposed (2026-10-20); **the owner answered the nine questions and the four follow-ups on 2026-10-20** and the answers
   are recorded in "Owner's answers" below (the goal is **a fast, honest draft**; research on Maestro and AutoMV is allowed in the spike
   and runs on the Mac only; the lip sync mark is removed everywhere, to be reviewed before release; a revenue-threshold licence such as
-  LTX-2.x's may be a default; hosted is a later idea; the feature is Video › Music video behind Labs). **No question is open.** Nothing
+  LTX-2.x's may be a default; hosted is a later idea; the feature is Video › Music video, labelled experimental; no Labs switch, owner 2026-10-21). **No question is open.** Nothing
   is built or started. **The roadmap's hold (2026-10-19) on spikes and new features stays:** stage MV0 does not start until bug fixing and the
   simple model picker are done, and **it runs after the WanGP spike W0 (ADR-0085, owner, 2026-10-20)**, which may leave the LTX-2.5 files for MV0 to reuse.
 - **Date:** 2026-10-20 (updated the same day, twice, with the owner's answers)
@@ -180,7 +180,7 @@ only as our own design and our own code.
 | `library.delete` (existing) | | `destroy` | | | works on the new kind via `LibraryKind` |
 
 Surfaces: `assistant` and `mcp` for plan/make/redo, so Claude Code or the agent can say "make a music video of this song"; `destroy`
-and `needs_consent` always ask a person. UI pointer: **Video › Music video** (new menu item, behind the Labs switch while experimental).
+and `needs_consent` always ask a person. UI pointer: **Video › Music video** (new menu item, labelled experimental; no Labs switch).
 
 ### The screen and flow for a non-technical person (plain words; shared `packages/ui` screen, tokens from `design/DESIGN.md` only)
 
@@ -344,7 +344,7 @@ web would need the cloud GPU host, B5); non-English interface text; editing vide
 | 5 | A visible "AI-generated" mark on the whole video? | **No mark needed**; the consent and safeguards for faces and voices that already apply to lip sync stay. Follow-up (same day): **the lip sync mark is removed everywhere**, to be reviewed before release | Consent section; MV3; backlog D13 |
 | 6 | A download of 47 GB or more for the spike? | **Fine**, because it can be deleted afterwards; the spike deletes its downloads and environments at the end and reports the disk used | MV0 |
 | 7 | Does the hold stay? | **Yes**: until the bug-fixing stage and the model picker are done | Status; roadmap; MV0 |
-| 8 | Menu name and place | **Video › Music video**, behind Labs | Actions; screen section |
+| 8 | Menu name and place | **Video › Music video**, labelled experimental | Actions; screen section |
 | 9 | May the spike install beat/section libraries? | **Yes, anything it needs**, with free disk; check the licence of anything that could be shipped; installs in a throwaway environment outside the repo | Decision 6; MV0 |
 
 ## Follow-up answers (owner, 2026-10-20)

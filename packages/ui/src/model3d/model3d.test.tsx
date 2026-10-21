@@ -9,7 +9,6 @@ import type {
 } from "@wasifyai/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Model3d } from "./Model3d";
-import { MODEL3D_KEY, readModel3d, writeModel3d } from "./labs";
 
 vi.mock("./viewer-loader", () => ({ loadViewer: () => Promise.resolve() }));
 
@@ -704,16 +703,5 @@ describe("from words", () => {
     await waitFor(() =>
       expect(screen.getAllByRole("button", { name: "Use this picture" })).toHaveLength(2),
     );
-  });
-});
-
-describe("the Labs switch", () => {
-  it("is off until the person turns it on, and remembers", () => {
-    expect(readModel3d()).toBe(false);
-    writeModel3d(true);
-    expect(localStorage.getItem(MODEL3D_KEY)).toBe("1");
-    expect(readModel3d()).toBe(true);
-    writeModel3d(false);
-    expect(readModel3d()).toBe(false);
   });
 });

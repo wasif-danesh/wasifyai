@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import {
-  Button,
-  SearchSettings,
-  useChatNext,
-  useModel3dLabs,
-  useVideoBuilderLabs,
-} from "@wasifyai/ui";
+import { Button, SearchSettings } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
 import { assistantApi, discoveryApi, hubApi } from "../api";
 import { engineRepair, engineRestart } from "../engine";
@@ -130,38 +124,6 @@ function HubSwitch() {
   );
 }
 
-/** Features still being tried (ADR-0082): off until the person turns them on, remembered on this computer. */
-function Labs() {
-  const [chatNext, setChatNext] = useChatNext();
-  const [videoBuilder, setVideoBuilder] = useVideoBuilderLabs();
-  const [model3d, setModel3d] = useModel3dLabs();
-  return (
-    <section className="grid gap-3" aria-label="Labs">
-      <h2 className="font-semibold text-lg">Labs</h2>
-      <p className="text-muted-foreground text-sm">
-        Things that are still being built. They may be missing a feature the usual screen has, and
-        they can change. Turning one off brings the usual screen back; nothing is lost.
-      </p>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={chatNext} onChange={(e) => setChatNext(e.target.checked)} />
-        Try the new chat (code, maths and diagrams in answers)
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={videoBuilder}
-          onChange={(e) => setVideoBuilder(e.target.checked)}
-        />
-        Try Video Builder (write a title card as a video; adds Video › Video Builder to the menu)
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={model3d} onChange={(e) => setModel3d(e.target.checked)} />
-        Try 3D models (make a 3D model from a picture; adds Images › 3D model to the menu)
-      </label>
-    </section>
-  );
-}
-
 export function SettingsPage() {
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-8 px-8 pt-16 pb-12">
@@ -182,8 +144,6 @@ export function SettingsPage() {
       <HubSwitch />
 
       <SearchSettings assistant={assistantApi} />
-
-      <Labs />
 
       <section className="grid gap-3" aria-label="Updates">
         <h2 className="font-semibold text-lg">Updates</h2>

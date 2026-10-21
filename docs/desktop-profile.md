@@ -704,10 +704,10 @@ each needs its licence and a measurement first), a smaller text encoder (the 8-b
 download by a third; its effect on the picture is not measured), sound for clips, clips longer than 5 seconds, and checking the
 finished clip (the known gap of images too).
 
-## Video Builder (ADR-0077, stages V1a to V1c and MG1; experimental, behind Labs)
+## Video Builder (ADR-0077, stages V1a to V1c and MG1; experimental)
 
-Videos written as an HTML page and drawn frame by frame on this computer, in a locked box. A person switches it on in
-**Settings › Labs**, which adds **Video › Video Builder**. Details and measurements: `docs/spikes/video-builder-v1.md`.
+Videos written as an HTML page and drawn frame by frame on this computer, in a locked box. It is always in the
+menu, as **Video › Video Builder**; the screen says it is experimental. Details and measurements: `docs/spikes/video-builder-v1.md`.
 
 | Piece | What |
 |---|---|
@@ -726,10 +726,10 @@ Measured with MG1: each template 7 to 10 s at 720p, tree peak 2.2 to 2.3 GB. Len
 Not built: the moderation of the words when safeguards are on (ADR-0079 decision 9), a card for projects in a web `/creations` page
 (the feature is desktop only), the quarantine check inside the packaged app, the chat path (needs A2), a looping preview clip.
 
-## 3D models (ADR-0080, stages TD1 and TD2; experimental, behind Labs)
+## 3D models (ADR-0080, stages TD1 and TD2; experimental)
 
-A 3D model made from a picture, or from words through a picture, on this computer. A person switches it on in **Settings › Labs**,
-which adds **Images › 3D model**. Details and measurements: `docs/spikes/pixal3d-td1.md`.
+A 3D model made from a picture, or from words through a picture, on this computer. It is always in the
+menu, as **Images › 3D model**; the screen says it is experimental. Details and measurements: `docs/spikes/pixal3d-td1.md`.
 
 | Piece | What |
 |---|---|

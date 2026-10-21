@@ -62,18 +62,17 @@ function home(props: Partial<React.ComponentProps<typeof AssistantHome>> = {}) {
   );
 }
 
-// The new chat is a separate chunk (AssistantHome loads it lazily). Loading assistant-ui took longer than the default wait on a slow
-// Windows runner, so the first "next" test found an empty page. Load it once here, with room to do so.
+// The chat is a separate chunk (AssistantHome loads it lazily). Loading assistant-ui took longer than the default wait on a slow
+// Windows runner, so the first test found an empty page. Load it once here, with room to do so.
 beforeAll(async () => {
-  await import("../ChatScreenNext");
+  await import("../ChatScreen");
 }, 60_000);
 
 afterEach(() => vi.restoreAllMocks());
 
-describe.each(["classic", "next"] as const)("the home screen (%s chat)", (screenName) => {
+describe("the home screen", () => {
   it("shows the Mic when a speech model is ready", async () => {
     home({
-      screen: screenName,
       voice: voiceThat(
         () => [model()],
         () => runtime(true),
@@ -83,14 +82,13 @@ describe.each(["classic", "next"] as const)("the home screen (%s chat)", (screen
   });
 
   it("has no Mic without a speech client, or where there is no speech-to-text model", async () => {
-    home({ screen: screenName });
+    home();
     await screen.findByRole("heading", { level: 1 });
     expect(screen.queryByRole("button", { name: /^Mic/ })).toBeNull();
   });
 
   it("has no Mic on the web when the service offers no transcription", async () => {
     home({
-      screen: screenName,
       voice: voiceThat(
         () => [],
         () => HOSTED_RUNTIME,
@@ -106,7 +104,7 @@ describe.each(["classic", "next"] as const)("the home screen (%s chat)", (screen
       () => [model({ state: "can_install", bytes_missing: 9e8 })],
       () => runtime(false),
     );
-    home({ screen: screenName, voice });
+    home({ voice });
     await screen.findByRole("heading", { level: 1 });
     await waitFor(() => expect(voice.models).toHaveBeenCalled());
     expect(screen.queryByRole("button", { name: /^Mic/ })).toBeNull();
@@ -128,7 +126,7 @@ describe.each(["classic", "next"] as const)("the home screen (%s chat)", (screen
       have = true;
     });
     const user = userEvent.setup();
-    home({ screen: screenName, voice, getSpeechModel });
+    home({ voice, getSpeechModel });
     await user.click(await screen.findByRole("button", { name: /^Mic/ }));
     const card = await screen.findByRole("region", { name: "Set up dictation" });
     expect(card).toHaveTextContent("Parakeet TDT 0.6B v3");

@@ -38,15 +38,10 @@ export function resolveItem(
   opts: {
     conversationId: string | null;
     notebook: string | null;
-    videoBuilder?: boolean;
-    model3d?: boolean;
   },
 ): ItemResolver {
-  const { conversationId, notebook, videoBuilder = false, model3d = false } = opts;
+  const { conversationId, notebook } = opts;
   return (id): ItemView | undefined => {
-    // experimental: the menu item exists only while the Labs switch is on
-    if (id === "video.builder" && !videoBuilder) return { hidden: true };
-    if (id === "images.model3d" && !model3d) return { hidden: true };
     if (id === "chat") {
       return {
         current: route === "home" && !conversationId,

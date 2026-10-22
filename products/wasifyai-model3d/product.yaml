@@ -2,5 +2,12 @@ id: wasifyai-model3d
 # Make a 3D model from a picture, or from words through a picture (ADR-0080). The 3D engine, its
 # models and the picture check run on this computer and belong to the engine; this product keeps the
 # models, their files and their search entries, and asks the engine to make them. It has no
-# language-model capability of its own: the words become a picture in the image product.
-capabilities: {}
+# language-model capability of its own except the picture check (P6): the words become a picture in
+# the image product.
+capabilities:
+  text.moderate_image: { provider: litellm, model: multimodal, inputs: [text, image] }
+# Daily limits per person, counted from the usage events and applied only while the safeguards are on (ADR-0047).
+# A model takes about ten minutes of a GPU; a picture's cut-out takes about one.
+quotas:
+  models_per_user_per_day: 5
+  pictures_per_user_per_day: 20

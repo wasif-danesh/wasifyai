@@ -5,7 +5,8 @@ import asyncio
 import logging
 from typing import Any
 
-from wasifyai_platform_sdk import EngineQueue, EngineWorkerInfo
+from wasifyai_platform_sdk import EngineOutcome, EngineQueue, EngineWorkerInfo, RunContext
+from wasifyai_platform_sdk.usage import UsageEvent, record_safely
 
 log = logging.getLogger("wasifyai_api.engine_workers")
 
@@ -51,3 +52,19 @@ class WorkerDirectory:
         found = [w.components[name] for w in self.workers if name in w.components]
         ready = [c for c in found if c.get("ready")]
         return (ready or found or [None])[0]
+
+
+ENGINE_SECONDS = "engine.seconds"  # the usage event for the time a worker spent on a job
+
+
+async def record_engine_seconds(
+    usage: Any, ctx: RunContext, kind: str, outcome: EngineOutcome
+) -> None:
+    """Note what a job cost the worker, whatever the outcome: the time was spent (P6). It never
+    fails the request."""
+    if usage is None or outcome.seconds <= 0:
+        return
+    event = UsageEvent.for_context(
+        ctx, ENGINE_SECONDS, round(outcome.seconds, 2), "seconds", job=kind, worker=outcome.worker
+    )
+    await record_safely(usage, event)

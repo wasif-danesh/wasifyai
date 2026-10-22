@@ -14,8 +14,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from wasifyai_platform_sdk import Identity, RouteDeps, RunError, search_text
+from wasifyai_platform_sdk import Identity, RouteDeps, RouteGuard, RunError, search_text
 
+from wasifyai_video import guardrail
 from wasifyai_video.builder import check, draft, projects, templates
 from wasifyai_video.builder.store import BuilderStore, NotFound
 from wasifyai_video.index import index_text
@@ -53,17 +54,31 @@ def engine_for(state: Any) -> Any:
     return engine
 
 
-async def words_allowed(state: Any) -> None:
-    """Typed words are not moderated yet (ADR-0079 decision 9), and Video Builder is a desktop
-    feature, where the safeguards are off (ADR-0047). Where they are on, it refuses instead of
-    letting unchecked words through."""
-    guard = getattr(state, "safeguards", None)
-    if guard is not None and await guard.enabled():
-        raise Refused(
-            "safeguards_on",
-            "Video Builder cannot check typed words for safety yet, so it is off while the "
-            "safeguards are on.",
-        )
+async def check_words(deps: RouteDeps, identity: Identity, *texts: str, kind: str) -> None:
+    """The words a video will show (or that a draft is asked to make) go to the text moderator,
+    only while the safeguards are on (ADR-0047, P6). It fails closed: with no answer nothing is
+    drawn. Raises `Refused` with the sentence the person is shown."""
+    guard = RouteGuard(deps.state, PRODUCT_ID)
+    if not await guard.on():
+        return
+    text = "\n\n".join(t.strip() for t in texts if t and t.strip())
+    if not text:
+        return
+    unavailable = Refused(
+        "moderation_unavailable", "We couldn't check your words right now. Please try again."
+    )
+    if guard.caps is None:
+        raise unavailable
+    try:
+        with deps.acting_as(identity, PRODUCT_ID):
+            verdict = await guardrail.judge_text(guard.caps, kind, text)
+    except RunError as e:
+        raise Refused(e.code, e.message) from None
+    except Exception:  # no moderator bound, or the gateway is down: nothing is let through
+        log.exception("the Video Builder words check failed")
+        raise unavailable from None
+    if not verdict.allowed:
+        raise Refused(verdict.category, guardrail.refusal_message(verdict.category))
 
 
 async def make_draft(
@@ -75,7 +90,7 @@ async def make_draft(
 ) -> dict[str, Any]:
     """The template and fields a description means (`draft.draft`), asked of the chosen chat
     model; nothing is saved. Raises `Refused` with the sentence the person is shown."""
-    await words_allowed(deps.state)
+    await check_words(deps, identity, prompt, kind="video description")
     try:
         with deps.acting_as(identity, "wasifyai-video"):
             return await draft.draft(engine_for(deps.state), prompt, attachment, shape)
@@ -126,6 +141,7 @@ def manager_for(deps: RouteDeps) -> "RenderManager":
 
 
 STOPPED = "It was stopped before it finished. Make it again."
+EV_RENDER = "builder.render"  # the usage event that the daily limit counts (ADR-0047)
 
 
 class RenderManager:
@@ -174,6 +190,13 @@ class RenderManager:
                 "bad_format",
                 f"{template.title} can be made as {', '.join(template.formats)}, not {fmt}.",
             )
+        guard = RouteGuard(state, PRODUCT_ID)
+        if refusal := await guard.over_quota(
+            identity, EV_RENDER, "renders_per_user_per_day", "videos"
+        ):
+            raise Refused(*refusal)
+        shown = [e.text for e in templates.expected(found["template"], found["slots"])]
+        await check_words(self._deps, identity, *shown, kind="text shown in a video")
         folder = self._write(identity, found, engine)
         row = store.add_render(
             identity.tenant_id, identity.user_id, cid,
@@ -315,6 +338,9 @@ class RenderManager:
                 rid, "done", video_id=video_id, elapsed_s=result.seconds,
                 peak_mb=result.peak_rss_bytes // 2**20, blocked=result.blocked_count,
             )  # fmt: skip
+            await RouteGuard(self._deps.state, PRODUCT_ID).record(
+                identity, EV_RENDER, 1, "videos", seconds=result.seconds, format=fmt
+            )
         except asyncio.CancelledError:
             if not getattr(engine, "closing", False):  # not just this service stopping
                 store.finish_render(rid, "cancelled", error="The video was cancelled.")

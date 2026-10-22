@@ -75,6 +75,20 @@ jobs:
         shell: bash
         run: cat "$RUNNER_TEMP/test-watchdog.txt" 2>/dev/null || echo "the watchdog did not stop anything"
 
+  parity:
+    # The release gate (ADR-0087, P8): every item of the desktop's side menu and every action's screen has a row for
+    # the web, and a row that is not live was accepted by someone. The packaged app waits for it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install
+      - run: pnpm --filter web exec vitest run lib/parity.test.ts lib/nav.test.ts
+      - name: The ledger is the release page
+        run: cat docs/web-parity-ledger.md >> "$GITHUB_STEP_SUMMARY"
+
   shell:
     strategy:
       fail-fast: false
@@ -188,6 +202,7 @@ jobs:
         run: cat "${{ runner.temp }}/wasifyai-data/logs/provision.log" || true
 
   package:
+    needs: parity
     # The packaged app: the engine bundle inside the app's resources, a first run on a machine with no
     # checkout (WASIFYAI_REPO points nowhere), the self-test, and the numbers it prints (SMOKE_METRICS:
     # time to ready with the install included, engine and shell memory). Unsigned: no signing in Phase 1.

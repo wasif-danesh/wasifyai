@@ -111,3 +111,27 @@ Edit speech, Dub, Audiobook, Split, 3D and Video Builder have none, and the web 
 - **Left:** the licence filter for a public service (a deployment setting that hides and refuses models that do not allow
   commercial use) waits for decision 2 of the plan; a worker does one job at a time, so a big download makes other work
   wait; the picker is not on the Image, Video, Chat and 3D screens on the web (their models are the deployment's).
+
+## Built (2026-10-22): P6 safeguards and usage, P8 the gate
+
+- **P6.** `RouteGuard` (`packages/platform-sdk/.../route_guard.py`) gives features that run from routes (3D, Video Builder) what a
+  graph gets from `Capabilities`: whether the safeguards are on, the day's usage events against the product's `quotas:`, and a
+  usage event for what was made. Nothing is checked while the safeguards are off (the desktop), but usage is recorded either way.
+  **3D:** an uploaded picture goes to the picture moderator (`text.moderate_image`, alias `multimodal`; categories include
+  `real_person_photo`, matching the rights statement already on the screen) before it is kept or cut out; it fails closed;
+  quotas `pictures_per_user_per_day: 20` and `models_per_user_per_day: 5`; events `model3d.picture` and `model3d.model`.
+  **Video Builder:** the old refusal while safeguards were on (ADR-0079 decision 9) is gone. The words a video would show
+  (`templates.expected`) go to the text moderator before a render starts, and a draft's description before the model sees it;
+  quota `renders_per_user_per_day: 10`; event `builder.render`. Saving a project's words is not moderated (they are only
+  drawn on a render, and the preview is shown to its author). **Workers:** every job's time is a usage event
+  `engine.seconds` (unit seconds, meta `job` and `worker`) from the three remote engines, whatever the outcome. Speech keeps
+  the voice graph's moderation, daily limits and consent screens (they are the product's, so the worker path does not change
+  them). A 3D title or prompt is not moderated (they are labels; the model is made from the checked picture).
+- **P8.** `PARITY` rows that are not `live` carry `accepted` (who, when, why); the gate is in `apps/web/lib/parity.test.ts`:
+  every non-live row is accepted, every action in `docs/contracts/actions.json` names a menu item with a row (or says why it has
+  none), and the generated table in `docs/web-parity-ledger.md` is what `parity.ts` says. The CI job `parity`
+  (`.github/workflows/desktop.yml`) runs it and writes the ledger to the run's summary; the packaged app waits for it. A browser
+  check (`apps/web/e2e/menu-walk.spec.ts`) opens each group of the side menu and visits every item: none may be missing or fail to
+  draw.
+- **Left:** per-deployment quota numbers are defaults in `product.yaml`; a GPU-seconds quota (the events are there to count);
+  the moderators' behaviour on a real gateway was not run here (the tests use a stand-in moderator).

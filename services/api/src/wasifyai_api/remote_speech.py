@@ -30,7 +30,7 @@ from wasifyai_platform_sdk import (
 )
 from wasifyai_platform_sdk.storage import object_key
 
-from wasifyai_api.engine_workers import WorkerDirectory
+from wasifyai_api.engine_workers import WorkerDirectory, record_engine_seconds
 
 log = logging.getLogger("wasifyai_api.remote_speech")
 
@@ -69,7 +69,9 @@ class RemoteSpeechEngine:
         catalogue: dict[str, VoiceModel],
         timeout_s: float = 3600,
         directory: WorkerDirectory | None = None,
+        usage: Any = None,
     ):
+        self._usage = usage
         self._queue = queue
         self._storage = storage  # the raw `Storage` (keys carry the tenant prefix)
         self._catalogue = catalogue
@@ -178,6 +180,7 @@ class RemoteSpeechEngine:
                 raise VoiceEngineError(
                     "engine_unavailable", "The speech worker took too long. Try again."
                 ) from None
+            await record_engine_seconds(self._usage, ctx, kind, outcome)
             if not outcome.ok:
                 err = outcome.error
                 raise VoiceEngineError(

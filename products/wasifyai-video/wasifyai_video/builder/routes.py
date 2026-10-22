@@ -28,7 +28,6 @@ from wasifyai_video.builder.runtime import (
     not_ready,
     root_for,
     store_for,
-    words_allowed,
 )
 from wasifyai_video.builder.store import NothingToUndo
 from wasifyai_video.videos import video_store
@@ -84,12 +83,6 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
 
     def refuse(e: Refused) -> HTTPException:
         return HTTPException(409, {"code": e.code, "message": e.message})
-
-    async def allowed() -> None:
-        try:
-            await words_allowed(deps.state)
-        except Refused as e:
-            raise refuse(e) from None
 
     def slots_or_422(template: str, raw: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -199,7 +192,6 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         body: ProjectIn, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
         guard()
-        await allowed()
         slots = slots_or_422(body.template, body.slots)
         found = await asyncio.to_thread(
             store_for(deps.state).add_composition,
@@ -219,7 +211,6 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         cid: str, body: ProjectPatch, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
         guard()
-        await allowed()
         current = composition(identity, cid)
         slots = slots_or_422(current["template"], {**current["slots"], **body.slots})
         found = await asyncio.to_thread(

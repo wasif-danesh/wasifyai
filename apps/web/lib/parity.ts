@@ -4,7 +4,16 @@
 //   live         the menu opens a page on the web
 //   soon         not built for the web yet: the menu shows "Soon" (the plan says what it needs)
 //   desktop-only hidden on purpose, with the reason
-export type Parity = { status: "live" | "soon" | "desktop-only"; note: string };
+//
+// A row that is not `live` must say who accepted that and when (`accepted`): the release gate (`parity.test.ts`, the
+// `parity` job of .github/workflows/desktop.yml) fails on a gap nobody has accepted, and the desktop's actions are held to
+// the same rows (`docs/contracts/actions.json`: an action's `ui` is a menu item that needs a row here).
+export type Parity = {
+  status: "live" | "soon" | "desktop-only";
+  note: string;
+  /** who accepted that this is not live on the web, and when; required unless `live` */
+  accepted?: string;
+};
 
 export const PARITY: Record<string, Parity> = {
   chat: { status: "live", note: "the shared chat" },
@@ -12,8 +21,14 @@ export const PARITY: Record<string, Parity> = {
   models: {
     status: "desktop-only",
     note: "the picker is on the voice, music and lip sync screens and an admin gets models onto a worker in Admin > Workers (P5); chat models are the admin's Models page; the nine-card Models page is the desktop's",
+    accepted:
+      "owner, 2026-10-21: an admin chooses a deployment's models; the person's own disk is the desktop's. The models.* actions need the desktop's model service, so the web assistant does not offer them",
   },
-  train: { status: "soon", note: "not built on either app" },
+  train: {
+    status: "soon",
+    note: "not built on either app",
+    accepted: "owner, 2026-10-21: training is not built on the desktop either (ADR-0073 onwards)",
+  },
 
   "notebook.create": { status: "live", note: "the shared notebooks, with the notebooks worker" },
   "notebook.list": { status: "live", note: "the shared notebooks" },

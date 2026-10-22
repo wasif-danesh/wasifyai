@@ -13,6 +13,7 @@ from wasifyai_engine_worker.handlers import run_job
 from wasifyai_platform_sdk import (
     EngineJob,
     EngineWorkerInfo,
+    InMemoryUsageRecorder,
     RunContext,
     memory_storage,
     model3d_wire,
@@ -224,3 +225,22 @@ async def test_a_stopping_service_does_not_tell_the_worker_to_stop(ctx, tmp_path
     with pytest.raises(asyncio.CancelledError):
         await task
     assert queue.cancelled_ids == []
+
+
+@pytest.mark.asyncio
+async def test_the_time_a_worker_spends_is_a_usage_event_of_the_person_even_when_it_fails(
+    ctx, tmp_path
+):
+    usage = InMemoryUsageRecorder()
+    storage, service = memory_storage(), Service()
+    queue = InlineQueue(storage, service)
+    engine = RemoteModel3dEngine(queue, storage, directory(worker()), usage=usage)  # type: ignore[arg-type]
+    pic = tmp_path / "p.png"
+    pic.write_bytes(b"PIC")
+    await engine.matte(pic, tmp_path)
+    service.fail = True
+    await engine.matte(pic, tmp_path)
+    events = usage.events
+    assert [e.kind for e in events] == ["engine.seconds", "engine.seconds"]
+    assert all(e.user_id == "u1" and e.product_id == "wasifyai-model3d" for e in events)
+    assert events[0].unit == "seconds" and events[0].meta["job"] == model3d_wire.MATTE

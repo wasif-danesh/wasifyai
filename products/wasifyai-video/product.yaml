@@ -9,6 +9,7 @@ capabilities:
   video.extend:        { provider: comfyui, workflow: ltx-video-2b-extend, defaults: { length: 121, steps: 30 } }
 quotas:
   videos_per_user_per_day: 5
+  renders_per_user_per_day: 10   # Video Builder videos: about a minute of a worker each
 uploads:
   image: { max_bytes: 10485760 }
 enhance:

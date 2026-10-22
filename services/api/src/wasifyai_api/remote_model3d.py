@@ -22,7 +22,7 @@ from wasifyai_platform_sdk import (
 )
 from wasifyai_platform_sdk.storage import object_key
 
-from wasifyai_api.engine_workers import WorkerDirectory
+from wasifyai_api.engine_workers import WorkerDirectory, record_engine_seconds
 
 log = logging.getLogger("wasifyai_api.remote_model3d")
 
@@ -50,7 +50,9 @@ class RemoteModel3dEngine:
         storage: Any,
         directory: WorkerDirectory,
         timeout_s: float = 3600,
+        usage: Any = None,
     ):
+        self._usage = usage
         self._queue = queue
         self._storage = storage  # the raw `Storage` (keys carry the tenant prefix)
         self._directory = directory
@@ -144,6 +146,7 @@ class RemoteModel3dEngine:
             except EngineUnavailable:
                 await asyncio.shield(self._queue.cancel(job_id))
                 raise _Failed("wall_time", "The 3D worker took too long. Try again.") from None
+            await record_engine_seconds(self._usage, ctx, kind, outcome)
             if not outcome.ok:
                 err = outcome.error
                 code = err.code if err else "failed"

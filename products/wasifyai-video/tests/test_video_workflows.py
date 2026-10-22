@@ -29,7 +29,7 @@ def test_the_product_config_loads_and_binds_every_mode():
     for name in ("text.moderate_image", "text.describe_image"):
         assert cfg.capabilities[name].model == "multimodal"
         assert cfg.capabilities[name].inputs == ["text", "image"]
-    assert cfg.quotas == {"videos_per_user_per_day": 5}
+    assert cfg.quotas == {"videos_per_user_per_day": 5, "renders_per_user_per_day": 10}
     assert cfg.uploads["image"].max_bytes == 10 * 1024 * 1024
     assert (
         cfg.enhance["image_to_video"].needs_picture

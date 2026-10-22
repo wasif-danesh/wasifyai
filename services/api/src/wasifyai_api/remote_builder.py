@@ -34,7 +34,7 @@ from wasifyai_platform_sdk.usage import (
     record_safely,
 )
 
-from wasifyai_api.engine_workers import WorkerDirectory
+from wasifyai_api.engine_workers import WorkerDirectory, record_engine_seconds
 
 log = logging.getLogger("wasifyai_api.remote_builder")
 
@@ -177,6 +177,7 @@ class RemoteBuilderEngine:
             except EngineUnavailable:
                 await asyncio.shield(self._queue.cancel(job_id))
                 raise _Failed("wall_time", "The video worker took too long. Try again.") from None
+            await record_engine_seconds(self._usage, ctx, kind, outcome)
             if not outcome.ok:
                 err = outcome.error
                 raise _Failed(

@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from video_rig import mp4, png
 from wasifyai_platform_sdk import (
     Identity,
+    InMemoryUsageRecorder,
     RouteDeps,
     RunError,
     ScopedStorage,
@@ -664,18 +665,90 @@ def test_a_description_the_model_cannot_answer_for_is_a_plain_422(rig):
     assert r.status_code == 409 and r.json()["detail"]["code"] == "bad_answer"
 
 
-def test_while_the_safeguards_are_on_typed_words_are_not_taken_at_all(rig):
-    class On:
-        async def enabled(self) -> bool:
-            return True
+class Safeguards:
+    """The safeguards switched on, with a moderator that says what it is told to and the usage the
+    product recorded: the pieces `RouteGuard` reads from the app's state (P6)."""
 
-    rig.app_state.safeguards = On()
+    def __init__(self, state, *, allow=True, quota=None, used=0):
+        self.verdicts: list[str] = []
+        self.allow, self.used = allow, used
+        outer = self
+
+        class On:
+            async def enabled(self) -> bool:
+                return True
+
+        class Text:
+            async def complete(self, name, system, user, schema=None):
+                outer.verdicts.append(str(user))
+                if outer.allow:
+                    return '{"allowed": true, "category": "ok", "reason": ""}'
+                return '{"allowed": false, "category": "hate", "reason": "x"}'
+
+        state.safeguards = On()
+        state.caps = {
+            "wasifyai-video": SimpleNamespace(
+                text=Text(), db=object(), config=SimpleNamespace(quotas=quota or {})
+            )
+        }
+        state.usage = InMemoryUsageRecorder()
+
+    def counted(self, monkeypatch) -> None:
+        async def used(db, tenant, product, user, kind, since):
+            return self.used
+
+        monkeypatch.setattr("wasifyai_platform_sdk.route_guard.sum_usage", used)
+
+
+def test_while_the_safeguards_are_on_the_words_of_a_video_are_checked_before_it_is_drawn(rig):
+    on = Safeguards(rig.app_state, allow=False)
+    made = create(rig)
+    r = rig.post(f"{BASE}/projects/{made['id']}/render")
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "hate"
+    assert "hatred" in r.json()["detail"]["message"]
+    assert rig.app_state.video_builder.rendered == []  # nothing was drawn
+    assert "Launch day" in on.verdicts[0]  # the moderator read the words on the screen
+
+
+def test_a_description_is_checked_before_the_model_sees_it(rig):
+    Safeguards(rig.app_state, allow=False)
     rig.app_state.video_builder.answer = said("title", title="Hi")
-    made = rig.post(f"{BASE}/projects", json={"template": "title", "slots": {"title": "Hi"}})
-    for r in (made, rig.post(f"{BASE}/draft", json={"prompt": "a title"})):
-        assert r.status_code == 409 and r.json()["detail"]["code"] == "safeguards_on"
-    assert rig.app_state.video_builder.asked == []  # the model never saw the words
-    rig.app_state.safeguards = None
+    r = rig.post(f"{BASE}/draft", json={"prompt": "a title"})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "hate"
+    assert rig.app_state.video_builder.asked == []
+
+
+def test_with_no_moderator_nothing_is_drawn(rig):
+    Safeguards(rig.app_state)
+    rig.app_state.caps = {}  # the product has no capabilities built
+    made = create(rig)
+    r = rig.post(f"{BASE}/projects/{made['id']}/render")
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "moderation_unavailable"
+
+
+def test_a_video_that_passes_is_drawn_and_counted_and_the_daily_limit_stops_the_next(
+    rig, monkeypatch
+):
+    on = Safeguards(rig.app_state, quota={"renders_per_user_per_day": 2})
+    on.counted(monkeypatch)
+    made = create(rig)
+    first = rig.post(f"{BASE}/projects/{made['id']}/render")
+    assert first.status_code == 202, first.text
+    assert wait_for(rig, first.json()["id"])["status"] == "done"
+    events = rig.app_state.usage.events
+    assert [(e.kind, e.quantity, e.unit) for e in events] == [("builder.render", 1, "videos")]
+    assert events[0].product_id == "wasifyai-video" and events[0].user_id == "u1"
+    on.used = 2  # the day's usage as the database would count it
+    again = rig.post(f"{BASE}/projects/{made['id']}/render")
+    assert again.status_code == 409 and again.json()["detail"]["code"] == "quota_exceeded"
+    assert "limit of 2 videos" in again.json()["detail"]["message"]
+
+
+def test_the_desktop_with_safeguards_off_checks_nothing_but_still_counts(rig):
+    made = create(rig)
+    r = rig.post(f"{BASE}/projects/{made['id']}/render")
+    assert r.status_code == 202
+    assert wait_for(rig, r.json()["id"])["status"] == "done"
 
 
 def test_where_there_is_no_component_the_routes_are_not_there(tmp_path):
@@ -905,13 +978,10 @@ async def test_the_library_lists_renames_and_deletes_compositions(arig):
     assert (await arig.go("library.get", gone)).status == "refused"
 
 
-async def test_while_the_safeguards_are_on_the_actions_write_nothing(arig):
-    class On:
-        async def enabled(self) -> bool:
-            return True
-
-    arig.state.safeguards = On()
+async def test_while_the_safeguards_are_on_the_assistant_cannot_draw_what_is_not_allowed(arig):
+    Safeguards(arig.state, allow=False)
     made = await arig.go("video_builder.create", {"template": "title", "fields": {"title": "Hi"}})
-    assert made.status == "refused" and "safeguards are on" in made.text
+    assert made.status == "ok"  # words are only stored
     r = await arig.go("motion.make", {"template": "title", "fields": {"title": "Hi"}})
-    assert r.status == "refused" and arig.state.video_builder.rendered == []
+    assert r.status != "ok" and "hatred" in r.text  # the moderator's refusal, in fixed words
+    assert arig.state.video_builder.rendered == []

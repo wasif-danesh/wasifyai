@@ -57,9 +57,9 @@ Each stage ships on its own and ends with its rows in `apps/web/lib/parity.ts` t
 | **P3 3D models** (built 2026-10-21) | Postgres store and files in storage for `wasifyai-model3d`; the Pixal3D component as a job kind | M | 3D on the web |
 | **P4 Video Builder** (built 2026-10-21) | Postgres store for projects and drafts; the sandboxed render as a job kind (browser sandbox plus a container boundary on a shared host) | L | Video Builder on the web |
 | **P5 The picker on the web** (built 2026-10-22) | `ModelSelect` on the web: the deployment's listed models and the person's choice; admin actions for adding a model to a worker; licence filter | M | "Select … model" on every web screen; the Models page for admins |
-| **P6 Safeguards and usage** | usage events and quotas for every new kind (backlog B1); moderation of text and uploads; consent screens kept; the voice-cloning policy of 2026-10-18 | M | a public deployment can turn safeguards on without gaps |
+| **P6 Safeguards and usage** (built 2026-10-22) | usage events and quotas for every new kind (backlog B1); moderation of text and uploads; consent screens kept; the voice-cloning policy of 2026-10-18 | M | a public deployment can turn safeguards on without gaps |
 | **P7 GPU host** | audio.cpp Linux CUDA lock (open since V1); the worker image for CUDA; Helm `engineWorker` with a GPU node selector; runbook; CI builds the image | L | staging runs the same screens as the Mac worker |
-| **P8 The gate** | CI fails when a desktop menu item or action has no "live" web row without an accepted reason; the desktop checklist runs on the web in Playwright for the shared screens; the ledger is the release page | S | releases are blocked on parity |
+| **P8 The gate** (built 2026-10-22) | CI fails when a desktop menu item or action has no "live" web row without an accepted reason; the desktop checklist runs on the web in Playwright for the shared screens; the ledger is the release page | S | releases are blocked on parity |
 
 P0 and P1 give the owner everything in the web menu on the Mac within the plan's first two stages; P7 is what a public launch needs.
 
@@ -125,3 +125,11 @@ size shown, progress followed, files checked by the worker) or set up the lip sy
 screens have the desktop's "Select ... model" button and panel, and a person who is not an admin sees a missing model as "ask an
 admin". Left of the plan: the licence filter for a public service (decision 2), P6 (usage, quotas, moderation), P7 (a cloud GPU) and
 P8 (the gate).
+
+## Status 2026-10-22 (later): P6 and P8 built
+
+P6: 3D pictures are moderated and counted, Video Builder's words are moderated before a render (it no longer refuses outright while
+safeguards are on), both have daily limits and usage events, and every worker job records its seconds (`engine.seconds`). P8: a
+non-live menu row needs an accepted reason, the desktop's actions are held to the same rows, the ledger is generated from
+`parity.ts` and shown on each run, and a browser walk visits every menu item. Left of the plan: P7 (a cloud GPU; serverless for
+staging and live, decisions pending) and the licence filter.

@@ -504,7 +504,7 @@ def create_app(
                     }
                     remote = RemoteSpeechEngine(
                         EngineQueue(conn), store.backing, voice_models,
-                        directory=app.state.engine_workers,
+                        directory=app.state.engine_workers, usage=recorder,
                     )  # fmt: skip
                     app.state.audio = CombinedSpeechEngine(remote, hosted)
                 else:
@@ -566,7 +566,7 @@ def create_app(
                 )
                 app.state.model3d_blobs = StorageBlobs(store)
                 app.state.model3d = RemoteModel3dEngine(
-                    EngineQueue(conn), store.backing, app.state.engine_workers
+                    EngineQueue(conn), store.backing, app.state.engine_workers, usage=recorder
                 )
                 await sweep_model3d(app.state)
                 await resume_model3d(route_deps)

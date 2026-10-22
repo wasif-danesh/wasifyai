@@ -73,6 +73,7 @@ from wasifyai_platform_sdk.parts import (
 )
 from wasifyai_platform_sdk.providers import ProviderDeps, build_capabilities, register_provider
 from wasifyai_platform_sdk.registry import CheckResult, GraphRegistry, ModelCheck
+from wasifyai_platform_sdk.route_guard import RouteGuard
 from wasifyai_platform_sdk.routes import RouteDeps, RouteFactory, parse_ids
 from wasifyai_platform_sdk.runstore import InMemoryRunStore, RedisRunStore, RunRecord, RunStore
 from wasifyai_platform_sdk.saving import SaveRefused, SaveTo, copy_to_path, write_to_path
@@ -193,6 +194,7 @@ __all__ = [
     "ModelCheck",
     "Identity",
     "RouteDeps",
+    "RouteGuard",
     "SaveRefused",
     "SaveTo",
     "copy_to_path",

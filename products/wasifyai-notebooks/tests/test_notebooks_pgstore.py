@@ -97,3 +97,36 @@ def test_a_passage_and_its_vector_go_together_and_a_search_stays_in_its_notebook
     store.delete_notebook("t", "u", one["id"])
     with store.connect() as db:
         assert db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0] == 1
+
+
+def test_the_vector_extension_goes_in_public_where_the_migrations_look_for_it():
+    """The API can start before the migrations (a fresh cluster): the store's search path begins
+    with its own schema, and an extension made there made the migrations fail with `type "vector"
+    does not exist`. A database of its own, so the test sees the extension being created."""
+    import uuid
+
+    import psycopg
+    from psycopg import sql
+    from psycopg.conninfo import make_conninfo
+
+    base = pg_dsn()
+    name = f"vec_{uuid.uuid4().hex[:10]}"
+    with psycopg.connect(base, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
+    try:
+        dsn = make_conninfo(base, dbname=name)
+        store = PostgresNotebookStore(dsn, dimension=4, embedder_id="e", schema="nbt_vec")
+        store.close()
+        with psycopg.connect(dsn) as conn:
+            where = conn.execute(
+                "SELECT n.nspname FROM pg_extension e "
+                "JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'vector'"
+            ).fetchone()
+            # and a migration's `vector(768)` resolves on a connection that knows only `public`
+            conn.execute("CREATE TABLE t (embedding vector(768))")
+        assert where == ("public",)
+    finally:
+        with psycopg.connect(base, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name))
+            )

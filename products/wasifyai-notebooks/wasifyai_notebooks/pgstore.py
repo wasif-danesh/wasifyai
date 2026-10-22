@@ -172,7 +172,10 @@ class PostgresNotebookStore(NotebookStore):
             conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{self.schema}"')  # pyright: ignore[reportArgumentType, reportCallIssue]
             have = conn.execute("SELECT 1 FROM pg_extension WHERE extname = 'vector'").fetchone()
             if have is None:
-                conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                # in `public`, where the migrations look for it: this connection's search path
+                # starts with the product's own schema, and an extension made there is invisible
+                # to them
+                conn.execute("CREATE EXTENSION IF NOT EXISTS vector SCHEMA public")
             fresh = (
                 conn.execute(
                     "SELECT 1 FROM information_schema.tables "

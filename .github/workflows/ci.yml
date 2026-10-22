@@ -44,18 +44,43 @@ jobs:
       # Every run since the Video Builder commit (f7e3da8) has hung here with no log: the runner stops answering and
       # neither a step nor a job limit fires. scripts/ci/guard.sh watches the memory, writes a snapshot every 30 s and, when
       # it runs low, stops the tests (with every thread's stack) so the log survives; both files are uploaded below.
-      - name: Tests
-        timeout-minutes: 15
+      # The tests run in four steps, each with a time limit of its own: the runner has stopped answering in the middle of
+      # this step on every run since 21 October (nothing reproduces it: the same command passes in 3 minutes in a Linux
+      # container with 7 GB and 2 CPUs, with the same Postgres and Redis). A step that has finished keeps its log, so
+      # the step that never ends says where the runner went.
+      - name: Tests, packages and products
+        timeout-minutes: 10
         shell: bash
         env:
           GUARD_LOG: ${{ runner.temp }}/resources.txt
-        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=300 2>&1 | tee "$RUNNER_TEMP/pytest.log"
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=300 packages products 2>&1 | tee "$RUNNER_TEMP/pytest-1.log"
+      - name: Tests, the API
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=300 services/api/tests --ignore=services/api/tests/integration 2>&1 | tee "$RUNNER_TEMP/pytest-2.log"
+      - name: Tests, with Postgres and Redis
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=300 services/api/tests/integration 2>&1 | tee "$RUNNER_TEMP/pytest-3.log"
+      - name: Tests, the workers
+        if: ${{ !cancelled() }}
+        timeout-minutes: 10
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=300 services/media-worker services/engine-worker 2>&1 | tee "$RUNNER_TEMP/pytest-4.log"
       - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: python-test-log
           path: |
-            ${{ runner.temp }}/pytest.log
+            ${{ runner.temp }}/pytest-*.log
             ${{ runner.temp }}/resources.txt
             ${{ runner.temp }}/test-watchdog.txt
           if-no-files-found: ignore

@@ -67,12 +67,12 @@ def test_a_picture_is_read_brought_to_a_size_the_engine_takes_and_stripped_of_it
 
 @pytest.mark.parametrize(
     ("data", "words"),
-    [
-        (b"", "empty"),
-        (b"not a picture at all", "could not be read"),
-        (blob(Image.new("RGB", (60, 60), "white")), "too small"),
-        (b"x" * (pictures.MAX_BYTES + 1), "under 20 MB"),
-        (blob(Image.new("P", (300, 300)), "GIF"), "PNG, JPEG or WebP"),
+    [  # explicit ids: a parameter is part of the test's name, and the 20 MB one was printed whole
+        pytest.param(b"", "empty", id="empty"),
+        pytest.param(b"not a picture at all", "could not be read", id="not-a-picture"),
+        pytest.param(blob(Image.new("RGB", (60, 60), "white")), "too small", id="too-small"),
+        pytest.param(b"x" * (pictures.MAX_BYTES + 1), "under 20 MB", id="too-big"),
+        pytest.param(blob(Image.new("P", (300, 300)), "GIF"), "PNG, JPEG or WebP", id="gif"),
     ],
 )
 def test_a_file_that_cannot_be_used_is_refused_in_words(data, words):

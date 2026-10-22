@@ -22,3 +22,17 @@ def save_copy(folder: Path, stem: str, source: Path, ext: str = "glb") -> Path:
         except FileExistsError:
             n += 1
             path = folder / f"{stem}-{n}.{ext}"
+
+
+def save_bytes(folder: Path, stem: str, data: bytes, ext: str = "glb") -> Path:
+    """The same as `save_copy`, for a file that is in memory."""
+    folder.mkdir(parents=True, exist_ok=True)
+    path, n = folder / f"{stem}.{ext}", 1
+    while True:
+        try:
+            with path.open("xb") as out:  # exclusive: never replaces
+                out.write(data)
+            return path
+        except FileExistsError:
+            n += 1
+            path = folder / f"{stem}-{n}.{ext}"

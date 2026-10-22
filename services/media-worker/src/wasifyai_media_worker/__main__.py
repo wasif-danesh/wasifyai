@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import os
 import signal
+from pathlib import Path
 
 import httpx
 from redis.asyncio import Redis
@@ -23,7 +25,23 @@ from wasifyai_media_worker.gpu import RedisGpuLock
 from wasifyai_media_worker.metrics import WORKER_UP, serve, watch_queue
 from wasifyai_media_worker.processor import ComfyRunner, JobProcessor, StubRunner
 from wasifyai_media_worker.settings import WorkerSettings
+from wasifyai_media_worker.sidecar import ComfySidecar, SidecarConfig, SidecarRunner
 from wasifyai_media_worker.state import RedisJobState
+
+
+def build_sidecar(s: WorkerSettings) -> ComfySidecar:
+    """The desktop app's ComfyUI, run by this worker (`COMFYUI_MODE=sidecar`)."""
+    if not s.desktop_data_dir:
+        raise SystemExit(
+            "COMFYUI_MODE=sidecar needs DESKTOP_DATA_DIR (the desktop app's data folder)"
+        )
+    data = Path(s.desktop_data_dir).expanduser()
+    models = Path(s.desktop_models_dir).expanduser() if s.desktop_models_dir else data / "models"
+    extra = tuple(
+        Path(p).expanduser() for p in s.desktop_extra_model_dirs.split(os.pathsep) if p.strip()
+    )
+    return ComfySidecar(SidecarConfig(data, models, extra))
+
 
 # redis-py defaults to 5 s; blocking queue reads must not hit that.
 REDIS_SOCKET_TIMEOUT_S = 60
@@ -55,9 +73,18 @@ async def main() -> None:
         log.warning("DATABASE_URL is unset: usage events are not persisted")
 
     comfy = ComfyClient(s.comfyui_base_url)
+    sidecar = None
     if s.comfyui_mode == "stub":
         log.warning("COMFYUI_MODE=stub: producing placeholder files, no GPU work")
         runner = StubRunner()
+    elif s.comfyui_mode == "sidecar":
+        sidecar = build_sidecar(s)
+        runner = SidecarRunner(sidecar, s.job_timeout_s)
+        log.info(
+            "COMFYUI_MODE=sidecar: ComfyUI from %s, models in %s",
+            s.desktop_data_dir,
+            sidecar.model_roots(),
+        )
     else:
         runner = ComfyRunner(comfy, s.job_timeout_s)
 
@@ -96,6 +123,8 @@ async def main() -> None:
     finally:
         WORKER_UP.set(0)
         queue_task.cancel()
+        if sidecar is not None:  # ComfyUI is this worker's own process
+            await sidecar.stop()
         await comfy.aclose()
         await router.aclose()
         await http.aclose()

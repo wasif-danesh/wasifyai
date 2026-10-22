@@ -30,9 +30,10 @@ from wasifyai_platform_sdk import (
 )
 from wasifyai_platform_sdk.storage import object_key
 
+from wasifyai_api.engine_workers import WorkerDirectory
+
 log = logging.getLogger("wasifyai_api.remote_speech")
 
-REFRESH_S = 3.0
 # how good a state is, when two workers list the same model
 _RANK = {"ready": 0, "needs_runtime": 1, "can_install": 2, "not_available": 3}
 
@@ -67,39 +68,36 @@ class RemoteSpeechEngine:
         storage: Any,
         catalogue: dict[str, VoiceModel],
         timeout_s: float = 3600,
+        directory: WorkerDirectory | None = None,
     ):
         self._queue = queue
         self._storage = storage  # the raw `Storage` (keys carry the tenant prefix)
         self._catalogue = catalogue
         self._timeout = timeout_s
-        self._workers: list[EngineWorkerInfo] = []
-        self._task: asyncio.Task[None] | None = None
+        self._directory = directory or WorkerDirectory(queue)
+        self._owns_directory = directory is None
         self.lipsync_sidecar = RemoteLipSync(self)
 
     # ---- which workers are here and what they list ----------------------------------------
 
+    @property
+    def _workers(self) -> list[EngineWorkerInfo]:
+        return self._directory.workers
+
+    @_workers.setter
+    def _workers(self, workers: list[EngineWorkerInfo]) -> None:
+        self._directory.workers = workers
+
     async def refresh(self) -> None:
-        self._workers = await self._queue.workers()
+        await self._directory.refresh()
 
     def start(self) -> None:
-        if self._task is None:
-            self._task = asyncio.create_task(self._watch())
-
-    async def _watch(self) -> None:
-        while True:
-            try:
-                await self.refresh()
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                log.exception("could not read the list of workers")
-            await asyncio.sleep(REFRESH_S)
+        if self._owns_directory:  # a shared directory is started by whoever made it
+            self._directory.start()
 
     async def close(self) -> None:
-        if self._task is not None:
-            self._task.cancel()
-            await asyncio.gather(self._task, return_exceptions=True)
-            self._task = None
+        if self._owns_directory:
+            await self._directory.close()
 
     async def stop(self) -> bool:
         return True  # the workers hold the memory; they give it back themselves

@@ -90,6 +90,10 @@ class Model3dStore:
         with self._lock:
             return self._db.execute(sql, args).fetchone()
 
+    def _all(self, sql: str, args: tuple[Any, ...] = ()) -> list[Any]:
+        with self._lock:
+            return self._db.execute(sql, args).fetchall()
+
     def _exec(self, sql: str, args: tuple[Any, ...] = ()) -> int:
         with self._lock:
             cur = self._db.execute(sql, args)
@@ -128,7 +132,7 @@ class Model3dStore:
     ) -> None:  # fmt: skip
         self._exec(
             "UPDATE inputs SET status = ?, checks = COALESCE(?, checks), error = ?, "
-            "stage = COALESCE(?, stage) WHERE id = ?",
+            "stage = COALESCE(?, stage) WHERE id = ? AND status = 'checking'",
             (status, json.dumps(checks) if checks is not None else None, error, stage, item),
         )
 
@@ -147,14 +151,13 @@ class Model3dStore:
     def purge_inputs(self, before: str) -> list[tuple[str, str, str]]:
         """Forget pictures older than `before` that no model was made from; their ids, to remove
         the files of."""
-        with self._lock:
-            rows = self._db.execute(
-                "SELECT id, tenant_id, user_id FROM inputs WHERE created_at < ? "
-                "AND id NOT IN (SELECT input_id FROM models WHERE input_id IS NOT NULL)",
-                (before,),
-            ).fetchall()
-            self._db.executemany("DELETE FROM inputs WHERE id = ?", [(r["id"],) for r in rows])
-            self._db.commit()
+        rows = self._all(
+            "SELECT id, tenant_id, user_id FROM inputs WHERE created_at < ? "
+            "AND id NOT IN (SELECT input_id FROM models WHERE input_id IS NOT NULL)",
+            (before,),
+        )
+        for r in rows:
+            self._exec("DELETE FROM inputs WHERE id = ?", (r["id"],))
         return [(r["tenant_id"], r["user_id"], r["id"]) for r in rows]
 
     # ---- models -------------------------------------------------------------------------------
@@ -195,9 +198,28 @@ class Model3dStore:
             sql += f" AND id IN ({','.join('?' * len(ids))})"
             args += ids
         sql += " ORDER BY created_at DESC, id DESC LIMIT ?"
-        with self._lock:
-            rows = self._db.execute(sql, (*args, limit)).fetchall()
-        return [self._model(r) for r in rows]
+        return [self._model(r) for r in self._all(sql, (*args, limit))]
+
+    def working_models(self) -> list[dict[str, Any]]:
+        """Models being made now, for any person: what a restarted service picks up again."""
+        return [self._model(r) for r in self._all("SELECT * FROM models WHERE status = 'working'")]
+
+    def working_inputs(self) -> list[dict[str, Any]]:
+        return [self._input(r) for r in self._all("SELECT * FROM inputs WHERE status = 'checking'")]
+
+    def fail_stale(self, before: str, message: str) -> int:
+        """Fail what has been working since before `before`: nobody is working on it."""
+        n = self._exec(
+            "UPDATE models SET status = 'failed', error = ?, finished_at = ? "
+            "WHERE status = 'working' AND created_at < ?",
+            (message, now(), before),
+        )
+        n += self._exec(
+            "UPDATE inputs SET status = 'failed', error = ? "
+            "WHERE status = 'checking' AND created_at < ?",
+            (message, before),
+        )
+        return n
 
     def set_progress(self, item: str, progress: float, stage: str) -> None:
         self._exec(
@@ -209,10 +231,11 @@ class Model3dStore:
         self, item: str, status: str, *, error: str | None = None, elapsed_s: float | None = None,
         peak_gb: float | None = None, glb_bytes: int | None = None,
     ) -> None:  # fmt: skip
+        # only what is still being made: a late failure does not undo a model that finished
         self._exec(
             "UPDATE models SET status = ?, error = ?, elapsed_s = ?, peak_gb = ?, glb_bytes = ?, "
             "progress = CASE WHEN ? = 'done' THEN 1 ELSE progress END, stage = '', "
-            "finished_at = ? WHERE id = ?",
+            "finished_at = ? WHERE id = ? AND status = 'working'",
             (status, error, elapsed_s, peak_gb, glb_bytes, status, now(), item),
         )
 

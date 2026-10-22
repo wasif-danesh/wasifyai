@@ -3,12 +3,10 @@ being made and finished, and their files. Desktop only: where there is no 3D eng
 answers 404. Every query is scoped by tenant and user."""
 
 import asyncio
-import shutil
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from wasifyai_platform_sdk import (
     Identity,
@@ -25,10 +23,10 @@ from wasifyai_model3d.runtime import (
     NotAvailable,
     Refused,
     add_to_search,
+    blobs_for,
     delete_model,
     engine_for,
     manager_for,
-    root_for,
     store_for,
     words_of,
 )
@@ -60,7 +58,6 @@ def build_routes(deps: RouteDeps) -> APIRouter:
 
     def guard() -> Any:
         try:
-            root_for(deps.state)
             return engine_for(deps.state)
         except NotAvailable as e:
             raise HTTPException(404, str(e)) from None
@@ -69,10 +66,10 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         status = 422 if e.code in ("bad_detail", "bad_seed", "unusable", "no_rights") else 409
         return HTTPException(status, {"code": e.code, "message": e.message})
 
-    def model_out(row: dict[str, Any]) -> dict[str, Any]:
+    def model_out(row: dict[str, Any], identity: Identity) -> dict[str, Any]:
         out = {k: v for k, v in row.items() if k not in ("tenant_id", "user_id")}
-        jobs = manager_for(deps)
-        out["live"] = bool(jobs.active and jobs.active["id"] == row["id"])
+        active = manager_for(deps).active(identity)
+        out["live"] = bool(active and active["id"] == row["id"])
         return out
 
     def input_out(row: dict[str, Any]) -> dict[str, Any]:
@@ -94,16 +91,6 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         except NotFound:
             raise HTTPException(404, "picture not found") from None
 
-    def file_of(identity: Identity, kind: str, item: str, name: str) -> Path:
-        store = store_for(deps.state)
-        try:
-            path = store.folder_of(identity.tenant_id, identity.user_id, kind, item) / name
-        except ValueError:
-            raise HTTPException(404, "not found") from None
-        if not path.is_file():
-            raise HTTPException(404, "not found")
-        return path
-
     # ---- status ---------------------------------------------------------------------------
 
     @router.get("/status")
@@ -114,9 +101,11 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             "ready": engine.ready(),
             "problem": engine.problem() if hasattr(engine, "problem") else None,
             "fit": engine.fit() if engine.ready() else None,
-            "busy": jobs.busy,
-            "active": jobs.active,
+            "busy": jobs.busy(identity),
+            "active": jobs.active(identity),
             "details": list(DETAILS),
+            # where the work is done: on this computer, or on a service's worker
+            "place": "device" if getattr(blobs_for(deps.state), "local", True) else "service",
         }
 
     # ---- the picture ----------------------------------------------------------------------
@@ -160,13 +149,14 @@ def build_routes(deps: RouteDeps) -> APIRouter:
     @router.get("/inputs/{input_id}/{which}")
     async def input_picture(
         input_id: str, which: str, identity: Identity = Depends(deps.identity)
-    ) -> FileResponse:
+    ) -> Response:
         guard()
         if which not in ("picture", "cutout"):
             raise HTTPException(404, "not found")
         input_or_404(identity, input_id)
-        path = file_of(identity, "inputs", input_id, f"{which}.png")
-        return FileResponse(path, media_type="image/png")
+        return await blobs_for(deps.state).response(
+            identity, "inputs", input_id, f"{which}.png", "image/png"
+        )
 
     @router.delete("/inputs/{input_id}", status_code=204)
     async def delete_input(input_id: str, identity: Identity = Depends(deps.identity)) -> Response:
@@ -176,10 +166,8 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         except HTTPException:
             return Response(status_code=204)  # already gone
         await manager_for(deps).cancel_input(identity, input_id)
-        store = store_for(deps.state)
-        store.delete_input(identity.tenant_id, identity.user_id, input_id)
-        folder = store.folder_of(identity.tenant_id, identity.user_id, "inputs", input_id)
-        await asyncio.to_thread(shutil.rmtree, folder, True)
+        store_for(deps.state).delete_input(identity.tenant_id, identity.user_id, input_id)
+        await blobs_for(deps.state).remove(identity, "inputs", input_id)
         return Response(status_code=204)
 
     # ---- models ---------------------------------------------------------------------------
@@ -203,7 +191,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             )  # fmt: skip
         except Refused as e:
             raise refuse(e) from None
-        return model_out(row)
+        return model_out(row, identity)
 
     @router.get("/models")
     async def list_models(
@@ -216,19 +204,19 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             store_for(deps.state).list_models,
             identity.tenant_id, identity.user_id, parse_ids(ids), limit,
         )  # fmt: skip
-        return {"items": [model_out(r) for r in rows]}
+        return {"items": [model_out(r, identity) for r in rows]}
 
     @router.get("/models/{model_id}")
     async def get_model(
         model_id: str, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
         guard()
-        return model_out(model_or_404(identity, model_id))
+        return model_out(model_or_404(identity, model_id), identity)
 
     @router.get("/models/{model_id}/{which}")
     async def model_file(
         model_id: str, which: str, identity: Identity = Depends(deps.identity)
-    ) -> FileResponse:
+    ) -> Response:
         """`file` (the GLB), `thumb`, `source` (the picture it came from) or `cutout`."""
         guard()
         row = model_or_404(identity, model_id)
@@ -241,13 +229,14 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         name, media = names[which]
         if which == "file" and row["status"] != "done":
             raise HTTPException(404, "not made yet")
-        path = file_of(identity, "models", model_id, name)
         headers = {}
         if which == "file":
             headers["Content-Disposition"] = (
                 f'attachment; filename="{files.file_stem(row["title"])}.glb"'
             )
-        return FileResponse(path, media_type=media, headers=headers)
+        return await blobs_for(deps.state).response(
+            identity, "models", model_id, name, media, headers
+        )
 
     @router.post("/models/{model_id}/cancel")
     async def cancel_model(
@@ -256,7 +245,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         guard()
         model_or_404(identity, model_id)
         stopped = await manager_for(deps).cancel(identity, model_id)
-        return {"stopped": stopped, **model_out(model_or_404(identity, model_id))}
+        return {"stopped": stopped, **model_out(model_or_404(identity, model_id), identity)}
 
     @router.post("/models/{model_id}/again", status_code=202)
     async def make_again(
@@ -271,7 +260,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             made = await manager_for(deps).start_again(identity, row)
         except Refused as e:
             raise refuse(e) from None
-        return model_out(made)
+        return model_out(made, identity)
 
     @router.patch("/models/{model_id}")
     async def rename_model(
@@ -283,7 +272,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             identity.tenant_id, identity.user_id, model_id, body.title.strip()
         )
         await add_to_search(deps.state, identity, model_id, words_of(row))
-        return model_out(row)
+        return model_out(row, identity)
 
     @router.post("/models/{model_id}/export", response_model=Exported)
     async def export_model(
@@ -298,7 +287,9 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         row = model_or_404(identity, model_id)
         if row["status"] != "done":
             raise HTTPException(404, "not made yet")
-        source = file_of(identity, "models", model_id, "model.glb")
+        source = blobs_for(deps.state).local_path(identity, "models", model_id, "model.glb")
+        if source is None:
+            raise HTTPException(404, "saving to a folder is not available here")
         if body and body.path:
             try:
                 path = await asyncio.to_thread(

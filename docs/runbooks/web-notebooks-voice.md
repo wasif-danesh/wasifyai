@@ -64,6 +64,13 @@ Set the switch to false and sync. The data stays (schemas `notebooks` and `voice
 prefix); the menu items return to "Soon" and the older speech pages stop redirecting. Do not drop a schema to "reset":
 people's notebooks and speeches are in it.
 
+## Getting a model onto a worker from the web (P5)
+
+Sign in as an admin and open Admin > Workers. Each worker lists the speech models it knows and whether they are on its disk;
+"Get ... (size)" has the worker download and check the files and shows how far it is. The lip sync engine is set up from the same
+page. Anyone can then choose the model with "Select ... model" on the Voice, Listening, Music or Lip sync screen. The worker does
+one job at a time, so a big download makes other jobs wait. `scripts/worker.sh models <id>` does the same from a terminal.
+
 ## The web app on a Mac with the local models (development and testing)
 
 Music, splitting, voice change, speech edit, dubbing, the audiobook and lip sync run on the machine that has the
@@ -90,8 +97,8 @@ machine with them and their memory), moderation and quotas for speech, and a loa
 Hosted models give the web Text to speech and Speech to text. The rest of the voice menu runs on an **engine worker**: the
 desktop engine's speech runtime behind a job loop. A screen is linked in the web menu when a live worker lists a *ready* model for it.
 
-**On a Mac (development, a home lab).** `make dev` starts the worker in the background when the desktop app's data folder exists
-(`make worker` runs it in a terminal; `scripts/worker.sh stop|logs`). It uses the models and the speech runtime the desktop app set
+**On a Mac (development, a home lab).** `make dev` starts the workers in the background when the desktop app's data folder exists
+(`make worker` runs the engine worker in a terminal; `scripts/worker.sh stop|logs`). It uses the models and the speech runtime the desktop app set
 up, so quit the desktop app while the worker makes something. `WORKER_DATA_DIR` picks another folder.
 
 **Getting a model onto the worker's machine** (until the admin screen of stage P5 exists):
@@ -109,3 +116,14 @@ reach Redis (`REDIS_URL`) or storage (`STORAGE_*`).
 
 **Not here yet:** a worker on a Linux GPU host and its Helm values (stage P7), and the lip sync engine's own environment, which is
 set up in the desktop app for now.
+
+
+### Images and video on a Mac: the media worker (the same pattern)
+
+The stack's own `media-worker` container makes placeholder pictures unless it can reach a ComfyUI. On a Mac, `scripts/worker.sh start`
+(and `make dev`) starts a **native media worker** with `COMFYUI_MODE=sidecar`: it starts the ComfyUI the desktop app installed
+(`<data folder>/engine/comfyui`), reads the model folders the desktop app saved (its Models page: the app's own folder and, for
+example, `~/ComfyUI-Shared/models`), and takes the jobs from the same queue. It stops the container worker so the two do not compete.
+Create, Edit, Inpaint, Reference, Make a video, Animate and Extend then run on the real engine. Check with
+`uv run python scripts/web_media_check.py` (images in about two minutes, each clip in minutes). The two workers share one GPU and one
+memory; quit the desktop app while they run jobs.

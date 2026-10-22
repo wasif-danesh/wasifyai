@@ -42,12 +42,23 @@ export type VideoBuilderProps = {
   /** For "Save a copy" of a finished video. */
   videos?: Pick<VideosApi, "exportCopy">;
   canSave?: boolean;
+  /** Where a finished video can be downloaded from (the web app): "Download" is offered when given. */
+  downloadHref?: (videoId: string) => string;
+  /** Where the work is done: on this computer (the desktop) or on a service's worker (the web). */
+  place?: "device" | "service";
   onOpenLibrary?: () => void;
 };
 
 /** Experimental: write a video from a template (title, quote, chart, name strap, captions),
  * have the words checked, watch it being drawn in a locked box, and keep it. */
-export function VideoBuilder({ api, videos, canSave = false, onOpenLibrary }: VideoBuilderProps) {
+export function VideoBuilder({
+  api,
+  videos,
+  canSave = false,
+  downloadHref,
+  place = "device",
+  onOpenLibrary,
+}: VideoBuilderProps) {
   const b = useVideoBuilder(api);
   const { state } = b;
   return (
@@ -56,10 +67,9 @@ export function VideoBuilder({ api, videos, canSave = false, onOpenLibrary }: Vi
         <span className={eyebrow}>Video · Experimental</span>
         <h1 className="font-semibold text-step-2">Video Builder</h1>
         <p className="max-w-3xl text-muted-foreground">
-          Write a title, a quote, a chart, a name strap or captions and have it drawn on your
-          computer. Every word is checked against what you typed before anything is drawn, and every
-          video is drawn in a locked box: it can reach nothing outside its own folder, and nothing
-          is sent anywhere.
+          {place === "device"
+            ? "Write a title, a quote, a chart, a name strap or captions and have it drawn on your computer. Every word is checked against what you typed before anything is drawn, and every video is drawn in a locked box: it can reach nothing outside its own folder, and nothing is sent anywhere."
+            : "Write a title, a quote, a chart, a name strap or captions and have it drawn on the service's computer. Every word is checked against what you typed before anything is drawn, and every video is drawn in a locked box: it can reach nothing outside its own folder. The words you type are sent there and deleted when the video is made."}
         </p>
       </header>
 
@@ -102,6 +112,7 @@ export function VideoBuilder({ api, videos, canSave = false, onOpenLibrary }: Vi
                 api={b}
                 videos={videos}
                 canSave={canSave}
+                downloadHref={downloadHref}
                 onOpenLibrary={onOpenLibrary}
               />
             ) : (
@@ -378,11 +389,13 @@ function Editor({
   api,
   videos,
   canSave,
+  downloadHref,
   onOpenLibrary,
 }: {
   api: ReturnType<typeof useVideoBuilder>;
   videos?: Pick<VideosApi, "exportCopy">;
   canSave: boolean;
+  downloadHref?: (videoId: string) => string;
   onOpenLibrary?: () => void;
 }) {
   const { state } = api;
@@ -655,6 +668,12 @@ function Editor({
             {canSave && videos && render.video_id ? (
               <Button type="button" onClick={() => void saveCopy(render.video_id as string)}>
                 <Save className="size-4" /> Save a copy
+              </Button>
+            ) : downloadHref && render.video_id ? (
+              <Button asChild>
+                <a href={downloadHref(render.video_id)} download>
+                  <Save className="size-4" /> Download
+                </a>
               </Button>
             ) : null}
             {onOpenLibrary ? (

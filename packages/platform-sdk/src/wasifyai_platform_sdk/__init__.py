@@ -1,4 +1,4 @@
-from wasifyai_platform_sdk import speech_wire
+from wasifyai_platform_sdk import admin_wire, builder_wire, model3d_wire, speech_wire
 from wasifyai_platform_sdk.capabilities import (
     Capabilities,
     CapabilityNotConfigured,
@@ -220,6 +220,9 @@ __all__ = [
     "EngineUnavailable",
     "EngineWorkerInfo",
     "RedisJobSink",
+    "admin_wire",
+    "builder_wire",
+    "model3d_wire",
     "speech_wire",
     "JobError",
     "JobFailed",

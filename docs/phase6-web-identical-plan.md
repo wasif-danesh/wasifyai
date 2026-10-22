@@ -53,10 +53,10 @@ Each stage ships on its own and ends with its rows in `apps/web/lib/parity.ts` t
 |---|---|---|---|
 | **P0 Worker core** (built 2026-10-21) | the job contract for engine kinds (inputs, presigned file in and out, progress, cancel, usage, one heavy model at a time); the `engine-worker` service and its image; a Mac mode (`make worker`, native, Metal) that reads the compose stack's queue and storage; fake components for tests | M | a fake job runs end to end in `make dev`; the Mac worker takes it |
 | **P1 Speech family** (built 2026-10-21; models still to fetch) | `RemoteSpeechEngine` for the voice product (the voice engine interface, queueing instead of calling in-process); speak, clone, design, convert, edit, transcribe, music, separate, dub, audiobook on the worker; the web offers a screen when a worker lists a ready model | L | Voices, Change a voice, Edit speech, Dub, Audiobook, Music, Lyrics, Split open and work on the web with the Mac worker |
-| **P2 Lip sync** | the MuseTalk server as a worker component; picture and recording through storage; the consent and the visible mark kept | M | Lip sync on the web |
-| **P3 3D models** | Postgres store and files in storage for `wasifyai-model3d`; the Pixal3D component as a job kind | M | 3D on the web |
-| **P4 Video Builder** | Postgres store for projects and drafts; the sandboxed render as a job kind (browser sandbox plus a container boundary on a shared host) | L | Video Builder on the web |
-| **P5 The picker on the web** | `ModelSelect` on the web: the deployment's listed models and the person's choice; admin actions for adding a model to a worker; licence filter | M | "Select … model" on every web screen; the Models page for admins |
+| **P2 Lip sync** (built with P1, checked for real 2026-10-21) | the MuseTalk server as a worker component; picture and recording through storage; the consent and the visible mark kept | M | Lip sync on the web |
+| **P3 3D models** (built 2026-10-21) | Postgres store and files in storage for `wasifyai-model3d`; the Pixal3D component as a job kind | M | 3D on the web |
+| **P4 Video Builder** (built 2026-10-21) | Postgres store for projects and drafts; the sandboxed render as a job kind (browser sandbox plus a container boundary on a shared host) | L | Video Builder on the web |
+| **P5 The picker on the web** (built 2026-10-22) | `ModelSelect` on the web: the deployment's listed models and the person's choice; admin actions for adding a model to a worker; licence filter | M | "Select … model" on every web screen; the Models page for admins |
 | **P6 Safeguards and usage** | usage events and quotas for every new kind (backlog B1); moderation of text and uploads; consent screens kept; the voice-cloning policy of 2026-10-18 | M | a public deployment can turn safeguards on without gaps |
 | **P7 GPU host** | audio.cpp Linux CUDA lock (open since V1); the worker image for CUDA; Helm `engineWorker` with a GPU node selector; runbook; CI builds the image | L | staging runs the same screens as the Mac worker |
 | **P8 The gate** | CI fails when a desktop menu item or action has no "live" web row without an accepted reason; the desktop checklist runs on the web in Playwright for the shared screens; the ledger is the release page | S | releases are blocked on parity |
@@ -110,3 +110,18 @@ also repairs Lip sync in the desktop app on a normal Mac. The worker now closes 
 **Still to do:** the admin screen to fetch models from the web (P5), a queue position and cancel for speech jobs, a worker on a Linux
 GPU host (P7). Lip sync's consent and picture handling are the product's own and unchanged, so P2 is mostly done: what remains is a
 real run through the web page with a signed-in session.
+
+## Status 2026-10-21 (later): P2, P3, P4 built, and images and video on the web
+
+The web menu has no "Soon" item left except Train (not built on either app). Real runs on this Mac: all seven image and
+video modes (`scripts/web_media_check.py`), every speech capability (`scripts/worker_smoke.py`). 3D (`scripts/web_model3d_check.py`: a picture cut out in 36 s, a model made in 551 s, a 34 MB GLB read back through the API) and Video Builder (`scripts/web_builder_check.py`: the words checked in 1.1 s, a still, a real MP4 in 15 s). What is left of the plan is P5
+(the picker and fetching models from the web), P6 (usage, quotas, moderation of every new kind), P7 (a cloud GPU) and P8 (the gate).
+
+## Status 2026-10-22: restart-safe jobs and P5 built
+
+A restart of the API during a 3D picture, a 3D model or a Video Builder render no longer loses the job (checked for real; ADR-0087
+has the mechanism). P5 is built: **Admin > Workers** lists the workers and their models and has a worker fetch a model (with its
+size shown, progress followed, files checked by the worker) or set up the lip sync engine; the Voice, Listening, Music and Lip sync
+screens have the desktop's "Select ... model" button and panel, and a person who is not an admin sees a missing model as "ask an
+admin". Left of the plan: the licence filter for a public service (decision 2), P6 (usage, quotas, moderation), P7 (a cloud GPU) and
+P8 (the gate).

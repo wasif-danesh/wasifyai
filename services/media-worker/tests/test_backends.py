@@ -352,9 +352,12 @@ async def test_video_jobs_use_the_separate_video_comfyui_when_one_is_set(router_
     await router.aclose()
 
 
-async def test_the_video_address_is_ignored_in_stub_mode(router_parts):
+@pytest.mark.parametrize("mode", ["stub", "sidecar"])
+async def test_the_video_address_is_ignored_in_stub_and_sidecar_mode(router_parts, mode):
+    # sidecar: this worker runs the desktop's own ComfyUI, which serves video too; the address in
+    # .env is for the containers and does not resolve on the machine itself
     _, store, box, default = router_parts
-    settings = WorkerSettings(comfyui_mode="stub", comfyui_video_base_url="http://local:8189")
+    settings = WorkerSettings(comfyui_mode=mode, comfyui_video_base_url="http://local:8189")
     router = BackendRouter(
         default, settings, store, box, client(lambda r: httpx.Response(404)), poll_s=0
     )

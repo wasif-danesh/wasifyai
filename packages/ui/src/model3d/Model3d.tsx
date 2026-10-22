@@ -49,11 +49,22 @@ export type Model3dProps = {
   images?: CandidateApi;
   /** "Save a copy" of a finished model (the desktop app). */
   canSave?: boolean;
+  /** Where a finished model can be downloaded from (the web app): "Download" is offered when given. */
+  downloadHref?: (model: { id: string; title: string }) => string;
+  /** Where the work is done: on this computer (the desktop) or on a service's worker (the web). */
+  place?: "device" | "service";
   onOpenLibrary?: () => void;
 };
 
 /** Experimental: make a 3D model from a picture, or from words through a picture you choose. */
-export function Model3d({ api, images, canSave = false, onOpenLibrary }: Model3dProps) {
+export function Model3d({
+  api,
+  images,
+  canSave = false,
+  downloadHref,
+  place = "device",
+  onOpenLibrary,
+}: Model3dProps) {
   const m = useModel3d(api);
   const { state } = m;
   // in the app window the same button as every other model: its dialog says what 3D needs and sets it up (ADR-0086)
@@ -75,7 +86,9 @@ export function Model3d({ api, images, canSave = false, onOpenLibrary }: Model3d
         <h1 className="font-semibold text-step-2">Make a 3D model</h1>
         <p className="max-w-3xl text-muted-foreground">
           Turn a picture of one object into a 3D model you can turn around and save as a file. It is
-          made on this computer; nothing is sent anywhere.
+          {place === "device"
+            ? "made on this computer; nothing is sent anywhere."
+            : "made on the service's graphics card. The picture is sent there and deleted when the model is made."}
         </p>
       </header>
 
@@ -126,7 +139,13 @@ export function Model3d({ api, images, canSave = false, onOpenLibrary }: Model3d
             </Notice>
           ) : null}
           {state.model ? (
-            <ModelStep m={m} canSave={canSave} api={api} onOpenLibrary={onOpenLibrary} />
+            <ModelStep
+              m={m}
+              canSave={canSave}
+              downloadHref={downloadHref}
+              api={api}
+              onOpenLibrary={onOpenLibrary}
+            />
           ) : state.input ? (
             <CheckStep m={m} />
           ) : (
@@ -524,11 +543,13 @@ function ModelStep({
   m,
   api,
   canSave,
+  downloadHref,
   onOpenLibrary,
 }: {
   m: Hook;
   api: Model3dApi;
   canSave: boolean;
+  downloadHref?: Model3dProps["downloadHref"];
   onOpenLibrary?: () => void;
 }) {
   const { model, glb } = m.state;
@@ -642,6 +663,12 @@ function ModelStep({
         {canSave ? (
           <Button type="button" onClick={() => void saveCopy()}>
             <Save className="size-4" /> Save a copy (GLB)
+          </Button>
+        ) : downloadHref ? (
+          <Button asChild>
+            <a href={downloadHref({ id: model.id, title: model.title })} download>
+              <Save className="size-4" /> Download (GLB)
+            </a>
           </Button>
         ) : null}
         {model.input_id ? (

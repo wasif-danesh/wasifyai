@@ -86,6 +86,9 @@ async def make_draft(
 
 
 def root_for(state: Any) -> Path:
+    scratch = getattr(state, "builder_scratch", None)  # the web: a folder for stand-in projects
+    if scratch is not None:
+        return Path(scratch)
     data = getattr(state, "desktop_dir", None)
     if not data:
         raise NotAvailable("Video Builder is not available in this deployment.")
@@ -122,6 +125,9 @@ def manager_for(deps: RouteDeps) -> "RenderManager":
     return existing  # type: ignore[no-any-return]
 
 
+STOPPED = "It was stopped before it finished. Make it again."
+
+
 class RenderManager:
     """Starts, follows and cancels renders. One at a time on this computer: a render holds a
     browser and a few gigabytes, and the person's models need the memory too."""
@@ -129,12 +135,19 @@ class RenderManager:
     def __init__(self, deps: RouteDeps):
         self._deps = deps
         self._jobs: dict[str, asyncio.Task[None]] = {}
+        self._owners: dict[str, str] = {}
         self._progress: dict[str, float] = {}
         self._stage: dict[str, str] = {}
 
-    @property
-    def busy(self) -> bool:
-        return any(not t.done() for t in self._jobs.values())
+    def _who(self, identity: Identity) -> str:
+        """The desktop has one person, so one render in all; the web has one per person."""
+        if getattr(self._deps.state, "builder_scratch", None) is None:
+            return "-"
+        return f"{identity.tenant_id}/{identity.user_id}"
+
+    def busy(self, identity: Identity) -> bool:
+        who = self._who(identity)
+        return any(not t.done() and self._owners.get(rid) == who for rid, t in self._jobs.items())
 
     def progress(self, rid: str) -> float | None:
         return self._progress.get(rid)
@@ -149,7 +162,7 @@ class RenderManager:
         store = store_for(state)
         if not engine.ready():
             raise Refused("not_ready", not_ready(engine))
-        if self.busy:
+        if self.busy(identity):
             raise Refused("busy", "A video is already being made. Wait for it to finish.")
         fit = engine.fit()
         if fit["verdict"] == "too_big":
@@ -168,11 +181,17 @@ class RenderManager:
              "format": fmt},
         )  # fmt: skip
         self._progress[row["id"]] = 0.0
+        self._owners[row["id"]] = self._who(identity)
         self._stage[row["id"]] = "checking"
         self._jobs[row["id"]] = asyncio.create_task(
-            self._run(identity, found, folder, row["id"], engine, fmt)
+            self._acting(identity, self._run(identity, found, folder, row["id"], engine, fmt))
         )
         return row
+
+    async def _acting(self, identity: Identity, work: Any) -> None:
+        """Run a render as this person: the engine reads whose it is from the context."""
+        with self._deps.acting_as(identity, PRODUCT_ID):
+            await work
 
     def _write(self, identity: Identity, found: dict[str, Any], engine: Any) -> Path:
         gsap = engine.gsap()
@@ -200,6 +219,36 @@ class RenderManager:
         await asyncio.gather(task, return_exceptions=True)
         return True
 
+    async def resume_all(self) -> int:
+        """Go on waiting for the renders the worker was drawing when this service stopped. One
+        that never got to drawing (it was still checking the words) or whose composition is gone
+        is failed in words. Returns how many were picked up."""
+        state = self._deps.state
+        engine, store = engine_for(state), store_for(state)
+        if not getattr(engine, "resumable", False):
+            return 0
+        picked = 0
+        for row in store.working_renders():
+            who = Identity(row["tenant_id"], row["user_id"])
+            rid = row["id"]
+            try:
+                found = store.get_composition(who.tenant_id, who.user_id, row["composition_id"])
+                if row["check"] is None:
+                    raise NotFound(rid)
+                folder = self._write(who, found, engine)
+            except (NotFound, Refused):
+                store.finish_render(rid, "failed", error=STOPPED)
+                continue
+            self._progress[rid] = row.get("progress") or 0.0
+            self._owners[rid] = self._who(who)
+            self._stage[rid] = "drawing"
+            fmt = row["settings"].get("format", "mp4")
+            self._jobs[rid] = asyncio.create_task(
+                self._acting(who, self._run(who, found, folder, rid, engine, fmt, resume=True))
+            )
+            picked += 1
+        return picked
+
     async def wait(self, rid: str) -> None:
         task = self._jobs.get(rid)
         if task is not None:
@@ -220,8 +269,11 @@ class RenderManager:
         rid: str,
         engine: Any,
         fmt: str,
+        resume: bool = False,
     ) -> None:
         store = store_for(self._deps.state)
+        # a worker's engine finds the drawing again by the render's id: a restart does not lose it
+        again = {"job_key": rid, "resume": resume} if getattr(engine, "resumable", False) else {}
         out = folder / "renders" / f"{rid}.{fmt}"
         last = 0.0
 
@@ -236,13 +288,14 @@ class RenderManager:
                     store.set_progress(rid, value)
 
         try:
-            report = await check.run_check(engine, folder, found["template"], found["slots"])
-            store.set_check(rid, report)
-            if not report["ok"]:  # the page does not say what was typed: nothing is drawn
-                store.finish_render(rid, "failed", error=report["message"])
-                return
+            if not resume:  # picked up again: the words were checked before the restart
+                report = await check.run_check(engine, folder, found["template"], found["slots"])
+                store.set_check(rid, report)
+                if not report["ok"]:  # the page does not say what was typed: nothing is drawn
+                    store.finish_render(rid, "failed", error=report["message"])
+                    return
             self._stage[rid] = "drawing"
-            result = await engine.render(folder, out, on_progress, ("--format", fmt))
+            result = await engine.render(folder, out, on_progress, ("--format", fmt), **again)
             if not result.ok and result.reason == "failed":
                 # the browser's own worker gave up (seen once under load, never when idle): one
                 # more try; a limit, a refusal or a cancel is never tried again
@@ -263,7 +316,8 @@ class RenderManager:
                 peak_mb=result.peak_rss_bytes // 2**20, blocked=result.blocked_count,
             )  # fmt: skip
         except asyncio.CancelledError:
-            store.finish_render(rid, "cancelled", error="The video was cancelled.")
+            if not getattr(engine, "closing", False):  # not just this service stopping
+                store.finish_render(rid, "cancelled", error="The video was cancelled.")
             raise
         except Exception:
             log.exception("a Video Builder render failed")

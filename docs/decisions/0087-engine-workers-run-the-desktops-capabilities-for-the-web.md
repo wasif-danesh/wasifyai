@@ -68,3 +68,46 @@ Edit speech, Dub, Audiobook, Split, 3D and Video Builder have none, and the web 
   a job a worker has started.
 - **Measured:** a real round trip on this Mac, API engine to Redis to the worker to Kokoro and back through SeaweedFS: 13.8 s for
   one sentence, 11.5 s of it the first model load; no file left behind.
+
+## Built (2026-10-21): P2 to P4, images and video
+
+- **Lip sync (P2)** is one of the speech kinds of P1 and ran for real; no new code beyond what P1 has.
+- **3D (P3):** kinds `model3d.matte` and `model3d.generate`; the worker runs the desktop's `Model3dService` and reports
+  its state (`ready`, `problem`, `fit`) in its heartbeat (`EngineWorkerInfo.components`). The product keeps its code: its
+  store has a Postgres subclass (`pgstore.py`, schema `model3d`), its files go through one interface with two homes
+  (`blobs.py`: folders on the desktop, object storage on the web, where a step works in a temporary `workspace`), and its job
+  manager is per person on the web. Cancelling asks the worker (`EngineQueue.cancel`), which kills the 3D process.
+- **Video Builder (P4):** kinds `builder.inspect`, `builder.snapshot`, `builder.render`, `builder.lint`. A composition
+  travels as its template and slots; the worker rebuilds the page (it has the library and the fonts) so no project files are
+  kept on the web. The product's engine calls are unchanged: the API's `RemoteBuilderEngine` hands the product stand-in
+  files and reads `slots.json` back. The words are turned into a template by the gateway's `chat` alias. Postgres store in
+  the schema `builder`.
+- **Images and video (not an engine kind):** the media worker got a native mode (`COMFYUI_MODE=sidecar`) that runs the
+  desktop's ComfyUI; checked for real with `scripts/web_media_check.py`.
+- **Left in these stages:** moderation of typed words and uploaded pictures for 3D and Video Builder (they refuse while
+  safeguards are on, as on the desktop; P6), usage events for GPU seconds, a queue position for 3D and Video Builder jobs.
+
+## Built (2026-10-22): jobs survive an API restart, and P5
+
+- **A restart no longer orphans a long job.** A 3D picture or model and a Video Builder render go out under the id of their
+  own row. `EngineQueue` keeps a `seen:{id}` key (6 hours) and `status(id)` says `waiting`, `done` (the outcome is waiting) or
+  `lost`. On start the API fails what is older than three hours, then `resume_all` picks up every row still working: it waits
+  for the same job (nothing is sent again), a job the queue has lost is failed in words ("It was stopped before it finished.
+  Make it again."), and a render that never got past its word check is failed the same way. When the service stops, the engines
+  are told `closing`, so the cancelled tasks do not tell the worker to stop and leave their rows working. A late failure cannot
+  undo a finished row (`WHERE status = 'working'`). The outcome list now lives 6 hours. Checked for real: the API container was
+  restarted during a Video Builder render (it finished and was saved), during a 3D picture cut-out and during a model.
+  Not covered: two API replicas that both resume the same job (one gets the outcome, the other waits until its time-out and
+  its failure is ignored); speech jobs (the voice graph awaits inside the run, no resume).
+- **P5, the picker on the web.** `admin_wire.py`: the job kinds `admin.fetch_model` and `admin.fetch_engine`, which a worker
+  runs on itself (`wasifyai_engine_worker/admin.py`: the download of the desktop's own `DownloadManager` with progress, and the
+  lip sync engine's installer). The API's admin routes (`admin_workers.py`): `GET /admin/workers`, `POST
+  /admin/workers/models/{id}/fetch`, `POST /admin/workers/engines/{name}/fetch`, `GET /admin/workers/jobs/{id}`; a second click
+  follows the first job; each start is audited. Admin > Workers lists the workers and offers "Get ... (size)". The screens
+  for Voice, Listening, Music and Lip sync get the same "Select ... model" button and panel as the desktop
+  (`apps/web/lib/choices.ts`, `WebModelChoices` in the product layout): the choice is remembered in the browser under the key
+  the screens already read; a person who is not an admin sees a missing model as "ask an admin". `scripts/worker.sh models`
+  still works (it uses the same code).
+- **Left:** the licence filter for a public service (a deployment setting that hides and refuses models that do not allow
+  commercial use) waits for decision 2 of the plan; a worker does one job at a time, so a big download makes other work
+  wait; the picker is not on the Image, Video, Chat and 3D screens on the web (their models are the deployment's).

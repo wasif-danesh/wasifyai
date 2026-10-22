@@ -48,6 +48,34 @@ async def test_a_job_goes_to_one_worker_and_its_outcome_to_the_waiter(queue):
     assert out.ok and out.meta == {"n": 1}
 
 
+async def test_a_restarted_api_can_tell_whether_a_job_is_waiting_done_or_lost(queue):
+    q, _ = queue
+    j = job()
+    assert await q.status(j.id) == "lost"  # never sent
+    await q.submit(j)
+    assert await q.status(j.id) == "waiting"
+    claimed = await q.claim("w1", block_ms=500)
+    assert claimed is not None
+    await q.finish(claimed[0], EngineOutcome(id=j.id, ok=True, worker="w1"))
+    assert await q.status(j.id) == "done"  # the outcome waits for whoever picks it up
+    out = await q.wait(j.id, 5, poll_s=1)
+    assert out.ok and await q.status(j.id) == "lost"  # taken: nothing is waiting for it any more
+
+
+async def test_a_page_can_follow_a_job_it_does_not_wait_for(queue):
+    q, _ = queue
+    j = job()
+    await q.submit(j)
+    assert await q.peek(j.id) is None and await q.progress_of(j.id) is None
+    claimed = await q.claim("w1", block_ms=500)
+    assert claimed is not None
+    await q.report(j.id, 0.25, "Downloading")
+    assert await q.progress_of(j.id) == (0.25, "Downloading")
+    await q.finish(claimed[0], EngineOutcome(id=j.id, ok=True, worker="w1"))
+    first, second = await q.peek(j.id), await q.peek(j.id)  # looking does not take it
+    assert first is not None and second is not None and first.ok
+
+
 async def test_waiting_gives_up_and_progress_is_passed_on(queue):
     q, _ = queue
     j = job()

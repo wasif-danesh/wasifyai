@@ -6,7 +6,7 @@ own prefix (the person's), or the job is refused."""
 
 import asyncio
 import tempfile
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +16,9 @@ from wasifyai_platform_sdk import (
     EngineOutcome,
     VoiceEngineError,
     VoiceRequestError,
+    admin_wire,
+    builder_wire,
+    model3d_wire,
     speech_wire,
 )
 
@@ -27,14 +30,32 @@ class Refused(Exception):
     pass
 
 
+class Failed(Exception):
+    """A component said no, with the code and the sentence to show."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code, self.message = code, message
+
+
 class Work:
     """One job's inputs and outputs."""
 
-    def __init__(self, job: EngineJob, storage: Storage, folder: Path):
+    def __init__(
+        self, job: EngineJob, storage: Storage, folder: Path, report: Report | None = None
+    ):
         self.job = job
         self._storage = storage
-        self._folder = folder
+        self.folder = folder
+        self._report = report
         self.outputs: dict[str, str] = {}
+        self._pending: set[asyncio.Future[None]] = set()
+
+    def report_soon(self, fraction: float, label: str) -> None:
+        """Tell the API how far the job is, from code that is not async (a progress callback)."""
+        if self._report is not None:
+            self._pending.add(task := asyncio.ensure_future(self._report(fraction, label)))
+            task.add_done_callback(self._pending.discard)
 
     def _checked(self, key: str) -> str:
         if not key.startswith(self.job.prefix) or ".." in key:
@@ -46,7 +67,7 @@ class Work:
         key = self.job.files.get(name)
         if key is None:
             raise Refused(f"The job has no {name}.")
-        path = self._folder / name
+        path = self.folder / name
         data = await self._storage.get(self._checked(key))
         await asyncio.to_thread(path.write_bytes, data)
         return path
@@ -172,7 +193,117 @@ async def _lipsync(engine: Any, w: Work) -> dict[str, Any]:
     return speech_wire.lipsync_meta(r)
 
 
+async def _matte(service: Any, w: Work) -> dict[str, Any]:
+    picture = await w.file("picture")
+    res = await service.matte(picture, w.folder)
+    if not res.ok or res.output is None:
+        raise Failed(res.reason or "engine_failed", res.message or "The cut-out did not work.")
+    await w.put("cutout", await asyncio.to_thread(res.output.read_bytes), "image/png")
+    return {"seconds": res.seconds, "peak_gb": res.peak_gb}
+
+
+async def _generate(service: Any, w: Work) -> dict[str, Any]:
+    p = w.job.params
+    cutout = await w.file("cutout")
+    glb = w.folder / "model.glb"
+    res = await service.generate(
+        cutout, glb, seed=int(p.get("seed", 42)), detail=str(p.get("detail", "standard")),
+        on_progress=w.report_soon,
+    )  # fmt: skip
+    if not res.ok or not glb.is_file():
+        raise Failed(res.reason or "engine_failed", res.message or "The 3D run did not finish.")
+    await w.put("glb", await asyncio.to_thread(glb.read_bytes), "model/gltf-binary")
+    return {"seconds": res.seconds, "peak_gb": res.peak_gb}
+
+
+def _page(service: Any, w: Work, template: str, slots: dict[str, Any]) -> Path:
+    """The composition's folder, made here from its template and slots: the worker has the library
+    and the fonts, the API only has the words."""
+    from wasifyai_video.builder import projects, templates
+
+    gsap = service.gsap()
+    if gsap is None:
+        raise Failed("not_ready", "Video Builder is not set up on the worker.")
+    fonts = service.fonts(templates.FONT_FILES)
+    folder = w.folder / "project"
+    projects.write_project(folder, template, slots, gsap, fonts)
+    return folder
+
+
+async def _inspect(service: Any, w: Work) -> dict[str, Any]:
+    p = w.job.params
+    folder = await asyncio.to_thread(_page, service, w, p["template"], p["slots"])
+    report = await service.inspect(folder, p["spec"])
+    return {"report": report}
+
+
+async def _snapshot(service: Any, w: Work) -> dict[str, Any]:
+    p = w.job.params
+    folder = await asyncio.to_thread(_page, service, w, p["template"], p["slots"])
+    work = w.folder / "still"
+    res = await service.snapshot(folder, work, float(p["at"]))
+    pngs = sorted(work.rglob("*.png")) if res.ok else []
+    if not pngs:
+        raise Failed(res.reason or "preview_failed", res.message or "No preview.")
+    await w.put("still", await asyncio.to_thread(pngs[0].read_bytes), "image/png")
+    return {"seconds": res.seconds}
+
+
+async def _render(service: Any, w: Work) -> dict[str, Any]:
+    import re
+
+    p = w.job.params
+    fmt = str(p.get("format", "mp4"))
+    folder = await asyncio.to_thread(_page, service, w, p["template"], p["slots"])
+    out = w.folder / f"video.{fmt}"
+    seen = re.compile(r"(\d{1,3})\s*%")
+
+    def on_progress(line: str) -> None:
+        hits = seen.findall(line)
+        if hits:
+            w.report_soon(min(int(hits[-1]), 100) / 100, "Drawing")
+
+    res = await service.render(folder, out, on_progress, ("--format", fmt))
+    numbers = {
+        "seconds": res.seconds, "peak_rss_bytes": res.peak_rss_bytes,
+        "blocked_count": res.blocked_count, "reason": res.reason, "message": res.message,
+        "ok": res.ok,
+    }  # fmt: skip
+    if res.ok and out.is_file():
+        await w.put("video", await asyncio.to_thread(out.read_bytes), f"video/{fmt}")
+    return numbers
+
+
+async def _lint(service: Any, w: Work) -> dict[str, Any]:
+    folder = w.folder / "lint"
+    await asyncio.to_thread(folder.mkdir)
+    await asyncio.to_thread((folder / "index.html").write_text, str(w.job.params["html"]))
+    return {"findings": await asyncio.to_thread(service.lint, folder)}
+
+
+async def _fetch_model(admin: Any, w: Work) -> dict[str, Any]:
+    async def report(fraction: float, label: str) -> None:
+        w.report_soon(fraction, label)
+
+    return await admin.fetch_model(str(w.job.params["model_id"]), report)  # type: ignore[no-any-return]
+
+
+async def _fetch_engine(admin: Any, w: Work) -> dict[str, Any]:
+    async def report(fraction: float, label: str) -> None:
+        w.report_soon(fraction, label)
+
+    return await admin.fetch_engine(str(w.job.params["name"]), report)  # type: ignore[no-any-return]
+
+
 HANDLERS: dict[str, Handler] = {
+    admin_wire.FETCH_MODEL: _fetch_model,
+    admin_wire.FETCH_ENGINE: _fetch_engine,
+    builder_wire.INSPECT: _inspect,
+    builder_wire.SNAPSHOT: _snapshot,
+    builder_wire.RENDER: _render,
+    builder_wire.LINT: _lint,
+    model3d_wire.MATTE: _matte,
+    model3d_wire.GENERATE: _generate,
     speech_wire.SPEAK: _speak,
     speech_wire.DESIGN: _design,
     speech_wire.CLONE: _clone,
@@ -186,7 +317,18 @@ HANDLERS: dict[str, Handler] = {
 }
 
 
-async def run_job(engine: Any, storage: Storage, job: EngineJob, worker: str) -> EngineOutcome:
+def _engine_for(engines: Any, kind: str) -> Any:
+    """The component a kind runs on: `speech.*` on the speech engine, `model3d.*` on the 3D service,
+    `admin.*` on the worker's own set-up component.
+    A single engine (not a mapping) is the speech engine."""
+    if isinstance(engines, Mapping):
+        return engines[kind.split(".", 1)[0]]
+    return engines
+
+
+async def run_job(
+    engines: Any, storage: Storage, job: EngineJob, worker: str, report: Report | None = None
+) -> EngineOutcome:
     """Run one job to an outcome. Nothing escapes: a failure is an outcome with a safe message."""
     import logging
     import time
@@ -201,8 +343,8 @@ async def run_job(engine: Any, storage: Storage, job: EngineJob, worker: str) ->
         )  # fmt: skip
     try:
         with tempfile.TemporaryDirectory(prefix="wasifyai-engine-") as tmp:
-            work = Work(job, storage, Path(tmp))
-            meta = await handler(engine, work)
+            work = Work(job, storage, Path(tmp), report)
+            meta = await handler(_engine_for(engines, job.kind), work)
             return EngineOutcome(
                 id=job.id, ok=True, outputs=work.outputs, meta=meta, worker=worker,
                 seconds=time.monotonic() - t0,
@@ -211,6 +353,11 @@ async def run_job(engine: Any, storage: Storage, job: EngineJob, worker: str) ->
         return EngineOutcome(
             id=job.id, ok=False, worker=worker, seconds=time.monotonic() - t0,
             error=EngineError(code=e.code, message=str(e)),
+        )  # fmt: skip
+    except Failed as e:
+        return EngineOutcome(
+            id=job.id, ok=False, worker=worker, seconds=time.monotonic() - t0,
+            error=EngineError(code=e.code, message=e.message),
         )  # fmt: skip
     except Refused as e:
         return EngineOutcome(

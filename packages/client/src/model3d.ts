@@ -41,6 +41,8 @@ export type Model3dComponent = {
 
 export type Model3dStatus = {
   ready: boolean;
+  /** where the work is done: on this computer, or on a service's worker */
+  place?: "device" | "service";
   problem: string | null;
   fit: Fit | null;
   busy: boolean;
@@ -128,7 +130,25 @@ export type Model3dApi = {
   exportCopy(id: string, path?: string): Promise<{ name: string; path: string }>;
 };
 
-export function createModel3dApi(transport: Transport, product = MODEL3D_PRODUCT_ID): Model3dApi {
+export type Model3dApiOptions = {
+  product?: string;
+  /** The web: the component is on a worker, set up by whoever runs the service, so there is nothing to
+   * install from the page and its state is read from the product's status. */
+  hosted?: boolean;
+};
+
+const HOSTED_ABOUT = {
+  built_with: "Built with DINOv3",
+  licence: "Models: MIT, and the DINOv3 licence for the image encoder.",
+  where: "Made on the service's graphics card; the picture is deleted when the model is made.",
+};
+
+export function createModel3dApi(
+  transport: Transport,
+  options: Model3dApiOptions | string = {},
+): Model3dApi {
+  const { product = MODEL3D_PRODUCT_ID, hosted = false } =
+    typeof options === "string" ? { product: options } : options;
   const base = `/products/${product}/m3d`;
 
   async function json<T>(path: string, init?: RequestInit): Promise<T> {
@@ -156,16 +176,45 @@ export function createModel3dApi(transport: Transport, product = MODEL3D_PRODUCT
     if (!res.ok && res.status !== 404) throw new HttpError(res.status, await errorMessage(res));
   };
 
+  const notHere = <T>(): Promise<T> =>
+    Promise.reject(new Error("This is set up by whoever runs this service, not from this page."));
+
+  /** What the setup card reads, from the product's status: a worker that is ready is "installed". */
+  async function hostedComponent(): Promise<Model3dComponent> {
+    const s = await json<Model3dStatus>(`${base}/status`);
+    return {
+      installed: s.ready,
+      source: "worker",
+      plan: { supported: true, platform: "worker", bytes: 0, parts: [], found: null },
+      progress: {
+        state: s.ready ? "ready" : "idle",
+        step: null,
+        message: s.problem ?? "",
+        done_bytes: 0,
+        total_bytes: 0,
+      },
+      fit: s.fit,
+      about: HOSTED_ABOUT,
+    };
+  }
+
   return {
-    component: () => json<Model3dComponent>("/desktop/model3d"),
+    component: () => (hosted ? hostedComponent() : json<Model3dComponent>("/desktop/model3d")),
     install: (confirmBytes) =>
-      json<Model3dComponent>(
-        "/desktop/model3d/install",
-        send("POST", { confirm_bytes: confirmBytes }),
-      ),
+      hosted
+        ? notHere<Model3dComponent>()
+        : json<Model3dComponent>(
+            "/desktop/model3d/install",
+            send("POST", { confirm_bytes: confirmBytes }),
+          ),
     cancelInstall: () =>
-      json<Model3dComponent>("/desktop/model3d/install/cancel", { method: "POST" }),
-    uninstall: () => json("/desktop/model3d/uninstall", { method: "POST" }),
+      hosted
+        ? notHere<Model3dComponent>()
+        : json<Model3dComponent>("/desktop/model3d/install/cancel", { method: "POST" }),
+    uninstall: () =>
+      hosted
+        ? notHere<{ freed_bytes: number } & Model3dComponent>()
+        : json("/desktop/model3d/uninstall", { method: "POST" }),
     status: () => json<Model3dStatus>(`${base}/status`),
     addPicture: (picture, name = "") =>
       json<PictureInput>(`${base}/inputs?name=${enc(name)}`, {

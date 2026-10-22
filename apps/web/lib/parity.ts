@@ -11,7 +11,7 @@ export const PARITY: Record<string, Parity> = {
   library: { status: "live", note: "My creations" },
   models: {
     status: "desktop-only",
-    note: "an admin chooses the models of a deployment (Models in the admin area); the person's own model picker is for local models",
+    note: "the picker is on the voice, music and lip sync screens and an admin gets models onto a worker in Admin > Workers (P5); chat models are the admin's Models page; the nine-card Models page is the desktop's",
   },
   train: { status: "soon", note: "not built on either app" },
 
@@ -23,8 +23,8 @@ export const PARITY: Record<string, Parity> = {
   "images.inpaint": { status: "live", note: "shared ImageWorkspace, mode inpaint" },
   "images.reference": { status: "live", note: "shared ImageWorkspace, mode reference" },
   "images.model3d": {
-    status: "soon",
-    note: "needs the 3D engine (Pixal3D) as a job on a GPU host (ADR-0080); on the desktop it is a local component",
+    status: "live",
+    note: "shared Model3d screen; Pixal3D runs as a job on an engine worker (ADR-0087, P3), rows in Postgres, files in storage",
   },
   "images.library": { status: "live", note: "shared ImageLibrary" },
 
@@ -35,8 +35,8 @@ export const PARITY: Record<string, Parity> = {
     note: "shared VideoWorkspace, mode extend; needs ffmpeg in the API image",
   },
   "video.builder": {
-    status: "soon",
-    note: "needs the sandboxed browser render as a job on a worker (ADR-0077); on the desktop it is a local component",
+    status: "live",
+    note: "shared VideoBuilder screen; the sandboxed render runs as a job on an engine worker (ADR-0087, P4), rows in Postgres, videos are library clips",
   },
   "video.library": { status: "live", note: "shared VideoLibrary" },
 

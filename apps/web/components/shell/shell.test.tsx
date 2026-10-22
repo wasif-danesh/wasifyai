@@ -67,7 +67,8 @@ describe("the side panel", () => {
     panel();
     expect(screen.getByRole("link", { name: /Edit/ })).toHaveAttribute("href", "/image/edit");
     expect(screen.getByRole("link", { name: /Inpaint/ })).toHaveAttribute("href", "/image/inpaint");
-    const soon = screen.getByRole("button", { name: /3D model/ });
+    expect(screen.getByRole("link", { name: /3D model/ })).toHaveAttribute("href", "/image/3d");
+    const soon = screen.getByRole("button", { name: /Train/ });
     expect(soon).toBeDisabled();
     expect(within(soon).getByText("Soon")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Notebook/ })).toBeInTheDocument();

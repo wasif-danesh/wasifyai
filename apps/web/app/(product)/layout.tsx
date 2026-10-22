@@ -1,3 +1,4 @@
+import { WebModelChoices } from "@/components/models/WebModelChoices";
 import { AppSidebar } from "@/components/shell/AppSidebar";
 import { TopBar } from "@/components/shell/TopBar";
 import { UserMenu } from "@/components/shell/UserMenu";
@@ -20,7 +21,7 @@ export default async function ProductLayout({ children }: { children: ReactNode 
         <SidebarInset>
           <TopBar />
           <main id="main" className={page}>
-            {children}
+            <WebModelChoices isAdmin={isAdmin}>{children}</WebModelChoices>
           </main>
         </SidebarInset>
       </SidebarProvider>

@@ -27,7 +27,8 @@ from redis.exceptions import ResponseError
 NAMESPACE = "wasifyai:engine"
 JOBS_GROUP = "engine-workers"
 
-DONE_TTL_S = 3600
+DONE_TTL_S = 6 * 3600  # an outcome waits this long for an API that restarted to come and read it
+SEEN_TTL_S = 6 * 3600
 WORKER_TTL_S = 30  # a worker refreshes its entry well inside this; a dead one drops out of the list
 # a job a worker took and never finished is run again by another after this long
 RECLAIM_AFTER_MS = 45 * 60 * 1000
@@ -71,6 +72,8 @@ class EngineWorkerInfo(BaseModel):
     id: str
     kinds: list[str]
     models: list[dict[str, Any]]  # the engine's descriptors with their state on that machine
+    # other components this worker runs, by name, with their state (`model3d`: ready, problem, fit)
+    components: dict[str, Any] = Field(default_factory=dict)
     busy: bool = False
     seen: float = 0.0
 
@@ -90,6 +93,8 @@ class EngineQueue:
         self._done = f"{namespace}:done:"
         self._progress = f"{namespace}:progress:"
         self._worker = f"{namespace}:worker:"
+        self._cancel = f"{namespace}:cancel:"
+        self._seen = f"{namespace}:seen:"
 
     async def _ensure(self) -> None:
         if self._ready:
@@ -106,6 +111,7 @@ class EngineQueue:
     async def submit(self, job: EngineJob) -> None:
         await self._ensure()
         await self._r.xadd(self._jobs, {"d": job.model_dump_json()})
+        await self._r.set(self._seen + job.id, "1", ex=SEEN_TTL_S)  # `status` knows it was sent
 
     async def wait(
         self,
@@ -124,6 +130,7 @@ class EngineQueue:
                 raise EngineUnavailable("The speech worker did not answer in time.")
             popped = await self._r.brpop([key], timeout=max(1, min(poll_s, int(left))))
             if popped:
+                await self._r.delete(self._seen + job_id)
                 return EngineOutcome.model_validate_json(popped[1])
             if on_progress is not None:
                 raw = await self._r.get(self._progress + job_id)
@@ -131,6 +138,33 @@ class EngineQueue:
                     last = raw
                     p = json.loads(raw)
                     await on_progress(float(p.get("fraction", 0.0)), str(p.get("label", "")))
+
+    async def status(self, job_id: str) -> str:
+        """Where a job stands for an API that restarted and wants to pick it up again: `done` (the
+        outcome is waiting), `waiting` (sent, not finished) or `lost` (never sent, or too old)."""
+        if await self._r.exists(self._done + job_id):
+            return "done"
+        return "waiting" if await self._r.exists(self._seen + job_id) else "lost"
+
+    async def peek(self, job_id: str) -> EngineOutcome | None:
+        """The outcome of a job without taking it, for a page that follows a job it does not wait
+        for (an admin fetching a model). It stays until it expires."""
+        raw = await self._r.lindex(self._done + job_id, 0)  # type: ignore[misc]
+        return EngineOutcome.model_validate_json(raw) if raw else None
+
+    async def progress_of(self, job_id: str) -> tuple[float, str] | None:
+        raw = await self._r.get(self._progress + job_id)
+        if not raw:
+            return None
+        p = json.loads(raw)
+        return float(p.get("fraction", 0.0)), str(p.get("label", ""))
+
+    async def cancel(self, job_id: str) -> None:
+        """Ask the worker that has this job to stop it (a 3D run takes minutes)."""
+        await self._r.set(self._cancel + job_id, "1", ex=DONE_TTL_S)
+
+    async def cancelled(self, job_id: str) -> bool:
+        return bool(await self._r.exists(self._cancel + job_id))
 
     async def workers(self) -> list[EngineWorkerInfo]:
         out = []

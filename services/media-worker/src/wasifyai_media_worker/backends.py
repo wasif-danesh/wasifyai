@@ -336,8 +336,10 @@ class BackendRouter:
                 )
 
     def _video_url(self, job: JobRequest) -> str:
-        """The separate ComfyUI for video jobs, if set (never in stub mode)."""
-        if job.capability.startswith("video.") and self._s.comfyui_mode != "stub":
+        """The separate ComfyUI for video jobs, if set (never in stub mode, and never when this
+        worker runs the desktop's own ComfyUI: that one serves video too)."""
+        own = self._s.comfyui_mode in ("stub", "sidecar")
+        if job.capability.startswith("video.") and not own:
             return self._s.comfyui_video_base_url
         return ""
 

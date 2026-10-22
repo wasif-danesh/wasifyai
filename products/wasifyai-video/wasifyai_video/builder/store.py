@@ -175,9 +175,9 @@ class BuilderStore:
     def version_count(self, cid: str) -> int:
         with self._connect() as db:
             row = db.execute(
-                "SELECT count(*) FROM versions WHERE composition_id=?", (cid,)
+                "SELECT count(*) AS n FROM versions WHERE composition_id=?", (cid,)
             ).fetchone()
-        return int(row[0])
+        return int(row["n"])
 
     def undo_composition(self, tenant: str, user: str, cid: str) -> dict[str, Any]:
         """Bring back the version before this one (the current one is not kept)."""
@@ -245,6 +245,13 @@ class BuilderStore:
             ).fetchall()
         return [self.get_render(tenant, user, r["id"]) for r in rows]
 
+    def working_renders(self) -> list[dict[str, Any]]:
+        """Renders being made now, for any person: what a restarted service picks up again."""
+        with self._connect() as db:
+            rows = db.execute("SELECT id, tenant_id, user_id FROM renders WHERE status='working'")
+            ids = [(r["tenant_id"], r["user_id"], r["id"]) for r in rows.fetchall()]
+        return [self.get_render(*one) for one in ids]
+
     def set_check(self, rid: str, report: dict[str, Any]) -> None:
         with self._connect() as db:
             db.execute("UPDATE renders SET check_report=? WHERE id=?", (json.dumps(report), rid))
@@ -264,6 +271,6 @@ class BuilderStore:
             db.execute(
                 "UPDATE renders SET status=?, video_id=?, error=?, elapsed_s=?, peak_mb=?, "
                 "blocked=?, finished_at=?, progress=CASE WHEN ?='done' THEN 1 ELSE progress END "
-                "WHERE id=?",
+                "WHERE id=? AND status='working'",
                 (status, video_id, error, elapsed_s, peak_mb, blocked, now(), status, rid),
             )

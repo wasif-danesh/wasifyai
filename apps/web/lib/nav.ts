@@ -5,8 +5,10 @@ import { VOICE_SCREENS, isVoiceScreen } from "./voice-screens";
 const SUBPAGES: Record<string, string> = {
   edit: "Edit",
   inpaint: "Inpaint",
+  "3d": "3D model",
   reference: "Reference",
   extend: "Extend video",
+  builder: "Video Builder",
   animate: "Animate a picture",
   library: "Library",
 };

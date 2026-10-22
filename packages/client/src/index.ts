@@ -264,3 +264,10 @@ export {
   gigabytes,
   minutes,
 } from "./model3d";
+export {
+  createWorkersApi,
+  type FetchJob,
+  type WorkerInfo,
+  type WorkerModel,
+  type WorkersApi,
+} from "./workers";

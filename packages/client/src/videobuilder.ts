@@ -137,6 +137,10 @@ export type BuilderProject = {
 
 export type BuilderStatus = {
   ready: boolean;
+  /** why it cannot be used now, in words (a worker that is not running, a component not set up) */
+  problem?: string | null;
+  /** where the work is done: on this computer, or on a service's worker */
+  place?: "device" | "service";
   fit: { verdict: "fits" | "tight" | "too_big"; reason: string };
   busy: boolean;
 };
@@ -186,10 +190,19 @@ export type VideoBuilderApi = {
   cancel(renderId: string): Promise<BuilderRender>;
 };
 
+export type VideoBuilderApiOptions = {
+  product?: string;
+  /** The web: the component is on a worker, set up by whoever runs the service, so there is nothing to
+   * install from the page and its state is read from the product's status. */
+  hosted?: boolean;
+};
+
 export function createVideoBuilderApi(
   transport: Transport,
-  product = VIDEO_BUILDER_PRODUCT_ID,
+  options: VideoBuilderApiOptions | string = {},
 ): VideoBuilderApi {
+  const { product = VIDEO_BUILDER_PRODUCT_ID, hosted = false } =
+    typeof options === "string" ? { product: options } : options;
   const base = `/products/${product}/builder`;
 
   async function json<T>(path: string, init?: RequestInit): Promise<T> {
@@ -206,14 +219,45 @@ export function createVideoBuilderApi(
   });
   const enc = encodeURIComponent;
 
+  const notHere = <T>(): Promise<T> =>
+    Promise.reject(new Error("This is set up by whoever runs this service, not from this page."));
+
+  /** What the setup card reads, from the product's status: a worker that is ready is "installed". */
+  async function hostedComponent(): Promise<BuilderComponent> {
+    const s = await json<BuilderStatus>(`${base}/status`);
+    return {
+      installed: s.ready,
+      tools: { ready: s.ready, message: s.problem ?? "" },
+      source: "worker",
+      plan: { supported: true, platform: "worker", bytes: 0, parts: [], found: null },
+      progress: {
+        state: s.ready ? "ready" : "idle",
+        step: null,
+        message: s.problem ?? "",
+        done_bytes: 0,
+        total_bytes: 0,
+      },
+      sandbox: {
+        network: "A video can reach nothing outside its own folder.",
+        telemetry: "Nothing is sent anywhere while it runs.",
+      },
+    };
+  }
+
   return {
-    component: () => json<BuilderComponent>("/desktop/video-builder"),
+    component: () =>
+      hosted ? hostedComponent() : json<BuilderComponent>("/desktop/video-builder"),
     install: (confirmBytes) =>
-      json<BuilderComponent>(
-        "/desktop/video-builder/install",
-        send("POST", { confirm_bytes: confirmBytes }),
-      ),
-    uninstall: () => json("/desktop/video-builder/uninstall", { method: "POST" }),
+      hosted
+        ? notHere<BuilderComponent>()
+        : json<BuilderComponent>(
+            "/desktop/video-builder/install",
+            send("POST", { confirm_bytes: confirmBytes }),
+          ),
+    uninstall: () =>
+      hosted
+        ? notHere<{ freed_bytes: number } & BuilderComponent>()
+        : json("/desktop/video-builder/uninstall", { method: "POST" }),
     status: () => json<BuilderStatus>(`${base}/status`),
     templates: () => json<TemplateCatalogue>(`${base}/templates`),
     list: async () => (await json<{ items: BuilderProject[] }>(`${base}/projects`)).items,

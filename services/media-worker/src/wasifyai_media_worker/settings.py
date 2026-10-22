@@ -13,7 +13,14 @@ class WorkerSettings(BaseSettings):
     # Video runs on its own ComfyUI (ADR-0037): the model needs fp32 weights on a Mac, a
     # process-wide setting that would slow the image and music models. Empty: COMFYUI_BASE_URL.
     comfyui_video_base_url: str = ""
-    comfyui_mode: str = "real"  # real | stub (stub returns placeholder files, no GPU needed)
+    # real: a ComfyUI at COMFYUI_BASE_URL; sidecar: the ComfyUI the desktop app installed, started
+    # and stopped by this worker (a Mac running the web stack, ADR-0087); stub: placeholder files
+    comfyui_mode: str = "real"
+    # sidecar mode: the desktop app's data folder (where its ComfyUI and models are), and the
+    # model folders it reads (the app's own, then read-only ones, separated like PATH)
+    desktop_data_dir: str = ""
+    desktop_models_dir: str = ""
+    desktop_extra_model_dirs: str = ""
 
     media_secrets_key: str = ""  # decrypts the API keys saved in the admin area (ADR-0025)
 

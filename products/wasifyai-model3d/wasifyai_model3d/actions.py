@@ -30,6 +30,7 @@ from wasifyai_model3d.runtime import (
     PRODUCT_ID,
     Refused,
     add_to_search,
+    blobs_for,
     delete_model,
     engine_for,
     manager_for,
@@ -99,7 +100,7 @@ async def _generate(p: GenerateIn, ctx: ActionContext) -> Outcome:
     row = store.add_input(ctx.actor.tenant_id, ctx.actor.user_id, "library picture", *img.size)
     try:
         await jobs.prepare(ctx.actor, row["id"], png)
-        await jobs.wait(row["id"])
+        await jobs.wait(ctx.actor, row["id"])
         checked = store.get_input(ctx.actor.tenant_id, ctx.actor.user_id, row["id"])
         if checked["status"] != "ready":
             return Outcome.error(checked["error"] or "The picture could not be cut out.", "cutout")
@@ -110,7 +111,7 @@ async def _generate(p: GenerateIn, ctx: ActionContext) -> Outcome:
             ctx.actor, row["id"], title=p.title, prompt=p.prompt, detail=p.detail, seed=p.seed
         )
         try:
-            await jobs.wait(made["id"])
+            await jobs.wait(ctx.actor, made["id"])
         except asyncio.CancelledError:
             await jobs.cancel(ctx.actor, made["id"])
             raise
@@ -168,29 +169,27 @@ async def _rename(ctx: ActionContext, item_id: str, name: str) -> bool:
     return True
 
 
-async def _glb(ctx: ActionContext, item_id: str) -> Path | None:
-    store = store_for(need_deps(ctx).state)
+async def _glb(ctx: ActionContext, item_id: str) -> bytes | None:
+    state = need_deps(ctx).state
     try:
-        row = store.get_model(ctx.actor.tenant_id, ctx.actor.user_id, item_id)
+        row = store_for(state).get_model(ctx.actor.tenant_id, ctx.actor.user_id, item_id)
     except NotFound:
         return None
     if row["status"] != "done":
         return None
-    path = store.folder_of(ctx.actor.tenant_id, ctx.actor.user_id, "models", item_id) / "model.glb"
-    return path if path.is_file() else None
+    return await blobs_for(state).get(ctx.actor, "models", item_id, "model.glb")
 
 
 async def _export(ctx: ActionContext, item_id: str, folder: Path) -> Path | None:
-    path = await _glb(ctx, item_id)
-    if path is None:
+    data = await _glb(ctx, item_id)
+    if data is None:
         return None
     row = store_for(need_deps(ctx).state).get_model(ctx.actor.tenant_id, ctx.actor.user_id, item_id)
-    return await asyncio.to_thread(files.save_copy, folder, files.file_stem(row["title"]), path)
+    return await asyncio.to_thread(files.save_bytes, folder, files.file_stem(row["title"]), data)
 
 
 async def _read(ctx: ActionContext, item_id: str) -> bytes | None:
-    path = await _glb(ctx, item_id)
-    return await asyncio.to_thread(path.read_bytes) if path else None
+    return await _glb(ctx, item_id)
 
 
 def actions() -> list[Action]:

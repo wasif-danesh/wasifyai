@@ -1,9 +1,12 @@
 """The engine worker's job handlers, with a fake engine and memory storage."""
 
+import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from wasifyai_engine_worker.admin import AdminComponent
 from wasifyai_engine_worker.handlers import run_job
 from wasifyai_platform_sdk import (
     EngineJob,
@@ -15,6 +18,7 @@ from wasifyai_platform_sdk import (
     TranscriptResult,
     TranscriptSegment,
     VoiceEngineError,
+    admin_wire,
     memory_storage,
     speech_wire,
 )
@@ -157,3 +161,107 @@ async def test_an_unknown_kind_and_a_crash_do_not_leak_details():
 
     out = await run_job(Broken(), memory_storage(), job(speech_wire.SPEAK, {"text": "x"}), "w")
     assert out.error and out.error.code == "engine_failed" and "secret" not in out.error.message
+
+
+# ---- admin jobs: getting a model onto the worker (ADR-0087, P5) -------------------------------
+
+
+class _Downloads:
+    def __init__(self, ends: str) -> None:
+        self.ends = ends
+        self.started: list[tuple[str, list[str]]] = []
+        self.cancelled: list[str] = []
+
+    def start(self, entry, files, models_dir):
+        d = SimpleNamespace(
+            id="d1", status="running", bytes_done=0, bytes_total=10, current="m.bin", error=""
+        )
+        self.started.append((entry.id, [f.name for f in files]))
+
+        async def finish() -> None:
+            await asyncio.sleep(0.01)
+            d.bytes_done, d.status = 10, self.ends
+            d.error = "No space left." if self.ends == "failed" else ""
+
+        asyncio.get_running_loop().create_task(finish())
+        return d
+
+    def cancel(self, download_id: str) -> bool:
+        self.cancelled.append(download_id)
+        return True
+
+
+class _Catalogue:
+    def __init__(self, entries: dict[str, Any]) -> None:
+        self._entries = entries
+
+    def get(self, key: str) -> Any:
+        return self._entries.get(key)
+
+
+class _Speech:
+    """The speech engine's model service, as far as the admin component uses it."""
+
+    def __init__(self, ends: str = "done", have: bool = False) -> None:
+        file = SimpleNamespace(name="m.bin", size=10)
+        entry = SimpleNamespace(
+            id="voxcpm2", files=[file], source="huggingface.co/x", voice=object()
+        )
+        self.downloads = _Downloads(ends)
+        self.models_dir = Path("/nowhere")
+        self.catalogue = _Catalogue(
+            {"voxcpm2": entry, "ocr": SimpleNamespace(id="ocr", files=[], voice=None)}
+        )
+        self.models_service = self
+        self.lipsync_sidecar = None
+        self._have = have
+
+    def locate(self, file):
+        return Path("/here") if self._have else None
+
+
+def _job(kind: str, **params: Any) -> EngineJob:
+    return EngineJob(
+        kind=kind, tenant_id="t1", product_id="wasifyai-voice", user_id="u1", prefix=PREFIX,
+        params=params,
+    )  # fmt: skip
+
+
+def _engines(speech: _Speech) -> dict[str, Any]:
+    return {"speech": speech, "admin": AdminComponent(speech, poll_s=0.005)}
+
+
+@pytest.mark.asyncio
+async def test_a_model_is_fetched_by_a_job_and_its_progress_is_told():
+    speech = _Speech()
+    told: list[tuple[float, str]] = []
+
+    async def report(f: float, label: str) -> None:
+        told.append((f, label))
+
+    job = _job(admin_wire.FETCH_MODEL, model_id="voxcpm2")
+    out = await run_job(_engines(speech), memory_storage(), job, "w1", report)
+    assert out.ok and out.meta["bytes"] == 10 and out.meta["already"] is False
+    assert speech.downloads.started == [("voxcpm2", ["m.bin"])]
+    assert told and told[0][1] == "Downloading m.bin"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_download_comes_back_as_words():
+    job = _job(admin_wire.FETCH_MODEL, model_id="voxcpm2")
+    out = await run_job(_engines(_Speech("failed")), memory_storage(), job, "w1")
+    assert not out.ok and out.error and out.error.message == "No space left."
+
+
+@pytest.mark.asyncio
+async def test_what_is_here_is_not_fetched_again_and_what_is_not_a_model_is_refused():
+    here = _Speech(have=True)
+    job = _job(admin_wire.FETCH_MODEL, model_id="voxcpm2")
+    again = await run_job(_engines(here), memory_storage(), job, "w1")
+    assert again.ok and again.meta["already"] is True and here.downloads.started == []
+    other = _job(admin_wire.FETCH_MODEL, model_id="ocr")
+    unknown = await run_job(_engines(here), memory_storage(), other, "w1")
+    assert not unknown.ok and unknown.error and unknown.error.code == "unknown_model"
+    engine = _job(admin_wire.FETCH_ENGINE, name="rm-rf")
+    refused = await run_job(_engines(here), memory_storage(), engine, "w1")
+    assert not refused.ok and refused.error and refused.error.code == "unknown_engine"

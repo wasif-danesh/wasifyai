@@ -9,3 +9,4 @@ export {
   useChoicesFor,
   useChoicesVersion,
 } from "./context";
+export { COPY, type Copy, hostOf, plainFor } from "./copy";

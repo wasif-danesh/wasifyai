@@ -1,10 +1,12 @@
 import asyncio
 import logging
 import os
+import shutil
 import tempfile
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -55,6 +57,7 @@ from wasifyai_api.admin import router as admin_router
 from wasifyai_api.admin_media import router as admin_media_router
 from wasifyai_api.admin_models import router as admin_models_router
 from wasifyai_api.admin_safeguards import router as admin_safeguards_router
+from wasifyai_api.admin_workers import router as admin_workers_router
 from wasifyai_api.attachments import router as attachments_router
 from wasifyai_api.auth import MIN_SECRET_BYTES
 from wasifyai_api.config import get_settings
@@ -79,6 +82,7 @@ from wasifyai_api.desktop_model3d import router as desktop_model3d_router
 from wasifyai_api.desktop_models import router as desktop_models_router
 from wasifyai_api.desktop_save import router as desktop_save_router
 from wasifyai_api.desktop_video_builder import router as desktop_video_builder_router
+from wasifyai_api.engine_workers import WorkerDirectory
 from wasifyai_api.graphs import default_registry
 from wasifyai_api.identity import get_identity
 from wasifyai_api.jobs_consumer import JobCompletionConsumer
@@ -447,6 +451,11 @@ def create_app(
         )
         app.state.engine = db
         app.state.storage = store
+        # the engine workers that run the desktop's heavy capabilities for the web (ADR-0087):
+        # speech and 3D read what they have from one list
+        if not desktop and store is not None and conn is not None:
+            app.state.engine_workers = WorkerDirectory(EngineQueue(conn))
+            app.state.engine_workers.start()
         # a product is served when it is part of this deployment: its folder is in the products
         # directory
         if (
@@ -493,8 +502,10 @@ def create_app(
                         for e in load_catalogue(Path(pdir), ["wasifyai-voice"])
                         if e.voice is not None
                     }
-                    remote = RemoteSpeechEngine(EngineQueue(conn), store.backing, voice_models)
-                    remote.start()
+                    remote = RemoteSpeechEngine(
+                        EngineQueue(conn), store.backing, voice_models,
+                        directory=app.state.engine_workers,
+                    )  # fmt: skip
                     app.state.audio = CombinedSpeechEngine(remote, hosted)
                 else:
                     from wasifyai_api.local_speech import CombinedSpeechEngine, build_local_engine
@@ -529,6 +540,74 @@ def create_app(
                     embed_model=settings.notebooks_embed_model,
                     embed_dimension=settings.notebooks_embed_dimension,
                 )
+        if (
+            not desktop
+            and store is not None
+            and db is not None
+            and conn is not None
+            and (pdir / "wasifyai-model3d").is_dir()
+        ):
+            try:
+                from wasifyai_model3d.blobs import StorageBlobs
+                from wasifyai_model3d.pgstore import PostgresModel3dStore
+                from wasifyai_model3d.runtime import resume as resume_model3d
+                from wasifyai_model3d.runtime import sweep as sweep_model3d
+
+                from wasifyai_api.remote_model3d import RemoteModel3dEngine
+            except ImportError:  # the 3D product is not part of this build
+                logging.getLogger("wasifyai_api").warning(
+                    "the 3D product is not installed: no 3D models on the web"
+                )
+            else:
+                # 3D models on engine workers (ADR-0087, P3): Postgres for the rows, object storage
+                # for the files, a worker that has the component for the work
+                app.state.model3d_store = await asyncio.to_thread(
+                    PostgresModel3dStore, settings.database_url
+                )
+                app.state.model3d_blobs = StorageBlobs(store)
+                app.state.model3d = RemoteModel3dEngine(
+                    EngineQueue(conn), store.backing, app.state.engine_workers
+                )
+                await sweep_model3d(app.state)
+                await resume_model3d(route_deps)
+        if (
+            not desktop
+            and store is not None
+            and db is not None
+            and conn is not None
+            and (pdir / "wasifyai-video").is_dir()
+        ):
+            try:
+                from wasifyai_video.builder.pgstore import PostgresBuilderStore
+
+                from wasifyai_api.remote_builder import RemoteBuilderEngine
+            except ImportError:  # the video product is not part of this build
+                logging.getLogger("wasifyai_api").warning(
+                    "the video product is not installed: no Video Builder on the web"
+                )
+            else:
+                # Video Builder on engine workers (ADR-0087, P4): Postgres for the compositions, a
+                # worker with the sandboxed browser for the drawing; videos are library clips
+                app.state.builder_store = await asyncio.to_thread(
+                    PostgresBuilderStore, settings.database_url
+                )
+                app.state.builder_scratch = Path(tempfile.mkdtemp(prefix="wasifyai-builder-"))
+                app.state.video_builder = RemoteBuilderEngine(
+                    EngineQueue(conn),
+                    store.backing,
+                    app.state.engine_workers,
+                    gateway_url=settings.litellm_base_url,
+                    gateway_key=settings.litellm_api_key,
+                    usage=recorder,
+                )
+                stale = (datetime.now(UTC) - timedelta(hours=3)).isoformat()
+                await asyncio.to_thread(
+                    app.state.builder_store.fail_stale, stale, "It was stopped before it finished."
+                )
+                # what a worker was still drawing when this service stopped is waited for again
+                from wasifyai_video.builder.runtime import manager_for as renders_for
+
+                await renders_for(route_deps).resume_all()
         if desktop:
             app.state.local_files = desktop.local_files
             app.state.desktop_models = desktop.models
@@ -585,6 +664,10 @@ def create_app(
             # cancelled in the middle of a query rolls back through its connection, and a connection
             # that is already closed never answers, which left the task (and the event loop's own
             # shutdown) waiting forever.
+            # the jobs on engine workers go on while this service restarts: stopping is not Stop
+            for name in ("model3d", "video_builder"):
+                if not desktop and getattr(getattr(app.state, name, None), "resumable", False):
+                    getattr(app.state, name).closing = True
             background = [t for t in (seeder, sweeper, reconciler) if t]
             for t in background:
                 t.cancel()
@@ -599,6 +682,16 @@ def create_app(
                     close = getattr(web_audio, "close", None)
                     await (close() if close is not None else web_audio.stop())
                 await asyncio.to_thread(web_voice.close)
+            if (directory := getattr(app.state, "engine_workers", None)) is not None:
+                await directory.close()
+            if (m3d_store := getattr(app.state, "model3d_store", None)) is not None:
+                close_m3d = getattr(m3d_store, "close", None)
+                if close_m3d is not None and not desktop:
+                    await asyncio.to_thread(close_m3d)
+            if (b_store := getattr(app.state, "builder_store", None)) is not None and not desktop:
+                await asyncio.to_thread(b_store.close)
+            if (scratch := getattr(app.state, "builder_scratch", None)) is not None:
+                shutil.rmtree(scratch, ignore_errors=True)
             if getattr(app.state, "runs", None):
                 await app.state.runs.aclose()
             if owns_conn and conn is not None:
@@ -642,6 +735,7 @@ def create_app(
     app.include_router(admin_router)
     app.include_router(admin_models_router)
     app.include_router(admin_media_router)
+    app.include_router(admin_workers_router)
     app.include_router(admin_safeguards_router)
     app.include_router(uploads_router)
     app.include_router(attachments_router)

@@ -79,7 +79,6 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
     def guard() -> None:
         try:
             engine_for(deps.state)
-            root_for(deps.state)
         except NotAvailable as e:
             raise HTTPException(404, str(e)) from None
 
@@ -152,7 +151,16 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
     async def status(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
         guard()
         engine = engine_for(deps.state)
-        return {"ready": engine.ready(), "fit": engine.fit(), "busy": manager_for(deps).busy}
+        return {
+            "ready": engine.ready(),
+            "fit": engine.fit(),
+            "busy": manager_for(deps).busy(identity),
+            "problem": engine.problem() if hasattr(engine, "problem") else None,
+            # where the work is done: on this computer, or on a service's worker
+            "place": "device"
+            if getattr(deps.state, "builder_scratch", None) is None
+            else "service",
+        }
 
     @router.get("/templates")
     async def list_templates(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
@@ -248,12 +256,13 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         found = composition(identity, cid)
         if not engine.ready():
             raise HTTPException(409, {"code": "not_ready", "message": not_ready(engine)})
-        if manager_for(deps).busy:
+        if manager_for(deps).busy(identity):
             raise HTTPException(
                 409, {"code": "busy", "message": "A video is being made. Try again in a moment."}
             )
         folder = await asyncio.to_thread(write_files, identity, found, engine)
-        return await check.run_check(engine, folder, found["template"], found["slots"])
+        with deps.acting_as(identity, PRODUCT_ID):
+            return await check.run_check(engine, folder, found["template"], found["slots"])
 
     @router.delete("/projects/{cid}", status_code=204)
     async def delete_project(cid: str, identity: Identity = Depends(deps.identity)) -> Response:
@@ -270,7 +279,12 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
             (folder / "index.html").write_text(
                 templates.render_html(found["template"], found["slots"])
             )
-            findings = await asyncio.to_thread(engine_for(deps.state).lint, folder)
+            engine = engine_for(deps.state)
+            with deps.acting_as(identity, PRODUCT_ID):
+                if asyncio.iscoroutinefunction(engine.lint):  # a worker's engine
+                    findings = await engine.lint(folder)
+                else:
+                    findings = await asyncio.to_thread(engine.lint, folder)
         return {"ok": not findings, "findings": findings}
 
     @router.get("/projects/{cid}/preview")
@@ -294,13 +308,14 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         ]
         cached = folder / "previews" / f"{key}.png"
         if not cached.is_file():
-            if manager_for(deps).busy:
+            if manager_for(deps).busy(identity):
                 raise HTTPException(
                     409,
                     {"code": "busy", "message": "A video is being made. Try again in a moment."},
                 )
             work = folder / "previews" / f"work-{key}"
-            result = await engine.snapshot(folder, work, at)
+            with deps.acting_as(identity, PRODUCT_ID):
+                result = await engine.snapshot(folder, work, at)
             if not result.ok:
                 raise HTTPException(
                     502, {"code": "preview_failed", "message": result.message or "No preview."}

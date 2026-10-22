@@ -45,6 +45,8 @@ export function resolveWebItem(
         return live("image") ? page("/image/inpaint") : undefined;
       case "images.reference":
         return live("image") ? page("/image/reference") : undefined;
+      case "images.model3d":
+        return live("image") ? page("/image/3d") : undefined;
       case "images.library":
         return live("image") ? page("/image/library", "/image/creations") : undefined;
       case "video.create":
@@ -53,6 +55,8 @@ export function resolveWebItem(
         return live("video") ? page("/video/animate") : undefined;
       case "video.extend":
         return live("video") ? page("/video/extend") : undefined;
+      case "video.builder":
+        return live("video") ? page("/video/builder") : undefined;
       case "video.library":
         return live("video") ? page("/video/library", "/video/creations") : undefined;
       case "voice.speak":

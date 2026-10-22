@@ -6,6 +6,7 @@ import asyncio
 import sqlite3
 from pathlib import Path
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import IndexItem, search_text
 
@@ -73,10 +74,47 @@ class BuilderIndexSource:
         finally:
             db.close()
 
+    # on Postgres (the web) the compositions are in the `builder` schema
+    @property
+    def _postgres(self) -> bool:
+        return self._engine.dialect.name == "postgresql"
+
+    async def _pg_page(self, after: str | None, limit: int) -> list[IndexItem]:
+        async with self._engine.connect() as conn:
+            rows = (
+                await conn.execute(
+                    text(
+                        "SELECT id, tenant_id, user_id, template, slots FROM builder.compositions "
+                        "WHERE (CAST(:a AS text) IS NULL OR id > :a) ORDER BY id LIMIT :n"
+                    ),
+                    {"a": after, "n": limit},
+                )
+            ).all()
+        return [IndexItem(t, PRODUCT_ID, u, KIND, i, words_of(tm, s)) for i, t, u, tm, s in rows]
+
+    async def _pg_present(self, ids: list[str]) -> set[str]:
+        async with self._engine.connect() as conn:
+            rows = await conn.execute(
+                text("SELECT id FROM builder.compositions WHERE id = ANY(:ids)"), {"ids": ids}
+            )
+            return {r[0] for r in rows}
+
     async def page(self, after: str | None, limit: int) -> list[IndexItem]:
+        if self._postgres:
+            try:
+                return await self._pg_page(after, limit)
+            except (
+                Exception
+            ):  # the web has no builder tables (the product is off): nothing to index
+                return []
         return await asyncio.to_thread(self._page, after, limit)
 
     async def present(self, item_ids: list[str]) -> set[str]:
         if not item_ids:
             return set()
+        if self._postgres:
+            try:
+                return await self._pg_present(item_ids)
+            except Exception:
+                return set(item_ids)  # unknown is not gone: never remove what cannot be checked
         return await asyncio.to_thread(self._present, item_ids)

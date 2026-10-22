@@ -7,7 +7,7 @@ import { ModelHub } from "../ModelHub";
 import { ModelsPanel } from "../ModelsPanel";
 
 /**
- * The Models page (ADR-0086): a card for each kind of job. What only an expert needs, the model folders, the files
+ * The Models page (ADR-0086): a tab for each kind of job, with a table of its models. What only an expert needs, the model folders, the files
  * other tools left and the Hugging Face hub (ADR-0064), is under Advanced.
  */
 export function ModelsPage() {

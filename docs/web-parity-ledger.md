@@ -17,8 +17,9 @@ This page adds what the menu does not show. Everything that needs a GPU, a model
 | Speech, music, voices, splitting, dubbing, audiobook, lip sync | live when a worker has the model | engine worker (P0, P1 built); a screen appears when a worker lists a ready model |
 | Model picker on the Voice, Listening, Music and Lip sync screens | live (P5) | the same button and panel over the models the workers list; the choice is remembered in the browser; a model a worker lacks shows "ask an admin" to everyone but admins |
 | Safeguards on the new screens (P6) | same | 3D pictures and Video Builder words are moderated while safeguards are on, with daily limits and usage events; worker seconds are an `engine.seconds` event |
-| Getting a model onto a worker (the desktop's download dialog) | live (P5) | Admin > Workers: an admin starts the download on the worker, with its size first and progress; the worker checks the files; the same for the lip sync engine |
-| Model picker on Image, Video, Chat and 3D screens; the nine-card Models page; first-run chat card | desktop only | the deployment's admin chooses chat models (Admin > Models) and the media worker's workflows; 3D has one model; the web has no per-person disk |
+| Getting a model onto a worker (the desktop's download dialog) | live (P5) | the Get button of the Models page: an admin starts the download on the worker, with its size first and progress; the worker checks the files; the lip sync engine is set up first when a model needs it |
+| Models page (tabs with a table each, ADR-0089) | live for admins | Admin > Models and workers: Voice, Listening, Music and Lip sync tabs over the workers' models, with Get; no Remove, folders or Hugging Face on the web |
+| Model picker on Image, Video, Chat and 3D screens; first-run chat card | desktop only | the deployment's admin chooses chat models (Admin > Models) and the media worker's workflows; 3D has one model; the web has no per-person disk |
 | Save As box, window bar, Recents menu in the bar | desktop only | a browser downloads files and has its own bar |
 | Notebook, speech and music switches | removed | no feature switches on either app |
 
@@ -35,7 +36,7 @@ web job's test step fail without one. The desktop's actions are held to the same
 |---|---|---|---|
 | `chat` | live | the shared chat |  |
 | `library` | live | My creations |  |
-| `models` | desktop-only | the picker is on the voice, music and lip sync screens and an admin gets models onto a worker in Admin > Workers (P5); chat models are the admin's Models page; the nine-card Models page is the desktop's | owner, 2026-10-21: an admin chooses a deployment's models; the person's own disk is the desktop's. The models.* actions need the desktop's model service, so the web assistant does not offer them |
+| `models` | live | for admins, Admin > Models and workers is the Models page (the same tab table, over the workers' models, with the picker on the voice, music and lip sync screens for everyone); other people use the pickers. The models.* actions need the desktop's model service, so the web assistant does not offer them |  |
 | `train` | soon | not built on either app | owner, 2026-10-21: training is not built on the desktop either (ADR-0073 onwards) |
 | `notebook.create` | live | the shared notebooks, with the notebooks worker |  |
 | `notebook.list` | live | the shared notebooks |  |

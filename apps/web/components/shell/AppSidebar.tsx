@@ -29,7 +29,7 @@ export function AppSidebar({
     <Sidebar collapsible="offcanvas">
       <SidebarContent className="gap-0 overflow-hidden">
         <SideMenu
-          resolve={resolveWebItem(pathname, show, { voiceScreens })}
+          resolve={resolveWebItem(pathname, show, { voiceScreens, isAdmin })}
           link={Link}
           brandHref="/"
           recents={{

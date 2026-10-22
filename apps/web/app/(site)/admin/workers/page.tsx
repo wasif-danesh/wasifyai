@@ -1,11 +1,11 @@
 import { Notice } from "@/components/Notice";
-import { WorkersPanel } from "@/components/admin/WorkersPanel";
+import { ModelsAdmin } from "@/components/models/ModelsAdmin";
 import { apiGet } from "@/lib/api";
 import { muted } from "@/lib/styles";
 import type { WorkerInfo } from "@wasifyai/client";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Workers" };
+export const metadata: Metadata = { title: "Models and workers" };
 export const dynamic = "force-dynamic";
 
 export default async function Workers() {
@@ -25,13 +25,28 @@ export default async function Workers() {
   }
   return (
     <>
-      <p className={muted}>
-        Workers run the heavy work: voices, music, lip sync, 3D and Video Builder. Get a model onto
-        a worker here; it downloads and checks the files itself, and people can choose it on their
-        screens as soon as it is there. A worker does one job at a time, so a big download makes
-        other work wait.
-      </p>
-      <WorkersPanel initial={workers} />
+      <section aria-label="Workers" className="grid gap-1">
+        <p className={muted}>
+          Workers run the heavy work: voices, music, lip sync, 3D and Video Builder. A worker does
+          one job at a time, so a big download makes other work wait.
+        </p>
+        {workers.length === 0 ? (
+          <output className={`${muted} block`}>
+            No worker is running. Start one with <code>scripts/worker.sh start</code> (or run the
+            worker image), and it appears here within a few seconds.
+          </output>
+        ) : (
+          <ul className="m-0 grid list-none gap-1 p-0 text-sm">
+            {workers.map((w) => (
+              <li key={w.id}>
+                <span className="font-medium">{w.id}</span>{" "}
+                <span className={muted}>{w.busy ? "busy" : "idle"}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <ModelsAdmin />
     </>
   );
 }

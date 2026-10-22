@@ -20,7 +20,7 @@ describe("the web follows the desktop's menu", () => {
   it("does what each decision says", () => {
     // every voice screen offered, as a deployment with models for all of them does
     const voiceScreens = Object.keys(VOICE_SCREENS) as VoiceScreenName[];
-    const resolve = resolveWebItem("/", null, { voiceScreens });
+    const resolve = resolveWebItem("/", null, { voiceScreens, isAdmin: true });
     for (const id of ids) {
       const view = resolve(id);
       const row = PARITY[id];

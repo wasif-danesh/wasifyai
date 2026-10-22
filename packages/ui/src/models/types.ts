@@ -57,7 +57,12 @@ export const GROUPS: Group[] = [
     select: "Select music model",
     about: "Makes songs and sounds, splits a song into parts",
   },
-  { id: "faces", title: "Faces", select: "Select lip sync model", about: "Makes a picture talk" },
+  {
+    id: "faces",
+    title: "Lip sync",
+    select: "Select lip sync model",
+    about: "Makes a picture talk",
+  },
   {
     id: "documents",
     title: "Documents",

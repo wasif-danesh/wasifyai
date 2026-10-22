@@ -90,5 +90,6 @@
 | [0086](0086-one-simple-model-picker.md) | One simple way to choose, get and use a model | Accepted |
 | [0087](0087-engine-workers-run-the-desktops-capabilities-for-the-web.md) | Engine workers run the desktop's capabilities for the web | Accepted for P0 and P1 |
 | [0088](0088-one-job-per-person-before-go-live.md) | One job per person across everything before go live, built so the rule can loosen | Accepted (not built) |
+| [0089](0089-models-page-as-tabs-and-tables.md) | The Models page is tabs with a table each, on the desktop and the web | Accepted |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

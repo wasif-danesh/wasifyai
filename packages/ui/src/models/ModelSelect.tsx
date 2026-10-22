@@ -316,7 +316,8 @@ export function ModelSelect({
 }
 
 /** "To use this we need to download it": in words, with what will be fetched, the licence and whether it fits. */
-function GetModelDialog({
+export function GetModelDialog({
+  place = "device",
   choice,
   diskFree,
   working,
@@ -324,6 +325,8 @@ function GetModelDialog({
   onGet,
   onCancel,
 }: {
+  /** where the files go: this computer, or a worker of the service (the web, for an admin) */
+  place?: "device" | "service";
   choice: ModelChoice;
   diskFree: number | null;
   working: { label: string; fraction: number | null } | null;
@@ -358,8 +361,11 @@ function GetModelDialog({
           </li>
         </ul>
         <p className="m-0 text-muted-foreground">
-          {choice.from ? `It is downloaded from ${choice.from}. ` : ""}It runs on this computer;
-          nothing you make is sent away. {COMMERCIAL[choice.commercial]}
+          {choice.from ? `It is downloaded from ${choice.from}. ` : ""}
+          {place === "service"
+            ? "It is downloaded onto the worker and runs there, for everyone who uses this service. "
+            : "It runs on this computer; nothing you make is sent away. "}
+          {COMMERCIAL[choice.commercial]}
           {choice.licenceUrl ? (
             <>
               {" "}
@@ -413,7 +419,7 @@ function GetModelDialog({
           disabled={Boolean(working) || tooLittleDisk}
           autoFocus
         >
-          {problem ? "Try again" : "Download and use"}
+          {problem ? "Try again" : place === "service" ? "Get on the worker" : "Download and use"}
         </Button>
       </div>
     </Modal>

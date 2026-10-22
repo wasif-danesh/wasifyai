@@ -15,7 +15,7 @@ const inArea = (pathname: string, href: string) =>
 export function resolveWebItem(
   pathname: string,
   show: string | null,
-  served: { voiceScreens?: readonly VoiceScreenName[] } = {},
+  served: { voiceScreens?: readonly VoiceScreenName[]; isAdmin?: boolean } = {},
 ): ItemResolver {
   // one page of a product: its create page, edit page or library (a saved result counts as the library)
   const page = (href: string, also?: string): ItemView => ({
@@ -77,8 +77,8 @@ export function resolveWebItem(
         return { href: "/", current: pathname === "/" }; // an open chat is marked in Recents
       case "library":
         return { href: "/creations", current: pathname === "/creations" && !show };
-      case "models": // models are chosen by the deployment's admin, not by each person
-        return { hidden: true };
+      case "models": // the models of the workers are an admin's to manage; everyone else uses the pickers
+        return served.isAdmin ? page("/admin/workers", "/admin/workers") : { hidden: true };
       default:
         return undefined;
     }

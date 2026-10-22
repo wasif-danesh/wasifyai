@@ -19,10 +19,8 @@ export const PARITY: Record<string, Parity> = {
   chat: { status: "live", note: "the shared chat" },
   library: { status: "live", note: "My creations" },
   models: {
-    status: "desktop-only",
-    note: "the picker is on the voice, music and lip sync screens and an admin gets models onto a worker in Admin > Workers (P5); chat models are the admin's Models page; the nine-card Models page is the desktop's",
-    accepted:
-      "owner, 2026-10-21: an admin chooses a deployment's models; the person's own disk is the desktop's. The models.* actions need the desktop's model service, so the web assistant does not offer them",
+    status: "live",
+    note: "for admins, Admin > Models and workers is the Models page (the same tab table, over the workers' models, with the picker on the voice, music and lip sync screens for everyone); other people use the pickers. The models.* actions need the desktop's model service, so the web assistant does not offer them",
   },
   train: {
     status: "soon",

@@ -45,7 +45,10 @@ function rig(
     list: vi.fn(async () => [{ id: "w1", lipsync_engine: opts.lipsync ?? null } as WorkerInfo]),
     fetchModel: vi.fn(async () => "job-model"),
     fetchEngine: vi.fn(async () => "job-engine"),
-    job: vi.fn(async () => jobs.shift() ?? { status: "done", fraction: 1, label: "", error: null }),
+    job: vi.fn(
+      async (_id: string): Promise<FetchJob> =>
+        jobs.shift() ?? { status: "done", fraction: 1, label: "", error: null },
+    ),
   } satisfies WorkersApi;
   const voice = { models: vi.fn(async () => models) } as unknown as VoiceApi;
   const deps = { voice, workers, memory: mem, isAdmin: opts.isAdmin ?? true };

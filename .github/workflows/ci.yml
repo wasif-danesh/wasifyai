@@ -121,6 +121,10 @@ jobs:
           kubectl -n wasifyai get pods -o wide
           kubectl -n wasifyai describe pods | tail -80
           for d in api litellm web; do echo "--- $d"; kubectl -n wasifyai logs deploy/wasifyai-$d --tail=40 || true; done
+          # the migration job is the pod that fails first: say why, from this try and the one before it
+          echo "--- migrate"; kubectl -n wasifyai logs job/wasifyai-migrate --tail=80 || true
+          kubectl -n wasifyai logs job/wasifyai-migrate --previous --tail=80 || true
+          kubectl -n wasifyai describe job wasifyai-migrate | tail -30 || true
   images:
     # Switched off for ordinary pushes while the app is built (the multi-arch build is the slowest job by
     # far). It runs for a release tag (`git tag v0.1.0 && git push origin v0.1.0`) or by hand (Actions >

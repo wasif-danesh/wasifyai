@@ -5,6 +5,7 @@ On the desktop there is one person, so one run in all; the engine behind `state.
 training (today a preview, see `trainer.py`). Everything is scoped by tenant and user."""
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import logging
@@ -23,6 +24,7 @@ from wasifyai_platform_sdk import (
     set_context,
 )
 from wasifyai_platform_sdk.context import reset_context
+
 from wasifyai_training import captions, guardrail, magic, pictures, trainer
 from wasifyai_training.store import NotFound, TrainingStore
 
@@ -424,6 +426,7 @@ class RunManager:
             "trained_at": datetime.now(UTC).isoformat(timespec="seconds"),
         }  # fmt: skip
         size = (await asyncio.to_thread(result.adapter.stat)).st_size
+        card["published"] = await self._publish(dataset, row, result)
         model = store.add_model(
             identity.tenant_id, identity.user_id, run_id=row["id"], dataset_id=dataset["id"],
             name=dataset["name"] or dataset["trigger_word"], trigger_word=dataset["trigger_word"],
@@ -435,6 +438,23 @@ class RunManager:
         await asyncio.to_thread(shutil.copyfile, result.adapter, folder / "adapter.safetensors")
         await asyncio.to_thread((folder / "card.json").write_text, json.dumps(card, indent=2))
         return model
+
+    async def _publish(
+        self, dataset: dict[str, Any], row: dict[str, Any], result: trainer.TrainResult
+    ) -> dict[str, str] | None:
+        """Where the image engine reads it: the engine converts the adapter to the names its model
+        uses and puts it with its other styles. A failure leaves the model kept, unpublished."""
+        publish = getattr(engine_for(self._deps.state), "publish", None)
+        if publish is None or result.engine == "preview":
+            return None
+        try:
+            name = await publish(
+                result.adapter, dataset["name"] or dataset["trigger_word"], row["id"]
+            )
+        except Exception:
+            log.exception("a trained model could not be published to the image engine")
+            return None
+        return {"lora_name": name} if name else None
 
     async def cancel(self, identity: Identity, run_id: str) -> bool:
         store_for(self._deps.state).get_run(identity.tenant_id, identity.user_id, run_id)  # owner
@@ -467,8 +487,18 @@ def run_manager_for(deps: RouteDeps) -> RunManager:
 
 async def delete_model(deps: RouteDeps, identity: Identity, model_id: str) -> bool:
     store = store_for(deps.state)
+    try:
+        published = (
+            store.get_model(identity.tenant_id, identity.user_id, model_id)["card"] or {}
+        ).get("published")
+    except NotFound:
+        published = None
     if not store.delete_model(identity.tenant_id, identity.user_id, model_id):
         return False
+    unpublish = getattr(engine_for(deps.state), "unpublish", None)
+    if published and unpublish is not None:
+        with contextlib.suppress(Exception):
+            await unpublish(published["lora_name"])  # the image engine no longer offers it
     await asyncio.to_thread(shutil.rmtree, model_folder(store, identity, model_id), True)
     await deps.unindex(identity, PRODUCT_ID, model_id)
     return True

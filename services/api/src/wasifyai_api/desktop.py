@@ -104,6 +104,9 @@ class DesktopBackends:
         if self.discovery is not None:
             await self.discovery.load()
             self.discovery.start()  # a background scan of the known folders (ADR-0063)
+        if self.training is not None and self.discovery is not None:
+            # a model just taught (or removed) is a style the image engine can use: look again
+            self.training.on_published = self.discovery.scan
         worker, self._worker_cleanup, self.slot = _build_worker(self)
         self._worker_task = asyncio.create_task(worker.run_forever())
         self._consumer = LocalCompletionConsumer(self.queue, runs, self.run_store)
@@ -180,7 +183,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         audio=audio,
         video_builder=VideoBuilderService(settings.desktop_dir),
         model3d=Model3dService(settings.desktop_dir),
-        training=make_trainer(settings.desktop_dir),
+        training=make_trainer(settings.desktop_dir, settings.models_dir),
         language=language,
         vision=vision,
         hub=hub,

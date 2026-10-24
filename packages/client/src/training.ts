@@ -106,6 +106,8 @@ export type TrainedModel = {
     steps: number;
     seconds: number;
     trigger_word: string;
+    /** The name the image engine gives it as a style, once it is published there (else null). */
+    published?: { lora_name: string } | null;
     statement: string;
     evaluation: { passed: boolean | null; note: string };
     trained_at: string;

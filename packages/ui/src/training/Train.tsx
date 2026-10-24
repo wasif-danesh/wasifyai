@@ -17,7 +17,9 @@ import { Button } from "../components/button";
 import { Chip } from "../components/chip";
 import { JobMeter, WorkingCard } from "../components/create";
 import { Notice } from "../components/notice";
+import type { ImageFlowApi } from "../hooks/use-image-flow";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
+import { TryIt } from "./TryIt";
 import { type TrainState, useTraining } from "./use-training";
 
 const INPUT =
@@ -34,6 +36,8 @@ export type TrainProps = {
   /** Where the work is done: on this computer (the desktop) or on a service's worker (the web). */
   place?: "device" | "service";
   onOpenLibrary?: () => void;
+  /** The image engine's run client: with it, a taught model can be tried (drawn with and without). */
+  runs?: ImageFlowApi;
   /** how often to read again while the descriptions are written or a run goes (milliseconds) */
   pollMs?: number;
 };
@@ -41,7 +45,7 @@ export type TrainProps = {
 type Hook = ReturnType<typeof useTraining>;
 
 /** Teach the app something of your own (ADR-0073): today a character, style or object from pictures. */
-export function Train({ api, place = "device", onOpenLibrary, pollMs }: TrainProps) {
+export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: TrainProps) {
   const t = useTraining(api, pollMs);
   const { state } = t;
   const showingRun = state.run !== null;
@@ -88,11 +92,11 @@ export function Train({ api, place = "device", onOpenLibrary, pollMs }: TrainPro
       {state.loading ? (
         <output className="text-muted-foreground">Looking at training…</output>
       ) : showingRun && state.run ? (
-        <RunView t={t} run={state.run} onOpenLibrary={onOpenLibrary} />
+        <RunView t={t} run={state.run} onOpenLibrary={onOpenLibrary} runs={runs} />
       ) : state.current ? (
         <MakeView t={t} status={state.status} />
       ) : (
-        <Home t={t} />
+        <Home t={t} runs={runs} />
       )}
     </div>
   );
@@ -100,7 +104,7 @@ export function Train({ api, place = "device", onOpenLibrary, pollMs }: TrainPro
 
 // ---- the front door -----------------------------------------------------------------------------
 
-function Home({ t }: { t: Hook }) {
+function Home({ t, runs }: { t: Hook; runs?: ImageFlowApi }) {
   const { state } = t;
   const ready = state.status?.ready === true;
   return (
@@ -172,7 +176,7 @@ function Home({ t }: { t: Hook }) {
         ) : (
           <ul className="m-0 grid list-none gap-2 p-0 md:grid-cols-2">
             {state.models.map((m) => (
-              <ModelCard key={m.id} model={m} t={t} />
+              <ModelCard key={m.id} model={m} t={t} runs={runs} />
             ))}
           </ul>
         )}
@@ -213,7 +217,7 @@ function Sure({ label, name, onSure }: { label: string; name: string; onSure: ()
   );
 }
 
-function ModelCard({ model: m, t }: { model: TrainedModel; t: Hook }) {
+function ModelCard({ model: m, t, runs }: { model: TrainedModel; t: Hook; runs?: ImageFlowApi }) {
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(m.name);
   const id = useId();
@@ -272,6 +276,14 @@ function ModelCard({ model: m, t }: { model: TrainedModel; t: Hook }) {
         )}
         <Sure label="Remove" name={m.name} onSure={() => void t.removeModel(m.id)} />
       </div>
+      {runs && !m.preview ? (
+        <details className="rounded-lg border px-3 py-2">
+          <summary className="cursor-pointer font-medium text-sm">Try it</summary>
+          <div className="pt-3">
+            <TryIt model={m} runs={runs} />
+          </div>
+        </details>
+      ) : null}
     </li>
   );
 }
@@ -667,7 +679,8 @@ function RunView({
   t,
   run,
   onOpenLibrary,
-}: { t: Hook; run: TrainRun; onOpenLibrary?: () => void }) {
+  runs,
+}: { t: Hook; run: TrainRun; onOpenLibrary?: () => void; runs?: ImageFlowApi }) {
   const working = run.status === "working";
   const model = t.state.models.find((m) => m.id === run.model_id) ?? null;
   const samples = run.samples
@@ -728,6 +741,8 @@ function RunView({
           </ul>
         </>
       ) : null}
+
+      {run.status === "done" && model && runs ? <TryIt model={model} runs={runs} /> : null}
 
       {working ? null : (
         <div className={actions}>

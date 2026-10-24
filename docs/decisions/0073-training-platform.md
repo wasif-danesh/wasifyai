@@ -162,7 +162,7 @@ bring **a folder of photos, a spreadsheet, or some chats**, and want a result.
 
 ## Not in v1
 
-Preference tuning and reinforcement learning; distillation; training audio, embedding or video models; voice cloning
+Preference tuning and reinforcement learning; distillation; training audio or embedding models (video models: see the amendment below); voice cloning
 models; continued pre-training and full fine-tuning on the simple path (Advanced only, on NVIDIA); sharing or selling
 models; continuous training on chats.
 
@@ -211,7 +211,7 @@ Desktop first, then the web (owner, 2026-10-24); `docs/train-day1-plan.md` has t
   three magic words; the statement of whose the pictures are (required before a run); runs with progress and samples, one at a
   time, stopped when the app closes; a trained model with its card; found by name and magic word in My creations (kind `lora`);
   the action `train.start` (a long action: `job.status` and `job.cancel` follow and stop it).
-- **The trainer is a preview** (`PreviewTrainer`): it runs every step, writes sample pictures that say "Preview" and an adapter file
+- **The trainer was a preview** until the real one below (`PreviewTrainer` stays for the product tests): it runs every step, writes sample pictures that say "Preview" and an adapter file
   that is not a model, and the screens say so. The real trainer (mflux, then Unsloth's component) replaces it behind the same
   interface (`TrainJob` in, `TrainResult` out); that is the next stage.
 - **The screens** (`packages/ui/src/training`, the client `packages/client/src/training.ts`, the desktop page): the front door with
@@ -231,3 +231,130 @@ photographs: **Qwen3.8 27B (Ollama, MLX, 18 GB)**: good captions that leave out 
 pictures 46 s; the first three 24 s with the load); **Gemma 4 e4b (Ollama, 9.5 GB)**: about 6.7 s a picture, but it described the
 set instead of the picture ("various backgrounds"), so it does not do this job with this instruction. The measured model of the T0
 spike, Qwen3.5 9B with its projector (2.5 to 3.4 s a picture), is the small choice. A model that only reads text says so in words.
+
+## Amendment (2026-10-24, owner): the person can choose the base model and the method
+
+The owner asked that the person be able to select the **base model** and the **method** (LoRA, QLoRA, full fine-tuning), and
+that the design be flexible enough to **train the models that are installed**, without copying Unsloth Studio's screen. This
+changes decision 5's rule "The app chooses the model, method, steps, resolution and learning rate": the app still chooses and
+recommends **by default**, and the person may choose instead. The rest of decision 5 holds (no jargon on the main path, the
+person supplies material, one recommendation in a sentence, every refusal has a next step).
+
+1. **Two levels.** The main path is unchanged: the three cards and the three steps, ending with one recommendation ("This will
+   take about 25 minutes and pause chat and image making"). Under the recommendation a collapsed **"Choose the model and method"**
+   shows the choice in plain words. It is not the whole of Studio's Advanced panel (steps, rank, learning rate, YAML stay in
+   "For experts", decision 5); it is the two choices the owner named.
+2. **Base model: any installed model that can be taught, and the recommended ones.** The list is built from the engine
+   descriptors (decision 3) joined with what is on this computer (the model picker's rows, ADR-0086, and the Models page). Each
+   row says in words whether it can be taught here and why not when it cannot ("needs an NVIDIA GPU", "this model is a GGUF file,
+   which cannot be taught; its original is not installed", "needs 40 GB, this computer has 24 GB free"). A model that is not
+   installed but is recommended is listed under Recommended with its download size, as in the picker. **Nothing is guessed:** a
+   model with no descriptor is shown as "cannot be taught yet", not offered.
+3. **Method: the ones the engine and the model support**, in words first, the technical name second:
+   **Small adapter (LoRA)**, the default and the only one for pictures; **Small adapter, less memory (QLoRA)**, for language
+   models, where the engine can quantise the base; **Teach all of it (full fine-tuning)**, Advanced only, with the memory it
+   needs shown first. A method the chosen model or computer cannot do is listed with the reason, not hidden.
+4. **Train as: the card decides the family** (pictures, writing, sorting, and video: the next amendment) and so which base models are listed.
+   A family with no engine here is not a card that does nothing: it says what is missing.
+5. **Engine behind the choice.** The product asks `engine_for(family, base, method)`; engines stay descriptors behind the one
+   `TrainJob`/`TrainResult` interface (mflux today for pictures on a Mac, Unsloth's component later), so a new base model or
+   method is a descriptor entry and not a screen change. The trained model's card records the base (name and hash), the method
+   and the engine, so the choice is reproducible.
+6. **What it needs before it is built:** the descriptors file per engine and family (decision 3), the installed-model scan for
+   trainable bases (the picture bases are known; language bases need the original weights, not a GGUF), `fit` per base and
+   method (measured, not guessed), and the screens (`packages/ui/src/training`) with the collapsed choice. The run route takes
+   an optional `base` and `method`; absent means the recommendation, so existing callers and the action `train.start` keep
+   working (they gain two optional fields).
+
+**Status:** decided, not built. The picture trainer built on 2026-10-24 uses one fixed base (FLUX.2 klein base 4B) and LoRA; it
+is the first descriptor and the first row of the list.
+
+## Amendment (2026-10-24, owner): video model training is a family of its own
+
+The owner asked that video model training be in this ADR. It was not: it appeared only as an engine fact (Unsloth Studio's
+diffusion trainer lists video models, line 35) and under "Not in v1". It is now a **fourth family**, decided here and
+**not built**; ADR-0076 (image LoRA) keeps "Video LoRAs" out of its own scope and points here.
+
+1. **What it is.** A **video LoRA**: a small adapter that teaches the video model a look, a motion or a character from a set of
+   short clips, used from the Video screens the way an image LoRA is used from Create (a magic word in the prompt, and
+   "Use it" with a before and after clip). Card, in plain words: **Make my own look or motion for video** (the label is
+   written with the screens; it follows the no-jargon rule of decision 5). It is a **third step on the same flow**: Add
+   clips, Check, Teach, then Use it. Method: LoRA only to begin with; the method choice of the amendment above applies as
+   engines allow.
+2. **The person supplies clips, not settings.** The dataset is a folder of short clips (and still pictures, which the video
+   trainers also take). The checks, in words, are the video ones: too short or too long, too small, too dark or blurry, a
+   still frame passed off as a clip, a copy of another clip, the sound (ignored) and, with the safeguards on, the picture
+   moderator on sampled frames (ADR-0047). Descriptions are written by the person's vision model from sampled frames (as for
+   pictures, ADR-0076 decision 2) and describe the scene and the motion, not the thing being learnt. The statement of whose
+   the clips are is required, and a real person's face asks whose it is (decision 7).
+3. **Base models are the installed video models that can be taught.** The desktop's video model today is LTX-Video 2B 0.9.5
+   (ADR for video, stage V8). **Whether it can be taught, with which engine, in how much memory and in what time is not known:
+   nothing has been measured.** Per decision 3 no number is guessed; a spike (**TV0**) measures it before any build.
+4. **Engines (descriptors, decision 3).** Studio's diffusion trainer lists video models (LTX-2 and others) on **NVIDIA**; the
+   Mac path is unproven, and mflux trains images only. So on this Mac the card is honest: "Teaching video models needs an
+   NVIDIA graphics card for now. Train on another machine of yours or a rented GPU" (the tiers of decision 4), unless TV0
+   finds a Mac engine. Windows and Linux with NVIDIA are the first place it could work, as for the other families.
+5. **Cost and safety.** Video training is the heaviest family: the screen shows the estimate and the memory it needs first, a
+   rented run shows the destination, size and cost and needs a click (decision 4), the quotas of decision 11 apply, and the
+   one-run-at-a-time rule holds (decision 8).
+6. **Where the result goes.** A video LoRA is a model with a card (decision 9; kind `lora`, family `video`, base recorded),
+   found in My creations search, and **published to where video is made**: the ComfyUI video workflow's `loras` folder with the
+   right key names for that model, the same way image LoRAs are published. The action `train.start` gains `family: "video"`
+   (ADR-0068 floor: `make`, `costly`, and `leaves_device` when rented).
+7. **Needs before it is built:** the TV0 spike (can LTX-Video 2B be taught, on what, how fast, how much memory, does it keep
+   the magic word, does it load in ComfyUI after the key rename); the video descriptors; the clip checks and the frame
+   captioner; the screens; the licence of each trainable base model (decision 3, `commercial_use`).
+
+**Status:** decided, not built; it follows the picture card's real trainer and the language card. Not in the first release
+unless TV0 finds a path that works on the owner's Mac.
+
+## Built (2026-10-24, later): the real picture trainer (mflux) on this Mac
+
+`services/api/src/wasifyai_api/desktop_training.py` (`MfluxTrainer`) replaces the preview in the desktop engine. It runs
+`mflux-train` (0.22.0, MIT) as a separate process in its own process group, holds the one big-model slot, reads the progress
+bar, copies each sample picture as it appears (`step-0000-1.png` is what the untrained base drew), takes the adapter out of the
+last checkpoint and removes the pictures copy and the checkpoints. A stop or the slot being wanted kills the group. It says in
+words why it cannot run (not an Apple-silicon Mac; the tool not set up; the base model not on the computer) and **never
+downloads silently** (`HF_HUB_OFFLINE=1`).
+
+- **Base and recipe:** FLUX.2 **klein base 4B** (Apache-2.0, 15 GB on disk: transformer 7.75 GB, text encoder 8.1 GB, VAE 0.17 GB),
+  not the distilled klein that Create image runs (the file in ComfyUI hashes to the distilled repo, not the base). LoRA rank 16 on
+  the attention and feed-forward layers of the 5 double and 20 single blocks, 8-bit base, 768 px, gradient checkpointing, full
+  timestep range (0 to 28, sigmoid), AdamW 1e-4, one picture a step, 4 sample rounds of 2 prompts (one scene it saw, one new).
+- **Measured, once, on the owner's M5 Pro (64 GB), through the real screens:** 12 pictures of one fictional character, descriptions
+  written by Qwen3.8 27B (Ollama), 204 steps (17 epochs): **39 minutes** wall in all (2,361 s, with the model load and 10 sample
+  pictures); about **9 s a step** between samples; adapter **77.7 MB**. `docs/spikes/train-t3/before-after.jpg`: before training the
+  magic word gave a young woman with hair pulled back; after it the same words gave long dark wavy hair and the face and build of
+  the set, in the seen scene and in a new one (a sunny park). That is one run on one set: **binding** (the word means the
+  character) looks right by eye on 2 prompts, not by a test.
+- **Not measured:** the peak memory (the `fit` figure of 28 GB is the engine's number and is **not measured** for klein; the
+  Z-Image run of T0 had a 39.9 GB footprint); the quality over several datasets; style and object runs; resume.
+- **Not built yet (at that point):** Use it, publishing and the check on the distilled klein: built the same day, below. Still to do: the web stage.
+- **Found on the way:** the progress bar of the sample pictures (28 steps) looks like training progress, so only the bar whose
+  total is the run's own count is read; the bar is redrawn in place, so a step is read when it is written, not when the next one
+  starts. A Hugging Face download that is still going has the folders but not the weight files, so "on this computer" means the
+  big files are there.
+
+## Built (2026-10-25): publishing to the image engine, and Use it
+
+- **The key rename** (`products/wasifyai-training/wasifyai_training/comfy_lora.py`, no new dependency). mflux names the layers
+  as diffusers does and trains the three attention projections apart; ComfyUI's klein has the original fused layout. Each layer
+  is renamed (`transformer_blocks.N.attn.to_out` is `double_blocks.N.img_attn.proj`, `ff.linear_in` is `img_mlp.0`, a single
+  block's `to_qkv_mlp_proj` is `linear1`), and the three q, k, v pairs of a block become one `qkv` pair that gives exactly the
+  three updates (A stacked three high, B on a block diagonal; a test multiplies them out). A layer it does not know is an error,
+  never dropped. Checked against the real distilled file: all 60 layers of an adapter match its tensor shapes.
+- **Published automatically:** when a run is kept, the engine writes the converted file to `<models>/loras/wasify-<name>-<run>.safetensors`,
+  the engine's discovery lists it as a ready style (family flux), and Create's Styles list offers it. The card records
+  `published.lora_name`; removing the model removes the file. A failure leaves the model kept and unpublished.
+- **Use it (the screen):** on the "is ready" panel and in My models (under "Try it"): the prompt (starting with the magic word in a
+  scene it has not seen), "Draw it", and the same words drawn twice with one seed, without and with the model, side by side. It
+  uses the image engine's own run client, so it follows Create's rules (one job at a time, the safeguards).
+- **Measured, through the real screens on the owner's M5 Pro:** 12 pictures, Qwen3.8 descriptions, 200 steps (204), 41.5 minutes
+  (2,491 s), adapter 77.7 MB, converted file 83.6 MB. **A LoRA taught on klein base 4B works on the distilled klein 4B that
+  Create runs** (the two are different weights, hash-checked): same prompt and seed, without it a young woman with light brown
+  hair, with it long dark wavy hair and the face of the set, the composition unchanged
+  (`docs/spikes/train-t3/use-it-distilled-klein.jpg`). ComfyUI logged no unloaded keys. A 96-step adapter on placeholder captions
+  already changed the picture the same way. Binding to the magic word (the word means the character, other words do not) is
+  **not tested**: that needs prompts with and without the word.
+- **Still open:** the web stage; the evaluation of the model (decision 10: the "did not pass" mark); the weight slider; the peak
+  memory; a style and an object run.

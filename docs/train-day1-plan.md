@@ -1,4 +1,9 @@
-# Train: the plan for the first day (2026-10-23)
+# Train: the plan for the first day
+
+**Desktop first, the web afterwards (owner, 2026-10-24).** Today and the next days build Train on the desktop only; the web follows
+as its own stage once the desktop works, so nothing is built twice or half. What that changes in the table below is marked
+"desktop only"; the pieces the web will reuse (the types in `packages/platform-sdk`, the screens in `packages/ui`, the actions)
+are written so that it can.
 
 Why: Train is the one menu item neither app has, and the part of the product a recruiter can see working end to end: pictures in,
 a model that draws your character out. Decisions already made: ADR-0073 (the platform and the simplicity rules), ADR-0076 (image
@@ -18,20 +23,27 @@ desktop window and is a decided, tested row on the web. CI runs the same flow wi
 
 | # | Work | Where | Done when |
 |---|---|---|---|
-| 1 | **The data model**: datasets (a folder with items, targets, manifest, content hash), runs, model cards; store with a SQLite and a Postgres side (as 3D and Video Builder have) | `packages/platform-sdk` (types), the new product `products/wasifyai-training` | tests on both stores; a dataset round trip |
+| 1 | **The data model**: datasets (a folder with items, targets, manifest, content hash), runs, model cards; store with a **SQLite side only** (the Postgres side and the object-storage files are the web stage; the store keeps the same interface as 3D's so adding it is small) | `packages/platform-sdk` (types), the new product `products/wasifyai-training` | tests on the SQLite store; a dataset round trip |
 | 2 | **The picture checks and the person's word**: decode, EXIF, size, too small, near-copy, several people; the rights statement stored with the dataset; the picture moderator while safeguards are on | the product; reuse the 3D `guardrail.py` and ADR-0035's upload hardening | a bad picture is tagged in words; a refused picture is not kept |
 | 3 | **Captions and magic words**: the multimodal alias writes a caption per picture (kind-dependent instruction, traits stripped for a character); three trigger-word suggestions checked against the tokenizer | the product; the alias is `text.describe_image` | the captions of a fixture set; three words, the first checked |
-| 4 | **The run as a job**: `train.*` job kinds on the engine queue with progress, samples, cancel, resume; a **fake trainer** that writes a tiny adapter and sample pictures on a timer | the engine worker handlers + `RemoteTrainEngine` (as 3D), desktop engine | a run goes start, progress, samples, done; a restart picks it up (the same resume as 3D) |
+| 4 | **The run as a job**: `train.*` job kinds on the engine queue with progress, samples, cancel, resume; a **fake trainer** that writes a tiny adapter and sample pictures on a timer | the desktop engine only (in process, as the desktop's other components); the worker handlers and `RemoteTrainEngine` are the web stage | a run goes start, progress, samples, done; an app restart marks a run that was working as stopped, in words (resume from the last checkpoint comes with the real trainer) |
 | 5 | **The actions** (ADR-0068): `dataset.*`, `train.start`, `train.status`, `train.cancel`, `train.publish`, `model.list`; `docs/contracts/actions.json` regenerated; the help files | the product's `actions.py` | the catalogue test and the parity gate pass |
-| 6 | **The screens**: the Train front door with the three cards (only the image card is live today, the other two say "coming next" in words), the three steps (Add pictures, Check, Train), the progress with sample pictures, **Use it** (before and after grid), **My models** with the card | `packages/ui` (shared), the desktop page, the web page | the flow works in the browser pane on the desktop dev shim and in jsdom tests |
+| 6 | **The screens**: the Train front door with the three cards (only the image card is live today, the other two say "coming next" in words), the three steps (Add pictures, Check, Train), the progress with sample pictures, **Use it** (before and after grid), **My models** with the card | `packages/ui` (shared), the desktop page (the web page is the web stage) | the flow works in the browser pane on the desktop dev shim and in jsdom tests |
 | 7 | **Searchable and safe**: every dataset and trained model is a creation kind indexed for My creations (ADR-0041); usage events `train.run` and `engine.seconds`; quota keys; one job per person (ADR-0088 pending) | the product, `index.py` | a model is found by its name and magic word |
-| 8 | **Parity and docs**: the `train` row in `parity.ts` (desktop live; web "live when a worker can train", accepted reason until P7), the ledger, ADR note, the backlog | web, docs | `parity.test.ts` and the menu walk pass |
+| 8 | **Parity and docs**: the `train` row in `parity.ts` stays `soon` for the web with its accepted reason, now saying "desktop first, then the web (owner 2026-10-24)"; the desktop menu item becomes live; the ledger, an ADR note, the backlog | web, docs | `parity.test.ts` and the menu walk pass |
 
 ## What I will not do today
 
 - No real training run (tomorrow: mflux Z-Image, then publish into ComfyUI's `loras` folder with the key rename).
 - No language or sorter card (T2, T5), no Unsloth component install (it is 2.1 GB; T2).
 - No rented GPU, no web training on a worker (P7).
+
+## The web stage (after the desktop works)
+
+The Postgres store and files in object storage, the `train.*` job kinds on the engine queue with `RemoteTrainEngine` (as 3D), the same
+screens on the web with `place="service"`, a Train row that is live when a worker can train (a GPU worker; the Mac worker does it
+today, the cloud GPU needs P7 and an NVIDIA trainer), usage and quotas, the one-job rule. It starts when the desktop flow is
+checked for real with the mflux run.
 
 ## Day two, so the plan is visible
 
@@ -61,3 +73,11 @@ grid for real. Then the licence read and the 9B measurement before T2.
 
 `pnpm lint && pnpm typecheck && pnpm test` (the real commands, not `-r`), ruff, pyright, the whole Python suite, the Playwright menu
 walk, `git add`, and one commit line.
+
+## What was done (2026-10-24)
+
+Steps 1 to 8 of the table above are built on the desktop with the preview trainer (details in ADR-0073, "Built (2026-10-24)"). The
+product has 21 tests (stores, checks, captions, magic words, runs, safeguards and usage), the client 6, the screen 8; a browser walk
+against the real engine (`Train` in the window, twelve pictures, a run to a model) worked. Left for the next day: the real mflux run
+(a separate process speaking JSON lines), Use it with before and after pictures, publishing into ComfyUI with the key rename, the
+tokenizer check of magic words, the 16 and 32 GB Macs.

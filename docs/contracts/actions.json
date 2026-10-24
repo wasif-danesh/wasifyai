@@ -1589,7 +1589,8 @@
               "lipsync",
               "notebook",
               "composition",
-              "model3d"
+              "model3d",
+              "lora"
             ],
             "title": "Kind",
             "type": "string"
@@ -1673,7 +1674,8 @@
               "lipsync",
               "notebook",
               "composition",
-              "model3d"
+              "model3d",
+              "lora"
             ],
             "title": "Kind",
             "type": "string"
@@ -1752,7 +1754,8 @@
               "lipsync",
               "notebook",
               "composition",
-              "model3d"
+              "model3d",
+              "lora"
             ],
             "title": "Kind",
             "type": "string"
@@ -1873,7 +1876,8 @@
               "lipsync",
               "notebook",
               "composition",
-              "model3d"
+              "model3d",
+              "lora"
             ],
             "title": "Kind",
             "type": "string"
@@ -1996,7 +2000,8 @@
               "lipsync",
               "notebook",
               "composition",
-              "model3d"
+              "model3d",
+              "lora"
             ],
             "title": "Kind",
             "type": "string"
@@ -4487,6 +4492,111 @@
       ],
       "consent": "",
       "help": "docs/help/speech.transcribe.md"
+    },
+    {
+      "id": "train.start",
+      "title": "Teach a character or style",
+      "summary": "Teach the image model a character, style or object from a set of pictures.",
+      "description": "Teach the image model something of the person's own from a set of their pictures: a character, a pet, a person (with their agreement), a style or an object. The set is made on the Train screen: the pictures are added there, the app writes a description of each, the person chooses a magic word and says whose the pictures are. This starts the run on a set that is ready and waits for it. It takes about 25 minutes on a Mac and pauses chat and image making, so it is made one at a time. Then writing the magic word in a prompt draws the result.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "dataset_id": {
+            "description": "The set of pictures to teach from: made on the Train screen, with its descriptions written, its magic word chosen and its statement of rights given.",
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Dataset Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset_id"
+        ],
+        "title": "StartIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "magic_word": {
+            "title": "Magic Word",
+            "type": "string"
+          },
+          "steps": {
+            "title": "Steps",
+            "type": "integer"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "integer"
+          },
+          "preview": {
+            "title": "Preview",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "run_id",
+          "model_id",
+          "product_id",
+          "uri",
+          "name",
+          "magic_word",
+          "steps",
+          "seconds",
+          "preview"
+        ],
+        "title": "StartOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "dataset_id": "0b7c1f9e0000400080000000deadbeef"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "costly"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-training"
+        },
+        {
+          "kind": "runtime",
+          "name": "training"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-training",
+      "ui": "train",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/train.start.md"
     },
     {
       "id": "video.animate",

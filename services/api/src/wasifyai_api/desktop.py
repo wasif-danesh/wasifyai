@@ -43,6 +43,7 @@ from wasifyai_api.desktop_hub import HubService
 from wasifyai_api.desktop_language import LanguageService
 from wasifyai_api.desktop_model3d import Model3dService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
+from wasifyai_api.desktop_training import preview_trainer
 from wasifyai_api.desktop_video_builder import VideoBuilderService
 from wasifyai_api.desktop_vision import VisionService
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
@@ -89,6 +90,7 @@ class DesktopBackends:
         None  # the render engine, installed on request (ADR-0077)
     )
     model3d: Model3dService | None = None  # the 3D engine, installed on request (ADR-0080)
+    training: Any = None  # the trainer: a preview until the real one is installed (ADR-0073)
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
     async def start(self, runs: RunManager) -> None:
@@ -178,6 +180,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         audio=audio,
         video_builder=VideoBuilderService(settings.desktop_dir),
         model3d=Model3dService(settings.desktop_dir),
+        training=preview_trainer(),
         language=language,
         vision=vision,
         hub=hub,
@@ -299,6 +302,8 @@ def _build_worker(d: DesktopBackends):
         owners["chat"] = unload_chat
     if d.model3d is not None:
         owners["model3d"] = d.model3d.stop  # a 3D run holds about 19 GB: the biggest owner
+    if d.training is not None:
+        owners["training"] = d.training.stop  # a training run holds most of the GPU
     if d.audio is not None:
         owners["audio"] = d.audio.stop  # the speech runtime is another owner of the one slot
         if d.audio.lipsync_sidecar is not None:
@@ -321,6 +326,8 @@ def _build_worker(d: DesktopBackends):
         d.audio.slot = slot
     if d.model3d is not None:
         d.model3d.slot = slot
+    if d.training is not None:
+        d.training.slot = slot
     processor = JobProcessor(
         ws,
         d.event_log,

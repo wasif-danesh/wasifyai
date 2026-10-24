@@ -271,3 +271,17 @@ export {
   type WorkerModel,
   type WorkersApi,
 } from "./workers";
+export {
+  TRAINING_PRODUCT_ID,
+  createTrainingApi,
+  type CaptionState,
+  type Statement,
+  type TrainDataset,
+  type TrainKind,
+  type TrainPicture,
+  type TrainPictureCheck,
+  type TrainRun,
+  type TrainStatus,
+  type TrainedModel,
+  type TrainingApi,
+} from "./training";

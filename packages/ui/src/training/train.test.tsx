@@ -1,0 +1,416 @@
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+// @vitest-environment jsdom
+import type {
+  TrainDataset,
+  TrainPicture,
+  TrainRun,
+  TrainStatus,
+  TrainedModel,
+  TrainingApi,
+} from "@wasifyai/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Train } from "./Train";
+
+afterEach(cleanup);
+
+const STATUS: TrainStatus = {
+  ready: true,
+  problem: null,
+  preview: true,
+  engine: {},
+  fit: { verdict: "fits", reason: "" },
+  busy: false,
+  active_run: null,
+  place: "device",
+  min_pictures: 3,
+  max_pictures: 100,
+  kinds: ["character", "style", "object"],
+  statements: {
+    mine: "It's me",
+    permission: "I have permission",
+    drawing: "It's a drawing, a character or an animal",
+    artwork: "It's my own artwork",
+  },
+  base: "flux2-klein-base-4b",
+  steps: { character: 200, style: 250, object: 150 },
+  estimates: {
+    character: "About 25 minutes",
+    style: "About 31 minutes",
+    object: "About 19 minutes",
+  },
+};
+
+/** An engine in memory: one set, its pictures and descriptions, one run that finishes when told to. */
+function fake(over: Partial<TrainStatus> = {}) {
+  const status = { ...STATUS, ...over };
+  let set: TrainDataset | null = null;
+  let items: TrainPicture[] = [];
+  let run: TrainRun | null = null;
+  let models: TrainedModel[] = [];
+  const log: string[] = [];
+  const dataset = (): TrainDataset => {
+    const d = set as TrainDataset;
+    const missing =
+      items.length < status.min_pictures
+        ? `Add at least ${status.min_pictures} pictures. 15 to 25 good ones is plenty.`
+        : !d.rights
+          ? "Say whose it is first."
+          : !d.trigger_word
+            ? "Choose the magic word first."
+            : items.some((i) => !["done", "edited"].includes(i.caption_state))
+              ? "Write the descriptions first."
+              : null;
+    return {
+      ...d,
+      pictures: items.length,
+      missing,
+      writing: false,
+      items,
+      suggestions: ["marlo", "zebrik", "kolan"],
+    };
+  };
+  const api: TrainingApi = {
+    status: async () => ({ ...status, busy: run?.status === "working", active_run: null }),
+    datasets: async () => (set ? [dataset()] : []),
+    createDataset: async (kind, name = "") => {
+      log.push("create");
+      set = {
+        id: "d".repeat(32),
+        kind,
+        name,
+        trigger_word: "",
+        rights: "",
+        created_at: "",
+        pictures: 0,
+        missing: null,
+        writing: false,
+      };
+      return dataset();
+    },
+    dataset: async () => dataset(),
+    updateDataset: async (_id, change) => {
+      set = { ...(set as TrainDataset), ...change };
+      return dataset();
+    },
+    removeDataset: async () => {
+      set = null;
+      items = [];
+    },
+    addPicture: async (_id, file, name = "") => {
+      const small = name.startsWith("small");
+      const item: TrainPicture = {
+        id: `${items.length + 1}`.padStart(32, "0"),
+        dataset_id: "d".repeat(32),
+        name,
+        width: 640,
+        height: 640,
+        checks: small
+          ? [{ code: "too_small", level: "warn", message: "Too small: 300 by 300." }]
+          : [{ code: "good", level: "ok", message: "Good." }],
+        caption: "",
+        caption_state: "none",
+        caption_error: null,
+        suggest_remove: small,
+        created_at: "",
+      };
+      items = [...items, item];
+      void file;
+      return item;
+    },
+    removePicture: async (_d, id) => {
+      items = items.filter((i) => i.id !== id);
+    },
+    editCaption: async (_d, id, caption) => {
+      items = items.map((i) => (i.id === id ? { ...i, caption, caption_state: "edited" } : i));
+      return items.find((i) => i.id === id) as TrainPicture;
+    },
+    writeCaptions: async (_d, o) => {
+      const only = o?.pictureIds;
+      items = items.map((i) =>
+        (only ? only.includes(i.id) : i.caption_state === "none")
+          ? { ...i, caption: "Standing on a beach.", caption_state: "done" }
+          : i,
+      );
+      return { writing: items.length };
+    },
+    pictureUrl: async (_d, id) => `blob:${id}`,
+    startRun: async (id) => {
+      log.push("run");
+      run = {
+        id: "r".repeat(32),
+        dataset_id: id,
+        status: "working",
+        stage: "Preview",
+        step: 10,
+        steps: 200,
+        progress: 0.05,
+        error: null,
+        base: "b",
+        samples: [],
+        preview: true,
+        model_id: null,
+        elapsed_s: null,
+        estimate: "About 25 minutes",
+        live: true,
+        created_at: "",
+        finished_at: null,
+      };
+      return run;
+    },
+    runs: async () => (run ? [run] : []),
+    run: async () => run as TrainRun,
+    cancelRun: async () => {
+      run = { ...(run as TrainRun), status: "cancelled", error: "Stopped." };
+      return { cancelled: true };
+    },
+    sampleUrl: async (_r, name) => `blob:${name}`,
+    models: async () => models,
+    model: async (id) => models.find((m) => m.id === id) as TrainedModel,
+    renameModel: async (id, name) => {
+      models = models.map((m) => (m.id === id ? { ...m, name } : m));
+      return models.find((m) => m.id === id) as TrainedModel;
+    },
+    removeModel: async (id) => {
+      models = models.filter((m) => m.id !== id);
+    },
+  };
+  return {
+    api,
+    log,
+    finish() {
+      models = [
+        {
+          id: "m".repeat(32),
+          run_id: "r".repeat(32),
+          dataset_id: null,
+          name: "Marlo",
+          trigger_word: "marlo",
+          kind: "character",
+          base: "b",
+          preview: true,
+          adapter_bytes: 4,
+          created_at: "",
+          card: {
+            base_title: "FLUX.2 klein base 4B",
+            licence: "Apache-2.0",
+            engine: "preview",
+            preview: true,
+            note: "A preview: this file is not a trained model.",
+            dataset: { name: "Marlo", kind: "character", pictures: 3, hash: "x" },
+            steps: 200,
+            seconds: 5,
+            trigger_word: "marlo",
+            statement: "x",
+            evaluation: { passed: null, note: "" },
+            trained_at: "",
+          },
+        },
+      ];
+      run = {
+        ...(run as TrainRun),
+        status: "done",
+        progress: 1,
+        step: 200,
+        samples: ["step-0050.png"],
+        model_id: models[0]?.id ?? null,
+        preview: true,
+      };
+    },
+    seed(m: TrainedModel[]) {
+      models = m;
+    },
+  };
+}
+
+const file = (name: string) =>
+  new File([new Uint8Array([137, 80, 78, 71])], name, { type: "image/png" });
+
+describe("Train", () => {
+  it("opens on three cards, says it is a preview, and only the picture card is live", async () => {
+    const { api } = fake();
+    render(<Train api={api} pollMs={10} />);
+    expect(await screen.findByText("A preview")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Make my own character or style" })).toBeTruthy();
+    expect(screen.getAllByText(/Coming next/)).toHaveLength(2);
+    expect((screen.getByRole("button", { name: "Start" }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+    expect(screen.getByText("Nothing taught yet.")).toBeTruthy();
+  });
+
+  it("does not offer Start when the trainer is not ready, and says why", async () => {
+    const { api } = fake({ ready: false, problem: "Not enough free disk space." });
+    render(<Train api={api} pollMs={10} />);
+    expect(await screen.findByText("Not enough free disk space.")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Start" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  it("takes pictures, says what is wrong with each, and suggests removing the bad ones", async () => {
+    const user = userEvent.setup();
+    const { api } = fake();
+    render(<Train api={api} pollMs={10} />);
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    const input = await screen.findByLabelText("Choose pictures");
+    expect((screen.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled).toBe(true);
+    await user.upload(input, [file("a.png"), file("small.png")]);
+    expect(await screen.findByText("Too small: 300 by 300.")).toBeTruthy();
+    expect(screen.getByText(/2 pictures\. 1 with a problem/)).toBeTruthy();
+    expect(screen.getByText("Add at least 3 pictures (1 more).")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Remove the 1 with a problem" }));
+    await waitFor(() => expect(screen.getByText(/1 picture\. All good/)).toBeTruthy());
+    await user.upload(input, [file("b.png"), file("c.png")]);
+    await waitFor(() =>
+      expect((screen.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
+  });
+
+  it("walks through Check to a finished model, in the person's words", async () => {
+    const user = userEvent.setup();
+    const engine = fake();
+    render(<Train api={engine.api} pollMs={10} />);
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.upload(await screen.findByLabelText("Choose pictures"), [
+      file("a.png"),
+      file("b.png"),
+      file("c.png"),
+    ]);
+    await user.click(await screen.findByRole("button", { name: "Next" }));
+    // nothing can be taught yet, and the screen says what is missing
+    const teach = await screen.findByRole("button", { name: "Teach it" });
+    expect((teach as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Say whose it is first.")).toBeTruthy();
+    await user.click(screen.getByLabelText("It's a drawing, a character or an animal"));
+    expect(await screen.findByText("Choose the magic word first.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "marlo" }));
+    expect(await screen.findByText("Write the descriptions first.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /Write the descriptions \(3\)/ }));
+    await waitFor(() =>
+      expect(screen.getAllByDisplayValue("Standing on a beach.")).toHaveLength(3),
+    );
+    expect(await screen.findByText(/About 25 minutes\. Chat and image making pause/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Teach it" }));
+    expect(await screen.findByText("Step 10 of 200")).toBeTruthy();
+    engine.finish();
+    expect(await screen.findByText("Marlo is ready")).toBeTruthy();
+    expect(screen.getByText(/Nothing was learnt/)).toBeTruthy();
+    expect(screen.getByText("marlo", { selector: "code" })).toBeTruthy();
+    expect(await screen.findByAltText("Sample step-0050.png")).toBeTruthy();
+  });
+
+  it("lets the person change a description and describe one again", async () => {
+    const user = userEvent.setup();
+    const { api } = fake();
+    render(<Train api={api} pollMs={10} />);
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.upload(await screen.findByLabelText("Choose pictures"), [
+      file("a.png"),
+      file("b.png"),
+      file("c.png"),
+    ]);
+    await user.click(await screen.findByRole("button", { name: "Next" }));
+    await user.click(await screen.findByRole("button", { name: /Write the descriptions/ }));
+    const box = await screen.findByLabelText("Description of a.png");
+    await user.clear(box);
+    await user.type(box, "On a hill.");
+    await user.tab();
+    expect(await screen.findByText("Changed by you.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Describe again a.png" }));
+    await waitFor(() =>
+      expect((screen.getByLabelText("Description of a.png") as HTMLTextAreaElement).value).toBe(
+        "Standing on a beach.",
+      ),
+    );
+  });
+
+  it("stops a run that is going and says nothing was kept", async () => {
+    const user = userEvent.setup();
+    const engine = fake();
+    render(<Train api={engine.api} pollMs={10} />);
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.upload(await screen.findByLabelText("Choose pictures"), [
+      file("a.png"),
+      file("b.png"),
+      file("c.png"),
+    ]);
+    await user.click(await screen.findByRole("button", { name: "Next" }));
+    await user.click(screen.getByLabelText("It's me"));
+    await user.click(await screen.findByRole("button", { name: "marlo" }));
+    await user.click(await screen.findByRole("button", { name: /Write the descriptions/ }));
+    await waitFor(() =>
+      expect((screen.getByRole("button", { name: "Teach it" }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: "Teach it" }));
+    await user.click(await screen.findByRole("button", { name: /Cancel|Stop/ }));
+    expect(await screen.findByText("Stopped")).toBeTruthy();
+    expect(screen.getByText("Stopped.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Back to the pictures" }));
+    expect(await screen.findByRole("navigation", { name: "Steps" })).toBeTruthy();
+  });
+
+  it("lists the models taught, renames one, and removes one after asking", async () => {
+    const user = userEvent.setup();
+    const engine = fake();
+    engine.seed([
+      {
+        id: "m".repeat(32),
+        run_id: "r",
+        dataset_id: null,
+        name: "Marlo",
+        trigger_word: "marlo",
+        kind: "character",
+        base: "b",
+        preview: true,
+        adapter_bytes: 4,
+        created_at: "",
+        card: {
+          base_title: "FLUX.2 klein base 4B",
+          licence: "Apache-2.0",
+          engine: "preview",
+          preview: true,
+          note: "",
+          dataset: { name: "Marlo", kind: "character", pictures: 12, hash: "x" },
+          steps: 200,
+          seconds: 5,
+          trigger_word: "marlo",
+          statement: "x",
+          evaluation: { passed: null, note: "" },
+          trained_at: "",
+        },
+      },
+    ]);
+    render(<Train api={engine.api} pollMs={10} />);
+    const section = await screen.findByRole("region", { name: "My models" });
+    expect(within(section).getByText("Marlo")).toBeTruthy();
+    expect(within(section).getByText("marlo", { selector: "code" })).toBeTruthy();
+    expect(within(section).getByText("Preview")).toBeTruthy();
+    await user.click(within(section).getByRole("button", { name: "Rename Marlo" }));
+    const box = within(section).getByLabelText("Name");
+    await user.clear(box);
+    await user.type(box, "Marlo the fox");
+    await user.click(within(section).getByRole("button", { name: "Save" }));
+    expect(await within(section).findByText("Marlo the fox")).toBeTruthy();
+    await user.click(within(section).getByRole("button", { name: "Remove Marlo the fox" }));
+    expect(within(section).getByText("Marlo the fox")).toBeTruthy(); // asked first, not removed yet
+    await user.click(within(section).getByRole("button", { name: /Yes, remove/ }));
+    await waitFor(() => expect(screen.getByText("Nothing taught yet.")).toBeTruthy());
+  });
+
+  it("says where it is learnt: on this computer, or on the service", async () => {
+    const { api } = fake();
+    const { unmount } = render(<Train api={api} pollMs={10} />);
+    expect(
+      await screen.findByText(/learnt on this computer; your pictures are not sent anywhere/),
+    ).toBeTruthy();
+    unmount();
+    render(<Train api={api} place="service" pollMs={10} />);
+    expect(await screen.findByText(/learnt on the service's graphics card/)).toBeTruthy();
+    vi.restoreAllMocks();
+  });
+});

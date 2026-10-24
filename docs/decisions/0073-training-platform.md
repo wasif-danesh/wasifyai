@@ -199,3 +199,25 @@ Measured on the owner's M5 Pro, 64 GB. Verdict: **T1 Go**, with the conditions b
   full swap), 39.9 GB footprint; captions 2.5 to 3.4 s per picture with Qwen3.5-9B. Table in the report, section 7.
 - **Not measured:** Qwen3.5-9B and any model over 2B; the 16 and 32 GB tiers; Clef; the REST routes; Unsloth's diffusion
   trainer and AI Toolkit; rented GPUs; Windows and Linux.
+
+## Built (2026-10-24): stage T1 on the desktop, with the image card first
+
+Desktop first, then the web (owner, 2026-10-24); `docs/train-day1-plan.md` has the order and what is left.
+
+- **The product** `products/wasifyai-training` (`/products/wasifyai-training/train/...`): a SQLite store of datasets, pictures
+  (with their checks), runs and trained models; picture checks in words (too small, blurry, a copy of another); the picture
+  moderator while safeguards are on (fails closed); daily limits for pictures and runs and the usage events `train.picture` and
+  `train.run`; the descriptions written by the person's vision model (a character's identity traits, a style's look left out);
+  three magic words; the statement of whose the pictures are (required before a run); runs with progress and samples, one at a
+  time, stopped when the app closes; a trained model with its card; found by name and magic word in My creations (kind `lora`);
+  the action `train.start` (a long action: `job.status` and `job.cancel` follow and stop it).
+- **The trainer is a preview** (`PreviewTrainer`): it runs every step, writes sample pictures that say "Preview" and an adapter file
+  that is not a model, and the screens say so. The real trainer (mflux, then Unsloth's component) replaces it behind the same
+  interface (`TrainJob` in, `TrainResult` out); that is the next stage.
+- **The screens** (`packages/ui/src/training`, the client `packages/client/src/training.ts`, the desktop page): the front door with
+  three cards (only the picture card is live), Add pictures, Check (what is it, name, magic word, whose, the descriptions), the run
+  with its sample pictures and Stop, My models with rename and remove. Checked in a browser against the real engine: twelve pictures,
+  the descriptions typed by hand (the dev engine had no vision model), a run, a model.
+- **Not built yet:** the real trainer; Use it with before and after pictures; publishing into ComfyUI; the language and sorter cards;
+  the web (Postgres store, worker job, the same screens); the magic-word check against the real tokenizer; the blur threshold
+  (6.0) was measured on three photographs only.

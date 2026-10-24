@@ -521,6 +521,32 @@
         "title": "Body_upload_products_wasifyai_notebooks_notebooks__nid__documents_upload_post",
         "type": "object"
       },
+      "CaptionsIn": {
+        "properties": {
+          "again": {
+            "default": false,
+            "title": "Again",
+            "type": "boolean"
+          },
+          "item_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Ids"
+          }
+        },
+        "title": "CaptionsIn",
+        "type": "object"
+      },
       "ChatOptions": {
         "description": "What the chat box can offer with the model in use (ADR-0083).",
         "properties": {
@@ -704,6 +730,78 @@
           "updated_at"
         ],
         "title": "ConversationSummary",
+        "type": "object"
+      },
+      "DatasetIn": {
+        "properties": {
+          "kind": {
+            "default": "character",
+            "maxLength": 12,
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "maxLength": 60,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "title": "DatasetIn",
+        "type": "object"
+      },
+      "DatasetPatch": {
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "rights": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rights"
+          },
+          "trigger_word": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Word"
+          }
+        },
+        "title": "DatasetPatch",
         "type": "object"
       },
       "DocumentPatch": {
@@ -1155,6 +1253,20 @@
         "title": "InterruptEvent",
         "type": "object"
       },
+      "ItemPatch": {
+        "properties": {
+          "caption": {
+            "maxLength": 2000,
+            "title": "Caption",
+            "type": "string"
+          }
+        },
+        "required": [
+          "caption"
+        ],
+        "title": "ItemPatch",
+        "type": "object"
+      },
       "JobProgressEvent": {
         "properties": {
           "capability": {
@@ -1259,6 +1371,53 @@
           "status"
         ],
         "title": "JobProgressEvent",
+        "type": "object"
+      },
+      "JobStarted": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "JobStarted",
+        "type": "object"
+      },
+      "JobState": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "fraction": {
+            "default": 0.0,
+            "title": "Fraction",
+            "type": "number"
+          },
+          "label": {
+            "default": "",
+            "title": "Label",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "JobState",
         "type": "object"
       },
       "MakeIn": {
@@ -1598,6 +1757,62 @@
           "providers"
         ],
         "title": "ModelList",
+        "type": "object"
+      },
+      "ModelRow": {
+        "properties": {
+          "bytes_missing": {
+            "title": "Bytes Missing",
+            "type": "integer"
+          },
+          "commercial_use": {
+            "title": "Commercial Use",
+            "type": "string"
+          },
+          "engine": {
+            "title": "Engine",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "licence": {
+            "title": "Licence",
+            "type": "string"
+          },
+          "runtime_ready": {
+            "title": "Runtime Ready",
+            "type": "boolean"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "tasks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tasks",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "state",
+          "bytes_missing",
+          "licence",
+          "commercial_use",
+          "tasks",
+          "engine",
+          "runtime_ready"
+        ],
+        "title": "ModelRow",
         "type": "object"
       },
       "ModelUpdated": {
@@ -2149,21 +2364,6 @@
         "title": "ReasoningEvent",
         "type": "object"
       },
-      "RenameIn": {
-        "properties": {
-          "title": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "title"
-        ],
-        "title": "RenameIn",
-        "type": "object"
-      },
       "RenderIn": {
         "properties": {
           "format": {
@@ -2194,6 +2394,21 @@
           }
         },
         "title": "ResumeRequest",
+        "type": "object"
+      },
+      "RunIn": {
+        "properties": {
+          "dataset_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Dataset Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset_id"
+        ],
+        "title": "RunIn",
         "type": "object"
       },
       "RunRequest": {
@@ -2346,7 +2561,8 @@
               "track",
               "voice",
               "composition",
-              "model3d"
+              "model3d",
+              "lora"
             ],
             "title": "Kind",
             "type": "string"
@@ -3237,6 +3453,107 @@
         ],
         "title": "WordsRequest",
         "type": "object"
+      },
+      "WorkerList": {
+        "properties": {
+          "workers": {
+            "items": {
+              "$ref": "#/components/schemas/WorkerRow"
+            },
+            "title": "Workers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "workers"
+        ],
+        "title": "WorkerList",
+        "type": "object"
+      },
+      "WorkerRow": {
+        "properties": {
+          "busy": {
+            "title": "Busy",
+            "type": "boolean"
+          },
+          "can_fetch": {
+            "title": "Can Fetch",
+            "type": "boolean"
+          },
+          "components": {
+            "additionalProperties": true,
+            "title": "Components",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lipsync_engine": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lipsync Engine"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelRow"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "seen": {
+            "title": "Seen",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "busy",
+          "seen",
+          "can_fetch",
+          "models",
+          "lipsync_engine",
+          "components"
+        ],
+        "title": "WorkerRow",
+        "type": "object"
+      },
+      "wasifyai_model3d__routes__RenameIn": {
+        "properties": {
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "RenameIn",
+        "type": "object"
+      },
+      "wasifyai_training__routes__RenameIn": {
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "RenameIn",
+        "type": "object"
       }
     }
   },
@@ -3833,6 +4150,153 @@
         ]
       }
     },
+    "/admin/workers": {
+      "get": {
+        "operationId": "list_workers_admin_workers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Workers",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/workers/engines/{name}/fetch": {
+      "post": {
+        "operationId": "fetch_engine_admin_workers_engines__name__fetch_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fetch Engine",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/workers/jobs/{job_id}": {
+      "get": {
+        "operationId": "job_state_admin_workers_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Job State",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/workers/models/{model_id}/fetch": {
+      "post": {
+        "operationId": "fetch_model_admin_workers_models__model_id__fetch_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fetch Model",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/creations/search": {
       "get": {
         "operationId": "search_creations_creations_search_get",
@@ -3867,7 +4331,8 @@
                     "track",
                     "voice",
                     "composition",
-                    "model3d"
+                    "model3d",
+                    "lora"
                   ],
                   "type": "string"
                 },
@@ -4997,7 +5462,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RenameIn"
+                "$ref": "#/components/schemas/wasifyai_model3d__routes__RenameIn"
               }
             }
           },
@@ -7123,6 +7588,966 @@
         "summary": "Status",
         "tags": [
           "wasifyai-notebooks"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/datasets": {
+      "get": {
+        "operationId": "list_datasets_products_wasifyai_training_train_datasets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Datasets Products Wasifyai Training Train Datasets Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Datasets",
+        "tags": [
+          "wasifyai-training"
+        ]
+      },
+      "post": {
+        "operationId": "make_dataset_products_wasifyai_training_train_datasets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Make Dataset Products Wasifyai Training Train Datasets Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make Dataset",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/datasets/{dataset_id}": {
+      "delete": {
+        "operationId": "remove_dataset_products_wasifyai_training_train_datasets__dataset_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Dataset",
+        "tags": [
+          "wasifyai-training"
+        ]
+      },
+      "get": {
+        "operationId": "get_dataset_products_wasifyai_training_train_datasets__dataset_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Dataset Products Wasifyai Training Train Datasets  Dataset Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Dataset",
+        "tags": [
+          "wasifyai-training"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_dataset_products_wasifyai_training_train_datasets__dataset_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Dataset Products Wasifyai Training Train Datasets  Dataset Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Dataset",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/datasets/{dataset_id}/captions": {
+      "post": {
+        "operationId": "write_captions_products_wasifyai_training_train_datasets__dataset_id__captions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CaptionsIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Write Captions Products Wasifyai Training Train Datasets  Dataset Id  Captions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Write Captions",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/datasets/{dataset_id}/items": {
+      "post": {
+        "operationId": "add_item_products_wasifyai_training_train_datasets__dataset_id__items_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 200,
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add Item Products Wasifyai Training Train Datasets  Dataset Id  Items Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Item",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/datasets/{dataset_id}/items/{item_id}": {
+      "delete": {
+        "operationId": "delete_item_products_wasifyai_training_train_datasets__dataset_id__items__item_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Item",
+        "tags": [
+          "wasifyai-training"
+        ]
+      },
+      "patch": {
+        "operationId": "edit_caption_products_wasifyai_training_train_datasets__dataset_id__items__item_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Edit Caption Products Wasifyai Training Train Datasets  Dataset Id  Items  Item Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Caption",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/datasets/{dataset_id}/items/{item_id}/{which}": {
+      "get": {
+        "operationId": "item_picture_products_wasifyai_training_train_datasets__dataset_id__items__item_id___which__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "title": "Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "which",
+            "required": true,
+            "schema": {
+              "title": "Which",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Item Picture",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/models": {
+      "get": {
+        "operationId": "list_models_products_wasifyai_training_train_models_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Models Products Wasifyai Training Train Models Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Models",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/models/{model_id}": {
+      "delete": {
+        "operationId": "remove_model_products_wasifyai_training_train_models__model_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Model",
+        "tags": [
+          "wasifyai-training"
+        ]
+      },
+      "get": {
+        "operationId": "get_model_products_wasifyai_training_train_models__model_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Model Products Wasifyai Training Train Models  Model Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Model",
+        "tags": [
+          "wasifyai-training"
+        ]
+      },
+      "patch": {
+        "operationId": "rename_model_products_wasifyai_training_train_models__model_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/wasifyai_training__routes__RenameIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rename Model Products Wasifyai Training Train Models  Model Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename Model",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/models/{model_id}/file": {
+      "get": {
+        "operationId": "model_file_products_wasifyai_training_train_models__model_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Model File",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/runs": {
+      "get": {
+        "operationId": "list_runs_products_wasifyai_training_train_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Runs Products Wasifyai Training Train Runs Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Runs",
+        "tags": [
+          "wasifyai-training"
+        ]
+      },
+      "post": {
+        "operationId": "start_run_products_wasifyai_training_train_runs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Start Run Products Wasifyai Training Train Runs Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Run",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/runs/{run_id}": {
+      "get": {
+        "operationId": "get_run_products_wasifyai_training_train_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Run Products Wasifyai Training Train Runs  Run Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Run",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/runs/{run_id}/cancel": {
+      "post": {
+        "operationId": "cancel_run_products_wasifyai_training_train_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cancel Run Products Wasifyai Training Train Runs  Run Id  Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Run",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/runs/{run_id}/samples/{name}": {
+      "get": {
+        "operationId": "run_sample_products_wasifyai_training_train_runs__run_id__samples__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Sample",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/status": {
+      "get": {
+        "operationId": "status_products_wasifyai_training_train_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Status Products Wasifyai Training Train Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Status",
+        "tags": [
+          "wasifyai-training"
         ]
       }
     },

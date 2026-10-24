@@ -24,8 +24,9 @@ export const PARITY: Record<string, Parity> = {
   },
   train: {
     status: "soon",
-    note: "not built on either app",
-    accepted: "owner, 2026-10-21: training is not built on the desktop either (ADR-0073 onwards)",
+    note: "built on the desktop first (ADR-0073, ADR-0076); the web follows as its own stage: a store in Postgres, the run as a job on an engine worker that can train",
+    accepted:
+      "owner, 2026-10-24: desktop first, then the web, so nothing is built twice or half (docs/train-day1-plan.md)",
   },
 
   "notebook.create": { status: "live", note: "the shared notebooks, with the notebooks worker" },

@@ -616,6 +616,7 @@ def create_app(
             app.state.audio = desktop.audio  # the speech runtime (ADR-0066); products reach it here
             app.state.video_builder = desktop.video_builder  # the render engine (ADR-0077)
             app.state.model3d = desktop.model3d  # the 3D engine (ADR-0080)
+            app.state.training = desktop.training  # the trainer, a preview for now (ADR-0073)
             if desktop.video_builder is not None:  # and the model it asks to fill a template
                 desktop.video_builder.language = desktop.language
                 desktop.video_builder.usage = recorder

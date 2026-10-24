@@ -27,6 +27,7 @@ import { ModelsPage } from "./pages/Models";
 import { NotebookPage } from "./pages/Notebook";
 import { NotebooksPage } from "./pages/Notebooks";
 import { SettingsPage } from "./pages/Settings";
+import { TrainPage } from "./pages/Train";
 import { VideoPage } from "./pages/Video";
 import { VideoBuilderPage } from "./pages/VideoBuilder";
 import { VideosPage } from "./pages/Videos";
@@ -185,6 +186,7 @@ export function Shell() {
               {route === "extend" ? <VideoPage mode="extend" go={go} /> : null}
               {route === "videobuilder" ? <VideoBuilderPage go={go} /> : null}
               {route === "model3d" ? <Model3dPage go={go} /> : null}
+              {route === "train" ? <TrainPage go={go} /> : null}
               {route === "videos" ? <VideosPage go={go} /> : null}
               {route === "models" ? <ModelsPage /> : null}
               {route === "settings" ? <SettingsPage /> : null}

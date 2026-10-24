@@ -1,0 +1,13 @@
+id: wasifyai-training
+# Teach the app something of the person's own (ADR-0073): today a character, a style or an object from nothing but
+# pictures (ADR-0076). The trainer, its models and the picture checks run on this computer and belong to the engine;
+# this product keeps the datasets, the runs and the trained models, and asks the engine to train.
+# The two language capabilities are the picture check and the captions (ADR-0076 decision 2): the app writes the
+# description of every picture, so the person only uploads pictures.
+capabilities:
+  text.moderate_image: { provider: litellm, model: multimodal, inputs: [text, image] }
+  text.describe_image: { provider: litellm, model: multimodal, inputs: [text, image] }
+# Daily limits per person, counted from the usage events and applied only while the safeguards are on (ADR-0047).
+quotas:
+  train_runs_per_user_per_day: 3
+  train_pictures_per_user_per_day: 200

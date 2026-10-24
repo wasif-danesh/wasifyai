@@ -147,6 +147,15 @@ class ApiToolHost:
                     ui="video.builder",
                 )
             return Readiness.ready()
+        if need.kind == "runtime" and need.name == "training":
+            trainer = getattr(state, "training", None)
+            if trainer is None:
+                return Readiness.unavailable("Training is not available here.")
+            if not trainer.ready():
+                return Readiness.needs_setup(
+                    trainer.problem() or "Set up training first.", ui="train"
+                )
+            return Readiness.ready()
         if need.kind == "runtime" and need.name == "model3d":
             engine = getattr(state, "model3d", None)
             if engine is None or not engine.installer.supported:

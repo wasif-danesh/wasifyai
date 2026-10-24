@@ -37,7 +37,7 @@ web job's test step fail without one. The desktop's actions are held to the same
 | `chat` | live | the shared chat |  |
 | `library` | live | My creations |  |
 | `models` | live | for admins, Admin > Models and workers is the Models page (the same tab table, over the workers' models, with the picker on the voice, music and lip sync screens for everyone); other people use the pickers. The models.* actions need the desktop's model service, so the web assistant does not offer them |  |
-| `train` | soon | not built on either app | owner, 2026-10-21: training is not built on the desktop either (ADR-0073 onwards) |
+| `train` | soon | built on the desktop first (ADR-0073, ADR-0076); the web follows as its own stage: a store in Postgres, the run as a job on an engine worker that can train | owner, 2026-10-24: desktop first, then the web, so nothing is built twice or half (docs/train-day1-plan.md) |
 | `notebook.create` | live | the shared notebooks, with the notebooks worker |  |
 | `notebook.list` | live | the shared notebooks |  |
 | `images.create` | live | shared ImageWorkspace |  |

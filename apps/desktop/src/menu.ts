@@ -32,6 +32,7 @@ export const ROUTES: Record<string, Route> = {
   "music.separate": "separate",
   library: "library",
   models: "models",
+  train: "train",
 };
 
 /** What the window's menu does for each item, given where the person is. */
@@ -75,6 +76,7 @@ const OTHER_TITLES: Partial<Record<Route, string>> = {
   notebook: "Notebook",
   library: "Library",
   models: "Models",
+  train: "Train",
   settings: "Settings",
 };
 

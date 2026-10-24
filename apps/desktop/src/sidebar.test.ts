@@ -10,8 +10,9 @@ const at = (route: Route, notebook: string | null = null, conversationId: string
 describe("the window's side menu", () => {
   it("opens a screen for everything that is built and marks the rest as soon", () => {
     const soon = ids.filter((id) => at("home")(id) === undefined);
-    expect(soon).toEqual([]); // every item of the groups opens a screen; only Train is still to come
-    expect(at("home")("train")).toBeUndefined();
+    expect(soon).toEqual([]); // every item of the groups opens a screen
+    const train = at("home")("train"); // and so does Train (ADR-0073), the one item outside the groups
+    expect(train && !("hidden" in train)).toBe(true);
   });
 
   it("shows the screens that are built, and marks the page being shown", () => {
@@ -32,7 +33,7 @@ describe("the window's side menu", () => {
   it("points every item at a route that exists", () => {
     for (const [id, route] of Object.entries(ROUTES)) {
       expect(routePath(route), id).toBeTruthy();
-      expect(ids.includes(id) || ["library", "models"].includes(id), id).toBe(true);
+      expect(ids.includes(id) || ["library", "models", "train"].includes(id), id).toBe(true);
     }
   });
 
@@ -47,6 +48,7 @@ describe("the window's side menu", () => {
     expect(current("tracks", "music.library")).toBe(true);
     expect(current("speechedit", "voice.edit")).toBe(true);
     expect(current("models", "models")).toBe(true);
+    expect(current("train", "train")).toBe(true);
   });
 
   it("tells a new chat from an open one, and a draft notebook from a saved one", () => {
@@ -78,6 +80,7 @@ describe("the title the top bar shows when a screen gives none", () => {
     expect(routeTitle("extend")).toBe("Video: Extend video");
     expect(routeTitle("speak")).toBe("Voice: Text to speech");
     expect(routeTitle("models")).toBe("Models");
+    expect(routeTitle("train")).toBe("Train");
     expect(routeTitle("settings")).toBe("Settings");
   });
 

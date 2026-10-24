@@ -78,7 +78,7 @@ const OTHER_TITLES: Partial<Record<Route, string>> = {
   videobuilder: "Motion graphics",
   model3d: "3D model",
   creations: "My creations",
-  models: "Models",
+  models: "Model hub",
   train: "Train models",
   settings: "Settings",
 };

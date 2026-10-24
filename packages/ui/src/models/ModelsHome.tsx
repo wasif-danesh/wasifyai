@@ -327,7 +327,9 @@ export function ModelsHome({
   return (
     <div className="grid gap-6">
       <header className="grid gap-1">
-        <h1 className="m-0 font-semibold text-2xl">Models</h1>
+        <h1 className="m-0 font-semibold text-2xl">
+          {place === "service" ? "Models" : "Model hub"}
+        </h1>
         <p className="m-0 text-muted-foreground">
           {place === "service"
             ? "The models on this service's workers. Getting one puts it on the worker for everyone."

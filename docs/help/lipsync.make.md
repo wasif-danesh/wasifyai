@@ -40,5 +40,5 @@ Make a picture talk: a video of the face saying words or a recording. Every vide
 
 ## Problems
 
-- **The lip sync engine is not set up** Open **Models** and set it up.
+- **The lip sync engine is not set up** Open **Model hub** and set it up.
 - **Needs your word** Approve in the app window.

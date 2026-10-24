@@ -4,7 +4,7 @@ import { Sidebar, SidebarContent, SidebarRail } from "@/components/ui/sidebar";
 import { useVoiceOffer } from "@/hooks/use-voice-offer";
 import { webAssistant } from "@/lib/library";
 import { resolveWebItem } from "@/lib/menu";
-import { SideMenu, useConversations } from "@wasifyai/ui";
+import { SideMenu, conversationsChanged, useConversations } from "@wasifyai/ui";
 import { Compass, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -38,6 +38,15 @@ export function AppSidebar({
               title: c.title,
               current: chatId === c.id,
               onSelect: () => router.push(`/chat/${c.id}`),
+              rename: async (name: string) => {
+                await webAssistant.rename(c.id, name);
+                conversationsChanged();
+              },
+              remove: async () => {
+                await webAssistant.remove(c.id);
+                conversationsChanged();
+                if (chatId === c.id) router.push("/"); // the chat on the screen is gone: a new one
+              },
             })),
           }}
           extra={[

@@ -195,7 +195,7 @@ async def test_nothing_chosen_is_said_in_plain_words(tmp_path, ctx):
             "text.enhance", CapabilityBinding(provider="litellm", model="prompt-enhancer"), "s", "p"
         ):
             pass
-    assert e.value.code == "no_language_model" and "Models" in e.value.message
+    assert e.value.code == "no_language_model" and "Model hub" in e.value.message
     await llama.close()
 
 

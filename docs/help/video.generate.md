@@ -40,4 +40,4 @@ Make a short video clip (5 or 8 seconds) from a description.
 ## Problems
 
 - **You already have a video being made** Wait for it to finish.
-- **Not set up** Open **Models** and set up the video engine.
+- **Not set up** Open **Model hub** and set up the video engine.

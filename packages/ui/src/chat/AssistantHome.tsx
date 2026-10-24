@@ -13,6 +13,7 @@ import {
 } from "@wasifyai/client";
 import { Pencil, Trash2 } from "lucide-react";
 import { type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { ConfirmDialog, NameDialog } from "../components/dialog";
 import { useChoicesVersion } from "../models/context";
 import type { ChatScreenProps } from "./ChatScreen";
 import type { TrackLookup } from "./ToolCard";
@@ -265,19 +266,25 @@ export function AssistantHome({
       return;
     }
     let gone = false;
-    assistant
-      .list(100)
-      .then((l) => !gone && setTitle(l.find((c) => c.id === conversationId)?.title ?? ""))
-      .catch(() => {});
+    const read = () =>
+      assistant
+        .list(100)
+        .then((l) => !gone && setTitle(l.find((c) => c.id === conversationId)?.title ?? ""))
+        .catch(() => {});
+    void read();
+    // renamed from the Recents list: the title above the chat follows
+    window.addEventListener("wasifyai:conversations-changed", read);
     return () => {
       gone = true;
+      window.removeEventListener("wasifyai:conversations-changed", read);
     };
   }, [conversationId, assistant]);
 
-  async function rename() {
+  // the questions are the app's own dialogs: the desktop window shows no browser prompts
+  const [asking, setAsking] = useState<"rename" | "delete" | null>(null);
+
+  async function rename(next: string) {
     if (!conversationId) return;
-    const next = window.prompt("Name this chat", title)?.trim();
-    if (!next) return;
     try {
       const c = await assistant.rename(conversationId, next);
       setTitle(c.title);
@@ -289,7 +296,6 @@ export function AssistantHome({
 
   async function remove() {
     if (!conversationId) return;
-    if (!window.confirm("Delete this chat? What it made stays in your library.")) return;
     try {
       await assistant.remove(conversationId);
       conversationsChanged();
@@ -337,7 +343,7 @@ export function AssistantHome({
           type="button"
           aria-label="Rename this chat"
           className="rounded-md p-2 text-muted-foreground hover:bg-accent"
-          onClick={() => void rename()}
+          onClick={() => setAsking("rename")}
         >
           <Pencil className="size-4" />
         </button>
@@ -345,7 +351,7 @@ export function AssistantHome({
           type="button"
           aria-label="Delete this chat"
           className="rounded-md p-2 text-muted-foreground hover:bg-accent"
-          onClick={() => void remove()}
+          onClick={() => setAsking("delete")}
         >
           <Trash2 className="size-4" />
         </button>
@@ -354,8 +360,33 @@ export function AssistantHome({
   };
 
   return (
-    <Suspense fallback={null}>
-      <ChatScreen {...shared} />
-    </Suspense>
+    <>
+      <Suspense fallback={null}>
+        <ChatScreen {...shared} />
+      </Suspense>
+      {asking === "rename" ? (
+        <NameDialog
+          title="Rename this chat"
+          label="Name"
+          initial={title}
+          onSubmit={(name) => {
+            setAsking(null);
+            void rename(name);
+          }}
+          onCancel={() => setAsking(null)}
+        />
+      ) : null}
+      {asking === "delete" ? (
+        <ConfirmDialog
+          title="Delete this chat?"
+          message="What it made stays in your library."
+          onConfirm={() => {
+            setAsking(null);
+            void remove();
+          }}
+          onCancel={() => setAsking(null)}
+        />
+      ) : null}
+    </>
   );
 }

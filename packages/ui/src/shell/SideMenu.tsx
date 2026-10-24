@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import { type ComponentType, type ReactNode, useState } from "react";
 import { cn } from "../cn";
+import { RecentChats, type Recents } from "./RecentChats";
 import { CHAT_ITEM, EXTRA_ITEMS, type ItemResolver, MENU_GROUPS, type MenuItemDef } from "./menu";
 
 /** How an app draws a link to one of its addresses (the web app passes its router's link). */
@@ -14,12 +15,6 @@ export type MenuLink = ComponentType<{
 }>;
 
 const DefaultLink: MenuLink = ({ children, ...props }) => <a {...props}>{children}</a>;
-
-export type Recents = {
-  label?: string;
-  empty?: string;
-  items: { id: string; title: string; current?: boolean; onSelect: () => void }[];
-};
 
 export type SideMenuProps = {
   /** What each item opens in this app. */
@@ -221,34 +216,7 @@ export function SideMenu({
           })}
         </div>
 
-        {recents ? (
-          <>
-            <div className="mt-4 px-3 text-muted-foreground text-sm">
-              {recents.label ?? "Recents"}
-            </div>
-            {recents.items.length === 0 ? (
-              <div className="px-3 py-1 text-muted-foreground/80 text-sm">
-                {recents.empty ?? "No chats yet"}
-              </div>
-            ) : (
-              <ul className="grid grid-cols-[minmax(0,1fr)] gap-0.5" aria-label="Recent chats">
-                {recents.items.map((c) => (
-                  <li key={c.id} className="min-w-0">
-                    <button
-                      type="button"
-                      title={c.title}
-                      aria-current={c.current ? "page" : undefined}
-                      className={cn(ITEM, "py-1.5 text-ui", c.current && "bg-accent")}
-                      onClick={c.onSelect}
-                    >
-                      <span className="truncate">{c.title || "New chat"}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        ) : null}
+        {recents ? <RecentChats recents={recents} /> : null}
       </div>
 
       {footer ? <div className="mt-auto pt-3">{footer}</div> : null}

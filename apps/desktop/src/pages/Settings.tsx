@@ -47,8 +47,8 @@ function FindingModels() {
       <h2 className="font-semibold text-lg">Finding models</h2>
       <p className="text-muted-foreground text-sm">
         When the app starts it looks in the folders where tools such as Ollama, LM Studio, ComfyUI
-        and the Hugging Face cache keep models, and lists what it finds under Models. It reads only
-        the start of each file, never copies or changes anything, and the list stays on this
+        and the Hugging Face cache keep models, and lists what it finds in the Model hub. It reads
+        only the start of each file, never copies or changes anything, and the list stays on this
         computer.
       </p>
       <label className="flex items-center gap-2 text-sm">
@@ -100,9 +100,9 @@ function HubSwitch() {
     <section className="grid gap-3" aria-label="Browsing models">
       <h2 className="font-semibold text-lg">Browsing models</h2>
       <p className="text-muted-foreground text-sm">
-        Discover (under Models) asks huggingface.co for lists of open models. It sends the words you
-        search for and the names of the models you open, with no account. Nothing is requested while
-        this is off.
+        Discover (in the Model hub) asks huggingface.co for lists of open models. It sends the words
+        you search for and the names of the models you open, with no account. Nothing is requested
+        while this is off.
       </p>
       <label className="flex items-center gap-2 text-sm">
         <input

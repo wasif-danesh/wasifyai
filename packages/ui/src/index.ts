@@ -168,7 +168,8 @@ export {
   type MenuGroupDef,
   type MenuItemDef,
 } from "./shell/menu";
-export { type MenuLink, type Recents, SideMenu, type SideMenuProps } from "./shell/SideMenu";
+export { type MenuLink, SideMenu, type SideMenuProps } from "./shell/SideMenu";
+export type { RecentChat, Recents } from "./shell/RecentChats";
 export { VideoBuilder, type VideoBuilderProps } from "./videobuilder/VideoBuilder";
 export { Model3d, type Model3dProps } from "./model3d/Model3d";
 export type { CandidateApi } from "./model3d/Candidates";

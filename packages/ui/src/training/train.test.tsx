@@ -233,6 +233,17 @@ describe("Train", () => {
     expect(await screen.findByText("A preview")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Make my own character or style" })).toBeTruthy();
     expect(screen.getAllByText(/Coming next/)).toHaveLength(2);
+    // each card says which kind of model it trains, and the video one says what it needs
+    for (const label of [
+      "Image model training",
+      "Language model training",
+      "Decision model training",
+      "Video model training",
+    ]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+    expect(screen.getByText(/Needs an NVIDIA graphics card/)).toBeInTheDocument();
+    expect(screen.getByText("Coming later")).toBeInTheDocument();
     expect((screen.getByRole("button", { name: "Start" }) as HTMLButtonElement).disabled).toBe(
       false,
     );

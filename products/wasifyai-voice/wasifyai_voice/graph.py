@@ -487,7 +487,7 @@ def build_speak(caps: Capabilities, checkpointer: Any):
                 log.exception("the language model failed")
                 raise RunError(
                     "language_failed",
-                    "The language model did not answer. Check it in Models and try again.",
+                    "The language model did not answer. Check it in the Model hub and try again.",
                     retryable=True,
                 ) from None
             text = clean_lyrics(text)

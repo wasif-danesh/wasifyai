@@ -45,7 +45,9 @@ log = logging.getLogger(__name__)
 KEY = "desktop.language"
 CONTEXTS = (2048, 4096, 8192, 16384, 32768)
 DEFAULT_CONTEXT = 8192
-NONE_CHOSEN = "No language model is chosen yet. Choose one in Models, under Found on this computer."
+NONE_CHOSEN = (
+    "No language model is chosen yet. Choose one in the Model hub, under Found on this computer."
+)
 
 
 @dataclass(frozen=True)

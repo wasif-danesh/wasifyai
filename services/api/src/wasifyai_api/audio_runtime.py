@@ -634,7 +634,8 @@ class AudioEngine:
             )
         if self._present(e) is None:
             raise VoiceEngineError(
-                "model_missing", f"{e.voice.title} is not on this computer yet. Get it in Models."
+                "model_missing",
+                f"{e.voice.title} is not on this computer yet. Get it in the Model hub.",
             )
         return e.voice
 

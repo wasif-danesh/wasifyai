@@ -358,3 +358,12 @@ downloads silently** (`HF_HUB_OFFLINE=1`).
   **not tested**: that needs prompts with and without the word.
 - **Still open:** the web stage; the evaluation of the model (decision 10: the "did not pass" mark); the weight slider; the peak
   memory; a style and an object run.
+
+## Amendment (2026-10-25, owner): the cards say which kind of model they train
+
+The front door has four cards, in a two by two grid, each with a small label above its plain headline: **Image model training**
+(Make my own character or style: built), **Language model training** (Teach my assistant to write like me: coming next),
+**Decision model training** (Teach it to sort things, with the example "spam or not spam": coming next) and **Video model
+training** (Make my own look or motion for video; from short clips; says it needs an NVIDIA graphics card for now: coming
+later, see the video amendment). The labels use the family names of decision 5's table so a person looking for them finds them;
+the headlines stay in plain words. Not live means a "Coming ..." tag and no button, never a button that does nothing.

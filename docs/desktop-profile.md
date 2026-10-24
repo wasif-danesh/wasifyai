@@ -274,7 +274,7 @@ disabled with the **Soon** pill, so the menu keeps its final shape (as above).
 | **Voice** | Text to speech, Speech to text, Lip sync, Voices | `wasifyai-voice` on audio.cpp (ADR-0066); lip sync is MuseTalk, an optional sidecar | all built (V1 to V5) |
 | **Music** | Create, Your music, Lyrics | `wasifyai-voice` on audio.cpp (ADR-0066, V3); the ComfyUI ACE-Step workflow and `text.lyrics` later | Create and Your music built; Lyrics Soon |
 | *Library* | (single item) all creations, searchable (ADR-0041) | | yes |
-| *Models*, *Train* (Soon) | single items | | Models yes |
+| *Train models*, *Model hub* | single items, in this order; the hub is last (owner, 2026-10-25: *Models* was renamed *Model hub*, the page where models are got and managed) | | both built |
 
 Rules:
 - **"Your ..." items open the Library filtered to that kind** (the per-kind filter ADR-0041 already requires), not

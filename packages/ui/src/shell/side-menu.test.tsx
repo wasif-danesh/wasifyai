@@ -96,7 +96,7 @@ describe("SideMenu", () => {
     expect(chat).toHaveAttribute("aria-current", "page");
     await user.click(chat);
     expect(onSelect).toHaveBeenCalledOnce();
-    expect(screen.queryByText("Models")).toBeNull();
+    expect(screen.queryByText("Model hub")).toBeNull();
     expect(screen.getByRole("link", { name: /Library/ })).toHaveAttribute("href", "/creations");
     expect(screen.getByRole("button", { name: /Train/ })).toBeDisabled();
   });

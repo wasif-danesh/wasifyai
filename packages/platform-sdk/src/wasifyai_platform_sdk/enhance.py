@@ -166,7 +166,7 @@ def build_enhance_router(
                 raise HTTPException(
                     503,
                     "The model answered with its working instead of a prompt. Try again, or "
-                    "choose another model in Models.",
+                    "choose another model in the Model hub.",
                 )
             cleaned = clean_output(result, rule.max_chars)
             await caps.record_usage(ENHANCED, 1, "prompts", prompt_kind=body.kind)

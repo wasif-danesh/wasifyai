@@ -33,4 +33,4 @@ Find passages about a topic across all your notebooks.
 
 ## Problems
 
-- **Search model missing** Open **Models** and get the search model.
+- **Search model missing** Open **Model hub** and get the search model.

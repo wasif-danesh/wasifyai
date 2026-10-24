@@ -31,6 +31,48 @@ const KIND_LABEL: Record<TrainKind, { title: string; note: string }> = {
   object: { title: "An idea or an object", note: "One kind of thing, shown in different places." },
 };
 
+/**
+ * What can be taught, one card each (ADR-0073): the label says which kind of model it makes, the
+ * headline says what the person gets. Only pictures are built; the others say when they are coming.
+ */
+const FAMILIES: {
+  id: string;
+  label: string;
+  title: string;
+  text: string;
+  live?: boolean;
+  soon?: string;
+}[] = [
+  {
+    id: "image",
+    label: "Image model training",
+    title: "Make my own character or style",
+    text: "Add 15 to 25 pictures of your character, pet, art style or object. Then write its magic word in a prompt to draw it.",
+    live: true,
+  },
+  {
+    id: "language",
+    label: "Language model training",
+    title: "Teach my assistant to write like me",
+    text: "From your own writing.",
+    soon: "Coming next",
+  },
+  {
+    id: "decision",
+    label: "Decision model training",
+    title: "Teach it to sort things",
+    text: "From a spreadsheet of examples, for example spam or not spam.",
+    soon: "Coming next",
+  },
+  {
+    id: "video",
+    label: "Video model training",
+    title: "Make my own look or motion for video",
+    text: "From short clips. Needs an NVIDIA graphics card for now.",
+    soon: "Coming later",
+  },
+];
+
 export type TrainProps = {
   api: TrainingApi;
   /** Where the work is done: on this computer (the desktop) or on a service's worker (the web). */
@@ -109,31 +151,33 @@ function Home({ t, runs }: { t: Hook; runs?: ImageFlowApi }) {
   const ready = state.status?.ready === true;
   return (
     <>
-      <section aria-label="What to teach" className="grid gap-3 md:grid-cols-3">
-        <div className={cn(panel, "content-start")}>
-          <h2 className="m-0 font-semibold text-lg">Make my own character or style</h2>
-          <p className="m-0 text-muted-foreground">
-            Add 15 to 25 pictures of your character, pet, art style or object. Then write its magic
-            word in a prompt to draw it.
-          </p>
-          <div className={actions}>
-            <Button
-              type="button"
-              disabled={!ready || state.busy !== null}
-              onClick={() => void t.newDataset()}
-            >
-              Start
-            </Button>
+      <section aria-label="What to teach" className="grid gap-3 md:grid-cols-2">
+        {FAMILIES.map((f) => (
+          <div
+            key={f.id}
+            className={cn(panel, "content-start", !f.live && "opacity-70")}
+            aria-disabled={f.live ? undefined : "true"}
+          >
+            <span className={eyebrow}>{f.label}</span>
+            <h2 className="m-0 font-semibold text-lg">{f.title}</h2>
+            <p className="m-0 text-muted-foreground">{f.text}</p>
+            {f.live ? (
+              <div className={actions}>
+                <Button
+                  type="button"
+                  disabled={!ready || state.busy !== null}
+                  onClick={() => void t.newDataset()}
+                >
+                  Start
+                </Button>
+              </div>
+            ) : (
+              <span className="w-fit rounded-full border px-2.5 py-0.5 text-muted-foreground text-xs">
+                {f.soon}
+              </span>
+            )}
           </div>
-        </div>
-        <div className={cn(panel, "content-start opacity-70")} aria-disabled="true">
-          <h2 className="m-0 font-semibold text-lg">Teach my assistant to write like me</h2>
-          <p className="m-0 text-muted-foreground">From your own writing. Coming next.</p>
-        </div>
-        <div className={cn(panel, "content-start opacity-70")} aria-disabled="true">
-          <h2 className="m-0 font-semibold text-lg">Teach it to sort things</h2>
-          <p className="m-0 text-muted-foreground">From a spreadsheet of examples. Coming next.</p>
-        </div>
+        ))}
       </section>
 
       {state.datasets.length > 0 ? (

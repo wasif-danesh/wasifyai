@@ -137,7 +137,8 @@ async def make_output(
                     "The language model did not answer.",
                     RunError(
                         "language_failed",
-                        "The language model did not answer. Check it in Models and try again.",
+                        "The language model did not answer. "
+                        "Check it in the Model hub and try again.",
                         retryable=True,
                     ),
                 )

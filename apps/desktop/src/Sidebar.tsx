@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // The window's side menu: the shared menu (packages/ui) in this window's frame, with what each item opens
 // (`menu.ts`), the recent chats, and the person and settings at the bottom.
-import { SideMenu, cn, useConversations } from "@wasifyai/ui";
+import { SideMenu, cn, conversationsChanged, useConversations } from "@wasifyai/ui";
 import { Settings } from "lucide-react";
 import { assistantApi } from "./api";
 import { resolveItem } from "./menu";
@@ -31,6 +31,18 @@ export function Sidebar({
             title: c.title,
             current: route === "home" && conversationId === c.id,
             onSelect: () => openChat(c.id),
+            rename: async (name: string) => {
+              await assistantApi.rename(c.id, name);
+              conversationsChanged();
+            },
+            remove: async () => {
+              await assistantApi.remove(c.id);
+              conversationsChanged();
+              if (route === "home" && conversationId === c.id) {
+                openChat(null); // the chat on the screen is gone: a new one
+                go("home");
+              }
+            },
           })),
         }}
         footer={

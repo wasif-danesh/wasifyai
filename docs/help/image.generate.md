@@ -39,5 +39,5 @@ Make a new picture from a description and keep it in your library.
 
 ## Problems
 
-- **It says the image engine is not set up** Open **Models** and set up image generation first.
+- **It says the image engine is not set up** Open **Model hub** and set up image generation first.
 - **Refused** The description was not allowed; change it.

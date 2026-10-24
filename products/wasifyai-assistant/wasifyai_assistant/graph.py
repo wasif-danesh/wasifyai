@@ -320,7 +320,7 @@ def build_assistant_graph(
                 return [], refuse_with(
                     "no_vision",
                     "The chat model in use cannot look at pictures. Choose one that can in "
-                    "Models, or set up its picture reader, then attach the picture again.",
+                    "the Model hub, or set up its picture reader, then attach the picture again.",
                 )
         return found, None
 
@@ -522,7 +522,8 @@ def build_assistant_graph(
                     log.exception("the language model failed")
                     raise RunError(
                         "language_failed",
-                        "The language model did not answer. Check it in Models and try again.",
+                        "The language model did not answer. "
+                        "Check it in the Model hub and try again.",
                         retryable=True,
                     ) from None
                 if allow_tools is None:

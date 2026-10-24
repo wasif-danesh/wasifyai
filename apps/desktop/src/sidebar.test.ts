@@ -83,7 +83,7 @@ describe("the title the top bar shows when a screen gives none", () => {
     expect(routeTitle("create")).toBe("Images: Create");
     expect(routeTitle("extend")).toBe("Video: Extend video");
     expect(routeTitle("speak")).toBe("Voice: Text to speech");
-    expect(routeTitle("models")).toBe("Models");
+    expect(routeTitle("models")).toBe("Model hub");
     expect(routeTitle("train")).toBe("Train models");
     expect(routeTitle("settings")).toBe("Settings");
   });

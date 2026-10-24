@@ -51,7 +51,7 @@ export type LipSyncWorkspaceProps = {
 };
 
 /** Setting up the lip sync engine: a program environment of about 2 GB, fetched only on a click
- * after the size is shown. The model's own files (4.2 GB) are in Models. */
+ * after the size is shown. The model's own files (4.2 GB) are in the Model hub. */
 function EngineCard({
   engine,
   api,
@@ -90,8 +90,8 @@ function EngineCard({
         <>
           <p className="text-muted-foreground">
             Lip sync runs here, with no account and nothing sent away. It needs MuseTalk's program
-            and its environment ({formatBytes(plan.bytes)}); the model's files are fetched in Models
-            afterwards. Setting up takes a few minutes.
+            and its environment ({formatBytes(plan.bytes)}); the model's files are fetched in the
+            Model hub afterwards. Setting up takes a few minutes.
           </p>
           {working ? (
             <div className="grid gap-2">

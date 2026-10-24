@@ -17,7 +17,7 @@ While the trainer is a preview, the run does everything except learn, and says s
 
 ## Steps in the app
 
-1. Open **Train models** and choose Make my own character or style.
+1. Open **Train models** and, under **Image model training**, choose Make my own character or style.
 2. Add pictures: 15 to 25 good ones is plenty, at least 8. Each is marked Good, Too small, Blurry or Looks like
    a copy; remove what you do not want, or choose Remove the ones with a problem.
 3. Say what it is (a character, a style or an object), give it a name, choose one of the three magic words (or

@@ -240,7 +240,7 @@ class CaptionManager:
         if caps is None:
             raise Refused(
                 "no_vision_model",
-                "Choose a model that can read pictures first (under Models), then try again.",
+                "Choose a model that can read pictures first (in the Model hub), then try again.",
             )
         for i in wanted:
             store.mark_writing(i["id"])

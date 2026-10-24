@@ -119,7 +119,7 @@ export function ModelPicker({
                       className="underline underline-offset-4"
                       onClick={() => onGetModel(chosen.id)}
                     >
-                      Get it in Models
+                      Get it in the Model hub
                     </button>
                   </>
                 ) : null}

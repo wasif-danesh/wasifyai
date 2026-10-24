@@ -13,7 +13,7 @@ See which models are on this computer, partly downloaded or missing.
 
 ## Steps in the app
 
-1. Open **Models**.
+1. Open **Model hub**.
 
 ## Fields
 

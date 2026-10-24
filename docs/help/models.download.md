@@ -13,7 +13,7 @@ Download a model that is missing. You are shown the files and their size and mus
 
 ## Steps in the app
 
-1. Open **Models**.
+1. Open **Model hub**.
 2. Choose the model and read the size.
 3. Choose Get and confirm.
 
@@ -37,5 +37,5 @@ Download a model that is missing. You are shown the files and their size and mus
 
 ## Problems
 
-- **A download is already running** Wait for it, or cancel it in **Models**.
+- **A download is already running** Wait for it, or cancel it in **Model hub**.
 - **Will not fit** Choose a smaller model.

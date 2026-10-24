@@ -101,7 +101,7 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
             log.exception("the language model failed")
             raise RunError(
                 "language_failed",
-                "The language model did not answer. Check it in Models and try again.",
+                "The language model did not answer. Check it in the Model hub and try again.",
                 retryable=True,
             ) from None
         return text
@@ -116,7 +116,7 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
             return refuse_with(
                 "no_voice_for_language",
                 f"No voice model on this computer speaks {dubbing.language_name(language)}. "
-                "Get one in Models.",
+                "Get one in the Model hub.",
             )
         try:
             source = await kit.load_source(state)
@@ -420,7 +420,7 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
             return refuse_with(
                 "no_voice_for_language",
                 f"No model on this computer speaks {dubbing.language_name(language)} that way. "
-                "Choose another voice or get a model in Models.",
+                "Choose another voice or get a model in the Model hub.",
             )
         return str(models[0]["id"])
 

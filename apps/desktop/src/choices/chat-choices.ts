@@ -171,7 +171,7 @@ export function chatChoices(deps: ChatDeps): ChoicesApi {
       if (signal.aborted) break;
     }
     throw new Error(
-      "The model was downloaded but could not be found. Look in Models, under Advanced.",
+      "The model was downloaded but could not be found. Look in the Model hub, under Advanced.",
     );
   }
 

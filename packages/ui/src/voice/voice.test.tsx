@@ -207,7 +207,7 @@ describe("text to speech", () => {
     render(<SpeakWorkspace api={api({ models })} runs={runsThat([])} onGetModel={onGet} />);
     await user.type(await screen.findByLabelText("Text"), "Hi");
     expect(screen.getByRole("button", { name: "Speak" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "Get it in Models" }));
+    await user.click(screen.getByRole("button", { name: "Get it in the Model hub" }));
     expect(onGet).toHaveBeenCalledWith("kokoro-82m");
     expect(screen.getByText(/190 MB/)).toBeInTheDocument();
   });
@@ -453,13 +453,13 @@ describe("your own voices", () => {
     expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({ saved_voice: "v1" });
     expect(await screen.findByLabelText("Calm speaking")).toHaveAttribute("src", "http://x");
     const failing = runsThat([
-      ev("error", { code: "model_missing", message: "Get it in Models." }),
+      ev("error", { code: "model_missing", message: "Get it in the Model hub." }),
     ]);
     rerender(
       <VoicesWorkspace api={api({ voices: vi.fn(async () => [saved()]) })} runs={failing} />,
     );
     await user.click(await screen.findByRole("button", { name: "Hear a sample" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Get it in Models.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Get it in the Model hub.");
   });
 
   it("shows a cloned voice with its recording, its words and what was said about whose it is", async () => {

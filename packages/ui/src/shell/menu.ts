@@ -100,8 +100,8 @@ export const EXTRA_ITEMS: MenuItemDef[] = [
   { id: "motion", label: "Motion graphics", icon: Shapes },
   { id: "model3d", label: "3D model", icon: Box },
   { id: "library", label: "Library", icon: Library },
-  { id: "models", label: "Models", icon: SquareStack },
   { id: "train", label: "Train models", icon: FlaskConical },
+  { id: "models", label: "Model hub", icon: SquareStack },
 ];
 
 /** What an app says about one item. No answer means the app does not serve it yet: it shows as "Soon". */

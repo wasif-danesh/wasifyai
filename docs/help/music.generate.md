@@ -41,5 +41,5 @@ Make a piece of music, a song with words, or a sound effect and keep it in your 
 
 ## Problems
 
-- **Model missing** Open **Models** and get a music model.
+- **Model missing** Open **Model hub** and get a music model.
 - **Takes a while** Longer pieces take minutes; it keeps working in the background.

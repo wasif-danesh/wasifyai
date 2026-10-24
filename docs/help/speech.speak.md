@@ -41,5 +41,5 @@ Read a text aloud in a voice and keep the recording in your library.
 
 ## Problems
 
-- **It says a model is missing** Open **Models**, get a speech model, then try again.
+- **It says a model is missing** Open **Model hub**, get a speech model, then try again.
 - **The text is too long** Split it, or use the Audiobook screen.

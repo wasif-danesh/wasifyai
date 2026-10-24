@@ -154,7 +154,8 @@ class ComfyMusic:
         wf, graph = self._graph(model, req, seed)
         if sidecar.missing_models(graph):
             raise VoiceEngineError(
-                "model_missing", f"{model.title} is not on this computer yet. Get it in Models."
+                "model_missing",
+                f"{model.title} is not on this computer yet. Get it in the Model hub.",
             )
         t0 = time.monotonic()
         client: Any = None

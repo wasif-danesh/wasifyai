@@ -221,3 +221,13 @@ Desktop first, then the web (owner, 2026-10-24); `docs/train-day1-plan.md` has t
 - **Not built yet:** the real trainer; Use it with before and after pictures; publishing into ComfyUI; the language and sorter cards;
   the web (Postgres store, worker job, the same screens); the magic-word check against the real tokenizer; the blur threshold
   (6.0) was measured on three photographs only.
+
+### Captions on the desktop, measured (2026-10-24)
+
+The descriptions are written by the chat model the person chose, through the desktop's text provider. That provider refused every
+picture ("reads text only") whatever the model; it now sends a picture to a model that sees (a model file with its projector, or a
+tool such as Ollama that lists `vision`), and still refuses sound. Tried for real on this Mac through the engine, three to six
+photographs: **Qwen3.8 27B (Ollama, MLX, 18 GB)**: good captions that leave out what stays the same, about 7.7 s a picture warm (6
+pictures 46 s; the first three 24 s with the load); **Gemma 4 e4b (Ollama, 9.5 GB)**: about 6.7 s a picture, but it described the
+set instead of the picture ("various backgrounds"), so it does not do this job with this instruction. The measured model of the T0
+spike, Qwen3.5 9B with its projector (2.5 to 3.4 s a picture), is the small choice. A model that only reads text says so in words.

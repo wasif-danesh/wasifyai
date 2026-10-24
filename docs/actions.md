@@ -16,6 +16,7 @@ assistant's four tools onto it; nothing else is wired yet, so nothing changed fo
 | `image.*`, `video.*`, `speech.*`, `voice.*`, `music.*`, `dub.*`, `audiobook.*`, `lipsync.*`, `notebook.*` | `actions.py` of the product that owns them |
 | The engine's side (readiness, stores, child runs) | `ApiToolHost` in `services/api/src/wasifyai_api/tool_host.py` |
 | Help for each action | `docs/help/<action id>.md` |
+| The assistant's list of screens (interim, ADR-0071) | `wasifyai_api/assistant_features.py` writes `products/wasifyai-assistant/wasifyai_assistant/features.json`; rerun `--write` after a menu or action change |
 | Audit and approvals tables | Postgres: Alembic `0020_actions`; desktop: created on first use by `SqlAuditStore` and `SqlApprovalStore` |
 
 ## Adding an action (one file, plus its help)

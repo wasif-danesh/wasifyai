@@ -1,0 +1,233 @@
+[
+  {
+    "where": "Notebook › Create",
+    "actions": [
+      "notebook.create"
+    ],
+    "does": [
+      "Create a notebook"
+    ]
+  },
+  {
+    "where": "Notebook › View Notebooks",
+    "actions": [
+      "notebook.add_source",
+      "notebook.ask",
+      "notebook.list",
+      "notebook.search",
+      "notebook.studio_output"
+    ],
+    "does": [
+      "Add a note to a notebook",
+      "Ask a notebook",
+      "My notebooks",
+      "Search inside notebooks",
+      "Make a Studio output"
+    ]
+  },
+  {
+    "where": "Images › Create",
+    "actions": [
+      "image.generate"
+    ],
+    "does": [
+      "Make a picture"
+    ]
+  },
+  {
+    "where": "Images › Edit",
+    "actions": [
+      "image.edit"
+    ],
+    "does": [
+      "Change a picture"
+    ]
+  },
+  {
+    "where": "Images › Inpaint",
+    "actions": [
+      "image.inpaint"
+    ],
+    "does": [
+      "Change part of a picture"
+    ]
+  },
+  {
+    "where": "Images › Reference",
+    "actions": [
+      "image.reference"
+    ],
+    "does": [
+      "Make a picture from two pictures"
+    ]
+  },
+  {
+    "where": "Images › 3D model",
+    "actions": [
+      "model3d.generate"
+    ],
+    "does": [
+      "Make a 3D model"
+    ]
+  },
+  {
+    "where": "Video › Create",
+    "actions": [
+      "video.generate"
+    ],
+    "does": [
+      "Make a video"
+    ]
+  },
+  {
+    "where": "Video › Animate an image",
+    "actions": [
+      "video.animate"
+    ],
+    "does": [
+      "Animate a picture"
+    ]
+  },
+  {
+    "where": "Video › Extend video",
+    "actions": [
+      "video.extend"
+    ],
+    "does": [
+      "Extend a video"
+    ]
+  },
+  {
+    "where": "Video › Video Builder",
+    "actions": [
+      "motion.make",
+      "motion.revise",
+      "video_builder.create",
+      "video_builder.lint",
+      "video_builder.render"
+    ],
+    "does": [
+      "Make a motion graphic",
+      "Change a motion graphic",
+      "Write a video project",
+      "Check a video project",
+      "Make the video"
+    ]
+  },
+  {
+    "where": "Voice › Text to speech",
+    "actions": [
+      "speech.speak"
+    ],
+    "does": [
+      "Text to speech"
+    ]
+  },
+  {
+    "where": "Voice › Speech to text",
+    "actions": [
+      "speech.transcribe"
+    ],
+    "does": [
+      "Speech to text"
+    ]
+  },
+  {
+    "where": "Voice › Lip sync",
+    "actions": [
+      "lipsync.make"
+    ],
+    "does": [
+      "Lip sync"
+    ]
+  },
+  {
+    "where": "Voice › Voices",
+    "actions": [
+      "voice.clone",
+      "voice.design",
+      "voice.list"
+    ],
+    "does": [
+      "Copy a voice",
+      "Describe a voice",
+      "My saved voices"
+    ]
+  },
+  {
+    "where": "Voice › Change a voice",
+    "actions": [
+      "voice.convert"
+    ],
+    "does": [
+      "Change a voice"
+    ]
+  },
+  {
+    "where": "Voice › Edit speech",
+    "actions": [
+      "voice.edit_speech"
+    ],
+    "does": [
+      "Edit speech"
+    ]
+  },
+  {
+    "where": "Voice › Dub a recording",
+    "actions": [
+      "dub.make",
+      "dub.script"
+    ],
+    "does": [
+      "Dub a recording",
+      "Write the dub script"
+    ]
+  },
+  {
+    "where": "Voice › Audiobook",
+    "actions": [
+      "audiobook.make",
+      "audiobook.plan"
+    ],
+    "does": [
+      "Make an audiobook",
+      "Find the chapters"
+    ]
+  },
+  {
+    "where": "Music › Create",
+    "actions": [
+      "music.generate"
+    ],
+    "does": [
+      "Make music"
+    ]
+  },
+  {
+    "where": "Music › Lyrics",
+    "actions": [
+      "music.lyrics"
+    ],
+    "does": [
+      "Write lyrics"
+    ]
+  },
+  {
+    "where": "Music › Split into parts",
+    "actions": [
+      "music.separate"
+    ],
+    "does": [
+      "Split into parts"
+    ]
+  },
+  {
+    "where": "Train",
+    "actions": [
+      "train.start"
+    ],
+    "does": [
+      "Teach a character or style"
+    ]
+  }
+]

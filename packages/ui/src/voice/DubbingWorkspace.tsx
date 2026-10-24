@@ -405,7 +405,7 @@ export function DubbingWorkspace({
             {voiceFrom === "saved" ? (
               <select
                 aria-label="Saved voice"
-                className="ms-6 h-10 rounded-md border border-input bg-transparent px-3 text-sm"
+                className="ms-6 h-10 max-w-[calc(100%-1.5rem)] rounded-md border border-input bg-transparent px-3 text-sm"
                 value={savedId}
                 onChange={(e) => setSavedId(e.target.value)}
               >
@@ -432,7 +432,7 @@ export function DubbingWorkspace({
             {voiceFrom === "builtin" && builtinVoices.length > 0 ? (
               <select
                 aria-label="Built-in voice"
-                className="ms-6 h-10 rounded-md border border-input bg-transparent px-3 text-sm"
+                className="ms-6 h-10 max-w-[calc(100%-1.5rem)] rounded-md border border-input bg-transparent px-3 text-sm"
                 value={builtin}
                 onChange={(e) => setBuiltin(e.target.value)}
               >

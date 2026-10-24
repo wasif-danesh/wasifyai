@@ -336,7 +336,12 @@ class LocalTextProvider:
     ) -> AsyncIterator[str]:
         ctx = require_context()
         media = {k: v for k, v in counts(prompt).items() if v}
-        if media:
+        chosen = self._language.selected
+        # pictures go to a model that sees them (its projector is next to it, or the tool says it
+        # has vision); sound goes to none of the local models; a tool that does not say is tried
+        if media.get("audio") or (
+            media.get("images") and (chosen is None or chosen.vision is False)
+        ):
             raise RunError(
                 "language_no_pictures",
                 "The chosen language model reads text only. Pictures need a model that sees them.",

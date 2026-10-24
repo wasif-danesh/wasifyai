@@ -304,3 +304,14 @@ def test_the_docs_describe_how_to_add_one():
     for needle in ("add_actions", "docs/help", "actions.json", "ui_exempt", "needs_consent"):
         assert needle in text, needle
     assert Path(CONTRACT).is_file()
+
+
+def test_the_assistants_feature_list_is_current():
+    """The screens the chat assistant is told about are made from the catalogue and the menu."""
+    from wasifyai_api import assistant_features
+
+    assert assistant_features.main(["--check"]) == 0, (
+        "run: python -m wasifyai_api.assistant_features --write"
+    )
+    wheres = {row["where"] for row in assistant_features.build()}
+    assert {"Video › Create", "Voice › Text to speech", "Images › 3D model", "Train"} <= wheres

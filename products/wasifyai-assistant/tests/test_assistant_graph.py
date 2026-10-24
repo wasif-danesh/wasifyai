@@ -770,3 +770,17 @@ async def test_a_search_that_is_not_allowed_yet_says_what_to_do(tmp_path, ctx):
     result = next(e for e in events if e["type"] == "tool_result")
     assert result["status"] == "error" and "Press Search" in result["output"]["message"]
     assert host.web_searches == []
+
+
+def test_the_assistant_is_told_where_the_features_are_but_only_those_this_engine_serves():
+    from wasifyai_assistant.features import features_prompt
+
+    everything = {"video.generate", "speech.speak", "model3d.generate"}
+    said = features_prompt(everything)
+    assert "Video › Create" in said and "Voice › Text to speech" in said
+    assert "Images › 3D model" in said
+    assert "Voice › Dub a recording" not in said  # nothing for it is served here
+    assert "3D model" not in features_prompt({"video.generate"})
+    assert features_prompt(set()) == ""
+    system = model_messages([], features=said)[0]["content"]
+    assert system.startswith("You are Wasify AI") and "Video › Create" in system

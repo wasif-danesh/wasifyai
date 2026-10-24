@@ -3,6 +3,7 @@ import { act, render, renderHook, screen, waitFor } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import type { AssistantApi, ImagesApi } from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ModelChoicesProvider, useChoicesChanged } from "../models";
 import { AssistantHome, greeting } from "./AssistantHome";
 import { conversationsChanged, useConversations } from "./use-conversations";
 
@@ -73,6 +74,41 @@ describe("AssistantHome", () => {
       );
     },
   );
+
+  it("asks again what the box can do when another model is chosen", async () => {
+    let can = false;
+    const options = vi.fn(async () => ({ thinking: can }));
+    function Choose() {
+      const changed = useChoicesChanged();
+      return (
+        <button type="button" onClick={changed}>
+          model chosen
+        </button>
+      );
+    }
+    const user = userEvent.setup();
+    render(
+      <ModelChoicesProvider source={() => null}>
+        <Choose />
+        <AssistantHome
+          runs={runs}
+          assistant={fakeAssistant({ options })}
+          images={images}
+          conversationId={null}
+          onAdopt={() => {}}
+          onNewChat={() => {}}
+        />
+      </ModelChoicesProvider>,
+    );
+    await screen.findByRole("heading", { level: 1 });
+    expect(screen.queryAllByRole("button", { name: /^Thinking/ })).toHaveLength(0);
+    can = true; // the model the person chose can think
+    await user.click(screen.getByRole("button", { name: "model chosen" }));
+    await waitFor(() =>
+      expect(screen.queryAllByRole("button", { name: /^Thinking/ })).toHaveLength(1),
+    );
+    expect(options).toHaveBeenCalledTimes(2);
+  });
 
   it("greets a new chat and offers examples, with no title bar", async () => {
     render(

@@ -1,7 +1,15 @@
 "use client";
 
 import { ChevronDown, Download, Eye } from "lucide-react";
-import { type Ref, useEffect, useId, useImperativeHandle, useRef, useState } from "react";
+import {
+  type Ref,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Modal } from "../components/dialog";
@@ -95,6 +103,8 @@ export function ModelSelect({
   const [tab, setTab] = useState<Tab>("recommended");
   const [asking, setAsking] = useState<ModelChoice | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  // where the panel opens: below the button, or above it when the button sits low (the notebook box), and no taller than the room there
+  const [room, setRoom] = useState({ up: false, max: 0 });
 
   const rows = useRef<ModelChoice[]>([]);
   rows.current = m.list?.choices ?? [];
@@ -109,6 +119,15 @@ export function ModelSelect({
     }),
     [],
   );
+
+  useLayoutEffect(() => {
+    if (!open || !root.current) return;
+    const r = root.current.getBoundingClientRect();
+    const below = window.innerHeight - r.bottom - 24;
+    const above = r.top - 24;
+    const up = below < 360 && above > below;
+    setRoom({ up, max: Math.max(160, up ? above : below) });
+  }, [open]);
 
   // a click outside or Escape closes the panel
   useEffect(() => {
@@ -197,7 +216,11 @@ export function ModelSelect({
         <section
           id={`${id}-panel`}
           aria-label={g.select}
-          className="absolute start-0 top-full z-30 mt-2 grid w-[min(26rem,calc(100vw-2rem))] gap-3 rounded-xl border bg-background p-3 shadow-card"
+          style={{ maxHeight: room.max || undefined }}
+          className={cn(
+            "absolute start-0 z-30 grid w-[min(26rem,calc(100vw-2rem))] grid-cols-[minmax(0,1fr)] content-start gap-3 overflow-y-auto rounded-xl border bg-background p-3 shadow-card",
+            room.up ? "bottom-full mb-2" : "top-full mt-2",
+          )}
         >
           <div
             role="tablist"
@@ -260,13 +283,15 @@ export function ModelSelect({
                   disabled={c.state === "too_big" || c.state === "unavailable"}
                   aria-current={c.chosen ? "true" : undefined}
                   className={cn(
-                    "grid w-full gap-0.5 rounded-lg px-3 py-2 text-start outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 disabled:hover:bg-transparent",
+                    "grid w-full grid-cols-[minmax(0,1fr)] gap-0.5 rounded-lg px-3 py-2 text-start outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 disabled:hover:bg-transparent",
                     c.chosen && "bg-accent",
                   )}
                   onClick={() => void pick(c)}
                 >
                   <span className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate font-medium text-sm">{c.title}</span>
+                    <span className="min-w-0 flex-1 truncate font-medium text-sm" title={c.title}>
+                      {c.title}
+                    </span>
                     {c.readsPictures ? (
                       <span title="Can read pictures" className="text-muted-foreground">
                         <Eye className="size-3.5" aria-label="Can read pictures" />
@@ -276,7 +301,9 @@ export function ModelSelect({
                       <span className="rounded-full border px-2 py-0.5 text-xs">Recommended</span>
                     ) : null}
                   </span>
-                  <span className="text-muted-foreground text-sm">{c.plain}</span>
+                  <span className="text-muted-foreground text-sm [overflow-wrap:anywhere]">
+                    {c.plain}
+                  </span>
                   <span
                     className={cn(
                       "flex items-center gap-1.5 text-xs",

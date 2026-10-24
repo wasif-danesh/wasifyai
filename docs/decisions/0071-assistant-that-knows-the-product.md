@@ -153,3 +153,15 @@ Other languages (the help corpus is English; the model may answer in the person'
 and spoken answers; a visual walkthrough that highlights parts of the screen; fine-tuning; actions that change
 settings; teaching the assistant by the person ("remember this"); the web deployment's assistant (it uses the same
 graph later).
+
+## Interim, built 2026-10-24: the screens in the prompt
+
+Until A2 exists the assistant told people it could not make video, speech or 3D, because it knew only its own
+tools. It now gets one sentence listing the side menu's screens and what each does ("Video › Create: make a video"),
+and is told to point people there and not to claim it made things itself (it still makes pictures and music with
+its tools). The list is **generated**, not typed: `wasifyai_api.assistant_features` joins the action catalogue
+(`ui` and `title` of every action offered to the assistant) with `packages/ui/src/shell/menu.ts` into
+`products/wasifyai-assistant/wasifyai_assistant/features.json`; a test fails when it is stale
+(`uv run python -m wasifyai_api.assistant_features --write`). At run time only the screens whose actions this engine
+serves are listed. About 360 tokens. A2's `how_to` and `app_status` replace it with steps and live state; the
+tool-choice eval now sends this same prompt.

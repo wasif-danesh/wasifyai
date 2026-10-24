@@ -45,6 +45,7 @@ from wasifyai_assistant.attachments import (
     user_content,
     valid_id,
 )
+from wasifyai_assistant.features import features_prompt
 from wasifyai_assistant.store import (
     HEAD,
     PRODUCT_ID,
@@ -156,10 +157,12 @@ def model_messages(
     history: list[Message],
     search: bool = False,
     attached: dict[str, Attached] | None = None,
+    features: str = "",
 ) -> list[dict[str, Any]]:
     """The conversation as OpenAI-style messages (assistant text and tool calls, tool results).
-    `attached`: what the person attached, as the model is given it (`attachments.py`)."""
-    prompt = SYSTEM_PROMPT + (WEB_PROMPT if search else "")
+    `attached`: what the person attached, as the model is given it (`attachments.py`).
+    `features`: the sentence about the app's screens (`features.py`)."""
+    prompt = SYSTEM_PROMPT + features + (WEB_PROMPT if search else "")
     if attachments_in(history):
         prompt += ATTACH_PROMPT
     out: list[dict[str, Any]] = [{"role": "system", "content": prompt}]
@@ -411,6 +414,10 @@ def build_assistant_graph(
         conv_id = state["conversation_id"]
         search = bool(state.get("search"))
         tools = offered_tools(host(), search)
+        catalogue = caps.extras.get("actions")
+        features = features_prompt(
+            {a.id for a in catalogue.registry.for_surface("assistant")} if catalogue else ()
+        )
         thinking = bool(state.get("thinking"))
         reply_id = client_id(state.get("client_reply_id"))
         saved: dict[str, Any] = dict(state.get("loop") or {})  # a turn that waited for an answer
@@ -491,7 +498,7 @@ def build_assistant_graph(
                 try:
                     async for chunk in caps.text.chat(
                         "chat",
-                        model_messages(history, search, attached),
+                        model_messages(history, search, attached, features),
                         allow_tools,
                         thinking=thinking,
                     ):

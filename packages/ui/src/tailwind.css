@@ -116,6 +116,12 @@
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
+  /* a select is as wide as its longest option; keep it inside its box and cut a long choice short */
+  select {
+    max-width: 100%;
+    min-width: 0;
+    text-overflow: ellipsis;
+  }
 }
 
 /* Everything that moves is switched off for people who ask for less motion. */

@@ -20,10 +20,15 @@ from pathlib import Path
 
 import httpx
 import yaml
+from wasifyai_assistant.features import FILE, features_prompt
 from wasifyai_assistant.graph import SYSTEM_PROMPT
 from wasifyai_assistant.tools import SIZES, TOOL_DEFINITIONS
 
 CASES = Path(__file__).with_name("cases.yaml")
+# what the assistant is really sent: its prompt and the sentence about the app's screens
+PROMPT = SYSTEM_PROMPT + features_prompt(
+    {a for row in json.loads(FILE.read_text()) for a in row["actions"]}
+)
 
 
 def judge(case: dict, message: dict) -> tuple[bool, str]:
@@ -72,7 +77,7 @@ async def ask(
         json={
             "model": model,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": PROMPT},
                 {"role": "user", "content": say},
             ],
             "tools": TOOL_DEFINITIONS,

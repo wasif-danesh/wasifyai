@@ -13,6 +13,7 @@ import {
 } from "@wasifyai/client";
 import { Pencil, Trash2 } from "lucide-react";
 import { type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { useChoicesVersion } from "../models/context";
 import type { ChatScreenProps } from "./ChatScreen";
 import type { TrackLookup } from "./ToolCard";
 import type { ComposerOptionsAvailable } from "./composer-options";
@@ -95,6 +96,9 @@ export function AssistantHome({
   // what the box can offer with the model in use (a Thinking switch only for a model that can think, a Search switch
   // only when this engine can search at all)
   const [offered, setOffered] = useState<ChatOptions | null>(null);
+  // read again when a model is chosen or fetched: the options belong to the model in use (can it think, can it read pictures)
+  const models = useChoicesVersion();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `models` only says "ask again"
   useEffect(() => {
     let gone = false;
     assistant
@@ -104,7 +108,7 @@ export function AssistantHome({
     return () => {
       gone = true;
     };
-  }, [assistant]);
+  }, [assistant, models]);
   const allowSearch = useCallback(async () => {
     const st = await assistant.updateSearch({ consent: true });
     const chosen = st.providers.find((p) => p.id === st.provider);

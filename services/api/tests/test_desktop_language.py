@@ -57,7 +57,12 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         n = int(self.headers.get("content-length", "0"))
         req = json.loads(self.rfile.read(n) or b"{}")
-        said = f"[{model}] " + req["messages"][-1]["content"]
+        content = req["messages"][-1]["content"]
+        if isinstance(content, list):  # words and pictures: the pictures are counted, not read
+            n = sum(1 for part in content if part["type"] == "image_url")
+            words = " ".join(part["text"] for part in content if part["type"] == "text")
+            content = f"{words} [{n} picture]"
+        said = f"[{model}] " + content
         kwargs = req.get("chat_template_kwargs")
         think = bool(kwargs and kwargs.get("enable_thinking"))
         if kwargs is not None and not think:
@@ -230,6 +235,34 @@ async def test_a_picture_in_the_prompt_is_refused_for_a_text_model(tmp_path, ctx
             pass
     assert e.value.code == "language_no_pictures"
     await llama.close()
+
+
+async def test_a_picture_goes_to_a_model_that_sees_it_and_sound_to_none(tmp_path, ctx):
+    from wasifyai_platform_sdk import Audio, Image
+
+    svc, llama = await make(tmp_path)
+    try:
+        model = gguf(tmp_path)
+        (tmp_path / "mmproj-F16.gguf").write_bytes(b"GGUF" + b"\0" * 64)  # its picture reader
+        await svc.select_file(model, "Demo", 4096)
+        assert svc.selected is not None and svc.selected.vision is True
+        provider = LocalTextProvider(svc, InMemoryUsageRecorder())
+        binding = CapabilityBinding(provider="litellm", model="multimodal")
+        text = "".join(
+            [c async for c in provider.stream(
+                "text.describe_image", binding, "s",
+                ["what is this", Image.from_bytes(b"\x89PNG" + b"0" * 10, "image/png")],
+            )]
+        )  # fmt: skip
+        assert text.strip() == "[m.gguf] what is this [1 picture]"
+        with pytest.raises(RunError) as e:  # no local model hears sound
+            async for _ in provider.stream(
+                "text.x", binding, "s", ["listen", Audio(data=b"RIFF", format="wav")]
+            ):
+                pass
+        assert e.value.code == "language_no_pictures"
+    finally:
+        await llama.close()
 
 
 async def test_a_running_tools_model_is_used_where_it_is_without_the_slot(tmp_path, ctx):

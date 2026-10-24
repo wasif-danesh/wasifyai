@@ -17,8 +17,9 @@ describe("the window's side menu", () => {
 
   it("shows the screens that are built, and marks the page being shown", () => {
     for (const [id, route, path] of [
-      ["video.builder", "videobuilder", "/video/builder"],
-      ["images.model3d", "model3d", "/images/3d"],
+      ["motion", "videobuilder", "/video/builder"],
+      ["model3d", "model3d", "/images/3d"],
+      ["library", "creations", "/creations"],
       ["images.reference", "reference", "/images/reference"],
       ["images.inpaint", "inpaint", "/images/inpaint"],
     ] as const) {
@@ -33,7 +34,10 @@ describe("the window's side menu", () => {
   it("points every item at a route that exists", () => {
     for (const [id, route] of Object.entries(ROUTES)) {
       expect(routePath(route), id).toBeTruthy();
-      expect(ids.includes(id) || ["library", "models", "train"].includes(id), id).toBe(true);
+      expect(
+        ids.includes(id) || ["motion", "model3d", "library", "models", "train"].includes(id),
+        id,
+      ).toBe(true);
     }
   });
 
@@ -80,7 +84,7 @@ describe("the title the top bar shows when a screen gives none", () => {
     expect(routeTitle("extend")).toBe("Video: Extend video");
     expect(routeTitle("speak")).toBe("Voice: Text to speech");
     expect(routeTitle("models")).toBe("Models");
-    expect(routeTitle("train")).toBe("Train");
+    expect(routeTitle("train")).toBe("Train models");
     expect(routeTitle("settings")).toBe("Settings");
   });
 

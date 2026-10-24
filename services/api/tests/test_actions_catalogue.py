@@ -55,7 +55,9 @@ def menu() -> tuple[dict[str, str], dict[str, str]]:
         groups[gid] = glabel
         for iid, ilabel in re.findall(r'id: "([\w.]+)", label: "([^"]+)"', body):
             items[iid] = f"{glabel} › {ilabel}"
-    for iid, ilabel in re.findall(r'\{ id: "(chat|library|models|train)", label: "([^"]+)"', text):
+    for iid, ilabel in re.findall(
+        r'\{ id: "(chat|motion|model3d|library|models|train)", label: "([^"]+)"', text
+    ):
         items[iid] = ilabel
     return items, groups
 
@@ -314,4 +316,4 @@ def test_the_assistants_feature_list_is_current():
         "run: python -m wasifyai_api.assistant_features --write"
     )
     wheres = {row["where"] for row in assistant_features.build()}
-    assert {"Video › Create", "Voice › Text to speech", "Images › 3D model", "Train"} <= wheres
+    assert {"Video › Create", "Voice › Text to speech", "3D model", "Train models"} <= wheres

@@ -1,4 +1,4 @@
-"""Video Builder (ADR-0077, ADR-0079) on stand-ins: the store, the routes, the render manager with
+"""Motion graphics (ADR-0077, ADR-0079) on stand-ins: the store, the routes, the render manager with
 the exact-text check, the actions and the library kind, with a real SQLite store, real storage and a
 stand-in render engine (the real browser: `services/api/tests/test_video_builder_hostile.py` and
 `test_video_builder_templates.py`). The templates themselves are in `test_templates.py`."""
@@ -450,7 +450,7 @@ def test_without_the_component_a_preview_a_check_and_a_render_say_what_to_do(rig
 def test_a_missing_ffmpeg_is_said_in_the_engines_own_words_everywhere(rig):
     engine = rig.app_state.video_builder
     engine.is_ready = False
-    engine.problem = lambda: "Video Builder also needs FFmpeg (with ffprobe)."  # type: ignore[attr-defined]
+    engine.problem = lambda: "Motion graphics also needs FFmpeg (with ffprobe)."  # type: ignore[attr-defined]
     made = create(rig)
     for call in (
         lambda: rig.get(f"{BASE}/projects/{made['id']}/preview"),
@@ -924,7 +924,7 @@ async def test_a_render_that_fails_is_an_error_with_the_reason(arig):
 async def test_the_component_must_be_set_up_before_checking_or_rendering(arig):
     arig.host.not_ready(
         need_runtime("video-builder"),
-        Readiness.needs_setup("Set up Video Builder first.", ui="video.builder"),
+        Readiness.needs_setup("Set up Motion graphics first.", ui="motion"),
     )
     cid = await title(arig)  # writing a project needs no component
     for action, params in (
@@ -933,7 +933,7 @@ async def test_the_component_must_be_set_up_before_checking_or_rendering(arig):
         ("motion.make", {"template": "title", "fields": {"title": "Hi"}}),
     ):
         r = await arig.go(action, params)
-        assert r.status == "needs_setup" and "Set up Video Builder" in r.text
+        assert r.status == "needs_setup" and "Set up Motion graphics" in r.text
 
 
 async def test_a_render_asks_first_when_asked_and_a_model_is_told_every_template(arig):
@@ -944,7 +944,7 @@ async def test_a_render_asks_first_when_asked_and_a_model_is_told_every_template
            "motion.revise")  # fmt: skip
     for action_id in ids:
         action = arig.ex.registry.get(action_id)
-        assert action and action.ui == "video.builder" and action.product == "wasifyai-video"
+        assert action and action.ui == "motion" and action.product == "wasifyai-video"
     for action_id in ("motion.make", "video_builder.create"):
         text = arig.ex.registry.get(action_id).description
         for template in templates.TEMPLATES:

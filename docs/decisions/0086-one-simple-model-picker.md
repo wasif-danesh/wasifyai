@@ -67,3 +67,23 @@ sections and a Hugging Face search; and the 19 catalogue models have no type a s
 ## Not in this version
 
 Other languages, comparing models, ratings, automatic updates, a picker on the web (its models are hosted).
+
+## Amendment: where the button goes (2026-10-24, owner)
+
+The "Select ... model" button sits **at the top of the screen, in the page's top bar**, on every screen that has one: in the
+app window that is the window's own bar (`PageHeader`, as on the chat, Images and Notebook screens); on the web it is a bar at
+the top of the screen's area (`TopBarSlot` in `packages/ui/src/window-bar.tsx`, used by the voice, music, listening and lip sync
+screens). It is no longer inside the body of the Video, Voice, Music, Listening, Dubbing, Audiobook, Lip sync and Edit speech
+screens, and it has no "Model" label of its own. One exception: a second picker on a screen that already has its one (editing a
+track on the Music screen) stays in its panel (`inBody`). The setup card of 3D, which shows a picker before the component is
+installed, keeps it in the card. Where there is no picker (the web's plain list of models, with its licence lines), nothing moves.
+
+## Amendment: the picker on the web for what the service sets up (2026-10-24, owner)
+
+The "Not in this version" line (no picker on the web) no longer holds. On the web, **Image, Video, Chat and 3D** have the same button in the
+same top bar, and it lists **only the models the service has set up**, so a person sees what is in use and whether it is ready. It is read
+only: nothing to choose or download (an admin sets chat up in Admin > Models and images and video in Admin > Media; 3D is its worker's
+Pixal3D). The engine route is `GET /models/in-use` (any signed-in person; title, plain line, ready and licence only: never a key, an
+address or a setting; `services/api/src/wasifyai_api/models_in_use.py`). The voice, listening, music and lip sync groups keep their
+choice of a worker's model (ADR-0086, P5). The admin Models page keeps its four worker tabs (`ModelsHome only=`). On the desktop the
+3D screen now has its button in the top bar too; its setup card points at it.

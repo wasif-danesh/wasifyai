@@ -5,7 +5,6 @@
 import {
   BookOpen,
   Box,
-  Clapperboard,
   FilePlus2,
   FileText,
   Film,
@@ -21,6 +20,7 @@ import {
   Paintbrush,
   Pencil,
   Scissors,
+  Shapes,
   Shuffle,
   Sparkles,
   SquarePen,
@@ -40,7 +40,7 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     icon: BookOpen,
     items: [
       { id: "notebook.create", label: "Create", icon: FilePlus2 },
-      { id: "notebook.list", label: "View Notebooks", icon: BookOpen },
+      { id: "notebook.list", label: "View notebooks", icon: BookOpen },
     ],
   },
   {
@@ -52,7 +52,6 @@ export const MENU_GROUPS: MenuGroupDef[] = [
       { id: "images.edit", label: "Edit", icon: Pencil },
       { id: "images.inpaint", label: "Inpaint", icon: Paintbrush },
       { id: "images.reference", label: "Reference", icon: SquareStack },
-      { id: "images.model3d", label: "3D model", icon: Box },
       { id: "images.library", label: "Your images", icon: Library },
     ],
   },
@@ -64,7 +63,6 @@ export const MENU_GROUPS: MenuGroupDef[] = [
       { id: "video.create", label: "Create", icon: Sparkles },
       { id: "video.animate", label: "Animate an image", icon: Film },
       { id: "video.extend", label: "Extend video", icon: Maximize2 },
-      { id: "video.builder", label: "Video Builder", icon: Clapperboard },
       { id: "video.library", label: "Your videos", icon: Library },
     ],
   },
@@ -99,9 +97,11 @@ export const MENU_GROUPS: MenuGroupDef[] = [
 /** The single items above and below the groups. */
 export const CHAT_ITEM: MenuItemDef = { id: "chat", label: "New chat", icon: SquarePen };
 export const EXTRA_ITEMS: MenuItemDef[] = [
+  { id: "motion", label: "Motion graphics", icon: Shapes },
+  { id: "model3d", label: "3D model", icon: Box },
   { id: "library", label: "Library", icon: Library },
   { id: "models", label: "Models", icon: SquareStack },
-  { id: "train", label: "Train", icon: FlaskConical },
+  { id: "train", label: "Train models", icon: FlaskConical },
 ];
 
 /** What an app says about one item. No answer means the app does not serve it yet: it shows as "Soon". */

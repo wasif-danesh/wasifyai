@@ -1,12 +1,13 @@
 "use client";
 
-import { type ReactNode, createContext, useContext, useEffect } from "react";
+import { type ReactNode, createContext, useContext, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "./cn";
 
 /** The top bar of the app window: where its content goes, and a way to say a page has put something there. */
 export type WindowBar = {
-  target: HTMLElement;
+  /** null until the place for it is on the screen: a page waits, then puts its header there */
+  target: HTMLElement | null;
   /** A page took the bar: the window stops showing its own title. Returns the call that gives it back. */
   claim(): () => void;
 };
@@ -41,11 +42,33 @@ export function PageHeader({
 }) {
   const bar = useContext(WindowBarContext);
   useEffect(() => bar?.claim(), [bar]);
-  if (bar) return createPortal(children, bar.target);
+  if (bar) return bar.target ? createPortal(children, bar.target) : null;
   return (
     <header data-tauri-drag-region className={cn(className)}>
       {children}
       {pageOnly}
     </header>
+  );
+}
+
+/**
+ * A top bar for a page that is not in the app window (the web): the page's header goes in a bar at the top of
+ * this area, as it does in the window's own bar, so a screen puts its tools in the same place everywhere.
+ * Inside the window it does nothing.
+ */
+export function TopBarSlot({ children }: { children: ReactNode }) {
+  const outer = useContext(WindowBarContext);
+  const [target, setTarget] = useState<HTMLElement | null>(null);
+  const bar = useMemo<WindowBar>(() => ({ target, claim: () => () => {} }), [target]);
+  if (outer) return <>{children}</>;
+  return (
+    <WindowBarProvider bar={bar}>
+      <div
+        ref={setTarget}
+        className="flex h-14 items-center gap-4 border-b px-6 empty:hidden"
+        data-testid="top-bar"
+      />
+      {children}
+    </WindowBarProvider>
   );
 }

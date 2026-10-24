@@ -1,4 +1,4 @@
-"""The templates of Video Builder: compositions written once by us, filled with the person's words.
+"""The templates of Motion graphics: compositions written once by us, filled with the words.
 
 A template is a set of fields (what the person fills in) and a function from the checked fields to
 one HTML file. The words go into the page as escaped text, never as markup and never inside the

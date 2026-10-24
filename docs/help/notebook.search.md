@@ -13,7 +13,7 @@ Find passages about a topic across all your notebooks.
 
 ## Steps in the app
 
-1. Open **Notebook › View Notebooks** and search inside a notebook, or ask the assistant.
+1. Open **Notebook › View notebooks** and search inside a notebook, or ask the assistant.
 
 ## Fields
 

@@ -641,12 +641,12 @@ async def test_the_action_is_costly_long_asks_first_and_is_told_what_it_needs(ar
     assert (
         action is not None and action.effect == "make" and action.long and "costly" in action.flags
     )
-    assert action.ui == "images.model3d" and action.product == "wasifyai-model3d"
+    assert action.ui == "model3d" and action.product == "wasifyai-model3d"
     assert "5 to 25 minutes" in action.description and "image.generate" in action.description
     asked = await arig.go("model3d.generate", {"image_id": "p1"}, origin="assistant")
     assert asked.status == "needs_approval" and arig.state.model3d.made == []
     arig.host.not_ready(
-        need_runtime("model3d"), Readiness.needs_setup("Set up 3D first.", ui="images.model3d")
+        need_runtime("model3d"), Readiness.needs_setup("Set up 3D first.", ui="model3d")
     )
     r = await arig.go("model3d.generate", {"image_id": "p1"}, person_approved=True)
     assert r.status == "needs_setup" and "Set up 3D" in r.text

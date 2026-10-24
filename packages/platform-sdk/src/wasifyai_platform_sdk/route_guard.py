@@ -1,7 +1,7 @@
 """Safeguards for features that run from routes, not from a graph (ADR-0047 for ADR-0087's P6).
 
 A graph asks its `Capabilities` whether the safeguards are on, counts the day's usage events against
-the product's `quotas:` and records what it made. The 3D and Video Builder screens have no graph:
+the product's `quotas:` and records what it made. The 3D and Motion graphics screens have no graph:
 their routes and job managers do the same through this, from the app's state. Nothing happens while
 the safeguards are off (the desktop, tests) except that usage is still recorded, so the numbers are
 there the day they are turned on."""

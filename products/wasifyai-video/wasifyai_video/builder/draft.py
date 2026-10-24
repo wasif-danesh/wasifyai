@@ -1,4 +1,4 @@
-"""Plain words to the fields of a template (the prompt box of Video Builder, ADR-0079).
+"""Plain words to the fields of a template (the prompt box of Motion graphics, ADR-0079).
 
 A model reads "lower third for \"Maya Chen\", Head of Design" and chooses a template and fills its
 fields. It only fills fields: the page is made by the template, the words stay what the person

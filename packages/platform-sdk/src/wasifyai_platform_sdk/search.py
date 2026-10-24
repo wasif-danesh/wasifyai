@@ -38,7 +38,7 @@ KINDS: tuple[str, ...] = (
     "notebook",
     "track",  # a piece of music or an edit of one, made by the voice product (ADR-0066)
     "voice",  # a saved voice
-    "composition",  # a Video Builder project (ADR-0077); its renders are `video`
+    "composition",  # a Motion graphics project (ADR-0077); its renders are `video`
     "model3d",  # a 3D model (ADR-0080)
     "lora",  # a model the person taught the app from their pictures (ADR-0073, ADR-0076)
 )

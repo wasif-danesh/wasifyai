@@ -318,6 +318,18 @@ describe("SearchSettings", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it("says on a service that the admin chooses it for everyone and each person allows it", async () => {
+    const assistant = assistantWith(
+      { thinking: false },
+      { searchStatus: async () => status({ can_save_keys: false }) },
+    );
+    render(<SearchSettings assistant={assistant} place="service" />);
+    expect(
+      await screen.findByText(/You choose the search service and keep its key for everyone/),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/I allow searching the web with DuckDuckGo/)).toBeInTheDocument();
+  });
+
   it("changes the service, the permission and the key, and never shows a saved key", async () => {
     let current = status();
     const updateSearch = vi.fn(async (u: Parameters<AssistantApi["updateSearch"]>[0]) => {

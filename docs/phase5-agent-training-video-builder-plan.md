@@ -10,7 +10,7 @@ things the owner asked for, in six Proposed ADRs:
 | An AI agent system on **Hermes Agent**: type a goal, get a result | ADR-0072 |
 | Training, **simple for non-technical people**, reusing **Unsloth**: the platform, **language models**, **decision models** ("sorters"), **image LoRA** (upload pictures only; the app writes the captions and suggests the magic word) | ADR-0073 (platform), ADR-0074 (language), ADR-0075 (decision model), ADR-0076 (image LoRA, with full diffusion fine-tuning as a remote-only last section) |
 | Something like **HyperFrames** (experimental): videos written as code | ADR-0077 (Video Builder) |
-| **Text to motion graphics**, working name Motion Graphics (`iart-ai/motion-skills`), added later the same day | ADR-0079 (Accepted) |
+| **Text to motion graphics**, working name Motion graphics (`iart-ai/motion-skills`), added later the same day | ADR-0079 (Accepted) |
 | **Text/image to 3D** (`TRELLIS.2`, `Pixal3D`), added later the same day | ADR-0080 (Accepted) |
 
 Nothing here is built. Everything waits for the owner's yes to the ADRs and to the components they install.
@@ -173,7 +173,7 @@ Sizes: S under a week, M one to two weeks, L two to four. Each ends with somethi
 | **V2** | Assets from the library, speech and captions with word times, music with ducking, five templates, the `video_builder.*` actions, creations kinds | M | A 60-second explainer with voice and captions made from a script |
 | **V3** | Authoring by the assistant and the agent, a generated skill for Claude Code, "turn this report into a video" | M | The GitHub report becomes a video from one request |
 
-### Motion Graphics (ADR-0079)
+### Motion graphics (ADR-0079)
 
 | Stage | What | Size | Done when |
 |---|---|---|---|
@@ -200,7 +200,7 @@ Sizes: S under a week, M one to two weeks, L two to four. Each ends with somethi
 | **DS1** | **Done 2026-10-19.** The token lint (no raw colours, sizes, radii), contrast, gamut, completeness and reduced-motion validation; replace the hard-coded values the lint finds | S to M | `pnpm design:check` passes in CI |
 | **DS2** | **Done 2026-10-19.** The blue template (`design/themes/blue.md`) as the default: visual review of the recommended blue and two alternatives, neutrals and accents, chart palette; the token-swap test | S | Web and desktop look blue, AA contrast holds in both schemes, layout checks pass |
 | **DS3** | Component catalogue (states, light and dark, density), content guide and state patterns, axe checks (dependency approval first) | M | Every component and state is visible in one place and checked |
-| **DS4** | Screen patterns for Teach, Agent, Video Builder, Motion Graphics and 3D, written before they are built; usability tests of the flows as they land | ongoing | Each Phase 5 screen is built against the system |
+| **DS4** | Screen patterns for Teach, Agent, Video Builder, Motion graphics and 3D, written before they are built; usability tests of the flows as they land | ongoing | Each Phase 5 screen is built against the system |
 
 ## Spike results (2026-10-19)
 
@@ -296,7 +296,7 @@ Then, in parallel sessions where files do not overlap:
 | 7 | Order | Unchanged: spikes, then the training platform with the Mac image LoRA, then the agent |
 | 8 | Optional last items (T4, T5b, G4) | Unchanged: last, droppable |
 | 10 | Design system (ADR-0081): `design/DESIGN.md` as the single source, blue replaces violet, build-time swap only, no Figma | **Accepted 2026-10-19.** Still needs your approval later for the axe-core dependency (MPL-2.0) |
-| 9 | Motion Graphics and 3D ADRs (0079, 0080) | **Accepted 2026-10-18**, including the `<model-viewer>` dependency. Still needed from you: accept Meta's DINOv3 licence on Hugging Face (by hand) and say yes to the TD0 download (the pinned `pixal3d.cpp` Metal build and Pixal3D weights, sizes shown first) |
+| 9 | Motion graphics and 3D ADRs (0079, 0080) | **Accepted 2026-10-18**, including the `<model-viewer>` dependency. Still needed from you: accept Meta's DINOv3 licence on Hugging Face (by hand) and say yes to the TD0 download (the pinned `pixal3d.cpp` Metal build and Pixal3D weights, sizes shown first) |
 
 New work this created: **the model switch (ADR-0078)** needs the guardrail, assistant, lyrics and caption checks before
 each alias moves, and the Qwen3.5-9B context and memory numbers from G0.

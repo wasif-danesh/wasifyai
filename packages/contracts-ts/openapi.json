@@ -1203,6 +1203,69 @@
         "title": "ImageUpdate",
         "type": "object"
       },
+      "InUse": {
+        "properties": {
+          "chat": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InUseModel"
+            },
+            "title": "Chat",
+            "type": "array"
+          },
+          "images": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InUseModel"
+            },
+            "title": "Images",
+            "type": "array"
+          },
+          "video": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InUseModel"
+            },
+            "title": "Video",
+            "type": "array"
+          }
+        },
+        "title": "InUse",
+        "type": "object"
+      },
+      "InUseModel": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "licence": {
+            "default": "",
+            "title": "Licence",
+            "type": "string"
+          },
+          "plain": {
+            "title": "Plain",
+            "type": "string"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "plain",
+          "ready"
+        ],
+        "title": "InUseModel",
+        "type": "object"
+      },
       "InterruptEvent": {
         "properties": {
           "event": {
@@ -4424,6 +4487,27 @@
         "summary": "Me",
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/models/in-use": {
+      "get": {
+        "operationId": "in_use_models_in_use_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InUse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "In Use",
+        "tags": [
+          "models"
         ]
       }
     },

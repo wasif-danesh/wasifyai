@@ -6,7 +6,7 @@ A process per run, not the resident `trellis-server`, because the server loads i
 request anyway, has no progress and no cancel, and keeps 2.5 GB after a job (TD0, section 6): a
 process shows its progress on its output, stops when it is killed, and gives all its memory back
 when it exits. The product (`wasifyai_model3d`) imports nothing from this package; it reads the
-service from the app state, as the Video Builder does."""
+service from the app state, as the Motion graphics does."""
 
 import asyncio
 import contextlib

@@ -253,3 +253,10 @@ binary, pinned by hash** (not our own CI build yet), and real generations during
 Decision 1's "behind Labs" is withdrawn. **Images › 3D model** is always in the desktop menu; the screen keeps its "experimental"
 label, and nothing is released before the owner's own testing. The owner's reason: a switch is a second way to get lost in the app and
 adds a state to test and to explain. The key `wasifyai.labs.model3d` is no longer read.
+
+## Amendment: the 3D model is its own menu item (2026-10-24, owner)
+
+A 3D model is not an image, so the screen no longer sits under Images. The side menu shows **3D model** (id `model3d`)
+as a single item right after Motion graphics, before Library, Models and Train. The action ids (`model3d.*`), the
+routes (`/images/3d` on the desktop, `/image/3d` on the web) and the engine are unchanged; the action's `ui`, its help
+file and the menu mappings use the id `model3d` instead of `images.model3d`.

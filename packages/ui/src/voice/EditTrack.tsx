@@ -125,6 +125,7 @@ export function EditTrack({ runs, track, models, onGetModel, onDone, onClose }: 
         }}
         onGetModel={onGetModel}
         disabled={working}
+        inBody
       />
       {rules ? (
         <div role="tablist" aria-label="What to do" className="flex flex-wrap gap-2">

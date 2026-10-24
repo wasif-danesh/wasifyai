@@ -61,8 +61,13 @@ def load_or_create_key(path: Path) -> str:
     return key
 
 
-def consent_text(provider_id: str) -> str:
+def consent_text(provider_id: str, hosted: bool = False) -> str:
     info = next(p for p in PROVIDERS if p.id == provider_id)
+    if hosted:
+        return (
+            f"Searching the web sends your question to {info.sends_to}, from this service. The "
+            "results are read by the assistant. You can turn this off with the Search button."
+        )
     return (
         f"Searching the web sends your question to {info.sends_to}. The results are read by the "
         "assistant on this computer. You can turn this off in Settings."
@@ -78,7 +83,11 @@ class WebService:
         *,
         reader: WebReader | None = None,
         duckduckgo: DuckDuckGoProvider | None = None,
+        per_person: bool = False,
     ) -> None:
+        # on a service (`per_person`) an admin chooses the service and keeps the keys, and each
+        # person allows searching for themself; on the desktop the one person does all of it
+        self.per_person = per_person
         self._store = store
         self._box = box
         self.usage = usage
@@ -87,6 +96,24 @@ class WebService:
         self._lock = asyncio.Lock()
 
     # ---- what the person chose ------------------------------------------------------------
+
+    @staticmethod
+    def _who_key(who: Any) -> str | None:
+        """Who a consent belongs to: the identity given, or the person whose run this is."""
+        if who is None:
+            try:
+                who = require_context()
+            except RuntimeError:
+                return None
+        return f"{KEY}.consent:{who.tenant_id}:{who.user_id}"
+
+    async def _consented_for(self, s: dict[str, Any], who: Any) -> str | None:
+        if not self.per_person:
+            return s["consented_for"]
+        key = self._who_key(who)
+        saved = await self._store.get(key) if key else None
+        value = saved.get("provider") if isinstance(saved, dict) else None
+        return value if value in PROVIDER_IDS else None
 
     async def _state(self) -> dict[str, Any]:
         saved = await self._store.get(KEY)
@@ -102,13 +129,13 @@ class WebService:
             "keys": {k: v for k, v in keys.items() if k in PROVIDER_IDS and isinstance(v, str)},
         }
 
-    async def status(self) -> dict[str, Any]:
+    async def status(self, who: Any = None) -> dict[str, Any]:
         """What Settings and the chat box show. Never a key, only whether one is saved."""
         s = await self._state()
         return {
             "provider": s["provider"],
-            "consented": s["consented_for"] == s["provider"],
-            "consent_text": consent_text(s["provider"]),
+            "consented": await self._consented_for(s, who) == s["provider"],
+            "consent_text": consent_text(s["provider"], self.per_person),
             "can_save_keys": bool(self._box and self._box.ready),
             "providers": [
                 {
@@ -131,6 +158,7 @@ class WebService:
         consent: bool | None = None,
         key: tuple[str, str] | None = None,
         remove_key: str | None = None,
+        who: Any = None,
     ) -> dict[str, Any]:
         """Change one or more settings; answers the new status. A different provider asks for
         consent again; a key that is not usable is refused in words."""
@@ -156,21 +184,33 @@ class WebService:
             if remove_key is not None:
                 s["keys"].pop(remove_key, None)
             if consent is not None:
-                s["consented_for"] = s["provider"] if consent else None
+                if self.per_person:
+                    mine = self._who_key(who)
+                    if mine is None:
+                        raise ValueError("Sign in to allow web search.")
+                    await self._store.put(
+                        mine, {"provider": s["provider"] if consent else None}, "person"
+                    )
+                else:
+                    s["consented_for"] = s["provider"] if consent else None
             await self._store.put(KEY, s, "window")
-        return await self.status()
+        return await self.status(who)
 
-    async def readiness(self) -> Readiness:
+    async def readiness(self, who: Any = None) -> Readiness:
         """Can a search or a read go ahead: allowed by the person, and the service has its key."""
         s = await self._state()
         info = next(p for p in PROVIDERS if p.id == s["provider"])
-        if s["consented_for"] != s["provider"]:
+        if await self._consented_for(s, who) != s["provider"]:
             return Readiness.needs_setup(
-                "Web search is off. The person can allow it with the Search button in the chat box "
-                "or in Settings."
+                "Web search is off. The person can allow it with the Search button in the chat box"
+                + ("." if self.per_person else " or in Settings.")
             )
         if info.needs_key and info.id not in s["keys"]:
-            return Readiness.needs_setup(f"Add the {info.title} key in Settings.")
+            return Readiness.needs_setup(
+                f"An admin needs to add the {info.title} key (Admin > Search)."
+                if self.per_person
+                else f"Add the {info.title} key in Settings."
+            )
         return Readiness.ready()
 
     # ---- the capability -------------------------------------------------------------------

@@ -3,6 +3,7 @@
 // them see stable functions.
 import {
   createAssistantApi,
+  createCreationsApi,
   createNotebooksApi,
   createRunClient,
   createVoiceApi,
@@ -25,3 +26,4 @@ export const assistantApi = createAssistantApi(transport);
 export const lorasApi = createLorasApi(transport);
 export const notebooksApi = createNotebooksApi(transport);
 export const voiceApi = createVoiceApi(transport);
+export const creationsApi = createCreationsApi(transport);

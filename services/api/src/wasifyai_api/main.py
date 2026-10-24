@@ -95,6 +95,7 @@ from wasifyai_api.metrics import MetricsMiddleware
 from wasifyai_api.metrics import serve as serve_metrics
 from wasifyai_api.model_access import ModelAccess, load_defaults
 from wasifyai_api.model_checks import RegistryCheckRunner
+from wasifyai_api.models_in_use import router as models_in_use_router
 from wasifyai_api.rag import DIMENSIONS, RagService
 from wasifyai_api.routes import HEARTBEAT_S, router
 from wasifyai_api.runs import RunManager
@@ -108,6 +109,7 @@ from wasifyai_api.tool_host import ApiToolHost
 from wasifyai_api.uploads import router as uploads_router
 from wasifyai_api.uploads import sweep_forever
 from wasifyai_api.users import CachedUsers, PostgresUserStore, UserStore
+from wasifyai_api.web_search import WebService
 
 # redis-py defaults to 5 s; stream reads block for the heartbeat interval, so allow well over it.
 REDIS_SOCKET_TIMEOUT_S = 60
@@ -219,6 +221,15 @@ def create_app(
             settings.safeguards_force_on,
         )
         app.state.safeguards = guard
+        if not desktop and settings.web_search_enabled:
+            # web search on a service (ADR-0083): an admin chooses the search service and keeps the
+            # keys, and each person allows it for themself; nothing is sent before that
+            app.state.web = WebService(
+                InMemorySettingsStore() if injected else PostgresSettingsStore(db),
+                SecretBox(settings.media_secrets_key),
+                recorder,
+                per_person=True,
+            )
         deps = ProviderDeps(
             safeguards=guard.enabled,
             products_dir=pdir,
@@ -252,6 +263,7 @@ def create_app(
                 )
                 seeder = asyncio.create_task(_seed_models(models))
         app.state.models = models
+        app.state.products_dir = pdir  # the picker names the models a product ships (models_in_use)
         app.state.media = media_access or MediaAccess(
             InMemoryMediaBindingStore() if injected or desktop else PostgresMediaBindingStore(db),
             SecretBox(settings.media_secrets_key),
@@ -583,10 +595,10 @@ def create_app(
                 from wasifyai_api.remote_builder import RemoteBuilderEngine
             except ImportError:  # the video product is not part of this build
                 logging.getLogger("wasifyai_api").warning(
-                    "the video product is not installed: no Video Builder on the web"
+                    "the video product is not installed: no Motion graphics on the web"
                 )
             else:
-                # Video Builder on engine workers (ADR-0087, P4): Postgres for the compositions, a
+                # Motion graphics on engine workers (ADR-0087, P4): Postgres for the compositions, a
                 # worker with the sandboxed browser for the drawing; videos are library clips
                 app.state.builder_store = await asyncio.to_thread(
                     PostgresBuilderStore, settings.database_url
@@ -741,6 +753,7 @@ def create_app(
     app.include_router(uploads_router)
     app.include_router(attachments_router)
     app.include_router(creations_router)
+    app.include_router(models_in_use_router)
     if desktop_profile:
         app.include_router(files_router)
         app.include_router(desktop_models_router)

@@ -2,6 +2,7 @@
 
 import type { AudioSource, ParsedEvent, VoiceApi } from "@wasifyai/client";
 import { type ReactNode, useRef, useState } from "react";
+import { TopBarSlot } from "../window-bar";
 import { AudioToolWorkspace } from "./AudioToolWorkspace";
 import { AudiobookWorkspace } from "./AudiobookWorkspace";
 import { DubbingWorkspace } from "./DubbingWorkspace";
@@ -50,13 +51,15 @@ export type VoicePageProps = {
 
 function Frame({ title, lead, children }: { title: string; lead: ReactNode; children: ReactNode }) {
   return (
-    <div className="grid gap-6 px-6 pt-10 pb-16">
-      <header className="mx-auto w-full max-w-3xl">
-        <h1 className="font-semibold text-2xl">{title}</h1>
-        <p className="text-muted-foreground">{lead}</p>
-      </header>
-      {children}
-    </div>
+    <TopBarSlot>
+      <div className="grid gap-6 px-6 pt-10 pb-16">
+        <header className="mx-auto w-full max-w-3xl">
+          <h1 className="font-semibold text-2xl">{title}</h1>
+          <p className="text-muted-foreground">{lead}</p>
+        </header>
+        {children}
+      </div>
+    </TopBarSlot>
   );
 }
 

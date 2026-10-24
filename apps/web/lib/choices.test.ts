@@ -55,13 +55,64 @@ function rig(
   return { deps, mem, workers };
 }
 
+const FLUX = {
+  id: "wasifyai-image:0",
+  title: "FLUX.2 klein 4B",
+  plain: "Set up on this service by an admin.",
+  ready: true,
+  licence: "Apache-2.0",
+};
+
+/** What the service says it uses, and what the 3D worker says; with the voice rig's other dependencies. */
+function inUseRig(
+  over: { images?: (typeof FLUX)[]; video?: (typeof FLUX)[]; threeD?: boolean } = {},
+) {
+  const base = rig([]).deps;
+  const deps = {
+    ...base,
+    inUse: {
+      inUse: vi.fn(async () => ({
+        chat: [{ ...FLUX, id: "default-chat", title: "gemma4:e4b", licence: "" }],
+        images: over.images ?? [FLUX],
+        video: over.video ?? [],
+      })),
+    },
+    model3d: {
+      component: vi.fn(async () => ({ installed: over.threeD ?? true, about: { licence: "MIT" } })),
+    } as never,
+  };
+  return deps;
+}
+
 describe("the picker on the web", () => {
-  it("is there for the groups the workers serve and nowhere else", () => {
-    const source = webChoices(rig([]).deps);
-    for (const g of Object.keys(GROUP_TASKS)) expect(source(g as never)).not.toBeNull();
-    expect(source("images")).toBeNull();
-    expect(source("chat")).toBeNull();
-    expect(source("three_d")).toBeNull();
+  it("is there for the groups the workers serve, and for what the service uses; not for documents", () => {
+    const source = webChoices(inUseRig());
+    for (const g of [...Object.keys(GROUP_TASKS), "images", "video", "chat", "three_d"])
+      expect(source(g as never), g).not.toBeNull();
+    expect(source("documents")).toBeNull();
+  });
+
+  it("shows the model the service uses for images, chat and 3D, and nothing to choose or get", async () => {
+    const source = webChoices(inUseRig());
+    const images = await source("images")?.list();
+    expect(images?.choices.map((c) => [c.title, c.state, c.chosen])).toEqual([
+      ["FLUX.2 klein 4B", "ready", true],
+    ]);
+    const chat = await source("chat")?.list();
+    expect(chat?.choices[0]?.title).toBe("gemma4:e4b");
+    const three = await source("three_d")?.list();
+    expect(three?.choices.map((c) => [c.title, c.state])).toEqual([["Pixal3D", "ready"]]);
+    await expect(source("images")?.get("x", () => {}, never)).rejects.toThrow(/Ask an admin/);
+  });
+
+  it("says a model is not set up when the service has none ready, and shows none when it lists none", async () => {
+    const source = webChoices(inUseRig({ images: [{ ...FLUX, ready: false }], threeD: false }));
+    const images = await source("images")?.list();
+    expect(images?.choices.map((c) => [c.state, c.chosen])).toEqual([["unavailable", false]]);
+    const three = await source("three_d")?.list();
+    expect(three?.choices[0]?.state).toBe("unavailable");
+    const video = await source("video")?.list();
+    expect(video?.choices).toEqual([]);
   });
 
   it("lists a model that is on the worker as ready and the one in use as chosen", async () => {

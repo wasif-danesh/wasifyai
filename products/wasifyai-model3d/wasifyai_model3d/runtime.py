@@ -1,7 +1,7 @@
 """What the 3D product needs at run time: its store, its files, the engine's 3D component, and the
 jobs that run (the cut-out of a picture, or a model being made).
 
-The engine (`state.model3d`) comes from the app state, as the Video Builder's does, so this package
+The engine (`state.model3d`) comes from the app state, as the Motion graphics' does, so this package
 imports nothing from the API. On the desktop it is the component on this computer; on the web it
 is a client of an engine worker (ADR-0087, P3), the store is Postgres and the files are in object
 storage (`state.model3d_store`, `state.model3d_blobs`). A 3D run holds about 19 GB and takes 5 to

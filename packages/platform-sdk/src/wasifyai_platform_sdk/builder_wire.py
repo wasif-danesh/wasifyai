@@ -1,4 +1,4 @@
-"""The wire format of Video Builder jobs (ADR-0087, stage P4): the API's `RemoteBuilderEngine` and
+"""The wire format of Motion graphics jobs (ADR-0087, stage P4): the API's `RemoteBuilderEngine` and
 the worker's handlers share these names. A composition travels as its template and its slots (the
 page is made from them on the worker, which has the library and the fonts); what comes back is
 numbers, a report, a still or the finished video."""

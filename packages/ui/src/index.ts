@@ -181,7 +181,12 @@ export {
   savedText,
   useSaveCopy,
 } from "./save";
-export { PageHeader, type WindowBar, WindowBarProvider } from "./window-bar";
+export { PageHeader, TopBarSlot, type WindowBar, WindowBarProvider } from "./window-bar";
 export { TITLE_BAR_PX, TitleBar } from "./title-bar";
 export * from "./models";
 export { Train, type TrainProps } from "./training/Train";
+export { MyCreations } from "./creations/MyCreations";
+export { CreationsList } from "./creations/CreationsList";
+export { longEnough, toRow } from "./creations/model";
+export { useCreationSearch } from "./creations/use-creation-search";
+export type { CreationsNav, Entry as CreationEntry, MakeScreen } from "./creations/model";

@@ -1,4 +1,4 @@
-"""The one question Video Builder asks the chosen chat model (`VideoBuilderService.complete`): it
+"""The one question Motion graphics asks the chosen chat model (`VideoBuilderService.complete`): it
 asks for an answer that follows a schema, turns thinking off, records the tokens, and says what
 went wrong in words. The model is a stand-in; nothing is downloaded."""
 
@@ -135,4 +135,4 @@ def test_the_service_says_set_it_up_first_when_the_component_is_missing(monkeypa
     svc = dvb.VideoBuilderService(tmp_path)
     monkeypatch.setattr(dvb.vb, "platform_key", lambda: "darwin-arm64")
     monkeypatch.setattr(svc, "install", lambda: None)
-    assert svc.problem() == "Video Builder is not set up yet. Set it up first."
+    assert svc.problem() == "Motion graphics is not set up yet. Set it up first."

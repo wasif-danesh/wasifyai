@@ -150,3 +150,13 @@ Counsel has not been asked; revisit before a public release if the risk changes.
 
 Tools and Skills buttons, "Approve for me", live dictation, image search, deep research, search history,
 voice conversations.
+
+## Amendment: web search on the web app (2026-10-24, owner)
+
+The web app has the same Search button, consent card and tools as the desktop. On a service the settings are split: an **admin**
+chooses the search service and keeps the keys (Admin > Search; the keys are encrypted with `MEDIA_SECRETS_KEY` and never shown
+again), and **each person** allows searching for themself (their consent is kept per person and per service; changing the service asks
+everyone again). Nothing is sent before a person has allowed it. DuckDuckGo needs no key. The pages are read through the same
+guarded reader (private and internal addresses are refused). `WEB_SEARCH_ENABLED=false` turns the whole feature off for a
+deployment that must send nothing out. Usage is counted as on the desktop (`web.search`, `web.read`). The routes are the assistant's
+`GET/PUT /search`; on a service `PUT` refuses a person who is not an admin when it changes the service or a key.

@@ -27,7 +27,7 @@ export default async function Workers() {
     <>
       <section aria-label="Workers" className="grid gap-1">
         <p className={muted}>
-          Workers run the heavy work: voices, music, lip sync, 3D and Video Builder. A worker does
+          Workers run the heavy work: voices, music, lip sync, 3D and Motion graphics. A worker does
           one job at a time, so a big download makes other work wait.
         </p>
         {workers.length === 0 ? (

@@ -1,10 +1,12 @@
 import { STARTED_EVENT } from "@/hooks/use-video-activity";
+import { webCreationsNav } from "@/lib/creations-nav";
+import { webCreations } from "@/lib/library";
 // @vitest-environment jsdom
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { VideoSummary } from "@wasifyai/contracts";
+import type { VideoSummary } from "@wasifyai/client";
+import { CreationsList } from "@wasifyai/ui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CreationsList } from "../creations/CreationsList";
 import { VideoLibraryScreen, VideoScreen } from "./VideoScreens";
 import { VideoView } from "./VideoView";
 
@@ -197,7 +199,15 @@ describe("creations with videos", () => {
       ],
       next_before: null,
     };
-    render(<CreationsList songs={songs} images={images} videos={videos} />);
+    render(
+      <CreationsList
+        api={webCreations}
+        nav={webCreationsNav(push)}
+        songs={songs}
+        images={images}
+        videos={videos}
+      />,
+    );
     expect(screen.getByRole("link", { name: /ready clip/i })).toHaveAttribute(
       "href",
       "/video/creations/a",
@@ -217,6 +227,8 @@ describe("creations with videos", () => {
     const user = userEvent.setup();
     render(
       <CreationsList
+        api={webCreations}
+        nav={webCreationsNav(push)}
         songs={songs}
         images={images}
         videos={{ videos: [clip({ id: "y" })], next_before: "2026-10-07T00:00:00Z" }}
@@ -255,6 +267,8 @@ describe("searching My creations", () => {
     const user = userEvent.setup();
     render(
       <CreationsList
+        api={webCreations}
+        nav={webCreationsNav(push)}
         songs={songs}
         images={images}
         videos={{ videos: [clip({ id: "v1", prompt: "library clip" })], next_before: null }}
@@ -273,7 +287,15 @@ describe("searching My creations", () => {
   it("says plainly when nothing matched, and when only exact words were searched", async () => {
     fetchMock.mockResolvedValueOnce(search([], true));
     const user = userEvent.setup();
-    render(<CreationsList songs={songs} images={images} videos={null} />);
+    render(
+      <CreationsList
+        api={webCreations}
+        nav={webCreationsNav(push)}
+        songs={songs}
+        images={images}
+        videos={null}
+      />,
+    );
     await user.type(screen.getByRole("searchbox", { name: /search your creations/i }), "zzzz");
     expect(await screen.findByText(/nothing matched/i)).toBeInTheDocument();
     expect(screen.getByText(/exact word matches only/i)).toBeInTheDocument();
@@ -284,7 +306,15 @@ describe("searching My creations", () => {
   it("asks for the kind that is filtered", async () => {
     fetchMock.mockResolvedValueOnce(search([]));
     const user = userEvent.setup();
-    render(<CreationsList songs={songs} images={images} videos={null} />);
+    render(
+      <CreationsList
+        api={webCreations}
+        nav={webCreationsNav(push)}
+        songs={songs}
+        images={images}
+        videos={null}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: /images/i }));
     await user.type(screen.getByRole("searchbox", { name: /search your creations/i }), "fox");
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
@@ -296,6 +326,8 @@ describe("searching My creations", () => {
     const user = userEvent.setup();
     render(
       <CreationsList
+        api={webCreations}
+        nav={webCreationsNav(push)}
         songs={songs}
         images={images}
         videos={{ videos: [clip({ prompt: "library clip" })], next_before: null }}

@@ -1,6 +1,6 @@
 # ADR-0051: Model catalog, capability variants and the LoRA chain
 
-- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wasifyai-art`, in its own repository (`wasifyai-art`); wasifyai does not implement it. Nothing here was built.
+- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio will not be built (owner, 2026-10-24); wasifyai does not implement it. Nothing here was built.
 - **Later (2026-10-16):** the LoRA chain of decision 2 (`lora_chain` in a map file, `Workflow.fill(loras=...)`) was built for the desktop app in `docs/phase2-stage-c-plan.md`. The model catalog table and capability variants were not.
 - **Date:** 2026-10-12
 

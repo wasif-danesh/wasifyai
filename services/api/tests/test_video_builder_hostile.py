@@ -24,7 +24,7 @@ from wasifyai_api import video_builder_sandbox as sb
 INSTALL = vb.find_install(Path("/nonexistent"))
 pytestmark = pytest.mark.skipif(
     INSTALL is None or len(vb.find_media_tools(INSTALL)) < len(vb.MEDIA_TOOLS),
-    reason="the Video Builder component or FFmpeg (with ffprobe) is not installed",
+    reason="the Motion graphics component or FFmpeg (with ffprobe) is not installed",
 )
 
 PAGE = """<!doctype html>

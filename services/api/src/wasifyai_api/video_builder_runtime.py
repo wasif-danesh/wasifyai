@@ -1,4 +1,4 @@
-"""The Video Builder component of the desktop (ADR-0077, stage V1a): the render engine, on request.
+"""The Motion graphics component of the desktop (ADR-0077, stage V1a): the render engine.
 
     Pins            what is installed: a Node.js build, the Chrome headless shell for Testing and
     the
@@ -91,7 +91,7 @@ def load_pins(path: Path = PINS_FILE) -> Pins:
     pk = raw["packages"]
     for key in ("lock_sha256", "package_sha256"):
         if len(str(pk[key])) != 64:
-            raise ValueError(f"the Video Builder package pin needs a SHA-256 ({key})")
+            raise ValueError(f"the Motion graphics package pin needs a SHA-256 ({key})")
     return Pins(
         _download(raw["node"], "Node.js"),
         _download(raw["shell"], "browser"),
@@ -175,7 +175,7 @@ MEDIA_BYTES = 24_100_000  # the two platform packages, part of the packages' siz
 MEDIA_ENCODERS = ("libx264", "libvpx-vp9", "prores_ks", "aac")  # what the templates' files need
 MEDIA_DIRS = ("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin")
 MEDIA_HINT = (
-    "Video Builder needs FFmpeg (with ffprobe) and this copy of it does not have one. "
+    "Motion graphics needs FFmpeg (with ffprobe) and this copy of it does not have one. "
     "In Terminal run: brew install ffmpeg. Then choose Check again."
 )
 
@@ -340,13 +340,13 @@ class VideoBuilderInstaller:
     def start(self, confirm_bytes: int) -> None:
         if not self.supported:
             raise InstallError(
-                "Video Builder is not available on this kind of computer yet "
+                "Motion graphics is not available on this kind of computer yet "
                 "(it was measured on Apple-silicon Macs)."
             )
         if confirm_bytes != self.total_bytes:
             raise InstallError("The download changed since it was shown. Look at it again.")
         if self.running:
-            raise InstallError("Video Builder is already being set up.")
+            raise InstallError("Motion graphics is already being set up.")
         self.progress = InstallProgress("installing", "node", "Starting", 0, self.total_bytes)
         self._task = asyncio.create_task(self._run_install())
 
@@ -367,9 +367,9 @@ class VideoBuilderInstaller:
         except InstallError as e:
             self.progress = InstallProgress("failed", self.progress.step, str(e))
         except Exception:
-            log.exception("Video Builder did not install")
+            log.exception("Motion graphics did not install")
             self.progress = InstallProgress(
-                "failed", self.progress.step, "Video Builder could not be set up. Try again."
+                "failed", self.progress.step, "Motion graphics could not be set up. Try again."
             )
         finally:
             shutil.rmtree(stage, ignore_errors=True)
@@ -392,7 +392,7 @@ class VideoBuilderInstaller:
         pins = self.pins
         free = await asyncio.to_thread(lambda: shutil.disk_usage(self._root).free)
         if free < self.total_bytes * 2 + MIN_FREE_BYTES:
-            raise InstallError("There is not enough free disk space for Video Builder.")
+            raise InstallError("There is not enough free disk space for Motion graphics.")
         if _sha256_file(pins.lock) != pins.lock_sha256 or _sha256_file(pins.package) != (
             pins.package_sha256
         ):
@@ -444,27 +444,27 @@ class VideoBuilderInstaller:
         )  # fmt: skip
         if not ok:
             log.error("npm ci failed: %s", text[-800:])
-            raise InstallError("The packages for Video Builder could not be installed.")
+            raise InstallError("The packages for Motion graphics could not be installed.")
 
         self._say("verify", "Checking that it starts", self.total_bytes - 1)
         ok, text = await self.run([str(install.node), str(install.cli), "--version"], app, env, 120)
         if not ok:
             log.error("the hyperframes check failed: %s", text[-600:])
-            raise InstallError("Video Builder did not start on this computer.")
+            raise InstallError("Motion graphics did not start on this computer.")
         make_media_tools_executable(install)  # the packages do this in an install script
         ffmpeg, ffprobe = (bundled_media_tool(install, n) for n in MEDIA_TOOLS)
         ok, text = await self.run([str(ffmpeg), "-hide_banner", "-encoders"], app, env, 60)
         if not ok or any(f" {name} " not in text for name in MEDIA_ENCODERS):
             log.error("the ffmpeg check failed: %s", text[-600:])
-            raise InstallError("FFmpeg for Video Builder did not start on this computer.")
+            raise InstallError("FFmpeg for Motion graphics did not start on this computer.")
         ok, text = await self.run([str(ffprobe), "-version"], app, env, 60)
         if not ok or "ffprobe version" not in text:
             log.error("the ffprobe check failed: %s", text[-600:])
-            raise InstallError("ffprobe for Video Builder did not start on this computer.")
+            raise InstallError("ffprobe for Motion graphics did not start on this computer.")
         ok, text = await self.run([str(install.shell), "--version"], app, env, 60)
         if not ok or "Chrome" not in text:
             log.error("the browser check failed: %s", text[-600:])
-            raise InstallError("The browser for Video Builder did not start on this computer.")
+            raise InstallError("The browser for Motion graphics did not start on this computer.")
         shutil.rmtree(
             self._root / "cache", ignore_errors=True
         )  # npm's download cache is not needed

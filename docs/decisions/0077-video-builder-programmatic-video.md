@@ -208,6 +208,12 @@ The engine, the projects and the experimental screen are built; the first workin
 
 ## Amendment: no Labs switch (2026-10-21, owner)
 
-Decision 10's "behind a Labs switch" is withdrawn for Video Builder (and so for Motion Graphics in ADR-0079). **Video › Video Builder**
+Decision 10's "behind a Labs switch" is withdrawn for Video Builder (and so for Motion graphics in ADR-0079). **Video › Video Builder**
 is always in the desktop menu; the screen keeps its "experimental" label and nothing is released before the owner's own testing. The
 key `wasifyai.labs.video-builder` is no longer read.
+
+## Amendment: Motion graphics is its own menu item (2026-10-24, owner)
+
+The screen is not a video model, so it no longer sits under Video. The side menu shows one item, **Motion graphics**
+(id `motion`), after Music and before Library, Models and Train. Action ids (`video_builder.*`, `motion.*`), the route
+(`/video/builder`) and the engine are unchanged; only the menu item and the screen's name changed.

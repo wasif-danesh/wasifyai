@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""What Video Builder keeps, on Postgres, for the web profile (ADR-0087, P4).
+"""What Motion graphics keeps, on Postgres, for the web profile (ADR-0087, P4).
 
 The same store as the desktop's (`BuilderStore`, SQLite): every method, with the same ownership
 rules, runs the same SQL through `_connect`; only the connection and the schema are here. The
@@ -72,7 +72,9 @@ class PostgresBuilderStore(BuilderStore):
                 return
             row = conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()
         if not row or int(row["value"]) > SCHEMA_VERSION:
-            raise RuntimeError("the Video Builder tables were made by a newer version of this app")
+            raise RuntimeError(
+                "the Motion graphics tables were made by a newer version of this app"
+            )
 
     def fail_stale(self, before: str, message: str) -> int:
         """Fail renders still working since before `before`: nobody is working on them."""

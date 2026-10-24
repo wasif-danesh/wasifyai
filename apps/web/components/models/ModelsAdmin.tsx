@@ -7,7 +7,7 @@ import { ModelsHome } from "@wasifyai/ui";
 export function ModelsAdmin() {
   return (
     <WebModelChoices isAdmin>
-      <ModelsHome place="service" />
+      <ModelsHome place="service" only={["voice", "listening", "music", "faces"]} />
     </WebModelChoices>
   );
 }

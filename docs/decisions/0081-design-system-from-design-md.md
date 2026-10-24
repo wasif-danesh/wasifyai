@@ -100,12 +100,12 @@ icon set, illustration, copy beyond written rules). A structural redesign remain
     licences recorded; the desktop never fetches fonts from the network.
 11. **Content design in `DESIGN.md`:** plain words, sentence case, one action per button, errors say what happened and
     what to do, no jargon on the simple path (the ADR-0073 list of expert words stays behind "For experts"), a glossary
-    of product words ("magic word", "Video Builder", "Motion Graphics", "My models"), and microcopy for the common
+    of product words ("magic word", "Video Builder", "Motion graphics", "My models"), and microcopy for the common
     states.
 12. **Motion and density are tokens** (durations, easing, comfortable and compact row and control sizes) with
     reduced-motion fallbacks.
 13. **Screen patterns for the new features are written before they are built:** the "Teach" front door and its three
-    steps, the Agent feed with inline approvals, the Video Builder and Motion Graphics screens, the 3D viewer and result
+    steps, the Agent feed with inline approvals, the Video Builder and Motion graphics screens, the 3D viewer and result
     page, the setup and download cards (size shown, one click), and the "For experts" panel. Phase 5 screens are built
     against the system, so stages DS0 to DS2 come before T1, G1, V1 and TD1.
 14. **Governance:** `DESIGN.md` carries a `version`; every change goes through a pull request with a checklist (tokens

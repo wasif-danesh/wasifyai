@@ -1,6 +1,6 @@
 ---
 action: video_builder.render
-screen: video.builder
+screen: motion
 synonyms: [make the video, render, export video, make it]
 ---
 # Make the video
@@ -9,14 +9,14 @@ Action: `video_builder.render`
 
 ## What it is for
 
-Make the video of a Video Builder project. First every word on the screen is checked against what
+Make the video of a Motion graphics project. First every word on the screen is checked against what
 you typed; if one is wrong the video is not made and the message says which. Then it is drawn frame
 by frame in a locked box, saved as an MP4 (or WebM or MOV, which keep a clear background) and kept
 in Your videos. It takes seconds to a minute for a short video and only one is made at a time.
 
 ## Steps in the app
 
-1. Open **Video › Video Builder**.
+1. Open **Motion graphics**.
 2. Open a project.
 3. Choose a file kind if the template offers more than one, then Make the video; watch the
    progress (checking the words, then drawing), or leave the screen.
@@ -34,7 +34,7 @@ in Your videos. It takes seconds to a minute for a short video and only one is m
 
 ## Needs
 
-- Video Builder set up (Video › Video Builder; FFmpeg is part of it) and enough free memory (about
+- Motion graphics set up (Motion graphics; FFmpeg is part of it) and enough free memory (about
   3 GB).
 
 ## Examples
@@ -47,6 +47,6 @@ in Your videos. It takes seconds to a minute for a short video and only one is m
   and try again.
 - **A video is already being made** Wait for it to finish or cancel it.
 - **Not enough memory** Close other apps, or choose a shorter, smaller video.
-- **Video Builder needs FFmpeg** This should not happen: FFmpeg comes with Video Builder. If it does,
+- **Motion graphics needs FFmpeg** This should not happen: FFmpeg comes with Motion graphics. If it does,
   run `brew install ffmpeg` in Terminal, then choose Check again.
-- **Video Builder is not set up** Open **Video › Video Builder** and choose Set up.
+- **Motion graphics is not set up** Open **Motion graphics** and choose Set up.

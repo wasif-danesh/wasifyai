@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
+import { createCreationsApi } from "@wasifyai/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEBOUNCE_MS, useCreationSearch } from "./use-creation-search";
+import { DEBOUNCE_MS, useCreationSearch as useSearch } from "./use-creation-search";
 
 const fetchMock = vi.fn();
+const api = createCreationsApi({ fetch: (path, init) => fetchMock(path, init) });
+const useCreationSearch = (query: string, filter: Parameters<typeof useSearch>[2]) =>
+  useSearch(api, query, filter);
 beforeEach(() => {
   vi.useFakeTimers();
   fetchMock.mockReset();
@@ -43,10 +47,10 @@ const settle = () => act(async () => void (await vi.advanceTimersByTimeAsync(DEB
 describe("useCreationSearch and the voice product", () => {
   it("finds a speech the voice product keeps, even when the older speech product is gone", async () => {
     fetchMock.mockImplementation(async (path: string) => {
-      if (path.startsWith("/api/creations/search") || path.includes("/creations/search")) {
+      if (path.includes("/creations/search")) {
         return Response.json({ query: "hello", degraded: false, results: [hit("speech", "v1")] });
       }
-      if (path.startsWith("/api/products/wasifyai-voice/speeches")) {
+      if (path.startsWith("/products/wasifyai-voice/speeches")) {
         return Response.json({
           items: [
             {
@@ -106,10 +110,10 @@ describe("useCreationSearch", () => {
     expect(fetchMock).not.toHaveBeenCalled(); // still typing
     await settle();
     const urls = fetchMock.mock.calls.map((c) => c[0] as string);
-    expect(urls[0]).toBe("/api/creations/search?q=rain+madrid&limit=30");
+    expect(urls[0]).toBe("/creations/search?q=rain+madrid&limit=30");
     expect(urls.slice(1).sort()).toEqual([
-      "/api/products/wasifyai-image/images?ids=i1",
-      "/api/products/wasifyai-voice/tracks?ids=s2,s1",
+      "/products/wasifyai-image/images?ids=i1",
+      "/products/wasifyai-voice/tracks?ids=s2,s1",
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     const s = result.current;
@@ -131,7 +135,7 @@ describe("useCreationSearch", () => {
       .mockResolvedValueOnce(Response.json({ images: [image("i1")], next_before: null }));
     const { result } = renderHook(() => useCreationSearch("fox", "images"));
     await settle();
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/creations/search?q=fox&limit=30&kind=image");
+    expect(fetchMock.mock.calls[0][0]).toBe("/creations/search?q=fox&limit=30&kind=image");
     const s = result.current;
     if (s.status !== "done") throw new Error("expected done");
     expect(s.entries.map((e) => e.id)).toEqual(["i1"]);

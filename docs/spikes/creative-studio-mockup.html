@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Creative Studio: mockup</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: light-dark(oklch(97% 0.004 250), oklch(15% 0.012 255));
+    --surface: light-dark(oklch(100% 0 0), oklch(20% 0.014 255));
+    --surface-2: light-dark(oklch(95.5% 0.006 250), oklch(25% 0.016 255));
+    --surface-3: light-dark(oklch(92% 0.008 250), oklch(30% 0.018 255));
+    --text: light-dark(oklch(21% 0.02 255), oklch(95% 0.006 250));
+    --muted: light-dark(oklch(49% 0.02 255), oklch(70% 0.016 255));
+    --border: light-dark(oklch(90% 0.01 250), oklch(32% 0.018 255));
+    --accent: light-dark(oklch(50% 0.17 258), oklch(76% 0.12 250));
+    --accent-soft: color-mix(in oklch, var(--accent) 14%, transparent);
+    --on-accent: light-dark(oklch(99% 0 0), oklch(19% 0.04 250));
+    --ok: light-dark(oklch(52% 0.13 155), oklch(74% 0.14 155));
+    --warn: light-dark(oklch(60% 0.14 70), oklch(80% 0.14 80));
+    --radius: .7rem;
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --serif: ui-serif, "Iowan Old Style", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: oklch(12% 0.01 255); color: #ddd; font: 14px/1.45 var(--font); padding: 22px; }
+  .bar { display:flex; gap:12px; align-items:center; margin: 0 auto 14px; max-width: 1280px; color:#aab; flex-wrap:wrap; }
+  .bar strong { color:#eef; }
+  .bar button { background:#2a2f3a; color:#eef; border:1px solid #3a4150; border-radius:999px; padding:6px 14px; font:inherit; cursor:pointer; }
+  .label { max-width:1280px; margin: 22px auto 8px; color:#9aa; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase; }
+  .frame { margin: 0 auto; border-radius: 14px; overflow: hidden; border:1px solid #333a46; }
+  .win { background: var(--bg); color: var(--text); }
+  .desk { width: 1280px; max-width: 100%; height: 800px; display:grid; grid-template-rows: 44px 1fr; }
+  .phone { width: 390px; height: 820px; display:grid; grid-template-rows: 44px 1fr auto auto; }
+  .notes { max-width:1280px; margin: 22px auto; color:#aab; display:grid; gap: 8px; }
+  .notes b { color:#dde; }
+  svg { flex:none; }
+
+  /* top bar of the window: the model button for the active tab sits at its left, as on every screen (ADR-0086) */
+  .top { display:flex; align-items:center; gap:10px; padding: 0 14px; border-bottom:1px solid var(--border); background: var(--surface); }
+  .btn { display:inline-flex; gap:7px; align-items:center; border:1px solid var(--border); background:transparent; color:var(--text); border-radius:.55rem; padding:6px 11px; font:inherit; font-size:13px; cursor:pointer; white-space:nowrap; }
+  .btn.ghost { color: var(--muted); }
+  .btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; font-weight:600; }
+  .btn.sm { padding: 3px 9px; font-size:12px; }
+  .seg { display:inline-flex; border:1px solid var(--border); border-radius:999px; padding:2px; background: var(--surface-2); }
+  .seg button { border:0; background:transparent; color:var(--muted); border-radius:999px; padding:4px 13px; font:inherit; font-size:13px; cursor:pointer; }
+  .seg button[aria-pressed=true] { background: var(--surface); color: var(--text); box-shadow:0 1px 2px #0004; font-weight:600; }
+  .grow { flex:1; }
+  .title { font-weight:600; }
+  .muted { color: var(--muted); }
+  .saved { color: var(--muted); font-size:12px; }
+
+  /* the three regions: make panel, stage, media rail; the timeline under them */
+  .body { display:grid; grid-template-columns: 300px minmax(0,1fr) 96px; grid-template-rows: minmax(0,1fr) 244px; min-height:0; }
+  .make { grid-row: 1 / 2; border-right:1px solid var(--border); background: var(--surface); display:grid; grid-template-rows: auto auto 1fr auto; min-height:0; }
+  .stage { grid-row:1/2; display:grid; grid-template-rows:auto 1fr auto; min-height:0; padding: 10px 14px; gap:8px; }
+  .rail { grid-row:1/2; border-left:1px solid var(--border); padding:8px; overflow:hidden; display:grid; gap:6px; align-content:start; background: var(--surface); }
+  .tl { position:relative; grid-column: 1 / -1; border-top:1px solid var(--border); background: var(--surface); display:grid; grid-template-rows:auto 1fr; min-height:0; }
+
+  .tools { display:grid; grid-template-columns: repeat(3, 1fr); gap:4px; padding:10px 10px 4px; }
+  .tool { display:grid; justify-items:center; gap:3px; padding:7px 2px; border-radius:.55rem; border:1px solid transparent; color: var(--muted); font-size:11.5px; cursor:pointer; background:transparent; font-family:inherit; }
+  .tool[aria-pressed=true] { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in oklch, var(--accent) 35%, transparent); font-weight:600; }
+  .sub { display:flex; gap:2px; margin: 6px 10px; padding:2px; background: var(--surface-2); border-radius:.55rem; border:1px solid var(--border); }
+  .sub button { flex:1; border:0; background:transparent; color:var(--muted); padding:5px 2px; border-radius:.45rem; font:inherit; font-size:12px; cursor:pointer; }
+  .sub button[aria-pressed=true] { background: var(--surface); color:var(--text); font-weight:600; box-shadow:0 1px 2px #0003; }
+  .form { padding: 4px 12px; display:grid; gap:8px; align-content:start; overflow:hidden; }
+  .field { display:grid; gap:4px; }
+  .field > span { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color: var(--muted); }
+  .box { border:1px solid var(--border); border-radius:.6rem; background: var(--surface-2); padding:7px 10px; color: var(--text); min-height: 56px; font-size:13px; }
+  .box.ph { color: var(--muted); }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; }
+  .chip { border:1px solid var(--border); border-radius:.5rem; padding:3px 9px; font-size:12px; color: var(--text); background:transparent; }
+  .chip.on { background: var(--accent); color: var(--on-accent); border-color:transparent; font-weight:600; }
+  .slider { height:4px; border-radius:4px; background: var(--surface-3); position:relative; margin: 8px 2px 4px; }
+  .slider i { position:absolute; left:0; top:0; bottom:0; width:30%; background: var(--accent); border-radius:4px; }
+  .slider b { position:absolute; left:30%; top:-5px; width:14px; height:14px; border-radius:50%; background: var(--accent); transform:translateX(-50%); box-shadow:0 1px 3px #0006; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .gen { padding:10px 12px 12px; border-top:1px solid var(--border); display:grid; gap:6px; }
+  .gen .go { width:100%; justify-content:center; padding:9px; font-size:14px; }
+  .honest { font-size:12px; color: var(--muted); display:flex; gap:8px; flex-wrap:wrap; }
+  .honest b { color: var(--text); font-weight:600; }
+  .ok { color: var(--ok); }
+
+  /* stage */
+  .filters { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+  .filters button { border:1px solid transparent; background:transparent; color:var(--muted); border-radius:999px; padding:4px 11px; font:inherit; font-size:12.5px; cursor:pointer; }
+  .filters button[aria-pressed=true] { background: var(--surface); color:var(--text); border-color: var(--border); font-weight:600; }
+  .viewer { border-radius: var(--radius); border:1px solid var(--accent); background: linear-gradient(135deg, oklch(34% .09 262), oklch(22% .06 300) 55%, oklch(30% .08 220)); position:relative; overflow:hidden; display:grid; place-items:center; min-height:0; }
+  .viewer .scene { font: 600 30px/1.1 var(--serif); color: oklch(97% 0 0); text-align:center; text-shadow:0 2px 20px #0008; }
+  .viewer .scene small { display:block; font: 14px var(--font); opacity:.8; margin-top:8px; font-weight:400; }
+  .viewer .play { position:absolute; left:14px; right:14px; bottom:10px; display:flex; align-items:center; gap:10px; color: oklch(97% 0 0); font-size:12.5px; }
+  .viewer .prog { flex:1; height:4px; border-radius:4px; background: #fff4; position:relative; }
+  .viewer .prog i { position:absolute; left:0; top:0; bottom:0; width:34%; background: oklch(80% .1 250); border-radius:4px; }
+  .info { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:12px; color: var(--muted); }
+  .info .acts { display:flex; gap:4px; }
+  .ico { width:28px; height:28px; display:grid; place-items:center; border-radius:.45rem; border:1px solid var(--border); color: var(--muted); background:transparent; }
+
+  /* media rail */
+  .thumb { height:54px; border-radius:.5rem; border:1px solid var(--border); position:relative; overflow:hidden; }
+  .thumb[aria-current=true] { outline:2px solid var(--accent); outline-offset:1px; }
+  .thumb em { position:absolute; left:3px; bottom:2px; font:600 9px var(--font); font-style:normal; background:#000a; color:#fff; padding:0 4px; border-radius:3px; letter-spacing:.04em; text-transform:uppercase; }
+  .g1 { background: linear-gradient(135deg, oklch(45% .14 265), oklch(30% .1 300)); }
+  .g2 { background: linear-gradient(135deg, oklch(48% .12 215), oklch(30% .08 250)); }
+  .g3 { background: linear-gradient(135deg, oklch(50% .13 40), oklch(32% .09 20)); }
+  .g4 { background: linear-gradient(135deg, oklch(46% .12 150), oklch(28% .08 190)); }
+  .g5 { background: linear-gradient(135deg, oklch(44% .1 300), oklch(28% .08 330)); }
+  .wave { background: repeating-linear-gradient(90deg, var(--accent) 0 2px, transparent 2px 5px); opacity:.7; }
+
+  /* timeline */
+  .tlbar { display:flex; align-items:center; gap:8px; padding:6px 12px; border-bottom:1px solid var(--border); font-size:12.5px; }
+  .tlbody { position:relative; overflow:hidden; padding: 4px 12px 8px 96px; display:grid; gap:5px; align-content:start; }
+  .ruler { height:18px; border-bottom:1px solid var(--border); position:relative; font-size:10.5px; color: var(--muted); }
+  .ruler span { position:absolute; top:2px; }
+  .trk { height:36px; position:relative; border-radius:.4rem; background: var(--surface-2); }
+  .trk .nm { position:absolute; left:-86px; top:0; width:80px; height:100%; display:flex; align-items:center; gap:5px; font-size:11.5px; color: var(--muted); }
+  .item { position:absolute; top:3px; bottom:3px; border-radius:.35rem; padding:3px 7px; font-size:11px; color:#fff; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; border:1px solid #fff3; }
+  .item.sel { outline:2px solid var(--accent); outline-offset:1px; }
+  .playhead { position:absolute; top:0; bottom:0; width:2px; background: oklch(70% .2 25); left: calc(96px + 34% * 0.93); }
+  .playhead::before { content:""; position:absolute; top:0; left:-5px; width:12px; height:8px; background: oklch(70% .2 25); clip-path: polygon(0 0,100% 0,50% 100%); }
+  .cuts { position:absolute; left:0; right:0; top:0; height:100%; pointer-events:none; }
+
+  /* plan view */
+  .plan { padding: 14px 18px; display:grid; gap:12px; align-content:start; overflow:hidden; }
+  .songstrip { display:flex; height:34px; border-radius:.5rem; overflow:hidden; border:1px solid var(--border); }
+  .songstrip div { display:grid; place-items:center; font-size:11.5px; color:#fff; border-right:1px solid #0003; }
+  .cards { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:10px; }
+  .card { border:1px solid var(--border); background: var(--surface); border-radius:.7rem; padding:9px; display:grid; gap:6px; font-size:12.5px; }
+  .card .pic { height:62px; border-radius:.5rem; }
+  .card b { font-weight:600; }
+  .tag { font-size:10.5px; border:1px solid var(--border); border-radius:999px; padding:0 7px; color: var(--muted); width:fit-content; }
+  .tag.hold { color: var(--ok); } .tag.anim { color: var(--accent); } .tag.sing { color: var(--warn); }
+
+  .phone .top { padding:0 10px; }
+  .phone .stage { padding:8px; grid-row:auto; }
+  .pm { display:grid; grid-template-rows:1fr; min-height:0; }
+  .phone .viewer { min-height: 190px; }
+  .dock { border-top:1px solid var(--border); background: var(--surface); display:grid; grid-template-columns: repeat(5,1fr); padding:6px 4px; }
+  .dock .tool { padding:5px 0; }
+  .sheet { border-top:1px solid var(--border); background: var(--surface); padding: 8px 12px 10px; display:grid; gap:8px; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <strong>Creative Studio: proposed screen</strong>
+  <button onclick="document.querySelectorAll('.win').forEach(w=>{const l=w.style.colorScheme!=='light';w.style.colorScheme=l?'light':'dark'})">Switch light / dark</button>
+  <span>Three frames: the Cut view with the Make panel (desktop), the Plan view, and a phone.</span>
+</div>
+
+<!-- ============================ DESKTOP: CUT + MAKE ============================ -->
+<div class="label">1. Desktop, 1280 px: the Cut view, with the Make panel open on Video</div>
+<div class="frame desk win" style="color-scheme:dark">
+  <div class="top">
+    <button class="btn" title="Select video model"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg> LTX-Video 2B ⌄</button>
+    <span class="title">Rainy day</span><span class="saved">Saved a moment ago</span>
+    <span class="grow"></span>
+    <div class="seg" role="group" aria-label="Step"><button aria-pressed="false">Plan</button><button aria-pressed="false">Shots</button><button aria-pressed="true">Cut</button></div>
+    <span class="grow"></span>
+    <span class="muted" style="font-size:12.5px">Review each step</span>
+    <button class="btn">Save a copy</button>
+    <button class="btn primary">Make the video</button>
+  </div>
+
+  <div class="body">
+    <!-- MAKE PANEL -->
+    <aside class="make" aria-label="Make something for this project">
+      <div class="tools" role="group" aria-label="What to make">
+        <button class="tool" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4-4-9 9"/></svg>Image</button>
+        <button class="tool" aria-pressed="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg>Video</button>
+        <button class="tool" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3"/></svg>Voice</button>
+        <button class="tool" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Music</button>
+        <button class="tool" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7V5h16v2M12 5v14M9 19h6"/></svg>Titles</button>
+        <button class="tool" aria-pressed="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg>3D</button>
+      </div>
+      <div class="sub" role="group" aria-label="Video">
+        <button aria-pressed="false">Create</button><button aria-pressed="true">Animate</button><button aria-pressed="false">Extend</button><button aria-pressed="false">Lip sync</button>
+      </div>
+      <div class="form">
+        <div class="field"><span>Start from</span>
+          <div class="row" style="gap:6px"><div class="thumb g1" style="flex:1;height:48px"><em>Shot 7</em></div><div class="box ph" style="flex:1;min-height:48px;display:grid;place-items:center;border-style:dashed">Drop a picture</div></div>
+        </div>
+        <div class="field"><span>What should move?</span><div class="box ph" style="min-height:52px">A slow push in. Rain on the window, the lamp flickers.</div></div>
+        <div class="field"><span>Length</span><div class="row"><div class="chips"><span class="chip on">2 s</span><span class="chip">5 s</span></div><span class="muted" style="font-size:12px">Shape follows the project: 16:9</span></div></div>
+        <div class="field"><span>Used in</span><div class="chips"><span class="chip on">Shot 7 · 0:21 to 0:25</span><span class="chip">Add as a new take</span></div></div>
+      </div>
+      <span></span>
+      <div class="gen">
+        <div class="honest"><span><b>About 1 min 15 s</b> on this Mac</span><span class="ok">Fits</span><span>Uses 40 MB</span></div>
+        <button class="btn primary go">Make this clip</button>
+      </div>
+    </aside>
+
+    <!-- STAGE -->
+    <main class="stage">
+      <div class="filters" role="group" aria-label="Show">
+        <button aria-pressed="true">All 38</button><button aria-pressed="false">Pictures 14</button><button aria-pressed="false">Clips 12</button><button aria-pressed="false">Voice 4</button><button aria-pressed="false">Music 2</button><button aria-pressed="false">Titles 6</button>
+        <span class="grow"></span><span class="muted" style="font-size:12.5px">Made for this project</span>
+      </div>
+      <div class="viewer" aria-label="Preview">
+        <div class="scene">Rainy day<small>Shot 7 · animate · take 2 of 3</small></div>
+        <div class="play"><span>▶</span><span>0:25 / 3:12</span><div class="prog"><i></i></div><span>🔊</span><span>⛶</span></div>
+      </div>
+      <div class="info">
+        <span><b style="color:var(--text);font-weight:600">LTX-Video 2B</b> · 768×512 · seed 418340 · made in 1 min 12 s · “a slow push in, rain on the window”</span>
+        <span class="acts">
+          <span class="ico" title="Edit the prompt">✎</span><span class="ico" title="Redo this shot">↻</span><span class="ico" title="Use in the cut">⤓</span><span class="ico" title="Save a copy">⇩</span><span class="ico" title="Mark as good">♡</span><span class="ico" title="Delete">🗑</span>
+        </span>
+      </div>
+    </main>
+
+    <!-- MEDIA RAIL -->
+    <aside class="rail" aria-label="Media of this project">
+      <div class="thumb g1" aria-current="true"><em>Clip</em></div>
+      <div class="thumb g3"><em>Clip</em></div>
+      <div class="thumb g2"><em>Pic</em></div>
+      <div class="thumb g4"><em>Pic</em></div>
+      <div class="thumb g5"><em>Clip</em></div>
+      <div class="thumb wave"><em>Voice</em></div>
+      <div class="thumb g2"><em>Title</em></div>
+      <div class="thumb g1"><em>Pic</em></div>
+    </aside>
+
+    <!-- TIMELINE -->
+    <section class="tl" aria-label="Timeline">
+      <div class="tlbar">
+        <button class="btn sm">▶ Play</button><span class="muted">0:25 / 3:12</span>
+        <span class="grow"></span>
+        <button class="btn sm ghost">↶ Undo</button><button class="btn sm ghost">↷ Redo</button>
+        <button class="btn sm ghost">✂ Split</button><button class="btn sm ghost">Snap to beats ✓</button>
+        <span class="muted">Cut speed</span><div class="seg"><button aria-pressed="false">−</button><button aria-pressed="true">0</button><button aria-pressed="false">+</button></div>
+        <span class="muted">Zoom</span><div class="slider" style="width:90px;margin:0"><i style="width:45%"></i><b style="left:45%"></b></div>
+      </div>
+      <div class="tlbody">
+        <div class="ruler"><span style="left:0">0:00</span><span style="left:18%">0:30</span><span style="left:36%">1:00</span><span style="left:54%">1:30</span><span style="left:72%">2:00</span><span style="left:90%">2:30</span></div>
+        <div class="trk"><span class="nm">▭ Pictures</span>
+          <div class="item g1" style="left:0;width:9%">1 · Hold</div><div class="item g3" style="left:9%;width:7%">2</div><div class="item g2" style="left:16%;width:10%">3 · Hold</div><div class="item g4" style="left:26%;width:8%">4</div>
+          <div class="item g1 sel" style="left:34%;width:6%">7 · Anim</div><div class="item g5" style="left:40%;width:12%">8 · Hold</div><div class="item g2" style="left:52%;width:9%">9</div><div class="item g3" style="left:61%;width:14%">10 · Sing</div><div class="item g4" style="left:75%;width:11%">11</div><div class="item g1" style="left:86%;width:12%">12 · Hold</div></div>
+        <div class="trk"><span class="nm">T Titles</span>
+          <div class="item" style="left:2%;width:12%;background:oklch(45% .1 262)">Rainy day</div><div class="item" style="left:36%;width:15%;background:oklch(42% .08 300)">“I watched the rain…”</div><div class="item" style="left:61%;width:14%;background:oklch(42% .08 300)">“…and the lamp light”</div></div>
+        <div class="trk"><span class="nm">♪ Voice</span><div class="item wave" style="left:61%;width:14%;background-color:oklch(40% .06 250)">Lead, sung</div></div>
+        <div class="trk"><span class="nm">♫ Song</span><div class="item wave" style="left:0;width:100%;background-color:oklch(34% .05 255)">Rainy day (ACE-Step) · 3:12 · 96 beats per minute</div></div>
+      </div>
+      <div class="playhead"></div>
+    </section>
+  </div>
+</div>
+
+<!-- ============================ DESKTOP: PLAN ============================ -->
+<div class="label">2. The Plan view: the idea turned into shots, nothing made yet</div>
+<div class="frame desk win" style="color-scheme:dark;height:560px">
+  <div class="top">
+    <button class="btn">Qwen3.5 9B ⌄</button>
+    <span class="title">Rainy day</span><span class="saved">Plan 2 · saved</span>
+    <span class="grow"></span>
+    <div class="seg"><button aria-pressed="true">Plan</button><button aria-pressed="false">Shots</button><button aria-pressed="false">Cut</button></div>
+    <span class="grow"></span>
+    <span class="muted" style="font-size:12.5px">Review each step</span>
+    <button class="btn">Planning log</button>
+    <button class="btn primary">Make the stills</button>
+  </div>
+  <div class="plan">
+    <div class="row"><div><b style="font:600 22px var(--serif)">A lonely robot finds a garden</b><div class="muted">Cinematic · 16:9 · 3:12 · 24 shots · song analysed: 96 beats per minute, 7 sections</div></div>
+      <div class="row" style="gap:10px"><span class="muted">Cut speed</span><div class="seg"><button aria-pressed="false">−</button><button aria-pressed="true">0</button><button aria-pressed="false">+</button></div><button class="btn">Try another idea</button></div></div>
+    <div class="songstrip">
+      <div style="width:6%;background:oklch(40% .06 255)">Intro</div><div style="width:20%;background:oklch(45% .1 262)">Verse 1</div><div style="width:14%;background:oklch(48% .13 40)">Chorus</div><div style="width:18%;background:oklch(45% .1 262)">Verse 2</div><div style="width:14%;background:oklch(48% .13 40)">Chorus</div><div style="width:12%;background:oklch(42% .1 300)">Bridge</div><div style="width:16%;background:oklch(48% .13 40)">Final chorus</div>
+    </div>
+    <div class="cards">
+      <div class="card"><div class="pic g1"></div><b>1 · A robot at a rusted gate</b><span class="muted">0:00 to 0:08 · wide, slow push in</span><span class="tag hold">Hold</span></div>
+      <div class="card"><div class="pic g2"></div><b>2 · Rain on its shoulders</b><span class="muted">0:08 to 0:14 · close, still</span><span class="tag hold">Hold</span></div>
+      <div class="card" style="border-color:var(--accent)"><div class="pic g3"></div><b>3 · The gate opens</b><span class="muted">0:14 to 0:21 · “I watched the rain…”</span><span class="tag anim">Animate</span></div>
+      <div class="card"><div class="pic g4"></div><b>4 · A garden in the grey city</b><span class="muted">0:21 to 0:29 · wide, tilt up</span><span class="tag hold">Hold</span></div>
+      <div class="card"><div class="pic g5"></div><b>5 · The robot kneels</b><span class="muted">0:29 to 0:36 · over the shoulder</span><span class="tag hold">Hold</span></div>
+      <div class="card"><div class="pic g1"></div><b>6 · It sings to the flowers</b><span class="muted">0:36 to 0:44 · close-up, lead vocal</span><span class="tag sing">Sing</span></div>
+      <div class="card"><div class="pic g2"></div><b>7 · Petals open</b><span class="muted">0:44 to 0:50 · macro</span><span class="tag anim">Animate</span></div>
+      <div class="card"><div class="pic g3"></div><b>8 · + Add a shot here</b><span class="muted">Or drag a cut on the strip above</span><span class="tag">New</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ PHONE ============================ -->
+<div class="label">3. Phone, 390 px: the Make panel is a sheet under the stage, the timeline is one swipe row</div>
+<div class="frame phone win" style="color-scheme:dark">
+  <div class="top"><span class="title">Rainy day</span><span class="grow"></span><div class="seg"><button aria-pressed="false">Plan</button><button aria-pressed="false">Shots</button><button aria-pressed="true">Cut</button></div></div>
+  <div class="stage" style="grid-template-rows:auto 1fr auto">
+    <div class="filters"><button aria-pressed="true">All</button><button aria-pressed="false">Pictures</button><button aria-pressed="false">Clips</button><button aria-pressed="false">Voice</button></div>
+    <div class="viewer"><div class="scene" style="font-size:22px">Rainy day<small>Shot 7 · take 2 of 3</small></div><div class="play"><span>▶</span><span>0:25</span><div class="prog"><i></i></div></div></div>
+    <div class="row" style="gap:6px"><div class="thumb g1" style="flex:1;height:44px"></div><div class="thumb g3" style="flex:1;height:44px"></div><div class="thumb g2" style="flex:1;height:44px"></div><div class="thumb g4" style="flex:1;height:44px"></div><div class="thumb wave" style="flex:1;height:44px"></div></div>
+  </div>
+  <div class="sheet">
+    <div class="sub" style="margin:0"><button aria-pressed="false">Create</button><button aria-pressed="true">Animate</button><button aria-pressed="false">Extend</button></div>
+    <div class="box ph" style="min-height:48px">What should move? A slow push in…</div>
+    <div class="honest"><span><b>About 1 min 15 s</b></span><span class="ok">Fits</span></div>
+    <button class="btn primary" style="justify-content:center;padding:10px">Make this clip</button>
+  </div>
+  <div class="dock"><button class="tool" aria-pressed="false">Image</button><button class="tool" aria-pressed="true">Video</button><button class="tool" aria-pressed="false">Voice</button><button class="tool" aria-pressed="false">Music</button><button class="tool" aria-pressed="false">Titles</button></div>
+</div>
+
+<div class="notes">
+  <div><b>What this borrows from Maestro:</b> a tool column on the left that makes things, a large preview in the middle, a rail of everything made on the right, filters above the preview, and the honest line above Generate. It does not copy any of its code or wording.</div>
+  <div><b>What is ours:</b> one project that holds the plan, the shots and the cut (the Plan, Shots and Cut buttons), the song and the captions on the timeline, and every product of the app in the left column: Image, Video, Voice, Music, Titles (Motion graphics) and 3D. Whatever is made there lands in the project's media rail and can be dropped on the timeline. The model button for the active tab is at the left of the top bar, as on every screen.</div>
+  <div><b>Honest limits:</b> pictures are sketches made of colour, not real output; the times shown are examples in the style of our measured ones (a 2 s clip is about 72 s today).</div>
+</div>
+</body>
+</html>

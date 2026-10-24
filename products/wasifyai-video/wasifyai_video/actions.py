@@ -197,7 +197,7 @@ def actions() -> list[Action]:
                             check=_extend_check),
             ui="video.extend",
         ),
-        *builder_actions(),  # Video Builder (ADR-0077): videos written as HTML
+        *builder_actions(),  # Motion graphics (ADR-0077): videos written as HTML
     ]  # fmt: skip
 
 

@@ -1,17 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { type Entry, type Row, toRow } from "@/lib/creations";
-import { timeAgo } from "@/lib/format";
 import {
   type ColumnDef,
   type SortingState,
@@ -21,8 +9,13 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-import Link from "next/link";
 import { useMemo, useState } from "react";
+import { Badge } from "../components/badge";
+import { Button } from "../components/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/table";
+import { NavLink } from "./NavLink";
+import { timeAgo } from "./format";
+import { type CreationsNav, type Entry, type Row, toRow } from "./model";
 
 function SortHeader({
   label,
@@ -42,67 +35,74 @@ function SortHeader({
   );
 }
 
-const columns: ColumnDef<Row>[] = [
-  {
-    accessorKey: "kindLabel",
-    header: ({ column }) => (
-      <SortHeader
-        label="Type"
-        sorted={column.getIsSorted()}
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-      />
-    ),
-    cell: ({ row }) => <Badge variant="secondary">{row.original.kindLabel}</Badge>,
-  },
-  {
-    accessorKey: "title",
-    header: "What it is",
-    enableSorting: false,
-    cell: ({ row }) => (
-      <div className="grid max-w-[36ch] gap-0.5 sm:max-w-[60ch]">
-        <Link href={row.original.href} className="truncate font-medium hover:underline">
-          {row.original.title}
-        </Link>
-        {row.original.detail ? (
-          <span className="truncate text-sm text-muted-foreground">{row.original.detail}</span>
-        ) : null}
-      </div>
-    ),
-  },
-  {
-    accessorKey: "status",
-    header: "Status",
-    enableSorting: false,
-    cell: ({ row }) =>
-      row.original.status === "working" ? (
-        <Badge variant="outline">Making…</Badge>
-      ) : row.original.status === "failed" ? (
-        <Badge variant="destructive">Couldn't be made</Badge>
-      ) : (
-        <span className="text-muted-foreground">Ready</span>
+function columnsFor(nav: CreationsNav): ColumnDef<Row>[] {
+  return [
+    {
+      accessorKey: "kindLabel",
+      header: ({ column }) => (
+        <SortHeader
+          label="Type"
+          sorted={column.getIsSorted()}
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        />
       ),
-  },
-  {
-    accessorKey: "createdAt",
-    sortingFn: (a, b) => Date.parse(a.original.createdAt) - Date.parse(b.original.createdAt),
-    header: ({ column }) => (
-      <SortHeader
-        label="Made"
-        sorted={column.getIsSorted()}
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-      />
-    ),
-    cell: ({ row }) => (
-      <time dateTime={row.original.createdAt} className="whitespace-nowrap text-muted-foreground">
-        {timeAgo(row.original.createdAt)}
-      </time>
-    ),
-  },
-];
+      cell: ({ row }) => <Badge variant="secondary">{row.original.kindLabel}</Badge>,
+    },
+    {
+      accessorKey: "title",
+      header: "What it is",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="grid max-w-[36ch] gap-0.5 sm:max-w-[60ch]">
+          <NavLink
+            nav={nav}
+            to={row.original.entry}
+            className="truncate font-medium hover:underline"
+          >
+            {row.original.title}
+          </NavLink>
+          {row.original.detail ? (
+            <span className="truncate text-sm text-muted-foreground">{row.original.detail}</span>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      enableSorting: false,
+      cell: ({ row }) =>
+        row.original.status === "working" ? (
+          <Badge variant="outline">Making…</Badge>
+        ) : row.original.status === "failed" ? (
+          <Badge variant="destructive">Couldn't be made</Badge>
+        ) : (
+          <span className="text-muted-foreground">Ready</span>
+        ),
+    },
+    {
+      accessorKey: "createdAt",
+      sortingFn: (a, b) => Date.parse(a.original.createdAt) - Date.parse(b.original.createdAt),
+      header: ({ column }) => (
+        <SortHeader
+          label="Made"
+          sorted={column.getIsSorted()}
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        />
+      ),
+      cell: ({ row }) => (
+        <time dateTime={row.original.createdAt} className="whitespace-nowrap text-muted-foreground">
+          {timeAgo(row.original.createdAt)}
+        </time>
+      ),
+    },
+  ];
+}
 
 /** My creations as a sortable table (ADR-0045): the same entries as the cards, in rows. */
-export function CreationsTable({ entries }: { entries: Entry[] }) {
+export function CreationsTable({ entries, nav }: { entries: Entry[]; nav: CreationsNav }) {
   const data = useMemo(() => entries.map(toRow), [entries]);
+  const columns = useMemo(() => columnsFor(nav), [nav]);
   const [sorting, setSorting] = useState<SortingState>([]);
   const table = useReactTable({
     data,

@@ -1,4 +1,4 @@
-"""Video Builder for the web, rendered by an engine worker (ADR-0087, P4).
+"""Motion graphics for the web, rendered by an engine worker (ADR-0087, P4).
 
 The product asks its engine to check a composition's words, draw a still, render the video and
 lint a page. Here each of those is an engine job: the composition travels as its template and
@@ -101,7 +101,7 @@ class RemoteBuilderEngine:
             return "No worker here can make these videos."
         if c.get("ready"):
             return None
-        return str(c.get("problem") or "Video Builder is not set up on the worker.")
+        return str(c.get("problem") or "Motion graphics is not set up on the worker.")
 
     def fit(self) -> dict[str, Any]:
         c = self._component() or {}

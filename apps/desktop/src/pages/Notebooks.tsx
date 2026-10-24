@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// View Notebooks: the notebooks of this computer as cards.
+// View notebooks: the notebooks of this computer as cards.
 import type { NotebookSummary } from "@wasifyai/client";
 import { NotebookList, SetupCard } from "@wasifyai/ui";
 import { useCallback, useEffect, useState } from "react";

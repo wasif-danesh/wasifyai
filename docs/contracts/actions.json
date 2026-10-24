@@ -2531,7 +2531,7 @@
       ],
       "long": true,
       "product": "wasifyai-model3d",
-      "ui": "images.model3d",
+      "ui": "model3d",
       "ui_exempt": "",
       "surfaces": [
         "assistant",
@@ -3041,7 +3041,7 @@
       ],
       "long": true,
       "product": "wasifyai-video",
-      "ui": "video.builder",
+      "ui": "motion",
       "ui_exempt": "",
       "surfaces": [
         "assistant",
@@ -3054,7 +3054,7 @@
       "id": "motion.revise",
       "title": "Change a motion graphic",
       "summary": "Change the words or the look of a motion graphic and make it again.",
-      "description": "Change an existing Video Builder project: give only the fields that change (the rest stay), and it is made again and checked. The earlier version can be brought back on the Video Builder screen. Use for requests like 'make the text bigger' (change the length or shape), 'use the forest look', or 'fix the typo'.",
+      "description": "Change an existing Motion graphics project: give only the fields that change (the rest stay), and it is made again and checked. The earlier version can be brought back on the Motion graphics screen. Use for requests like 'make the text bigger' (change the length or shape), 'use the forest look', or 'fix the typo'.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -3186,7 +3186,7 @@
       ],
       "long": true,
       "product": "wasifyai-video",
-      "ui": "video.builder",
+      "ui": "motion",
       "ui_exempt": "",
       "surfaces": [
         "assistant",
@@ -4939,7 +4939,7 @@
       "id": "video_builder.create",
       "title": "Write a video project",
       "summary": "Start a video from a template, without making it yet.",
-      "description": "Create a Video Builder project from one of five templates and keep it in the library. Nothing is rendered; call video_builder.render to make the video, or use motion.make to do both at once. The words are shown exactly as given. title: A title and a line under it, animated in on a colour you pick. Fields: title (text, up to 80 characters, required); subtitle (text, up to 140 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper); font (sans/serif). quote: A quote that appears word by word, with who said it. Fields: quote (text, up to 220 characters, required); author (text, up to 60 characters); shape (landscape/portrait/square); seconds (seconds, 4 to 90); theme (midnight/sunrise/forest/paper); font (sans/serif). chart: Bars that grow, from your own numbers. Each number is shown exactly as you type it. Fields: title (text, up to 80 characters, required); data (lines like 'Sales, 120', up to 8); shape (landscape/portrait/square); seconds (seconds, 5 to 90); theme (midnight/sunrise/forest/paper); font (sans/serif). lower_third: A name strap for the bottom of a video. Transparent, to lay over footage. Fields: name (text, up to 60 characters, required); role (text, up to 80 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper); font (sans/serif). captions: Your own words as captions, one after another. Transparent, to lay over footage. Fields: lines (one caption per line, up to 45 lines); per_line (2/3/4); shape (landscape/portrait/square); theme (midnight/sunrise/forest/paper); font (sans/serif).",
+      "description": "Create a Motion graphics project from one of five templates and keep it in the library. Nothing is rendered; call video_builder.render to make the video, or use motion.make to do both at once. The words are shown exactly as given. title: A title and a line under it, animated in on a colour you pick. Fields: title (text, up to 80 characters, required); subtitle (text, up to 140 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper); font (sans/serif). quote: A quote that appears word by word, with who said it. Fields: quote (text, up to 220 characters, required); author (text, up to 60 characters); shape (landscape/portrait/square); seconds (seconds, 4 to 90); theme (midnight/sunrise/forest/paper); font (sans/serif). chart: Bars that grow, from your own numbers. Each number is shown exactly as you type it. Fields: title (text, up to 80 characters, required); data (lines like 'Sales, 120', up to 8); shape (landscape/portrait/square); seconds (seconds, 5 to 90); theme (midnight/sunrise/forest/paper); font (sans/serif). lower_third: A name strap for the bottom of a video. Transparent, to lay over footage. Fields: name (text, up to 60 characters, required); role (text, up to 80 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper); font (sans/serif). captions: Your own words as captions, one after another. Transparent, to lay over footage. Fields: lines (one caption per line, up to 45 lines); per_line (2/3/4); shape (landscape/portrait/square); theme (midnight/sunrise/forest/paper); font (sans/serif).",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -5026,7 +5026,7 @@
       ],
       "long": false,
       "product": "wasifyai-video",
-      "ui": "video.builder",
+      "ui": "motion",
       "ui_exempt": "",
       "surfaces": [
         "assistant",
@@ -5039,7 +5039,7 @@
       "id": "video_builder.lint",
       "title": "Check a video project",
       "summary": "Check that a video project reaches nothing outside its own folder.",
-      "description": "Check a Video Builder project before rendering: the page must not load anything from the internet or from other folders. Returns the findings, if any.",
+      "description": "Check a Motion graphics project before rendering: the page must not load anything from the internet or from other folders. Returns the findings, if any.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -5133,7 +5133,7 @@
       ],
       "long": false,
       "product": "wasifyai-video",
-      "ui": "video.builder",
+      "ui": "motion",
       "ui_exempt": "",
       "surfaces": [
         "assistant",
@@ -5146,7 +5146,7 @@
       "id": "video_builder.render",
       "title": "Make the video",
       "summary": "Render a video project to a video in the library.",
-      "description": "Render a Video Builder project and save it to the person's library (Your videos). The words on the screen are checked against what was typed first; a page that does not say them is not rendered. It runs in a sandbox, takes seconds to a minute, and only one video is made at a time. Returns a job handle when it is not done within the wait. Lower thirds and captions can be made transparent (webm or mov).",
+      "description": "Render a Motion graphics project and save it to the library (Your videos). The words on the screen are checked against what was typed first; a page that does not say them is not rendered. It runs in a sandbox, takes seconds to a minute, and only one video is made at a time. Returns a job handle when it is not done within the wait. Lower thirds and captions can be made transparent (webm or mov).",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -5245,7 +5245,7 @@
       ],
       "long": true,
       "product": "wasifyai-video",
-      "ui": "video.builder",
+      "ui": "motion",
       "ui_exempt": "",
       "surfaces": [
         "assistant",

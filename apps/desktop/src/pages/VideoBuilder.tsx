@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Video Builder (ADR-0077): the shared screen on this window's engine.
+// Motion graphics (ADR-0077): the shared screen on this window's engine.
 import { VideoBuilder } from "@wasifyai/ui";
 import { videoBuilder } from "../builder";
 import type { Route } from "../router";

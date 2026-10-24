@@ -1,4 +1,4 @@
-"""What Video Builder can do, for the action catalogue (ADR-0068, ADR-0079): write a video from a
+"""What Motion graphics can do, for the action catalogue (ADR-0068, ADR-0079): write a video from a
 template, check it, make it, change it, and the compositions as a kind of creation in the library.
 
 `motion.make` is the plain-words front door (ADR-0079): the assistant or an agent maps "a lower
@@ -299,7 +299,7 @@ async def _revise(p: ReviseIn, ctx: ActionContext) -> Outcome:
     failed, done = await _made(ctx, found["id"], p.format)
     if failed is not None or done is None:
         text = (failed.text if failed else "The video could not be made.") + (
-            " The change was kept; you can undo it on the Video Builder screen."
+            " The change was kept; you can undo it on the Motion graphics screen."
         )
         return Outcome.error(text, failed.code if failed else "render_failed")
     return Outcome.ok(
@@ -315,7 +315,7 @@ def actions() -> list[Action]:
             id="video_builder.create", title="Write a video project",
             summary="Start a video from a template, without making it yet.",
             description=(
-                "Create a Video Builder project from one of five templates and keep it in the "
+                "Create a Motion graphics project from one of five templates and keep it in the "
                 "library. Nothing is rendered; call video_builder.render to make the video, or use "
                 "motion.make to do both at once. The words are shown exactly as given. "
                 + _fields_help()
@@ -324,24 +324,24 @@ def actions() -> list[Action]:
             examples=({"template": "title", "fields": {"title": "Launch day",
                                                       "subtitle": "Wasify AI is here"}},),
             effect="make", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
-            bind=CallBinding(_create), ui="video.builder",
+            bind=CallBinding(_create), ui="motion",
         ),
         Action(
             id="video_builder.lint", title="Check a video project",
             summary="Check that a video project reaches nothing outside its own folder.",
             description=(
-                "Check a Video Builder project before rendering: the page must not load anything "
+                "Check a Motion graphics project before rendering: the page must not load anything "
                 "from the internet or from other folders. Returns the findings, if any."
             ),
             input=CompositionIn, output=LintOut, examples=({"composition_id": SAMPLE_ID},),
             effect="read", requires=(need_product(PRODUCT_ID), BUILDER), product=PRODUCT_ID,
-            bind=CallBinding(_lint, check=_check_composition), ui="video.builder",
+            bind=CallBinding(_lint, check=_check_composition), ui="motion",
         ),
         Action(
             id="video_builder.render", title="Make the video",
             summary="Render a video project to a video in the library.",
             description=(
-                "Render a Video Builder project and save it to the person's library (Your videos). "
+                "Render a Motion graphics project and save it to the library (Your videos). "
                 "The words on the screen are checked against what was typed first; a page that "
                 "does not say them is not rendered. It runs in a sandbox, takes seconds to a "
                 "minute, and only one video is made at a time. Returns a job handle when it is not "
@@ -351,7 +351,7 @@ def actions() -> list[Action]:
             input=RenderIn, output=RenderOut, examples=({"composition_id": SAMPLE_ID},),
             effect="make", flags=("costly",), requires=(need_product(PRODUCT_ID), BUILDER),
             long=True, product=PRODUCT_ID,
-            bind=CallBinding(_render, check=_check_composition), ui="video.builder",
+            bind=CallBinding(_render, check=_check_composition), ui="motion",
         ),
         Action(
             id="motion.make", title="Make a motion graphic",
@@ -373,22 +373,22 @@ def actions() -> list[Action]:
                                                  "data": "North, 120\nSouth, 95\nEast, 150"}},
             ),
             effect="make", requires=(need_product(PRODUCT_ID), BUILDER), long=True,
-            product=PRODUCT_ID, bind=CallBinding(_make), ui="video.builder",
+            product=PRODUCT_ID, bind=CallBinding(_make), ui="motion",
         ),
         Action(
             id="motion.revise", title="Change a motion graphic",
             summary="Change the words or the look of a motion graphic and make it again.",
             description=(
-                "Change an existing Video Builder project: give only the fields that change (the "
+                "Change an existing Motion graphics project: give only the fields that change (the "
                 "rest stay), and it is made again and checked. The earlier version can be brought "
-                "back on the Video Builder screen. Use for requests like 'make the text bigger' "
+                "back on the Motion graphics screen. Use for requests like 'make the text bigger' "
                 "(change the length or shape), 'use the forest look', or 'fix the typo'."
             ),
             input=ReviseIn, output=MotionOut,
             examples=({"composition_id": SAMPLE_ID, "fields": {"theme": "forest"}},),
             effect="change", requires=(need_product(PRODUCT_ID), BUILDER), long=True,
             product=PRODUCT_ID,
-            bind=CallBinding(_revise, check=_check_composition), ui="video.builder",
+            bind=CallBinding(_revise, check=_check_composition), ui="motion",
         ),
     ]  # fmt: skip
 

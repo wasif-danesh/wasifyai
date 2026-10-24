@@ -1,4 +1,4 @@
-"""The sandbox a Video Builder render runs in (ADR-0077 decision 4, stage V1b).
+"""The sandbox a Motion graphics render runs in (ADR-0077 decision 4, stage V1b).
 
 A composition is code written by a model or taken from the web, and HyperFrames renders it in a
 browser. The stock render starts that browser with `--no-sandbox`, popups allowed and no network

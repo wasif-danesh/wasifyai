@@ -1,5 +1,5 @@
 "use client";
-// What the Video Builder screen keeps track of: the component (is it set up, how far has it got), the
+// What the Motion graphics screen keeps track of: the component (is it set up, how far has it got), the
 // projects, the one being edited, its preview and the render that is running.
 import type {
   BuilderCheck,
@@ -109,7 +109,7 @@ export function useVideoBuilder(api: VideoBuilderApi) {
       });
     } catch (e) {
       if (alive.current)
-        patch({ loading: false, error: say(e, "Video Builder could not be reached.") });
+        patch({ loading: false, error: say(e, "Motion graphics could not be reached.") });
     }
   }, [api, patch]);
 
@@ -160,7 +160,7 @@ export function useVideoBuilder(api: VideoBuilderApi) {
       try {
         patch({ component: await api.install(bytes), error: null });
       } catch (e) {
-        patch({ error: say(e, "Video Builder could not be set up.") });
+        patch({ error: say(e, "Motion graphics could not be set up.") });
       }
     },
     [api, patch],

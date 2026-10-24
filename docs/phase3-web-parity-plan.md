@@ -131,7 +131,7 @@ and the reading worker (`python -m wasifyai_notebooks.worker`, any number of the
 ADR-0065's second amendment. The web engine can now store and serve notebooks when it is switched on and a worker runs; the
 menu keeps them "Soon" because there are no web screens yet (step 4). **Step 3 is built**: the search model through the gateway (`GatewayEmbedder`, alias `creation-embedder`, multilingual), token usage
 recorded for every embedding call, and per-person limits on notebooks, sources and bytes, applied while the safeguards are on
-(ADR-0065's third amendment). **Step 4 is built**: `/notebooks` (View Notebooks) and `/notebooks/<id>` or `/notebooks/new` (a draft, saved when its first source
+(ADR-0065's third amendment). **Step 4 is built**: `/notebooks` (View notebooks) and `/notebooks/<id>` or `/notebooks/new` (a draft, saved when its first source
 is added, then given its address without a reload) show the shared `NotebookList` and `NotebookWorkspace` over the BFF (the
 catch-all route carries the uploads, the downloads and the question runs). The menu's two Notebook items are live when the web
 app has `NOTEBOOKS_ENABLED=true` (the same switch as the engine's) and "Soon" otherwise. Copy that promised "stays on this

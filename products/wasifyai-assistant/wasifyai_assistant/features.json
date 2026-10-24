@@ -9,7 +9,7 @@
     ]
   },
   {
-    "where": "Notebook › View Notebooks",
+    "where": "Notebook › View notebooks",
     "actions": [
       "notebook.add_source",
       "notebook.ask",
@@ -62,15 +62,6 @@
     ]
   },
   {
-    "where": "Images › 3D model",
-    "actions": [
-      "model3d.generate"
-    ],
-    "does": [
-      "Make a 3D model"
-    ]
-  },
-  {
     "where": "Video › Create",
     "actions": [
       "video.generate"
@@ -95,23 +86,6 @@
     ],
     "does": [
       "Extend a video"
-    ]
-  },
-  {
-    "where": "Video › Video Builder",
-    "actions": [
-      "motion.make",
-      "motion.revise",
-      "video_builder.create",
-      "video_builder.lint",
-      "video_builder.render"
-    ],
-    "does": [
-      "Make a motion graphic",
-      "Change a motion graphic",
-      "Write a video project",
-      "Check a video project",
-      "Make the video"
     ]
   },
   {
@@ -222,7 +196,33 @@
     ]
   },
   {
-    "where": "Train",
+    "where": "Motion graphics",
+    "actions": [
+      "motion.make",
+      "motion.revise",
+      "video_builder.create",
+      "video_builder.lint",
+      "video_builder.render"
+    ],
+    "does": [
+      "Make a motion graphic",
+      "Change a motion graphic",
+      "Write a video project",
+      "Check a video project",
+      "Make the video"
+    ]
+  },
+  {
+    "where": "3D model",
+    "actions": [
+      "model3d.generate"
+    ],
+    "does": [
+      "Make a 3D model"
+    ]
+  },
+  {
+    "where": "Train models",
     "actions": [
       "train.start"
     ],

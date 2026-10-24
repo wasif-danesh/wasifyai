@@ -1,19 +1,19 @@
-import { Equaliser } from "@/components/Logo";
-import { Badge } from "@/components/ui/badge";
-import { Spinner } from "@/components/ui/spinner";
-import type { Entry } from "@/lib/creations";
-import { clock, styleTags, timeAgo } from "@/lib/format";
-import { clamp2, coverTile } from "@/lib/styles";
-import { cn } from "@/lib/utils";
-import type { LipSyncCard as LipSyncEntry } from "@/lib/voice-cards";
-import type { VideoSummary } from "@wasifyai/contracts";
-import { Mic } from "lucide-react";
-import Link from "next/link";
+import type { LipSyncCard as LipSyncEntry, VideoSummary } from "@wasifyai/client";
+import { AudioLines, Mic } from "lucide-react";
 import type { ReactNode } from "react";
+import { cn } from "../cn";
+import { Badge } from "../components/badge";
+import { Spinner } from "../components/spinner";
+import { clamp2, coverTile } from "../styles";
+import { clock } from "../voice/format";
+import { NavLink } from "./NavLink";
+import { styleTags, timeAgo } from "./format";
+import type { CreationsNav, Entry } from "./model";
 
 /** One card in My creations: a cover, what kind it is, a title, a few tags and when it was made. */
 function Card({
-  href,
+  nav,
+  to,
   kind,
   cover,
   title,
@@ -22,7 +22,8 @@ function Card({
   lang,
   status,
 }: {
-  href: string;
+  nav: CreationsNav;
+  to: Entry;
   kind: string;
   cover: ReactNode;
   title: string;
@@ -32,8 +33,9 @@ function Card({
   status?: string;
 }) {
   return (
-    <Link
-      href={href}
+    <NavLink
+      nav={nav}
+      to={to}
       data-status={status}
       className="relative grid h-full grid-rows-[auto_1fr] gap-3 overflow-hidden rounded-lg border bg-surface p-[0.8rem] text-foreground no-underline transition-[translate,box-shadow,border-color] duration-300 ease-out-soft hover:-translate-y-1 hover:border-primary/45 hover:text-foreground hover:shadow-card"
     >
@@ -50,27 +52,36 @@ function Card({
           {timeAgo(when)}
         </time>
       </div>
-    </Link>
+    </NavLink>
   );
 }
 
 const picture = cn(coverTile, "rounded-lg");
 
 /** One card in My creations: a song, an image, a video or speech, each linking to its own page. */
-export function CreationCard({ entry, note }: { entry: Entry; note?: string }) {
+export function CreationCard({
+  entry,
+  note,
+  nav,
+}: {
+  entry: Entry;
+  note?: string;
+  nav: CreationsNav;
+}) {
   const noteTag = note ? <Badge variant="tag">{note}</Badge> : null;
   if (entry.kind === "speech") {
     const { speech } = entry;
     return (
       <Card
-        href="/voice/speak"
+        nav={nav}
+        to={entry}
         kind="Speech"
         cover={
           <div
             className={cn(picture, "grid place-items-center p-4 text-primary-foreground")}
             aria-hidden="true"
           >
-            <Equaliser still />
+            <AudioLines className="size-10" />
           </div>
         }
         title={speech.text}
@@ -88,7 +99,8 @@ export function CreationCard({ entry, note }: { entry: Entry; note?: string }) {
     const { transcript } = entry;
     return (
       <Card
-        href="/voice/transcribe"
+        nav={nav}
+        to={entry}
         kind="Transcript"
         cover={
           <div
@@ -109,12 +121,15 @@ export function CreationCard({ entry, note }: { entry: Entry; note?: string }) {
       />
     );
   }
-  if (entry.kind === "lipsync") return <LipSyncCard lipsync={entry.lipsync} note={note} />;
-  if (entry.kind === "video") return <VideoCard video={entry.video} note={note} />;
+  if (entry.kind === "lipsync")
+    return <LipSyncCard lipsync={entry.lipsync} entry={entry} nav={nav} note={note} />;
+  if (entry.kind === "video")
+    return <VideoCard video={entry.video} entry={entry} nav={nav} note={note} />;
   if (entry.kind === "image") {
     return (
       <Card
-        href={`/image/creations/${entry.id}`}
+        nav={nav}
+        to={entry}
         kind="Image"
         cover={<img className={picture} src={entry.image.thumb_url} alt="" loading="lazy" />}
         title={entry.image.prompt}
@@ -125,14 +140,15 @@ export function CreationCard({ entry, note }: { entry: Entry; note?: string }) {
   }
   return (
     <Card
-      href="/voice/tracks"
+      nav={nav}
+      to={entry}
       kind="Music"
       cover={
         <div
           className={cn(picture, "grid place-items-center p-4 text-primary-foreground")}
           aria-hidden="true"
         >
-          <Equaliser still />
+          <AudioLines className="size-10" />
         </div>
       }
       title={entry.song.title}
@@ -154,10 +170,21 @@ export function CreationCard({ entry, note }: { entry: Entry; note?: string }) {
 }
 
 /** A clip: its poster when ready, a "making" card while it is, and the reason when it failed. */
-function VideoCard({ video, note }: { video: VideoSummary; note?: string }) {
+function VideoCard({
+  video,
+  entry,
+  nav,
+  note,
+}: {
+  video: VideoSummary;
+  entry: Entry;
+  nav: CreationsNav;
+  note?: string;
+}) {
   return (
     <Card
-      href={`/video/creations/${video.id}`}
+      nav={nav}
+      to={entry}
       kind="Video"
       status={video.status}
       cover={
@@ -187,10 +214,21 @@ function VideoCard({ video, note }: { video: VideoSummary; note?: string }) {
   );
 }
 
-function LipSyncCard({ lipsync, note }: { lipsync: LipSyncEntry; note?: string }) {
+function LipSyncCard({
+  lipsync,
+  entry,
+  nav,
+  note,
+}: {
+  lipsync: LipSyncEntry;
+  entry: Entry;
+  nav: CreationsNav;
+  note?: string;
+}) {
   return (
     <Card
-      href="/voice/lipsync"
+      nav={nav}
+      to={entry}
       kind="Lip sync"
       cover={
         lipsync.poster_url ? (

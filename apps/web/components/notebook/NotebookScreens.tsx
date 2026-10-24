@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const DRAFT_TITLE = "Untitled notebook";
 
-/** View Notebooks: the person's notebooks as cards (the shared screen, also the desktop's). */
+/** View notebooks: the person's notebooks as cards (the shared screen, also the desktop's). */
 export function NotebookListScreen() {
   const router = useRouter();
   const [notebooks, setNotebooks] = useState<NotebookSummary[]>([]);

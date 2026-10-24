@@ -33,7 +33,7 @@ const json = (body: unknown, status = 200) =>
 
 afterEach(() => vi.restoreAllMocks());
 
-describe("the Video Builder client", () => {
+describe("the Motion graphics client", () => {
   it("reads the component and sets it up with the size the person was shown", async () => {
     const { transport, calls } = fake(() => json({ installed: false }));
     const api = createVideoBuilderApi(transport);

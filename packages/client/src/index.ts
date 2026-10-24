@@ -265,6 +265,30 @@ export {
   minutes,
 } from "./model3d";
 export {
+  type CreationKind,
+  type CreationsApi,
+  type Found,
+  type Recent,
+  SearchError,
+  createCreationsApi,
+} from "./creations";
+export {
+  type LipSyncCard,
+  type SongCard,
+  type SpeechCard,
+  type TranscriptCard,
+  clipFromVoice,
+  speechFromVoice,
+  trackFromVoice,
+  transcriptFromVoice,
+} from "./voice-cards";
+export {
+  type InUse,
+  type InUseModel,
+  type ModelsInUseApi,
+  createModelsInUseApi,
+} from "./models-in-use";
+export {
   createWorkersApi,
   type FetchJob,
   type WorkerInfo,

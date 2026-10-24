@@ -1,4 +1,4 @@
-"""The five templates of Video Builder (ADR-0079, MG1): their fields, the page each makes, the
+"""The five templates of Motion graphics (ADR-0079, MG1): their fields, the page each makes, the
 moments and words the exact-text check looks for, and how its report is read."""
 
 import re

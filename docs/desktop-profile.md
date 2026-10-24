@@ -238,10 +238,10 @@ to `@wasifyai/ui` when it is migrated; delete the shim when nothing uses it.
 |---|---|---|
 | Router | `router.ts` | URL hash, eight routes: `/`, `/images/create`, `/images/edit`, `/library`, `/models`, `/settings`, `/notebooks` and `/notebooks/<id>` (`new` is a draft). No library. `useRoute` answers an object; a chat or a draft notebook gets its address without a reload (`adopt`, `adoptNotebook`) |
 | Shell | `Shell.tsx` | side menu + the screen; the menu collapses (remembered in `localStorage`) |
-| Side menu | `Sidebar.tsx`, `menu.ts` | the shared `SideMenu` of `packages/ui` (the web app uses the same one; the menu is defined once in `packages/ui/src/shell/menu.ts`, and `menu.ts` here says what each item opens in the window; an item missing there shows as "Soon"). New chat; groups **Notebook** (Create, View Notebooks), **Images** (Create, Edit, and Transform, Inpaint, Extend, Upscale, Reference marked "Soon", Your images), **Video** (Create, Animate an image, Extend video, Your videos), **Voice** (Text to speech, Speech to text, Lip sync, Voices, Change a voice, Edit speech, Dub a recording and Audiobook), **Music** (Create, Your music, Lyrics and Split into parts); Library, Models, Train ("Soon"); Recents; You and settings. One group is open at a time and the one holding the current page stays open |
+| Side menu | `Sidebar.tsx`, `menu.ts` | the shared `SideMenu` of `packages/ui` (the web app uses the same one; the menu is defined once in `packages/ui/src/shell/menu.ts`, and `menu.ts` here says what each item opens in the window; an item missing there shows as "Soon"). New chat; groups **Notebook** (Create, View notebooks), **Images** (Create, Edit, and Transform, Inpaint, Extend, Upscale, Reference marked "Soon", Your images), **Video** (Create, Animate an image, Extend video, Your videos), **Voice** (Text to speech, Speech to text, Lip sync, Voices, Change a voice, Edit speech, Dub a recording and Audiobook), **Music** (Create, Your music, Lyrics and Split into parts); Library, Models, Train ("Soon"); Recents; You and settings. One group is open at a time and the one holding the current page stays open |
 | Home | `pages/Home.tsx` | the shared `AssistantHome` of `packages/ui` (the web app's home is the same screen), with this window's "choose a chat model" notice |
 | Create / Edit | `pages/Create.tsx` | wraps the shared `ImageWorkspace` with this window's model chip and setup notices |
-| Notebooks | `pages/Notebooks.tsx`, `pages/Notebook.tsx`, `notebook-setup.ts` (the web app mounts the same `NotebookList` and `NotebookWorkspace`, with `NotebookPlaceProvider` saying where documents live) | View Notebooks (cards, search by title and by what is inside, rename, delete, the setup card) and one notebook (the shared `NotebookWorkspace`) |
+| Notebooks | `pages/Notebooks.tsx`, `pages/Notebook.tsx`, `notebook-setup.ts` (the web app mounts the same `NotebookList` and `NotebookWorkspace`, with `NotebookPlaceProvider` saying where documents live) | View notebooks (cards, search by title and by what is inside, rename, delete, the setup card) and one notebook (the shared `NotebookWorkspace`) |
 | Library | `pages/Library.tsx` | wraps the shared `ImageLibrary`; "Make it again" sends the recipe to Create (`Shell.tsx` holds it until the route changes) |
 | Attach (chat box) | `packages/ui/src/chat/attachments/`, `services/api/.../attachments.py`, `products/wasifyai-assistant/wasifyai_assistant/attachments.py` | pictures (the model's projector, `--mmproj`, fetched from `projector-shelf.yaml` after a click: `desktop_vision.py`) and documents (read to text on the engine); see the CO2 section of `docs/spikes/composer-co0.md` |
 | Models, Settings | `pages/Models.tsx`, `pages/Settings.tsx` | the model panel; the image engine card, updates, restart and repair; "Searching the web" (`SearchSettings` in `packages/ui`: service, permission, key; the engine side is `web_search.py`, keys encrypted with `secrets.key` in the data folder, ADR-0083) |
@@ -268,7 +268,7 @@ disabled with the **Soon** pill, so the menu keeps its final shape (as above).
 | Group | Items | Engine today (ADR-0062) | Built on the desktop |
 |---|---|---|---|
 | *New chat* | (single item) | assistant (ADR-0057) | yes |
-| **Notebook** | Create, View Notebooks | `wasifyai-notebooks` (ADR-0065) | stage E |
+| **Notebook** | Create, View notebooks | `wasifyai-notebooks` (ADR-0065) | stage E |
 | **Images** | Create, Edit, Inpaint, Reference, 3D model, Your images (Transform, Extend and Upscale were taken out of the menu 2026-10-21; `docs/spikes/unsloth-image-workflows.md`) | ComfyUI | Create, Edit, Inpaint, Reference (2026-10-21) |
 | **Video** | Create, Animate an image, Extend video, Your videos | `wasifyai-video` on ComfyUI (`video.generate`, `video.animate`, `video.extend`); LTX-Video 2B (V8) | Create, Animate an image, Extend video (2026-10-21), Your videos |
 | **Voice** | Text to speech, Speech to text, Lip sync, Voices | `wasifyai-voice` on audio.cpp (ADR-0066); lip sync is MuseTalk, an optional sidecar | all built (V1 to V5) |
@@ -761,7 +761,7 @@ Not built: the moderation of the words when safeguards are on (ADR-0079 decision
 ## 3D models (ADR-0080, stages TD1 and TD2; experimental)
 
 A 3D model made from a picture, or from words through a picture, on this computer. It is always in the
-menu, as **Images › 3D model**; the screen says it is experimental. Details and measurements: `docs/spikes/pixal3d-td1.md`.
+menu, as **3D model** (its own item after Motion graphics since 2026-10-24); the screen says it is experimental. Details and measurements: `docs/spikes/pixal3d-td1.md`.
 
 | Piece | What |
 |---|---|

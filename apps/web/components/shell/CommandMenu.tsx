@@ -10,9 +10,10 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import { useCreationSearch } from "@/hooks/use-creation-search";
-import { longEnough, toRow } from "@/lib/creations";
+import { hrefOf } from "@/lib/creations-nav";
+import { webCreations } from "@/lib/library";
 import { PRODUCTS } from "@/lib/products";
+import { longEnough, toRow, useCreationSearch } from "@wasifyai/ui";
 import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -22,7 +23,7 @@ export function CommandMenu() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const search = useCreationSearch(open ? query : "", "all");
+  const search = useCreationSearch(webCreations, open ? query : "", "all");
   const searching = longEnough(query);
 
   useEffect(() => {
@@ -93,7 +94,7 @@ export function CommandMenu() {
                     <CommandItem
                       key={row.key}
                       value={row.key}
-                      onSelect={() => go(row.href)}
+                      onSelect={() => go(hrefOf(entry))}
                       className="gap-2"
                     >
                       <span className="shrink-0 text-xs text-muted-foreground">

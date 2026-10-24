@@ -35,7 +35,7 @@ export type LipSyncCard = {
   poster_url: string | null;
 };
 
-type VoiceSpeech = {
+export type VoiceSpeech = {
   id: string;
   text: string;
   voice?: string | null;
@@ -45,7 +45,7 @@ type VoiceSpeech = {
   audio_url: string;
 };
 
-type VoiceTranscript = {
+export type VoiceTranscript = {
   id: string;
   title: string;
   text?: string;
@@ -53,7 +53,7 @@ type VoiceTranscript = {
   created_at: string;
 };
 
-type VoiceTrack = {
+export type VoiceTrack = {
   id: string;
   title: string;
   description?: string;
@@ -61,7 +61,7 @@ type VoiceTrack = {
   audio_url: string;
 };
 
-type VoiceClip = {
+export type VoiceClip = {
   id: string;
   title: string;
   script?: string;

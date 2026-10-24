@@ -189,17 +189,18 @@ export function ModelSelect({
   }
 
   return (
-    <div ref={root} className={cn("relative inline-block", className)}>
+    <div ref={root} className={cn("relative inline-block max-w-full min-w-0", className)}>
       <Button
         type="button"
         variant="outline"
+        className="max-w-full"
         disabled={disabled || !api}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={`${id}-panel`}
         onClick={() => setOpen((o) => !o)}
       >
-        <span className="max-w-[16rem] truncate">{label}</span>
+        <span className="min-w-0 max-w-[16rem] truncate">{label}</span>
         {getting ? (
           <span className="text-muted-foreground text-xs">
             {getting.progress.fraction === null

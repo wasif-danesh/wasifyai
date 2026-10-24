@@ -1,6 +1,6 @@
 ---
 action: video_builder.create
-screen: video.builder
+screen: motion
 synonyms: [title card, animated title, write a video, video from a template, text on screen, quote, bar chart, lower third, captions]
 ---
 # Write a video project
@@ -11,11 +11,11 @@ Action: `video_builder.create`
 
 Start a video from one of five templates: an animated title, a quote, a bar chart from your own
 numbers, a lower third (a name strap) or captions. Nothing is made yet; the project is kept in your
-library and you make the video from it. Video Builder is experimental.
+library and you make the video from it. Motion graphics is experimental.
 
 ## Steps in the app
 
-1. Open **Video › Video Builder**.
+1. Open **Motion graphics**.
 2. Choose New video, then what to make.
 3. Fill in the form: the words, and the shape, length, look and letters.
 4. Choose Preview to see three stills, then Make the video.
@@ -35,7 +35,7 @@ library and you make the video from it. Video Builder is experimental.
 
 ## Needs
 
-- Nothing to write the project. Making the video needs Video Builder to be set up (a download of
+- Nothing to write the project. Making the video needs Motion graphics to be set up (a download of
   a few hundred megabytes).
 
 ## Examples

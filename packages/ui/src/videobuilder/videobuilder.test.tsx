@@ -266,7 +266,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("setting up Video Builder", () => {
+describe("setting up Motion graphics", () => {
   it("shows every part with its size and licence, and sets up with the size that was shown", async () => {
     const a = api({
       component: vi.fn().mockResolvedValue(component()),
@@ -285,7 +285,7 @@ describe("setting up Video Builder", () => {
     const user = userEvent.setup();
     render(<VideoBuilder api={a} />);
     expect(
-      await screen.findByRole("heading", { name: "Set up Video Builder" }),
+      await screen.findByRole("heading", { name: "Set up Motion graphics" }),
     ).toBeInTheDocument();
     for (const name of ["Node.js", "Chrome headless shell", "HyperFrames and GSAP"]) {
       expect(screen.getByText(name)).toBeInTheDocument();
@@ -381,6 +381,16 @@ describe("writing and making a video", () => {
       "true",
     );
     expect(screen.getByText("<html>the page</html>")).toBeInTheDocument(); // the code view
+  });
+
+  it("has a way out of the form: Cancel on a new draft, Close on a saved project", async () => {
+    const user = userEvent.setup();
+    const a = api({ list: vi.fn().mockResolvedValue([]) });
+    render(<VideoBuilder api={a} />);
+    await user.click(await screen.findByRole("button", { name: "Or fill in the form yourself" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(await screen.findByLabelText("Describe what to make")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Title")).toBeNull();
   });
 
   it("creates a project from a new draft and will not make one without a title", async () => {
@@ -765,7 +775,7 @@ describe("FFmpeg, which a video needs", () => {
       tools: {
         ready: false,
         message:
-          "Video Builder also needs FFmpeg (with ffprobe). In Terminal run: brew install ffmpeg.",
+          "Motion graphics also needs FFmpeg (with ffprobe). In Terminal run: brew install ffmpeg.",
       },
     });
     const a = api({

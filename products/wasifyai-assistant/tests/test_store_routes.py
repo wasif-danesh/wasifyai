@@ -213,9 +213,10 @@ class FakeWeb:
 
     def __init__(self) -> None:
         self.provider, self.consented, self.keys = "duckduckgo", False, set()
+        self.per_person = False
         self.updates: list[dict] = []
 
-    async def status(self):
+    async def status(self, who=None):
         titles = {"duckduckgo": "DuckDuckGo", "tavily": "Tavily"}
         return {
             "provider": self.provider,
@@ -229,13 +230,13 @@ class FakeWeb:
             ],
         }  # fmt: skip
 
-    async def readiness(self):
+    async def readiness(self, who=None):
         from wasifyai_platform_sdk.actions import Readiness
 
         ok = self.consented and (self.provider == "duckduckgo" or self.provider in self.keys)
         return Readiness.ready() if ok else Readiness.needs_setup("not yet")
 
-    async def update(self, *, provider=None, consent=None, key=None, remove_key=None):
+    async def update(self, *, provider=None, consent=None, key=None, remove_key=None, who=None):
         self.updates.append(
             {"provider": provider, "consent": consent, "key": key, "remove": remove_key}
         )
@@ -309,3 +310,18 @@ def test_where_there_is_no_web_search_the_box_gets_no_button_and_the_settings_ar
     assert c.get("/products/wasifyai-assistant/options").json()["search"]["available"] is False
     assert c.get("/products/wasifyai-assistant/search").status_code == 404
     assert c.put("/products/wasifyai-assistant/search", json={"consent": True}).status_code == 404
+
+
+def test_on_a_service_only_an_admin_changes_the_search_service_and_its_keys():
+    web = FakeWeb()
+    web.per_person = True  # a service: the person (not an admin) may only allow it for themself
+    c = web_client(web)
+    base = "/products/wasifyai-assistant"
+    assert c.put(f"{base}/search", json={"consent": True}).status_code == 200
+    for body in (
+        {"provider": "tavily"},
+        {"key": {"provider": "tavily", "value": "tvly-0123456789"}},
+        {"remove_key": "tavily"},
+    ):
+        assert c.put(f"{base}/search", json=body).status_code == 403
+    assert [u["provider"] for u in web.updates] == [None]  # nothing of that reached the service

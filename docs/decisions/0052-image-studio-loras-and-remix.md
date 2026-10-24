@@ -1,6 +1,6 @@
 # ADR-0052: Image studio: base model, LoRAs, stored parameters and Remix
 
-- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wasifyai-art`, in its own repository (`wasifyai-art`); wasifyai does not implement it. Nothing here was built.
+- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio will not be built (owner, 2026-10-24); wasifyai does not implement it. Nothing here was built.
 - **Date:** 2026-10-12
 - **Depends on:** ADR-0051. **Extends:** ADR-0036 (it does not supersede it).
 

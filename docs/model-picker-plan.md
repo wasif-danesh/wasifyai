@@ -67,7 +67,7 @@ good`, `advanced`). The plain descriptions are content work: about 25 lines, wri
 A shared component `ModelPicker` in `packages/ui` (desktop only; the web serves hosted models) with the group as its argument.
 
 - **The button** says "Select image model" when nothing is chosen, else the model's name with a small state: *ready*, *loading…*, *not on this computer*.
-  It sits where the screen's chip, `<select>` and notices are now; those go.
+  It sits where the screen's chip, `<select>` and notices are now; those go. **Where, decided 2026-10-24 (owner): at the top of the screen, in the page's top bar, like chat and Images; never in the body.**
 - **The panel** opens on **Recommended for this computer**: the best model of the group that fits this computer's memory first (memory decides the order,
   using the fit check), at most three rows, each with name, one plain line, size, and a state. **On this computer** lists what is already there (also found
   files and servers). **More models** holds the `advanced` tier, search, custom folders and Hugging Face (ADR-0064's Discover, demoted but kept).

@@ -37,6 +37,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <NavLink href="/admin/models">Models</NavLink>
           <NavLink href="/admin/media">Media</NavLink>
           <NavLink href="/admin/workers">Models and workers</NavLink>
+          <NavLink href="/admin/search">Search</NavLink>
+          <NavLink href="/admin/settings">Settings</NavLink>
           <NavLink href="/admin/safeguards">Safeguards</NavLink>
           <NavLink href="/admin/audit">Audit log</NavLink>
         </nav>

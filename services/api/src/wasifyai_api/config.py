@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     metrics_port: int = 9464  # Prometheus scrapes this port (ADR-0048); 0 turns the listener off
     media_secrets_key: str = ""  # encrypts media provider API keys saved in the admin area
+    # the assistant may search the web once an admin picks the service and a person allows it
+    # (ADR-0083); off here for a deployment that must send nothing out
+    web_search_enabled: bool = True
 
     # Search over My creations (ADR-0041). The embedder is the `creation-embedder` alias; the index
     # records which model made each row, and a row made by another model is re-embedded.

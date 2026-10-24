@@ -163,15 +163,15 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
             images_note=why,
             picture_reader=reader,
         )
-        return ChatOptions(thinking=thinking, search=await search_options(), attach=attach)
+        return ChatOptions(thinking=thinking, search=await search_options(identity), attach=attach)
 
-    async def search_options() -> SearchOptions:
+    async def search_options(identity: Identity) -> SearchOptions:
         web = getattr(deps.state, "web", None)
         if web is None:
             return SearchOptions()
-        st = await web.status()
+        st = await web.status(identity)
         chosen = next(p for p in st["providers"] if p["id"] == st["provider"])
-        ready = (await web.readiness()).state == "ready"
+        ready = (await web.readiness(identity)).state == "ready"
         return SearchOptions(
             available=True,
             consented=st["consented"],
@@ -189,7 +189,7 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
         web = getattr(deps.state, "web", None)
         if web is None:
             raise HTTPException(404, "Web search is not available here.")
-        return await web.status()
+        return await web.status(identity)
 
     @router.put("/search", response_model=SearchStatus)
     async def search_update(
@@ -198,12 +198,17 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
         web = getattr(deps.state, "web", None)
         if web is None:
             raise HTTPException(404, "Web search is not available here.")
+        # on a service the admins choose the search service and keep its keys; anyone may allow it
+        if getattr(web, "per_person", False) and identity.role != "admin":
+            if body.provider is not None or body.key is not None or body.remove_key is not None:
+                raise HTTPException(403, "An admin chooses the search service and keeps its keys.")
         try:
             return await web.update(
                 provider=body.provider,
                 consent=body.consent,
                 key=(body.key.provider, body.key.value) if body.key else None,
                 remove_key=body.remove_key,
+                who=identity,
             )
         except ValueError as e:
             raise HTTPException(422, str(e)) from None

@@ -7,6 +7,8 @@ import { Button } from "../components/button";
 
 export type SearchSettingsProps = {
   assistant: Pick<AssistantApi, "searchStatus" | "updateSearch">;
+  /** this computer (the desktop's Settings), or a service (the web's Admin > Search: the admin's choice for everyone) */
+  place?: "device" | "service";
 };
 
 function problem(e: unknown): string {
@@ -18,7 +20,9 @@ function ProviderKey({
   onSave,
   onRemove,
   canSave,
+  place,
 }: {
+  place: "device" | "service";
   provider: SearchProvider;
   onSave: (value: string) => Promise<void>;
   onRemove: () => Promise<void>;
@@ -91,14 +95,18 @@ function ProviderKey({
         ) : null}
       </p>
       {!canSave ? (
-        <p className="text-muted-foreground text-xs">Keys cannot be saved on this computer.</p>
+        <p className="text-muted-foreground text-xs">
+          {place === "device"
+            ? "Keys cannot be saved on this computer."
+            : "Keys cannot be saved yet: the service has no key to keep them encrypted (MEDIA_SECRETS_KEY)."}
+        </p>
       ) : null}
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
     </div>
   );
 }
 
-export function SearchSettings({ assistant }: SearchSettingsProps) {
+export function SearchSettings({ assistant, place = "device" }: SearchSettingsProps) {
   const [status, setStatus] = useState<SearchStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
@@ -122,10 +130,9 @@ export function SearchSettings({ assistant }: SearchSettingsProps) {
     <section className="grid gap-3" aria-label="Searching the web">
       <h2 className="font-semibold text-lg">Searching the web</h2>
       <p className="text-muted-foreground text-sm">
-        The Search button in the chat box lets the assistant look things up on the internet. It is
-        off until you allow it. What you ask is sent to the search service you choose, and the pages
-        it reads are fetched from the internet by this computer. Nothing it finds is trusted: it
-        cannot make or change anything because a web page said so.
+        {place === "device"
+          ? "The Search button in the chat box lets the assistant look things up on the internet. It is off until you allow it. What you ask is sent to the search service you choose, and the pages it reads are fetched from the internet by this computer. Nothing it finds is trusted: it cannot make or change anything because a web page said so."
+          : "The Search button in the chat box lets the assistant look things up on the internet. You choose the search service and keep its key for everyone; each person allows searching for themself, and until they do nothing is sent. What a person asks is sent to the service, and the pages it reads are fetched by this service. Nothing it finds is trusted: it cannot make or change anything because a web page said so."}
       </p>
       <fieldset className="grid gap-2">
         <legend className="mb-1 text-sm">Search service</legend>
@@ -160,7 +167,8 @@ export function SearchSettings({ assistant }: SearchSettingsProps) {
             update({ consent: e.target.checked }).catch((err) => setError(problem(err)));
           }}
         />
-        Allow searching the web with {chosen?.title ?? "this service"}
+        {place === "device" ? "Allow" : "I allow"} searching the web with{" "}
+        {chosen?.title ?? "this service"}
       </label>
       <p className="text-muted-foreground text-xs">{status.consent_text}</p>
       {chosen?.needs_key ? (
@@ -168,6 +176,7 @@ export function SearchSettings({ assistant }: SearchSettingsProps) {
           key={chosen.id}
           provider={chosen}
           canSave={status.can_save_keys}
+          place={place}
           onSave={(value) => update({ key: { provider: chosen.id, value } })}
           onRemove={() => update({ remove_key: chosen.id })}
         />

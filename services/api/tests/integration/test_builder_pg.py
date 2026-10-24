@@ -1,4 +1,4 @@
-"""Video Builder's rows on real Postgres (ADR-0087, P4): the same store as the desktop's, the same
+"""Motion graphics' rows on real Postgres (ADR-0087, P4): the same store as the desktop's, the same
 SQL."""
 
 from uuid import uuid4

@@ -223,7 +223,7 @@ def _page(service: Any, w: Work, template: str, slots: dict[str, Any]) -> Path:
 
     gsap = service.gsap()
     if gsap is None:
-        raise Failed("not_ready", "Video Builder is not set up on the worker.")
+        raise Failed("not_ready", "Motion graphics is not set up on the worker.")
     fonts = service.fonts(templates.FONT_FILES)
     folder = w.folder / "project"
     projects.write_project(folder, template, slots, gsap, fonts)

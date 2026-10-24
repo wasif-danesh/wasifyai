@@ -1,24 +1,30 @@
 "use client";
 
-import { Equaliser } from "@/components/Logo";
-import { Notice } from "@/components/Notice";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useCreationSearch } from "@/hooks/use-creation-search";
-import type { Entry, Filter } from "@/lib/creations";
-import { actions, empty, hint, panel } from "@/lib/styles";
-import { cn } from "@/lib/utils";
-import type { LipSyncCard, SongCard, SpeechCard, TranscriptCard } from "@/lib/voice-cards";
-import type { ImagePage, VideoPage } from "@wasifyai/contracts";
-import { LayoutGrid, Table2 } from "lucide-react";
-import Link from "next/link";
+import type {
+  CreationsApi,
+  ImagePage,
+  LipSyncCard,
+  SongCard,
+  SpeechCard,
+  TranscriptCard,
+  VideoPage,
+} from "@wasifyai/client";
+import { AudioLines, LayoutGrid, Table2 } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
+import { cn } from "../cn";
+import { Button } from "../components/button";
+import { Input } from "../components/input";
+import { Label } from "../components/label";
+import { Notice } from "../components/notice";
+import { Skeleton } from "../components/skeleton";
+import { Spinner } from "../components/spinner";
+import { ToggleGroup, ToggleGroupItem } from "../components/toggle-group";
+import { actions, empty, hint, panel } from "../styles";
 import { CreationCard } from "./CreationCard";
 import { CreationsTable } from "./CreationsTable";
+import { NavLink } from "./NavLink";
+import type { CreationsNav, Entry, Filter } from "./model";
+import { useCreationSearch } from "./use-creation-search";
 
 const PAGE = 12;
 const tiles =
@@ -34,6 +40,8 @@ const FILTERS: { value: Filter; label: string }[] = [
 ];
 
 export function CreationsList({
+  api,
+  nav,
   songs = [],
   images: imagePage,
   videos: videoPage = null,
@@ -42,6 +50,8 @@ export function CreationsList({
   lipsyncs = [],
   initialFilter = "all",
 }: {
+  api: CreationsApi;
+  nav: CreationsNav;
   /** the voice product's lists: the latest of each, with no further pages */
   songs?: SongCard[];
   images: ImagePage | null;
@@ -113,11 +123,9 @@ export function CreationsList({
   }, [filter, images, lipsyncs, songs, speeches, transcripts, videos]);
 
   /** Load the next page of one kind. Returns true when it failed. */
-  async function page<T>(url: string, apply: (p: T) => void): Promise<boolean> {
+  async function page<T>(load: () => Promise<T>, apply: (p: T) => void): Promise<boolean> {
     try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(String(res.status));
-      apply((await res.json()) as T);
+      apply(await load());
       return false;
     } catch {
       return true;
@@ -128,22 +136,27 @@ export function CreationsList({
     if (loading) return;
     setLoading(true);
     setFailed(false);
-    const q = (before: string) => `limit=${PAGE}&before=${encodeURIComponent(before)}`;
     const jobs: Promise<boolean>[] = [];
     if (imageNext && (filter === "all" || filter === "images")) {
       jobs.push(
-        page<ImagePage>(`/api/products/wasifyai-image/images?${q(imageNext)}`, (p) => {
-          setImages((cur) => [...cur, ...p.images]);
-          setImageNext(p.next_before ?? null);
-        }),
+        page<ImagePage>(
+          () => api.moreImages(imageNext, PAGE),
+          (p) => {
+            setImages((cur) => [...cur, ...p.images]);
+            setImageNext(p.next_before ?? null);
+          },
+        ),
       );
     }
     if (videoNext && (filter === "all" || filter === "videos")) {
       jobs.push(
-        page<VideoPage>(`/api/products/wasifyai-video/videos?${q(videoNext)}`, (p) => {
-          setVideos((cur) => [...cur, ...p.videos]);
-          setVideoNext(p.next_before ?? null);
-        }),
+        page<VideoPage>(
+          () => api.moreVideos(videoNext, PAGE),
+          (p) => {
+            setVideos((cur) => [...cur, ...p.videos]);
+            setVideoNext(p.next_before ?? null);
+          },
+        ),
       );
     }
     const results = await Promise.all(jobs);
@@ -195,7 +208,7 @@ export function CreationsList({
 
   const [query, setQuery] = useState("");
   const searchId = useId();
-  const search = useCreationSearch(query, filter);
+  const search = useCreationSearch(api, query, filter);
   const searching = search.status !== "idle";
   const shown = search.status === "done" ? search.entries : entries;
   const isEmpty = !searching && entries.length === 0;
@@ -295,7 +308,9 @@ export function CreationsList({
         </div>
       ) : isEmpty ? (
         <div className={cn(panel, empty, "mt-4 mb-8")}>
-          {filter === "all" || filter === "songs" ? <Equaliser still /> : null}
+          {filter === "all" || filter === "songs" ? (
+            <AudioLines className="size-6" aria-hidden="true" />
+          ) : null}
           <h2 className="text-step-1 font-semibold">
             {filter === "all"
               ? "Your creative space is ready"
@@ -304,22 +319,34 @@ export function CreationsList({
           <p>Make something new and it will appear here.</p>
           <div className={actions}>
             <Button asChild>
-              <Link href="/voice/music">Create music</Link>
+              <NavLink nav={nav} to="music">
+                Create music
+              </NavLink>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/image">Make an image</Link>
+              <NavLink nav={nav} to="image">
+                Make an image
+              </NavLink>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/video">Make a video</Link>
+              <NavLink nav={nav} to="video">
+                Make a video
+              </NavLink>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/voice/speak">Create speech</Link>
+              <NavLink nav={nav} to="speech">
+                Create speech
+              </NavLink>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/voice/transcribe">Transcribe audio</Link>
+              <NavLink nav={nav} to="transcribe">
+                Transcribe audio
+              </NavLink>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/voice/lipsync">Make a lip sync</Link>
+              <NavLink nav={nav} to="lipsync">
+                Make a lip sync
+              </NavLink>
             </Button>
           </div>
         </div>
@@ -332,13 +359,14 @@ export function CreationsList({
           ))}
         </ul>
       ) : view === "table" ? (
-        <CreationsTable entries={shown} />
+        <CreationsTable entries={shown} nav={nav} />
       ) : (
         <ul className={tiles}>
           {shown.map((entry) => (
             <li key={`${entry.kind}-${entry.id}`} className="grid min-w-0">
               <CreationCard
                 entry={entry}
+                nav={nav}
                 note={
                   search.status === "done" && search.words.has(entry.id) ? "Exact words" : undefined
                 }

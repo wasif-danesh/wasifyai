@@ -38,3 +38,13 @@ describe("navigation helpers", () => {
     expect(isCurrent("/musical", "/music")).toBe(false);
   });
 });
+
+describe("Motion graphics", () => {
+  it("has its own breadcrumb, not one under Video", () => {
+    expect(crumbs("/video/builder")).toEqual([{ label: "Motion graphics" }]);
+  });
+
+  it("shows the 3D model on its own too", () => {
+    expect(crumbs("/image/3d")).toEqual([{ label: "3D model" }]);
+  });
+});

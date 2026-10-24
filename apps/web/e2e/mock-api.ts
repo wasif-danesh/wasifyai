@@ -176,6 +176,20 @@ export async function mockApi(
     const path = url.pathname.replace(/^\/api/, "");
     const method = route.request().method();
 
+    if (path === "/models/in-use" && method === "GET") {
+      const flux = {
+        id: "wasifyai-image:0",
+        title: "FLUX.2 klein 4B",
+        plain: "Set up on this service by an admin.",
+        ready: true,
+        licence: "Apache-2.0",
+      };
+      return json(route, {
+        chat: [{ ...flux, id: "default-chat", title: "gemma4:e4b", licence: "" }],
+        images: [flux],
+        video: [{ ...flux, id: "wasifyai-video:0", title: "LTX-Video 2B" }],
+      });
+    }
     if (path === "/products/wasifyai-image/images" && method === "GET") {
       return json(route, { images: IMAGES, next_before: null });
     }

@@ -16,7 +16,7 @@ plugins and MCP, sharing, the web profile, Bengali and Hindi, video overview.
 
 | Today | After stage E |
 |---|---|
-| Side menu: New chat, Models, Library, Images, Train (Soon), an empty **Projects** block, Recents | an expandable **Notebook** entry (*Create*, *View Notebooks*); the empty *Projects* block goes |
+| Side menu: New chat, Models, Library, Images, Train (Soon), an empty **Projects** block, Recents | an expandable **Notebook** entry (*Create*, *View notebooks*); the empty *Projects* block goes |
 | Routes: `home`, `create`, `edit`, `library`, `models`, `settings` | adds `notebooks` (the list), `notebooks/new` (a draft) and `notebooks/<id>` (a notebook) |
 | The assistant searches My creations only | a notebook answers from its sources; the assistant gets `search_notebooks` (E6, done) |
 | No document parsing, chunking, embedding or vector store in the engine | `wasifyai-notebooks` product, `notebooks.db`, a reader and an embedder component |
@@ -35,7 +35,7 @@ Decided by the owner (2026-10-16): one expandable **Notebook** entry with two it
   New chat
   Notebook           v               <- new, expands
       Create                            makes a notebook and opens it
-      View Notebooks                    the list of existing notebooks
+      View notebooks                    the list of existing notebooks
   Library                               (My creations, now with notebook outputs)
   Images             v  Create / Edit / (Soon) ...
   Models
@@ -90,7 +90,7 @@ The dialog appears over the chat pane while the notebook has no sources, and fro
 reading at once; the dialog closes on drop and the Sources pane shows each file's progress. Sources pane header
 has **Add sources** and **Create note**, as in the screenshot.
 
-### Notebooks list, *View Notebooks* (`#/notebooks`)
+### Notebooks list, *View notebooks* (`#/notebooks`)
 
 ```
   Notebooks                                              [ + New notebook ]
@@ -218,7 +218,7 @@ Each step ends with the repo's usual gate: tests, lint, typecheck, the window se
 
 ## Answers (2026-10-16)
 
-All recommended: Notebook; menu *Notebook* › *Create*, *View Notebooks* (a draft stored after the first source);
+All recommended: Notebook; menu *Notebook* › *Create*, *View notebooks* (a draft stored after the first source);
 first release E0 to E3 then Studio; reader as a component, size measured in E0; no agent mode; dependency list
 approved subject to S5.
 
@@ -319,9 +319,9 @@ creations (the notebook itself is indexed).
 
 ## E3 evidence (2026-10-16)
 
-**What was built.** The side menu as approved (Notebook › Create, View Notebooks; Video, Voice, Music with their
+**What was built.** The side menu as approved (Notebook › Create, View notebooks; Video, Voice, Music with their
 items as Soon; the empty Projects block gone; one group open at a time); the router with notebook addresses and
-drafts; View Notebooks; the notebook page with the add-sources screen, the sources tree, the conversation with
+drafts; View notebooks; the notebook page with the add-sources screen, the sources tree, the conversation with
 citations, the source viewer and Studio's tiles; the setup card. Details in `docs/desktop-profile.md`
 ("Notebooks in the window").
 
@@ -346,7 +346,7 @@ pills opening the passage with the cited lines marked, the add-sources screen, t
 
 **Not done in E3.** A PDF viewer by page (needs `pdfjs-dist`, not yet approved: sources show their text);
 dropping a folder (the engine takes folder ids, the window has no relative-path upload yet); a Library card for
-notebooks (the desktop Library is images only; notebooks are found from View Notebooks, and the creation kind is
+notebooks (the desktop Library is images only; notebooks are found from View notebooks, and the creation kind is
 in the API for the day Library lists every kind); Studio formats (E4); source guide and "save as note" (E5).
 
 ## E4 evidence (2026-10-16, the owner's Mac)

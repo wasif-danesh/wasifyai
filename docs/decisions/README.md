@@ -52,10 +52,10 @@
 | [0048](0048-monitoring-and-alerting.md) | Monitoring and alerting (Prometheus stack in cluster, Telegram, external heartbeat) | Accepted |
 | [0049](0049-data-inspection-tools.md) | Redis and Postgres viewers in every environment | Accepted |
 | [0050](0050-langfuse-llm-observability.md) | LLM observability, analytics and cost tracking with Langfuse | Accepted |
-| [0051](0051-model-catalog-variants-and-lora-chain.md) | Model catalog, capability variants and the LoRA chain | Withdrawn (moved to wasifyai-art) |
-| [0052](0052-image-studio-loras-and-remix.md) | Image studio: base model, LoRAs, stored parameters and Remix | Withdrawn (moved to wasifyai-art) |
-| [0053](0053-ai-tools-product.md) | AI Tools: a manifest-driven product, and Change Clothes | Withdrawn (moved to wasifyai-art) |
-| [0054](0054-lora-training-product.md) | LoRA training: dataset, captions, trainer service, publish (Mac first) | Withdrawn (moved to wasifyai-art) |
+| [0051](0051-model-catalog-variants-and-lora-chain.md) | Model catalog, capability variants and the LoRA chain | Withdrawn |
+| [0052](0052-image-studio-loras-and-remix.md) | Image studio: base model, LoRAs, stored parameters and Remix | Withdrawn |
+| [0053](0053-ai-tools-product.md) | AI Tools: a manifest-driven product, and Change Clothes | Withdrawn |
+| [0054](0054-lora-training-product.md) | LoRA training: dataset, captions, trainer service, publish (Mac first) | Withdrawn |
 | [0055](0055-rename-to-wasifyai.md) | Rename the project and every product from `wd-*` to `wasifyai` | Proposed |
 | [0056](0056-desktop-app-and-web-share-one-engine.md) | The desktop app and the web product share one engine; image first | Accepted |
 | [0057](0057-ai-assistant-chat-first-shell.md) | An AI assistant, ChatGPT-style, on desktop and web | Accepted |
@@ -85,11 +85,10 @@
 | [0081](0081-design-system-from-design-md.md) | A design system with design/DESIGN.md as the single source of the look (blue accent; DS0 to DS2 built 2026-10-19) | Accepted |
 | [0082](0082-chat-ui-on-assistant-ui.md) | The chat UI is built on assistant-ui (and streamdown), not on our own components; amends ADR-0057 decision 7 | Accepted (assistant-ui); other dependencies to approve in CU0 |
 | [0083](0083-composer-options-attach-search-thinking-mic.md) | The chat box gets Attach, Search (DuckDuckGo first), Thinking and Mic | Accepted (CO0 on hold) |
-| [0084](0084-music-video.md) | Music video: a song in, a plan you can edit, clips, a final cut; our own pipeline on our own parts (Maestro and AutoMV are references, not dependencies) | Proposed (all owner questions answered 2026-10-20; MV0 on hold) |
-| [0085](0085-wangp-evaluation-spike.md) | WanGP evaluation spike: can it make basic images, video and audio on the Mac better than what we run now? (comparison protocol, licence gate, decision rule) | Proposed (owner's answers recorded 2026-10-20; spike W0 on hold, runs before ADR-0084 MV0) |
 | [0086](0086-one-simple-model-picker.md) | One simple way to choose, get and use a model | Accepted |
 | [0087](0087-engine-workers-run-the-desktops-capabilities-for-the-web.md) | Engine workers run the desktop's capabilities for the web | Accepted for P0 and P1 |
 | [0088](0088-one-job-per-person-before-go-live.md) | One job per person across everything before go live, built so the rule can loosen | Accepted (not built) |
 | [0089](0089-models-page-as-tabs-and-tables.md) | The Models page is tabs with a table each, on the desktop and the web | Accepted |
+| [0090](0090-creative-studio.md) | Creative Studio: one project from an idea to a finished video (a plan, shots, a cut), Maestro's concepts built on our own parts; nothing copied | Accepted (2026-10-24; nothing built, CS0 waits for the owner) |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

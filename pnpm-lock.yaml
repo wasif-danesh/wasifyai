@@ -209,6 +209,9 @@ importers:
       '@streamdown/mermaid':
         specifier: 1.0.3
         version: 1.0.3(react@19.3.0)
+      '@tanstack/react-table':
+        specifier: 8.21.3
+        version: 8.21.3(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@wasifyai/client':
         specifier: workspace:*
         version: link:../client

@@ -216,7 +216,7 @@ def actions() -> list[Action]:
             long=True,
             product=PRODUCT_ID,
             bind=CallBinding(_generate),
-            ui="images.model3d",
+            ui="model3d",
         ),
     ]
 

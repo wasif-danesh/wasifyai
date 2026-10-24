@@ -32,7 +32,7 @@ def menu_paths() -> dict[str, str]:
     ):
         for iid, ilabel in re.findall(r'id: "([\w.]+)", label: "([^"]+)"', body):
             paths[iid] = f"{glabel} › {ilabel}"
-    for iid, ilabel in re.findall(r'\{ id: "(train)", label: "([^"]+)"', text):
+    for iid, ilabel in re.findall(r'\{ id: "(motion|model3d|train)", label: "([^"]+)"', text):
         paths[iid] = ilabel
     return paths
 

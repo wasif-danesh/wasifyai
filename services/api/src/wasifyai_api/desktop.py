@@ -43,7 +43,7 @@ from wasifyai_api.desktop_hub import HubService
 from wasifyai_api.desktop_language import LanguageService
 from wasifyai_api.desktop_model3d import Model3dService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
-from wasifyai_api.desktop_training import preview_trainer
+from wasifyai_api.desktop_training import make_trainer
 from wasifyai_api.desktop_video_builder import VideoBuilderService
 from wasifyai_api.desktop_vision import VisionService
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
@@ -180,7 +180,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         audio=audio,
         video_builder=VideoBuilderService(settings.desktop_dir),
         model3d=Model3dService(settings.desktop_dir),
-        training=preview_trainer(),
+        training=make_trainer(settings.desktop_dir),
         language=language,
         vision=vision,
         hub=hub,

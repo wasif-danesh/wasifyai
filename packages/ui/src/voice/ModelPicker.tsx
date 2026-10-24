@@ -5,6 +5,7 @@ import { cn } from "../cn";
 import { Label } from "../components/label";
 import { ModelSelect, groupOfTask, useChoicesFor } from "../models";
 import { formatBytes } from "../notebook/format";
+import { PageHeader } from "../window-bar";
 import { COMMERCIAL_TEXT, costLine, modelOption, stateText } from "./format";
 
 /**
@@ -19,6 +20,7 @@ export function ModelPicker({
   onChange,
   onGetModel,
   disabled,
+  inBody,
 }: {
   models: VoiceModelInfo[];
   task: VoiceTask;
@@ -27,22 +29,40 @@ export function ModelPicker({
   /** open the Models panel (a missing model is fetched there, after the person sees its size) */
   onGetModel?: (id: string) => void;
   disabled?: boolean;
+  /** a second picker on a screen that already has its one in the top bar (editing a track on the music screen) */
+  inBody?: boolean;
 }) {
   // in the app window the same button and panel as every other group (ADR-0086); on the web, the plain list
   const choices = useChoicesFor(groupOfTask(task), task);
   const chosen = models.find((m) => m.id === value) ?? null;
   if (choices) {
+    if (inBody) {
+      return (
+        <div className="grid justify-items-start gap-2">
+          <Label htmlFor={`model-${task}`}>Model</Label>
+          <ModelSelect
+            group={groupOfTask(task)}
+            api={choices}
+            value={value}
+            disabled={disabled}
+            onChanged={(id) => id && onChange(id)}
+          />
+        </div>
+      );
+    }
+    // at the top of the screen, in the window's bar, like the chat and image screens
     return (
-      <div className="grid justify-items-start gap-2">
-        <Label htmlFor={`model-${task}`}>Model</Label>
-        <ModelSelect
-          group={groupOfTask(task)}
-          api={choices}
-          value={value}
-          disabled={disabled}
-          onChanged={(id) => id && onChange(id)}
-        />
-      </div>
+      <PageHeader className="flex h-14 shrink-0 items-center gap-4 border-b px-6 pt-1">
+        <div className="flex items-center gap-2 ps-2 text-sm">
+          <ModelSelect
+            group={groupOfTask(task)}
+            api={choices}
+            value={value}
+            disabled={disabled}
+            onChanged={(id) => id && onChange(id)}
+          />
+        </div>
+      </PageHeader>
     );
   }
   const warn = chosen && (chosen.commercial_use === "no" || chosen.commercial_use === "unreviewed");
@@ -115,6 +135,6 @@ export function ModelPicker({
 /** What a screen says under its main button while the chosen model is not on the computer. */
 export function NotReadyText({ task, seeAbove }: { task: string; seeAbove?: boolean }) {
   const choices = useChoicesFor(groupOfTask(task), task);
-  if (choices) return "Download the model first: use the Model button above.";
+  if (choices) return "Download the model first: use the model button at the top.";
   return seeAbove ? "Set this model up first (see above)." : "Set this model up first.";
 }

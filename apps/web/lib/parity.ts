@@ -17,7 +17,18 @@ export type Parity = {
 
 export const PARITY: Record<string, Parity> = {
   chat: { status: "live", note: "the shared chat" },
-  library: { status: "live", note: "My creations" },
+  library: {
+    status: "live",
+    note: "shared My creations screen (search by meaning, a filter for each kind, cards or a table); the desktop's Library is the same screen",
+  },
+  model3d: {
+    status: "live",
+    note: "shared Model3d screen; Pixal3D runs as a job on an engine worker (ADR-0087, P3), rows in Postgres, files in storage",
+  },
+  motion: {
+    status: "live",
+    note: "shared VideoBuilder screen; the sandboxed render runs as a job on an engine worker (ADR-0087, P4), rows in Postgres, videos are library clips",
+  },
   models: {
     status: "live",
     note: "for admins, Admin > Models and workers is the Models page (the same tab table, over the workers' models, with the picker on the voice, music and lip sync screens for everyone); other people use the pickers. The models.* actions need the desktop's model service, so the web assistant does not offer them",
@@ -36,10 +47,6 @@ export const PARITY: Record<string, Parity> = {
   "images.edit": { status: "live", note: "shared ImageWorkspace" },
   "images.inpaint": { status: "live", note: "shared ImageWorkspace, mode inpaint" },
   "images.reference": { status: "live", note: "shared ImageWorkspace, mode reference" },
-  "images.model3d": {
-    status: "live",
-    note: "shared Model3d screen; Pixal3D runs as a job on an engine worker (ADR-0087, P3), rows in Postgres, files in storage",
-  },
   "images.library": { status: "live", note: "shared ImageLibrary" },
 
   "video.create": { status: "live", note: "shared VideoWorkspace" },
@@ -47,10 +54,6 @@ export const PARITY: Record<string, Parity> = {
   "video.extend": {
     status: "live",
     note: "shared VideoWorkspace, mode extend; needs ffmpeg in the API image",
-  },
-  "video.builder": {
-    status: "live",
-    note: "shared VideoBuilder screen; the sandboxed render runs as a job on an engine worker (ADR-0087, P4), rows in Postgres, videos are library clips",
   },
   "video.library": { status: "live", note: "shared VideoLibrary" },
 

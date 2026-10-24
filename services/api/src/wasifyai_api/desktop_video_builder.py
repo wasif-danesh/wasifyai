@@ -1,4 +1,4 @@
-"""The Video Builder component's routes for the window (ADR-0077, stage V1a): is it set up, what
+"""The Motion graphics component's routes for the window (ADR-0077, stage V1a): is it set up, what
 would setting it up fetch, set it up (after the person saw the size), remove it. The render itself
 comes in V1c; the sandbox it will run in is `video_builder_sandbox.py`."""
 
@@ -32,7 +32,7 @@ RENDER_NEED_GB = 3.0
 
 
 class VideoBuilderService:
-    """What the engine holds for Video Builder: the installer, and what is installed."""
+    """What the engine holds for Motion graphics: the installer, and what is installed."""
 
     def __init__(self, data_dir: Path) -> None:
         self.data_dir = data_dir
@@ -51,9 +51,9 @@ class VideoBuilderService:
     def problem(self) -> str | None:
         """Why a video cannot be drawn now, in words, or None when it can."""
         if not self.installer.supported:
-            return "Video Builder is not available on this kind of computer yet."
+            return "Motion graphics is not available on this kind of computer yet."
         if self.install() is None:
-            return "Video Builder is not set up yet. Set it up first."
+            return "Motion graphics is not set up yet. Set it up first."
         return self.media_problem()
 
     def state(self) -> dict[str, Any]:
@@ -72,7 +72,7 @@ class VideoBuilderService:
             },
         }
 
-    # ---- what the Video Builder product calls (it imports nothing from this package) ----------
+    # ---- what the Motion graphics product calls (it imports nothing from this package) ----------
 
     def ready(self) -> bool:
         return self.problem() is None
@@ -160,7 +160,7 @@ class VideoBuilderService:
         compares it with the words that were typed)."""
         found = self.install()
         if found is None:
-            return {"ok": False, "message": "Video Builder is not set up yet.", "items": []}
+            return {"ok": False, "message": "Motion graphics is not set up yet.", "items": []}
         result, report = await sandbox.run_check(found, project, spec)
         if report is None:
             why = result.message or "The check could not be run."
@@ -187,7 +187,7 @@ class VideoBuilderService:
     ) -> sandbox.RenderResult:
         found = self.install()
         if found is None:
-            return sandbox.RenderResult(False, "unavailable", "Video Builder is not set up yet.")
+            return sandbox.RenderResult(False, "unavailable", "Motion graphics is not set up yet.")
         return await sandbox.run_render(
             found, project, output, limits=self.limits(), on_progress=on_progress,
             extra_args=extra_args,
@@ -196,12 +196,12 @@ class VideoBuilderService:
     async def snapshot(self, project: Path, folder: Path, at: float) -> sandbox.RenderResult:
         found = self.install()
         if found is None:
-            return sandbox.RenderResult(False, "unavailable", "Video Builder is not set up yet.")
+            return sandbox.RenderResult(False, "unavailable", "Motion graphics is not set up yet.")
         return await sandbox.run_snapshot(found, project, folder, at, limits=None)
 
     def remove(self) -> int:
         if self.installer.running:
-            raise InstallError("Video Builder is being set up. Wait for it to finish.")
+            raise InstallError("Motion graphics is being set up. Wait for it to finish.")
         return vb.uninstall(self.data_dir)
 
 

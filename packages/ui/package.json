@@ -25,6 +25,7 @@
     "@streamdown/code": "2.0.0",
     "@streamdown/math": "1.0.3",
     "@streamdown/mermaid": "1.0.3",
+    "@tanstack/react-table": "8.21.3",
     "@wasifyai/client": "workspace:*",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",

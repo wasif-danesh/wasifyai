@@ -1,4 +1,4 @@
-"""The Video Builder component through the desktop engine's routes (V1a): what the window is told,
+"""The Motion graphics component through the desktop engine's routes (V1a): what the window is told,
 what a confirmation must carry, and that the routes need the shell's token."""
 
 from dataclasses import replace

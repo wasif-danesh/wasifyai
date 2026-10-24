@@ -101,7 +101,7 @@ class Worker:
                     "state": builder.state(),
                 }
             except Exception:
-                log.exception("Video Builder could not report its state")
+                log.exception("Motion graphics could not report its state")
         return EngineWorkerInfo(
             id=self.name, kinds=kinds, models=models, components=components, busy=self._busy
         )
@@ -119,7 +119,7 @@ class Worker:
         """A cancelled job: give its process back (a 3D run is a program of its own)."""
         if job.kind.startswith("model3d.") and (service := self._model3d) is not None:
             await service.stop()
-        # a Video Builder render is a browser the sandbox ends itself when its task is cancelled
+        # a Motion graphics render is a browser the sandbox ends itself when its task is cancelled
 
     async def _run(self, job: EngineJob) -> EngineOutcome:
         async def report(fraction: float, label: str) -> None:

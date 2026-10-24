@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Create, Animate and Extend (ADR-0037): a clip from words, from a picture and what should move, or one of
-// your videos carried on. The shared workspace with this window's model chip and setup notices.
+// your videos carried on. The shared workspace with this window's model button (in the top bar) and setup notices.
 import type { VideoMode } from "@wasifyai/client";
 import {
   ModelSelect,
   type ModelSelectHandle,
   Notice,
+  PageHeader,
   VideoWorkspace,
   useChoicesFor,
 } from "@wasifyai/ui";
@@ -50,10 +51,10 @@ export function VideoPage({ mode, go }: { mode: PageMode; go: (r: Route) => void
           <h1 className="font-semibold text-2xl">{TITLES[mode][0]}</h1>
           <p className="text-muted-foreground">{TITLES[mode][1]}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <ModelSelect group="video" api={choices} handleRef={picker} />
-        </div>
       </header>
+      <PageHeader className="flex h-14 shrink-0 items-center gap-4 border-b px-6 pt-1">
+        <ModelSelect group="video" api={choices} handleRef={picker} />
+      </PageHeader>
       <VideoWorkspace
         mode={mode}
         runs={client}

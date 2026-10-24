@@ -1,4 +1,4 @@
-"""Video Builder for the web (ADR-0087, P4): the product's routes and render manager with the API's
+"""Motion graphics for the web (ADR-0087, P4): the product's routes and render manager, the API's
 `RemoteBuilderEngine` and the worker's handlers between them. A fake queue runs each job on the
 worker's own code at once, with a stand-in for the browser that draws."""
 
@@ -41,7 +41,7 @@ SLOTS = {"title": "Launch day", "subtitle": "Wasify AI is here", "theme": "sunri
 
 
 class Service:
-    """The Video Builder component on the worker's machine: the library, the fonts, the browser."""
+    """The Motion graphics component on the worker: the library, the fonts, the browser."""
 
     def __init__(self, tmp: Path) -> None:
         self.gsap_file = tmp / "gsap.min.js"

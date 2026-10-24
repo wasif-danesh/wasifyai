@@ -177,7 +177,7 @@ copy a reply; links open only if `http(s)`; no model output runs as markup; work
 2. **CU1 should land before the assistant's action cards (stage A2) are built as UI**, so the cards are written once as
    assistant-ui tool UIs. A2's backend (the help corpus, `propose_action`, `confirm_action`) can proceed without waiting.
 3. **DS3** (the component catalogue) and the chat patterns in `design/DESIGN.md` are updated when CU1 lands.
-4. The Phase 5 screens (Teach, Agent, Video Builder, Motion Graphics, 3D) use assistant-ui tool UIs for their live feeds where a
+4. The Phase 5 screens (Teach, Agent, Video Builder, Motion graphics, 3D) use assistant-ui tool UIs for their live feeds where a
    chat-like feed is the right shape (the Agent's feed in particular).
 
 ## Risks

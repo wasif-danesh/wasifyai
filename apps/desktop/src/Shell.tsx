@@ -20,6 +20,7 @@ import { Sidebar } from "./Sidebar";
 import { client, voiceApi } from "./api";
 import { routeTitle } from "./menu";
 import { CreatePage } from "./pages/Create";
+import { CreationsPage } from "./pages/Creations";
 import { HomePage } from "./pages/Home";
 import { LibraryPage } from "./pages/Library";
 import { Model3dPage } from "./pages/Model3d";
@@ -152,6 +153,7 @@ export function Shell() {
               ) : null}
               {route === "reference" ? <CreatePage mode="reference" go={go} /> : null}
               {route === "inpaint" ? <CreatePage mode="inpaint" go={go} /> : null}
+              {route === "creations" ? <CreationsPage go={go} /> : null}
               {route === "library" ? (
                 <LibraryPage
                   go={go}

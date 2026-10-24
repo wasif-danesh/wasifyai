@@ -11,12 +11,12 @@ export const ROUTES: Record<string, Route> = {
   "images.edit": "edit",
   "images.reference": "reference",
   "images.inpaint": "inpaint",
-  "images.model3d": "model3d",
   "images.library": "library",
   "video.create": "video",
   "video.animate": "animate",
   "video.extend": "extend",
-  "video.builder": "videobuilder",
+  motion: "videobuilder",
+  model3d: "model3d",
   "video.library": "videos",
   "voice.speak": "speak",
   "voice.transcribe": "transcribe",
@@ -30,7 +30,8 @@ export const ROUTES: Record<string, Route> = {
   "music.library": "tracks",
   "music.lyrics": "lyrics",
   "music.separate": "separate",
-  library: "library",
+  // the Library item is My creations, as on the web; "Your images" has its own item
+  library: "creations",
   models: "models",
   train: "train",
 };
@@ -74,9 +75,11 @@ const OTHER_TITLES: Partial<Record<Route, string>> = {
   home: "New chat",
   notebooks: "Notebooks",
   notebook: "Notebook",
-  library: "Library",
+  videobuilder: "Motion graphics",
+  model3d: "3D model",
+  creations: "My creations",
   models: "Models",
-  train: "Train",
+  train: "Train models",
   settings: "Settings",
 };
 

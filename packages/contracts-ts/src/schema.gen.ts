@@ -328,6 +328,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/models/in-use": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** In Use */
+        get: operations["in_use_models_in_use_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-assistant/attachments": {
         parameters: {
             query?: never;
@@ -2883,6 +2900,40 @@ export interface components {
             /** Favourite */
             favourite: boolean;
         };
+        /** InUse */
+        InUse: {
+            /**
+             * Chat
+             * @default []
+             */
+            chat: components["schemas"]["InUseModel"][];
+            /**
+             * Images
+             * @default []
+             */
+            images: components["schemas"]["InUseModel"][];
+            /**
+             * Video
+             * @default []
+             */
+            video: components["schemas"]["InUseModel"][];
+        };
+        /** InUseModel */
+        InUseModel: {
+            /** Id */
+            id: string;
+            /**
+             * Licence
+             * @default
+             */
+            licence: string;
+            /** Plain */
+            plain: string;
+            /** Ready */
+            ready: boolean;
+            /** Title */
+            title: string;
+        };
         /** InterruptEvent */
         InterruptEvent: {
             /**
@@ -4423,6 +4474,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+        };
+    };
+    in_use_models_in_use_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InUse"];
                 };
             };
         };

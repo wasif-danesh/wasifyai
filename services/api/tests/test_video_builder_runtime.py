@@ -1,4 +1,4 @@
-"""The Video Builder component (V1a): pins, what counts as installed, the installer on stand-ins,
+"""The Motion graphics component (V1a): pins, what counts as installed, the installer on stand-ins,
 the environment a render runs in, and removing it."""
 
 import hashlib
@@ -288,7 +288,7 @@ async def test_a_download_that_is_not_what_was_pinned_keeps_nothing(tmp_path, mo
     [
         ({"ok_npm": False}, "packages"),
         ({"ok_browser": False}, "browser"),
-        ({"encoders": ("libx264", "aac")}, "FFmpeg for Video Builder did not start"),
+        ({"encoders": ("libx264", "aac")}, "FFmpeg for Motion graphics did not start"),
     ],
 )
 async def test_a_failed_step_says_so_in_words_and_leaves_no_install(

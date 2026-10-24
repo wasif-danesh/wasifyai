@@ -1,5 +1,5 @@
 # ruff: noqa: ASYNC221  (the tests run ffmpeg and ffprobe on purpose)
-"""The five Video Builder templates through the real sandboxed browser (MG1).
+"""The five Motion graphics templates through the real sandboxed browser (MG1).
 
 Every template is written to a project folder with the shipped fonts, seen by the real pinned
 browser, compared with the words that were typed, and drawn to a file. What is proved here and
@@ -23,7 +23,7 @@ from wasifyai_video.builder import check, projects, templates
 INSTALL = vb.find_install(Path("/nonexistent"))
 pytestmark = pytest.mark.skipif(
     INSTALL is None or len(vb.find_media_tools(INSTALL)) < len(vb.MEDIA_TOOLS),
-    reason="Video Builder or FFmpeg (with ffprobe) is not installed",
+    reason="Motion graphics or FFmpeg (with ffprobe) is not installed",
 )
 
 SAMPLES: dict[str, dict[str, Any]] = {

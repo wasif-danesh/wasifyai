@@ -1,6 +1,6 @@
 # ADR-0054: LoRA training: dataset, captions, trainer service, publish
 
-- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wasifyai-art`, in its own repository (`wasifyai-art`); wasifyai does not implement it. Nothing here was built.
+- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio will not be built (owner, 2026-10-24); wasifyai does not implement it. Nothing here was built.
 - **Date:** 2026-10-12
 - **Depends on:** ADR-0051 (catalog, LoRA chain). Follows the pattern of ADR-0044 (an external native service) and
   ADR-0037 (a long job the user can leave).

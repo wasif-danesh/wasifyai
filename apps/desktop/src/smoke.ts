@@ -143,7 +143,7 @@ export async function runSmoke(): Promise<void> {
         : null,
     );
     const menu = document.querySelector('nav[aria-label="Main"]')?.textContent ?? "";
-    for (const word of ["Notebook", "View Notebooks", "Video", "Voice", "Music"]) {
+    for (const word of ["Notebook", "View notebooks", "Video", "Voice", "Music"]) {
       if (!menu.includes(word)) throw new Error(`the side menu has no ${word}`);
     }
     window.location.hash = "/notebooks/new";

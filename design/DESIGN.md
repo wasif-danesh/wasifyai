@@ -29,7 +29,7 @@ spacing, depth, motion) is defined once, in the tokens block at the end of this 
   "magic word" not "trigger token" (the experts' words stay in "For experts").
 - A button says what it does ("Make the picture", "Save a copy"), not "Submit" or "OK".
 - **An error says what happened and what to do next,** never a code or a stack trace: "That file is too large. Use one under 300 MB."
-- Use the product words consistently: *My creations*, *My models*, *Video Builder*, *Motion Graphics*, *Make a 3D model*, *Teach*.
+- Use the product words consistently: *My creations*, *My models*, *Video Builder*, *Motion graphics*, *Make a 3D model*, *Teach*.
 - English only in v1; the layout must still survive longer strings and right-to-left (use logical properties: start and end).
 
 ## Components: which to use
@@ -72,6 +72,8 @@ Logical CSS properties (`ms-`, `me-`, `ps-`, `pe-`, `start`, `end`) instead of l
 files we ship with their licences recorded; the desktop never fetches fonts from the network.
 
 ## Screen patterns (written before the screens are built)
+
+- **The model button is in the top bar (ADR-0086 amendment, 2026-10-24).** Every screen that makes something with a model puts its "Select ... model" button at the left of the page's top bar, as the chat, Images and Notebook screens do; the page's other tools (the library link, a mode tab) go at the right. In the app window that bar is the window's own (`PageHeader`); on the web it is a bar at the top of the screen's area (`TopBarSlot`, same `PageHeader` call). A screen never puts its model button in the body or gives it a "Model" label. A second picker on one screen (for example editing a track on the Music screen) stays in its own panel. On the web the button on Image, Video, Chat and 3D is read only: it names the model the service uses and says whether it is ready.
 
 - **Chat (the assistant; built on assistant-ui, ADR-0082, `packages/ui/src/chat/thread/`):** a title bar (name, rename, delete) only for a saved chat; while empty, the greeting, the box and three
   suggestions under it, which put their text in the box and never send; afterwards the thread (at most `max-w-3xl`, a gap
@@ -121,7 +123,7 @@ files we ship with their licences recorded; the desktop never fetches fonts from
 - **Teach (training):** a front door with three cards; three steps (add examples, check, train) then "use it"; the app picks the
   settings and shows "Quick" or "Better" and a time (ADR-0073).
 - **Agent:** a goal box, starting points, a live feed, approvals as inline cards, Stop always visible, the result saved as a report.
-- **Video Builder and Motion Graphics:** describe, preview three stills, change it in words, render; the code view is closed.
+- **Video Builder and Motion graphics:** describe, preview three stills, change it in words, render; the code view is closed.
 - **Make a 3D model:** pick a starting point, check the picture, "about 5 to 25 minutes", a viewer with orbit, the result as a card.
 - **Setup and download cards:** what it is, where it comes from, the size, the licence, one button; nothing is fetched without the click.
 

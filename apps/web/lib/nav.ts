@@ -8,7 +8,7 @@ const SUBPAGES: Record<string, string> = {
   "3d": "3D model",
   reference: "Reference",
   extend: "Extend video",
-  builder: "Video Builder",
+  builder: "Motion graphics",
   animate: "Animate a picture",
   library: "Library",
 };
@@ -40,6 +40,9 @@ export function crumbs(pathname: string): Crumb[] {
   const product = productOf(pathname);
   if (!product) return [];
   if (pathname === product.href) return [{ label: product.title }];
+  // Motion graphics and the 3D model have their own menu items, so they are not shown under a product
+  if (pathname === `${product.href}/builder`) return [{ label: SUBPAGES.builder }];
+  if (pathname === `${product.href}/3d`) return [{ label: SUBPAGES["3d"] }];
   const sub = SUBPAGES[pathname.slice(product.href.length + 1)];
   if (sub) return [{ label: product.title, href: product.href }, { label: sub }];
   // /image/creations/<id>: one saved result of that product

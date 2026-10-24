@@ -1,4 +1,4 @@
-"""What Video Builder needs at run time: its store, the engine's render component, and the one
+"""What Motion graphics needs at run time: its store, the engine's render component, and the one
 render that may run at a time.
 
 The component (`state.video_builder`) comes from the engine's app state, as the voice product's
@@ -30,7 +30,7 @@ MIME = {"mp4": "video/mp4", "webm": "video/webm", "mov": "video/quicktime"}
 
 
 class NotAvailable(Exception):
-    """Video Builder is not served by this deployment (no desktop engine)."""
+    """Motion graphics is not served by this deployment (no desktop engine)."""
 
 
 class Refused(Exception):
@@ -44,13 +44,13 @@ class Refused(Exception):
 def not_ready(engine: Any) -> str:
     """Why the engine cannot draw now, in words (its own sentence when it has one)."""
     why = getattr(engine, "problem", lambda: None)()
-    return why or "Video Builder is not set up yet. Set it up first."
+    return why or "Motion graphics is not set up yet. Set it up first."
 
 
 def engine_for(state: Any) -> Any:
     engine = getattr(state, "video_builder", None)
     if engine is None:
-        raise NotAvailable("Video Builder is not available in this deployment.")
+        raise NotAvailable("Motion graphics is not available in this deployment.")
     return engine
 
 
@@ -75,7 +75,7 @@ async def check_words(deps: RouteDeps, identity: Identity, *texts: str, kind: st
     except RunError as e:
         raise Refused(e.code, e.message) from None
     except Exception:  # no moderator bound, or the gateway is down: nothing is let through
-        log.exception("the Video Builder words check failed")
+        log.exception("the Motion graphics words check failed")
         raise unavailable from None
     if not verdict.allowed:
         raise Refused(verdict.category, guardrail.refusal_message(verdict.category))
@@ -106,7 +106,7 @@ def root_for(state: Any) -> Path:
         return Path(scratch)
     data = getattr(state, "desktop_dir", None)
     if not data:
-        raise NotAvailable("Video Builder is not available in this deployment.")
+        raise NotAvailable("Motion graphics is not available in this deployment.")
     return Path(data) / "video-builder"
 
 
@@ -219,7 +219,7 @@ class RenderManager:
     def _write(self, identity: Identity, found: dict[str, Any], engine: Any) -> Path:
         gsap = engine.gsap()
         if gsap is None:
-            raise Refused("not_ready", "Video Builder is not set up yet. Set it up first.")
+            raise Refused("not_ready", "Motion graphics is not set up yet. Set it up first.")
         folder = projects.project_dir(
             root_for(self._deps.state), identity.tenant_id, identity.user_id, found["id"]
         )
@@ -228,7 +228,7 @@ class RenderManager:
         if family not in fonts:
             raise Refused(
                 "not_ready",
-                "Video Builder needs to be set up again: it has new fonts.",
+                "Motion graphics needs to be set up again: it has new fonts.",
             )
         projects.write_project(folder, found["template"], found["slots"], gsap, fonts)
         return folder
@@ -346,7 +346,7 @@ class RenderManager:
                 store.finish_render(rid, "cancelled", error="The video was cancelled.")
             raise
         except Exception:
-            log.exception("a Video Builder render failed")
+            log.exception("a Motion graphics render failed")
             store.finish_render(rid, "failed", error="The video could not be saved.")
         finally:
             out.unlink(missing_ok=True)

@@ -1,4 +1,4 @@
-// Video Builder (ADR-0077): the render component (set up on request, with the size shown first) and
+// Motion graphics (ADR-0077): the render component (set up on request, with the size shown first) and
 // the projects a person writes and makes videos from. The same engine routes serve the desktop window;
 // only the transport differs. A finished render is a clip of Your videos (`videos.ts`).
 import { HttpError, type Transport, errorMessage } from "./transport";

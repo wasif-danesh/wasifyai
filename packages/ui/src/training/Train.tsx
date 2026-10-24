@@ -48,7 +48,7 @@ export function Train({ api, place = "device", onOpenLibrary, pollMs }: TrainPro
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-5 p-[clamp(1rem,3vw,2rem)]">
       <header className="grid gap-1.5">
-        <span className={eyebrow}>Train</span>
+        <span className={eyebrow}>Train models</span>
         <h1 className="font-semibold text-step-2">
           {state.current || showingRun
             ? "Make my own character or style"
@@ -304,7 +304,7 @@ function MakeView({ t, status }: { t: Hook; status: TrainStatus | null }) {
       )}
       <div>
         <Button type="button" variant="ghost" size="sm" onClick={() => void t.leave()}>
-          Back to Train
+          Back to Train models
         </Button>
       </div>
     </>
@@ -732,7 +732,7 @@ function RunView({
       {working ? null : (
         <div className={actions}>
           <Button type="button" onClick={() => void t.leave()}>
-            {run.status === "done" ? "Done" : "Back to Train"}
+            {run.status === "done" ? "Done" : "Back to Train models"}
           </Button>
           {run.status === "done" && onOpenLibrary ? (
             <Button type="button" variant="outline" onClick={onOpenLibrary}>

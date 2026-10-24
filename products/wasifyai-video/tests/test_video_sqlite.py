@@ -95,7 +95,7 @@ async def test_a_clip_that_stays_working_too_long_is_marked_failed(engine):
 
 async def test_the_factory_picks_the_store_by_the_database(engine):
     assert isinstance(video_store(engine), SqliteVideoStore)
-    # the clips and Video Builder's compositions are one source on the desktop
+    # the clips and Motion graphics' compositions are one source on the desktop
     source = video_index_source(engine)
     assert isinstance(source, CombinedIndexSource)
     assert any(isinstance(s, SqliteVideoIndexSource) for s in source._sources)  # noqa: SLF001

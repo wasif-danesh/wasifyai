@@ -13,7 +13,7 @@ List your notebooks, to use one by id.
 
 ## Steps in the app
 
-1. Open **Notebook › View Notebooks**.
+1. Open **Notebook › View notebooks**.
 
 ## Fields
 

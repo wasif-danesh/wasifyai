@@ -53,7 +53,7 @@ grid for real. Then the licence read and the 9B measurement before T2.
 
 ## Decisions I need from you tomorrow morning (five minutes)
 
-1. **Name:** the menu says Train; ADR-0073 says the front door is **Teach** with plain-word cards. I would keep **Train** in the menu
+1. **Name:** the menu says Train (since 2026-10-24, owner: **Train models**, so nobody has to guess what it trains); ADR-0073 says the front door is **Teach** with plain-word cards. I would keep **Train** in the menu
    and use the plain cards inside. OK?
 2. **Base model for the first LoRA:** Z-Image (measured on this Mac) or FLUX.2 klein 4B (Apache-2.0, in the app already, 7.5 s a
    step). I would start with **klein 4B**, because it is the model Create image already uses and its licence is clear.

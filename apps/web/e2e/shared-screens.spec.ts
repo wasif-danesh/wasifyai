@@ -220,7 +220,7 @@ test("the notebook list opens a notebook, and the menu marks it @layout", async 
   await page.goto("/notebooks");
   await expect(page.getByText("Thesis reading")).toBeVisible();
   const nav = await menu(page);
-  await expect(nav.getByRole("link", { name: /View Notebooks/ })).toHaveAttribute(
+  await expect(nav.getByRole("link", { name: /View notebooks/ })).toHaveAttribute(
     "aria-current",
     "page",
   );

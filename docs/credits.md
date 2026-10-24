@@ -153,7 +153,7 @@ Weights have their own licences, recorded per model in `products/*/models.yaml` 
 | MCP Python SDK | `modelcontextprotocol/python-sdk` | MIT | Our MCP server and client (0069, 0070) |
 | Claude Code, Codex, OpenCode | Anthropic (closed), `openai/codex`, `anomalyco/opencode` | Apache-2.0, MIT | MCP clients tested in spike S1; not dependencies |
 | HyperFrames | `heygen-com/hyperframes` | Apache-2.0 | Video Builder's render engine (0077) |
-| motion-skills (iart.ai) | `iart-ai/motion-skills` and its packs | MIT (one pack has no licence and is excluded) | Reviewed, pinned, adapted content for Motion Graphics (0079) |
+| motion-skills (iart.ai) | `iart-ai/motion-skills` and its packs | MIT (one pack has no licence and is excluded) | Reviewed, pinned, adapted content for Motion graphics (0079) |
 | Pixal3D | `TencentARC/Pixal3D` | MIT | Text and image to 3D (0080) |
 | pixal3d.cpp, trellis.cpp | `raven38/pixal3d.cpp`, `pwilkin/trellis.cpp` | MIT | The native runtime that runs Pixal3D (0080) |
 | TRELLIS.2 | `microsoft/TRELLIS.2` | MIT | The backbone Pixal3D builds on; not offered in v1 |

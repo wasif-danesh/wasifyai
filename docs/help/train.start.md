@@ -12,12 +12,12 @@ Action: `train.start`
 Teach the image model something of your own from your pictures: a character, a pet, a person (with their
 agreement), your art style or an object. You only add pictures. The app checks each one, writes a
 description of each, suggests a magic word, and teaches the model. Then writing the magic word in a prompt
-draws it. The set of pictures is made on the **Train** screen; an agent starts the run on a set that is ready.
+draws it. The set of pictures is made on the **Train models** screen; an agent starts the run on a set that is ready.
 While the trainer is a preview, the run does everything except learn, and says so.
 
 ## Steps in the app
 
-1. Open **Train** and choose Make my own character or style.
+1. Open **Train models** and choose Make my own character or style.
 2. Add pictures: 15 to 25 good ones is plenty, at least 8. Each is marked Good, Too small, Blurry or Looks like
    a copy; remove what you do not want, or choose Remove the ones with a problem.
 3. Say what it is (a character, a style or an object), give it a name, choose one of the three magic words (or

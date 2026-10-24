@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Video Builder (ADR-0077): the shared API (packages/client) on the window's transport.
+// Motion graphics (ADR-0077): the shared API (packages/client) on the window's transport.
 import { createVideoBuilderApi } from "@wasifyai/client";
 import { transport } from "./api";
 

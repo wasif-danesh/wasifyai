@@ -11,7 +11,7 @@ import {
   type VideosApi,
   megabytes,
 } from "@wasifyai/client";
-import { Library, Plus, Save, Trash2, Undo2 } from "lucide-react";
+import { Library, Plus, Save, Trash2, Undo2, X } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
@@ -64,13 +64,23 @@ export function VideoBuilder({
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-5 p-[clamp(1rem,3vw,2rem)]">
       <header className="grid gap-1.5">
-        <span className={eyebrow}>Video · Experimental</span>
-        <h1 className="font-semibold text-step-2">Video Builder</h1>
+        <span className={eyebrow}>Experimental</span>
+        <h1 className="font-semibold text-step-2">Motion graphics</h1>
         <p className="max-w-3xl text-muted-foreground">
           {place === "device"
-            ? "Write a title, a quote, a chart, a name strap or captions and have it drawn on your computer. Every word is checked against what you typed before anything is drawn, and every video is drawn in a locked box: it can reach nothing outside its own folder, and nothing is sent anywhere."
-            : "Write a title, a quote, a chart, a name strap or captions and have it drawn on the service's computer. Every word is checked against what you typed before anything is drawn, and every video is drawn in a locked box: it can reach nothing outside its own folder. The words you type are sent there and deleted when the video is made."}
+            ? "Write a title, a quote, a chart, a name strap or captions and have it drawn on your computer."
+            : "Write a title, a quote, a chart, a name strap or captions and have it drawn on the service's computer."}
         </p>
+        <details className="text-muted-foreground text-sm">
+          <summary className="w-fit cursor-pointer underline underline-offset-4">
+            How is it made, and is it safe?
+          </summary>
+          <p className="mt-1.5 max-w-3xl">
+            {place === "device"
+              ? "Every word is checked against what you typed before anything is drawn. Each video is drawn in a locked box: it can reach nothing outside its own folder, and nothing is sent anywhere."
+              : "Every word is checked against what you typed before anything is drawn. Each video is drawn in a locked box: it can reach nothing outside its own folder. The words you type are sent to the service and deleted when the video is made."}
+          </p>
+        </details>
       </header>
 
       {state.error ? (
@@ -80,7 +90,7 @@ export function VideoBuilder({
       ) : null}
 
       {state.loading ? (
-        <output className="text-muted-foreground">Looking at Video Builder…</output>
+        <output className="text-muted-foreground">Looking at Motion graphics…</output>
       ) : !state.component?.installed ? (
         <SetupCard
           component={state.component}
@@ -98,7 +108,7 @@ export function VideoBuilder({
               {state.component.tools.message}
             </Notice>
           ) : null}
-          <div className="grid items-start gap-5 md:grid-cols-[16rem_1fr]">
+          <div className="grid items-start gap-5 md:grid-cols-[15rem_minmax(0,1fr)] md:gap-8">
             <ProjectList
               projects={state.projects}
               catalogue={state.catalogue}
@@ -144,7 +154,7 @@ function SetupCard({
     return (
       <Notice
         tone="error"
-        title="Video Builder could not be reached"
+        title="Motion graphics could not be reached"
         actions={<Button onClick={onRetry}>Try again</Button>}
       >
         The engine did not answer. Try again in a moment.
@@ -155,15 +165,16 @@ function SetupCard({
   if (!plan.supported) {
     return (
       <Notice tone="info" title="Not on this computer yet">
-        Video Builder was measured on Apple-silicon Macs and is not offered on other computers yet.
+        Motion graphics was measured on Apple-silicon Macs and is not offered on other computers
+        yet.
       </Notice>
     );
   }
   const installing = progress.state === "installing";
   const value = progress.total_bytes > 0 ? progress.done_bytes / progress.total_bytes : undefined;
   return (
-    <section className={panel} aria-label="Set up Video Builder">
-      <h2 className="font-semibold text-lg">Set up Video Builder</h2>
+    <section className={panel} aria-label="Set up Motion graphics">
+      <h2 className="font-semibold text-lg">Set up Motion graphics</h2>
       <p className="text-muted-foreground">
         It needs a few parts that are not in the app. They are downloaded once, checked, and kept in
         the app's own folder; nothing else on your computer is changed.
@@ -186,7 +197,7 @@ function SetupCard({
       {installing ? (
         <WorkingCard label={progress.message || "Setting up"}>
           <JobMeter
-            title="Setting up Video Builder"
+            title="Setting up Motion graphics"
             text={value === undefined ? "Starting" : `${Math.round(value * 100)}%`}
             value={value}
             label="Setup progress"
@@ -226,22 +237,34 @@ function ProjectList({
 }) {
   const kind = (id: string) => catalogue?.templates.find((t) => t.id === id)?.title ?? id;
   return (
-    <nav aria-label="Your video projects" className="grid gap-2">
-      <Button type="button" variant="outline" onClick={onNew}>
+    <nav
+      aria-label="Your video projects"
+      className="grid min-w-0 gap-2.5 max-md:flex max-md:items-center max-md:gap-2 max-md:overflow-x-auto max-md:pb-1"
+    >
+      <h2 className={cn(eyebrow, "max-md:hidden")}>Your videos</h2>
+      <Button type="button" variant="outline" className="max-md:shrink-0" onClick={onNew}>
         <Plus className="size-4" /> New video
       </Button>
-      <ul className="grid gap-1">
+      <ul className="max-md:contents md:grid md:gap-1">
         {projects.map((p) => (
-          <li key={p.id}>
+          <li key={p.id} className="min-w-0 max-md:shrink-0">
             <button
               type="button"
               aria-current={selected === p.id ? "true" : undefined}
               onClick={() => onOpen(p.id)}
-              className="w-full rounded-md px-3 py-2 text-start hover:bg-accent aria-[current=true]:bg-accent aria-[current=true]:font-semibold"
+              className="grid w-full min-w-0 items-center gap-x-2.5 rounded-lg border border-transparent p-2 text-start hover:bg-accent aria-[current=true]:border-border aria-[current=true]:bg-surface aria-[current=true]:shadow-card max-md:max-w-56 max-md:border-border md:grid-cols-[3.5rem_minmax(0,1fr)]"
             >
-              <span className="block truncate">{p.title}</span>
-              <span className="text-muted-foreground text-sm">
-                {kind(p.template)} · {String(p.slots.seconds)} seconds
+              <span
+                aria-hidden="true"
+                className="grid h-9 place-items-center rounded-md bg-muted font-semibold font-serif text-sm max-md:hidden"
+              >
+                {kind(p.template).slice(0, 2)}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate font-medium">{p.title}</span>
+                <span className="block truncate text-muted-foreground text-sm max-md:hidden">
+                  {kind(p.template)} · {String(p.slots.seconds)} seconds
+                </span>
               </span>
             </button>
           </li>
@@ -478,6 +501,12 @@ function Editor({
           void keep();
         }}
       >
+        <div className="flex justify-end">
+          {/* a way out: back to the first screen; what is saved stays in "Your videos" */}
+          <Button type="button" variant="ghost" size="sm" onClick={() => void api.open(null)}>
+            <X className="size-4" aria-hidden="true" /> {project ? "Close" : "Cancel"}
+          </Button>
+        </div>
         {!project && drafted && drafted.template === template.id ? (
           <Notice
             tone={drafted.warnings.length > 0 ? "warn" : "info"}

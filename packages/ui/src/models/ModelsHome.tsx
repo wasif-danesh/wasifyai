@@ -293,16 +293,19 @@ export function ModelsHome({
   advancedOpen = false,
   place = "device",
   initialGroup,
+  only,
 }: {
   advanced?: ReactNode;
   advancedOpen?: boolean;
   /** where the models are: this computer, or the workers of a service (the web, for an admin) */
   place?: Place;
   initialGroup?: GroupId;
+  /** only these groups have a tab (the web's admins manage what workers hold; the other groups are set up elsewhere) */
+  only?: GroupId[];
 }) {
   // one hook per group, always in the same order: a group the app has no picker for gets no tab
   const apis = GROUPS.map((g) => useChoicesFor(g.id));
-  const tabs = GROUPS.filter((_, i) => apis[i] !== null);
+  const tabs = GROUPS.filter((g, i) => apis[i] !== null && (!only || only.includes(g.id)));
   const first =
     initialGroup && tabs.some((g) => g.id === initialGroup) ? initialGroup : tabs[0]?.id;
   const [group, setGroup] = useState<GroupId | undefined>(first);

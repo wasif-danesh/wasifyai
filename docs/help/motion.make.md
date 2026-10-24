@@ -1,6 +1,6 @@
 ---
 action: motion.make
-screen: video.builder
+screen: motion
 synonyms: [motion graphic, lower third, name strap, bar chart video, chart from my csv, animated quote, captions, animated title, text on screen, overlay]
 ---
 # Make a motion graphic
@@ -14,11 +14,11 @@ a bar chart from your own numbers, a lower third (a name strap) or captions. The
 go in exactly as you typed them. Before anything is drawn the page is opened and every word on the
 screen is checked against what you typed; a misspelt name, a cut-off line or a word too close to
 the edge stops the video and says which. The video is saved to Your videos, and the project stays
-in your library so you can change it. Video Builder is experimental.
+in your library so you can change it. Motion graphics is experimental.
 
 ## Steps in the app
 
-1. Open **Video › Video Builder**.
+1. Open **Motion graphics**.
 2. Say what to make in your own words, for example `Lower third for "Maya Chen", Head of Design`,
    and press the arrow. You can attach a CSV file to chart, and pick a shape. The form opens filled
    in, with what was understood; check anything it flags. (Or choose "Or fill in the form
@@ -54,7 +54,7 @@ in your library so you can change it. Video Builder is experimental.
 
 ## Needs
 
-- Video Builder set up (a download of about 320 MB, shown before it starts; FFmpeg is part of it) and
+- Motion graphics set up (a download of about 320 MB, shown before it starts; FFmpeg is part of it) and
   about 3 GB of free memory. Only Apple-silicon Macs for now.
 
 ## Examples
@@ -70,6 +70,6 @@ in your library so you can change it. Video Builder is experimental.
 - **Choose a language model first** The box that reads your description needs a chat model
   (Settings › Language). The form works without one.
 - **A video is already being made** Wait for it to finish or cancel it.
-- **Video Builder needs FFmpeg** This should not happen: FFmpeg comes with Video Builder. If it does,
+- **Motion graphics needs FFmpeg** This should not happen: FFmpeg comes with Motion graphics. If it does,
   run `brew install ffmpeg` in Terminal, then choose Check again.
-- **Video Builder is not set up** Open **Video › Video Builder** and choose Set up.
+- **Motion graphics is not set up** Open **Motion graphics** and choose Set up.

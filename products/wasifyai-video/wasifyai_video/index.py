@@ -98,7 +98,7 @@ class SqliteVideoIndexSource:
 
 
 class CombinedIndexSource:
-    """The clips and the Video Builder compositions as one source (a product registers one):
+    """The clips and the Motion graphics compositions as one source (a product registers one):
     every item carries its own kind, and a page is the next `limit` items of both, in id order."""
 
     product_id = PRODUCT_ID
@@ -120,7 +120,7 @@ class CombinedIndexSource:
 
 def video_index_source(engine: AsyncEngine) -> IndexSource:
     """The source for the database the engine speaks to (Postgres on the web, SQLite on desktop,
-    where Video Builder's compositions are searchable too)."""
+    where Motion graphics' compositions are searchable too)."""
     if not is_sqlite(engine):
         return VideoIndexSource(engine)
     from wasifyai_video.builder.index import BuilderIndexSource

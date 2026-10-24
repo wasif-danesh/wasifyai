@@ -1,6 +1,6 @@
 # ADR-0079: Text to motion graphics: describe it, get an animated title, chart or overlay
 
-- **Status:** Accepted (2026-10-18, by the owner), together with the components it names. **Names:** *Motion Graphics* (this feature) and
+- **Status:** Accepted (2026-10-18, by the owner), together with the components it names. **Names:** *Motion graphics* (this feature) and
   *Video Builder* (ADR-0077's HTML-to-video product) are working names chosen by the owner on 2026-10-18 until better ones
   are found; "Compose" was dropped because it clashes with Compose Multiplatform and `docker compose`.
 - **Date:** 2026-10-18
@@ -42,7 +42,7 @@ kinetic title that says X" come out right**, with the app's own models, locally,
 
 ## Decision
 
-1. **Product: "Motion Graphics" inside Video Builder** (ADR-0077's screen, Labs switch, desktop only in v1). The person
+1. **Product: "Motion graphics" inside Video Builder** (ADR-0077's screen, Labs switch, desktop only in v1). The person
    picks a starting point or just types. Starting points, each a **template with slots** (decision 3): *Animated
    title*, *Quote or kinetic text*, *Chart from my numbers* (a spreadsheet), *Lower third / name strap* (transparent),
    *Captions for a video*, *Logo reveal*, *Explainer from a script*. Output: MP4, **WebM with transparency**
@@ -216,3 +216,8 @@ with only these tools (no Homebrew): everything passes, but **FFmpeg 4.4 draws a
 pinned build (option C of `docs/spikes/video-builder-ffmpeg.md`) is the way to get the speed back if it matters. The licence
 is not a concern for now (owner), and the "nonfree" flag of this build means it must not be redistributed by us, only fetched
 by the person's own computer from npm, which is what the setup does; counsel can read it with D10.
+
+## Amendment: menu placement (2026-10-24, owner)
+
+Motion graphics moved out of the Video group into its own item after Music (see the ADR-0077 amendment of the same
+date). Nothing else here changes.

@@ -1,6 +1,6 @@
 ---
 action: video_builder.lint
-screen: video.builder
+screen: motion
 synonyms: [check a video, is it safe, check the project]
 ---
 # Check a video project
@@ -15,7 +15,7 @@ this check first.
 
 ## Steps in the app
 
-1. Open **Video › Video Builder**.
+1. Open **Motion graphics**.
 2. Open a project.
 3. Choose Check (it also runs by itself before every video is made).
 
@@ -30,7 +30,7 @@ this check first.
 
 ## Needs
 
-- Video Builder set up (Video › Video Builder).
+- Motion graphics set up (Motion graphics).
 
 ## Examples
 
@@ -38,5 +38,5 @@ this check first.
 
 ## Problems
 
-- **Video Builder is not set up** Open **Video › Video Builder** and choose Set up.
+- **Motion graphics is not set up** Open **Motion graphics** and choose Set up.
 - **That video project does not exist** It may have been deleted.

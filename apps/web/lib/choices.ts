@@ -12,6 +12,7 @@ import {
   type Remembered,
   plainFor,
 } from "@wasifyai/ui";
+import { IN_USE_GROUPS, type InUseDeps, inUseChoices } from "./choices-in-use";
 
 export type WebChoicesDeps = {
   voice: VoiceApi;
@@ -186,7 +187,15 @@ export function webChoicesFor(deps: WebChoicesDeps, group: GroupId, task?: strin
   };
 }
 
-/** The picker for the groups the web serves from workers (voice, listening, music, lip sync); the others have none. */
-export function webChoices(deps: WebChoicesDeps): ChoicesSource {
-  return (group, task) => (GROUP_TASKS[group] ? webChoicesFor(deps, group, task) : null);
+/**
+ * The picker on the web: the groups workers serve (voice, listening, music, lip sync) with the choice of a model, and the groups an
+ * admin sets up for the whole service (chat, images, video, 3D) as a read-only view of what is in use. Documents has none.
+ */
+export function webChoices(deps: WebChoicesDeps & InUseDeps): ChoicesSource {
+  return (group, task) =>
+    GROUP_TASKS[group]
+      ? webChoicesFor(deps, group, task)
+      : IN_USE_GROUPS.includes(group)
+        ? inUseChoices(deps, group)
+        : null;
 }

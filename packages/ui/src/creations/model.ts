@@ -1,8 +1,14 @@
-import { clock } from "./format";
-import type { LipSyncCard, SongCard, SpeechCard, TranscriptCard } from "./voice-cards";
+import type {
+  ImageSummary,
+  LipSyncCard,
+  SongCard,
+  SpeechCard,
+  TranscriptCard,
+  VideoSummary,
+} from "@wasifyai/client";
+import { clock } from "../voice/format";
 
 // What My creations shows: one entry per piece of music, image, video, speech, transcript or lip sync (ADR-0040).
-import type { ImageSummary, VideoSummary } from "@wasifyai/contracts";
 
 export type Entry =
   | { kind: "song"; id: string; createdAt: string; song: SongCard }
@@ -47,14 +53,19 @@ export type Row = {
   kindLabel: string;
   title: string;
   detail: string;
-  href: string;
+  entry: Entry;
   createdAt: string;
   status: "done" | "working" | "failed";
 };
 
 /** One entry as a table row: what it is, what it says, where it opens and whether it is ready. */
 export function toRow(entry: Entry): Row {
-  const base = { key: `${entry.kind}:${entry.id}`, kind: entry.kind, createdAt: entry.createdAt };
+  const base = {
+    key: `${entry.kind}:${entry.id}`,
+    kind: entry.kind,
+    entry,
+    createdAt: entry.createdAt,
+  };
   switch (entry.kind) {
     case "song":
       return {
@@ -62,7 +73,6 @@ export function toRow(entry: Entry): Row {
         kindLabel: "Music",
         title: entry.song.title,
         detail: entry.song.style ?? "",
-        href: "/voice/tracks",
         status: "done",
       };
     case "image":
@@ -71,7 +81,6 @@ export function toRow(entry: Entry): Row {
         kindLabel: "Image",
         title: entry.image.prompt,
         detail: "",
-        href: `/image/creations/${entry.id}`,
         status: "done",
       };
     case "video":
@@ -80,7 +89,6 @@ export function toRow(entry: Entry): Row {
         kindLabel: "Video",
         title: entry.video.prompt,
         detail: "",
-        href: `/video/creations/${entry.id}`,
         status: entry.video.status,
       };
     case "speech":
@@ -89,7 +97,6 @@ export function toRow(entry: Entry): Row {
         kindLabel: "Speech",
         title: entry.speech.text,
         detail: entry.speech.voice,
-        href: "/voice/speak",
         status: "done",
       };
     case "transcript":
@@ -98,7 +105,6 @@ export function toRow(entry: Entry): Row {
         kindLabel: "Transcript",
         title: entry.transcript.title || "Transcribing…",
         detail: clock(entry.transcript.seconds),
-        href: "/voice/transcribe",
         status: entry.transcript.status,
       };
     case "lipsync":
@@ -107,8 +113,19 @@ export function toRow(entry: Entry): Row {
         kindLabel: "Lip sync",
         title: entry.lipsync.text || "Lip sync",
         detail: clock(entry.lipsync.seconds),
-        href: "/voice/lipsync",
         status: entry.lipsync.status,
       };
   }
 }
+
+export type MakeScreen = "music" | "image" | "video" | "speech" | "transcribe" | "lipsync";
+
+/** How My creations goes elsewhere: each app knows its own screens (the web has addresses, the desktop a router). */
+export type CreationsNav = {
+  /** open the screen that holds an entry */
+  open(entry: Entry): void;
+  /** open a screen that makes something new */
+  make(screen: MakeScreen): void;
+  /** the address of a place, where the app has addresses (the web): a card is then a real link */
+  href?(target: Entry | MakeScreen): string;
+};

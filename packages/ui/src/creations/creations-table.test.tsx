@@ -1,9 +1,19 @@
-import type { Entry } from "@/lib/creations";
 // @vitest-environment jsdom
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { CreationsTable } from "./CreationsTable";
+import type { CreationsNav, Entry } from "./model";
+
+const HREFS: Record<string, string> = {
+  speech: "/voice/speak",
+  song: "/voice/tracks",
+};
+const nav: CreationsNav = {
+  open: () => {},
+  make: () => {},
+  href: (to) => (typeof to === "string" ? `/${to}` : (HREFS[to.kind] ?? "/")),
+};
 
 const song = (id: string, title: string, createdAt: string): Entry => ({
   kind: "song",
@@ -37,7 +47,7 @@ const titles = () =>
 
 describe("CreationsTable", () => {
   it("shows each creation with its type, a link to it and its details", () => {
-    render(<CreationsTable entries={entries} />);
+    render(<CreationsTable entries={entries} nav={nav} />);
     const link = screen.getByRole("link", { name: "আপনি কেমন আছেন?" });
     expect(link).toHaveAttribute("href", "/voice/speak");
     expect(screen.getByText("Aditi")).toBeInTheDocument();
@@ -45,7 +55,7 @@ describe("CreationsTable", () => {
   });
 
   it("keeps the order it was given until a header is clicked, then sorts by that column", async () => {
-    render(<CreationsTable entries={entries} />);
+    render(<CreationsTable entries={entries} nav={nav} />);
     expect(titles()[0]).toContain("Beta");
     await userEvent.click(screen.getByRole("button", { name: /Made/ }));
     expect(titles()[0]).toContain("Alpha"); // oldest first

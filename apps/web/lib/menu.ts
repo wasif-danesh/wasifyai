@@ -45,8 +45,6 @@ export function resolveWebItem(
         return live("image") ? page("/image/inpaint") : undefined;
       case "images.reference":
         return live("image") ? page("/image/reference") : undefined;
-      case "images.model3d":
-        return live("image") ? page("/image/3d") : undefined;
       case "images.library":
         return live("image") ? page("/image/library", "/image/creations") : undefined;
       case "video.create":
@@ -55,8 +53,6 @@ export function resolveWebItem(
         return live("video") ? page("/video/animate") : undefined;
       case "video.extend":
         return live("video") ? page("/video/extend") : undefined;
-      case "video.builder":
-        return live("video") ? page("/video/builder") : undefined;
       case "video.library":
         return live("video") ? page("/video/library", "/video/creations") : undefined;
       case "voice.speak":
@@ -75,6 +71,10 @@ export function resolveWebItem(
         };
       case "chat":
         return { href: "/", current: pathname === "/" }; // an open chat is marked in Recents
+      case "motion":
+        return live("video") ? page("/video/builder") : undefined;
+      case "model3d":
+        return live("image") ? page("/image/3d") : undefined; // still the image product's page (D25)
       case "library":
         return { href: "/creations", current: pathname === "/creations" && !show };
       case "models": // the models of the workers are an admin's to manage; everyone else uses the pickers

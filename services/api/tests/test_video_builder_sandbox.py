@@ -1,4 +1,4 @@
-"""The sandbox of a Video Builder render (V1b) on stand-ins: the filter, the launcher, the lint step
+"""The sandbox of a Motion graphics render (V1b) on stand-ins: the filter, launcher, lint step
 and the guard. The real browser against hostile compositions is `test_video_builder_hostile.py`."""
 
 import asyncio

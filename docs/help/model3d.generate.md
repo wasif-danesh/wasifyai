@@ -1,6 +1,6 @@
 ---
 action: model3d.generate
-screen: images.model3d
+screen: model3d
 synonyms: [3d model, make a 3d model, 3d object, glb, 3d from a picture, image to 3d, text to 3d, turn a picture into 3d, model of my mascot, 3d print, turntable]
 ---
 # Make a 3D model
@@ -16,7 +16,7 @@ computer and nothing is sent anywhere. 3D models are experimental.
 
 ## Steps in the app
 
-1. Open **Images › 3D model** The first time, choose
+1. Open **3D model** The first time, choose
    Download and set up: it shows the size (about 9 GB) before it starts.
 2. Choose a picture, or choose Words, describe the object and choose Make 4 pictures, then Use this
    picture on the one you like.
@@ -61,4 +61,4 @@ computer and nothing is sent anywhere. 3D models are experimental.
 - **No object was found in this picture** Use a picture of one object on a plain background.
 - **A 3D model is already being made** Wait for it to finish or cancel it.
 - **Not enough memory** Close other apps, or use a Mac with more memory.
-- **The 3D component is not set up** Open **Images › 3D model** and choose Download and set up.
+- **The 3D component is not set up** Open **3D model** and choose Download and set up.

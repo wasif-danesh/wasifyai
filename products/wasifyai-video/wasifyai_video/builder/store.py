@@ -1,4 +1,4 @@
-"""What Video Builder keeps (`builder.db`, in `<app data>/video-builder/`): the compositions (a
+"""What Motion graphics keeps (`builder.db`, in `<app data>/video-builder/`): the compositions (a
 title, a template and the words and settings that fill it) and one row for each render that was
 started.
 

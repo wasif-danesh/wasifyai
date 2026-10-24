@@ -19,6 +19,7 @@ import { Spinner } from "../components/spinner";
 import { ModelSelect, useChoicesFor, useChoicesVersion } from "../models";
 import { fileNameFor, savedText, useSaveCopy } from "../save";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
+import { PageHeader, TopBarSlot } from "../window-bar";
 import { type CandidateApi, Candidates } from "./Candidates";
 import { ModelViewer } from "./ModelViewer";
 import { useModel3d } from "./use-model3d";
@@ -80,84 +81,93 @@ export function Model3d({
     state.component.plan.supported &&
     state.component.progress.state !== "installing";
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-5 p-[clamp(1rem,3vw,2rem)]">
-      <header className="grid gap-1.5">
-        <span className={eyebrow}>Images · Experimental</span>
-        <h1 className="font-semibold text-step-2">Make a 3D model</h1>
-        <p className="max-w-3xl text-muted-foreground">
-          Turn a picture of one object into a 3D model you can turn around and save as a file. It is
-          {place === "device"
-            ? "made on this computer; nothing is sent anywhere."
-            : "made on the service's graphics card. The picture is sent there and deleted when the model is made."}
-        </p>
-      </header>
-
-      {state.error ? (
-        <Notice tone="error" title="That did not work">
-          {state.error}
-        </Notice>
-      ) : null}
-
-      {state.loading ? (
-        <output className="text-muted-foreground">Looking at 3D…</output>
-      ) : !state.component?.installed && picking ? (
-        <section
-          aria-label="Choose a 3D model"
-          className="grid gap-3 rounded-2xl border bg-card p-5"
-        >
-          <h2 className="m-0 font-semibold text-lg">Choose a 3D model</h2>
-          <p className="m-0 text-muted-foreground">
-            Making a 3D model needs a model on this computer. Select it to see what it needs and
-            download it.
-          </p>
-          <div>
+    <TopBarSlot>
+      {choices ? (
+        // the model button is at the top of the screen, as on the chat and image screens (ADR-0086)
+        <PageHeader className="flex h-14 shrink-0 items-center gap-4 border-b px-6 pt-1">
+          <div className="flex items-center gap-2 ps-2 text-sm">
             <ModelSelect group="three_d" api={choices} />
           </div>
-        </section>
-      ) : !state.component?.installed ? (
-        <SetupCard
-          component={state.component}
-          onInstall={(bytes) => void m.install(bytes)}
-          onCancel={() => void m.cancelInstall()}
-          onRetry={() => void m.refresh()}
-        />
-      ) : (
-        <>
-          {state.status && !state.status.ready ? (
-            <Notice tone="warn" title="3D is not ready">
-              {state.status.problem ?? "It could not be started."}
-            </Notice>
-          ) : null}
-          {state.status?.fit?.verdict === "tight" ? (
-            <Notice tone="warn" title="Memory is tight">
-              {state.status.fit.reason}
-            </Notice>
-          ) : null}
-          {state.status?.fit?.verdict === "too_big" ? (
-            <Notice tone="warn" title="Not enough memory for a 3D model">
-              {state.status.fit.reason}
-            </Notice>
-          ) : null}
-          {state.model ? (
-            <ModelStep
-              m={m}
-              canSave={canSave}
-              downloadHref={downloadHref}
-              api={api}
-              onOpenLibrary={onOpenLibrary}
-            />
-          ) : state.input ? (
-            <CheckStep m={m} />
-          ) : (
-            <StartStep m={m} images={images} />
-          )}
-          <ModelsRow m={m} />
-          <p className={hint}>
-            {state.component.about.built_with}. {state.component.about.licence}
+        </PageHeader>
+      ) : null}
+      <div className="mx-auto grid w-full max-w-5xl gap-5 p-[clamp(1rem,3vw,2rem)]">
+        <header className="grid gap-1.5">
+          <span className={eyebrow}>Experimental</span>
+          <h1 className="font-semibold text-step-2">Make a 3D model</h1>
+          <p className="max-w-3xl text-muted-foreground">
+            Turn a picture of one object into a 3D model you can turn around and save as a file. It
+            is
+            {place === "device"
+              ? "made on this computer; nothing is sent anywhere."
+              : "made on the service's graphics card. The picture is sent there and deleted when the model is made."}
           </p>
-        </>
-      )}
-    </div>
+        </header>
+
+        {state.error ? (
+          <Notice tone="error" title="That did not work">
+            {state.error}
+          </Notice>
+        ) : null}
+
+        {state.loading ? (
+          <output className="text-muted-foreground">Looking at 3D…</output>
+        ) : !state.component?.installed && picking ? (
+          <section
+            aria-label="Choose a 3D model"
+            className="grid gap-3 rounded-2xl border bg-card p-5"
+          >
+            <h2 className="m-0 font-semibold text-lg">Choose a 3D model</h2>
+            <p className="m-0 text-muted-foreground">
+              Making a 3D model needs a model on this computer. Select it to see what it needs and
+              download it.
+            </p>
+            <p className="m-0 text-muted-foreground text-sm">Use the model button at the top.</p>
+          </section>
+        ) : !state.component?.installed ? (
+          <SetupCard
+            component={state.component}
+            onInstall={(bytes) => void m.install(bytes)}
+            onCancel={() => void m.cancelInstall()}
+            onRetry={() => void m.refresh()}
+          />
+        ) : (
+          <>
+            {state.status && !state.status.ready ? (
+              <Notice tone="warn" title="3D is not ready">
+                {state.status.problem ?? "It could not be started."}
+              </Notice>
+            ) : null}
+            {state.status?.fit?.verdict === "tight" ? (
+              <Notice tone="warn" title="Memory is tight">
+                {state.status.fit.reason}
+              </Notice>
+            ) : null}
+            {state.status?.fit?.verdict === "too_big" ? (
+              <Notice tone="warn" title="Not enough memory for a 3D model">
+                {state.status.fit.reason}
+              </Notice>
+            ) : null}
+            {state.model ? (
+              <ModelStep
+                m={m}
+                canSave={canSave}
+                downloadHref={downloadHref}
+                api={api}
+                onOpenLibrary={onOpenLibrary}
+              />
+            ) : state.input ? (
+              <CheckStep m={m} />
+            ) : (
+              <StartStep m={m} images={images} />
+            )}
+            <ModelsRow m={m} />
+            <p className={hint}>
+              {state.component.about.built_with}. {state.component.about.licence}
+            </p>
+          </>
+        )}
+      </div>
+    </TopBarSlot>
   );
 }
 

@@ -137,14 +137,13 @@ class ApiToolHost:
             builder = getattr(state, "video_builder", None)
             if builder is None or not builder.installer.supported:
                 return Readiness.unavailable(
-                    "Video Builder is not available on this kind of computer yet."
+                    "Motion graphics is not available on this kind of computer yet."
                 )
             if not builder.ready():
                 why = builder.media_problem() if builder.install() is not None else None
                 return Readiness.needs_setup(
-                    why
-                    or "Set up Video Builder first (it is a download of a few hundred megabytes).",
-                    ui="video.builder",
+                    why or "Set up Motion graphics first (a download of a few hundred megabytes).",
+                    ui="motion",
                 )
             return Readiness.ready()
         if need.kind == "runtime" and need.name == "training":
@@ -165,7 +164,7 @@ class ApiToolHost:
             if not engine.ready():
                 return Readiness.needs_setup(
                     "Set up 3D first (a download of about 9 GB, shown before it starts).",
-                    ui="images.model3d",
+                    ui="model3d",
                 )
             return Readiness.ready()
         if need.kind == "notebooks":

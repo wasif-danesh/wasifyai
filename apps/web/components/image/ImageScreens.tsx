@@ -4,7 +4,14 @@ import { putHandoff, takeHandoff } from "@/lib/handoff";
 import { imageDownload, webImages } from "@/lib/library";
 import { webClient } from "@/lib/run-client";
 import type { ImageMode } from "@wasifyai/client";
-import { ImageLibrary, ImageWorkspace, type WorkspacePreset, presetOf } from "@wasifyai/ui";
+import {
+  ImageLibrary,
+  ImageWorkspace,
+  ModelSelect,
+  type WorkspacePreset,
+  presetOf,
+  useChoicesFor,
+} from "@wasifyai/ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -17,6 +24,7 @@ type Start = { preset: WorkspacePreset | null; source: { url: string; name: stri
  * the library ("Make it again") or a result sent to Edit arrives through the tab's session storage. */
 export function ImageScreen({ mode }: { mode: ImageMode }) {
   const router = useRouter();
+  const choices = useChoicesFor("images");
   const [start, setStart] = useState<Start | null>(null);
   useEffect(() => {
     setStart({
@@ -35,7 +43,13 @@ export function ImageScreen({ mode }: { mode: ImageMode }) {
           images={webImages}
           preset={start.preset}
           sourceImage={start.source}
-          header={<span className="font-medium">Images</span>}
+          header={
+            choices ? (
+              <ModelSelect group="images" api={choices} />
+            ) : (
+              <span className="font-medium">Images</span>
+            )
+          }
           downloadHref={imageDownload}
           onOpenLibrary={() => router.push("/image/library")}
           onEditThis={(image) => {

@@ -20,6 +20,8 @@ const model = (over: Record<string, unknown>) => ({
   ...over,
 });
 vi.mock("@/lib/library", () => ({
+  webModelsInUse: { inUse: async () => ({ chat: [], images: [], video: [] }) },
+  webModel3d: {},
   webVoice: {
     models: async (task: string) =>
       task === "speak"

@@ -1,6 +1,6 @@
 ---
 action: motion.revise
-screen: video.builder
+screen: motion
 synonyms: [change the video, fix the typo, use another look, change the lower third, edit the chart, change the colours, undo]
 ---
 # Change a motion graphic
@@ -9,14 +9,14 @@ Action: `motion.revise`
 
 ## What it is for
 
-Change a project you made with Video Builder and make the video again. Give only what changes: the
+Change a project you made with Motion graphics and make the video again. Give only what changes: the
 rest stays as it was. The new words are checked against what you typed before anything is drawn. The
-earlier version is kept, and **Undo the last change** on the Video Builder screen brings it back
+earlier version is kept, and **Undo the last change** on the Motion graphics screen brings it back
 (the last 20 changes are kept).
 
 ## Steps in the app
 
-1. Open **Video › Video Builder** and open the project.
+1. Open **Motion graphics** and open the project.
 2. Change the words or the look in the form.
 3. Choose Make the video. Use Undo the last change if you prefer how it was.
 
@@ -34,7 +34,7 @@ earlier version is kept, and **Undo the last change** on the Video Builder scree
 
 ## Needs
 
-- Video Builder set up and about 3 GB of free memory, to make the video again.
+- Motion graphics set up and about 3 GB of free memory, to make the video again.
 
 ## Examples
 
@@ -44,6 +44,6 @@ earlier version is kept, and **Undo the last change** on the Video Builder scree
 ## Problems
 
 - **The length must be between 3 and 90 seconds** Choose a length in the range the message names.
-- **The project does not exist** It may have been deleted; open Video Builder to see what is left.
+- **The project does not exist** It may have been deleted; open Motion graphics to see what is left.
 - **The words on the screen are not exactly what you wrote** The change was kept but no video was
   made; change the words and try again, or choose Undo.

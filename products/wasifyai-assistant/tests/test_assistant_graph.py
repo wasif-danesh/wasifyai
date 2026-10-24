@@ -778,7 +778,7 @@ def test_the_assistant_is_told_where_the_features_are_but_only_those_this_engine
     everything = {"video.generate", "speech.speak", "model3d.generate"}
     said = features_prompt(everything)
     assert "Video › Create" in said and "Voice › Text to speech" in said
-    assert "Images › 3D model" in said
+    assert "3D model" in said
     assert "Voice › Dub a recording" not in said  # nothing for it is served here
     assert "3D model" not in features_prompt({"video.generate"})
     assert features_prompt(set()) == ""

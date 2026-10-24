@@ -145,7 +145,7 @@ checks it. It is the lowest priority and can be dropped without cost.
 
 ## Not in v1
 
-Video LoRAs; LoRAs for edit models; training from a single picture; stacking and merging LoRAs in the trainer (the
+Video LoRAs (a family of their own: ADR-0073, amendment 2026-10-24); LoRAs for edit models; training from a single picture; stacking and merging LoRAs in the trainer (the
 LoRA chain stacks at generation time); sharing or selling LoRAs; collecting pictures from the web; a full diffusion
 fine-tune.
 

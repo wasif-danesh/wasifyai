@@ -1,4 +1,4 @@
-"""Video Builder's API, under /products/wasifyai-video/builder/: templates, compositions, a still
+"""Motion graphics' API, under /products/wasifyai-video/builder/: templates, compositions, a still
 preview, lint, and renders that run in the background and can be followed and cancelled.
 
 Every query is scoped by tenant and user. A composition has no files until it is previewed or
@@ -103,7 +103,7 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         gsap, fonts = engine.gsap(), engine.fonts(templates.FONT_FILES)
         if gsap is None or templates.FONTS[found["slots"]["font"]][1] not in fonts:
             raise HTTPException(
-                409, {"code": "not_ready", "message": "Video Builder needs to be set up again."}
+                409, {"code": "not_ready", "message": "Motion graphics needs to be set up again."}
             )
         projects.write_project(folder, found["template"], found["slots"], gsap, fonts)
         return folder

@@ -97,7 +97,7 @@ The investigation (read, not run; details and counts in the spike document) foun
     indexed for My creations search, with an `IndexSource`, list filter and corpus row. Multilingual: v1 is
     English only (owner's decision); nothing in the data model or UI assumes it.
 13. **The interface** follows `docs/phase2-stage-e-plan.md`: one expandable **Notebook** entry in the side menu
-    with *Create* and *View Notebooks* (the same pattern as *Images*; the empty *Projects* placeholder is
+    with *Create* and *View notebooks* (the same pattern as *Images*; the empty *Projects* placeholder is
     removed), a notebooks list, an add-sources screen for a new notebook (upload files, copied text; websites
     and Drive later) and a notebook page of three panes (Sources, Chat, Studio). Model use goes through the slot
     manager and the existing model chip; a notebook never loads a model by itself.
@@ -143,7 +143,7 @@ The investigation (read, not run; details and counts in the spike document) foun
 
 - **Decision 13 (E3):** built as decided. Three differences: Studio's tiles are shown and not available (E4);
   the source viewer shows a source's text, not its pages (a PDF viewer needs `pdfjs-dist`, which is still to be
-  approved); My creations search finds a notebook from View Notebooks (the desktop Library lists images only).
+  approved); My creations search finds a notebook from View notebooks (the desktop Library lists images only).
 
 - **Decision 11 (E4):** the first-release formats are built (report, study guide, flashcards, quiz, mind map, Word,
   PDF) on the builder rule. **ReportLab** was added for PDF with the owner's approval (2026-10-16); python-docx and

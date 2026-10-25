@@ -22,6 +22,8 @@ export type TrainState = {
   current: TrainDataset | null;
   /** the run being followed */
   run: TrainRun | null;
+  /** runs paused with a checkpoint kept: they can be picked up where they stopped */
+  paused: TrainRun[];
   busy: Busy;
   /** object URLs of the pictures and samples, by key */
   urls: Record<string, string>;
@@ -35,6 +37,7 @@ const START: TrainState = {
   models: [],
   current: null,
   run: null,
+  paused: [],
   busy: null,
   urls: {},
 };
@@ -99,12 +102,20 @@ export function useTraining(api: TrainingApi, pollMs = 1500) {
 
   const refresh = useCallback(async () => {
     try {
-      const [status, datasets, models] = await Promise.all([
+      const [status, datasets, models, runs] = await Promise.all([
         api.status(),
         api.datasets(),
         api.models(),
+        api.runs().catch(() => [] as TrainRun[]),
       ]);
-      set({ loading: false, error: null, status, datasets, models });
+      set({
+        loading: false,
+        error: null,
+        status,
+        datasets,
+        models,
+        paused: runs.filter((r) => r.status === "paused"),
+      });
       if (status.active_run) {
         const run = await api.run(status.active_run);
         set({ run });
@@ -292,6 +303,47 @@ export function useTraining(api: TrainingApi, pollMs = 1500) {
     }
   }, [api, state.run?.id, set, fail]);
 
+  const pause = useCallback(async () => {
+    const id = state.run?.id;
+    if (!id) return;
+    try {
+      await api.pauseRun(id);
+      const run = await api.run(id);
+      set({ run });
+      await refresh();
+    } catch (e) {
+      fail(e, "It could not be paused.");
+    }
+  }, [api, state.run?.id, set, fail, refresh]);
+
+  const resume = useCallback(
+    async (id: string) => {
+      try {
+        set({ error: null });
+        const run = await api.resumeRun(id);
+        set({ run });
+        loadSamples(run);
+        await refresh();
+      } catch (e) {
+        fail(e, "It could not be picked up again.");
+      }
+    },
+    [api, set, fail, loadSamples, refresh],
+  );
+
+  const discard = useCallback(
+    async (id: string) => {
+      try {
+        await api.cancelRun(id);
+        set({ run: null });
+        await refresh();
+      } catch (e) {
+        fail(e, "It could not be discarded.");
+      }
+    },
+    [api, set, fail, refresh],
+  );
+
   const leave = useCallback(async () => {
     set({ current: null, run: null, error: null });
     await refresh();
@@ -361,6 +413,9 @@ export function useTraining(api: TrainingApi, pollMs = 1500) {
     removeDataset,
     teach,
     stop,
+    pause,
+    resume,
+    discard,
     leave,
     renameModel,
     removeModel,

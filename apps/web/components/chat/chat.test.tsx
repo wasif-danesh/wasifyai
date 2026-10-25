@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatHome } from "./ChatHome";
@@ -58,7 +58,6 @@ describe("ChatHome (the web app's mount of the shared home screen)", () => {
   });
 
   it("opens a saved chat with its title, and goes home when it is deleted", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     fetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
       if (init?.method === "DELETE") return new Response(null, { status: 204 });
       if (path.includes(`/conversations/${CHAT}`)) {
@@ -86,6 +85,9 @@ describe("ChatHome (the web app's mount of the shared home screen)", () => {
     render(<ChatHome conversationId={CHAT} />);
     expect(await screen.findByText("Foxes")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /delete this chat/i }));
+    // the question is the app's own box (the desktop window shows no browser prompts)
+    const box = await screen.findByRole("dialog", { name: "Delete this chat?" });
+    await user.click(within(box).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
   });
 });

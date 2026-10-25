@@ -106,6 +106,7 @@ from wasifyai_api.safeguards import (
     Safeguards,
 )
 from wasifyai_api.tool_host import ApiToolHost
+from wasifyai_api.training_setup import router as training_setup_router
 from wasifyai_api.uploads import router as uploads_router
 from wasifyai_api.uploads import sweep_forever
 from wasifyai_api.users import CachedUsers, PostgresUserStore, UserStore
@@ -628,7 +629,8 @@ def create_app(
             app.state.audio = desktop.audio  # the speech runtime (ADR-0066); products reach it here
             app.state.video_builder = desktop.video_builder  # the render engine (ADR-0077)
             app.state.model3d = desktop.model3d  # the 3D engine (ADR-0080)
-            app.state.training = desktop.training  # the trainer, a preview for now (ADR-0073)
+            app.state.training_setup = desktop.training_setup  # the trainer, set up on request
+            app.state.training = desktop.training  # the trainer: mflux on a Mac (ADR-0073)
             if desktop.video_builder is not None:  # and the model it asks to fill a template
                 desktop.video_builder.language = desktop.language
                 desktop.video_builder.usage = recorder
@@ -761,6 +763,7 @@ def create_app(
         app.include_router(desktop_lipsync_router)
         app.include_router(desktop_video_builder_router)
         app.include_router(desktop_model3d_router)
+        app.include_router(training_setup_router)
         app.include_router(desktop_save_router)
         app.include_router(desktop_discovery_router)
         app.include_router(desktop_llm_router)

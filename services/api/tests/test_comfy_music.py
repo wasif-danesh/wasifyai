@@ -107,7 +107,7 @@ def test_resolve_says_what_a_comfyui_model_needs(tmp_path, monkeypatch):
     eng, _, _ = comfy_engine(tmp_path, monkeypatch, FakeSidecar(), present=ALL)
     with pytest.raises(VoiceEngineError) as e:
         eng.resolve("music", "ace-step-1.5-turbo-comfyui")
-    assert e.value.code == "model_missing" and "Models" in e.value.message
+    assert e.value.code == "model_missing" and "Model hub" in e.value.message
     eng, _, _ = comfy_engine(tmp_path, monkeypatch, FakeSidecar())
     assert eng.resolve("music", None).id == "ace-step-1.5-turbo"
 

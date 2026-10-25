@@ -25,7 +25,7 @@ from wasifyai_platform_sdk import (
 )
 from wasifyai_platform_sdk.context import reset_context
 
-from wasifyai_training import captions, guardrail, magic, pictures, trainer
+from wasifyai_training import captions, evaluation, guardrail, magic, pictures, trainer
 from wasifyai_training.store import NotFound, TrainingStore
 
 log = logging.getLogger(__name__)
@@ -190,14 +190,43 @@ async def remove_picture(deps: RouteDeps, identity: Identity, item_id: str) -> b
     return True
 
 
-def suggestions(store: TrainingStore, identity: Identity, dataset: dict[str, Any]) -> list[str]:
-    """Three magic words, avoiding the ones this person already uses."""
+async def word_problem(engine: Any, word: str) -> str | None:
+    """Why the model's own tokenizer finds this a poor magic word, in words, or None (also None
+    where the engine cannot read the tokenizer: the sound rules of `magic.valid` still apply)."""
+    tokenize = getattr(engine, "tokenize", None)
+    if tokenize is None:
+        return None
+    try:
+        found = (await tokenize([word]) or {}).get(word)
+    except Exception:
+        log.exception("the tokenizer could not be read")
+        return None
+    return magic.judge(word, found["pieces"], found["known"]) if found else None
+
+
+async def suggestions(
+    store: TrainingStore, identity: Identity, dataset: dict[str, Any], engine: Any = None
+) -> list[str]:
+    """Three magic words, avoiding the ones this person already uses, and (where the engine can
+    read the model's tokenizer) the ones it finds a poor fit."""
     taken = {
         d["trigger_word"]
         for d in store.list_datasets(identity.tenant_id, identity.user_id, 200)
         if d["id"] != dataset["id"] and d["trigger_word"]
     }
-    return magic.suggest(dataset["name"], dataset["kind"], taken)
+    tokenize = getattr(engine, "tokenize", None)
+    if tokenize is None:
+        return magic.suggest(dataset["name"], dataset["kind"], taken)
+    pool = magic.candidates(dataset["name"], dataset["kind"], taken)
+    try:
+        found = await tokenize(pool) or {}
+    except Exception:
+        log.exception("the tokenizer could not be read")
+        return pool[:3]
+    good = [
+        w for w in pool if w in found and not magic.judge(w, found[w]["pieces"], found[w]["known"])
+    ]
+    return (good or pool)[:3]
 
 
 # ---- the descriptions the app writes --------------------------------------------------------
@@ -334,6 +363,7 @@ class RunManager:
         self._deps = deps
         self._task: asyncio.Task[None] | None = None
         self._run_id: str | None = None
+        self._pausing = False
 
     def busy(self) -> bool:
         return self._task is not None and not self._task.done()
@@ -360,6 +390,9 @@ class RunManager:
         fit = engine.fit()
         if fit["verdict"] == "too_big":
             raise Refused("too_big", fit["reason"])
+        check = getattr(engine, "preflight", None)
+        if check is not None and (blockers := check()["blockers"]):
+            raise Refused("not_now", blockers[0])  # not enough disk, a flat battery
         steps = trainer.PRESETS[dataset["kind"]]
         row = store.add_run(
             identity.tenant_id, identity.user_id, dataset_id,
@@ -371,9 +404,54 @@ class RunManager:
         self._task = asyncio.create_task(self._run(identity, dataset, items, row, engine))
         return row
 
+    async def pause(self, identity: Identity, run_id: str) -> bool:
+        """Stop for now and keep the last checkpoint; `resume` picks it up where it stopped."""
+        store_for(self._deps.state).get_run(identity.tenant_id, identity.user_id, run_id)  # owner
+        if self._task is None or self._task.done() or self._run_id != run_id:
+            return False
+        engine = engine_for(self._deps.state)
+        pause = getattr(engine, "pause", None)
+        if pause is None:
+            return False
+        self._pausing = True
+        await pause()
+        await asyncio.gather(self._task, return_exceptions=True)
+        return True
+
+    async def resume(self, identity: Identity, run_id: str) -> dict[str, Any]:
+        state = self._deps.state
+        engine, store = engine_for(state), store_for(state)
+        row = store.get_run(identity.tenant_id, identity.user_id, run_id)
+        if row["status"] != "paused":
+            raise Refused("not_paused", "That run is not paused.")
+        if not engine.ready():
+            raise Refused("not_ready", not_ready(engine))
+        if self.busy():
+            raise Refused("busy", "A model is being taught. Wait for it to finish.")
+        fit = engine.fit()
+        if fit["verdict"] == "too_big":
+            raise Refused("too_big", fit["reason"])
+        check = getattr(engine, "preflight", None)
+        if check is not None and (blockers := check()["blockers"]):
+            raise Refused("not_now", blockers[0])
+        try:
+            dataset = store.get_dataset(identity.tenant_id, identity.user_id, row["dataset_id"])
+        except NotFound:
+            raise Refused(
+                "gone", "The pictures of this run were removed, so it cannot go on."
+            ) from None
+        items = store.list_items(identity.tenant_id, identity.user_id, dataset["id"])
+        store.resume_run(run_id)
+        row = store.get_run(identity.tenant_id, identity.user_id, run_id)
+        self._run_id = run_id
+        self._task = asyncio.create_task(
+            self._run(identity, dataset, items, row, engine, resume=True)
+        )
+        return row
+
     async def _run(
         self, identity: Identity, dataset: dict[str, Any], items: list[dict[str, Any]],
-        row: dict[str, Any], engine: Any,
+        row: dict[str, Any], engine: Any, resume: bool = False,
     ) -> None:  # fmt: skip
         store = store_for(self._deps.state)
         run_id = row["id"]
@@ -391,6 +469,7 @@ class RunManager:
                 job,
                 lambda step, stage: store.set_progress(run_id, step, stage),
                 lambda name: store.add_sample(run_id, name),
+                **({"resume": True} if resume else {}),
             )
             model = await self._keep(identity, dataset, items, row, result)
             store.finish_run(run_id, "done", elapsed_s=result.seconds, model_id=model["id"])
@@ -399,6 +478,10 @@ class RunManager:
                 preview=bool(row["preview"]),
             )  # fmt: skip
             await add_to_search(self._deps.state, identity, model["id"], words_of(model))
+        except trainer.Paused as p:
+            store.pause_run(run_id, f"Paused at step {p.step} of {row['steps']}")
+        except trainer.Stopped as e:
+            store.finish_run(run_id, "cancelled", error=str(e))
         except asyncio.CancelledError:
             store.finish_run(run_id, "cancelled", error="Stopped.")
             raise
@@ -406,6 +489,7 @@ class RunManager:
             log.exception("a training run failed")
             store.finish_run(run_id, "failed", error="The model could not be taught. Try again.")
         finally:
+            self._pausing = False
             reset_context(token)
 
     async def _keep(
@@ -420,6 +504,7 @@ class RunManager:
             "dataset": {"name": dataset["name"], "kind": dataset["kind"], "pictures": len(items),
                         "hash": dataset_hash(items)},
             "settings": row["settings"], "steps": row["steps"], "seconds": round(result.seconds, 1),
+            "peak_memory_gb": round(result.peak_bytes / 1024**3, 1) if result.peak_bytes else None,
             "trigger_word": dataset["trigger_word"],
             "statement": STATEMENTS.get(dataset["rights"], ""),
             "evaluation": {"passed": None, "note": "Not evaluated yet."},
@@ -436,6 +521,9 @@ class RunManager:
         folder = model_folder(store, identity, model["id"])
         await asyncio.to_thread(folder.mkdir, parents=True, exist_ok=True)
         await asyncio.to_thread(shutil.copyfile, result.adapter, folder / "adapter.safetensors")
+        # a few of the pictures it learnt from, small: what a check compares what it draws with
+        refs = [item_folder(store, identity, i["id"]) / "picture.png" for i in items]
+        await asyncio.to_thread(evaluation.save_refs, refs, folder / "refs")
         await asyncio.to_thread((folder / "card.json").write_text, json.dumps(card, indent=2))
         return model
 
@@ -457,7 +545,15 @@ class RunManager:
         return {"lora_name": name} if name else None
 
     async def cancel(self, identity: Identity, run_id: str) -> bool:
-        store_for(self._deps.state).get_run(identity.tenant_id, identity.user_id, run_id)  # owner
+        """Stop a run that is going, or discard one that is paused (its kept files go)."""
+        store = store_for(self._deps.state)
+        row = store.get_run(identity.tenant_id, identity.user_id, run_id)  # owner
+        if row["status"] == "paused" and not (self.busy() and self._run_id == run_id):
+            store.finish_run(run_id, "cancelled", error="Discarded.")
+            folder = run_folder(store, identity, run_id)
+            for part in ("work", "out"):
+                await asyncio.to_thread(shutil.rmtree, folder / part, True)
+            return True
         if self._task is None or self._task.done() or self._run_id != run_id:
             return False
         self._task.cancel()

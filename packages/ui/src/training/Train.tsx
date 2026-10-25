@@ -19,7 +19,10 @@ import { JobMeter, WorkingCard } from "../components/create";
 import { Notice } from "../components/notice";
 import type { ImageFlowApi } from "../hooks/use-image-flow";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
+import { CheckIt, EvaluationLine } from "./CheckIt";
+import { SetupCard } from "./SetupCard";
 import { TryIt } from "./TryIt";
+import { useTrainingSetup } from "./use-setup";
 import { type TrainState, useTraining } from "./use-training";
 
 const INPUT =
@@ -90,6 +93,9 @@ type Hook = ReturnType<typeof useTraining>;
 export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: TrainProps) {
   const t = useTraining(api, pollMs);
   const { state } = t;
+  // the trainer's own component: offered while training is not ready (a desktop engine), read again once set up
+  const notReady = state.status !== null && !state.status.ready;
+  const setup = useTrainingSetup(api, place === "device", () => void t.refresh(), pollMs);
   const showingRun = state.run !== null;
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-5 p-[clamp(1rem,3vw,2rem)]">
@@ -115,9 +121,16 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
           models it makes are not real. The real trainer is coming.
         </Notice>
       ) : null}
-      {state.status && !state.status.ready ? (
+      {notReady && setup.setup && setup.setup.plan.supported && !setup.setup.installed ? (
+        <SetupCard
+          setup={setup.setup}
+          error={setup.error}
+          onInstall={(bytes) => void setup.install(bytes)}
+          onCancel={() => void setup.cancel()}
+        />
+      ) : notReady ? (
         <Notice tone="warn" title="Training is not ready">
-          {state.status.problem ?? "It could not be started."}
+          {setup.setup?.problem ?? state.status?.problem ?? "It could not be started."}
         </Notice>
       ) : null}
       {state.status?.fit?.verdict === "too_big" ? (
@@ -134,11 +147,11 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
       {state.loading ? (
         <output className="text-muted-foreground">Looking at training…</output>
       ) : showingRun && state.run ? (
-        <RunView t={t} run={state.run} onOpenLibrary={onOpenLibrary} runs={runs} />
+        <RunView t={t} run={state.run} onOpenLibrary={onOpenLibrary} runs={runs} api={api} />
       ) : state.current ? (
         <MakeView t={t} status={state.status} />
       ) : (
-        <Home t={t} runs={runs} />
+        <Home t={t} runs={runs} setup={setup} api={api} />
       )}
     </div>
   );
@@ -146,7 +159,17 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
 
 // ---- the front door -----------------------------------------------------------------------------
 
-function Home({ t, runs }: { t: Hook; runs?: ImageFlowApi }) {
+function Home({
+  t,
+  runs,
+  setup,
+  api,
+}: {
+  t: Hook;
+  runs?: ImageFlowApi;
+  setup: ReturnType<typeof useTrainingSetup>;
+  api: TrainingApi;
+}) {
   const { state } = t;
   const ready = state.status?.ready === true;
   return (
@@ -179,6 +202,28 @@ function Home({ t, runs }: { t: Hook; runs?: ImageFlowApi }) {
           </div>
         ))}
       </section>
+
+      {state.paused.length > 0 ? (
+        <section aria-label="Paused" className="grid gap-2">
+          <h2 className="m-0 font-semibold text-lg">Paused</h2>
+          <ul className="m-0 grid list-none gap-2 p-0">
+            {state.paused.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-3 rounded-xl border p-3">
+                <span className="min-w-0 flex-1">
+                  <strong>{r.stage || "Paused"}</strong>{" "}
+                  <span className="text-muted-foreground">
+                    · its place is kept, and it carries on from there
+                  </span>
+                </span>
+                <Button type="button" size="sm" onClick={() => void t.resume(r.id)}>
+                  Carry on
+                </Button>
+                <Sure label="Discard" name="this run" onSure={() => void t.discard(r.id)} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {state.datasets.length > 0 ? (
         <section aria-label="Sets of pictures" className="grid gap-2">
@@ -220,11 +265,29 @@ function Home({ t, runs }: { t: Hook; runs?: ImageFlowApi }) {
         ) : (
           <ul className="m-0 grid list-none gap-2 p-0 md:grid-cols-2">
             {state.models.map((m) => (
-              <ModelCard key={m.id} model={m} t={t} runs={runs} />
+              <ModelCard key={m.id} model={m} t={t} runs={runs} api={api} />
             ))}
           </ul>
         )}
       </section>
+
+      {setup.setup && (setup.setup.tool === "managed" || setup.setup.base === "managed") ? (
+        <section aria-label="Training tools" className="grid gap-2">
+          <h2 className="m-0 font-semibold text-lg">Training tools</h2>
+          <p className={hint}>
+            The trainer and the picture model it learns on are kept in the app's own folder.
+            Removing them gives the space back; you can set them up again whenever you want to teach
+            something. Your pictures and the models you taught are kept.
+          </p>
+          <div className={actions}>
+            <Sure
+              label="Remove"
+              name="the trainer and the picture model"
+              onSure={() => void setup.remove()}
+            />
+          </div>
+        </section>
+      ) : null}
     </>
   );
 }
@@ -261,7 +324,12 @@ function Sure({ label, name, onSure }: { label: string; name: string; onSure: ()
   );
 }
 
-function ModelCard({ model: m, t, runs }: { model: TrainedModel; t: Hook; runs?: ImageFlowApi }) {
+function ModelCard({
+  model: m,
+  t,
+  runs,
+  api,
+}: { model: TrainedModel; t: Hook; runs?: ImageFlowApi; api: TrainingApi }) {
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(m.name);
   const id = useId();
@@ -306,6 +374,7 @@ function ModelCard({ model: m, t, runs }: { model: TrainedModel; t: Hook; runs?:
         {KIND_LABEL[m.kind].title}, {m.card.dataset.pictures} pictures, {m.card.steps} steps,{" "}
         {m.card.base_title} · {m.card.licence}.{m.card.note ? ` ${m.card.note}` : ""}
       </p>
+      <EvaluationLine model={m} />
       <div className={actions}>
         {renaming ? null : (
           <Button
@@ -322,8 +391,9 @@ function ModelCard({ model: m, t, runs }: { model: TrainedModel; t: Hook; runs?:
       </div>
       {runs && !m.preview ? (
         <details className="rounded-lg border px-3 py-2">
-          <summary className="cursor-pointer font-medium text-sm">Try it</summary>
-          <div className="pt-3">
+          <summary className="cursor-pointer font-medium text-sm">Check and try it</summary>
+          <div className="grid gap-5 pt-3">
+            <CheckIt model={m} api={api} runs={runs} onSaved={() => void t.refresh()} />
             <TryIt model={m} runs={runs} />
           </div>
         </details>
@@ -516,6 +586,7 @@ function CheckStep({
   ).length;
   const writing = d.writing || t.state.busy === "captions";
   const estimate = status?.estimates?.[d.kind] ?? "";
+  const preflight = status?.preflight ?? null;
   return (
     <section className={panel} aria-label="Check">
       <fieldset className={cn(field, "m-0 border-0 p-0")}>
@@ -642,6 +713,20 @@ function CheckStep({
         </ul>
       </div>
 
+      {preflight ? (
+        <>
+          {preflight.blockers.map((why) => (
+            <Notice key={why} tone="error" title="It cannot start now">
+              {why}
+            </Notice>
+          ))}
+          {preflight.warnings.map((why) => (
+            <Notice key={why} tone="warn" title="Before you start">
+              {why}
+            </Notice>
+          ))}
+        </>
+      ) : null}
       <div className={actions}>
         <Button type="button" variant="outline" onClick={onBack}>
           Back
@@ -650,14 +735,19 @@ function CheckStep({
           type="button"
           size="lg"
           disabled={
-            d.missing !== null || writing || t.state.busy === "run" || t.state.status?.busy === true
+            d.missing !== null ||
+            writing ||
+            t.state.busy === "run" ||
+            t.state.status?.busy === true ||
+            preflight?.ok === false
           }
           onClick={() => void t.teach()}
         >
           Teach it
         </Button>
         <span className="text-muted-foreground">
-          {d.missing ?? `${estimate}. Chat and image making pause while it learns.`}
+          {d.missing ??
+            `${estimate}. ${preflight?.pauses ?? "Chat and image making pause while it learns."}`}
         </span>
       </div>
     </section>
@@ -724,7 +814,14 @@ function RunView({
   run,
   onOpenLibrary,
   runs,
-}: { t: Hook; run: TrainRun; onOpenLibrary?: () => void; runs?: ImageFlowApi }) {
+  api,
+}: {
+  t: Hook;
+  run: TrainRun;
+  onOpenLibrary?: () => void;
+  runs?: ImageFlowApi;
+  api: TrainingApi;
+}) {
   const working = run.status === "working";
   const model = t.state.models.find((m) => m.id === run.model_id) ?? null;
   const samples = run.samples
@@ -744,7 +841,31 @@ function RunView({
             {run.stage || "Starting"}. About {run.estimate.replace(/^About /, "").toLowerCase()} in
             all.
           </p>
+          {run.preview ? null : (
+            <div className={actions}>
+              <Button type="button" variant="outline" onClick={() => void t.pause()}>
+                Pause
+              </Button>
+              <span className="text-muted-foreground text-sm">
+                Pause keeps its place so you can carry on later; Cancel throws it away.
+              </span>
+            </div>
+          )}
         </WorkingCard>
+      ) : run.status === "paused" ? (
+        <>
+          <h2 className="m-0 font-semibold text-lg">Paused</h2>
+          <p className="m-0 text-muted-foreground">
+            {run.stage || "Paused"}. Its place is kept, so it carries on from there. Chat and image
+            making are free until you do.
+          </p>
+          <div className={actions}>
+            <Button type="button" onClick={() => void t.resume(run.id)}>
+              Carry on
+            </Button>
+            <Sure label="Discard" name="this run" onSure={() => void t.discard(run.id)} />
+          </div>
+        </>
       ) : run.status === "done" ? (
         <>
           <h2 className="m-0 font-semibold text-lg">
@@ -786,7 +907,12 @@ function RunView({
         </>
       ) : null}
 
-      {run.status === "done" && model && runs ? <TryIt model={model} runs={runs} /> : null}
+      {run.status === "done" && model && runs ? (
+        <>
+          <CheckIt model={model} api={api} runs={runs} auto onSaved={() => void t.refresh()} />
+          <TryIt model={model} runs={runs} />
+        </>
+      ) : null}
 
       {working ? null : (
         <div className={actions}>

@@ -19,6 +19,7 @@ from typing import Any
 
 SCHEMA = 1
 LEFT_RUNNING = "It was stopped when the app closed. Start it again."
+LEFT_PAUSED = "It was paused when the app closed. You can pick it up where it stopped."
 KINDS = ("character", "style", "object")
 RIGHTS = ("mine", "permission", "drawing", "artwork")
 
@@ -39,7 +40,18 @@ def _slug(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]", "_", text)[:64] or "_"
 
 
-DDL = """
+RUNS_DDL = """
+CREATE TABLE IF NOT EXISTS runs(
+  id TEXT PRIMARY KEY, dataset_id TEXT NOT NULL, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('working', 'paused', 'done', 'failed', 'cancelled')),
+  stage TEXT NOT NULL DEFAULT '', step INTEGER NOT NULL DEFAULT 0, steps INTEGER NOT NULL DEFAULT 0,
+  progress REAL NOT NULL DEFAULT 0, error TEXT, base TEXT NOT NULL DEFAULT '', settings TEXT NOT NULL DEFAULT '{}',
+  samples TEXT NOT NULL DEFAULT '[]', preview INTEGER NOT NULL DEFAULT 0, model_id TEXT, elapsed_s REAL,
+  created_at TEXT NOT NULL, finished_at TEXT);
+"""
+
+DDL = (
+    """
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS datasets(
   id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
@@ -52,14 +64,9 @@ CREATE TABLE IF NOT EXISTS items(
   checks TEXT NOT NULL DEFAULT '[]', caption TEXT NOT NULL DEFAULT '',
   caption_state TEXT NOT NULL DEFAULT 'none' CHECK (caption_state IN ('none', 'writing', 'done', 'edited', 'failed')),
   caption_error TEXT, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS runs(
-  id TEXT PRIMARY KEY, dataset_id TEXT NOT NULL, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('working', 'done', 'failed', 'cancelled')),
-  stage TEXT NOT NULL DEFAULT '', step INTEGER NOT NULL DEFAULT 0, steps INTEGER NOT NULL DEFAULT 0,
-  progress REAL NOT NULL DEFAULT 0, error TEXT, base TEXT NOT NULL DEFAULT '', settings TEXT NOT NULL DEFAULT '{}',
-  samples TEXT NOT NULL DEFAULT '[]', preview INTEGER NOT NULL DEFAULT 0, model_id TEXT, elapsed_s REAL,
-  created_at TEXT NOT NULL, finished_at TEXT);
-CREATE TABLE IF NOT EXISTS models(
+"""
+    + RUNS_DDL
+    + """CREATE TABLE IF NOT EXISTS models(
   id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL, run_id TEXT NOT NULL, dataset_id TEXT,
   name TEXT NOT NULL, trigger_word TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT 'character',
   base TEXT NOT NULL DEFAULT '', card TEXT NOT NULL DEFAULT '{}', preview INTEGER NOT NULL DEFAULT 0,
@@ -69,6 +76,7 @@ CREATE INDEX IF NOT EXISTS items_dataset ON items(dataset_id, created_at);
 CREATE INDEX IF NOT EXISTS runs_owner ON runs(tenant_id, user_id, created_at);
 CREATE INDEX IF NOT EXISTS models_owner ON models(tenant_id, user_id, created_at);
 """
+)
 
 
 class TrainingStore:
@@ -79,16 +87,48 @@ class TrainingStore:
         self._db = sqlite3.connect(folder / "training.db", check_same_thread=False, timeout=10)
         self._db.row_factory = sqlite3.Row
         with self._lock:
+            self._migrate()
             self._db.executescript(DDL)
             self._db.execute("INSERT OR IGNORE INTO meta VALUES ('schema', ?)", (str(SCHEMA),))
-            self._db.execute(
-                "UPDATE runs SET status = 'failed', error = ?, finished_at = ? WHERE status = 'working'",
-                (LEFT_RUNNING, now()),
-            )
+            # a run the app left going: paused when a checkpoint was kept, else stopped
+            for row in self._db.execute(
+                "SELECT id, tenant_id, user_id FROM runs WHERE status = 'working'"
+            ).fetchall():
+                kept = self._has_checkpoint(row["tenant_id"], row["user_id"], row["id"])
+                self._db.execute(
+                    "UPDATE runs SET status = ?, error = ?, finished_at = ? WHERE id = ?",
+                    (
+                        "paused" if kept else "failed",
+                        LEFT_PAUSED if kept else LEFT_RUNNING,
+                        None if kept else now(),
+                        row["id"],
+                    ),
+                )
             self._db.execute(
                 "UPDATE items SET caption_state = 'none' WHERE caption_state = 'writing'"
             )
             self._db.commit()
+
+    def _migrate(self) -> None:
+        """A run can be paused (2026-10-25): the status check of an older table does not allow it."""
+        row = self._db.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'runs'"
+        ).fetchone()
+        if row is None or "'paused'" in row["sql"]:
+            return
+        self._db.execute("ALTER TABLE runs RENAME TO runs_old")
+        self._db.execute("DROP INDEX IF EXISTS runs_owner")
+        self._db.executescript(RUNS_DDL)
+        self._db.execute("INSERT INTO runs SELECT * FROM runs_old")
+        self._db.execute("DROP TABLE runs_old")
+        self._db.commit()
+
+    def _has_checkpoint(self, tenant: str, user: str, run: str) -> bool:
+        try:
+            folder = self.folder_of(tenant, user, "runs", run) / "out" / "checkpoints"
+        except ValueError:
+            return False
+        return folder.is_dir() and any(folder.glob("*_checkpoint.zip"))
 
     # ---- where the files are ----------------------------------------------------------------
 
@@ -279,6 +319,24 @@ class TrainingStore:
             samples = [*json.loads(row["samples"]), name]
             self._exec("UPDATE runs SET samples = ? WHERE id = ?", (json.dumps(samples), item))
 
+    def pause_run(self, item: str, stage: str = "Paused") -> None:
+        """Stopped for now, with a checkpoint kept: it can be picked up where it stopped."""
+        self._exec(
+            "UPDATE runs SET status = 'paused', stage = ?, error = NULL, finished_at = NULL "
+            "WHERE id = ? AND status = 'working'",
+            (stage, item),
+        )
+
+    def resume_run(self, item: str) -> bool:
+        return (
+            self._exec(
+                "UPDATE runs SET status = 'working', stage = 'Starting again', error = NULL "
+                "WHERE id = ? AND status = 'paused'",
+                (item,),
+            )
+            > 0
+        )
+
     def finish_run(
         self, item: str, status: str, *, error: str | None = None, elapsed_s: float | None = None,
         model_id: str | None = None,
@@ -287,7 +345,7 @@ class TrainingStore:
         self._exec(
             "UPDATE runs SET status = ?, error = ?, elapsed_s = ?, model_id = ?, stage = '', "
             "progress = CASE WHEN ? = 'done' THEN 1 ELSE progress END, finished_at = ? "
-            "WHERE id = ? AND status = 'working'",
+            "WHERE id = ? AND status IN ('working', 'paused')",
             (status, error, elapsed_s, model_id, status, now(), item),
         )
 
@@ -334,6 +392,20 @@ class TrainingStore:
         n = self._exec(
             "UPDATE models SET name = ? WHERE id = ? AND tenant_id = ? AND user_id = ?",
             (name.strip()[:200], item, tenant, user),
+        )
+        if n == 0:
+            raise NotFound(item)
+        return self.get_model(tenant, user, item)
+
+    def set_evaluation(
+        self, tenant: str, user: str, item: str, evaluation: dict[str, Any]
+    ) -> dict[str, Any]:
+        """What the check found, kept on the model's card (ADR-0073 decision 10)."""
+        card = self.get_model(tenant, user, item)["card"]
+        card["evaluation"] = evaluation
+        n = self._exec(
+            "UPDATE models SET card = ? WHERE id = ? AND tenant_id = ? AND user_id = ?",
+            (json.dumps(card), item, tenant, user),
         )
         if n == 0:
             raise NotFound(item)

@@ -61,6 +61,16 @@ if ! ls "$READER_SRC"/requirements-*.lock >/dev/null 2>&1; then
 fi
 cp "$READER_SRC"/requirements-*.lock "$OUT/products/wasifyai-notebooks/reader/"
 
+# The picture trainer (ADR-0073): mflux in an environment of its own, set up on request from this hashed lock
+# (scripts/lock-trainer.sh writes it). Apple silicon only, so there is one lock.
+TRAINER_SRC="products/wasifyai-training/trainer"
+if [ ! -f "$TRAINER_SRC/requirements-aarch64-apple-darwin.lock" ]; then
+  echo "no trainer lock file in $TRAINER_SRC: run scripts/lock-trainer.sh first" >&2
+  exit 1
+fi
+mkdir -p "$OUT/products/wasifyai-training/trainer"
+cp "$TRAINER_SRC"/requirements-*.lock "$OUT/products/wasifyai-training/trainer/"
+
 for p in $PRODUCTS; do
   mkdir -p "$OUT/products/$p"
   cp "products/$p/product.yaml" "$OUT/products/$p/"

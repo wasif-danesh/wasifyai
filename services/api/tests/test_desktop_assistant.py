@@ -257,7 +257,7 @@ def test_nothing_chosen_ends_the_run_with_a_sentence_that_says_what_to_do(data_d
         events = ask(c, "Hello")
         last_name, last = events[-1]
         assert last_name == "error" and last["code"] == "no_language_model"
-        assert "Models" in last["message"]
+        assert "Model hub" in last["message"]
 
 
 def test_another_persons_conversation_is_not_reachable_through_a_run(data_dir):

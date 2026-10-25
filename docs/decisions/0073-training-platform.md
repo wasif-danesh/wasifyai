@@ -327,8 +327,7 @@ downloads silently** (`HF_HUB_OFFLINE=1`).
   magic word gave a young woman with hair pulled back; after it the same words gave long dark wavy hair and the face and build of
   the set, in the seen scene and in a new one (a sunny park). That is one run on one set: **binding** (the word means the
   character) looks right by eye on 2 prompts, not by a test.
-- **Not measured:** the peak memory (the `fit` figure of 28 GB is the engine's number and is **not measured** for klein; the
-  Z-Image run of T0 had a 39.9 GB footprint); the quality over several datasets; style and object runs; resume.
+- **Not measured (at that point):** the peak memory (measured later, see the next section); the quality over several datasets; style and object runs; resume.
 - **Not built yet (at that point):** Use it, publishing and the check on the distilled klein: built the same day, below. Still to do: the web stage.
 - **Found on the way:** the progress bar of the sample pictures (28 steps) looks like training progress, so only the bar whose
   total is the run's own count is read; the bar is redrawn in place, so a step is read when it is written, not when the next one
@@ -367,3 +366,65 @@ The front door has four cards, in a two by two grid, each with a small label abo
 training** (Make my own look or motion for video; from short clips; says it needs an NVIDIA graphics card for now: coming
 later, see the video amendment). The labels use the family names of decision 5's table so a person looking for them finds them;
 the headlines stay in plain words. Not live means a "Coming ..." tag and no button, never a button that does nothing.
+
+## Built (2026-10-25): Set up training, in the app
+
+A fresh install can now train. `services/api/src/wasifyai_api/training_setup.py` (routes `/desktop/training-setup`, the card
+**Set up training** on the Train screen) fetches, on request, what the picture trainer needs, in the same shape as the other
+components (3D, the notebooks' reader):
+
+- **Shown first, repeated on the button:** the trainer (mflux 0.22.0, MIT, from PyPI, about 1.1 GB) and the picture model it learns on
+  (FLUX.2 klein base 4B, Apache-2.0, from Hugging Face, 15.98 GB), the free disk space needed (about 20 GB), and a button that
+  carries the exact total ("Download and set up (17.1 GB)"). The engine refuses a start whose size is not the one shown. A part
+  that is already on the computer (a Hugging Face cache that holds a whole copy of the model, a developer's `WASIFYAI_MFLUX_DIR`) is
+  used where it is and not offered again.
+- **Reproducible:** the trainer's environment is made with `uv` from a **hashed lock** of the exact packages the real runs were made
+  with (`products/wasifyai-training/trainer/requirements-aarch64-apple-darwin.lock`, `scripts/lock-trainer.sh`, carried by the engine
+  bundle), `--require-hashes`. The model's 19 files have a pinned size and SHA-256 (`training_pins.json`, checked against the values
+  Hugging Face publishes), go through the resumable downloader of the Models screen, and are used from the app's own folder
+  (`model_path`: the trainer fetches nothing and reads no Hugging Face cache).
+- **Checked, then installed:** the tool must start and every model file be whole before `installed.json` is written. A failed install
+  removes the environment it made and keeps the model files that arrived; a new start continues. **Stop** keeps them too.
+  **Remove** (Training tools, on the Train screen) gives the space back and keeps the pictures and the models taught.
+- **Not Apple silicon:** the card is replaced by the reason in words (mflux runs on MLX); nothing is offered.
+- **Rehearsed for real, 2026-10-25:** an engine with no trainer and an empty Hugging Face cache, a local stand-in for the hub: the card
+  showed the offer, one click made the environment from the lock (offline, from uv's cache), fetched and hash-checked all 19 files,
+  started the tool and enabled Start; a run then trained from the app's own copies (step 6 reached, stopped cleanly, no process
+  left). **Not rehearsed:** the download from huggingface.co and PyPI themselves (the owner had approved the 16 GB once; the
+  stand-in served the same bytes), and an interrupted download resuming through this installer (the downloader's own tests cover it).
+- The hard-coded path of the spikes' environment is gone: a developer's own copy is named by `WASIFYAI_MFLUX_DIR`.
+
+## Built (2026-10-25, later): "Did it learn?", safety around a run, and the style and object runs
+
+All of it was run for real through the screens on the owner's M5 Pro (64 GB), with the person's own Qwen3.8 27B as the vision model and the
+distilled klein as the image engine. Three picture sets: 12 pictures of one fictional character, 15 pictures in one paper-collage style and
+15 of one blue teapot (the last two drawn by the app's own image engine).
+
+- **Did it learn? (decision 10).** After a run the model is drawn on two new scenes three ways (with the model and its magic word, with the
+  model and no word, the base model alone) from one seed, and the picture-reading model says for each whether it looks like the pictures it
+  learnt from (three small references are kept with the model; the judge compares with what all the references share). The card gets a
+  sentence and **Passed** or **Did not pass** (never blocking), the reasons show under each picture, and the check starts by itself after a
+  run (and by a button later). It passes when the pictures with the word look like the references at least half the time and the base
+  model's do not. A soft check by a vision model, not a proof. **Measured:** character **passed** (1 of 2 with its word, base 0 of 2; it also
+  appeared without the word, 2 of 2: strong); object **passed** (1 of 2, base 0 of 2; the first judge, which counted a spout that varied
+  between the references against it, said 0 of 2, so the instruction was changed); style **did not pass** (below).
+- **Safety around a run.** Before a run the screen shows what could stop it (memory, disk, a flat battery) and what to look out for (tight
+  memory, battery power), and what waits while it runs; **Pause** keeps the last checkpoint (every 25 steps; the newest two are kept) and
+  **Carry on** picks it up where it stopped, also after the app was closed (a run left going is paused when it has a checkpoint, else
+  stopped); **Discard** removes what was kept. Real run: paused at step 50 of 200, carried on, finished, passed its check. The first real
+  attempt found a bug no test had: the resumed trainer still read the checkpoint it started from, which the clean-up had removed (it
+  failed at step 124); that checkpoint is now kept. An older training database is migrated (the status check gained `paused`).
+- **Measured on this Mac:** the most memory a run held (system footprint, Metal included): **21.0 GB** for the style and the object runs and
+  **35.0 GB** for the character run; the memory check uses the worst case, 35 GB (it said 28 GB, a guess). Time: **25 to 41 minutes** for
+  150 to 250 steps, 9.2 to 11.6 s a step in all (model load and sample pictures included), so the estimate is 10 s a step (it said 7.5 s):
+  character "about 33 minutes". Peak memory differed between kinds for a reason not found.
+- **Magic words against the real tokenizer.** The engine reads how the model's own tokenizer splits a word (in the trainer's environment) and
+  the app refuses a word that is one piece or holds a word the model knows (and suggests only words it likes). Measured on the klein
+  tokenizer: 483 of 500 random pronounceable words pass; "dog" and "sunrise" are one piece, "brainy" holds "brain".
+- **Style did not carry over to a new scene: not solved.** Three real runs of the paper-collage set, each judged 0 of 2 on new scenes (a
+  lighthouse and a bowl of fruit stayed photographs): 250 steps at learning rate 1e-4, 500 steps at 1e-4, 250 steps at 3e-4. The scenes it was
+  shown are learnt (the fox turns into a paper cut-out by step 508) and a stronger strength (up to 2.0) does not bring the style to a new
+  scene (`docs/spikes/train-t3/style-500-steps-seen-and-new-scene.jpg`, `style-strength-0-1-1.5-2.jpg`). More steps and a higher rate are
+  therefore not the lever; untried: more pictures of more different subjects (15 was used), the text-stream layers (mflux's recipe here trains the
+  image stream only), a higher rank. The check reports it honestly and says what to try ("add pictures of different things"); the style preset
+  stays at 250 steps and 1e-4. Backlog D32.

@@ -225,7 +225,7 @@ def test_resolve_names_what_to_do(tmp_path, monkeypatch):
     assert eng.resolve("speak", None).id == "kokoro-82m"  # the recommended, ready one
     with pytest.raises(VoiceEngineError) as e:
         eng.resolve("speak", "voxcpm2")
-    assert e.value.code == "model_missing" and "Models" in e.value.message
+    assert e.value.code == "model_missing" and "Model hub" in e.value.message
     with pytest.raises(VoiceEngineError) as e:
         eng.resolve("speak", "parakeet-tdt-0.6b-v3")
     assert e.value.code == "unknown_model"

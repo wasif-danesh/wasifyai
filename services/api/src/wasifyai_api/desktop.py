@@ -14,6 +14,7 @@ import json
 import logging
 import mimetypes
 import os
+import shutil
 import socket
 import sys
 import threading
@@ -52,6 +53,7 @@ from wasifyai_api.llama_server import LlamaServer
 from wasifyai_api.runs import RunManager
 from wasifyai_api.safeguards import SettingsStore
 from wasifyai_api.sqlite_stores import SqliteIndexStore, SqliteSettingsStore, SqliteUserStore
+from wasifyai_api.training_setup import HUB, LOCK_NAME, TrainingSetup
 from wasifyai_api.web_search import WebService, load_or_create_key
 
 log = logging.getLogger("wasifyai_api.desktop")
@@ -90,6 +92,7 @@ class DesktopBackends:
         None  # the render engine, installed on request (ADR-0077)
     )
     model3d: Model3dService | None = None  # the 3D engine, installed on request (ADR-0080)
+    training_setup: TrainingSetup | None = None  # the trainer's component, set up on request
     training: Any = None  # the trainer: a preview until the real one is installed (ADR-0073)
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
@@ -175,6 +178,14 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         SqliteSettingsStore(engine),
         SecretBox(load_or_create_key(root / "secrets.key")),
     )
+    cache = root / "engine" / "cache"
+    setup = TrainingSetup(
+        root,
+        lock=products / "wasifyai-training" / "trainer" / LOCK_NAME,
+        uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
+        cache_dir=cache if cache.is_dir() else None,
+        base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
+    )
     return DesktopBackends(
         web=web,
         models=models,
@@ -183,7 +194,8 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         audio=audio,
         video_builder=VideoBuilderService(settings.desktop_dir),
         model3d=Model3dService(settings.desktop_dir),
-        training=make_trainer(settings.desktop_dir, settings.models_dir),
+        training_setup=setup,
+        training=make_trainer(settings.desktop_dir, settings.models_dir, setup),
         language=language,
         vision=vision,
         hub=hub,

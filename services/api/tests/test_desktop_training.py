@@ -17,19 +17,33 @@ from wasifyai_training.trainer import TrainJob
 FAKE = """#!{python}
 import json, os, sys, time, zipfile
 from pathlib import Path
-cfg = json.loads(Path(sys.argv[sys.argv.index("--config") + 1]).read_text())
-out = Path(cfg["checkpoint"]["output_path"])
+argv = sys.argv
+resume = "--resume" in argv
+if resume:
+    out = Path(argv[argv.index("--resume") + 1]).parent.parent
+    total = int((out / "total.txt").read_text())
+    first = int(Path(argv[argv.index("--resume") + 1]).name[:7]) + 1
+else:
+    cfg = json.loads(Path(argv[argv.index("--config") + 1]).read_text())
+    out = Path(cfg["checkpoint"]["output_path"])
+    (out / "preview").mkdir(parents=True)
+    (out / "checkpoints").mkdir()
+    total = cfg["training_loop"]["num_epochs"] * len(list(Path(cfg["data"]).glob("*.png")))
+    (out / "total.txt").write_text(str(total))
+    first = 1
 Path(os.environ["FAKE_PID_FILE"]).write_text(str(os.getpid()))
-(out / "preview").mkdir(parents=True)
-(out / "checkpoints").mkdir()
 mode = os.environ.get("FAKE_MODE", "ok")
-total = cfg["training_loop"]["num_epochs"] * len(list(Path(cfg["data"]).glob("*.png")))
 def preview(n):
     for k in (1, 2):
         Path(out / "preview" / f"{{n:07d}}_preview_image_preview-{{k}}.png").write_bytes(b"png")
-preview(0)
-sys.stderr.write("\\r100%|##########| 28/28 [00:30<00:00,  1.0s/it]\\n")  # a sample, not training
-for step in range(1, total + 1):
+def checkpoint(n):
+    with zipfile.ZipFile(out / "checkpoints" / f"{{n:07d}}_checkpoint.zip", "w") as z:
+        z.writestr(f"{{n:07d}}_adapter.safetensors", b"adapter-bytes")
+        z.writestr(f"{{n:07d}}_optimizer.safetensors", b"x" * 1000)
+if not resume:
+    preview(0)
+    sys.stderr.write("\\r100%|##########| 28/28 [00:30<00:00,  1.0s/it]\\n")  # a sample
+for step in range(first, total + 1):
     sys.stderr.write(f"\\r 50%|#####     | {{step}}/{{total}} [00:01<00:01,  1.0s/it]")
     sys.stderr.flush()
     if mode == "fail" and step == 2:
@@ -37,12 +51,15 @@ for step in range(1, total + 1):
         sys.exit(3)
     if mode == "hang" and step == 2:
         time.sleep(600)
+    if mode == "pause" and step == 5 and not resume:
+        checkpoint(3)
+        time.sleep(600)
+    if mode == "pause_early" and step == 2:
+        time.sleep(600)
     if step % 3 == 0:
         preview(step)
     time.sleep(0.01)
-with zipfile.ZipFile(out / "checkpoints" / f"{{total:07d}}_checkpoint.zip", "w") as z:
-    z.writestr(f"{{total:07d}}_adapter.safetensors", b"adapter-bytes")
-    z.writestr(f"{{total:07d}}_optimizer.safetensors", b"x" * 1000)
+checkpoint(total)
 """
 
 
@@ -56,7 +73,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("WASIFYAI_MFLUX_DIR", str(tmp_path / "mflux"))
     monkeypatch.setenv("FAKE_PID_FILE", str(tmp_path / "pid"))
     monkeypatch.setattr(dt, "apple_silicon", lambda: True)
-    monkeypatch.setattr(dt, "base_on_computer", lambda: True)
+    monkeypatch.setattr(dt, "find_base", lambda *_: (tmp_path / "base", "cache"))
     return tmp_path
 
 
@@ -93,12 +110,11 @@ def test_progress_is_read_from_the_bar():
 def test_it_says_in_words_why_it_cannot_train(home: Path, monkeypatch: pytest.MonkeyPatch):
     trainer = dt.MfluxTrainer(None)
     assert trainer.ready() and trainer.problem() is None
-    monkeypatch.setattr(dt, "base_on_computer", lambda: False)
-    assert "12 GB" in (trainer.problem() or "") and not trainer.ready()
+    monkeypatch.setattr(dt, "find_base", lambda *_: None)
+    assert "set it up" in (trainer.problem() or "").lower() and not trainer.ready()
     monkeypatch.setattr(dt, "apple_silicon", lambda: False)
     assert "Apple silicon" in (trainer.problem() or "") and "NVIDIA" in (trainer.problem() or "")
     monkeypatch.delenv("WASIFYAI_MFLUX_DIR")
-    monkeypatch.setattr(dt, "DEV_FALLBACK", home / "nowhere")
     monkeypatch.setattr(dt, "apple_silicon", lambda: True)
     assert "not set up" in (dt.MfluxTrainer(home / "data").problem() or "")
 
@@ -174,26 +190,6 @@ def test_the_data_folder_holds_pictures_captions_and_two_sample_prompts(tmp_path
     assert "enaq7x" in (work / "preview-2.txt").read_text()
 
 
-def test_the_base_model_counts_only_when_its_big_files_are_there(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setenv("HF_HOME", str(tmp_path))
-    snap = (
-        tmp_path / "hub" / "models--black-forest-labs--FLUX.2-klein-base-4B" / "snapshots" / "abc"
-    )
-    (snap / "transformer").mkdir(parents=True)
-    (snap / "transformer" / "config.json").write_text("{}")
-    assert not dt.base_on_computer()  # the folders are there, the weights are not (a download)
-    for name in (
-        "transformer/diffusion_pytorch_model.safetensors",
-        "text_encoder/model-00002-of-00002.safetensors",
-        "vae/diffusion_pytorch_model.safetensors",
-    ):
-        (snap / name).parent.mkdir(parents=True, exist_ok=True)
-        (snap / name).write_bytes(b"w")
-    assert dt.base_on_computer()
-
-
 @pytest.mark.asyncio
 async def test_a_taught_model_is_published_to_the_image_engines_styles_and_removed_again(
     tmp_path: Path,
@@ -232,3 +228,157 @@ async def test_a_taught_model_is_published_to_the_image_engines_styles_and_remov
     assert not published.exists() and scans == [1, 1]
     await trainer.unpublish("../escape.safetensors")  # a name that leaves the folder is ignored
     assert await dt.MfluxTrainer(None, None).publish(adapter, "x", "y") is None
+
+
+def test_each_kind_of_thing_has_its_own_learning_rate():
+    rate = lambda kind: dt.training_config(  # noqa: E731
+        8, 4, Path("/w"), Path("/o"), sample_every=2, kind=kind
+    )["optimizer"]["learning_rate"]
+    assert rate("character") == rate("object") == rate("style") == 1e-4
+    assert rate("something else") == 1e-4
+
+
+def test_the_config_names_the_models_own_folder_so_the_trainer_fetches_nothing():
+    cfg = dt.training_config(8, 4, Path("/w"), Path("/o"), sample_every=2, base=Path("/m/base"))
+    assert cfg["model_path"] == "/m/base"
+    assert "model_path" not in dt.training_config(8, 4, Path("/w"), Path("/o"), sample_every=2)
+
+
+@pytest.mark.asyncio
+async def test_a_paused_run_keeps_its_checkpoint_and_goes_on_from_it(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from wasifyai_training.trainer import Paused
+
+    monkeypatch.setenv("FAKE_MODE", "pause")
+    trainer = dt.MfluxTrainer(None)
+    job = job_in(home, pictures=4, steps=8)
+    reached = asyncio.Event()
+
+    def report(step: int, _words: str) -> None:
+        if step >= 5:
+            reached.set()
+
+    task = asyncio.create_task(trainer.train(job, report, lambda _n: None))
+    await asyncio.wait_for(reached.wait(), 20)
+    await asyncio.sleep(0.2)
+    await trainer.pause()
+    with pytest.raises(Paused) as stopped:
+        await task
+    assert stopped.value.step == 3  # the checkpoint it had written
+    folder = job.samples.parent
+    assert (folder / "work").is_dir() and (folder / "out" / "checkpoints").is_dir()
+    seen: list[int] = []
+    result = await trainer.train(job, lambda s, _w: seen.append(s), lambda _n: None, resume=True)
+    assert seen and seen[-1] == job.steps and min(s for s in seen if s) >= 4
+    assert result.adapter.read_bytes() == b"adapter-bytes"
+    assert not (folder / "work").exists() and not (folder / "out").exists()
+
+
+@pytest.mark.asyncio
+async def test_a_run_stopped_before_its_first_checkpoint_keeps_nothing(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from wasifyai_training.trainer import Stopped
+
+    monkeypatch.setenv("FAKE_MODE", "pause_early")
+    trainer = dt.MfluxTrainer(None)
+    job = job_in(home)
+    reached = asyncio.Event()
+    task = asyncio.create_task(
+        trainer.train(job, lambda s, _w: reached.set() if s >= 2 else None, lambda _n: None)
+    )
+    await asyncio.wait_for(reached.wait(), 20)
+    await asyncio.sleep(0.2)
+    await trainer.pause()
+    with pytest.raises(Stopped, match="nothing was kept"):
+        await task
+    assert not (job.samples.parent / "work").exists()
+
+
+@pytest.mark.asyncio
+async def test_a_run_that_cannot_be_picked_up_says_so(home: Path):
+    trainer = dt.MfluxTrainer(None)
+    with pytest.raises(RuntimeError, match="is gone"):
+        await trainer.train(job_in(home), lambda *_: None, lambda _n: None, resume=True)
+
+
+@pytest.mark.asyncio
+async def test_the_most_memory_a_run_held_is_measured(home: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(dt, "process_footprint", lambda pid: 31 * 1024**3)
+    result = await dt.MfluxTrainer(None).train(job_in(home), lambda *_: None, lambda _n: None)
+    assert result.peak_bytes == 31 * 1024**3
+
+
+def test_only_the_newest_two_checkpoints_are_kept(tmp_path: Path):
+    for n in (25, 50, 75, 100):
+        (tmp_path / f"{n:07d}_checkpoint.zip").write_bytes(b"z")
+    dt.prune_checkpoints(tmp_path)
+    assert [p.name for p in sorted(tmp_path.iterdir())] == [
+        "0000075_checkpoint.zip",
+        "0000100_checkpoint.zip",
+    ]
+    assert dt.checkpoint_step(dt.latest_checkpoint(tmp_path)) == 100
+    # the checkpoint a picked-up run started from is still read by the trainer: it is never removed
+    for n in (50, 125):
+        (tmp_path / f"{n:07d}_checkpoint.zip").write_bytes(b"z")
+    dt.prune_checkpoints(tmp_path, protect=tmp_path / "0000050_checkpoint.zip")
+    names = [p.name for p in sorted(tmp_path.iterdir())]
+    assert "0000050_checkpoint.zip" in names and "0000075_checkpoint.zip" not in names
+    assert dt.latest_checkpoint(tmp_path / "none") is None
+
+
+def test_the_battery_and_the_memory_a_process_holds_are_read_in_words_and_numbers(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class Done:
+        def __init__(self, out: str):
+            self.stdout = out
+
+    monkeypatch.setattr(
+        dt.subprocess,
+        "run",
+        lambda *a, **k: Done(
+            "Now drawing from 'Battery Power'\n -InternalBattery-0\t73%; discharging"
+        ),
+    )
+    assert dt.power_state() == {"source": "battery", "percent": 73}
+    monkeypatch.setattr(dt.subprocess, "run", lambda *a, **k: Done("Now drawing from 'AC Power'"))
+    assert dt.power_state()["source"] == "mains"
+    monkeypatch.setattr(
+        dt.subprocess, "run", lambda *a, **k: Done("zsh [1]: 64-bit    Footprint: 28.5 GB (16384)")
+    )
+    assert dt.process_footprint(1) == int(28.5 * 1024**3)
+
+
+def test_before_a_run_it_says_what_stops_it_and_what_to_look_out_for(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+):
+    trainer = dt.MfluxTrainer(home)
+    fit = {
+        "verdict": "fits",
+        "reason": "",
+        "needed_bytes": 28 * 1024**3,
+        "budget_bytes": 40 * 1024**3,
+    }
+    monkeypatch.setattr(trainer, "fit", lambda: fit)
+    monkeypatch.setattr(dt, "free_disk_bytes", lambda p: 50 * 1024**3)
+    monkeypatch.setattr(dt, "power_state", lambda: {"source": "mains", "percent": 100})
+    ok = trainer.preflight()
+    assert ok["ok"] and ok["blockers"] == [] and ok["warnings"] == []
+    assert "wait" in ok["pauses"] and ok["facts"]["power"] == "mains"
+    monkeypatch.setattr(dt, "power_state", lambda: {"source": "battery", "percent": 70})
+    warn = trainer.preflight()
+    assert warn["ok"] and "battery power (70%)" in warn["warnings"][0]
+    monkeypatch.setattr(dt, "power_state", lambda: {"source": "battery", "percent": 12})
+    assert "battery is low" in trainer.preflight()["blockers"][0]
+    monkeypatch.setattr(dt, "power_state", lambda: {"source": "mains", "percent": 100})
+    monkeypatch.setattr(dt, "free_disk_bytes", lambda p: 1 * 1024**3)
+    assert "not enough free disk space" in trainer.preflight()["blockers"][0]
+    monkeypatch.setattr(dt, "free_disk_bytes", lambda p: 50 * 1024**3)
+    monkeypatch.setattr(
+        trainer, "fit", lambda: {**fit, "verdict": "too_big", "reason": "Needs 40 GB."}
+    )
+    assert trainer.preflight()["blockers"] == ["Needs 40 GB."]
+    monkeypatch.setattr(trainer, "fit", lambda: {**fit, "verdict": "tight", "reason": "Tight."})
+    assert "Close other apps" in trainer.preflight()["warnings"][0]

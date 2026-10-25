@@ -24,8 +24,13 @@ from PIL import Image, ImageDraw, ImageEnhance
 BASE = "flux2-klein-base-4b"  # what the first LoRA is taught on: the model Create image uses
 BASE_TITLE = "FLUX.2 klein base 4B"
 BASE_LICENCE = "Apache-2.0"
-SECONDS_PER_STEP = 7.5  # measured on the owner's M5 Pro (docs/spikes/training-t0.md)
-PRESETS = {"character": 200, "style": 250, "object": 150}  # steps: 150 to 300 bind a magic word
+# measured on the owner's M5 Pro through the real screens (ADR-0073, 2026-10-25): 9.2 to 11.6 s a
+# step in all, the model load and the sample pictures included
+SECONDS_PER_STEP = 10.0
+# steps. A character and an object bound their magic word in 150 to 200 steps. A style learnt the
+# scenes it was shown by 250 steps and did not carry over to a new one at 500 either (measured), so
+# more steps is not the lever: see the learning rate
+PRESETS = {"character": 200, "style": 250, "object": 150}
 
 
 @dataclass
@@ -45,6 +50,19 @@ class TrainResult:
     seconds: float
     engine: str
     note: str = ""
+    peak_bytes: int = 0  # the most memory the run held, when the engine measures it
+
+
+class Paused(Exception):
+    """The run was paused: its last checkpoint is kept, and it can be picked up again."""
+
+    def __init__(self, step: int = 0):
+        super().__init__(f"paused at step {step}")
+        self.step = step
+
+
+class Stopped(Exception):
+    """The run was stopped on request and nothing was kept (it had no checkpoint yet)."""
 
 
 Report = Callable[[int, str], None]
@@ -77,6 +95,7 @@ class PreviewTrainer:
     base = BASE
     slot: Any = None
     step_s = 0.02  # a preview run takes seconds, not the hour a real one does
+    _pausing = False
 
     def ready(self) -> bool:
         return True
@@ -93,11 +112,24 @@ class PreviewTrainer:
     async def stop(self) -> None:
         return None
 
-    async def train(self, job: TrainJob, report: Report, sample: SampleFn) -> TrainResult:
+    async def pause(self) -> None:
+        self._pausing = True
+
+    async def train(
+        self, job: TrainJob, report: Report, sample: SampleFn, resume: bool = False
+    ) -> TrainResult:
         started = time.monotonic()
         job.samples.mkdir(parents=True, exist_ok=True)
         every = max(1, job.steps // 4)
-        for step in range(1, job.steps + 1):
+        marker = job.samples.parent / "preview-paused.json"
+        first = 1
+        if resume and marker.is_file():
+            first = int(json.loads(marker.read_text())["step"]) + 1
+        self._pausing = False
+        for step in range(first, job.steps + 1):
+            if self._pausing:
+                marker.write_text(json.dumps({"step": step - 1}))
+                raise Paused(step - 1)
             await asyncio.sleep(self.step_s)
             report(step, "Preview: not learning, only showing the steps")
             if step % every == 0 or step == job.steps:

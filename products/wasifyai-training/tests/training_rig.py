@@ -49,12 +49,20 @@ class Vision:
         self.verdict = "ok"
         self.caption = "Standing on a beach at sunset, wearing a red scarf."
         self.fail_caption = False
+        self.judged = 0
+        self.fail_judge = False
+        self.same = lambda n: True  # what the judge says about the n-th picture
 
     async def complete(self, name: str, system: str, user: Any, schema: Any = None) -> str:
         self.asked.append(name)
         if name == "moderate_image":
             ok = self.verdict == "ok"
             return json.dumps({"allowed": ok, "category": self.verdict, "reason": "x"})
+        if name == "judge_image":
+            self.judged += 1
+            if self.fail_judge:
+                raise RuntimeError("the model is not there")
+            return json.dumps({"same": self.same(self.judged), "reason": "x"})
         if self.fail_caption:
             raise RuntimeError("the model is not there")
         return self.caption

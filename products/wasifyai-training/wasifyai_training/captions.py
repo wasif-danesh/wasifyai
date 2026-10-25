@@ -10,6 +10,7 @@ import asyncio
 import re
 
 from wasifyai_platform_sdk import Capabilities, Image, RunError
+
 from wasifyai_training import guardrail
 
 MAX_WORDS = 60

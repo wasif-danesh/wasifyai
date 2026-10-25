@@ -315,5 +315,5 @@ def test_the_assistants_feature_list_is_current():
     assert assistant_features.main(["--check"]) == 0, (
         "run: python -m wasifyai_api.assistant_features --write"
     )
-    wheres = {row["where"] for row in assistant_features.build()}
+    wheres = {str(row["where"]) for row in assistant_features.build()}
     assert {"Video › Create", "Voice › Text to speech", "3D model", "Train models"} <= wheres

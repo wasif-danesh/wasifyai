@@ -3,15 +3,24 @@ descriptions the app writes, the runs and the trained models. Where there is no 
 every route answers 404. Every query is scoped by tenant and user."""
 
 import asyncio
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from wasifyai_platform_sdk import Identity, RouteDeps
+from wasifyai_platform_sdk import (
+    Identity,
+    RouteDeps,
+    RouteGuard,
+    RunContext,
+    RunError,
+    set_context,
+)
+from wasifyai_platform_sdk.context import reset_context
 
-from wasifyai_training import magic, trainer
+from wasifyai_training import evaluation, magic, trainer
 from wasifyai_training.runtime import (
     MAX_PICTURES,
     MIN_PICTURES,
@@ -32,6 +41,7 @@ from wasifyai_training.runtime import (
     run_manager_for,
     store_for,
     suggestions,
+    word_problem,
     words_of,
 )
 from wasifyai_training.store import KINDS, RIGHTS, NotFound
@@ -63,6 +73,18 @@ class CaptionsIn(BaseModel):
 
 class RunIn(BaseModel):
     dataset_id: str = Field(min_length=32, max_length=32)
+
+
+class CheckedPicture(BaseModel):
+    id: str = Field(max_length=40)
+    condition: Literal["with_word", "without_word", "without_model"]
+    prompt: str = Field(max_length=600)
+    same: bool | None = None
+    reason: str = Field("", max_length=300)
+
+
+class EvaluationIn(BaseModel):
+    items: list[CheckedPicture] = Field(max_length=12)
 
 
 class RenameIn(BaseModel):
@@ -144,6 +166,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             "preview": bool(getattr(engine, "preview", False)),
             "engine": engine.state(),
             "fit": engine.fit() if engine.ready() else None,
+            "preflight": engine.preflight() if hasattr(engine, "preflight") else None,
             "busy": runs.busy(),
             "active_run": runs.active(),
             "place": "device",
@@ -190,7 +213,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         items = store.list_items(identity.tenant_id, identity.user_id, dataset_id)
         out = dataset_out(identity, row)
         out["items"] = [item_out(i) for i in items]
-        out["suggestions"] = suggestions(store, identity, row)
+        out["suggestions"] = await suggestions(store, identity, row, guard())
         return out
 
     @router.patch("/datasets/{dataset_id}")
@@ -216,6 +239,8 @@ def build_routes(deps: RouteDeps) -> APIRouter:
                         "message": "Use a made-up word of 4 to 12 letters, a to z.",
                     },
                 )
+            if word and (why := await word_problem(guard(), word)):
+                raise HTTPException(422, {"code": "bad_word", "message": why})
             fields["trigger_word"] = word
         row = store_for(deps.state).update_dataset(
             identity.tenant_id, identity.user_id, dataset_id, **fields
@@ -337,6 +362,25 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         run_or_404(identity, run_id)
         return {"cancelled": await run_manager_for(deps).cancel(identity, run_id)}
 
+    @router.post("/runs/{run_id}/pause")
+    async def pause_run(run_id: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """Stop for now, keeping the last checkpoint; the run can be resumed."""
+        guard()
+        run_or_404(identity, run_id)
+        return {"paused": await run_manager_for(deps).pause(identity, run_id)}
+
+    @router.post("/runs/{run_id}/resume", status_code=202)
+    async def resume_run(
+        run_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        guard()
+        run_or_404(identity, run_id)
+        try:
+            row = await run_manager_for(deps).resume(identity, run_id)
+        except Refused as e:
+            raise refuse(e) from None
+        return run_out(row)
+
     @router.get("/runs/{run_id}/samples/{name}")
     async def run_sample(
         run_id: str, name: str, identity: Identity = Depends(deps.identity)
@@ -378,6 +422,70 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         )
         await add_to_search(deps.state, identity, model_id, words_of(row))
         return clean(row)
+
+    # ---- did it learn? ----------------------------------------------------------------------
+
+    @router.get("/models/{model_id}/check")
+    async def check_plan(
+        model_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """The pictures to draw to find out, and how many reference pictures it has."""
+        guard()
+        row = model_or_404(identity, model_id)
+        folder = model_folder(store_for(deps.state), identity, model_id) / "refs"
+        refs = len(await asyncio.to_thread(evaluation.load_refs, folder))
+        return {"items": evaluation.check_plan(row["kind"], row["trigger_word"]), "refs": refs}
+
+    @router.post("/models/{model_id}/judge")
+    async def judge_picture(
+        model_id: str, request: Request, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """The body is one picture it drew: does it look like the pictures it learnt from?"""
+        guard()
+        row = model_or_404(identity, model_id)
+        if int(request.headers.get("content-length") or 0) > MAX_UPLOAD:
+            raise HTTPException(
+                422, {"code": "bad_picture", "message": "That picture is too big to check."}
+            )
+        data = await request.body()
+        caps = RouteGuard(deps.state, PRODUCT_ID).caps
+        if caps is None:
+            raise HTTPException(
+                409,
+                {
+                    "code": "no_vision_model",
+                    "message": "Choose a model that can read pictures first (in the Model hub).",
+                },
+            )
+        folder = model_folder(store_for(deps.state), identity, model_id) / "refs"
+        refs = await asyncio.to_thread(evaluation.load_refs, folder)
+        token = set_context(RunContext(identity.tenant_id, PRODUCT_ID, identity.user_id))
+        try:
+            return await evaluation.judge(caps, row["kind"], refs, data)
+        except RunError as e:
+            raise HTTPException(409, {"code": e.code, "message": e.message}) from None
+        except OSError:
+            raise HTTPException(
+                422, {"code": "bad_picture", "message": "That is not a picture it can check."}
+            ) from None
+        finally:
+            reset_context(token)
+
+    @router.put("/models/{model_id}/evaluation")
+    async def put_evaluation(
+        model_id: str, body: EvaluationIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Keep what the check found on the model's card, as a sentence and a mark."""
+        guard()
+        row = model_or_404(identity, model_id)
+        items = [i.model_dump() for i in body.items]
+        at = datetime.now(UTC).isoformat(timespec="seconds")
+        result = evaluation.summarize(row["kind"], items, at)
+        return clean(
+            store_for(deps.state).set_evaluation(
+                identity.tenant_id, identity.user_id, model_id, result
+            )
+        )
 
     @router.delete("/models/{model_id}", status_code=204)
     async def remove_model(model_id: str, identity: Identity = Depends(deps.identity)) -> Response:

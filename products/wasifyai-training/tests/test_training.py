@@ -35,7 +35,8 @@ def test_the_status_says_it_is_a_preview_and_what_a_run_asks_for(rig):
     s = rig.get(f"{BASE}/status").json()
     assert s["ready"] is True and s["preview"] is True and s["place"] == "device"
     assert s["min_pictures"] == 8 and set(s["kinds"]) == {"character", "style", "object"}
-    assert s["estimates"]["character"] == "About 25 minutes"  # 200 steps at 7.5 s
+    assert s["estimates"]["character"] == "About 33 minutes"  # 200 steps at 10 s
+    assert s["steps"] == {"character": 200, "style": 250, "object": 150}
 
 
 def test_a_dataset_has_a_kind_a_name_a_magic_word_and_a_statement_of_rights(rig):
@@ -189,7 +190,7 @@ def test_a_run_goes_through_its_steps_and_leaves_a_model_with_its_card(rig):
     assert started.status_code == 202, started.text
     run = started.json()
     assert run["status"] == "working" and run["steps"] == 200 and run["preview"] is True
-    assert run["estimate"] == "About 25 minutes"
+    assert run["estimate"] == "About 33 minutes"
     assert rig.post(f"{BASE}/runs", json={"dataset_id": ds["id"]}).json()["detail"]["code"] in (
         "busy",
         "not_ready_to_train",

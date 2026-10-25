@@ -8,6 +8,15 @@ export const TRAINING_PRODUCT_ID = "wasifyai-training";
 export type TrainKind = "character" | "style" | "object";
 export type Statement = "mine" | "permission" | "drawing" | "artwork";
 
+export type TrainPreflight = {
+  ok: boolean;
+  /** why it cannot start now, in words (not enough disk, a flat battery) */
+  blockers: string[];
+  warnings: string[];
+  /** what waits while it runs */
+  pauses: string;
+};
+
 export type TrainStatus = {
   ready: boolean;
   problem: string | null;
@@ -17,6 +26,8 @@ export type TrainStatus = {
   fit: { verdict: "fits" | "tight" | "too_big"; reason: string } | null;
   busy: boolean;
   active_run: string | null;
+  /** What to know before a run starts: whether anything stops it, what to look out for (desktop). */
+  preflight?: TrainPreflight | null;
   place: "device" | "service";
   min_pictures: number;
   max_pictures: number;
@@ -68,7 +79,7 @@ export type TrainDataset = {
 export type TrainRun = {
   id: string;
   dataset_id: string;
-  status: "working" | "done" | "failed" | "cancelled";
+  status: "working" | "paused" | "done" | "failed" | "cancelled";
   stage: string;
   step: number;
   steps: number;
@@ -84,6 +95,35 @@ export type TrainRun = {
   live: boolean;
   created_at: string;
   finished_at: string | null;
+};
+
+/** One picture of the check: what was drawn, and whether it looked like the pictures it learnt from. */
+export type CheckedPicture = {
+  id: string;
+  condition: "with_word" | "without_word" | "without_model";
+  prompt: string;
+  /** null: it could not be judged (no picture-reading model) */
+  same: boolean | null;
+  reason: string;
+};
+
+/** What "did it learn?" found, in words and a mark (ADR-0073 decision 10). `passed` null: not checked or not judged. */
+export type TrainEvaluation = {
+  passed: boolean | null;
+  note: string;
+  at?: string;
+  /** [pictures that looked the same, pictures judged], by kind of picture */
+  counts?: Partial<Record<CheckedPicture["condition"], [number, number]>>;
+  items?: CheckedPicture[];
+};
+
+/** A picture to draw for the check; `with_model` says whether the trained model is applied to it. */
+export type CheckStep = {
+  id: string;
+  scene: number;
+  condition: CheckedPicture["condition"];
+  prompt: string;
+  with_model: boolean;
 };
 
 export type TrainedModel = {
@@ -109,13 +149,59 @@ export type TrainedModel = {
     /** The name the image engine gives it as a style, once it is published there (else null). */
     published?: { lora_name: string } | null;
     statement: string;
-    evaluation: { passed: boolean | null; note: string };
+    evaluation: TrainEvaluation;
     trained_at: string;
   };
   created_at: string;
 };
 
+/** One thing the setup fetches: what it is, how large, and whose licence it carries. */
+export type TrainingSetupPart = {
+  name: string;
+  version: string;
+  bytes: number;
+  /** already on this computer: it is not fetched again */
+  have: boolean;
+  licence: string;
+  source: string;
+};
+
+/** The trainer's component on a desktop engine: what is there, what it would take, how an install goes. */
+export type TrainingSetupState = {
+  installed: boolean;
+  /** where the trainer is from: "managed" (this app's own), "env", "dev"; null when it is not there */
+  tool: string | null;
+  base: string | null;
+  problem: string | null;
+  plan: {
+    supported: boolean;
+    bytes: number;
+    needs_free_bytes: number;
+    parts: TrainingSetupPart[];
+  };
+  progress: {
+    state: "idle" | "installing" | "ready" | "failed";
+    step: string | null;
+    steps: string[];
+    message: string;
+    done_bytes: number;
+    total_bytes: number;
+  };
+};
+
 export type TrainingApi = {
+  /** The pictures to draw to find out whether a model learnt, and how many references it keeps. */
+  checkPlan(modelId: string): Promise<{ items: CheckStep[]; refs: number }>;
+  /** One picture it drew: does it look like the ones it learnt from? */
+  judge(modelId: string, picture: Blob): Promise<{ same: boolean; reason: string }>;
+  /** Keep what the check found on the model's card. */
+  saveEvaluation(modelId: string, items: CheckedPicture[]): Promise<TrainedModel>;
+  /** The trainer's component (desktop only: the web's trainer lives on a worker). */
+  setup(): Promise<TrainingSetupState>;
+  /** Set it up; `confirmBytes` is the size the person was shown. */
+  installSetup(confirmBytes: number): Promise<TrainingSetupState>;
+  cancelSetup(): Promise<TrainingSetupState>;
+  removeSetup(): Promise<{ freed_bytes: number } & TrainingSetupState>;
   status(): Promise<TrainStatus>;
   datasets(): Promise<TrainDataset[]>;
   createDataset(kind: TrainKind, name?: string): Promise<TrainDataset>;
@@ -138,6 +224,10 @@ export type TrainingApi = {
   startRun(datasetId: string): Promise<TrainRun>;
   runs(): Promise<TrainRun[]>;
   run(id: string): Promise<TrainRun>;
+  /** Stop for now and keep the last checkpoint; `resumeRun` picks it up where it stopped. */
+  pauseRun(id: string): Promise<{ paused: boolean }>;
+  resumeRun(id: string): Promise<TrainRun>;
+  /** Stop a run that is going, or discard one that is paused. */
   cancelRun(id: string): Promise<{ cancelled: boolean }>;
   /** A sample picture of a run as an object URL. */
   sampleUrl(runId: string, name: string): Promise<string>;
@@ -211,6 +301,9 @@ export function createTrainingApi(
       json<TrainRun>(`${base}/runs`, send("POST", { dataset_id: datasetId })),
     runs: async () => (await json<{ runs: TrainRun[] }>(`${base}/runs`)).runs,
     run: (id) => json<TrainRun>(`${base}/runs/${enc(id)}`),
+    pauseRun: (id) =>
+      json<{ paused: boolean }>(`${base}/runs/${enc(id)}/pause`, { method: "POST" }),
+    resumeRun: (id) => json<TrainRun>(`${base}/runs/${enc(id)}/resume`, { method: "POST" }),
     cancelRun: (id) =>
       json<{ cancelled: boolean }>(`${base}/runs/${enc(id)}/cancel`, { method: "POST" }),
     sampleUrl: (runId, name) => objectUrl(`${base}/runs/${enc(runId)}/samples/${enc(name)}`),
@@ -219,5 +312,27 @@ export function createTrainingApi(
     renameModel: (id, name) =>
       json<TrainedModel>(`${base}/models/${enc(id)}`, send("PATCH", { name })),
     removeModel: (id) => del(`${base}/models/${enc(id)}`),
+    checkPlan: (modelId) =>
+      json<{ items: CheckStep[]; refs: number }>(`${base}/models/${enc(modelId)}/check`),
+    judge: (modelId, picture) =>
+      json<{ same: boolean; reason: string }>(`${base}/models/${enc(modelId)}/judge`, {
+        method: "POST",
+        headers: { "content-type": picture.type || "application/octet-stream" },
+        body: picture,
+      }),
+    saveEvaluation: (modelId, items) =>
+      json<TrainedModel>(`${base}/models/${enc(modelId)}/evaluation`, send("PUT", { items })),
+    setup: () => json<TrainingSetupState>("/desktop/training-setup"),
+    installSetup: (confirmBytes) =>
+      json<TrainingSetupState>(
+        "/desktop/training-setup/install",
+        send("POST", { confirm_bytes: confirmBytes }),
+      ),
+    cancelSetup: () =>
+      json<TrainingSetupState>("/desktop/training-setup/install/cancel", { method: "POST" }),
+    removeSetup: () =>
+      json<{ freed_bytes: number } & TrainingSetupState>("/desktop/training-setup/uninstall", {
+        method: "POST",
+      }),
   };
 }

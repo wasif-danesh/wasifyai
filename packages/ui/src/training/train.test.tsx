@@ -148,7 +148,7 @@ function fake(over: Partial<TrainStatus> = {}) {
         error: null,
         base: "b",
         samples: [],
-        preview: true,
+        preview: status.preview,
         model_id: null,
         elapsed_s: null,
         estimate: "About 25 minutes",
@@ -174,10 +174,57 @@ function fake(over: Partial<TrainStatus> = {}) {
     removeModel: async (id) => {
       models = models.filter((m) => m.id !== id);
     },
+    pauseRun: async () => {
+      run = { ...(run as TrainRun), status: "paused", stage: "Paused at step 10 of 200" };
+      return { paused: true };
+    },
+    resumeRun: async () => {
+      log.push("resume");
+      run = { ...(run as TrainRun), status: "working", stage: "Starting again" };
+      return run;
+    },
+    checkPlan: async () => ({ items: [], refs: 0 }),
+    judge: async () => ({ same: true, reason: "" }),
+    saveEvaluation: async (id) => models.find((m) => m.id === id) as TrainedModel,
+    // no trainer component here (the web): nothing to set up
+    setup: async () => {
+      throw new Error("not available");
+    },
+    installSetup: async () => {
+      throw new Error("not available");
+    },
+    cancelSetup: async () => {
+      throw new Error("not available");
+    },
+    removeSetup: async () => {
+      throw new Error("not available");
+    },
   };
   return {
     api,
     log,
+    /** a run the app left paused: it is there when the screen opens */
+    leavePaused() {
+      run = {
+        id: "r".repeat(32),
+        dataset_id: "d".repeat(32),
+        status: "paused",
+        stage: "Paused at step 75 of 200",
+        step: 75,
+        steps: 200,
+        progress: 0.37,
+        error: null,
+        base: "b",
+        samples: [],
+        preview: false,
+        model_id: null,
+        elapsed_s: null,
+        estimate: "About 25 minutes",
+        live: false,
+        created_at: "",
+        finished_at: null,
+      };
+    },
     finish() {
       models = [
         {
@@ -423,5 +470,73 @@ describe("Train", () => {
     render(<Train api={api} place="service" pollMs={10} />);
     expect(await screen.findByText(/learnt on the service's graphics card/)).toBeTruthy();
     vi.restoreAllMocks();
+  });
+
+  it("shows what could stop a run or is worth knowing, before it starts", async () => {
+    const user = userEvent.setup();
+    const engine = fake({
+      preflight: {
+        ok: false,
+        blockers: ["The battery is low (12%). Plug in before you start."],
+        warnings: ["It is tight on memory. Close other apps first."],
+        pauses: "Chat, images, video and 3D wait while it runs.",
+      },
+    });
+    render(<Train api={engine.api} pollMs={10} />);
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.upload(await screen.findByLabelText("Choose pictures"), [
+      file("a.png"),
+      file("b.png"),
+      file("c.png"),
+    ]);
+    await user.click(await screen.findByRole("button", { name: "Next" }));
+    await user.click(await screen.findByLabelText("It's a drawing, a character or an animal"));
+    await user.click(await screen.findByRole("button", { name: "marlo" }));
+    await user.click(await screen.findByRole("button", { name: /Write the descriptions \(3\)/ }));
+    await waitFor(() =>
+      expect(screen.getAllByDisplayValue("Standing on a beach.")).toHaveLength(3),
+    );
+    expect(await screen.findByText(/The battery is low \(12%\)/)).toBeTruthy();
+    expect(screen.getByText(/It is tight on memory/)).toBeTruthy();
+    expect(screen.getByText(/Chat, images, video and 3D wait/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Teach it" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  it("pauses a run that is going and carries on from where it stopped", async () => {
+    const user = userEvent.setup();
+    const engine = fake({ preview: false });
+    render(<Train api={engine.api} pollMs={10} />);
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.upload(await screen.findByLabelText("Choose pictures"), [
+      file("a.png"),
+      file("b.png"),
+      file("c.png"),
+    ]);
+    await user.click(await screen.findByRole("button", { name: "Next" }));
+    await user.click(await screen.findByLabelText("It's a drawing, a character or an animal"));
+    await user.click(await screen.findByRole("button", { name: "marlo" }));
+    await user.click(await screen.findByRole("button", { name: /Write the descriptions \(3\)/ }));
+    await waitFor(() =>
+      expect(screen.getAllByDisplayValue("Standing on a beach.")).toHaveLength(3),
+    );
+    await user.click(await screen.findByRole("button", { name: "Teach it" }));
+    await user.click(await screen.findByRole("button", { name: "Pause" }));
+    expect(await screen.findByRole("heading", { name: "Paused" })).toBeTruthy();
+    expect(screen.getByText(/Paused at step 10 of 200/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Carry on" }));
+    expect(await screen.findByText("Step 10 of 200")).toBeTruthy();
+    expect(engine.log).toContain("resume");
+  });
+
+  it("finds a run the app left paused and offers to carry on or discard it", async () => {
+    const user = userEvent.setup();
+    const engine = fake();
+    engine.leavePaused();
+    render(<Train api={engine.api} pollMs={10} />);
+    expect(await screen.findByText("Paused at step 75 of 200")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Carry on" }));
+    await waitFor(() => expect(engine.log).toContain("resume"));
   });
 });

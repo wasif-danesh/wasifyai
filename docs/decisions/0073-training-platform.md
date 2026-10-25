@@ -266,8 +266,8 @@ person supplies material, one recommendation in a sentence, every refusal has a 
    an optional `base` and `method`; absent means the recommendation, so existing callers and the action `train.start` keep
    working (they gain two optional fields).
 
-**Status:** decided, not built. The picture trainer built on 2026-10-24 uses one fixed base (FLUX.2 klein base 4B) and LoRA; it
-is the first descriptor and the first row of the list.
+**Status:** built for pictures on 2026-10-25 (see "Built: the choice of model and method"); the language engine adds the other
+rows. The picture trainer uses one base (FLUX.2 klein base 4B) and LoRA; it is the first descriptor and the first row of the list.
 
 ## Amendment (2026-10-24, owner): video model training is a family of its own
 
@@ -428,3 +428,49 @@ distilled klein as the image engine. Three picture sets: 12 pictures of one fict
   therefore not the lever; untried: more pictures of more different subjects (15 was used), the text-stream layers (mflux's recipe here trains the
   image stream only), a higher rank. The check reports it honestly and says what to try ("add pictures of different things"); the style preset
   stays at 250 steps and 1e-4. Backlog D32.
+
+## Built (2026-10-25): the choice of model and method
+
+The amendment of 2026-10-24 is built for pictures; nothing in it is guessed.
+
+- **Descriptors:** `products/wasifyai-training/wasifyai_training/bases.py`. A `Descriptor` names a family, a base model, its engine, its
+  licence and the methods it cannot use with the reason for each. Today one: FLUX.2 klein base 4B, engine mflux, LoRA only (QLoRA: "pictures are
+  taught as a small adapter"; full fine-tuning: "far more memory than a Mac has"). `engine_for` is `bases.resolve(kind, base, method)`: it
+  returns the descriptor and method a run will use, or says in words why a choice cannot be used. A new base or method is one descriptor entry.
+- **The list:** `GET .../train/choices?kind=` joins the descriptors with the engine's fit (too big, not set up) and the models the discovery scan found
+  (kind `diffusion`); an installed model with no descriptor is listed as "cannot be taught yet", never offered.
+- **The run:** `POST .../train/runs` and the action `train.start` take optional `base` and `method`; absent means the recommendation, so
+  every earlier caller works. A refused choice answers with the reason and starts nothing. The run's settings, and so the model's card, record the
+  method and the engine beside the base.
+- **The screen:** under the recommendation a closed "Choose the model and method" (`packages/ui/src/training/Choose.tsx`, `use-choices.ts`): models
+  with the recommended one marked; methods in words first with the technical name second; teaching all of it under "For experts"; anything that
+  cannot be used is disabled with its reason. A method the chosen model cannot use falls back to the model's recommendation.
+- **Tests:** `test_bases.py` (rows, reasons, refusals, the run record), the client and the screen (closed by default sends nothing; an open choice
+  sends only what changed).
+- **Not built:** the rows for writing models (QLoRA, full fine-tuning on Unsloth's component) and for video; they are descriptor entries when
+  those engines arrive.
+
+## Built (2026-10-25, last): the character recipe against AI Toolkit, and steps by picture count
+
+The owner asked whether the app's trainer is "the wrong tool", because an earlier AI Toolkit run of the same character drew more realistically. Measured
+on the owner's 37 approved pictures and captions (Ena), drawn through Create's own klein workflow on a private ComfyUI (the distilled model, 4 steps,
+seed 42; scripts were kept outside the repository):
+
+- **Same base.** The AI Toolkit run trained `flux-2-klein-base-4b`, as the app's does (it was first guessed to be the distilled model: wrong).
+  The differences are the steps (500 against the preset 200), the resolution (512 against 768), the text-stream layers (AI Toolkit trains
+  `txt_attn` and `txt_mlp`, 160 tensors; ours the image stream only, 120) and the number of pictures the earlier app run used (11 against 37).
+- **mflux, 518 steps, 512 px, 37 pictures** (51 minutes, 6.0 s a step): through Create, as realistic as the AI Toolkit adapter and sharper (the
+  AI Toolkit adapter drew smooth skin and a flat dress at 1024); the 200-step checkpoint of the same run looked as good; the earlier 200-step app
+  run on 11 pictures also looked as realistic and as close to the reference. **A plain "A beautiful woman" with no word gives a woman of Ena's
+  look from all of them.**
+- **Where it is weak:** with only the magic word and no "woman" (`enav7qx, natural portrait photo, three-quarter view`) the 37-picture run drew a man
+  in a portrait and in sportswear: the word alone does not bind the person strongly enough; AI Toolkit's adapter did for the portrait but not for the
+  sportswear. The 11-picture app run, whose descriptions say "she" and "the woman", bound a woman reliably. So the descriptions of a character should
+  keep the person's kind (woman, man, dog) in words; this is a measured lead, not changed yet.
+- **Decision: steps follow the picture count; a character is taught at 512 px.** `trainer.steps_for(kind, pictures)`: 14 passes over the pictures, never
+  fewer steps than the preset (200, 250, 150), never more than 500; 11 pictures stay at 200 steps, 25 take 350, 37 take 500. A run states its side
+  (`settings.side`: 512 for a character, 768 for the others, which are not measured at 512), the engine passes it as `max_resolution`, and the time
+  estimate uses the measured seconds a step for that side (6 s at 512, 10 s at 768); each set says its own steps and estimate. **Not proven:** that 500 steps
+  beats 200 in likeness (no difference seen on one seed and four prompts), and that 512 px equals 768 px on the same data.
+- **Not done:** training the text-stream layers (needs the `txt_*` rename in `comfy_lora.py`, a different layer list) and an A/B of it; the in-app
+  Try it on this recipe; a likeness score (only eyes, mine and the owner's).

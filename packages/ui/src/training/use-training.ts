@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  TrainChoice,
   TrainDataset,
   TrainKind,
   TrainRun,
@@ -279,17 +280,20 @@ export function useTraining(api: TrainingApi, pollMs = 1500) {
 
   // ---- the run --------------------------------------------------------------------------------
 
-  const teach = useCallback(async () => {
-    const id = state.current?.id;
-    if (!id) return;
-    try {
-      set({ busy: "run", error: null });
-      const run = await api.startRun(id);
-      set({ run, busy: null });
-    } catch (e) {
-      fail(e, "The teaching could not be started.");
-    }
-  }, [api, state.current?.id, set, fail]);
+  const teach = useCallback(
+    async (choice?: TrainChoice) => {
+      const id = state.current?.id;
+      if (!id) return;
+      try {
+        set({ busy: "run", error: null });
+        const run = await api.startRun(id, choice);
+        set({ run, busy: null });
+      } catch (e) {
+        fail(e, "The teaching could not be started.");
+      }
+    },
+    [api, state.current?.id, set, fail],
+  );
 
   const stop = useCallback(async () => {
     const id = state.run?.id;

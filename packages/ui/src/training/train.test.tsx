@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 // @vitest-environment jsdom
 import type {
+  TrainChoices,
   TrainDataset,
   TrainPicture,
   TrainRun,
@@ -13,6 +14,67 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Train } from "./Train";
 
 afterEach(cleanup);
+
+const METHODS = (can: Record<string, string>): TrainChoices["bases"][number]["methods"] => [
+  { id: "lora", title: "Small adapter", technical: "LoRA", advanced: false, can: true, reason: "" },
+  {
+    id: "qlora",
+    title: "Small adapter, less memory",
+    technical: "QLoRA",
+    advanced: false,
+    can: !can.qlora,
+    reason: can.qlora ?? "",
+  },
+  {
+    id: "full",
+    title: "Teach all of it",
+    technical: "full fine-tuning",
+    advanced: true,
+    can: !can.full,
+    reason: can.full ?? "",
+  },
+];
+
+const CHOICES: TrainChoices = {
+  family: "image",
+  default_base: "base-a",
+  default_method: "lora",
+  bases: [
+    {
+      id: "base-a",
+      title: "Base A",
+      licence: "Apache-2.0",
+      engine: "mflux",
+      recommended: true,
+      can_teach: true,
+      reason: "",
+      installed: true,
+      methods: METHODS({ qlora: "Pictures are taught as a small adapter." }),
+    },
+    {
+      id: "base-b",
+      title: "Base B",
+      licence: "Apache-2.0",
+      engine: "mflux",
+      recommended: false,
+      can_teach: true,
+      reason: "",
+      installed: true,
+      methods: METHODS({ qlora: "Not for pictures.", full: "Needs far more memory." }),
+    },
+    {
+      id: "",
+      title: "Some other picture model",
+      licence: "",
+      engine: "",
+      recommended: false,
+      can_teach: false,
+      reason: "This model cannot be taught yet: the app has no way to teach it.",
+      installed: true,
+      methods: [],
+    },
+  ],
+};
 
 const STATUS: TrainStatus = {
   ready: true,
@@ -72,6 +134,7 @@ function fake(over: Partial<TrainStatus> = {}) {
   };
   const api: TrainingApi = {
     status: async () => ({ ...status, busy: run?.status === "working", active_run: null }),
+    choices: async () => CHOICES,
     datasets: async () => (set ? [dataset()] : []),
     createDataset: async (kind, name = "") => {
       log.push("create");
@@ -358,6 +421,74 @@ describe("Train", () => {
     expect(screen.getByText(/Nothing was learnt/)).toBeTruthy();
     expect(screen.getByText("marlo", { selector: "code" })).toBeTruthy();
     expect(await screen.findByAltText("Sample step-0050.png")).toBeTruthy();
+  });
+
+  /** Pictures in, rights and word chosen, descriptions written: the Teach it button is ready. */
+  async function readyToTeach(user: ReturnType<typeof userEvent.setup>, api: TrainingApi) {
+    render(<Train api={api} pollMs={10} />);
+    await user.click(await screen.findByRole("button", { name: "Start" }));
+    await user.upload(await screen.findByLabelText("Choose pictures"), [
+      file("a.png"),
+      file("b.png"),
+      file("c.png"),
+    ]);
+    await user.click(await screen.findByRole("button", { name: "Next" }));
+    await user.click(await screen.findByLabelText("It's a drawing, a character or an animal"));
+    await user.click(await screen.findByRole("button", { name: "marlo" }));
+    await user.click(await screen.findByRole("button", { name: /Write the descriptions \(3\)/ }));
+    await waitFor(() =>
+      expect(screen.getAllByDisplayValue("Standing on a beach.")).toHaveLength(3),
+    );
+  }
+
+  it("teaches the recommendation when the choice is left closed", async () => {
+    const user = userEvent.setup();
+    const engine = fake();
+    const start = vi.spyOn(engine.api, "startRun");
+    await readyToTeach(user, engine.api);
+    expect(await screen.findByText("Choose the model and method")).toBeTruthy();
+    expect(screen.getAllByText("Recommended").length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "Teach it" }));
+    await waitFor(() => expect(start).toHaveBeenCalledWith("d".repeat(32), {}));
+  });
+
+  it("lists what can be chosen with the reason for what cannot, and sends the choice", async () => {
+    const user = userEvent.setup();
+    const engine = fake();
+    const start = vi.spyOn(engine.api, "startRun");
+    await readyToTeach(user, engine.api);
+    await user.click(await screen.findByText("Choose the model and method"));
+    // a model nobody can teach is listed with the reason, and cannot be picked
+    const other = screen.getByLabelText(/Some other picture model/) as HTMLInputElement;
+    expect(other.disabled).toBe(true);
+    expect(
+      screen.getByText(/The app has no way to teach it|the app has no way to teach it/i),
+    ).toBeTruthy();
+    // a method the model cannot use is shown with why, not hidden
+    const less = screen.getByLabelText(/Small adapter, less memory/) as HTMLInputElement;
+    expect(less.disabled).toBe(true);
+    expect(screen.getByText("Pictures are taught as a small adapter.")).toBeTruthy();
+    // the technical name comes second, and teaching all of it sits under "For experts"
+    expect(screen.getByText("(LoRA)")).toBeTruthy();
+    await user.click(screen.getByText("For experts"));
+    await user.click(screen.getByLabelText(/Teach all of it/));
+    await user.click(screen.getByRole("button", { name: "Teach it" }));
+    await waitFor(() => expect(start).toHaveBeenCalledWith("d".repeat(32), { method: "full" }));
+  });
+
+  it("starts a chosen model from its own recommendation", async () => {
+    const user = userEvent.setup();
+    const engine = fake();
+    const start = vi.spyOn(engine.api, "startRun");
+    await readyToTeach(user, engine.api);
+    await user.click(await screen.findByText("Choose the model and method"));
+    await user.click(screen.getByText("For experts"));
+    await user.click(screen.getByLabelText(/Teach all of it/));
+    await user.click(screen.getByLabelText(/Base B/));
+    // Base B cannot teach all of it: the choice falls back to the small adapter
+    expect((screen.getByLabelText(/Teach all of it/) as HTMLInputElement).disabled).toBe(true);
+    await user.click(screen.getByRole("button", { name: "Teach it" }));
+    await waitFor(() => expect(start).toHaveBeenCalledWith("d".repeat(32), { base: "base-b" }));
   });
 
   it("lets the person change a description and describe one again", async () => {

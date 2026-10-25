@@ -89,6 +89,19 @@ describe("the training client", () => {
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ dataset_id: "d1" });
   });
 
+  it("sends the person's choice of model and method, and reads what can be chosen", async () => {
+    const { transport, calls } = fake(() => json({ family: "image", bases: [], id: "r1" }));
+    const api = createTrainingApi(transport);
+    await api.startRun("d1", { base: "b", method: "lora" });
+    await api.choices("style");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
+      dataset_id: "d1",
+      base: "b",
+      method: "lora",
+    });
+    expect(calls[1]?.path).toBe(`${BASE}/choices?kind=style`);
+  });
+
   it("turns a picture into an object URL, once asked", async () => {
     const created: Blob[] = [];
     const original = URL.createObjectURL;

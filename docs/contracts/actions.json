@@ -4507,6 +4507,34 @@
             "minLength": 32,
             "title": "Dataset Id",
             "type": "string"
+          },
+          "base": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The model to teach, from the Train screen's 'Choose the model and method'. Leave it out to use the recommended one.",
+            "title": "Base"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "How to teach it: lora, qlora or full. Leave it out for the recommended one (lora, a small adapter); a method the model cannot use is refused with the reason.",
+            "title": "Method"
           }
         },
         "required": [

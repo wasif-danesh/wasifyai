@@ -382,3 +382,11 @@ def test_before_a_run_it_says_what_stops_it_and_what_to_look_out_for(
     assert trainer.preflight()["blockers"] == ["Needs 40 GB."]
     monkeypatch.setattr(trainer, "fit", lambda: {**fit, "verdict": "tight", "reason": "Tight."})
     assert "Close other apps" in trainer.preflight()["warnings"][0]
+
+
+def test_the_config_trains_at_the_side_the_run_asks_for(tmp_path):
+    from wasifyai_api.desktop_training import SIDE, training_config
+
+    at_default = training_config(200, 20, tmp_path / "w", tmp_path / "o", sample_every=50)
+    at_512 = training_config(200, 20, tmp_path / "w", tmp_path / "o", sample_every=50, side=512)
+    assert at_default["max_resolution"] == SIDE == 768 and at_512["max_resolution"] == 512

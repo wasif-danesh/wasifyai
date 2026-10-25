@@ -40,6 +40,43 @@ export type TrainStatus = {
   estimates: Record<TrainKind, string>;
 };
 
+export type TrainMethodId = "lora" | "qlora" | "full";
+
+/** One way of teaching a model, in words first; `can` false carries the reason. */
+export type TrainMethod = {
+  id: TrainMethodId;
+  title: string;
+  technical: string;
+  /** Advanced only: the screen shows it under "For experts" */
+  advanced: boolean;
+  can: boolean;
+  reason: string;
+};
+
+/** A model that may be taught, or one on this computer that cannot be (with the reason). */
+export type TrainBase = {
+  /** empty for a model with no descriptor: it is listed, not offered */
+  id: string;
+  title: string;
+  licence: string;
+  engine: string;
+  recommended: boolean;
+  can_teach: boolean;
+  reason: string;
+  installed: boolean;
+  methods: TrainMethod[];
+};
+
+export type TrainChoices = {
+  family: string;
+  default_base: string;
+  default_method: TrainMethodId;
+  bases: TrainBase[];
+};
+
+/** The person's choice: leave a field out for the recommendation. */
+export type TrainChoice = { base?: string; method?: TrainMethodId };
+
 export type TrainPictureCheck = { code: string; level: "ok" | "warn"; message: string };
 
 export type CaptionState = "none" | "writing" | "done" | "edited" | "failed";
@@ -71,6 +108,9 @@ export type TrainDataset = {
   missing: string | null;
   /** the descriptions are being written */
   writing: boolean;
+  /** what teaching this set would take, by its own size: the steps and "About 40 minutes" */
+  steps?: number;
+  estimate?: string;
   /** with the whole set: its pictures and three magic words */
   items?: TrainPicture[];
   suggestions?: string[];
@@ -221,7 +261,9 @@ export type TrainingApi = {
   ): Promise<{ writing: number }>;
   /** A picture of the set (`thumb` or `picture`) as an object URL. */
   pictureUrl(datasetId: string, pictureId: string, which: "thumb" | "picture"): Promise<string>;
-  startRun(datasetId: string): Promise<TrainRun>;
+  startRun(datasetId: string, choice?: TrainChoice): Promise<TrainRun>;
+  /** The models and methods that can be chosen for a kind of teaching. */
+  choices(kind: TrainKind): Promise<TrainChoices>;
   runs(): Promise<TrainRun[]>;
   run(id: string): Promise<TrainRun>;
   /** Stop for now and keep the last checkpoint; `resumeRun` picks it up where it stopped. */
@@ -297,8 +339,9 @@ export function createTrainingApi(
       ),
     pictureUrl: (datasetId, pictureId, which) =>
       objectUrl(`${base}/datasets/${enc(datasetId)}/items/${enc(pictureId)}/${which}`),
-    startRun: (datasetId) =>
-      json<TrainRun>(`${base}/runs`, send("POST", { dataset_id: datasetId })),
+    startRun: (datasetId, choice) =>
+      json<TrainRun>(`${base}/runs`, send("POST", { dataset_id: datasetId, ...choice })),
+    choices: (kind) => json<TrainChoices>(`${base}/choices?kind=${enc(kind)}`),
     runs: async () => (await json<{ runs: TrainRun[] }>(`${base}/runs`)).runs,
     run: (id) => json<TrainRun>(`${base}/runs/${enc(id)}`),
     pauseRun: (id) =>

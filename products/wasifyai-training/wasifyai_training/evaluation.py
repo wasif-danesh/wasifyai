@@ -37,7 +37,8 @@ PROMPT = {"character": "judge_character", "style": "judge_style", "object": "jud
 REFS = 3  # reference pictures kept with a model, and shown to the judge
 REF_PX = 512
 
-# a scene the model did not see, twice; `{w}` is the magic word
+# a scene the model did not see, twice; `{w}` is the magic word, placed first as in the captions it
+# was taught with (a position the model never saw it in is not a fair test)
 SCENES = {
     "character": [
         ("{w}, standing in a sunny park", "someone standing in a sunny park"),
@@ -47,8 +48,8 @@ SCENES = {
         ),
     ],
     "style": [
-        ("a lighthouse on a cliff at sunrise, {w}", "a lighthouse on a cliff at sunrise"),
-        ("a bowl of fruit on a wooden table, {w}", "a bowl of fruit on a wooden table"),
+        ("{w}, a lighthouse on a cliff at sunrise", "a lighthouse on a cliff at sunrise"),
+        ("{w}, a bowl of fruit on a wooden table", "a bowl of fruit on a wooden table"),
     ],
     "object": [
         ("{w} on a wooden table by a window", "an object on a wooden table by a window"),

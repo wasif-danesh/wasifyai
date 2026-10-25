@@ -20,8 +20,10 @@ import { Notice } from "../components/notice";
 import type { ImageFlowApi } from "../hooks/use-image-flow";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
 import { CheckIt, EvaluationLine } from "./CheckIt";
+import { Choose } from "./Choose";
 import { SetupCard } from "./SetupCard";
 import { TryIt } from "./TryIt";
+import { useChoices } from "./use-choices";
 import { useTrainingSetup } from "./use-setup";
 import { type TrainState, useTraining } from "./use-training";
 
@@ -149,7 +151,7 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
       ) : showingRun && state.run ? (
         <RunView t={t} run={state.run} onOpenLibrary={onOpenLibrary} runs={runs} api={api} />
       ) : state.current ? (
-        <MakeView t={t} status={state.status} />
+        <MakeView t={t} status={state.status} api={api} />
       ) : (
         <Home t={t} runs={runs} setup={setup} api={api} />
       )}
@@ -404,7 +406,15 @@ function ModelCard({
 
 // ---- the set being made: add pictures, check, teach ---------------------------------------------
 
-function MakeView({ t, status }: { t: Hook; status: TrainStatus | null }) {
+function MakeView({
+  t,
+  status,
+  api,
+}: {
+  t: Hook;
+  status: TrainStatus | null;
+  api: TrainingApi;
+}) {
   const d = t.state.current as TrainDataset;
   const [step, setStep] = useState<1 | 2>(1);
   const min = status?.min_pictures ?? 8;
@@ -426,7 +436,7 @@ function MakeView({ t, status }: { t: Hook; status: TrainStatus | null }) {
       {step === 1 ? (
         <PicturesStep t={t} d={d} min={min} onNext={() => setStep(2)} />
       ) : (
-        <CheckStep t={t} d={d} status={status} onBack={() => setStep(1)} />
+        <CheckStep t={t} d={d} status={status} onBack={() => setStep(1)} api={api} />
       )}
       <div>
         <Button type="button" variant="ghost" size="sm" onClick={() => void t.leave()}>
@@ -574,8 +584,16 @@ function CheckStep({
   d,
   status,
   onBack,
-}: { t: Hook; d: TrainDataset; status: TrainStatus | null; onBack: () => void }) {
+  api,
+}: {
+  t: Hook;
+  d: TrainDataset;
+  status: TrainStatus | null;
+  onBack: () => void;
+  api: TrainingApi;
+}) {
   const [own, setOwn] = useState("");
+  const choosing = useChoices(api, d.kind);
   const nameId = useId();
   const ownId = useId();
   const items = d.items ?? [];
@@ -585,7 +603,7 @@ function CheckStep({
     (i) => i.caption_state === "none" || i.caption_state === "failed",
   ).length;
   const writing = d.writing || t.state.busy === "captions";
-  const estimate = status?.estimates?.[d.kind] ?? "";
+  const estimate = d.estimate ?? status?.estimates?.[d.kind] ?? "";
   const preflight = status?.preflight ?? null;
   return (
     <section className={panel} aria-label="Check">
@@ -727,6 +745,7 @@ function CheckStep({
           ))}
         </>
       ) : null}
+      <Choose c={choosing} />
       <div className={actions}>
         <Button type="button" variant="outline" onClick={onBack}>
           Back
@@ -741,7 +760,7 @@ function CheckStep({
             t.state.status?.busy === true ||
             preflight?.ok === false
           }
-          onClick={() => void t.teach()}
+          onClick={() => void t.teach(choosing.choice)}
         >
           Teach it
         </Button>

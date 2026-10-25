@@ -582,6 +582,53 @@
         "title": "ChatOptions",
         "type": "object"
       },
+      "CheckedPicture": {
+        "properties": {
+          "condition": {
+            "enum": [
+              "with_word",
+              "without_word",
+              "without_model"
+            ],
+            "title": "Condition",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 40,
+            "title": "Id",
+            "type": "string"
+          },
+          "prompt": {
+            "maxLength": 600,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 300,
+            "title": "Reason",
+            "type": "string"
+          },
+          "same": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Same"
+          }
+        },
+        "required": [
+          "id",
+          "condition",
+          "prompt"
+        ],
+        "title": "CheckedPicture",
+        "type": "object"
+      },
       "ConfirmReader": {
         "additionalProperties": false,
         "properties": {
@@ -1023,6 +1070,23 @@
           "message"
         ],
         "title": "ErrorEvent",
+        "type": "object"
+      },
+      "EvaluationIn": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CheckedPicture"
+            },
+            "maxItems": 12,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EvaluationIn",
         "type": "object"
       },
       "Exported": {
@@ -2461,11 +2525,35 @@
       },
       "RunIn": {
         "properties": {
+          "base": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base"
+          },
           "dataset_id": {
             "maxLength": 32,
             "minLength": 32,
             "title": "Dataset Id",
             "type": "string"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
           }
         },
         "required": [
@@ -7675,6 +7763,53 @@
         ]
       }
     },
+    "/products/wasifyai-training/train/choices": {
+      "get": {
+        "description": "The base models and methods the person may choose for a kind of teaching.",
+        "operationId": "choices_products_wasifyai_training_train_choices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "default": "character",
+              "maxLength": 20,
+              "title": "Kind",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Choices Products Wasifyai Training Train Choices Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Choices",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
     "/products/wasifyai-training/train/datasets": {
       "get": {
         "operationId": "list_datasets_products_wasifyai_training_train_datasets_get",
@@ -8347,6 +8482,106 @@
         ]
       }
     },
+    "/products/wasifyai-training/train/models/{model_id}/check": {
+      "get": {
+        "description": "The pictures to draw to find out, and how many reference pictures it has.",
+        "operationId": "check_plan_products_wasifyai_training_train_models__model_id__check_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Check Plan Products Wasifyai Training Train Models  Model Id  Check Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Plan",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/models/{model_id}/evaluation": {
+      "put": {
+        "description": "Keep what the check found on the model's card, as a sentence and a mark.",
+        "operationId": "put_evaluation_products_wasifyai_training_train_models__model_id__evaluation_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Put Evaluation Products Wasifyai Training Train Models  Model Id  Evaluation Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Evaluation",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
     "/products/wasifyai-training/train/models/{model_id}/file": {
       "get": {
         "operationId": "model_file_products_wasifyai_training_train_models__model_id__file_get",
@@ -8382,6 +8617,51 @@
           }
         },
         "summary": "Model File",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/models/{model_id}/judge": {
+      "post": {
+        "description": "The body is one picture it drew: does it look like the pictures it learnt from?",
+        "operationId": "judge_picture_products_wasifyai_training_train_models__model_id__judge_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Judge Picture Products Wasifyai Training Train Models  Model Id  Judge Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Judge Picture",
         "tags": [
           "wasifyai-training"
         ]
@@ -8558,6 +8838,95 @@
           }
         },
         "summary": "Cancel Run",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/runs/{run_id}/pause": {
+      "post": {
+        "description": "Stop for now, keeping the last checkpoint; the run can be resumed.",
+        "operationId": "pause_run_products_wasifyai_training_train_runs__run_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Pause Run Products Wasifyai Training Train Runs  Run Id  Pause Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause Run",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/runs/{run_id}/resume": {
+      "post": {
+        "operationId": "resume_run_products_wasifyai_training_train_runs__run_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Resume Run Products Wasifyai Training Train Runs  Run Id  Resume Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume Run",
         "tags": [
           "wasifyai-training"
         ]

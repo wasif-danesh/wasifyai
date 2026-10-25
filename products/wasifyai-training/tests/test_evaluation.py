@@ -25,7 +25,8 @@ def test_each_scene_is_drawn_three_ways_so_one_thing_differs():
     assert "marlo" in with_word["prompt"] and with_word["with_model"] is True
     assert "marlo" not in without_word["prompt"] and without_word["with_model"] is True
     assert base["prompt"] == with_word["prompt"] and base["with_model"] is False
-    assert evaluation.check_plan("style", "tazur")[0]["prompt"].endswith("tazur")
+    # the word first, as in the descriptions the model was taught with
+    assert evaluation.check_plan("style", "tazur")[0]["prompt"].startswith("tazur,")
 
 
 def verdicts(**yes):

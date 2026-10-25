@@ -25,7 +25,7 @@ from wasifyai_platform_sdk import (
 )
 from wasifyai_platform_sdk.context import reset_context
 
-from wasifyai_training import captions, evaluation, guardrail, magic, pictures, trainer
+from wasifyai_training import bases, captions, evaluation, guardrail, magic, pictures, trainer
 from wasifyai_training.store import NotFound, TrainingStore
 
 log = logging.getLogger(__name__)
@@ -371,7 +371,15 @@ class RunManager:
     def active(self) -> str | None:
         return self._run_id if self.busy() else None
 
-    async def start(self, identity: Identity, dataset_id: str) -> dict[str, Any]:
+    async def start(
+        self,
+        identity: Identity,
+        dataset_id: str,
+        base: str | None = None,
+        method: str | None = None,
+    ) -> dict[str, Any]:
+        """Start teaching. `base` and `method` are the person's choice (`bases`); absent means the
+        recommendation, so a caller that does not know about the choice keeps working."""
         state = self._deps.state
         engine, store = engine_for(state), store_for(state)
         if not engine.ready():
@@ -393,11 +401,16 @@ class RunManager:
         check = getattr(engine, "preflight", None)
         if check is not None and (blockers := check()["blockers"]):
             raise Refused("not_now", blockers[0])  # not enough disk, a flat battery
-        steps = trainer.PRESETS[dataset["kind"]]
+        try:
+            chosen, how = bases.resolve(dataset["kind"], base, method)
+        except bases.Unavailable as e:
+            raise Refused("cannot_teach", str(e)) from None
+        steps = trainer.steps_for(dataset["kind"], len(items))
         row = store.add_run(
             identity.tenant_id, identity.user_id, dataset_id,
-            base=getattr(engine, "base", trainer.BASE), steps=steps,
-            settings={"steps": steps, "kind": dataset["kind"]},
+            base=getattr(engine, "base", chosen.id), steps=steps,
+            settings={"steps": steps, "kind": dataset["kind"], "method": how,
+                      "engine": chosen.engine, "side": trainer.side_for(dataset["kind"])},
             preview=bool(getattr(engine, "preview", False)),
         )  # fmt: skip
         self._run_id = row["id"]

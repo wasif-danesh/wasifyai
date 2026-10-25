@@ -20,7 +20,7 @@ from wasifyai_platform_sdk import (
 )
 from wasifyai_platform_sdk.context import reset_context
 
-from wasifyai_training import evaluation, magic, trainer
+from wasifyai_training import bases, evaluation, magic, trainer
 from wasifyai_training.runtime import (
     MAX_PICTURES,
     MIN_PICTURES,
@@ -73,6 +73,8 @@ class CaptionsIn(BaseModel):
 
 class RunIn(BaseModel):
     dataset_id: str = Field(min_length=32, max_length=32)
+    base: str | None = Field(default=None, max_length=80)  # the person's choice; none = recommended
+    method: str | None = Field(default=None, max_length=20)
 
 
 class CheckedPicture(BaseModel):
@@ -140,6 +142,9 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         out = clean(row)
         out["pictures"] = len(items)
         out["missing"] = ready_to_train(row, items)
+        # what teaching this set would take, by its own size: more pictures, more steps
+        out["steps"] = trainer.steps_for(row["kind"], len(items))
+        out["estimate"] = trainer.estimate_words(out["steps"], row["kind"])
         out["writing"] = caption_manager_for(deps).busy(row["id"])
         return out
 
@@ -150,7 +155,9 @@ def build_routes(deps: RouteDeps) -> APIRouter:
 
     def run_out(row: dict[str, Any]) -> dict[str, Any]:
         out = clean(row)
-        out["estimate"] = trainer.estimate_words(row["steps"])
+        out["estimate"] = trainer.estimate_words(
+            row["steps"], (row.get("settings") or {}).get("kind", "character")
+        )
         out["live"] = run_manager_for(deps).active() == row["id"]
         return out
 
@@ -176,8 +183,19 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             "statements": STATEMENTS,
             "base": getattr(engine, "base", trainer.BASE),
             "steps": trainer.PRESETS,
-            "estimates": {k: trainer.estimate_words(v) for k, v in trainer.PRESETS.items()},
+            "estimates": {k: trainer.estimate_words(v, k) for k, v in trainer.PRESETS.items()},
         }
+
+    @router.get("/choices")
+    async def choices(
+        kind: str = Query("character", max_length=20), identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """The base models and methods the person may choose for a kind of teaching."""
+        engine = guard()
+        found = getattr(deps.state, "desktop_discovery", None)
+        installed = [i.public() for i in getattr(found, "items", [])]
+        ready = engine.ready()
+        return bases.choices(kind, engine.fit() if ready else None, ready, installed)
 
     # ---- datasets -------------------------------------------------------------------------
 
@@ -335,7 +353,9 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         guard()
         dataset_or_404(identity, body.dataset_id)
         try:
-            row = await run_manager_for(deps).start(identity, body.dataset_id)
+            row = await run_manager_for(deps).start(
+                identity, body.dataset_id, body.base, body.method
+            )
         except Refused as e:
             raise refuse(e) from None
         return run_out(row)

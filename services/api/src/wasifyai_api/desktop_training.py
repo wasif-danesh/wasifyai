@@ -52,7 +52,7 @@ TOKENIZE_SCRIPT = Path(__file__).with_name("training_tokenize.py")
 # a sample shows what the model makes with the magic word: a scene it saw and one it did not
 SAMPLE_PROMPTS = {
     "character": "{word}, standing in a sunny park",
-    "style": "a lighthouse on a cliff at sunrise, {word}",
+    "style": "{word}, a lighthouse on a cliff at sunrise",
     "object": "{word} on a wooden table by a window",
 }
 
@@ -70,6 +70,7 @@ def training_config(
     sample_every: int,
     base: Path | None = None,
     kind: str = "character",
+    side: int = SIDE,
 ) -> dict[str, Any]:
     """The `mflux-train` config: epochs make up the steps (one picture is one step), the full
     timestep range (the klein finding), the layers of both kinds of block at rank 16."""
@@ -95,7 +96,7 @@ def training_config(
     ]
     config = {
         "model": BASE, "data": str(work), "seed": 42, "steps": 28, "guidance": 4.0,
-        "quantize": 8, "max_resolution": SIDE, "low_ram": False, "gradient_checkpointing": True,
+        "quantize": 8, "max_resolution": side, "low_ram": False, "gradient_checkpointing": True,
         "training_loop": {
             "num_epochs": epochs, "batch_size": 1,
             "timestep_low": 0, "timestep_high": 28, "timestep_type": "sigmoid",
@@ -393,6 +394,7 @@ class MfluxTrainer:
                 config = training_config(
                     job.steps, len(job.pictures), work, out,
                     sample_every=max(1, total // 4), base=base[0], kind=job.kind,
+                    side=int(job.settings.get("side", SIDE)),
                 )  # fmt: skip
                 cfg = folder / "train.json"
                 await asyncio.to_thread(cfg.write_text, json.dumps(config, indent=2))

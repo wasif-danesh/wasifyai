@@ -35,7 +35,8 @@ def test_the_status_says_it_is_a_preview_and_what_a_run_asks_for(rig):
     s = rig.get(f"{BASE}/status").json()
     assert s["ready"] is True and s["preview"] is True and s["place"] == "device"
     assert s["min_pictures"] == 8 and set(s["kinds"]) == {"character", "style", "object"}
-    assert s["estimates"]["character"] == "About 33 minutes"  # 200 steps at 10 s
+    assert s["estimates"]["character"] == "About 20 minutes"  # 200 steps at 6 s (512 pixels)
+    assert s["estimates"]["style"] == "About 42 minutes"  # 250 steps at 10 s (768 pixels)
     assert s["steps"] == {"character": 200, "style": 250, "object": 150}
 
 
@@ -190,7 +191,7 @@ def test_a_run_goes_through_its_steps_and_leaves_a_model_with_its_card(rig):
     assert started.status_code == 202, started.text
     run = started.json()
     assert run["status"] == "working" and run["steps"] == 200 and run["preview"] is True
-    assert run["estimate"] == "About 33 minutes"
+    assert run["estimate"] == "About 20 minutes"
     assert rig.post(f"{BASE}/runs", json={"dataset_id": ds["id"]}).json()["detail"]["code"] in (
         "busy",
         "not_ready_to_train",
@@ -326,3 +327,26 @@ def test_with_the_safeguards_off_nothing_is_checked_but_usage_is_still_recorded(
     ds = new_dataset(rig)
     assert add_picture(rig, ds["id"]).status_code == 201
     assert [e.kind for e in rig.app_state.usage.events] == ["train.picture"]
+
+
+def test_the_steps_follow_the_number_of_pictures_between_the_preset_and_a_ceiling():
+    from wasifyai_training import trainer
+
+    # 14 passes over the pictures, never fewer steps than the preset, never more than 500
+    assert trainer.steps_for("character", 11) == 200  # 154 passes-worth: the preset holds
+    assert trainer.steps_for("character", 25) == 350
+    assert trainer.steps_for("character", 37) == 500  # 518 would be 14 passes: the ceiling
+    assert trainer.steps_for("character", 80) == 500
+    assert trainer.steps_for("style", 15) == 250 and trainer.steps_for("object", 8) == 150
+    # a character is taught at 512 pixels (6 s a step), the others at 768 (10 s a step)
+    assert trainer.side_for("character") == 512 and trainer.side_for("style") == 768
+    assert trainer.estimate_words(500, "character") == "About 50 minutes"
+    assert trainer.estimate_words(500, "object") == "About 83 minutes"
+
+
+def test_a_set_says_what_teaching_it_would_take_and_the_run_keeps_the_side(rig):
+    ds = ready_dataset(rig, pictures=8)
+    got = rig.get(f"{BASE}/datasets/{ds['id']}").json()
+    assert got["steps"] == 200 and got["estimate"] == "About 20 minutes"
+    run = rig.post(f"{BASE}/runs", json={"dataset_id": ds["id"]}).json()
+    assert run["steps"] == 200 and run["settings"]["side"] == 512

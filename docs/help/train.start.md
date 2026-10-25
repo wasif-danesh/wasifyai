@@ -23,14 +23,21 @@ While the trainer is a preview, the run does everything except learn, and says s
 3. Say what it is (a character, a style or an object), give it a name, choose one of the three magic words (or
    type your own) and say whose it is.
 4. Read the descriptions the app wrote; change any, or choose Describe again.
-5. Choose Teach it. It takes about 25 minutes on a Mac and chat and image making pause. A new sample picture
+5. Leave **Choose the model and method** closed to use the recommendation (FLUX.2 klein base 4B, as a small
+   adapter). Open it to see every model on this computer and how each can be taught, with the reason beside
+   anything that cannot be used.
+6. Choose Teach it. It takes about 25 minutes on a Mac and chat and image making pause. A new sample picture
    appears now and then. You can stop it; nothing is kept.
-6. The result is in My models and in the library, found by its name and magic word.
+7. The result is in My models and in the library, found by its name and magic word.
 
 ## Fields
 
 - `dataset_id`: The set of pictures to teach from. It must have at least 8 pictures, a description for each, a
   magic word and the statement of whose it is.
+- `base`: Optional. The model to teach. Leave it out for the recommended one (FLUX.2 klein base 4B).
+- `method`: Optional. `lora` (a small adapter, the recommended and only method for pictures), `qlora` (less
+  memory, for writing models) or `full` (teach all of it, Advanced). A method the model cannot use is refused
+  with the reason.
 
 ## Limits
 
@@ -57,4 +64,5 @@ While the trainer is a preview, the run does everything except learn, and says s
 - **Write the descriptions first** Choose Write the descriptions on the screen.
 - **Say whose it is first** Choose one of the statements on the Check step.
 - **A model is being taught** Wait for it to finish or stop it.
+- **This model cannot be taught yet** Choose the recommended model, or leave the choice closed.
 - **You've reached today's limit** Try again tomorrow.

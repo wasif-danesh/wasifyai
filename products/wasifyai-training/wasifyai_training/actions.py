@@ -50,6 +50,18 @@ class StartIn(BaseModel):
         description="The set of pictures to teach from: made on the Train screen, with its "
         "descriptions written, its magic word chosen and its statement of rights given.",
     )  # fmt: skip
+    base: str | None = Field(
+        default=None,
+        max_length=80,
+        description="The model to teach, from the Train screen's 'Choose the model and method'. "
+        "Leave it out to use the recommended one.",
+    )
+    method: str | None = Field(
+        default=None,
+        max_length=20,
+        description="How to teach it: lora, qlora or full. Leave it out for the recommended one "
+        "(lora, a small adapter); a method the model cannot use is refused with the reason.",
+    )
 
 
 class StartOut(BaseModel):
@@ -78,7 +90,7 @@ async def _start(p: StartIn, ctx: ActionContext) -> Outcome:
         return Outcome.refused(not_ready(engine), "not_ready")
     runs = run_manager_for(deps)
     try:
-        row = await runs.start(ctx.actor, p.dataset_id)
+        row = await runs.start(ctx.actor, p.dataset_id, p.base, p.method)
     except NotFound:
         return Outcome.refused("That set of pictures does not exist.", "not_found")
     except Refused as e:

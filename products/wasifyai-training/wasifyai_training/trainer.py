@@ -24,13 +24,21 @@ from PIL import Image, ImageDraw, ImageEnhance
 BASE = "flux2-klein-base-4b"  # what the first LoRA is taught on: the model Create image uses
 BASE_TITLE = "FLUX.2 klein base 4B"
 BASE_LICENCE = "Apache-2.0"
-# measured on the owner's M5 Pro through the real screens (ADR-0073, 2026-10-25): 9.2 to 11.6 s a
-# step in all, the model load and the sample pictures included
-SECONDS_PER_STEP = 10.0
-# steps. A character and an object bound their magic word in 150 to 200 steps. A style learnt the
-# scenes it was shown by 250 steps and did not carry over to a new one at 500 either (measured), so
-# more steps is not the lever: see the learning rate
+# measured on the owner's M5 Pro (ADR-0073, 2026-10-25): 9.2 to 11.6 s a step at 768 pixels, the
+# model load and the sample pictures included, and 6.0 s a step at 512 pixels (518 steps in 51 min)
+SECONDS_PER_STEP = {512: 6.0, 768: 10.0}
+# the longest side of a training picture. A character is taught at 512, as the AI Toolkit run of
+# the same 37 pictures was, and drew as well (Create, 2026-10-25); the others stay at 768 until
+# they are measured at 512
+SIDES = {"character": 512, "style": 768, "object": 768}
+# steps. The least a kind needs: a character and an object bound their magic word in 150 to 200
+# steps on 10 to 15 pictures; a style learnt the scenes it was shown by 250 steps
 PRESETS = {"character": 200, "style": 250, "object": 150}
+# a steps count is not a count of passes over the pictures: 200 steps is 18 passes over 11
+# pictures and 5 over 37. The run takes about this many passes, never fewer steps than the preset
+# and never more than the ceiling (a set of 37 took 518 steps, 14 passes: 51 minutes at 512)
+PASSES = 14
+MAX_STEPS = 500
 
 
 @dataclass
@@ -69,12 +77,21 @@ Report = Callable[[int, str], None]
 SampleFn = Callable[[str], None]
 
 
-def estimate_seconds(steps: int) -> int:
-    return round(steps * SECONDS_PER_STEP)
+def steps_for(kind: str, pictures: int) -> int:
+    """How many steps to teach `pictures` pictures of this kind."""
+    return min(MAX_STEPS, max(PRESETS[kind], PASSES * max(0, pictures)))
 
 
-def estimate_words(steps: int) -> str:
-    minutes = max(1, round(estimate_seconds(steps) / 60))
+def side_for(kind: str) -> int:
+    return SIDES.get(kind, 768)
+
+
+def estimate_seconds(steps: int, kind: str = "character") -> int:
+    return round(steps * SECONDS_PER_STEP[side_for(kind)])
+
+
+def estimate_words(steps: int, kind: str = "character") -> str:
+    minutes = max(1, round(estimate_seconds(steps, kind) / 60))
     return f"About {minutes} minutes"
 
 

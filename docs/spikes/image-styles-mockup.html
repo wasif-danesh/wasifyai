@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Styles in Create images: mockup</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: light-dark(oklch(97% 0.004 250), oklch(15% 0.012 255));
+    --surface: light-dark(oklch(100% 0 0), oklch(20% 0.014 255));
+    --surface-2: light-dark(oklch(95.5% 0.006 250), oklch(25% 0.016 255));
+    --surface-3: light-dark(oklch(92% 0.008 250), oklch(30% 0.018 255));
+    --text: light-dark(oklch(21% 0.02 255), oklch(95% 0.006 250));
+    --muted: light-dark(oklch(49% 0.02 255), oklch(70% 0.016 255));
+    --border: light-dark(oklch(90% 0.01 250), oklch(32% 0.018 255));
+    --accent: light-dark(oklch(50% 0.17 258), oklch(76% 0.12 250));
+    --accent-soft: color-mix(in oklch, var(--accent) 14%, transparent);
+    --on-accent: light-dark(oklch(99% 0 0), oklch(19% 0.04 250));
+    --ok: light-dark(oklch(52% 0.13 155), oklch(74% 0.14 155));
+    --warn: light-dark(oklch(58% 0.14 70), oklch(80% 0.14 80));
+    --bad: light-dark(oklch(55% 0.2 25), oklch(72% 0.17 25));
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --serif: ui-serif, "Iowan Old Style", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: oklch(12% 0.01 255); color: #ddd; font: 14px/1.45 var(--font); padding: 22px; }
+  .bar { display:flex; gap:12px; align-items:center; margin: 0 auto 14px; max-width: 1420px; color:#aab; flex-wrap:wrap; }
+  .bar strong { color:#eef; }
+  .bar button { background:#2a2f3a; color:#eef; border:1px solid #3a4150; border-radius:999px; padding:6px 14px; font:inherit; cursor:pointer; }
+  .row3 { display:flex; gap:18px; justify-content:center; align-items:flex-start; flex-wrap:wrap; max-width:1420px; margin:0 auto; }
+  .col { width: 440px; }
+  .label { margin: 0 0 8px; color:#9aa; font-size:12.5px; letter-spacing:.05em; text-transform:uppercase; }
+  .frame { border-radius: 14px; overflow: hidden; border:1px solid #333a46; height: 900px; }
+  .win { background: var(--bg); color: var(--text); display:grid; grid-template-rows:auto 1fr auto; }
+  .head { padding: 12px 18px 6px; display:flex; justify-content:space-between; align-items:flex-start; gap:10px; border-bottom:1px solid var(--border); background: var(--surface); }
+  .head h1 { margin:0; font-size:19px; font-weight:650; }
+  .head p { margin:2px 0 8px; color: var(--muted); font-size:12.5px; }
+  .model { display:inline-flex; gap:6px; align-items:center; border:1px solid var(--border); border-radius:.55rem; padding:5px 10px; font-size:13px; background:var(--surface-2); }
+  .scroll { padding: 14px 18px; display:grid; gap:14px; align-content:start; overflow:hidden; }
+  .field { display:grid; gap:5px; }
+  .field > h2, .lab { margin:0; font-size:13px; font-weight:650; display:flex; justify-content:space-between; align-items:center; }
+  .box { border:1px solid var(--border); border-radius:.65rem; background: var(--surface-2); padding:9px 11px; min-height:64px; font-size:13.5px; }
+  .muted { color: var(--muted); }
+  .small { font-size:12px; }
+  .btn { display:inline-flex; gap:6px; align-items:center; border:1px solid var(--border); background:transparent; color:var(--text); border-radius:.55rem; padding:5px 11px; font:inherit; font-size:12.5px; cursor:pointer; white-space:nowrap; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); border-color:transparent; font-weight:650; }
+  .btn.sm { padding:3px 9px; font-size:12px; }
+  .btn.ghost { border-color:transparent; color: var(--muted); }
+  .chip { border:1px solid var(--border); border-radius:.5rem; padding:3px 9px; font-size:12px; background:transparent; color:var(--text); }
+  .chip.on { background: var(--accent); color: var(--on-accent); border-color:transparent; font-weight:600; }
+  .chips { display:flex; gap:5px; flex-wrap:wrap; }
+  .style { border:1px solid var(--border); border-radius:.7rem; background: var(--surface); padding:9px 11px; display:grid; gap:6px; }
+  .style.bad { opacity:.7; border-style:dashed; }
+  .srow { display:flex; align-items:center; gap:8px; }
+  .name { font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tag { font-size:11px; border:1px solid var(--border); border-radius:999px; padding:0 8px; color: var(--muted); white-space:nowrap; }
+  .tag.mine { color: var(--accent); border-color: color-mix(in oklch, var(--accent) 45%, transparent); }
+  .fit { font-size:12px; display:flex; gap:6px; align-items:center; }
+  .fit.ok { color: var(--ok); } .fit.bad { color: var(--bad); } .fit.unk { color: var(--warn); }
+  .slider { height:4px; border-radius:4px; background: var(--surface-3); position:relative; flex:1; }
+  .slider i { position:absolute; left:0; top:0; bottom:0; background: var(--accent); border-radius:4px; }
+  .slider b { position:absolute; top:-5px; width:14px; height:14px; border-radius:50%; background: var(--accent); transform:translateX(-50%); box-shadow:0 1px 3px #0006; }
+  .num { width:38px; text-align:end; font-variant-numeric: tabular-nums; font-size:12.5px; }
+  .menu { position:absolute; right:0; top:34px; width:270px; border:1px solid var(--border); background: var(--surface); border-radius:.75rem; padding:6px; box-shadow:0 14px 34px -10px #000a; z-index:5; display:grid; gap:2px; }
+  .menu div { padding:7px 10px; border-radius:.5rem; display:grid; gap:1px; font-size:13px; }
+  .menu div small { color: var(--muted); font-size:11.5px; }
+  .menu div:hover, .menu div.hl { background: var(--accent-soft); }
+  .menu hr { border:0; border-top:1px solid var(--border); margin:3px 0; }
+  .rel { position:relative; }
+  .foot { padding: 12px 18px 14px; border-top:1px solid var(--border); background: var(--surface); display:grid; gap:6px; }
+  .foot .btn.primary { justify-content:center; padding:9px; font-size:14px; border-radius:999px; }
+  .honest { font-size:12px; color: var(--muted); display:flex; gap:10px; flex-wrap:wrap; }
+  .honest b { color: var(--text); font-weight:600; }
+  .adv { display:grid; grid-template-columns: 1fr 1fr; gap:8px 12px; padding:10px 11px; border:1px solid var(--border); border-radius:.7rem; background: var(--surface); }
+  .adv label { display:grid; gap:3px; font-size:11px; letter-spacing:.05em; text-transform:uppercase; color: var(--muted); }
+  .adv label span { font-size:13px; letter-spacing:0; text-transform:none; color: var(--text); border:1px solid var(--border); border-radius:.45rem; padding:4px 8px; background: var(--surface-2); }
+  .dlg { margin:auto; width: 392px; border:1px solid var(--border); border-radius:1rem; background: var(--surface); padding:16px; display:grid; gap:11px; box-shadow:0 20px 50px -14px #000b; }
+  .dlg h3 { margin:0; font-size:16px; }
+  .scrim { background: oklch(10% .01 255 / .55); display:grid; }
+  .file { display:flex; gap:8px; align-items:center; padding:7px 9px; border:1px solid var(--border); border-radius:.55rem; font-size:12.5px; }
+  .file.on { border-color: var(--accent); background: var(--accent-soft); }
+  .drop { border:1.5px dashed var(--border); border-radius:.8rem; padding:18px; text-align:center; color: var(--muted); }
+  .notice { border:1px solid var(--border); border-left:3px solid var(--accent); background: var(--surface-2); border-radius:.55rem; padding:8px 10px; font-size:12.5px; }
+  .notice.warn { border-left-color: var(--warn); }
+  .notes { max-width:1420px; margin: 20px auto; color:#aab; display:grid; gap:8px; }
+  .notes b { color:#dde; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <strong>Styles (LoRAs) in the image screens: proposed</strong>
+  <button onclick="document.querySelectorAll('.win').forEach(w=>{const l=w.style.colorScheme!=='light';w.style.colorScheme=l?'light':'dark'})">Switch light / dark</button>
+  <span>Three steps: the Create panel, adding from Hugging Face, adding from this computer.</span>
+</div>
+
+<div class="row3">
+  <!-- ===================== 1: Create panel ===================== -->
+  <div class="col">
+    <p class="label">1. Create images, with Styles always in view</p>
+    <div class="frame win" style="color-scheme:dark">
+      <div class="head">
+        <div><h1>Create images</h1><p>Generate a new image from a prompt</p></div>
+        <span class="model">FLUX.2 klein 4B ⌄</span>
+      </div>
+      <div class="scroll">
+        <div class="field"><h2>Prompt</h2><div class="box">A lighthouse on a cliff at sunrise, soft watercolour, ena</div></div>
+
+        <div class="field">
+          <h2>Styles <span class="muted small" style="font-weight:400">2 chosen · up to 8</span>
+            <span class="rel"><button class="btn sm">＋ Add a style ⌄</button>
+              <span class="menu">
+                <div class="hl">Yours<small>Trained in Train models · 1</small></div>
+                <div>From this computer<small>Choose a .safetensors file</small></div>
+                <div>From Hugging Face<small>Paste owner/name, or search</small></div>
+                <div>Recommended<small>Checked for klein 4B and for commercial use</small></div>
+                <hr><div>Look in a folder…<small>Read styles another app keeps</small></div>
+              </span></span>
+          </h2>
+
+          <div class="style">
+            <div class="srow"><span class="name">Ena</span><span class="tag mine">Made by you</span><button class="btn sm ghost" aria-label="Remove">🗑</button></div>
+            <div class="fit ok">✓ Made for FLUX.2 klein 4B · 80 MB</div>
+            <div class="srow"><span class="small muted" style="width:54px">Strength</span><div class="slider"><i style="width:50%"></i><b style="left:50%"></b></div><span class="num">1.00</span></div>
+            <div class="srow small"><span class="muted">Trigger word</span><span class="chip">ena</span><button class="btn sm">Use this word</button></div>
+          </div>
+
+          <div class="style">
+            <div class="srow"><span class="name">Soft watercolour</span><span class="tag">Hugging Face</span><button class="btn sm ghost" aria-label="Remove">🗑</button></div>
+            <div class="fit ok">✓ Made for FLUX.2 klein 4B · 164 MB · Licence: Apache-2.0</div>
+            <div class="srow"><span class="small muted" style="width:54px">Strength</span><div class="slider"><i style="width:40%"></i><b style="left:40%"></b></div><span class="num">0.80</span></div>
+          </div>
+
+          <div class="style bad">
+            <div class="srow"><span class="name">Anime lines v2</span><span class="tag">From a folder</span></div>
+            <div class="fit bad">✕ Made for FLUX.1: it would give noise here</div>
+            <div class="srow small"><span class="muted">Not used in this picture.</span><button class="btn sm">Take it out</button></div>
+          </div>
+        </div>
+
+        <div class="field"><h2>Aspect ratio</h2><div class="chips"><span class="chip on">Square 1:1</span><span class="chip">Landscape 4:3</span><span class="chip">Portrait 3:4</span><span class="chip">Wide 16:9</span><span class="chip">Tall 9:16</span></div></div>
+
+        <div class="field"><h2>Advanced <span class="muted small" style="font-weight:400">steps, seed, how many</span></h2>
+          <div class="adv"><label>Steps<span>4</span></label><label>Seed<span>Random</span></label><label>Pictures<span>1</span></label><label>Size<span>1024 × 1024</span></label></div>
+        </div>
+      </div>
+      <div class="foot">
+        <div class="honest"><span><b>About 28 s</b> on this Mac</span><span style="color:var(--ok)">Fits</span><span>2 styles add about 2 s</span></div>
+        <button class="btn primary">Generate</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 2: Hugging Face ===================== -->
+  <div class="col">
+    <p class="label">2. Add from Hugging Face (asks first, shows size and licence)</p>
+    <div class="frame win scrim" style="color-scheme:dark;grid-template-rows:1fr">
+      <div class="dlg">
+        <h3>Get a style from Hugging Face</h3>
+        <div class="notice">This contacts huggingface.co to read the list of files. Nothing else is sent. <a style="color:var(--accent)">Change in Settings</a></div>
+        <div class="field"><span class="lab">Name or address</span><div class="box" style="min-height:0;padding:7px 10px">someone/klein4b-watercolour</div></div>
+        <div class="field"><span class="lab">Files in this repository <span class="muted small" style="font-weight:400">only .safetensors are offered</span></span>
+          <div class="file on">◉ <span style="flex:1">watercolour_v2.safetensors</span><span class="muted">164 MB</span></div>
+          <div class="file">○ <span style="flex:1">watercolour_v1.safetensors</span><span class="muted">164 MB</span></div>
+          <div class="file" style="opacity:.55">✕ <span style="flex:1">watercolour.ckpt</span><span class="muted">not offered: it can run code</span></div>
+        </div>
+        <div class="srow small"><span class="tag">Licence: Apache-2.0</span><span class="tag">For: FLUX.2 klein 4B (checked after download)</span></div>
+        <div class="notice warn small">Commercial use of this style has <b>not been reviewed</b> by us. The licence above is what its author states.</div>
+        <div class="srow" style="justify-content:flex-end;gap:8px"><button class="btn">Not now</button><button class="btn primary">Download 164 MB and add</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== 3: From this computer ===================== -->
+  <div class="col">
+    <p class="label">3. Add from this computer (checked before it is kept)</p>
+    <div class="frame win scrim" style="color-scheme:dark;grid-template-rows:1fr">
+      <div class="dlg">
+        <h3>Add a style from this computer</h3>
+        <div class="drop">Drop a <b>.safetensors</b> file here, or choose one<br><span class="small">Not .ckpt or .pt files: those can run code.</span></div>
+        <div class="notice"><b>Checked: a style for FLUX.2 klein 4B</b><br><span class="small muted">ena_flux2_klein_4b_full.safetensors · 83 MB · rank 16 · 120 tensors · nothing was run</span></div>
+        <div class="field"><span class="lab">Name</span><div class="box" style="min-height:0;padding:7px 10px">Ena</div></div>
+        <div class="field"><span class="lab">Trigger word <span class="muted small" style="font-weight:400">optional · found in the file</span></span><div class="box" style="min-height:0;padding:7px 10px">ena</div></div>
+        <div class="field"><span class="lab">Where it came from <span class="muted small" style="font-weight:400">optional</span></span><div class="box" style="min-height:0;padding:7px 10px">Trained here, in Train models</div></div>
+        <div class="srow" style="justify-content:flex-end;gap:8px"><button class="btn">Cancel</button><button class="btn primary">Add this style</button></div>
+        <div class="small muted">A copy is kept in the app's own folder. Your original file is not changed or moved.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="notes">
+  <div><b>What this borrows from Unsloth's image screen:</b> a list of up to eight adapters, each with a strength from 0 to 2, an "Add" button, a way to look in other folders, and suggestions for the loaded model. It does not copy its code or wording.</div>
+  <div><b>What is ours:</b> styles you trained in the app come first and are marked; each one says in words whether it fits the model (read from the file, not guessed from the name); a trigger word has a "Use this word" button; downloads ask first and show size and licence; only .safetensors files are accepted; and the honest line says what the styles cost in time.</div>
+  <div><b>Honest limits:</b> the pictures are sketches. The numbers (28 s, 2 s per style) are examples in the style of our measured ones, to be measured in stage S0.</div>
+</div>
+</body>
+</html>

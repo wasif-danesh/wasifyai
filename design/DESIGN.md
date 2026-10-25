@@ -73,6 +73,8 @@ files we ship with their licences recorded; the desktop never fetches fonts from
 
 ## Screen patterns (written before the screens are built)
 
+- **Long work never blocks the window (ADR-0086 amendment, 2026-10-25).** A model download asks first in a dialog (files, size, licence) that closes the moment the person agrees; the work goes on in a **tray** at the top right, under the top bar, on every screen: name, percentage, a thin bar, a stop button; queued rows say "Waiting"; a finished row says "Ready" and leaves after a few seconds; a failed row stays with its reason and "Try again". The tray is a labelled region with a polite live line; it never takes focus and the page behind stays usable.
+
 - **The model button is in the top bar (ADR-0086 amendment, 2026-10-24).** Every screen that makes something with a model puts its "Select ... model" button at the left of the page's top bar, as the chat, Images and Notebook screens do; the page's other tools (the library link, a mode tab) go at the right. In the app window that bar is the window's own (`PageHeader`); on the web it is a bar at the top of the screen's area (`TopBarSlot`, same `PageHeader` call). A screen never puts its model button in the body or gives it a "Model" label. A second picker on one screen (for example editing a track on the Music screen) stays in its own panel. On the web the button on Image, Video, Chat and 3D is read only: it names the model the service uses and says whether it is ready.
 
 - **Chat (the assistant; built on assistant-ui, ADR-0082, `packages/ui/src/chat/thread/`):** a title bar (name, rename, delete) only for a saved chat; while empty, the greeting, the box and three

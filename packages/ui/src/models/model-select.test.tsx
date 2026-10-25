@@ -181,45 +181,6 @@ describe("choosing a model that is not on the computer", () => {
     expect(screen.getByRole("button", { name: /FLUX.2 klein 4B/ })).toBeInTheDocument();
   });
 
-  it("shows how far it is, and can be stopped", async () => {
-    let release: () => void = () => {};
-    const api = fake([choice()], {
-      get: vi.fn(
-        (_id, on, signal: AbortSignal) =>
-          new Promise<void>((_resolve, reject) => {
-            on({ label: "Getting the model", fraction: 0.4 });
-            release = () => reject(new Error("stopped"));
-            signal.addEventListener("abort", () => reject(new Error("stopped")));
-          }),
-      ),
-    });
-    const user = userEvent.setup();
-    render(<ModelSelect group="listening" api={api} />);
-    await user.click(await screen.findByRole("button", { name: /Select transcription model/ }));
-    await user.click(await screen.findByRole("button", { name: /Parakeet TDT 0.6B v3/ }));
-    await user.click(await screen.findByRole("button", { name: "Download and use" }));
-    expect(await screen.findByText(/Getting the model, 40%/)).toBeInTheDocument();
-    expect(screen.getByText("Downloading 40%")).toBeInTheDocument(); // on the button too, behind the box
-    await user.click(screen.getByRole("button", { name: "Stop" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    release();
-  });
-
-  it("says in words when it could not be downloaded and offers to try again", async () => {
-    const api = fake([choice()], {
-      get: vi.fn(async () => {
-        throw new Error("There is not enough free disk space: 4 GB free, 17 GB needed.");
-      }),
-    });
-    const user = userEvent.setup();
-    render(<ModelSelect group="listening" api={api} />);
-    await user.click(await screen.findByRole("button", { name: /Select transcription model/ }));
-    await user.click(await screen.findByRole("button", { name: /Parakeet TDT 0.6B v3/ }));
-    await user.click(await screen.findByRole("button", { name: "Download and use" }));
-    expect((await screen.findAllByText(/not enough free disk space/)).length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
-  });
-
   it("will not start when the disk is too full, and says so before asking", async () => {
     const api = fake([choice({ downloadBytes: 16e9 })]);
     vi.mocked(api.list).mockResolvedValue({

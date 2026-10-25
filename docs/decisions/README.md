@@ -90,5 +90,6 @@
 | [0088](0088-one-job-per-person-before-go-live.md) | One job per person across everything before go live, built so the rule can loosen | Accepted (not built) |
 | [0089](0089-models-page-as-tabs-and-tables.md) | The Models page is tabs with a table each, on the desktop and the web | Accepted |
 | [0090](0090-creative-studio.md) | Creative Studio: one project from an idea to a finished video (a plan, shots, a cut), Maestro's concepts built on our own parts; nothing copied | Accepted (2026-10-24; nothing built, CS0 waits for the owner) |
+| [0091](0091-styles-in-the-image-screens.md) | Styles (LoRAs) in the image screens: add, check, stack and reuse them (Unsloth's features as ideas, nothing copied) | Accepted (2026-10-25; nothing built, S0 waits for the owner) |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

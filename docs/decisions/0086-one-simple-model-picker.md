@@ -87,3 +87,16 @@ Pixal3D). The engine route is `GET /models/in-use` (any signed-in person; title,
 address or a setting; `services/api/src/wasifyai_api/models_in_use.py`). The voice, listening, music and lip sync groups keep their
 choice of a worker's model (ADR-0086, P5). The admin Models page keeps its four worker tabs (`ModelsHome only=`). On the desktop the
 3D screen now has its button in the top bar too; its setup card points at it.
+
+## Amendment: a download does not block the window (2026-10-25, owner)
+
+The owner found that while a model downloaded, the dialog stayed open over the whole window: nothing else could be clicked and the window could
+not be used. **A download now goes on in the background.** The confirm dialog (it names the files, the size and the licence, and is still
+needed before anything is fetched) closes the moment the person agrees; the download runs in a **tray** at the top right of the window, below
+the top bar, that is shown on every screen: the model's name, how far it is, and a button to stop it. Several downloads wait in a queue and run
+one at a time, in the order asked. A finished one says "Ready" and goes away by itself; a failed one stays, says why in words and offers
+**Try again**. The model button still shows "Downloading 40%". The downloads belong to the window, not to the screen that asked: going to
+another screen does not stop them, and every screen that lists models reads its rows again when one finishes (`ModelChoicesProvider`
+holds the queue; `packages/ui/src/models/downloads.tsx`). The Models page, the model button and the web's "Get on the worker" use it alike.
+Not changed: the dialogs that ask a question (download, remove) are still dialogs; setup cards that sit inside a screen (3D, the speech
+runtime) were never blocking.

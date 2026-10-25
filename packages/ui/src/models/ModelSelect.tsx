@@ -97,7 +97,7 @@ export function ModelSelect({
 }) {
   const g = groupOf(group);
   const id = useId();
-  const m = useModelChoices(api);
+  const m = useModelChoices(api, group);
   const changed = useChoicesChanged();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("recommended");
@@ -180,10 +180,13 @@ export function ModelSelect({
     }
   }
 
-  async function download(c: ModelChoice) {
-    if (!(await m.get(c.id))) return;
-    onChanged?.(c.id);
-    changed();
+  // the download goes on in the background (the tray shows it): the dialog and the panel close at once
+  function download(c: ModelChoice) {
+    const started = m.get(c.id, () => {
+      onChanged?.(c.id);
+      changed();
+    });
+    if (!started) return;
     setAsking(null);
     setOpen(false);
   }
@@ -332,11 +335,8 @@ export function ModelSelect({
           diskFree={m.list?.diskFreeBytes ?? null}
           working={getting?.id === asking.id ? getting.progress : null}
           problem={m.problem}
-          onGet={() => void download(asking)}
-          onCancel={() => {
-            if (getting) m.cancel();
-            setAsking(null);
-          }}
+          onGet={() => download(asking)}
+          onCancel={() => setAsking(null)}
         />
       ) : null}
     </div>
@@ -410,6 +410,10 @@ export function GetModelDialog({
             </>
           ) : null}
           .
+        </p>
+        <p className="m-0 text-muted-foreground">
+          It downloads in the background: you can keep using the app and see how far it is at the
+          top right.
         </p>
         {choice.fit === "tight" ? (
           <p className="m-0 text-warn">

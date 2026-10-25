@@ -90,7 +90,7 @@ function sizeText(c: ModelChoice): string {
 /** One tab: the models of a group as a table, with the one thing a person can do to each. */
 function GroupTable({ group, place }: { group: GroupId; place: Place }) {
   const api = useChoicesFor(group);
-  const m = useModelChoices(api);
+  const m = useModelChoices(api, group);
   const version = useChoicesVersion();
   const changed = useChoicesChanged();
   const [asking, setAsking] = useState<ModelChoice | null>(null);
@@ -109,9 +109,9 @@ function GroupTable({ group, place }: { group: GroupId; place: Place }) {
     changed();
   }
 
-  async function get(c: ModelChoice) {
-    if (!(await m.get(c.id))) return;
-    changed();
+  // the download goes on in the background (the tray shows it): the dialog closes at once
+  function get(c: ModelChoice) {
+    if (!m.get(c.id, changed)) return;
     setAsking(null);
   }
 
@@ -260,11 +260,8 @@ function GroupTable({ group, place }: { group: GroupId; place: Place }) {
           diskFree={m.list?.diskFreeBytes ?? null}
           working={m.working?.id === asking.id ? m.working.progress : null}
           problem={m.problem}
-          onGet={() => void get(asking)}
-          onCancel={() => {
-            if (m.working) m.cancel();
-            setAsking(null);
-          }}
+          onGet={() => get(asking)}
+          onCancel={() => setAsking(null)}
         />
       ) : null}
       {removing ? (

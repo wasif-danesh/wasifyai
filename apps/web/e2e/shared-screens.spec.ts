@@ -203,7 +203,7 @@ test("recent chats are in the menu and open their chat @layout", async ({ page }
   await page.goto("/");
   const nav = await menu(page);
   await expect(nav.getByRole("link", { name: /new chat/i })).toHaveAttribute("href", "/");
-  const recent = nav.getByRole("button", { name: "Plan for the launch" });
+  const recent = nav.getByRole("button", { name: "Plan for the launch", exact: true });
   await expect(recent).toBeVisible();
   await recent.click();
   await expect(page).toHaveURL(/\/chat\/1a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d$/);

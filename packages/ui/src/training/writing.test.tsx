@@ -246,14 +246,14 @@ function fake(
   };
 }
 
+/** Add `n` examples: pasted into the two boxes (typing key by key made this test slower than a busy CI runner allows). */
 const typed = async (user: ReturnType<typeof userEvent.setup>, n: number) => {
   for (let i = 0; i < n; i++) {
     await user.click(screen.getByRole("button", { name: "Add an example" }));
-    await user.type(screen.getByLabelText(`What it is asked, example ${i + 1}`), `Question ${i}?`);
-    await user.type(
-      screen.getByLabelText(`What it should answer, example ${i + 1}`),
-      `Answer ${i}. - Wasi`,
-    );
+    await user.click(screen.getByLabelText(`What it is asked, example ${i + 1}`));
+    await user.paste(`Question ${i}?`);
+    await user.click(screen.getByLabelText(`What it should answer, example ${i + 1}`));
+    await user.paste(`Answer ${i}. - Wasi`);
   }
 };
 
@@ -280,46 +280,50 @@ describe("Writing", () => {
     );
   });
 
-  it("teaches from typed examples, follows the run and shows the answers before and after", async () => {
-    const user = userEvent.setup();
-    const engine = fake();
-    render(<Writing api={engine.api} pollMs={10} onBack={() => {}} />);
-    await user.click(await screen.findByRole("button", { name: "New set of examples" }));
-    await user.click(await screen.findByRole("button", { name: "Add an example" }));
-    // a row can be added, typed into and removed
-    await user.type(screen.getByLabelText("What it is asked, example 1"), "Gone?");
-    await user.click(screen.getByRole("button", { name: "Remove example 1" }));
-    await typed(user, 10);
-    // rights are asked for: nothing starts until they are said
-    await waitFor(
-      () => expect(screen.getByText("Say whose these examples are first.")).toBeTruthy(),
-      { timeout: 3000 },
-    );
-    await user.click(screen.getByRole("button", { name: "I wrote these" }));
-    await waitFor(
-      () =>
-        expect(
-          (screen.getByRole("button", { name: "Teach it" }) as HTMLButtonElement).disabled,
-        ).toBe(false),
-      { timeout: 3000 },
-    );
-    expect(screen.getByText(/It is taught on Qwen3 0.6B: Small and quick/)).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Teach it" }));
-    expect(await screen.findByText("17%")).toBeTruthy();
-    // the typed examples were sent before the run started
-    expect(engine.log.indexOf("examples 10")).toBeGreaterThanOrEqual(0);
-    expect(engine.log.indexOf("examples 10")).toBeLessThan(engine.log.indexOf("run"));
-    engine.finish();
-    expect(await screen.findByText("My replies is ready")).toBeTruthy();
-    expect(screen.getByText(/52 percent closer/)).toBeTruthy();
-    expect(screen.getByText("Go to the app store and look for updates.")).toBeTruthy();
-    expect(screen.getByText("Open Settings and press Update. - Wasi")).toBeTruthy();
-    await user.type(screen.getByLabelText("Ask both something new"), "Can I use two models?");
-    await user.click(screen.getByRole("button", { name: "Ask both" }));
-    const both = await screen.findByLabelText("Its answers");
-    expect(within(both).getByText("It depends on the models.")).toBeTruthy();
-    expect(within(both).getByText("Yes, switch them on your own. - Wasi")).toBeTruthy();
-  });
+  it(
+    "teaches from typed examples, follows the run and shows the answers before and after",
+    { timeout: 30_000 },
+    async () => {
+      const user = userEvent.setup();
+      const engine = fake();
+      render(<Writing api={engine.api} pollMs={10} onBack={() => {}} />);
+      await user.click(await screen.findByRole("button", { name: "New set of examples" }));
+      await user.click(await screen.findByRole("button", { name: "Add an example" }));
+      // a row can be added, typed into and removed
+      await user.type(screen.getByLabelText("What it is asked, example 1"), "Gone?");
+      await user.click(screen.getByRole("button", { name: "Remove example 1" }));
+      await typed(user, 10);
+      // rights are asked for: nothing starts until they are said
+      await waitFor(
+        () => expect(screen.getByText("Say whose these examples are first.")).toBeTruthy(),
+        { timeout: 3000 },
+      );
+      await user.click(screen.getByRole("button", { name: "I wrote these" }));
+      await waitFor(
+        () =>
+          expect(
+            (screen.getByRole("button", { name: "Teach it" }) as HTMLButtonElement).disabled,
+          ).toBe(false),
+        { timeout: 3000 },
+      );
+      expect(screen.getByText(/It is taught on Qwen3 0.6B: Small and quick/)).toBeTruthy();
+      await user.click(screen.getByRole("button", { name: "Teach it" }));
+      expect(await screen.findByText("17%")).toBeTruthy();
+      // the typed examples were sent before the run started
+      expect(engine.log.indexOf("examples 10")).toBeGreaterThanOrEqual(0);
+      expect(engine.log.indexOf("examples 10")).toBeLessThan(engine.log.indexOf("run"));
+      engine.finish();
+      expect(await screen.findByText("My replies is ready")).toBeTruthy();
+      expect(screen.getByText(/52 percent closer/)).toBeTruthy();
+      expect(screen.getByText("Go to the app store and look for updates.")).toBeTruthy();
+      expect(screen.getByText("Open Settings and press Update. - Wasi")).toBeTruthy();
+      await user.type(screen.getByLabelText("Ask both something new"), "Can I use two models?");
+      await user.click(screen.getByRole("button", { name: "Ask both" }));
+      const both = await screen.findByLabelText("Its answers");
+      expect(within(both).getByText("It depends on the models.")).toBeTruthy();
+      expect(within(both).getByText("Yes, switch them on your own. - Wasi")).toBeTruthy();
+    },
+  );
 
   it("keeps the model and method behind one closed line that says what is recommended", async () => {
     const user = userEvent.setup();
@@ -339,7 +343,7 @@ describe("Writing", () => {
     expect(within(summary).getByText("Qwen3 0.6B, Better")).toBeTruthy();
   });
 
-  it("pastes rows in and stops a run that is going", async () => {
+  it("pastes rows in and stops a run that is going", { timeout: 30_000 }, async () => {
     const user = userEvent.setup();
     const engine = fake();
     render(<Writing api={engine.api} pollMs={10} onBack={() => {}} />);
@@ -532,86 +536,90 @@ const ROW = (id: string, title: string, installed: boolean, recommended = false)
 });
 
 describe("Which model?", () => {
-  it("lists the models, fetches one that is not there after its size is shown, and teaching waits for it", async () => {
-    const user = userEvent.setup();
-    const installed = new Set(["qwen3-0.6b-4bit"]);
-    const engine = fake({
-      baseMissing: (b) =>
-        installed.has(b || "qwen3-0.6b-4bit")
-          ? null
-          : "Qwen3 1.7B is not on this computer yet. Get it first, next to its name.",
-    });
-    const choices = () => ({
-      family: "language",
-      default_base: "qwen3-0.6b-4bit",
-      default_method: "qlora" as const,
-      bases: [
-        ROW("qwen3-0.6b-4bit", "Qwen3 0.6B", installed.has("qwen3-0.6b-4bit"), true),
-        ROW("qwen3-1.7b-4bit", "Qwen3 1.7B", installed.has("qwen3-1.7b-4bit")),
-      ],
-    });
-    let getting = false;
-    const parts = () => {
-      const big = base(
-        "qwen3-1.7b-4bit",
-        "Qwen3 1.7B",
-        984_000_000,
-        1_834_000_000,
-        installed.has("qwen3-1.7b-4bit"),
+  it(
+    "lists the models, fetches one that is not there after its size is shown, and teaching waits for it",
+    { timeout: 30_000 },
+    async () => {
+      const user = userEvent.setup();
+      const installed = new Set(["qwen3-0.6b-4bit"]);
+      const engine = fake({
+        baseMissing: (b) =>
+          installed.has(b || "qwen3-0.6b-4bit")
+            ? null
+            : "Qwen3 1.7B is not on this computer yet. Get it first, next to its name.",
+      });
+      const choices = () => ({
+        family: "language",
+        default_base: "qwen3-0.6b-4bit",
+        default_method: "qlora" as const,
+        bases: [
+          ROW("qwen3-0.6b-4bit", "Qwen3 0.6B", installed.has("qwen3-0.6b-4bit"), true),
+          ROW("qwen3-1.7b-4bit", "Qwen3 1.7B", installed.has("qwen3-1.7b-4bit")),
+        ],
+      });
+      let getting = false;
+      const parts = () => {
+        const big = base(
+          "qwen3-1.7b-4bit",
+          "Qwen3 1.7B",
+          984_000_000,
+          1_834_000_000,
+          installed.has("qwen3-1.7b-4bit"),
+        );
+        if (getting && !big.model.have) {
+          big.model.progress = {
+            state: "installing",
+            message: "Downloading",
+            done_bytes: 100,
+            total_bytes: 984_000_000,
+          };
+        }
+        return [base("qwen3-0.6b-4bit", "Qwen3 0.6B", 351_000_000, 639_000_000, true), big];
+      };
+      engine.api.writingStatus = async () => ({ ...STATUS, choices: choices() }) as WritingStatus;
+      engine.api.languageBases = async () => parts();
+      const update = vi.spyOn(engine.api, "updateWritingSet");
+      engine.api.installLanguagePart = vi.fn(async () => {
+        getting = true;
+        return parts();
+      }) as unknown as TrainingApi["installLanguagePart"];
+      render(<Writing api={engine.api} pollMs={10} onBack={() => {}} />);
+      await user.click(await screen.findByRole("button", { name: "New set of examples" }));
+      await user.click(await screen.findByText("Paste from a spreadsheet"));
+      await user.click(screen.getByLabelText(/Two columns/));
+      await user.paste(Array.from({ length: 12 }, (_, i) => `Q${i}?\tA${i}`).join("\n"));
+      await user.click(screen.getByRole("button", { name: /Add 12 pasted rows/ }));
+      await user.click(await screen.findByRole("button", { name: "I wrote these" }));
+      expect(await screen.findByText("Which model?")).toBeTruthy();
+      expect((screen.getByLabelText("Qwen3 0.6B") as HTMLInputElement).checked).toBe(true);
+      expect(screen.getByText(/Measured here: 70 steps in 13 s/)).toBeTruthy();
+      // nothing to get for the model that is there; the other one says its size
+      expect(screen.queryByRole("button", { name: "Get Qwen3 0.6B" })).toBeNull();
+      const get = await screen.findByRole("button", { name: "Get Qwen3 1.7B" });
+      expect(get.textContent).toBe("Get it (984 MB)");
+      // choosing it: teaching waits and says why
+      await user.click(screen.getByLabelText("Qwen3 1.7B"));
+      expect(update).toHaveBeenCalledWith(expect.any(String), { base: "qwen3-1.7b-4bit" });
+      expect(await screen.findByText(/Qwen3 1.7B is not on this computer yet/)).toBeTruthy();
+      expect((screen.getByRole("button", { name: "Teach it" }) as HTMLButtonElement).disabled).toBe(
+        true,
       );
-      if (getting && !big.model.have) {
-        big.model.progress = {
-          state: "installing",
-          message: "Downloading",
-          done_bytes: 100,
-          total_bytes: 984_000_000,
-        };
-      }
-      return [base("qwen3-0.6b-4bit", "Qwen3 0.6B", 351_000_000, 639_000_000, true), big];
-    };
-    engine.api.writingStatus = async () => ({ ...STATUS, choices: choices() }) as WritingStatus;
-    engine.api.languageBases = async () => parts();
-    const update = vi.spyOn(engine.api, "updateWritingSet");
-    engine.api.installLanguagePart = vi.fn(async () => {
-      getting = true;
-      return parts();
-    }) as unknown as TrainingApi["installLanguagePart"];
-    render(<Writing api={engine.api} pollMs={10} onBack={() => {}} />);
-    await user.click(await screen.findByRole("button", { name: "New set of examples" }));
-    await user.click(await screen.findByText("Paste from a spreadsheet"));
-    await user.click(screen.getByLabelText(/Two columns/));
-    await user.paste(Array.from({ length: 12 }, (_, i) => `Q${i}?\tA${i}`).join("\n"));
-    await user.click(screen.getByRole("button", { name: /Add 12 pasted rows/ }));
-    await user.click(await screen.findByRole("button", { name: "I wrote these" }));
-    expect(await screen.findByText("Which model?")).toBeTruthy();
-    expect((screen.getByLabelText("Qwen3 0.6B") as HTMLInputElement).checked).toBe(true);
-    expect(screen.getByText(/Measured here: 70 steps in 13 s/)).toBeTruthy();
-    // nothing to get for the model that is there; the other one says its size
-    expect(screen.queryByRole("button", { name: "Get Qwen3 0.6B" })).toBeNull();
-    const get = await screen.findByRole("button", { name: "Get Qwen3 1.7B" });
-    expect(get.textContent).toBe("Get it (984 MB)");
-    // choosing it: teaching waits and says why
-    await user.click(screen.getByLabelText("Qwen3 1.7B"));
-    expect(update).toHaveBeenCalledWith(expect.any(String), { base: "qwen3-1.7b-4bit" });
-    expect(await screen.findByText(/Qwen3 1.7B is not on this computer yet/)).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Teach it" }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
-    // fetching it: the size was shown on the button and is sent back
-    await user.click(get);
-    expect(engine.api.installLanguagePart).toHaveBeenCalledWith(
-      "qwen3-1.7b-4bit",
-      "model",
-      984_000_000,
-    );
-    // when it has arrived the plan is read again and teaching is possible
-    installed.add("qwen3-1.7b-4bit");
-    await waitFor(
-      () =>
-        expect(
-          (screen.getByRole("button", { name: "Teach it" }) as HTMLButtonElement).disabled,
-        ).toBe(false),
-      { timeout: 4000 },
-    );
-  });
+      // fetching it: the size was shown on the button and is sent back
+      await user.click(get);
+      expect(engine.api.installLanguagePart).toHaveBeenCalledWith(
+        "qwen3-1.7b-4bit",
+        "model",
+        984_000_000,
+      );
+      // when it has arrived the plan is read again and teaching is possible
+      installed.add("qwen3-1.7b-4bit");
+      await waitFor(
+        () =>
+          expect(
+            (screen.getByRole("button", { name: "Teach it" }) as HTMLButtonElement).disabled,
+          ).toBe(false),
+        { timeout: 4000 },
+      );
+    },
+  );
 });

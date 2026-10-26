@@ -52,7 +52,12 @@ async function ask(page: Page, text: string) {
   await page.goto("/");
   await expect(box(page)).toBeVisible();
   await box(page).fill(text);
-  await box(page).press("Enter");
+  // The first Enter can arrive before the page can use it (the box is there before its handler is), so it is
+  // pressed again, but only while the text is still in the box: a message that was sent empties it, and is never sent twice.
+  await expect(async () => {
+    if ((await box(page).inputValue()) === text) await box(page).press("Enter");
+    await expect(box(page)).toHaveValue("", { timeout: 1500 });
+  }).toPass({ timeout: 20_000 });
 }
 
 async function noSideScroll(page: Page) {
@@ -201,7 +206,7 @@ test("results of a search are a card in the answer @layout", async ({ page }) =>
   ]);
   await ask(page, "find my lighthouse");
   await expect(page.getByText("Found 1 in your library")).toBeVisible();
-  await expect(page.getByText("A lighthouse at sunrise")).toBeVisible();
+  await expect(page.getByText("A lighthouse at sunrise", { exact: true })).toBeVisible();
 });
 
 test("a reply can be copied @layout", async ({ page, context }) => {

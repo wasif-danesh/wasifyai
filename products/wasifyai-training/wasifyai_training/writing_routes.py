@@ -1,4 +1,4 @@
-"""The routes of "Teach my assistant to write like me" (ADR-0074), added to the training router.
+"""The routes of "Teach it from examples" (ADR-0074), added to the training router.
 
 GET/POST /writing/sets                  PATCH/DELETE /writing/sets/{id}
 GET /writing/sets/{id}                  the set with its examples and the plan of a run

@@ -57,7 +57,7 @@ function Sure({ label, name, onSure }: { label: string; name: string; onSure: ()
 }
 
 /**
- * "Teach my assistant to write like me" (ADR-0074): questions with the answers the person would write, a check in
+ * "Teach it from examples" (ADR-0074): questions with the answers the person wants, a check in
  * words, one button, and then the same questions asked before and after, side by side. Nothing here says QLoRA, steps
  * or loss; the person types, checks and teaches.
  */
@@ -126,11 +126,10 @@ function Sets({ w, onBack }: { w: WritingHook; onBack: () => void }) {
   return (
     <section className={panel} aria-label="Sets of examples">
       <span className={eyebrow}>Language model training</span>
-      <h2 className="m-0 font-semibold text-lg">Teach my assistant to write like me</h2>
+      <h2 className="m-0 font-semibold text-lg">Teach it from examples</h2>
       <p className="m-0 max-w-3xl text-muted-foreground">
-        Type some questions and the answers you would write. The app teaches a small model to answer
-        the way you do, on this computer: your examples are not sent anywhere. It learns how you
-        write, not new facts.
+        Add questions and the answers you want. The app teaches a small model to answer that way, on
+        this computer: your examples are not sent anywhere. It learns how to answer, not new facts.
       </p>
       <div className={actions}>
         <Button
@@ -277,11 +276,24 @@ function ModelChoice({ w, api, pollMs }: { w: WritingHook; api: TrainingApi; pol
       </div>
       {lang.error ? <span className="text-destructive text-sm">{lang.error}</span> : null}
       <p className={hint}>
-        A larger model keeps to your style better and takes longer to teach. Each is downloaded
-        once, every file checked, and kept in the app's own folder.
+        A larger model follows your examples more closely and takes longer to teach. Each is
+        downloaded once, every file checked, and kept in the app's own folder.
       </p>
     </fieldset>
   );
+}
+
+/** What the collapsed "Choose the model and method" line says: the recommendation, or what was chosen. */
+function chosenSummary(w: WritingHook): string {
+  const set = w.state.current;
+  const rows = w.state.status?.choices.bases ?? [];
+  const base = set?.base || w.state.status?.choices.default_base || "";
+  const picked = rows.find((b) => b.id === base);
+  const changed =
+    (set?.base && set.base !== w.state.status?.choices.default_base) || set?.quality === "better";
+  return changed
+    ? `${picked?.title ?? w.state.plan?.base_title ?? ""}, ${set?.quality === "better" ? "Better" : "Quick"}`
+    : "Recommended";
 }
 
 function Editor({ w, api, pollMs }: { w: WritingHook; api: TrainingApi; pollMs?: number }) {
@@ -314,7 +326,7 @@ function Editor({ w, api, pollMs }: { w: WritingHook; api: TrainingApi; pollMs?:
           id={nameId}
           defaultValue={set.name}
           maxLength={60}
-          placeholder="For example: How I answer customers"
+          placeholder="For example: Customer replies"
           onBlur={(e) => {
             if (e.target.value.trim() !== set.name) void w.patch({ name: e.target.value.trim() });
           }}
@@ -324,26 +336,26 @@ function Editor({ w, api, pollMs }: { w: WritingHook; api: TrainingApi; pollMs?:
       <div className="grid gap-3">
         <h2 className="m-0 font-semibold text-lg">1 Add examples</h2>
         <p className={hint}>
-          A question someone might ask, and the answer you would write. Short answers in your own
-          words teach a style fastest. 50 or more is better than 10.
+          A question, and the answer you want. The more examples, the better: 50 or more is a good
+          start.
         </p>
         <ul className="m-0 grid list-none gap-3 p-0">
           {rows.map((r, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: rows have no id and are edited in place
             <li key={i} className="grid gap-2 rounded-xl border p-3 md:grid-cols-[1fr_1fr_auto]">
               <div className="grid gap-1 text-sm">
-                <span className="font-medium">What someone asks</span>
+                <span className="font-medium">What it is asked</span>
                 <Textarea
                   value={r.ask}
-                  aria-label={`What someone asks, example ${i + 1}`}
+                  aria-label={`What it is asked, example ${i + 1}`}
                   onChange={(e) => change(i, { ask: e.target.value })}
                 />
               </div>
               <div className="grid gap-1 text-sm">
-                <span className="font-medium">How I would answer</span>
+                <span className="font-medium">What it should answer</span>
                 <Textarea
                   value={r.answer}
-                  aria-label={`How I would answer, example ${i + 1}`}
+                  aria-label={`What it should answer, example ${i + 1}`}
                   onChange={(e) => change(i, { answer: e.target.value })}
                 />
               </div>
@@ -433,33 +445,40 @@ function Editor({ w, api, pollMs }: { w: WritingHook; api: TrainingApi; pollMs?:
             ))}
           </div>
         </fieldset>
-        <fieldset className={cn(field, "m-0 border-0 p-0")}>
-          <legend className={cn(fieldLabel, "mb-1.5")}>How careful?</legend>
-          <div className={chips}>
-            <Chip
-              aria-pressed={set.quality === "quick"}
-              onClick={() => void w.patch({ quality: "quick" })}
-            >
-              Quick
-            </Chip>
-            <Chip
-              aria-pressed={set.quality === "better"}
-              onClick={() => void w.patch({ quality: "better" })}
-            >
-              Better
-            </Chip>
+        <details className="rounded-lg border px-3 py-2">
+          <summary className="cursor-pointer font-semibold">
+            Choose the model and method
+            <span className="ml-2 font-normal text-muted-foreground">{chosenSummary(w)}</span>
+          </summary>
+          <div className="mt-3 grid gap-4">
+            <fieldset className={cn(field, "m-0 border-0 p-0")}>
+              <legend className={cn(fieldLabel, "mb-1.5")}>How careful?</legend>
+              <div className={chips}>
+                <Chip
+                  aria-pressed={set.quality === "quick"}
+                  onClick={() => void w.patch({ quality: "quick" })}
+                >
+                  Quick
+                </Chip>
+                <Chip
+                  aria-pressed={set.quality === "better"}
+                  onClick={() => void w.patch({ quality: "better" })}
+                >
+                  Better
+                </Chip>
+              </div>
+              <p className={hint}>
+                Better goes over your examples twice as often and takes about twice as long.
+              </p>
+            </fieldset>
+            <ModelChoice w={w} api={api} pollMs={pollMs} />
+            {plan ? (
+              <p className={hint}>
+                It is taught on {plan.base_title}: {plan.base_note}
+              </p>
+            ) : null}
           </div>
-          <p className={hint}>
-            Better goes over your examples twice as often and takes about twice as long.
-          </p>
-        </fieldset>
-        <ModelChoice w={w} api={api} pollMs={pollMs} />
-        {plan ? (
-          <p className={hint}>
-            It is taught on {plan.base_title}: {plan.base_note} {plan.held_back} of your examples
-            are kept back to check it on.
-          </p>
-        ) : null}
+        </details>
       </div>
 
       <div className="grid gap-2">
@@ -492,7 +511,7 @@ function RunView({ w, api, onBack }: { w: WritingHook; api: TrainingApi; onBack:
         <WorkingCard label="Teaching" onCancel={() => void w.stop()}>
           <JobMeter
             title="Teaching the model"
-            text={`Step ${run.step} of ${run.steps}`}
+            text={`${Math.round(run.progress * 100)}%`}
             value={run.progress}
             label="Teaching progress"
           />
@@ -550,8 +569,7 @@ export function ChatWithIt({
       {c.mine ? (
         <>
           <p className="m-0 text-sm">
-            Chat answers with this model now, in your style. Chat models you chose before are
-            waiting.
+            Chat answers with this model now. The model you chose before is waiting.
           </p>
           <div className={actions}>
             <Button type="button" variant="outline" disabled={c.busy} onClick={() => void c.stop()}>
@@ -564,9 +582,7 @@ export function ChatWithIt({
           <Button type="button" disabled={c.busy} onClick={() => void c.use()}>
             {c.inChat ? "Use this one in chat instead" : "Use in chat"}
           </Button>
-          <span className={hint}>
-            It is small, so it keeps your style and can still get facts wrong.
-          </span>
+          <span className={hint}>It learns how to answer, not new facts.</span>
         </div>
       ) : downloading ? (
         <WorkingCard
@@ -700,7 +716,7 @@ export function WritingResult({
             {got.original}
           </p>
           <p className="m-0 rounded-lg border p-3 text-sm">
-            <span className="mb-1 block font-medium text-muted-foreground">Taught by you</span>
+            <span className="mb-1 block font-medium text-muted-foreground">Your model</span>
             {got.mine}
           </p>
         </div>

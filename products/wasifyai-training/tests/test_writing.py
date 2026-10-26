@@ -1,4 +1,4 @@
-"""Teach my assistant to write like me: the sets, the checks, a run with a fake engine, the card."""
+"""Teach it from examples: the sets, the checks, a run with a fake engine, the card."""
 
 from pathlib import Path
 

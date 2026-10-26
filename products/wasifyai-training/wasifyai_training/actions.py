@@ -55,7 +55,7 @@ class StartIn(BaseModel):
     set_id: str | None = Field(
         default=None, min_length=32, max_length=32,
         description="Or the set of examples to teach a writing model from: made on the Train "
-        "screen under 'Teach my assistant to write like me', with at least 10 questions and "
+        "screen under 'Teach it from examples', with at least 10 questions and "
         "answers and a statement of whose they are. Give this or dataset_id, not both.",
     )  # fmt: skip
     base: str | None = Field(
@@ -260,9 +260,9 @@ def actions() -> list[Action]:
                 "are. This starts the run on a set that is ready and waits for it. It takes about "
                 "25 minutes on a Mac and pauses chat and image making, so it is made one at a "
                 "time. Then writing the magic word in a prompt draws the result. Or, with "
-                "set_id, it teaches a small writing model how the person answers from a set "
-                "of their own questions and answers (made under 'Teach my assistant to write "
-                "like me' on the same screen): it takes a minute or two and ends with the "
+                "set_id, it teaches a small language model to answer the way the person's own "
+                "examples do, from a set of questions and answers (made under 'Teach it from "
+                "examples' on the same screen): it takes a minute or two and ends with the "
                 "same questions answered before and after and a mark that says whether it "
                 "learnt."
             ),

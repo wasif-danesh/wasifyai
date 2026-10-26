@@ -283,7 +283,7 @@ export type TrainedModel = {
       examples?: number;
       hash: string;
     };
-    /** a writing model: the same questions asked before and after, and the loss on answers kept back */
+    /** a language model: the same questions asked before and after, and the loss on answers kept back */
     answers?: WritingAnswer[];
     loss?: {
       first_held_back: number | null;
@@ -389,7 +389,7 @@ export type TrainingApi = {
   model(id: string): Promise<TrainedModel>;
   renameModel(id: string, name: string): Promise<TrainedModel>;
   removeModel(id: string): Promise<void>;
-  /** "Teach my assistant to write like me" (ADR-0074): sets of examples, a run, the side-by-side answers. */
+  /** "Teach it from examples" (ADR-0074): sets of examples, a run, the side-by-side answers. */
   writingStatus(): Promise<WritingStatus>;
   writingSets(): Promise<WritingSet[]>;
   createWritingSet(name?: string): Promise<WritingSet>;

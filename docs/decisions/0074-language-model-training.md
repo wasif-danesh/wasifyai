@@ -238,3 +238,11 @@ The owner approved downloading Qwen3 1.7B and 4B (about 7.6 GB with their chat c
   others and has "Get it (size)" next to its name; Teach it waits (and says why) until it has arrived, then the plan is read again. "Chat with it" asks for the chat copy of the model's own base.
   A refusal for a missing base says which and what to do.
 - **Not built:** 8B and Qwen3.5 (its fused tensors need their own GGUF layout, and a thinking-off check of its own); the "My style" row in the model picker.
+
+## Amendment (2026-10-26, owner): the screen says what it does, not who it is for
+
+The owner found "Teach my assistant to write like me" too narrow and the screen too full for someone who has never trained a model ("it should be generic"). Decided and built, screen and words only:
+
+- The card and the screen are **"Teach it from examples"**: "Show it questions and the answers you want. It learns to answer that way, on this computer." The boxes are "What it is asked" and "What it should answer"; the mark says the answers got "closer to your answers"; a model is "Taught from N examples". "Teach my assistant to write like me" is gone, also as a starting point (it stays a search synonym of the help file). Starting points, if they come, are named by what they do ("Always answer in this format", "Use my words").
+- **One recommendation, the rest closed.** The main screen is the examples, the check, whose they are, and Teach it with its one sentence. The model, Quick or Better and the downloads are under a closed "Choose the model and method" (as the amendment of 2026-10-24 asks), whose line says "Recommended" or what was chosen. A run shows a percentage, not steps.
+- **No claims the screen cannot back.** It says it learns how to answer, not new facts; it does not list uses (JSON, labels, tool calls) that were not measured. Only a sign-off style on a 50-question fixture has been measured.

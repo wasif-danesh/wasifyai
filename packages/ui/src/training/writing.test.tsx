@@ -93,7 +93,7 @@ const MODEL: TrainedModel = {
     statement: "",
     evaluation: {
       passed: true,
-      note: "On 2 answers it had not seen, it got 52 percent closer to how you write.",
+      note: "On 2 answers it had not seen, it got 52 percent closer to your answers.",
       at: "",
     },
     trained_at: "",
@@ -249,9 +249,9 @@ function fake(
 const typed = async (user: ReturnType<typeof userEvent.setup>, n: number) => {
   for (let i = 0; i < n; i++) {
     await user.click(screen.getByRole("button", { name: "Add an example" }));
-    await user.type(screen.getByLabelText(`What someone asks, example ${i + 1}`), `Question ${i}?`);
+    await user.type(screen.getByLabelText(`What it is asked, example ${i + 1}`), `Question ${i}?`);
     await user.type(
-      screen.getByLabelText(`How I would answer, example ${i + 1}`),
+      screen.getByLabelText(`What it should answer, example ${i + 1}`),
       `Answer ${i}. - Wasi`,
     );
   }
@@ -287,7 +287,7 @@ describe("Writing", () => {
     await user.click(await screen.findByRole("button", { name: "New set of examples" }));
     await user.click(await screen.findByRole("button", { name: "Add an example" }));
     // a row can be added, typed into and removed
-    await user.type(screen.getByLabelText("What someone asks, example 1"), "Gone?");
+    await user.type(screen.getByLabelText("What it is asked, example 1"), "Gone?");
     await user.click(screen.getByRole("button", { name: "Remove example 1" }));
     await typed(user, 10);
     // rights are asked for: nothing starts until they are said
@@ -303,13 +303,9 @@ describe("Writing", () => {
         ).toBe(false),
       { timeout: 3000 },
     );
-    expect(
-      screen.getByText(
-        /It is taught on Qwen3 0.6B: Small and quick.*2 of your examples are kept back/,
-      ),
-    ).toBeTruthy();
+    expect(screen.getByText(/It is taught on Qwen3 0.6B: Small and quick/)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Teach it" }));
-    expect(await screen.findByText("Step 5 of 30")).toBeTruthy();
+    expect(await screen.findByText("17%")).toBeTruthy();
     // the typed examples were sent before the run started
     expect(engine.log.indexOf("examples 10")).toBeGreaterThanOrEqual(0);
     expect(engine.log.indexOf("examples 10")).toBeLessThan(engine.log.indexOf("run"));
@@ -325,6 +321,24 @@ describe("Writing", () => {
     expect(within(both).getByText("Yes, switch them on your own. - Wasi")).toBeTruthy();
   });
 
+  it("keeps the model and method behind one closed line that says what is recommended", async () => {
+    const user = userEvent.setup();
+    const engine = fake();
+    render(<Writing api={engine.api} pollMs={10} onBack={() => {}} />);
+    await user.click(await screen.findByRole("button", { name: "New set of examples" }));
+    const summary = await screen.findByText("Choose the model and method");
+    const box = summary.closest("details") as HTMLDetailsElement;
+    expect(box.open).toBe(false);
+    expect(within(summary).getByText("Recommended")).toBeTruthy();
+    // nothing writing-specific on the front door of the screen
+    expect(screen.queryByText(/write like me/i)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Add an example" }));
+    expect(screen.getByLabelText("What it is asked, example 1")).toBeTruthy();
+    expect(screen.getByLabelText("What it should answer, example 1")).toBeTruthy();
+    await user.click(within(box).getByRole("button", { name: "Better" }));
+    expect(within(summary).getByText("Qwen3 0.6B, Better")).toBeTruthy();
+  });
+
   it("pastes rows in and stops a run that is going", async () => {
     const user = userEvent.setup();
     const engine = fake();
@@ -335,7 +349,7 @@ describe("Writing", () => {
     await user.click(screen.getByLabelText(/Two columns/));
     await user.paste(rows);
     await user.click(screen.getByRole("button", { name: /Add 12 pasted rows/ }));
-    expect(await screen.findByLabelText("What someone asks, example 12")).toBeTruthy();
+    expect(await screen.findByLabelText("What it is asked, example 12")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "I have permission to use them" }));
     await waitFor(
       () =>

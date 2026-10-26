@@ -390,7 +390,9 @@ describe("Train", () => {
     expect(await screen.findByText("A preview")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Make my own character or style" })).toBeTruthy();
     expect(screen.getAllByText(/Coming next/)).toHaveLength(1);
-    expect(screen.getByRole("button", { name: /Start: teach my assistant/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Start: teach it from examples/ }),
+    ).toBeInTheDocument();
     // each card says which kind of model it trains, and the video one says what it needs
     for (const label of [
       "Image model training",
@@ -644,7 +646,7 @@ describe("Train", () => {
     const { unmount } = render(<Train api={api} pollMs={10} />);
     expect(
       await screen.findByText(
-        /learnt on this computer; your pictures and writing are not sent anywhere/,
+        /learnt on this computer; your pictures and examples are not sent anywhere/,
       ),
     ).toBeTruthy();
     unmount();

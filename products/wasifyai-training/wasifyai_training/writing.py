@@ -1,5 +1,5 @@
 # ruff: noqa: E501  (the sentences shown to people are easier to read on one line)
-"""Teach my assistant to write like me: the runs of a writing set (ADR-0074).
+"""Teach it from examples: the runs of a set of examples (ADR-0074).
 
 A writing set is questions with the answers a person would write. A run asks the chosen model the
 test questions first, teaches it (`desktop_language_training`), asks again with the adapter, and keeps
@@ -67,12 +67,12 @@ def evaluation_of(first: float | None, last: float | None, held: int) -> dict[st
     if last <= first * (1 - LEARNT_BY):
         return {
             "passed": True,
-            "note": f"On {held} answers it had not seen, it got {closer} percent closer to how you write.",
+            "note": f"On {held} answers it had not seen, it got {closer} percent closer to your answers.",
         }
     return {
         "passed": False,
         "note": f"On {held} answers it had not seen, it got only {max(0, closer)} percent closer to "
-        "how you write. It did not pass: add more examples, or longer ones.",
+        "your answers. It did not pass: add more examples, or longer ones.",
     }
 
 
@@ -248,7 +248,7 @@ class WritingRunManager:
         size = (await asyncio.to_thread(adapter.stat)).st_size
         model = store.add_model(
             identity.tenant_id, identity.user_id, run_id=run["id"], dataset_id=row["id"],
-            name=row["name"] or "My writing style", trigger_word="", kind=KIND, base=run["base"],
+            name=row["name"] or "My model", trigger_word="", kind=KIND, base=run["base"],
             card=card, preview=False, adapter_bytes=size,
         )  # fmt: skip
         target = model_folder(store, identity, model["id"]) / "adapter"

@@ -1,7 +1,7 @@
 ---
 action: train.start
 screen: train
-synonyms: [write like me, my writing style, teach my assistant, train a writing model, my tone, how I answer, language model training, train, teach, teach the app, make my own character, my own style, lora, fine tune, my mascot, my pet, my face, my art style, train a character, train a style, magic word, trigger word, custom model]
+synonyms: [teach it from examples, answer my way, my tone, my format, language model training, write like me, my writing style, train, teach, teach the app, make my own character, my own style, lora, fine tune, my mascot, my pet, my face, my art style, train a character, train a style, magic word, trigger word, custom model]
 ---
 # Teach a character or style
 
@@ -69,54 +69,58 @@ While the trainer is a preview, the run does everything except learn, and says s
 
 ---
 
-## Teaching a writing model (the same action, with `set_id`)
-
+## Teaching a language model from examples (the same action, with `set_id`)
 
 ### What it is for
 
-Teach a small language model how you write: your tone, the format you always use, the way you answer. You give
-it questions with the answers you would write; it learns how you answer, not new facts (for facts, put your
+Show a small language model questions and the answers you want, many times, and it learns to answer that way: a
+tone, a format, a set of labels, the way you reply. It learns how to answer, not new facts (for facts, put your
 documents in a notebook). It is taught on this computer and your examples are not sent anywhere. Afterwards the
-screen shows the same questions answered before it learnt and after, side by side, and a mark that says whether
-it learnt.
+screen shows the same questions answered before it learnt and after, side by side, and a mark that says whether the
+answers got closer to yours.
 
 ### Steps in the app
 
-1. Open **Train models** and, under **Language model training**, choose Teach my assistant to write like me.
+1. Open **Train models** and, under **Language model training**, choose **Teach it from examples**.
 2. The first time, the app offers to set up the trainer and a small model (about 0.4 GB, shown first); nothing
    is fetched until you press the button.
-3. Choose New set of examples. Type each question and the answer you would write, or paste two columns from a
-   spreadsheet. It saves as you type. At least 10 are needed; 50 or more is better.
+3. Choose New set of examples. Type each question and the answer you want ("What it is asked", "What it should
+   answer"), or paste two columns from a spreadsheet. It saves as you type. At least 10 are needed; 50 or more is a
+   good start.
 4. Read the check. It leaves out empty and repeated rows, and warns about very long answers and about anything
    that looks like an email address, a phone number or a card number.
-5. Choose the model under **Which model?**: Qwen3 0.6B (small and quick), 1.7B or 4B (they keep your style better and
-   take longer). One that is not on this computer has **Get it** next to its name, with its size (about 1 GB for
-   1.7B, 2.3 GB for 4B); nothing is fetched until you press it. Then say whose the examples are (you wrote them, or you have permission), and choose Quick or Better.
+5. Say whose the examples are (you wrote them, or you have permission).
 6. Choose Teach it. It takes about a minute on a Mac and chat and image making pause.
 7. The result is in My models. Ask both the original and your taught model something new with Ask both.
 8. To chat with it, choose **Use in chat** under the result (or under it in My models). The first time the app asks to
-   download the same model in the form the chat engine runs (about 640 MB, shown first). Choose **Back to my chat
-   model** to return to the model chat used before.
+   download the same model in the form the chat engine runs (shown first). Choose **Back to my chat model** to
+   return to the model chat used before.
+
+To use a different model or to take more care, open **Choose the model and method** (closed by default, with the
+recommendation). It lists Qwen3 0.6B (small and quick), 1.7B and 4B (they follow the examples more closely and take
+longer), and Quick or Better. One that is not on this computer has **Get it** next to its name, with its size;
+nothing is fetched until you press it.
 
 ### Fields
 
-- `set_id`: Instead of `dataset_id`: the set of examples to teach a writing model from. It needs at least 10 examples and the statement of whose they are.
+- `set_id`: Instead of `dataset_id`: the set of examples to teach a language model from. It needs at least 10
+  examples and the statement of whose they are.
 
 ### Limits
 
 - One run at a time: a run holds most of the GPU and the one big-model slot, so other models are put away.
-- The models it is taught on are small (Qwen3 0.6B, 1.7B or 4B, 4-bit): it picks up a style or a format well and can answer
-  wrongly about facts. It can be used in chat, but a model this small is for style, not for work that needs facts.
+- The models it is taught on are small (Qwen3 0.6B, 1.7B or 4B, 4-bit): they copy how the examples answer and can
+  still answer wrongly about facts.
 - Examples in English work best; the base model reads other languages but this has not been measured.
 - Daily limits apply while the safeguards are on, the same as pictures.
 
 ### Needs
 
-- A Mac with Apple silicon, the writing trainer and its small model (set up in the app), a little free disk space.
+- A Mac with Apple silicon, the trainer and its small model (set up in the app), a little free disk space.
 
 ### Examples
 
-- Teach my assistant to answer the way I do, from the set "Customer replies".
+- Teach it from the set of examples "Customer replies".
 
 ### Problems
 

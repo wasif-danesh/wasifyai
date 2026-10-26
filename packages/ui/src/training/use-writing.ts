@@ -53,7 +53,7 @@ const words = (e: unknown, fallback: string) =>
 const SAVE_AFTER_MS = 700;
 
 /**
- * The state of the "Teach my assistant to write like me" screen (ADR-0074): the sets of examples, the one being made
+ * The state of the "Teach it from examples" screen (ADR-0074): the sets of examples, the one being made
  * (saved as it is typed), the run being followed and the model it leaves. A set lives on the engine; this keeps what
  * the screen shows and reads the run again while it goes.
  */

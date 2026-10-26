@@ -61,8 +61,8 @@ const FAMILIES: {
   {
     id: "language",
     label: "Language model training",
-    title: "Teach my assistant to write like me",
-    text: "Type some questions and the answers you would write. A small model learns to answer the way you do, on this computer.",
+    title: "Teach it from examples",
+    text: "Show it questions and the answers you want. It learns to answer that way, on this computer.",
     live: true,
     start: "writing",
   },
@@ -110,7 +110,7 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
         <span className={eyebrow}>Train models</span>
         <h1 className="font-semibold text-step-2">
           {writing
-            ? "Teach my assistant to write like me"
+            ? "Teach it from examples"
             : state.current || showingRun
               ? "Make my own character or style"
               : "Teach the app something of your own"}
@@ -127,7 +127,7 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
           <p className="max-w-3xl text-muted-foreground">
             Choose what to teach and add your own examples. The app does the rest.{" "}
             {place === "device"
-              ? "It is learnt on this computer; your pictures and writing are not sent anywhere."
+              ? "It is learnt on this computer; your pictures and examples are not sent anywhere."
               : "It is learnt on the service's graphics card."}
           </p>
         )}
@@ -227,7 +227,7 @@ function Home({
                 <div className={actions}>
                   <Button
                     type="button"
-                    aria-label="Start: teach my assistant to write like me"
+                    aria-label="Start: teach it from examples"
                     onClick={onWriting}
                   >
                     Start
@@ -423,8 +423,8 @@ function ModelCard({
       </div>
       {m.kind === "writing" ? (
         <p className={hint}>
-          Writing style, {m.card.dataset.examples ?? 0} examples, {m.card.steps} steps,{" "}
-          {m.card.base_title} · {m.card.licence}.
+          Taught from {m.card.dataset.examples ?? 0} examples · {m.card.base_title} ·{" "}
+          {m.card.licence}.
         </p>
       ) : (
         <>

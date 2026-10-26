@@ -65,6 +65,11 @@ class Selection:
     tool: str | None = None  # kind == "server"
     url: str | None = None
     model: str | None = None
+    # a taught writing model (ADR-0074): the adapter served on top of `path` (llama-server
+    # `--lora`) and the id of the model it came from. The chat template's thinking is off for it:
+    # the served prompt equals the trained one only that way.
+    lora: str | None = None
+    style: str | None = None
 
     def public(self) -> dict[str, Any]:
         return asdict(self)
@@ -141,6 +146,8 @@ class LanguageService:
         self.discovery = discovery  # DiscoveryService: found models and running servers
         self.slot: Any = None  # the SlotManager, set when the worker is built
         self.selected: Selection | None = None
+        # the choice a taught writing model replaced: "Back" restores it
+        self.previous: Selection | None = None
         self.probe_ollama = ollama_can_think  # a test can stand in for the running Ollama
         # a projector the app fetched for a model (desktop_vision), tried after its own folder
         self.shelf_projector: Callable[[Path], Path | None] | None = None
@@ -152,11 +159,17 @@ class LanguageService:
         saved = await self._store.get(KEY)
         if not isinstance(saved, dict):
             return
+        saved = dict(saved)
+        earlier = saved.pop("previous", None)
         try:
             self.selected = Selection(**saved)
         except TypeError:
             self.selected = None
             return
+        try:
+            self.previous = Selection(**earlier) if isinstance(earlier, dict) else None
+        except TypeError:
+            self.previous = None
         # what a model can do is read again each start: a choice saved before the window knew about
         # thinking, or a model that was updated since, must not keep an old answer
         self.selected = replace(
@@ -167,10 +180,13 @@ class LanguageService:
 
     async def _save(self) -> None:
         value = self.selected.public() if self.selected else {}
+        if value and self.previous is not None:
+            value["previous"] = self.previous.public()
         await self._store.put(KEY, value, "window")
 
     async def clear(self) -> None:
         self.selected = None
+        self.previous = None
         await self._save()
         await self.llama.stop()
 
@@ -185,6 +201,7 @@ class LanguageService:
             else ""
         )
         projector = await self._projector(path)
+        self.previous = None  # a new choice replaces a taught model that was in use
         self.selected = Selection(
             "file",
             name,
@@ -198,9 +215,35 @@ class LanguageService:
         await self._save()
         await self.llama.stop()  # the next request starts the new model
 
+    async def select_style(
+        self, base: Path, adapter: Path, name: str, style: str, context: int = DEFAULT_CONTEXT
+    ) -> None:
+        """Chat with a taught writing model: its base file with the adapter on top. What was chosen
+        before is kept, so `end_style` can give it back."""
+        if self.selected is not None and self.selected.style is None:
+            self.previous = self.selected
+        self.selected = Selection(
+            "file", name, _context(context), path=str(base), thinking=False, vision=False,
+            lora=str(adapter), style=style,
+        )  # fmt: skip
+        await self._save()
+        await self.llama.stop()  # the next request starts it with the adapter
+
+    async def end_style(self) -> bool:
+        """Stop chatting with a taught model; the model chosen before comes back (or none)."""
+        if self.selected is None or self.selected.style is None:
+            return False
+        self.selected, self.previous = self.previous, None
+        await self._save()
+        await self.llama.stop()
+        return True
+
     async def _can_think(self, sel: Selection) -> bool:
         """Can the chosen model think when asked? A file: its chat template takes the switch. A
-        model of Ollama: Ollama says so. Another tool's model: not known, so no switch."""
+        model of Ollama: Ollama says so. Another tool's model: not known, so no switch. A taught
+        writing model: never (see `Selection.lora`)."""
+        if sel.lora:
+            return False
         if sel.kind == "file" and sel.path:
             return can_think(await asyncio.to_thread(gguf_chat_template, Path(sel.path)))
         if sel.kind == "server" and sel.tool == "ollama" and sel.url and sel.model:
@@ -250,6 +293,7 @@ class LanguageService:
             model=model,
             vision=None,
         )
+        self.previous = None
         self.selected = replace(
             sel, thinking=await self._can_think(sel), **await self._can_see(sel)
         )
@@ -288,6 +332,14 @@ class LanguageService:
             yield Route(sel.url.rstrip("/") + "/v1", sel.model, external=True)
             return
         assert sel.path
+        if sel.lora and not await asyncio.to_thread(Path(sel.lora).is_file):
+            # the taught model was removed behind chat's back: go back to what was chosen before
+            await self.end_style()
+            if self.selected is None:
+                raise RunError("no_language_model", NONE_CHOSEN)
+            async with self.session() as route:
+                yield route
+            return
         async with AsyncExitStack() as stack:
             if self.slot is not None:
                 await stack.enter_async_context(self.slot.hold("chat"))
@@ -296,8 +348,9 @@ class LanguageService:
                     Path(sel.projector or "").is_file
                 )
                 with_pictures = ("--mmproj", str(sel.projector)) if has_projector else ()
+                with_adapter = ("--lora", str(sel.lora)) if sel.lora else ()
                 url = await self.llama.ensure_running(
-                    Path(sel.path), context=sel.context, extra_args=with_pictures
+                    Path(sel.path), context=sel.context, extra_args=(*with_pictures, *with_adapter)
                 )
             except LlamaError as exc:
                 raise RunError(f"language_{exc.code}", exc.message) from None
@@ -315,6 +368,8 @@ def thinking_fields(sel: Any, external: bool, thinking: bool) -> dict[str, Any] 
     gpt-oss, which always thinks, a little at "low": 0.7 s against 12 s for a sum). Other
     tools' models: left alone."""
     if not external:
+        if sel is not None and getattr(sel, "lora", None):
+            thinking = False  # a taught writing model was trained with thinking off
         return {"chat_template_kwargs": {"enable_thinking": thinking}}
     if sel is not None and sel.tool == "ollama" and sel.thinking:
         return {"think": thinking, "reasoning_effort": "medium" if thinking else "low"}

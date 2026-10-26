@@ -259,6 +259,53 @@ function fake(over: Partial<TrainStatus> = {}) {
     cancelSetup: async () => {
       throw new Error("not available");
     },
+    // the writing screen has its own tests (writing.test.tsx)
+    useWritingInChat: async () => {
+      throw new Error("not in this test");
+    },
+    stopWritingInChat: async () => ({ ended: false }),
+    languageBases: async () => [],
+    installLanguagePart: async () => {
+      throw new Error("not in this test");
+    },
+    cancelLanguagePart: async () => {
+      throw new Error("not in this test");
+    },
+    writingSetup: async () => {
+      throw new Error("not in this test");
+    },
+    installWritingSetup: async () => {
+      throw new Error("not in this test");
+    },
+    cancelWritingSetup: async () => {
+      throw new Error("not in this test");
+    },
+    removeWritingSetup: async () => {
+      throw new Error("not in this test");
+    },
+    writingStatus: async () => {
+      throw new Error("not in this test");
+    },
+    writingSets: async () => [],
+    createWritingSet: async () => {
+      throw new Error("not in this test");
+    },
+    writingSet: async () => {
+      throw new Error("not in this test");
+    },
+    updateWritingSet: async () => {
+      throw new Error("not in this test");
+    },
+    setExamples: async () => {
+      throw new Error("not in this test");
+    },
+    removeWritingSet: async () => {},
+    startWritingRun: async () => {
+      throw new Error("not in this test");
+    },
+    askWriting: async () => {
+      throw new Error("not in this test");
+    },
     removeSetup: async () => {
       throw new Error("not available");
     },
@@ -337,12 +384,13 @@ const file = (name: string) =>
   new File([new Uint8Array([137, 80, 78, 71])], name, { type: "image/png" });
 
 describe("Train", () => {
-  it("opens on three cards, says it is a preview, and only the picture card is live", async () => {
+  it("opens on four cards, says it is a preview, and the picture and writing cards are live", async () => {
     const { api } = fake();
     render(<Train api={api} pollMs={10} />);
     expect(await screen.findByText("A preview")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Make my own character or style" })).toBeTruthy();
-    expect(screen.getAllByText(/Coming next/)).toHaveLength(2);
+    expect(screen.getAllByText(/Coming next/)).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /Start: teach my assistant/ })).toBeInTheDocument();
     // each card says which kind of model it trains, and the video one says what it needs
     for (const label of [
       "Image model training",
@@ -595,7 +643,9 @@ describe("Train", () => {
     const { api } = fake();
     const { unmount } = render(<Train api={api} pollMs={10} />);
     expect(
-      await screen.findByText(/learnt on this computer; your pictures are not sent anywhere/),
+      await screen.findByText(
+        /learnt on this computer; your pictures and writing are not sent anywhere/,
+      ),
     ).toBeTruthy();
     unmount();
     render(<Train api={api} place="service" pollMs={10} />);

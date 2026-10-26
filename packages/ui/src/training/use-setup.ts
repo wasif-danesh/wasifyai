@@ -12,7 +12,7 @@ const words = (e: unknown, fallback: string) =>
  * such component (the web), the state stays null and nothing is offered.
  */
 export function useTrainingSetup(
-  api: TrainingApi,
+  api: Pick<TrainingApi, "setup" | "installSetup" | "cancelSetup" | "removeSetup">,
   enabled: boolean,
   onReady: () => void,
   pollMs = 1500,

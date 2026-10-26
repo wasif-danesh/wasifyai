@@ -583,6 +583,13 @@ class RunManager:
             await asyncio.gather(self._task, return_exceptions=True)
 
 
+def model_or_none(deps: RouteDeps, identity: Identity, model_id: str) -> dict[str, Any] | None:
+    try:
+        return store_for(deps.state).get_model(identity.tenant_id, identity.user_id, model_id)
+    except NotFound:
+        return None
+
+
 def run_manager_for(deps: RouteDeps) -> RunManager:
     existing = getattr(deps.state, "training_runs", None)
     if existing is None:
@@ -604,6 +611,11 @@ async def delete_model(deps: RouteDeps, identity: Identity, model_id: str) -> bo
         published = None
     if not store.delete_model(identity.tenant_id, identity.user_id, model_id):
         return False
+    lang = getattr(deps.state, "desktop_language", None)
+    chosen = getattr(getattr(lang, "selected", None), "style", None)
+    if lang is not None and chosen == model_id:
+        with contextlib.suppress(Exception):
+            await lang.end_style()  # a model that is gone is not the one chat answers with
     unpublish = getattr(engine_for(deps.state), "unpublish", None)
     if published and unpublish is not None:
         with contextlib.suppress(Exception):

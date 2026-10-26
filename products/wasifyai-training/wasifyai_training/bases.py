@@ -7,12 +7,18 @@ support is listed with the reason, never hidden. A model on this computer that h
 shown as "cannot be taught yet", never offered. The app still recommends (the first base, LoRA) and
 the choice is optional: a run that names neither uses the recommendation."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 from wasifyai_training import trainer
 
-FAMILY_FOR_KIND = {"character": "image", "style": "image", "object": "image"}
+FAMILY_FOR_KIND = {
+    "character": "image",
+    "style": "image",
+    "object": "image",
+    "writing": "language",
+}
 
 # id, the words, the technical name, Advanced only
 METHODS = (
@@ -33,6 +39,13 @@ class Descriptor:
     methods_not: dict[str, str] = field(
         default_factory=dict
     )  # method -> why it cannot be used here
+    default_method: str = "lora"
+    seconds_per_step: float = 1.0  # measured: training only, a step of batch 2
+    overhead_s: float = 10.0  # measured: the rest of a run (loading, asking before and after)
+    architecture: str = ""  # what llama.cpp calls it, for serving an adapter on top of it
+    need_gb: float = 0.0  # the memory a run held when measured, rounded up; 0 = see the engine
+    note: str = ""  # one sentence on what it is good for, shown beside it
+    measured: str = ""  # what a real run measured, for the card; empty = not measured
 
 
 DESCRIPTORS = (
@@ -44,9 +57,66 @@ DESCRIPTORS = (
         licence=trainer.BASE_LICENCE,
         methods_not={
             "qlora": "Pictures are taught as a small adapter. The less-memory version is for "
-            "writing models, which the app cannot teach yet.",
+            "writing models.",
             "full": "Teaching all of a picture model needs far more memory than a Mac has, and the "
             "picture trainer does not do it.",
+        },
+    ),
+    Descriptor(
+        id="qwen3-0.6b-4bit",
+        title="Qwen3 0.6B",
+        family="language",
+        engine="mlx-lm",
+        licence="Apache-2.0",
+        default_method="qlora",
+        need_gb=1.5,
+        architecture="qwen3",
+        seconds_per_step=0.113,
+        overhead_s=6.3,
+        note="Small and quick: it picks up a style or a format, not new facts.",
+        measured="69 steps in 8 s, 1.3 GB, the whole run 14 s, on a 64 GB Mac (2026-10-26)",
+        methods_not={
+            "lora": "This model is kept in 4-bit form, so it is taught the less-memory way "
+            "(QLoRA).",
+            "full": "Teaching all of a writing model needs an NVIDIA graphics card for now.",
+        },
+    ),
+    Descriptor(
+        id="qwen3-1.7b-4bit",
+        title="Qwen3 1.7B",
+        family="language",
+        engine="mlx-lm",
+        licence="Apache-2.0",
+        default_method="qlora",
+        note="A step up: better at keeping to a style, still not for facts.",
+        measured="69 steps in 13 s, 2.0 GB, the whole run 21 s, on a 64 GB Mac (2026-10-26)",
+        need_gb=2.0,
+        seconds_per_step=0.184,
+        overhead_s=8.0,
+        architecture="qwen3",
+        methods_not={
+            "lora": "This model is kept in 4-bit form, so it is taught the less-memory way "
+            "(QLoRA).",
+            "full": "Teaching all of a writing model needs an NVIDIA graphics card for now.",
+        },
+    ),
+    Descriptor(
+        id="qwen3-4b-4bit",
+        title="Qwen3 4B",
+        family="language",
+        engine="mlx-lm",
+        licence="Apache-2.0",
+        default_method="qlora",
+        note="The best of these at following a style and a format; slower to teach.",
+        measured="69 steps in 19 s, 3.8 GB, the whole run 30 s, on a 64 GB Mac (2026-10-26)",
+        need_gb=4.0,
+        seconds_per_step=0.281,
+        overhead_s=10.3,
+        architecture="qwen3",
+        methods_not={
+            "lora": "This model is kept in 4-bit form, so it is taught the less-memory way "
+            "(QLoRA).",
+            "full": "Teaching all of a writing model needs an NVIDIA graphics card for now.",
         },
     ),
 )
@@ -54,6 +124,10 @@ DESCRIPTORS = (
 
 class Unavailable(ValueError):
     """The base or the method asked for cannot be used; `str(e)` says why, in words."""
+
+
+def descriptor(base: str) -> Descriptor | None:
+    return next((d for d in DESCRIPTORS if d.id == base), None)
 
 
 def descriptors(family: str) -> list[Descriptor]:
@@ -71,28 +145,36 @@ def method_rows(d: Descriptor) -> list[dict[str, Any]]:
 
 
 def choices(
-    kind: str, fit: dict[str, Any] | None, ready: bool, installed: list[dict[str, Any]]
+    kind: str,
+    fit: dict[str, Any] | Callable[[Descriptor], dict[str, Any] | None] | None,
+    ready: bool,
+    installed: list[dict[str, Any]],
+    have: Callable[[Descriptor], bool] | None = None,
 ) -> dict[str, Any]:
     """The rows of the "Choose the model and method" panel for a kind of teaching.
 
-    `fit` is the engine's verdict for this computer, `ready` whether the engine is set up, and
-    `installed` the models found on this computer (`kind`, `name`, `format` at least)."""
+    `fit` is the engine's verdict for this computer (or a function that gives it for a base),
+    `ready` whether the engine is set up, `have` whether a base is on this computer (a row that is
+    not can still be chosen: the screen offers to get it) and `installed` the models found on this
+    computer (`kind`, `name`, `format` at least)."""
     family = FAMILY_FOR_KIND.get(kind, "image")
     rows: list[dict[str, Any]] = []
     for d in descriptors(family):
         can, reason = True, ""
+        verdict = fit(d) if callable(fit) else fit
         if not ready:
             can, reason = (
                 False,
                 "Set up training first: this model is taught by a tool that is not installed yet.",
             )
-        elif fit and fit.get("verdict") == "too_big":
-            can, reason = False, str(fit.get("reason", ""))
+        elif verdict and verdict.get("verdict") == "too_big":
+            can, reason = False, str(verdict.get("reason", ""))
         rows.append(
             {
                 "id": d.id, "title": d.title, "licence": d.licence, "engine": d.engine,
+                "note": d.note, "measured": d.measured,
                 "recommended": d is descriptors(family)[0], "can_teach": can, "reason": reason,
-                "installed": ready, "methods": method_rows(d),
+                "installed": ready and (have(d) if have else True), "methods": method_rows(d),
             }
         )  # fmt: skip
     known = {d.title.lower() for d in DESCRIPTORS}
@@ -111,7 +193,7 @@ def choices(
     return {
         "family": family,
         "default_base": rows[0]["id"] if rows else "",
-        "default_method": DEFAULT_METHOD,
+        "default_method": descriptors(family)[0].default_method,
         "bases": rows,
     }
 
@@ -126,7 +208,7 @@ def resolve(kind: str, base: str | None, method: str | None) -> tuple[Descriptor
         if not found:
             raise Unavailable("This model cannot be taught yet. Choose another one.")
         chosen = found[0]
-    use = method or DEFAULT_METHOD
+    use = method or chosen.default_method
     if use not in {m[0] for m in METHODS}:
         raise Unavailable("Choose a small adapter or teach all of it.")
     if use in chosen.methods_not:

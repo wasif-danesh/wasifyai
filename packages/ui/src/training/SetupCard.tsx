@@ -16,11 +16,14 @@ export function SetupCard({
   error,
   onInstall,
   onCancel,
+  intro,
 }: {
   setup: TrainingSetupState;
   error: string | null;
   onInstall: (bytes: number) => void;
   onCancel: () => void;
+  /** what is being set up, in a sentence: the picture trainer's by default */
+  intro?: string;
 }) {
   const { plan, progress } = setup;
   const installing = progress.state === "installing";
@@ -30,9 +33,8 @@ export function SetupCard({
     <section className={panel} aria-label="Set up training">
       <h2 className="m-0 font-semibold text-lg">Set up training</h2>
       <p className="m-0 text-muted-foreground">
-        Teaching a picture model needs a trainer and the picture model it learns on. They are not in
-        the app. They are downloaded once, every file checked, and kept in the app's own folder.
-        Nothing else on your computer is changed, and your pictures are not sent anywhere.
+        {intro ??
+          "Teaching a picture model needs a trainer and the picture model it learns on. They are not in the app. They are downloaded once, every file checked, and kept in the app's own folder. Nothing else on your computer is changed, and your pictures are not sent anywhere."}
       </p>
       <ul className="m-0 grid list-none gap-1.5 p-0">
         {plan.parts.map((p) => (

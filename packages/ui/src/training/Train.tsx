@@ -23,6 +23,7 @@ import { CheckIt, EvaluationLine } from "./CheckIt";
 import { Choose } from "./Choose";
 import { SetupCard } from "./SetupCard";
 import { TryIt } from "./TryIt";
+import { Writing, WritingResult } from "./Writing";
 import { useChoices } from "./use-choices";
 import { useTrainingSetup } from "./use-setup";
 import { type TrainState, useTraining } from "./use-training";
@@ -46,6 +47,8 @@ const FAMILIES: {
   title: string;
   text: string;
   live?: boolean;
+  /** which screen Start opens: the pictures (default) or the writing examples */
+  start?: "writing";
   soon?: string;
 }[] = [
   {
@@ -59,8 +62,9 @@ const FAMILIES: {
     id: "language",
     label: "Language model training",
     title: "Teach my assistant to write like me",
-    text: "From your own writing.",
-    soon: "Coming next",
+    text: "Type some questions and the answers you would write. A small model learns to answer the way you do, on this computer.",
+    live: true,
+    start: "writing",
   },
   {
     id: "decision",
@@ -99,31 +103,46 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
   const notReady = state.status !== null && !state.status.ready;
   const setup = useTrainingSetup(api, place === "device", () => void t.refresh(), pollMs);
   const showingRun = state.run !== null;
+  const [writing, setWriting] = useState(false);
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-5 p-[clamp(1rem,3vw,2rem)]">
       <header className="grid gap-1.5">
         <span className={eyebrow}>Train models</span>
         <h1 className="font-semibold text-step-2">
-          {state.current || showingRun
-            ? "Make my own character or style"
-            : "Teach the app something of your own"}
+          {writing
+            ? "Teach my assistant to write like me"
+            : state.current || showingRun
+              ? "Make my own character or style"
+              : "Teach the app something of your own"}
         </h1>
-        <p className="max-w-3xl text-muted-foreground">
-          Add pictures and nothing else: the app describes them, suggests a magic word and teaches
-          the image model.{" "}
-          {place === "device"
-            ? "It is learnt on this computer; your pictures are not sent anywhere."
-            : "It is learnt on the service's graphics card."}
-        </p>
+        {writing ? null : state.current || showingRun ? (
+          <p className="max-w-3xl text-muted-foreground">
+            Add pictures and nothing else: the app describes them, suggests a magic word and teaches
+            the image model.{" "}
+            {place === "device"
+              ? "It is learnt on this computer; your pictures are not sent anywhere."
+              : "It is learnt on the service's graphics card."}
+          </p>
+        ) : (
+          <p className="max-w-3xl text-muted-foreground">
+            Choose what to teach and add your own examples. The app does the rest.{" "}
+            {place === "device"
+              ? "It is learnt on this computer; your pictures and writing are not sent anywhere."
+              : "It is learnt on the service's graphics card."}
+          </p>
+        )}
       </header>
 
-      {state.status?.preview ? (
+      {writing ? null : state.status?.preview ? (
         <Notice tone="info" title="A preview">
           Training runs every step and shows sample pictures, but it does not learn yet, so the
           models it makes are not real. The real trainer is coming.
         </Notice>
       ) : null}
-      {notReady && setup.setup && setup.setup.plan.supported && !setup.setup.installed ? (
+      {writing ? null : notReady &&
+        setup.setup &&
+        setup.setup.plan.supported &&
+        !setup.setup.installed ? (
         <SetupCard
           setup={setup.setup}
           error={setup.error}
@@ -135,25 +154,40 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
           {setup.setup?.problem ?? state.status?.problem ?? "It could not be started."}
         </Notice>
       ) : null}
-      {state.status?.fit?.verdict === "too_big" ? (
+      {!writing && state.status?.fit?.verdict === "too_big" ? (
         <Notice tone="warn" title="Not enough memory to teach a model">
           {state.status.fit.reason}
         </Notice>
       ) : null}
-      {state.error ? (
+      {!writing && state.error ? (
         <Notice tone="error" title="That did not work">
           {state.error}
         </Notice>
       ) : null}
 
-      {state.loading ? (
+      {writing ? (
+        <Writing
+          api={api}
+          pollMs={pollMs}
+          onBack={() => {
+            setWriting(false);
+            void t.refresh();
+          }}
+        />
+      ) : state.loading ? (
         <output className="text-muted-foreground">Looking at training…</output>
       ) : showingRun && state.run ? (
         <RunView t={t} run={state.run} onOpenLibrary={onOpenLibrary} runs={runs} api={api} />
       ) : state.current ? (
         <MakeView t={t} status={state.status} api={api} />
       ) : (
-        <Home t={t} runs={runs} setup={setup} api={api} />
+        <Home
+          t={t}
+          runs={runs}
+          setup={setup}
+          api={api}
+          onWriting={place === "device" ? () => setWriting(true) : undefined}
+        />
       )}
     </div>
   );
@@ -166,11 +200,13 @@ function Home({
   runs,
   setup,
   api,
+  onWriting,
 }: {
   t: Hook;
   runs?: ImageFlowApi;
   setup: ReturnType<typeof useTrainingSetup>;
   api: TrainingApi;
+  onWriting?: () => void;
 }) {
   const { state } = t;
   const ready = state.status?.ready === true;
@@ -186,7 +222,23 @@ function Home({
             <span className={eyebrow}>{f.label}</span>
             <h2 className="m-0 font-semibold text-lg">{f.title}</h2>
             <p className="m-0 text-muted-foreground">{f.text}</p>
-            {f.live ? (
+            {f.live && f.start === "writing" ? (
+              onWriting ? (
+                <div className={actions}>
+                  <Button
+                    type="button"
+                    aria-label="Start: teach my assistant to write like me"
+                    onClick={onWriting}
+                  >
+                    Start
+                  </Button>
+                </div>
+              ) : (
+                <span className="w-fit rounded-full border px-2.5 py-0.5 text-muted-foreground text-xs">
+                  On the desktop app
+                </span>
+              )
+            ) : f.live ? (
               <div className={actions}>
                 <Button
                   type="button"
@@ -369,13 +421,22 @@ function ModelCard({
           <span className="rounded-full border px-2 py-0.5 text-xs">Preview</span>
         ) : null}
       </div>
-      <p className="m-0 text-sm">
-        Magic word: <code>{m.trigger_word}</code>
-      </p>
-      <p className={hint}>
-        {KIND_LABEL[m.kind].title}, {m.card.dataset.pictures} pictures, {m.card.steps} steps,{" "}
-        {m.card.base_title} · {m.card.licence}.{m.card.note ? ` ${m.card.note}` : ""}
-      </p>
+      {m.kind === "writing" ? (
+        <p className={hint}>
+          Writing style, {m.card.dataset.examples ?? 0} examples, {m.card.steps} steps,{" "}
+          {m.card.base_title} · {m.card.licence}.
+        </p>
+      ) : (
+        <>
+          <p className="m-0 text-sm">
+            Magic word: <code>{m.trigger_word}</code>
+          </p>
+          <p className={hint}>
+            {KIND_LABEL[m.kind].title}, {m.card.dataset.pictures} pictures, {m.card.steps} steps,{" "}
+            {m.card.base_title} · {m.card.licence}.{m.card.note ? ` ${m.card.note}` : ""}
+          </p>
+        </>
+      )}
       <EvaluationLine model={m} />
       <div className={actions}>
         {renaming ? null : (
@@ -391,7 +452,14 @@ function ModelCard({
         )}
         <Sure label="Remove" name={m.name} onSure={() => void t.removeModel(m.id)} />
       </div>
-      {runs && !m.preview ? (
+      {m.kind === "writing" ? (
+        <details className="rounded-lg border px-3 py-2">
+          <summary className="cursor-pointer font-medium text-sm">See what it learnt</summary>
+          <div className="pt-3">
+            <WritingResult model={m} api={api} />
+          </div>
+        </details>
+      ) : runs && !m.preview ? (
         <details className="rounded-lg border px-3 py-2">
           <summary className="cursor-pointer font-medium text-sm">Check and try it</summary>
           <div className="grid gap-5 pt-3">

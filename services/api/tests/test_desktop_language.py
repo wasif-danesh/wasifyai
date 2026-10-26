@@ -569,3 +569,110 @@ async def test_the_switch_is_sent_the_way_each_kind_of_model_takes_it(tmp_path):
     finally:
         server.shutdown()
         await llama.close()
+
+
+# ---- a taught writing model in chat (ADR-0074) -------------------------------------------------
+
+
+async def test_a_taught_model_is_served_on_its_base_with_the_adapter_and_no_thinking(tmp_path, ctx):
+    svc, llama = await make(tmp_path)
+    calls: list[tuple[Path, dict[str, Any]]] = []
+    original = llama.ensure_running
+
+    async def spy(model, **kw):  # noqa: ANN001
+        calls.append((model, kw))
+        return await original(model, **kw)
+
+    llama.ensure_running = spy  # type: ignore[method-assign]
+    try:
+        base, adapter = gguf(tmp_path, "base.gguf"), gguf(tmp_path, "adapter.gguf")
+        await svc.select_style(base, adapter, "My style: Replies", "m" * 32)
+        sel = svc.selected
+        assert sel is not None and sel.style == "m" * 32 and sel.lora == str(adapter)
+        assert sel.thinking is False and sel.vision is False and sel.path == str(base)
+        provider = LocalTextProvider(svc, InMemoryUsageRecorder())
+        binding = CapabilityBinding(provider="litellm", model="chat")
+        messages = [{"role": "user", "content": "hi"}]
+        # even when the window asks it to think: the served prompt must equal the trained one
+        out = [c async for c in provider.chat("text.chat", binding, messages, None, True)]
+        assert "".join(c.text for c in out).startswith("[told not to think]")
+        assert not any(c.reasoning for c in out)
+        model, kw = calls[-1]
+        assert model == base and kw["extra_args"] == ("--lora", str(adapter))
+    finally:
+        await llama.close()
+
+
+async def test_going_back_gives_the_earlier_choice_again_even_after_a_restart(tmp_path):
+    svc, llama = await make(tmp_path)
+    try:
+        before = gguf(tmp_path, "chat.gguf")
+        await svc.select_file(before, "Chat model", 4096)
+        await svc.select_style(
+            gguf(tmp_path, "b.gguf"), gguf(tmp_path, "a.gguf"), "My style", "s" * 32
+        )
+        assert svc.previous is not None and svc.previous.path == str(before)
+        # a second use does not forget what came first
+        await svc.select_style(
+            gguf(tmp_path, "b.gguf"), gguf(tmp_path, "a2.gguf"), "My style 2", "t" * 32
+        )
+        assert svc.previous is not None and svc.previous.path == str(before)
+        again = LanguageService(svc._store, llama)
+        await again.load()
+        assert again.selected is not None and again.selected.style == "t" * 32
+        assert await again.end_style() is True
+        assert again.selected is not None and again.selected.path == str(before)
+        assert again.previous is None and await again.end_style() is False
+        saved: Any = await svc._store.get("desktop.language")
+        assert saved["path"] == str(before) and "previous" not in saved
+    finally:
+        await llama.close()
+
+
+async def test_a_taught_model_whose_files_are_gone_gives_chat_its_old_model_back(tmp_path, ctx):
+    svc, llama = await make(tmp_path)
+    try:
+        before = gguf(tmp_path, "chat.gguf")
+        await svc.select_file(before, "Chat model", 4096)
+        gone = tmp_path / "adapter-that-was-deleted.gguf"
+        await svc.select_style(gguf(tmp_path, "b.gguf"), gone, "My style", "s" * 32)
+        provider = LocalTextProvider(svc, InMemoryUsageRecorder())
+        binding = CapabilityBinding(provider="litellm", model="chat")
+        out = [
+            c
+            async for c in provider.chat(
+                "text.chat", binding, [{"role": "user", "content": "hi"}], None, False
+            )
+        ]
+        assert "[chat.gguf]" in "".join(c.text for c in out)  # answered by the model chosen before
+        assert svc.selected is not None and svc.selected.style is None
+        # and when there was nothing before, it is said in words, not as a server that did not start
+        await svc.clear()
+        await svc.select_style(gguf(tmp_path, "b.gguf"), gone, "My style", "s" * 32)
+        with pytest.raises(RunError) as e:
+            async for _ in provider.chat(
+                "text.chat", binding, [{"role": "user", "content": "hi"}], None, False
+            ):
+                pass
+        assert e.value.code == "no_language_model"
+    finally:
+        await llama.close()
+
+
+async def test_choosing_another_model_replaces_a_taught_one_for_good(tmp_path):
+    svc, llama = await make(tmp_path)
+    try:
+        await svc.select_file(gguf(tmp_path, "chat.gguf"), "Chat model", 4096)
+        await svc.select_style(
+            gguf(tmp_path, "b.gguf"), gguf(tmp_path, "a.gguf"), "My style", "s" * 32
+        )
+        await svc.select_file(gguf(tmp_path, "other.gguf"), "Other", 4096)
+        assert svc.previous is None and svc.selected is not None and svc.selected.style is None
+        assert await svc.end_style() is False
+        await svc.select_style(
+            gguf(tmp_path, "b.gguf"), gguf(tmp_path, "a.gguf"), "My style", "s" * 32
+        )
+        await svc.clear()
+        assert svc.selected is None and svc.previous is None
+    finally:
+        await llama.close()

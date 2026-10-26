@@ -22,6 +22,11 @@ LEFT_RUNNING = "It was stopped when the app closed. Start it again."
 LEFT_PAUSED = "It was paused when the app closed. You can pick it up where it stopped."
 KINDS = ("character", "style", "object")
 RIGHTS = ("mine", "permission", "drawing", "artwork")
+WRITING_RIGHTS = (
+    "mine",
+    "permission",
+)  # whose the examples are: the text is the person's own writing
+QUALITIES = ("quick", "better")
 
 
 class NotFound(Exception):
@@ -75,6 +80,15 @@ CREATE INDEX IF NOT EXISTS datasets_owner ON datasets(tenant_id, user_id, create
 CREATE INDEX IF NOT EXISTS items_dataset ON items(dataset_id, created_at);
 CREATE INDEX IF NOT EXISTS runs_owner ON runs(tenant_id, user_id, created_at);
 CREATE INDEX IF NOT EXISTS models_owner ON models(tenant_id, user_id, created_at);
+CREATE TABLE IF NOT EXISTS writing_sets(
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
+  name TEXT NOT NULL DEFAULT '', quality TEXT NOT NULL DEFAULT 'quick' CHECK (quality IN ('quick', 'better')),
+  base TEXT NOT NULL DEFAULT '', rights TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS examples(
+  id TEXT PRIMARY KEY, set_id TEXT NOT NULL, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
+  position INTEGER NOT NULL, ask TEXT NOT NULL, answer TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS writing_sets_owner ON writing_sets(tenant_id, user_id, created_at);
+CREATE INDEX IF NOT EXISTS examples_set ON examples(set_id, position);
 """
 )
 
@@ -419,3 +433,80 @@ class TrainingStore:
             )
             > 0
         )
+
+    # ---- writing sets: examples of how a person writes (ADR-0074) -----------------------------
+
+    def add_writing_set(self, tenant: str, user: str, name: str) -> dict[str, Any]:
+        item = new_id()
+        self._exec(
+            "INSERT INTO writing_sets(id, tenant_id, user_id, name, created_at) VALUES (?,?,?,?,?)",
+            (item, tenant, user, name.strip()[:60], now()),
+        )
+        return self.get_writing_set(tenant, user, item)
+
+    def get_writing_set(self, tenant: str, user: str, item: str) -> dict[str, Any]:
+        row = self._one(
+            "SELECT * FROM writing_sets WHERE id = ? AND tenant_id = ? AND user_id = ?",
+            (item, tenant, user),
+        )
+        if row is None:
+            raise NotFound(item)
+        return dict(row)
+
+    def list_writing_sets(self, tenant: str, user: str, limit: int = 50) -> list[dict[str, Any]]:
+        rows = self._all(
+            "SELECT * FROM writing_sets WHERE tenant_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT ?",
+            (tenant, user, limit),
+        )
+        return [dict(r) for r in rows]
+
+    def update_writing_set(
+        self, tenant: str, user: str, item: str, **fields: str
+    ) -> dict[str, Any]:
+        sets = {k: v for k, v in fields.items() if k in {"name", "quality", "base", "rights"}}
+        if "quality" in sets and sets["quality"] not in QUALITIES:
+            raise ValueError("quality")
+        if "rights" in sets and sets["rights"] not in (*WRITING_RIGHTS, ""):
+            raise ValueError("rights")
+        if "name" in sets:
+            sets["name"] = sets["name"].strip()[:60]
+        if sets:
+            cols = ", ".join(f"{k} = ?" for k in sets)
+            n = self._exec(
+                f"UPDATE writing_sets SET {cols} WHERE id = ? AND tenant_id = ? AND user_id = ?",
+                (*sets.values(), item, tenant, user),
+            )
+            if n == 0:
+                raise NotFound(item)
+        return self.get_writing_set(tenant, user, item)
+
+    def delete_writing_set(self, tenant: str, user: str, item: str) -> bool:
+        n = self._exec(
+            "DELETE FROM writing_sets WHERE id = ? AND tenant_id = ? AND user_id = ?",
+            (item, tenant, user),
+        )
+        if n:
+            self._exec("DELETE FROM examples WHERE set_id = ?", (item,))
+        return n > 0
+
+    def set_examples(self, tenant: str, user: str, item: str, rows: list[dict[str, str]]) -> int:
+        """Replace the examples of a set with `rows` (`ask` and `answer`), in order."""
+        self.get_writing_set(tenant, user, item)  # the owner's, or NotFound
+        with self._lock:
+            self._db.execute("DELETE FROM examples WHERE set_id = ?", (item,))
+            self._db.executemany(
+                "INSERT INTO examples(id, set_id, tenant_id, user_id, position, ask, answer) VALUES (?,?,?,?,?,?,?)",
+                [
+                    (new_id(), item, tenant, user, n, r["ask"], r["answer"])
+                    for n, r in enumerate(rows)
+                ],
+            )
+            self._db.commit()
+        return len(rows)
+
+    def list_examples(self, tenant: str, user: str, item: str) -> list[dict[str, str]]:
+        rows = self._all(
+            "SELECT ask, answer FROM examples WHERE set_id = ? AND tenant_id = ? AND user_id = ? ORDER BY position",
+            (item, tenant, user),
+        )
+        return [{"ask": r["ask"], "answer": r["answer"]} for r in rows]

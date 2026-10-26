@@ -91,6 +91,21 @@
         "title": "AdminUserPage",
         "type": "object"
       },
+      "AskIn": {
+        "properties": {
+          "question": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "AskIn",
+        "type": "object"
+      },
       "AttachOptions": {
         "description": "Attaching files to a message (ADR-0083, CO2): what this engine and the model in use take.",
         "properties": {
@@ -1087,6 +1102,43 @@
           "items"
         ],
         "title": "EvaluationIn",
+        "type": "object"
+      },
+      "ExampleIn": {
+        "properties": {
+          "answer": {
+            "maxLength": 8000,
+            "title": "Answer",
+            "type": "string"
+          },
+          "ask": {
+            "maxLength": 4000,
+            "title": "Ask",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ask",
+          "answer"
+        ],
+        "title": "ExampleIn",
+        "type": "object"
+      },
+      "ExamplesIn": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ExampleIn"
+            },
+            "maxItems": 2000,
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "ExamplesIn",
         "type": "object"
       },
       "Exported": {
@@ -3674,6 +3726,72 @@
           "components"
         ],
         "title": "WorkerRow",
+        "type": "object"
+      },
+      "WritingSetIn": {
+        "properties": {
+          "name": {
+            "default": "",
+            "maxLength": 60,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "title": "WritingSetIn",
+        "type": "object"
+      },
+      "WritingSetPatch": {
+        "properties": {
+          "base": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "quality": {
+            "anyOf": [
+              {
+                "maxLength": 10,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality"
+          },
+          "rights": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rights"
+          }
+        },
+        "title": "WritingSetPatch",
         "type": "object"
       },
       "wasifyai_model3d__routes__RenameIn": {
@@ -8999,6 +9117,469 @@
           }
         },
         "summary": "Status",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/writing/models/{model_id}/ask": {
+      "post": {
+        "description": "One question to the original model and to the one taught, side by side.",
+        "operationId": "ask_products_wasifyai_training_train_writing_models__model_id__ask_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ask Products Wasifyai Training Train Writing Models  Model Id  Ask Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ask",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/writing/models/{model_id}/use": {
+      "post": {
+        "description": "Chat with this taught model: its base with the adapter on top, in the app's own\nlanguage engine. What was chosen before is kept, so `DELETE /writing/use` gives it back.",
+        "operationId": "use_in_chat_products_wasifyai_training_train_writing_models__model_id__use_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Use In Chat Products Wasifyai Training Train Writing Models  Model Id  Use Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Use In Chat",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/writing/sets": {
+      "get": {
+        "operationId": "list_sets_products_wasifyai_training_train_writing_sets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Sets Products Wasifyai Training Train Writing Sets Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Sets",
+        "tags": [
+          "wasifyai-training"
+        ]
+      },
+      "post": {
+        "operationId": "make_set_products_wasifyai_training_train_writing_sets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WritingSetIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Make Set Products Wasifyai Training Train Writing Sets Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make Set",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/writing/sets/{set_id}": {
+      "delete": {
+        "operationId": "remove_set_products_wasifyai_training_train_writing_sets__set_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "title": "Set Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Set",
+        "tags": [
+          "wasifyai-training"
+        ]
+      },
+      "get": {
+        "operationId": "get_set_products_wasifyai_training_train_writing_sets__set_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "title": "Set Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Set Products Wasifyai Training Train Writing Sets  Set Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Set",
+        "tags": [
+          "wasifyai-training"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_set_products_wasifyai_training_train_writing_sets__set_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "title": "Set Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WritingSetPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Patch Set Products Wasifyai Training Train Writing Sets  Set Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Set",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/writing/sets/{set_id}/examples": {
+      "put": {
+        "description": "Replace the examples with these rows, as typed: the checks say what will be left out.",
+        "operationId": "put_examples_products_wasifyai_training_train_writing_sets__set_id__examples_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "title": "Set Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExamplesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Put Examples Products Wasifyai Training Train Writing Sets  Set Id  Examples Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Examples",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/writing/sets/{set_id}/runs": {
+      "post": {
+        "operationId": "start_writing_run_products_wasifyai_training_train_writing_sets__set_id__runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "title": "Set Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Start Writing Run Products Wasifyai Training Train Writing Sets  Set Id  Runs Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Writing Run",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/writing/status": {
+      "get": {
+        "operationId": "writing_status_products_wasifyai_training_train_writing_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Writing Status Products Wasifyai Training Train Writing Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Writing Status",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/writing/use": {
+      "delete": {
+        "description": "Back to the model that was chosen before.",
+        "operationId": "stop_using_in_chat_products_wasifyai_training_train_writing_use_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Stop Using In Chat Products Wasifyai Training Train Writing Use Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Stop Using In Chat",
         "tags": [
           "wasifyai-training"
         ]

@@ -1,6 +1,7 @@
 """A stand-in for the app around the training product: the routes on a FastAPI app with the preview
 trainer, a fake vision model that moderates and describes, and memory for usage and search."""
 
+import asyncio
 import io
 import json
 import time
@@ -83,12 +84,99 @@ def user_of(x_user: str = Header("u1"), x_tenant: str = Header("t1")) -> Identit
     return Identity(tenant_id=x_tenant, user_id=x_user)
 
 
+def write_tiny_adapter(folder: Path) -> None:
+    """A real, very small mlx-lm adapter (rank 2, one projection of one layer): the files the
+    converter reads, without a model."""
+    from array import array
+
+    from wasifyai_training.comfy_lora import write_tensors
+
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "adapter_config.json").write_text(
+        json.dumps({"fine_tune_type": "lora", "lora_parameters": {"rank": 2, "scale": 1.0}})
+    )
+    f32 = lambda v: array("f", v).tobytes()  # noqa: E731
+    write_tensors(
+        folder / "adapters.safetensors",
+        {
+            "model.layers.0.self_attn.q_proj.lora_a": {
+                "dtype": "F32", "shape": [4, 2], "data": f32(range(8)),
+            },
+            "model.layers.0.self_attn.q_proj.lora_b": {
+                "dtype": "F32", "shape": [2, 3], "data": f32(range(6)),
+            },
+        },
+        {},
+    )  # fmt: skip
+
+
+class FakeWriter:
+    """The language engine without a model: the same calls, the answers a stub makes."""
+
+    preview = False
+    engine = "fake-mlx"
+
+    def __init__(self) -> None:
+        self.slot = None
+        self.stopped = False
+        self.fail_with: str | None = None
+        self.steps_seen: list[int] = []
+        self.hold = asyncio.Event()  # a test that wants a run to stay going clears it
+        self.hold.set()
+
+    missing: frozenset[str] = frozenset()  # bases that are not on this computer
+
+    def problem(self, base_id=None):  # noqa: ANN001
+        return (
+            "The model to teach is not on this computer yet." if base_id in self.missing else None
+        )
+
+    def ready(self, base_id=None):  # noqa: ANN001
+        return self.problem(base_id) is None
+
+    def fit(self, need_gb):  # noqa: ANN001
+        return {"verdict": "fits", "reason": ""}
+
+    def state(self):
+        return {"engine": self.engine, "preview": False, "setup": None}
+
+    def preflight_blockers(self):
+        return []
+
+    async def stop(self):
+        self.stopped = True
+        self.hold.set()
+
+    async def answer(self, base_id, questions, adapter=None, max_tokens=120):  # noqa: ANN001
+        mark = " - Wasi" if adapter else ""
+        return [("mine: " if adapter else "original: ") + q + mark for q in questions]
+
+    async def train(self, job, base_id, folder, report):  # noqa: ANN001
+        from wasifyai_training.language import LanguageResult, Stopped
+
+        self.stopped = False
+        for step in range(1, job.steps + 1):
+            report(step, f"Learning, step {step} of {job.steps}")
+            self.steps_seen.append(step)
+            if step == 1:
+                await self.hold.wait()
+            if self.stopped:
+                raise Stopped("It was stopped, so nothing was kept.")
+            await asyncio.sleep(0)
+        if self.fail_with:
+            raise RuntimeError(self.fail_with)
+        adapter = folder / "adapter"
+        write_tiny_adapter(adapter)
+        return LanguageResult(adapter, 1.5, self.engine, 5.0, 2.5, 0.1, 1_300_000_000)
+
+
 def make_app(tmp_path: Path) -> tuple[FastAPI, Vision]:
     app = FastAPI()
     app.state.desktop_dir = tmp_path
     trainer = PreviewTrainer()
     trainer.step_s = 0.001
     app.state.training = trainer
+    app.state.language_training = FakeWriter()
     vision = Vision()
     app.state.caps = {"wasifyai-training": SimpleNamespace(text=vision, db=None, config=None)}
     app.state.creation_index = Index()

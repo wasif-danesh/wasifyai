@@ -45,6 +45,9 @@ from wasifyai_training.runtime import (
     words_of,
 )
 from wasifyai_training.store import KINDS, RIGHTS, NotFound
+from wasifyai_training.writing import estimate_words as writing_estimate
+from wasifyai_training.writing import manager_for as writing_manager_for
+from wasifyai_training.writing_routes import add_writing_routes
 
 PRODUCT_ID = "wasifyai-training"
 MAX_UPLOAD = 25 * 1024 * 1024
@@ -155,9 +158,13 @@ def build_routes(deps: RouteDeps) -> APIRouter:
 
     def run_out(row: dict[str, Any]) -> dict[str, Any]:
         out = clean(row)
-        out["estimate"] = trainer.estimate_words(
-            row["steps"], (row.get("settings") or {}).get("kind", "character")
-        )
+        settings = row.get("settings") or {}
+        if settings.get("family") == "language":  # a writing run: its own manager and estimate
+            base = bases.descriptor(row["base"]) or bases.descriptors("language")[0]
+            out["estimate"] = writing_estimate(row["steps"], base)
+            out["live"] = writing_manager_for(deps).active() == row["id"]
+            return out
+        out["estimate"] = trainer.estimate_words(row["steps"], settings.get("kind", "character"))
         out["live"] = run_manager_for(deps).active() == row["id"]
         return out
 
@@ -174,8 +181,8 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             "engine": engine.state(),
             "fit": engine.fit() if engine.ready() else None,
             "preflight": engine.preflight() if hasattr(engine, "preflight") else None,
-            "busy": runs.busy(),
-            "active_run": runs.active(),
+            "busy": runs.busy() or writing_manager_for(deps).busy(),
+            "active_run": runs.active() or writing_manager_for(deps).active(),
             "place": "device",
             "min_pictures": MIN_PICTURES,
             "max_pictures": MAX_PICTURES,
@@ -379,7 +386,9 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         run_id: str, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
         guard()
-        run_or_404(identity, run_id)
+        row = run_or_404(identity, run_id)
+        if (row.get("settings") or {}).get("family") == "language":
+            return {"cancelled": await writing_manager_for(deps).cancel(identity, run_id)}
         return {"cancelled": await run_manager_for(deps).cancel(identity, run_id)}
 
     @router.post("/runs/{run_id}/pause")
@@ -528,4 +537,5 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             filename=f"{row['trigger_word'] or 'lora'}.safetensors",
         )
 
+    add_writing_routes(router, deps)
     return router

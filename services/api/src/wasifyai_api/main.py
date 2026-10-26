@@ -86,6 +86,7 @@ from wasifyai_api.engine_workers import WorkerDirectory
 from wasifyai_api.graphs import default_registry
 from wasifyai_api.identity import get_identity
 from wasifyai_api.jobs_consumer import JobCompletionConsumer
+from wasifyai_api.language_setup import router as language_setup_router
 from wasifyai_api.litellm_admin import BackendError, InMemoryModelBackend, LiteLLMBackend
 from wasifyai_api.local_embedder import MODEL as LOCAL_EMBEDDER_MODEL
 from wasifyai_api.local_embedder import hashing_embed
@@ -631,6 +632,8 @@ def create_app(
             app.state.model3d = desktop.model3d  # the 3D engine (ADR-0080)
             app.state.training_setup = desktop.training_setup  # the trainer, set up on request
             app.state.training = desktop.training  # the trainer: mflux on a Mac (ADR-0073)
+            app.state.language_training = desktop.writing  # mlx-lm on a Mac (ADR-0074)
+            app.state.language_setup = desktop.language_setup  # its component, set up on request
             if desktop.video_builder is not None:  # and the model it asks to fill a template
                 desktop.video_builder.language = desktop.language
                 desktop.video_builder.usage = recorder
@@ -764,6 +767,7 @@ def create_app(
         app.include_router(desktop_video_builder_router)
         app.include_router(desktop_model3d_router)
         app.include_router(training_setup_router)
+        app.include_router(language_setup_router)
         app.include_router(desktop_save_router)
         app.include_router(desktop_discovery_router)
         app.include_router(desktop_llm_router)

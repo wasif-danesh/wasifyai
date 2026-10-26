@@ -10,7 +10,7 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from wasifyai_platform_sdk.actions import (
     Action,
     ActionContext,
@@ -26,6 +26,7 @@ from wasifyai_platform_sdk.actions.helpers import need_deps
 from wasifyai_training.runtime import (
     KIND,
     PRODUCT_ID,
+    NotAvailable,
     Refused,
     add_to_search,
     delete_model,
@@ -37,6 +38,7 @@ from wasifyai_training.runtime import (
     words_of,
 )
 from wasifyai_training.store import NotFound
+from wasifyai_training.writing import manager_for as writing_manager_for
 
 ENGINE = need_runtime("training")
 SAMPLE_ID = "0b7c1f9e0000400080000000deadbeef"
@@ -45,10 +47,16 @@ SAMPLE_ID = "0b7c1f9e0000400080000000deadbeef"
 class StartIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    dataset_id: str = Field(
-        min_length=32, max_length=32,
+    dataset_id: str | None = Field(
+        default=None, min_length=32, max_length=32,
         description="The set of pictures to teach from: made on the Train screen, with its "
         "descriptions written, its magic word chosen and its statement of rights given.",
+    )  # fmt: skip
+    set_id: str | None = Field(
+        default=None, min_length=32, max_length=32,
+        description="Or the set of examples to teach a writing model from: made on the Train "
+        "screen under 'Teach my assistant to write like me', with at least 10 questions and "
+        "answers and a statement of whose they are. Give this or dataset_id, not both.",
     )  # fmt: skip
     base: str | None = Field(
         default=None,
@@ -63,6 +71,12 @@ class StartIn(BaseModel):
         "(lora, a small adapter); a method the model cannot use is refused with the reason.",
     )
 
+    @model_validator(mode="after")
+    def _one_set(self) -> "StartIn":
+        if (self.dataset_id is None) == (self.set_id is None):
+            raise ValueError("Give dataset_id (pictures) or set_id (writing examples), not both.")
+        return self
+
 
 class StartOut(BaseModel):
     run_id: str
@@ -70,10 +84,13 @@ class StartOut(BaseModel):
     product_id: str
     uri: str
     name: str
-    magic_word: str
     steps: int
     seconds: int
-    preview: bool
+    magic_word: str = ""  # pictures: the word that draws it
+    preview: bool = False
+    examples: int = 0  # writing: how many examples it learnt from
+    passed: bool | None = None  # writing: whether the check says it learnt
+    verdict: str = ""  # writing: that, in a sentence
 
 
 def _item(row: dict[str, Any]) -> LibraryItem:
@@ -83,14 +100,48 @@ def _item(row: dict[str, Any]) -> LibraryItem:
     )  # fmt: skip
 
 
+async def _start_writing(p: StartIn, ctx: ActionContext) -> Outcome:
+    deps = need_deps(ctx)
+    store = store_for(deps.state)
+    runs = writing_manager_for(deps)
+    try:
+        row = await runs.start(ctx.actor, str(p.set_id))
+    except NotFound:
+        return Outcome.refused("That set of examples does not exist.", "not_found")
+    except (Refused, NotAvailable) as e:
+        return Outcome.refused(str(getattr(e, "message", e)), getattr(e, "code", "not_ready"))
+    try:
+        await runs.wait(row["id"])
+    except asyncio.CancelledError:
+        await runs.cancel(ctx.actor, row["id"])
+        raise
+    done = store.get_run(ctx.actor.tenant_id, ctx.actor.user_id, row["id"])
+    if done["status"] != "done" or not done["model_id"]:
+        return Outcome.error(done["error"] or "The model could not be taught.", "failed")
+    model = store.get_model(ctx.actor.tenant_id, ctx.actor.user_id, done["model_id"])
+    verdict = model["card"]["evaluation"]
+    examples = model["card"]["dataset"]["examples"]
+    return Outcome.ok(
+        {
+            "run_id": done["id"], "model_id": model["id"], "product_id": PRODUCT_ID,
+            "uri": f"wasify://creation/lora/{model['id']}", "name": model["name"],
+            "steps": done["steps"], "seconds": round(done["elapsed_s"] or 0),
+            "examples": examples, "passed": verdict["passed"], "verdict": verdict["note"],
+        },
+        f'"{model["name"]}" was taught from {examples} examples. {verdict["note"]}',
+    )  # fmt: skip
+
+
 async def _start(p: StartIn, ctx: ActionContext) -> Outcome:
+    if p.set_id is not None:
+        return await _start_writing(p, ctx)
     deps = need_deps(ctx)
     engine, store = engine_for(deps.state), store_for(deps.state)
     if not engine.ready():
         return Outcome.refused(not_ready(engine), "not_ready")
     runs = run_manager_for(deps)
     try:
-        row = await runs.start(ctx.actor, p.dataset_id, p.base, p.method)
+        row = await runs.start(ctx.actor, str(p.dataset_id), p.base, p.method)
     except NotFound:
         return Outcome.refused("That set of pictures does not exist.", "not_found")
     except Refused as e:
@@ -208,11 +259,16 @@ def actions() -> list[Action]:
                 "description of each, the person chooses a magic word and says whose the pictures "
                 "are. This starts the run on a set that is ready and waits for it. It takes about "
                 "25 minutes on a Mac and pauses chat and image making, so it is made one at a "
-                "time. Then writing the magic word in a prompt draws the result."
+                "time. Then writing the magic word in a prompt draws the result. Or, with "
+                "set_id, it teaches a small writing model how the person answers from a set "
+                "of their own questions and answers (made under 'Teach my assistant to write "
+                "like me' on the same screen): it takes a minute or two and ends with the "
+                "same questions answered before and after and a mark that says whether it "
+                "learnt."
             ),
             input=StartIn,
             output=StartOut,
-            examples=({"dataset_id": SAMPLE_ID},),
+            examples=({"dataset_id": SAMPLE_ID}, {"set_id": SAMPLE_ID}),
             effect="make",
             flags=("costly",),
             long=True,

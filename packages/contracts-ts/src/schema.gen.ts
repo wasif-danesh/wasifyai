@@ -1552,6 +1552,158 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-training/train/writing/models/{model_id}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask
+         * @description One question to the original model and to the one taught, side by side.
+         */
+        post: operations["ask_products_wasifyai_training_train_writing_models__model_id__ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/writing/models/{model_id}/use": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Use In Chat
+         * @description Chat with this taught model: its base with the adapter on top, in the app's own
+         *     language engine. What was chosen before is kept, so `DELETE /writing/use` gives it back.
+         */
+        post: operations["use_in_chat_products_wasifyai_training_train_writing_models__model_id__use_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/writing/sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sets */
+        get: operations["list_sets_products_wasifyai_training_train_writing_sets_get"];
+        put?: never;
+        /** Make Set */
+        post: operations["make_set_products_wasifyai_training_train_writing_sets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/writing/sets/{set_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Set */
+        get: operations["get_set_products_wasifyai_training_train_writing_sets__set_id__get"];
+        put?: never;
+        post?: never;
+        /** Remove Set */
+        delete: operations["remove_set_products_wasifyai_training_train_writing_sets__set_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Set */
+        patch: operations["patch_set_products_wasifyai_training_train_writing_sets__set_id__patch"];
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/writing/sets/{set_id}/examples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Examples
+         * @description Replace the examples with these rows, as typed: the checks say what will be left out.
+         */
+        put: operations["put_examples_products_wasifyai_training_train_writing_sets__set_id__examples_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/writing/sets/{set_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Writing Run */
+        post: operations["start_writing_run_products_wasifyai_training_train_writing_sets__set_id__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/writing/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Writing Status */
+        get: operations["writing_status_products_wasifyai_training_train_writing_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/writing/use": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Stop Using In Chat
+         * @description Back to the model that was chosen before.
+         */
+        delete: operations["stop_using_in_chat_products_wasifyai_training_train_writing_use_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-video/builder/draft": {
         parameters: {
             query?: never;
@@ -2572,6 +2724,11 @@ export interface components {
             /** Users */
             users: components["schemas"]["AdminUser"][];
         };
+        /** AskIn */
+        AskIn: {
+            /** Question */
+            question: string;
+        };
         /**
          * AttachOptions
          * @description Attaching files to a message (ADR-0083, CO2): what this engine and the model in use take.
@@ -2970,6 +3127,18 @@ export interface components {
         EvaluationIn: {
             /** Items */
             items: components["schemas"]["CheckedPicture"][];
+        };
+        /** ExampleIn */
+        ExampleIn: {
+            /** Answer */
+            answer: string;
+            /** Ask */
+            ask: string;
+        };
+        /** ExamplesIn */
+        ExamplesIn: {
+            /** Rows */
+            rows: components["schemas"]["ExampleIn"][];
         };
         /** Exported */
         Exported: {
@@ -4023,6 +4192,25 @@ export interface components {
             models: components["schemas"]["ModelRow"][];
             /** Seen */
             seen: number;
+        };
+        /** WritingSetIn */
+        WritingSetIn: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+        };
+        /** WritingSetPatch */
+        WritingSetPatch: {
+            /** Base */
+            base?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Quality */
+            quality?: string | null;
+            /** Rights */
+            rights?: string | null;
         };
         /** RenameIn */
         wasifyai_model3d__routes__RenameIn: {
@@ -7672,6 +7860,357 @@ export interface operations {
         };
     };
     status_products_wasifyai_training_train_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    ask_products_wasifyai_training_train_writing_models__model_id__ask_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    use_in_chat_products_wasifyai_training_train_writing_models__model_id__use_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sets_products_wasifyai_training_train_writing_sets_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    make_set_products_wasifyai_training_train_writing_sets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WritingSetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_set_products_wasifyai_training_train_writing_sets__set_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_set_products_wasifyai_training_train_writing_sets__set_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_set_products_wasifyai_training_train_writing_sets__set_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WritingSetPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_examples_products_wasifyai_training_train_writing_sets__set_id__examples_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExamplesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_writing_run_products_wasifyai_training_train_writing_sets__set_id__runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    writing_status_products_wasifyai_training_train_writing_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    stop_using_in_chat_products_wasifyai_training_train_writing_use_delete: {
         parameters: {
             query?: never;
             header?: never;

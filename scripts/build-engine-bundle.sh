@@ -71,6 +71,13 @@ fi
 mkdir -p "$OUT/products/wasifyai-training/trainer"
 cp "$TRAINER_SRC"/requirements-*.lock "$OUT/products/wasifyai-training/trainer/"
 
+# The writing trainer (ADR-0074): mlx-lm, the same way (scripts/lock-language-trainer.sh writes the lock).
+if [ ! -f "$TRAINER_SRC/language-requirements-aarch64-apple-darwin.lock" ]; then
+  echo "no writing trainer lock file in $TRAINER_SRC: run scripts/lock-language-trainer.sh first" >&2
+  exit 1
+fi
+cp "$TRAINER_SRC"/language-requirements-*.lock "$OUT/products/wasifyai-training/trainer/"
+
 for p in $PRODUCTS; do
   mkdir -p "$OUT/products/$p"
   cp "products/$p/product.yaml" "$OUT/products/$p/"

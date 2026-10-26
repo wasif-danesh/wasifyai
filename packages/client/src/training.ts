@@ -6,6 +6,9 @@ import { HttpError, type Transport, errorMessage } from "./transport";
 export const TRAINING_PRODUCT_ID = "wasifyai-training";
 
 export type TrainKind = "character" | "style" | "object";
+
+/** What a trained model is: pictures of one of the three kinds, or how a person writes. */
+export type TrainedKind = TrainKind | "writing";
 export type Statement = "mine" | "permission" | "drawing" | "artwork";
 
 export type TrainPreflight = {
@@ -55,6 +58,9 @@ export type TrainMethod = {
 
 /** A model that may be taught, or one on this computer that cannot be (with the reason). */
 export type TrainBase = {
+  /** what this model is good for, and what a real run on this Mac measured (writing models) */
+  note?: string;
+  measured?: string;
   /** empty for a model with no descriptor: it is listed, not offered */
   id: string;
   title: string;
@@ -166,13 +172,101 @@ export type CheckStep = {
   with_model: boolean;
 };
 
+/** One question put to the model before it was taught and after, side by side. */
+export type WritingAnswer = { question: string; before: string; after: string };
+
+export type WritingQuality = "quick" | "better";
+export type WritingRights = "mine" | "permission";
+
+export type WritingExample = { ask: string; answer: string };
+
+export type WritingCheck = { level: "ok" | "warn" | "error"; code: string; message: string };
+
+/** What a run of a set would take, and what stops it, in words. */
+export type WritingPlan = {
+  examples: number;
+  dropped: string[];
+  checks: WritingCheck[];
+  steps: number;
+  estimate: string;
+  base: string;
+  base_title: string;
+  /** what this model is good for, one sentence */
+  base_note: string;
+  held_back: number;
+  missing: string | null;
+};
+
+export type WritingSet = {
+  id: string;
+  name: string;
+  quality: WritingQuality;
+  base: string;
+  rights: WritingRights | "";
+  created_at: string;
+  examples: number;
+  missing: string | null;
+  steps: number;
+  estimate: string;
+  /** with the whole set */
+  rows?: WritingExample[];
+  plan?: WritingPlan;
+};
+
+/** One thing the writing trainer can fetch for a base: its weights ("model") or the chat form of it ("chat"). */
+export type LanguagePart = {
+  have: boolean;
+  bytes: number;
+  title: string;
+  needs_free_bytes: number;
+  progress: {
+    state: "idle" | "installing" | "ready" | "failed";
+    message: string;
+    done_bytes: number;
+    total_bytes: number;
+  };
+};
+
+/** A base a writing model can be taught on, and what of it is on this computer. */
+export type LanguageBase = {
+  id: string;
+  title: string;
+  licence: string;
+  source: string;
+  /** set up with the trainer, not fetched on its own */
+  main: boolean;
+  problem: string | null;
+  model: LanguagePart;
+  chat: LanguagePart;
+};
+
+export type WritingStatus = {
+  ready: boolean;
+  problem: string | null;
+  engine: Record<string, unknown>;
+  fit: { verdict: "fits" | "tight" | "too_big"; reason: string } | null;
+  busy: boolean;
+  active_run: string | null;
+  place: "device" | "service";
+  min_examples: number;
+  good_examples: number;
+  rights: WritingRights[];
+  qualities: WritingQuality[];
+  choices: TrainChoices;
+  /** the taught model chat answers with now, if any */
+  in_chat: string | null;
+  bases: LanguageBase[];
+};
+
+export type WritingAsk = { question: string; original: string; mine: string };
+
 export type TrainedModel = {
   id: string;
   run_id: string;
   dataset_id: string | null;
   name: string;
   trigger_word: string;
-  kind: TrainKind;
+  kind: TrainedKind;
   base: string;
   preview: boolean;
   adapter_bytes: number | null;
@@ -182,7 +276,20 @@ export type TrainedModel = {
     engine: string;
     preview: boolean;
     note: string;
-    dataset: { name: string; kind: TrainKind; pictures: number; hash: string };
+    dataset: {
+      name: string;
+      kind: TrainedKind;
+      pictures?: number;
+      examples?: number;
+      hash: string;
+    };
+    /** a writing model: the same questions asked before and after, and the loss on answers kept back */
+    answers?: WritingAnswer[];
+    loss?: {
+      first_held_back: number | null;
+      last_held_back: number | null;
+      last_train: number | null;
+    };
     steps: number;
     seconds: number;
     trigger_word: string;
@@ -242,6 +349,11 @@ export type TrainingApi = {
   installSetup(confirmBytes: number): Promise<TrainingSetupState>;
   cancelSetup(): Promise<TrainingSetupState>;
   removeSetup(): Promise<{ freed_bytes: number } & TrainingSetupState>;
+  /** The writing trainer's component (ADR-0074), set up the same way. */
+  writingSetup(): Promise<TrainingSetupState>;
+  installWritingSetup(confirmBytes: number): Promise<TrainingSetupState>;
+  cancelWritingSetup(): Promise<TrainingSetupState>;
+  removeWritingSetup(): Promise<{ freed_bytes: number } & TrainingSetupState>;
   status(): Promise<TrainStatus>;
   datasets(): Promise<TrainDataset[]>;
   createDataset(kind: TrainKind, name?: string): Promise<TrainDataset>;
@@ -277,6 +389,34 @@ export type TrainingApi = {
   model(id: string): Promise<TrainedModel>;
   renameModel(id: string, name: string): Promise<TrainedModel>;
   removeModel(id: string): Promise<void>;
+  /** "Teach my assistant to write like me" (ADR-0074): sets of examples, a run, the side-by-side answers. */
+  writingStatus(): Promise<WritingStatus>;
+  writingSets(): Promise<WritingSet[]>;
+  createWritingSet(name?: string): Promise<WritingSet>;
+  writingSet(id: string): Promise<WritingSet>;
+  updateWritingSet(
+    id: string,
+    patch: { name?: string; quality?: WritingQuality; base?: string; rights?: WritingRights },
+  ): Promise<WritingSet>;
+  /** Replace the examples of a set with these rows. */
+  setExamples(id: string, rows: WritingExample[]): Promise<WritingSet>;
+  removeWritingSet(id: string): Promise<void>;
+  startWritingRun(setId: string): Promise<TrainRun>;
+  /** The same question to the original model and to the one taught. */
+  askWriting(modelId: string, question: string): Promise<WritingAsk>;
+  /** Chat with a taught writing model: the chat engine serves its base with the adapter on top. */
+  useWritingInChat(modelId: string): Promise<void>;
+  /** Back to the model chat used before. */
+  stopWritingInChat(): Promise<{ ended: boolean }>;
+  /** What is on this computer for each base a writing model can be taught on. */
+  languageBases(): Promise<LanguageBase[]>;
+  /** Get the weights of a base, or the chat form of it, after its size was shown. */
+  installLanguagePart(
+    baseId: string,
+    part: "model" | "chat",
+    confirmBytes: number,
+  ): Promise<LanguageBase[]>;
+  cancelLanguagePart(baseId: string, part: "model" | "chat"): Promise<LanguageBase[]>;
 };
 
 export function createTrainingApi(
@@ -342,6 +482,43 @@ export function createTrainingApi(
     startRun: (datasetId, choice) =>
       json<TrainRun>(`${base}/runs`, send("POST", { dataset_id: datasetId, ...choice })),
     choices: (kind) => json<TrainChoices>(`${base}/choices?kind=${enc(kind)}`),
+    writingStatus: () => json<WritingStatus>(`${base}/writing/status`),
+    writingSets: async () => (await json<{ sets: WritingSet[] }>(`${base}/writing/sets`)).sets,
+    createWritingSet: (name = "") =>
+      json<WritingSet>(`${base}/writing/sets`, send("POST", { name })),
+    writingSet: (id) => json<WritingSet>(`${base}/writing/sets/${enc(id)}`),
+    updateWritingSet: (id, patch) =>
+      json<WritingSet>(`${base}/writing/sets/${enc(id)}`, send("PATCH", patch)),
+    setExamples: (id, rows) =>
+      json<WritingSet>(`${base}/writing/sets/${enc(id)}/examples`, send("PUT", { rows })),
+    removeWritingSet: async (id) => {
+      const res = await transport.fetch(`${base}/writing/sets/${enc(id)}`, { method: "DELETE" });
+      if (!res.ok) throw new HttpError(res.status, await errorMessage(res));
+    },
+    startWritingRun: (setId) =>
+      json<TrainRun>(`${base}/writing/sets/${enc(setId)}/runs`, { method: "POST" }),
+    useWritingInChat: async (modelId) => {
+      await json<unknown>(`${base}/writing/models/${enc(modelId)}/use`, { method: "POST" });
+    },
+    stopWritingInChat: () => json<{ ended: boolean }>(`${base}/writing/use`, { method: "DELETE" }),
+    languageBases: async () =>
+      (await json<{ bases: LanguageBase[] }>("/desktop/language-setup/bases")).bases,
+    installLanguagePart: async (baseId, part, confirmBytes) =>
+      (
+        await json<{ bases: LanguageBase[] }>(
+          `/desktop/language-setup/bases/${enc(baseId)}/${part}/install`,
+          send("POST", { confirm_bytes: confirmBytes }),
+        )
+      ).bases,
+    cancelLanguagePart: async (baseId, part) =>
+      (
+        await json<{ bases: LanguageBase[] }>(
+          `/desktop/language-setup/bases/${enc(baseId)}/${part}/cancel`,
+          { method: "POST" },
+        )
+      ).bases,
+    askWriting: (modelId, question) =>
+      json<WritingAsk>(`${base}/writing/models/${enc(modelId)}/ask`, send("POST", { question })),
     runs: async () => (await json<{ runs: TrainRun[] }>(`${base}/runs`)).runs,
     run: (id) => json<TrainRun>(`${base}/runs/${enc(id)}`),
     pauseRun: (id) =>
@@ -373,6 +550,18 @@ export function createTrainingApi(
       ),
     cancelSetup: () =>
       json<TrainingSetupState>("/desktop/training-setup/install/cancel", { method: "POST" }),
+    writingSetup: () => json<TrainingSetupState>("/desktop/language-setup"),
+    installWritingSetup: (confirmBytes) =>
+      json<TrainingSetupState>(
+        "/desktop/language-setup/install",
+        send("POST", { confirm_bytes: confirmBytes }),
+      ),
+    cancelWritingSetup: () =>
+      json<TrainingSetupState>("/desktop/language-setup/install/cancel", { method: "POST" }),
+    removeWritingSetup: () =>
+      json<{ freed_bytes: number } & TrainingSetupState>("/desktop/language-setup/uninstall", {
+        method: "POST",
+      }),
     removeSetup: () =>
       json<{ freed_bytes: number } & TrainingSetupState>("/desktop/training-setup/uninstall", {
         method: "POST",

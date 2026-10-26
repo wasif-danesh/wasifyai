@@ -42,12 +42,15 @@ from wasifyai_api.desktop_discovery import DiscoveryService
 from wasifyai_api.desktop_fit import assess_fit, need_declared, process_rss_bytes
 from wasifyai_api.desktop_hub import HubService
 from wasifyai_api.desktop_language import LanguageService
+from wasifyai_api.desktop_language_training import MlxLmTrainer, make_language_trainer
 from wasifyai_api.desktop_model3d import Model3dService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
 from wasifyai_api.desktop_training import make_trainer
 from wasifyai_api.desktop_video_builder import VideoBuilderService
 from wasifyai_api.desktop_vision import VisionService
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
+from wasifyai_api.language_setup import LOCK_NAME as LANGUAGE_LOCK_NAME
+from wasifyai_api.language_setup import LanguageSetup
 from wasifyai_api.lipsync_runtime import LipSyncSidecar
 from wasifyai_api.llama_server import LlamaServer
 from wasifyai_api.runs import RunManager
@@ -93,6 +96,8 @@ class DesktopBackends:
     )
     model3d: Model3dService | None = None  # the 3D engine, installed on request (ADR-0080)
     training_setup: TrainingSetup | None = None  # the trainer's component, set up on request
+    language_setup: LanguageSetup | None = None  # the writing trainer's component
+    writing: MlxLmTrainer | None = None  # the language trainer: mlx-lm on a Mac (ADR-0074)
     training: Any = None  # the trainer: a preview until the real one is installed (ADR-0073)
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
@@ -186,6 +191,13 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         cache_dir=cache if cache.is_dir() else None,
         base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
     )
+    language_setup = LanguageSetup(
+        root,
+        lock=products / "wasifyai-training" / "trainer" / LANGUAGE_LOCK_NAME,
+        uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
+        cache_dir=cache if cache.is_dir() else None,
+        base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
+    )
     return DesktopBackends(
         web=web,
         models=models,
@@ -196,6 +208,8 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         model3d=Model3dService(settings.desktop_dir),
         training_setup=setup,
         training=make_trainer(settings.desktop_dir, settings.models_dir, setup),
+        language_setup=language_setup,
+        writing=make_language_trainer(settings.desktop_dir),
         language=language,
         vision=vision,
         hub=hub,
@@ -319,6 +333,8 @@ def _build_worker(d: DesktopBackends):
         owners["model3d"] = d.model3d.stop  # a 3D run holds about 19 GB: the biggest owner
     if d.training is not None:
         owners["training"] = d.training.stop  # a training run holds most of the GPU
+    if d.writing is not None:
+        owners["writing"] = d.writing.stop  # so does teaching a writing model
     if d.audio is not None:
         owners["audio"] = d.audio.stop  # the speech runtime is another owner of the one slot
         if d.audio.lipsync_sidecar is not None:
@@ -343,6 +359,8 @@ def _build_worker(d: DesktopBackends):
         d.model3d.slot = slot
     if d.training is not None:
         d.training.slot = slot
+    if d.writing is not None:
+        d.writing.slot = slot
     processor = JobProcessor(
         ws,
         d.event_log,

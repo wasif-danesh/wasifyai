@@ -21,6 +21,7 @@ import type { ImageFlowApi } from "../hooks/use-image-flow";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
 import { CheckIt, EvaluationLine } from "./CheckIt";
 import { Choose } from "./Choose";
+import { Decide, DecideResult } from "./Decide";
 import { SetupCard } from "./SetupCard";
 import { TryIt } from "./TryIt";
 import { Writing, WritingResult } from "./Writing";
@@ -47,8 +48,8 @@ const FAMILIES: {
   title: string;
   text: string;
   live?: boolean;
-  /** which screen Start opens: the pictures (default) or the writing examples */
-  start?: "writing";
+  /** which screen Start opens: the pictures (default), the writing examples or the decisions */
+  start?: "writing" | "decide";
   soon?: string;
 }[] = [
   {
@@ -69,9 +70,10 @@ const FAMILIES: {
   {
     id: "decision",
     label: "Decision model training",
-    title: "Teach it to sort things",
-    text: "From a spreadsheet of examples, for example spam or not spam.",
-    soon: "Coming next",
+    title: "Teach it to decide",
+    text: "Give it texts and the right answers, such as yes or no, a category or a score. It learns to answer new texts the same way, and says how sure it is.",
+    live: true,
+    start: "decide",
   },
   {
     id: "video",
@@ -103,17 +105,20 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
   const notReady = state.status !== null && !state.status.ready;
   const setup = useTrainingSetup(api, place === "device", () => void t.refresh(), pollMs);
   const showingRun = state.run !== null;
-  const [writing, setWriting] = useState(false);
+  const [screen, setScreen] = useState<"writing" | "decide" | null>(null);
+  const writing = screen !== null;
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-5 p-[clamp(1rem,3vw,2rem)]">
       <header className="grid gap-1.5">
         <span className={eyebrow}>Train models</span>
         <h1 className="font-semibold text-step-2">
-          {writing
+          {screen === "writing"
             ? "Teach it from examples"
-            : state.current || showingRun
-              ? "Make my own character or style"
-              : "Teach the app something of your own"}
+            : screen === "decide"
+              ? "Teach it to decide"
+              : state.current || showingRun
+                ? "Make my own character or style"
+                : "Teach the app something of your own"}
         </h1>
         {writing ? null : state.current || showingRun ? (
           <p className="max-w-3xl text-muted-foreground">
@@ -165,12 +170,21 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
         </Notice>
       ) : null}
 
-      {writing ? (
+      {screen === "writing" ? (
         <Writing
           api={api}
           pollMs={pollMs}
           onBack={() => {
-            setWriting(false);
+            setScreen(null);
+            void t.refresh();
+          }}
+        />
+      ) : screen === "decide" ? (
+        <Decide
+          api={api}
+          pollMs={pollMs}
+          onBack={() => {
+            setScreen(null);
             void t.refresh();
           }}
         />
@@ -186,7 +200,11 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
           runs={runs}
           setup={setup}
           api={api}
-          onWriting={place === "device" ? () => setWriting(true) : undefined}
+          onStart={
+            place === "device"
+              ? { writing: () => setScreen("writing"), decide: () => setScreen("decide") }
+              : undefined
+          }
         />
       )}
     </div>
@@ -200,13 +218,13 @@ function Home({
   runs,
   setup,
   api,
-  onWriting,
+  onStart,
 }: {
   t: Hook;
   runs?: ImageFlowApi;
   setup: ReturnType<typeof useTrainingSetup>;
   api: TrainingApi;
-  onWriting?: () => void;
+  onStart?: { writing: () => void; decide: () => void };
 }) {
   const { state } = t;
   const ready = state.status?.ready === true;
@@ -222,13 +240,17 @@ function Home({
             <span className={eyebrow}>{f.label}</span>
             <h2 className="m-0 font-semibold text-lg">{f.title}</h2>
             <p className="m-0 text-muted-foreground">{f.text}</p>
-            {f.live && f.start === "writing" ? (
-              onWriting ? (
+            {f.live && (f.start === "writing" || f.start === "decide") ? (
+              onStart ? (
                 <div className={actions}>
                   <Button
                     type="button"
-                    aria-label="Start: teach it from examples"
-                    onClick={onWriting}
+                    aria-label={
+                      f.start === "writing"
+                        ? "Start: teach it from examples"
+                        : "Start: teach it to decide"
+                    }
+                    onClick={f.start === "writing" ? onStart.writing : onStart.decide}
                   >
                     Start
                   </Button>
@@ -426,6 +448,11 @@ function ModelCard({
           Taught from {m.card.dataset.examples ?? 0} examples · {m.card.base_title} ·{" "}
           {m.card.licence}.
         </p>
+      ) : m.kind === "decision" ? (
+        <p className={hint}>
+          Answers “{m.card.question?.text ?? ""}” · taught from {m.card.dataset.examples ?? 0}{" "}
+          examples · {m.card.base_title} · {m.card.licence}.
+        </p>
       ) : (
         <>
           <p className="m-0 text-sm">
@@ -457,6 +484,13 @@ function ModelCard({
           <summary className="cursor-pointer font-medium text-sm">See what it learnt</summary>
           <div className="pt-3">
             <WritingResult model={m} api={api} />
+          </div>
+        </details>
+      ) : m.kind === "decision" ? (
+        <details className="rounded-lg border px-3 py-2">
+          <summary className="cursor-pointer font-medium text-sm">See what it learnt</summary>
+          <div className="pt-3">
+            <DecideResult model={m} api={api} />
           </div>
         </details>
       ) : runs && !m.preview ? (

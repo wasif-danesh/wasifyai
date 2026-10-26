@@ -21,6 +21,9 @@ from wasifyai_platform_sdk import (
 from wasifyai_platform_sdk.context import reset_context
 
 from wasifyai_training import bases, evaluation, magic, trainer
+from wasifyai_training.decision_routes import add_decision_routes
+from wasifyai_training.decisions import estimate_words as decision_estimate
+from wasifyai_training.decisions import manager_for as decision_manager_for
 from wasifyai_training.runtime import (
     MAX_PICTURES,
     MIN_PICTURES,
@@ -164,6 +167,11 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             out["estimate"] = writing_estimate(row["steps"], base)
             out["live"] = writing_manager_for(deps).active() == row["id"]
             return out
+        if settings.get("family") == "decision":  # a decision run: its own manager and estimate
+            base = bases.descriptor(row["base"]) or bases.descriptors("decision")[0]
+            out["estimate"] = decision_estimate(row["steps"], base)
+            out["live"] = decision_manager_for(deps).active() == row["id"]
+            return out
         out["estimate"] = trainer.estimate_words(row["steps"], settings.get("kind", "character"))
         out["live"] = run_manager_for(deps).active() == row["id"]
         return out
@@ -181,8 +189,12 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             "engine": engine.state(),
             "fit": engine.fit() if engine.ready() else None,
             "preflight": engine.preflight() if hasattr(engine, "preflight") else None,
-            "busy": runs.busy() or writing_manager_for(deps).busy(),
-            "active_run": runs.active() or writing_manager_for(deps).active(),
+            "busy": runs.busy()
+            or writing_manager_for(deps).busy()
+            or decision_manager_for(deps).busy(),
+            "active_run": runs.active()
+            or writing_manager_for(deps).active()
+            or decision_manager_for(deps).active(),
             "place": "device",
             "min_pictures": MIN_PICTURES,
             "max_pictures": MAX_PICTURES,
@@ -389,6 +401,8 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         row = run_or_404(identity, run_id)
         if (row.get("settings") or {}).get("family") == "language":
             return {"cancelled": await writing_manager_for(deps).cancel(identity, run_id)}
+        if (row.get("settings") or {}).get("family") == "decision":
+            return {"cancelled": await decision_manager_for(deps).cancel(identity, run_id)}
         return {"cancelled": await run_manager_for(deps).cancel(identity, run_id)}
 
     @router.post("/runs/{run_id}/pause")
@@ -538,4 +552,5 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         )
 
     add_writing_routes(router, deps)
+    add_decision_routes(router, deps)
     return router

@@ -1,7 +1,7 @@
 ---
 action: train.start
 screen: train
-synonyms: [teach it from examples, answer my way, my tone, my format, language model training, write like me, my writing style, train, teach, teach the app, make my own character, my own style, lora, fine tune, my mascot, my pet, my face, my art style, train a character, train a style, magic word, trigger word, custom model]
+synonyms: [teach it to decide, decision model training, teach it from examples, answer my way, my tone, my format, language model training, write like me, my writing style, train, teach, teach the app, make my own character, my own style, lora, fine tune, my mascot, my pet, my face, my art style, train a character, train a style, magic word, trigger word, custom model]
 ---
 # Teach a character or style
 
@@ -128,3 +128,55 @@ nothing is fetched until you press it.
 - **Say whose these examples are first** Choose one of the two statements on the Check step.
 - **A model is being taught** Wait for it to finish or stop it.
 - **Training is not set up on this computer yet** Choose Download and set up on the Train screen.
+
+---
+
+## Teaching it to decide (the same action, with `decision_set_id`)
+
+### What it is for
+
+Show a model texts with the right answer to one question about them, and it learns to answer that question about
+new texts, and to say how sure it is. The answer is yes or no, one of your categories, or a score. It is taught on
+this computer and your texts are not sent anywhere. Afterwards the screen reports how often it was right on texts
+it had not seen, beside a plain word counter, where it went wrong, and whether its confidence can be trusted.
+
+### Steps in the app
+
+1. Open **Train models** and, under **Decision model training**, choose **Teach it to decide**.
+2. The first time, the app offers to set up the trainer and a small model (about 1 GB, shown first); nothing is
+   fetched until you press the button.
+3. Choose New set of examples. Write the question and choose yes or no, a category or a score. Add a text and the
+   right answer for each, or paste two columns from a spreadsheet. At least 20 are needed; 60 or more is a good start.
+4. Read the check: it leaves out empty and repeated rows and rows whose answer is not one of the options, and warns
+   about thin or lopsided answers, texts that appear twice with different answers, long texts and personal data.
+5. Say whose the texts are, and choose Teach it. It takes a minute or two on a Mac; chat and image making pause.
+6. Read the report, then choose **Try it** or **Sort a list**. The model is kept in My models, about 840 MB.
+
+To use the model for many languages or to take more care, open **Choose the model and method** (closed by default).
+All of the model is taught; it is not taught as a small adapter.
+
+### Fields
+
+- `decision_set_id`: Instead of `dataset_id`: the set of texts and answers to teach a decision model from. It needs the
+  question, at least 20 examples with at least two different answers, and the statement of whose they are.
+
+### Limits
+
+- One run at a time, and not while a picture or writing model is being taught.
+- A run needs about 13 GB of free memory. Each model it makes takes about 840 MB on disk.
+- Only English (or the many-languages model) is read; texts are read up to about 2,000 characters.
+
+### Needs
+
+- A Mac with Apple silicon, the trainer (PyTorch and Laya, set up in the app) and about 3 GB of free disk space.
+
+### Examples
+
+- Teach it to decide from the set "Support messages".
+
+### Problems
+
+- **Add at least 20 examples** Add more texts with their answers; 60 or more is better.
+- **Every example has the same answer** Add examples with the other answers too.
+- **Say whose these texts are first** Choose one of the two statements on the Check step.
+- **A model is being taught** Wait for it to finish or stop it.

@@ -1316,6 +1316,137 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-training/train/decision/models/{model_id}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask
+         * @description One text, to the model that was taught and to the one it started from, side by side.
+         */
+        post: operations["ask_products_wasifyai_training_train_decision_models__model_id__ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/decision/models/{model_id}/sort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sort
+         * @description Many texts, each with its answer and how sure the model is.
+         */
+        post: operations["sort_products_wasifyai_training_train_decision_models__model_id__sort_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/decision/sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sets */
+        get: operations["list_sets_products_wasifyai_training_train_decision_sets_get"];
+        put?: never;
+        /** Make Set */
+        post: operations["make_set_products_wasifyai_training_train_decision_sets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/decision/sets/{set_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Set */
+        get: operations["get_set_products_wasifyai_training_train_decision_sets__set_id__get"];
+        put?: never;
+        post?: never;
+        /** Remove Set */
+        delete: operations["remove_set_products_wasifyai_training_train_decision_sets__set_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Set */
+        patch: operations["patch_set_products_wasifyai_training_train_decision_sets__set_id__patch"];
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/decision/sets/{set_id}/examples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Examples
+         * @description Replace the examples with these rows, as typed: the checks say what will be left out.
+         */
+        put: operations["put_examples_products_wasifyai_training_train_decision_sets__set_id__examples_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/decision/sets/{set_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Run */
+        post: operations["start_run_products_wasifyai_training_train_decision_sets__set_id__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/decision/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Decision Status */
+        get: operations["decision_status_products_wasifyai_training_train_decision_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-training/train/models": {
         parameters: {
             query?: never;
@@ -2724,11 +2855,6 @@ export interface components {
             /** Users */
             users: components["schemas"]["AdminUser"][];
         };
-        /** AskIn */
-        AskIn: {
-            /** Question */
-            question: string;
-        };
         /**
          * AttachOptions
          * @description Attaching files to a message (ADR-0083, CO2): what this engine and the model in use take.
@@ -3026,6 +3152,37 @@ export interface components {
             rights?: string | null;
             /** Trigger Word */
             trigger_word?: string | null;
+        };
+        /** DecisionSetIn */
+        DecisionSetIn: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+        };
+        /** DecisionSetPatch */
+        DecisionSetPatch: {
+            /** Base */
+            base?: string | null;
+            /** High */
+            high?: string | null;
+            /** Kind */
+            kind?: string | null;
+            /** Levels */
+            levels?: number | null;
+            /** Low */
+            low?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Options */
+            options?: components["schemas"]["OptionIn"][] | null;
+            /** Quality */
+            quality?: string | null;
+            /** Question */
+            question?: string | null;
+            /** Rights */
+            rights?: string | null;
         };
         /** DocumentPatch */
         DocumentPatch: {
@@ -3629,6 +3786,16 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /** OptionIn */
+        OptionIn: {
+            /**
+             * About
+             * @default
+             */
+            about: string;
+            /** Label */
+            label: string;
+        };
         /**
          * OverviewVoices
          * @description Which model speaks the overview and which built-in voice each host has (both optional).
@@ -3742,6 +3909,18 @@ export interface components {
             interrupt_id?: string | null;
             /** Value */
             value?: unknown;
+        };
+        /** RowIn */
+        RowIn: {
+            /** Answer */
+            answer: string;
+            /** Text */
+            text: string;
+        };
+        /** RowsIn */
+        RowsIn: {
+            /** Rows */
+            rows: components["schemas"]["RowIn"][];
         };
         /** RunIn */
         RunIn: {
@@ -3921,6 +4100,11 @@ export interface components {
             provider?: string | null;
             /** Remove Key */
             remove_key?: string | null;
+        };
+        /** SortIn */
+        SortIn: {
+            /** Texts */
+            texts: string[];
         };
         SseEvent: components["schemas"]["NodeEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["ReasoningEvent"] | components["schemas"]["InterruptEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["JobProgressEvent"] | components["schemas"]["ErrorEvent"] | components["schemas"]["DoneEvent"];
         /** TestOutcome */
@@ -4217,10 +4401,20 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** AskIn */
+        wasifyai_training__decision_routes__AskIn: {
+            /** Text */
+            text: string;
+        };
         /** RenameIn */
         wasifyai_training__routes__RenameIn: {
             /** Name */
             name: string;
+        };
+        /** AskIn */
+        wasifyai_training__writing_routes__AskIn: {
+            /** Question */
+            question: string;
         };
     };
     responses: never;
@@ -7361,6 +7555,339 @@ export interface operations {
             };
         };
     };
+    ask_products_wasifyai_training_train_decision_models__model_id__ask_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["wasifyai_training__decision_routes__AskIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sort_products_wasifyai_training_train_decision_models__model_id__sort_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SortIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sets_products_wasifyai_training_train_decision_sets_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    make_set_products_wasifyai_training_train_decision_sets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionSetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_set_products_wasifyai_training_train_decision_sets__set_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_set_products_wasifyai_training_train_decision_sets__set_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_set_products_wasifyai_training_train_decision_sets__set_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionSetPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_examples_products_wasifyai_training_train_decision_sets__set_id__examples_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RowsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_run_products_wasifyai_training_train_decision_sets__set_id__runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decision_status_products_wasifyai_training_train_decision_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     list_models_products_wasifyai_training_train_models_get: {
         parameters: {
             query?: {
@@ -7892,7 +8419,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AskIn"];
+                "application/json": components["schemas"]["wasifyai_training__writing_routes__AskIn"];
             };
         };
         responses: {

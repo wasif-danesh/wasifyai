@@ -132,7 +132,7 @@ class WritingRunManager:
             if "not on this computer" in why:
                 why = f"{chosen.title} is not on this computer yet. Get it first, next to its name."
             raise Refused("not_ready", why)
-        if self.busy() or run_manager_for(self._deps).busy():
+        if self.busy() or run_manager_for(self._deps).busy() or decision_busy(self._deps):
             raise Refused("busy", "A model is being taught. Wait for it to finish.")
         examples, _ = language.clean(
             store.list_examples(identity.tenant_id, identity.user_id, set_id)
@@ -255,6 +255,12 @@ class WritingRunManager:
         await asyncio.to_thread(target.parent.mkdir, parents=True, exist_ok=True)
         await asyncio.to_thread(shutil.move, str(result.adapter), str(target))
         return model
+
+
+def decision_busy(deps: RouteDeps) -> bool:
+    """Whether a decision model is being taught (they share the one big-model slot)."""
+    found = getattr(deps.state, "decision_runs", None)
+    return bool(found is not None and found.busy())
 
 
 def adapter_of(store: Any, identity: Identity, model_id: str) -> Path:

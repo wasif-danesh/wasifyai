@@ -384,7 +384,8 @@ class RunManager:
         engine, store = engine_for(state), store_for(state)
         if not engine.ready():
             raise Refused("not_ready", not_ready(engine))
-        if self.busy():
+        others = (getattr(state, name, None) for name in ("writing_runs", "decision_runs"))
+        if self.busy() or any(o is not None and o.busy() for o in others):
             raise Refused("busy", "A model is being taught. Wait for it to finish.")
         dataset = store.get_dataset(identity.tenant_id, identity.user_id, dataset_id)
         items = store.list_items(identity.tenant_id, identity.user_id, dataset_id)

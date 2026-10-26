@@ -8,7 +8,7 @@ export const TRAINING_PRODUCT_ID = "wasifyai-training";
 export type TrainKind = "character" | "style" | "object";
 
 /** What a trained model is: pictures of one of the three kinds, or how a person writes. */
-export type TrainedKind = TrainKind | "writing";
+export type TrainedKind = TrainKind | "writing" | "decision";
 export type Statement = "mine" | "permission" | "drawing" | "artwork";
 
 export type TrainPreflight = {
@@ -260,6 +260,142 @@ export type WritingStatus = {
 
 export type WritingAsk = { question: string; original: string; mine: string };
 
+// ---- "Teach it to decide" (ADR-0075) -------------------------------------------------------------
+
+export type DecisionKind = "yes_no" | "category" | "score";
+export type DecisionOption = { label: string; about: string };
+
+/** A text and its right answer: "yes" or "no", one of the categories, or a level as a number. */
+export type DecisionExample = { text: string; answer: string };
+
+/** What the model is asked about every text. */
+export type DecisionQuestion = {
+  kind: DecisionKind;
+  text: string;
+  levels: number;
+  low: string;
+  high: string;
+  options: DecisionOption[];
+};
+
+export type DecisionPlan = {
+  examples: number;
+  dropped: string[];
+  checks: WritingCheck[];
+  /** how many examples there are of each answer */
+  counts: Record<string, number>;
+  steps: number;
+  passes: number;
+  estimate: string;
+  base: string;
+  base_title: string;
+  base_note: string;
+  held_back: number;
+  missing: string | null;
+};
+
+export type DecisionSet = {
+  id: string;
+  name: string;
+  kind: DecisionKind;
+  question: string;
+  options: DecisionOption[];
+  levels: number;
+  low: string;
+  high: string;
+  quality: WritingQuality;
+  base: string;
+  rights: WritingRights | "";
+  created_at: string;
+  examples: number;
+  missing: string | null;
+  steps: number;
+  estimate: string;
+  /** with the whole set */
+  rows?: DecisionExample[];
+  plan?: DecisionPlan;
+  /** every answer it can give, in order */
+  answers?: string[];
+  /** what is wrong with the question itself, in words */
+  problem?: string | null;
+};
+
+export type DecisionPatch = {
+  name?: string;
+  kind?: DecisionKind;
+  question?: string;
+  options?: DecisionOption[];
+  levels?: number;
+  low?: string;
+  high?: string;
+  quality?: WritingQuality;
+  base?: string;
+  rights?: WritingRights;
+};
+
+export type DecisionStatus = {
+  ready: boolean;
+  problem: string | null;
+  engine: Record<string, unknown>;
+  fit: { verdict: "fits" | "tight" | "too_big"; reason: string } | null;
+  busy: boolean;
+  active_run: string | null;
+  place: "device" | "service";
+  min_examples: number;
+  good_examples: number;
+  min_per_answer: number;
+  max_options: number;
+  /** the fewest, the most and the usual number of levels of a score */
+  levels: [number, number, number];
+  kinds: DecisionKind[];
+  rights: WritingRights[];
+  qualities: WritingQuality[];
+  choices: TrainChoices;
+  bases: DecisionBase[];
+};
+
+/** A model a decision model can be taught on, and what of it is on this computer. */
+export type DecisionBase = {
+  id: string;
+  title: string;
+  licence: string;
+  source: string;
+  main: boolean;
+  problem: string | null;
+  model: LanguagePart;
+};
+
+/** An answer, how sure the model is (0 to 1) and its share for every answer. */
+export type Said = { answer: string; confidence: number; shares: Record<string, number> };
+
+export type DecisionReport = {
+  texts: number;
+  right: { before: number; after: number; word_counter: number; exactly: number };
+  percent: { before: number; after: number; word_counter: number };
+  per_answer: { answer: string; of: number; right: number }[];
+  mix_ups: { right: string; said: string; times: number }[];
+  confidence: { note: string; sure: number; sure_right: number };
+  wrong: { text: string; right: string; said: string; confidence: number }[];
+  passed: boolean | null;
+  note: string;
+};
+
+export type DecisionAsk = {
+  question: string;
+  kind: DecisionKind;
+  answers: string[];
+  mine: Said;
+  /** the model it started from, before it was taught */
+  original: Said | null;
+};
+
+export type DecisionSorted = {
+  question: string;
+  kind: DecisionKind;
+  answers: string[];
+  results: Said[];
+};
+
 export type TrainedModel = {
   id: string;
   run_id: string;
@@ -285,11 +421,17 @@ export type TrainedModel = {
     };
     /** a language model: the same questions asked before and after, and the loss on answers kept back */
     answers?: WritingAnswer[];
-    loss?: {
-      first_held_back: number | null;
-      last_held_back: number | null;
-      last_train: number | null;
-    };
+    loss?:
+      | {
+          first_held_back: number | null;
+          last_held_back: number | null;
+          last_train: number | null;
+        }
+      | number[];
+    /** a decision model: its question, the report on texts kept back and a few texts before and after */
+    question?: DecisionQuestion;
+    report?: DecisionReport;
+    peek?: { text: string; before: Said; after: Said }[];
     steps: number;
     seconds: number;
     trigger_word: string;
@@ -417,6 +559,29 @@ export type TrainingApi = {
     confirmBytes: number,
   ): Promise<LanguageBase[]>;
   cancelLanguagePart(baseId: string, part: "model" | "chat"): Promise<LanguageBase[]>;
+  /** The decision trainer's component (ADR-0075), set up the same way. */
+  decisionSetup(): Promise<TrainingSetupState>;
+  installDecisionSetup(confirmBytes: number): Promise<TrainingSetupState>;
+  cancelDecisionSetup(): Promise<TrainingSetupState>;
+  removeDecisionSetup(): Promise<{ freed_bytes: number } & TrainingSetupState>;
+  /** "Teach it to decide": sets of texts with answers to one question, a run, the report. */
+  decisionStatus(): Promise<DecisionStatus>;
+  decisionSets(): Promise<DecisionSet[]>;
+  createDecisionSet(name?: string): Promise<DecisionSet>;
+  decisionSet(id: string): Promise<DecisionSet>;
+  updateDecisionSet(id: string, patch: DecisionPatch): Promise<DecisionSet>;
+  /** Replace the examples of a set with these rows. */
+  setDecisionExamples(id: string, rows: DecisionExample[]): Promise<DecisionSet>;
+  removeDecisionSet(id: string): Promise<void>;
+  startDecisionRun(setId: string): Promise<TrainRun>;
+  /** One text, to the model that was taught and to the one it started from. */
+  askDecision(modelId: string, text: string): Promise<DecisionAsk>;
+  /** Many texts, each with its answer. */
+  sortDecision(modelId: string, texts: string[]): Promise<DecisionSorted>;
+  /** What is on this computer for each model a decision model can be taught on. */
+  decisionBases(): Promise<DecisionBase[]>;
+  installDecisionBase(baseId: string, confirmBytes: number): Promise<DecisionBase[]>;
+  cancelDecisionBase(baseId: string): Promise<DecisionBase[]>;
 };
 
 export function createTrainingApi(
@@ -517,6 +682,50 @@ export function createTrainingApi(
           { method: "POST" },
         )
       ).bases,
+    decisionStatus: () => json<DecisionStatus>(`${base}/decision/status`),
+    decisionSets: async () => (await json<{ sets: DecisionSet[] }>(`${base}/decision/sets`)).sets,
+    createDecisionSet: (name = "") =>
+      json<DecisionSet>(`${base}/decision/sets`, send("POST", { name })),
+    decisionSet: (id) => json<DecisionSet>(`${base}/decision/sets/${enc(id)}`),
+    updateDecisionSet: (id, patch) =>
+      json<DecisionSet>(`${base}/decision/sets/${enc(id)}`, send("PATCH", patch)),
+    setDecisionExamples: (id, rows) =>
+      json<DecisionSet>(`${base}/decision/sets/${enc(id)}/examples`, send("PUT", { rows })),
+    removeDecisionSet: (id) => del(`${base}/decision/sets/${enc(id)}`),
+    startDecisionRun: (setId) =>
+      json<TrainRun>(`${base}/decision/sets/${enc(setId)}/runs`, { method: "POST" }),
+    askDecision: (modelId, text) =>
+      json<DecisionAsk>(`${base}/decision/models/${enc(modelId)}/ask`, send("POST", { text })),
+    sortDecision: (modelId, texts) =>
+      json<DecisionSorted>(`${base}/decision/models/${enc(modelId)}/sort`, send("POST", { texts })),
+    decisionBases: async () =>
+      (await json<{ bases: DecisionBase[] }>("/desktop/decision-setup/bases")).bases,
+    installDecisionBase: async (baseId, confirmBytes) =>
+      (
+        await json<{ bases: DecisionBase[] }>(
+          `/desktop/decision-setup/bases/${enc(baseId)}/install`,
+          send("POST", { confirm_bytes: confirmBytes }),
+        )
+      ).bases,
+    cancelDecisionBase: async (baseId) =>
+      (
+        await json<{ bases: DecisionBase[] }>(
+          `/desktop/decision-setup/bases/${enc(baseId)}/cancel`,
+          { method: "POST" },
+        )
+      ).bases,
+    decisionSetup: () => json<TrainingSetupState>("/desktop/decision-setup"),
+    installDecisionSetup: (confirmBytes) =>
+      json<TrainingSetupState>(
+        "/desktop/decision-setup/install",
+        send("POST", { confirm_bytes: confirmBytes }),
+      ),
+    cancelDecisionSetup: () =>
+      json<TrainingSetupState>("/desktop/decision-setup/install/cancel", { method: "POST" }),
+    removeDecisionSetup: () =>
+      json<{ freed_bytes: number } & TrainingSetupState>("/desktop/decision-setup/uninstall", {
+        method: "POST",
+      }),
     askWriting: (modelId, question) =>
       json<WritingAsk>(`${base}/writing/models/${enc(modelId)}/ask`, send("POST", { question })),
     runs: async () => (await json<{ runs: TrainRun[] }>(`${base}/runs`)).runs,

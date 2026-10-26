@@ -17,7 +17,7 @@ from wasifyai_platform_sdk import Identity, RouteDeps
 from wasifyai_training import bases, gguf_lora, language
 from wasifyai_training.runtime import Refused, model_or_none, run_manager_for, store_for
 from wasifyai_training.store import QUALITIES, WRITING_RIGHTS, NotFound
-from wasifyai_training.writing import KIND, adapter_of, engine_for, manager_for
+from wasifyai_training.writing import KIND, adapter_of, decision_busy, engine_for, manager_for
 
 
 def clean(row: dict[str, Any]) -> dict[str, Any]:
@@ -250,7 +250,7 @@ def add_writing_routes(router: APIRouter, deps: RouteDeps) -> None:
         row = model_or_none(deps, identity, model_id)
         if row is None or row["kind"] != KIND:
             raise HTTPException(404, "trained model not found")
-        if manager_for(deps).busy() or run_manager_for(deps).busy():
+        if manager_for(deps).busy() or run_manager_for(deps).busy() or decision_busy(deps):
             raise HTTPException(
                 409, {"code": "busy", "message": "A model is being taught. Wait for it to finish."}
             )

@@ -156,6 +156,6 @@ sentence under it says only what the numbers allow; storing the series grows the
 
 ## After these three
 
-Decision (sorting) training with a spike first (ADR-0075; Laya measured at 9 s on this Mac in T0); Hugging Face datasets by name (D1b);
+Decision training (**built 2026-10-26 as "Teach it to decide", ADR-0075; its data in is the typed grid, a paste and a CSV file, so D1 below also serves it**); Hugging Face datasets by name (D1b);
 vision and embedding language models; merged-model and standalone GGUF export; synthetic data (Unsloth's "data recipes"); an
 OpenAI-compatible server with keys. Each is its own plan; none is started.

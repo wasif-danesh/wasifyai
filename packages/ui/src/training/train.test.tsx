@@ -306,6 +306,52 @@ function fake(over: Partial<TrainStatus> = {}) {
     askWriting: async () => {
       throw new Error("not in this test");
     },
+    // the decision screen has its own tests (decide.test.tsx)
+    decisionSetup: async () => {
+      throw new Error("not in this test");
+    },
+    installDecisionSetup: async () => {
+      throw new Error("not in this test");
+    },
+    cancelDecisionSetup: async () => {
+      throw new Error("not in this test");
+    },
+    removeDecisionSetup: async () => {
+      throw new Error("not in this test");
+    },
+    decisionStatus: async () => {
+      throw new Error("not in this test");
+    },
+    decisionSets: async () => [],
+    createDecisionSet: async () => {
+      throw new Error("not in this test");
+    },
+    decisionSet: async () => {
+      throw new Error("not in this test");
+    },
+    updateDecisionSet: async () => {
+      throw new Error("not in this test");
+    },
+    setDecisionExamples: async () => {
+      throw new Error("not in this test");
+    },
+    removeDecisionSet: async () => {},
+    startDecisionRun: async () => {
+      throw new Error("not in this test");
+    },
+    askDecision: async () => {
+      throw new Error("not in this test");
+    },
+    sortDecision: async () => {
+      throw new Error("not in this test");
+    },
+    decisionBases: async () => [],
+    installDecisionBase: async () => {
+      throw new Error("not in this test");
+    },
+    cancelDecisionBase: async () => {
+      throw new Error("not in this test");
+    },
     removeSetup: async () => {
       throw new Error("not available");
     },
@@ -384,15 +430,17 @@ const file = (name: string) =>
   new File([new Uint8Array([137, 80, 78, 71])], name, { type: "image/png" });
 
 describe("Train", () => {
-  it("opens on four cards, says it is a preview, and the picture and writing cards are live", async () => {
+  it("opens on four cards, says it is a preview, and the picture, writing and decision cards are live", async () => {
     const { api } = fake();
     render(<Train api={api} pollMs={10} />);
     expect(await screen.findByText("A preview")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Make my own character or style" })).toBeTruthy();
-    expect(screen.getAllByText(/Coming next/)).toHaveLength(1);
+    expect(screen.queryByText(/Coming next/)).toBeNull();
     expect(
       screen.getByRole("button", { name: /Start: teach it from examples/ }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Teach it to decide" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Start: teach it to decide/ })).toBeInTheDocument();
     // each card says which kind of model it trains, and the video one says what it needs
     for (const label of [
       "Image model training",

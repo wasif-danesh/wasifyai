@@ -23,6 +23,8 @@ from wasifyai_platform_sdk.actions import (
 )
 from wasifyai_platform_sdk.actions.helpers import need_deps
 
+from wasifyai_training.decisions import CannotDecide, decide
+from wasifyai_training.decisions import manager_for as decision_manager_for
 from wasifyai_training.runtime import (
     KIND,
     PRODUCT_ID,
@@ -41,6 +43,7 @@ from wasifyai_training.store import NotFound
 from wasifyai_training.writing import manager_for as writing_manager_for
 
 ENGINE = need_runtime("training")
+DECIDER = need_runtime("decision_training")
 SAMPLE_ID = "0b7c1f9e0000400080000000deadbeef"
 
 
@@ -58,6 +61,13 @@ class StartIn(BaseModel):
         "screen under 'Teach it from examples', with at least 10 questions and "
         "answers and a statement of whose they are. Give this or dataset_id, not both.",
     )  # fmt: skip
+    decision_set_id: str | None = Field(
+        default=None, min_length=32, max_length=32,
+        description="Or the set of texts and answers to teach a decision model from: made on the "
+        "Train screen under 'Teach it to decide', with one question, at least 20 texts with their "
+        "answers and a statement of whose they are. Give one of dataset_id, set_id or "
+        "decision_set_id.",
+    )  # fmt: skip
     base: str | None = Field(
         default=None,
         max_length=80,
@@ -73,8 +83,12 @@ class StartIn(BaseModel):
 
     @model_validator(mode="after")
     def _one_set(self) -> "StartIn":
-        if (self.dataset_id is None) == (self.set_id is None):
-            raise ValueError("Give dataset_id (pictures) or set_id (writing examples), not both.")
+        given = [x for x in (self.dataset_id, self.set_id, self.decision_set_id) if x is not None]
+        if len(given) != 1:
+            raise ValueError(
+                "Give exactly one of dataset_id (pictures), set_id (writing examples) or "
+                "decision_set_id (texts and answers)."
+            )
         return self
 
 
@@ -89,8 +103,59 @@ class StartOut(BaseModel):
     magic_word: str = ""  # pictures: the word that draws it
     preview: bool = False
     examples: int = 0  # writing: how many examples it learnt from
-    passed: bool | None = None  # writing: whether the check says it learnt
-    verdict: str = ""  # writing: that, in a sentence
+    passed: bool | None = None  # writing and deciding: whether the check says it learnt
+    verdict: str = ""  # writing and deciding: that, in a sentence
+
+
+class DecideIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    model_id: str = Field(
+        min_length=32, max_length=32,
+        description="The decision model to ask: one made on the Train screen under 'Teach it to "
+        "decide' (its id is in the library).",
+    )  # fmt: skip
+    texts: list[str] = Field(
+        min_length=1, max_length=100,
+        description="The texts to decide about, up to 100. Each is answered on its own.",
+    )  # fmt: skip
+
+
+class Decided(BaseModel):
+    text: str
+    answer: str  # yes or no, one of the categories, or a level
+    confidence: float  # how sure it is, 0 to 1
+
+
+class DecideOut(BaseModel):
+    question: str
+    kind: str  # yes_no, category or score
+    answers: list[str]  # every answer it can give
+    results: list[Decided]
+
+
+async def _decide(p: DecideIn, ctx: ActionContext) -> Outcome:
+    try:
+        got = await decide(need_deps(ctx), ctx.actor, p.model_id, p.texts)
+    except CannotDecide as e:
+        return Outcome.refused(e.message, e.code)
+    results = [
+        {"text": t, "answer": r["answer"], "confidence": r["confidence"]}
+        for t, r in zip(p.texts, got["results"], strict=True)
+    ]
+    first = results[0]
+    one = (
+        f"{got['question']} {first['answer']} ({round(first['confidence'] * 100)} percent sure)."
+        if len(results) == 1
+        else f"Decided {len(results)} texts: {got['question']}"
+    )
+    return Outcome.ok(
+        {
+            "question": got["question"], "kind": got["kind"],
+            "answers": got["answers"], "results": results,
+        },
+        one,
+    )  # fmt: skip
 
 
 def _item(row: dict[str, Any]) -> LibraryItem:
@@ -132,7 +197,41 @@ async def _start_writing(p: StartIn, ctx: ActionContext) -> Outcome:
     )  # fmt: skip
 
 
+async def _start_decision(p: StartIn, ctx: ActionContext) -> Outcome:
+    deps = need_deps(ctx)
+    store = store_for(deps.state)
+    runs = decision_manager_for(deps)
+    try:
+        row = await runs.start(ctx.actor, str(p.decision_set_id))
+    except NotFound:
+        return Outcome.refused("That set of examples does not exist.", "not_found")
+    except (Refused, NotAvailable) as e:
+        return Outcome.refused(str(getattr(e, "message", e)), getattr(e, "code", "not_ready"))
+    try:
+        await runs.wait(row["id"])
+    except asyncio.CancelledError:
+        await runs.cancel(ctx.actor, row["id"])
+        raise
+    done = store.get_run(ctx.actor.tenant_id, ctx.actor.user_id, row["id"])
+    if done["status"] != "done" or not done["model_id"]:
+        return Outcome.error(done["error"] or "The model could not be taught.", "failed")
+    model = store.get_model(ctx.actor.tenant_id, ctx.actor.user_id, done["model_id"])
+    verdict = model["card"]["evaluation"]
+    examples = model["card"]["dataset"]["examples"]
+    return Outcome.ok(
+        {
+            "run_id": done["id"], "model_id": model["id"], "product_id": PRODUCT_ID,
+            "uri": f"wasify://creation/lora/{model['id']}", "name": model["name"],
+            "steps": done["steps"], "seconds": round(done["elapsed_s"] or 0),
+            "examples": examples, "passed": verdict["passed"], "verdict": verdict["note"],
+        },
+        f'"{model["name"]}" was taught from {examples} examples. {verdict["note"]}',
+    )  # fmt: skip
+
+
 async def _start(p: StartIn, ctx: ActionContext) -> Outcome:
+    if p.decision_set_id is not None:
+        return await _start_decision(p, ctx)
     if p.set_id is not None:
         return await _start_writing(p, ctx)
     deps = need_deps(ctx)
@@ -274,6 +373,30 @@ def actions() -> list[Action]:
             long=True,
             bind=CallBinding(_start),
             **common,
+        ),
+        Action(
+            id="decision.decide",
+            title="Decide with a model I taught",
+            summary="Ask a decision model for its answer to a question about some texts.",
+            description=(
+                "Ask a decision model the person taught (under 'Teach it to decide' on the Train "
+                "screen) to answer its question about one or more texts. The question was chosen "
+                "when it was taught: yes or no ('Is this review positive?'), one of several "
+                "categories ('billing, bug or other') or a score ('how angry, 1 to 5'). Each text "
+                "comes back with its answer and how sure the model is, from 0 to 1, which can be "
+                "trusted about as much as the model's own report says. It is quick (a second or "
+                "two for a hundred texts, after the model loads) and runs on this computer. It "
+                "is not for deciding about a person's job, credit or safety."
+            ),
+            input=DecideIn,
+            output=DecideOut,
+            examples=({"model_id": SAMPLE_ID, "texts": ["I was charged twice this month."]},),
+            effect="read",
+            flags=(),
+            bind=CallBinding(_decide),
+            requires=(need_product(PRODUCT_ID), DECIDER),
+            product=PRODUCT_ID,
+            ui="train",
         ),
     ]
 

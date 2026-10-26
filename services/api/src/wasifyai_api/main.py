@@ -71,6 +71,7 @@ from wasifyai_api.creation_index import (
     reconcile_forever,
 )
 from wasifyai_api.creations import router as creations_router
+from wasifyai_api.decision_setup import router as decision_setup_router
 from wasifyai_api.desktop import files_router, open_desktop
 from wasifyai_api.desktop_audio import router as desktop_audio_router
 from wasifyai_api.desktop_discovery import router as desktop_discovery_router
@@ -634,6 +635,8 @@ def create_app(
             app.state.training = desktop.training  # the trainer: mflux on a Mac (ADR-0073)
             app.state.language_training = desktop.writing  # mlx-lm on a Mac (ADR-0074)
             app.state.language_setup = desktop.language_setup  # its component, set up on request
+            app.state.decision_training = desktop.deciding  # Laya on a Mac (ADR-0075)
+            app.state.decision_setup = desktop.decision_setup  # its component, set up on request
             if desktop.video_builder is not None:  # and the model it asks to fill a template
                 desktop.video_builder.language = desktop.language
                 desktop.video_builder.usage = recorder
@@ -768,6 +771,7 @@ def create_app(
         app.include_router(desktop_model3d_router)
         app.include_router(training_setup_router)
         app.include_router(language_setup_router)
+        app.include_router(decision_setup_router)
         app.include_router(desktop_save_router)
         app.include_router(desktop_discovery_router)
         app.include_router(desktop_llm_router)

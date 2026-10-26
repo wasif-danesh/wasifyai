@@ -27,6 +27,7 @@ WRITING_RIGHTS = (
     "permission",
 )  # whose the examples are: the text is the person's own writing
 QUALITIES = ("quick", "better")
+DECISION_KINDS = ("yes_no", "category", "score")
 
 
 class NotFound(Exception):
@@ -89,6 +90,18 @@ CREATE TABLE IF NOT EXISTS examples(
   position INTEGER NOT NULL, ask TEXT NOT NULL, answer TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS writing_sets_owner ON writing_sets(tenant_id, user_id, created_at);
 CREATE INDEX IF NOT EXISTS examples_set ON examples(set_id, position);
+CREATE TABLE IF NOT EXISTS decision_sets(
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
+  name TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT 'yes_no' CHECK (kind IN ('yes_no', 'category', 'score')),
+  question TEXT NOT NULL DEFAULT '', options TEXT NOT NULL DEFAULT '[]', levels INTEGER NOT NULL DEFAULT 5,
+  low TEXT NOT NULL DEFAULT '', high TEXT NOT NULL DEFAULT '',
+  quality TEXT NOT NULL DEFAULT 'quick' CHECK (quality IN ('quick', 'better')),
+  base TEXT NOT NULL DEFAULT '', rights TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS decision_examples(
+  id TEXT PRIMARY KEY, set_id TEXT NOT NULL, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
+  position INTEGER NOT NULL, text TEXT NOT NULL, answer TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS decision_sets_owner ON decision_sets(tenant_id, user_id, created_at);
+CREATE INDEX IF NOT EXISTS decision_examples_set ON decision_examples(set_id, position);
 """
 )
 
@@ -510,3 +523,113 @@ class TrainingStore:
             (item, tenant, user),
         )
         return [{"ask": r["ask"], "answer": r["answer"]} for r in rows]
+
+    # ---- decision sets: texts with the right answers to one question (ADR-0075) -----------------
+
+    def add_decision_set(self, tenant: str, user: str, name: str) -> dict[str, Any]:
+        item = new_id()
+        self._exec(
+            "INSERT INTO decision_sets(id, tenant_id, user_id, name, created_at) VALUES (?,?,?,?,?)",
+            (item, tenant, user, name.strip()[:60], now()),
+        )
+        return self.get_decision_set(tenant, user, item)
+
+    @staticmethod
+    def _decision_set(row: sqlite3.Row) -> dict[str, Any]:
+        out = dict(row)
+        out["options"] = json.loads(out["options"] or "[]")
+        return out
+
+    def get_decision_set(self, tenant: str, user: str, item: str) -> dict[str, Any]:
+        row = self._one(
+            "SELECT * FROM decision_sets WHERE id = ? AND tenant_id = ? AND user_id = ?",
+            (item, tenant, user),
+        )
+        if row is None:
+            raise NotFound(item)
+        return self._decision_set(row)
+
+    def list_decision_sets(self, tenant: str, user: str, limit: int = 50) -> list[dict[str, Any]]:
+        rows = self._all(
+            "SELECT * FROM decision_sets WHERE tenant_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT ?",
+            (tenant, user, limit),
+        )
+        return [self._decision_set(r) for r in rows]
+
+    def update_decision_set(
+        self, tenant: str, user: str, item: str, **fields: Any
+    ) -> dict[str, Any]:
+        keys = {
+            "name",
+            "kind",
+            "question",
+            "options",
+            "levels",
+            "low",
+            "high",
+            "quality",
+            "base",
+            "rights",
+        }
+        sets = {k: v for k, v in fields.items() if k in keys}
+        if "quality" in sets and sets["quality"] not in QUALITIES:
+            raise ValueError("quality")
+        if "kind" in sets and sets["kind"] not in DECISION_KINDS:
+            raise ValueError("kind")
+        if "rights" in sets and sets["rights"] not in (*WRITING_RIGHTS, ""):
+            raise ValueError("rights")
+        for k, limit in (("name", 60), ("question", 300), ("low", 200), ("high", 200)):
+            if k in sets:
+                sets[k] = str(sets[k]).strip()[:limit]
+        if "options" in sets:
+            sets["options"] = json.dumps(
+                [
+                    {
+                        "label": str(o.get("label", "")).strip()[:60],
+                        "about": str(o.get("about", "")).strip()[:200],
+                    }
+                    for o in sets["options"]
+                ][:30]
+            )
+        if sets:
+            cols = ", ".join(f"{k} = ?" for k in sets)
+            n = self._exec(
+                f"UPDATE decision_sets SET {cols} WHERE id = ? AND tenant_id = ? AND user_id = ?",
+                (*sets.values(), item, tenant, user),
+            )
+            if n == 0:
+                raise NotFound(item)
+        return self.get_decision_set(tenant, user, item)
+
+    def delete_decision_set(self, tenant: str, user: str, item: str) -> bool:
+        n = self._exec(
+            "DELETE FROM decision_sets WHERE id = ? AND tenant_id = ? AND user_id = ?",
+            (item, tenant, user),
+        )
+        if n:
+            self._exec("DELETE FROM decision_examples WHERE set_id = ?", (item,))
+        return n > 0
+
+    def set_decision_examples(
+        self, tenant: str, user: str, item: str, rows: list[dict[str, str]]
+    ) -> int:
+        """Replace the examples of a set with `rows` (`text` and `answer`), in order."""
+        self.get_decision_set(tenant, user, item)  # the owner's, or NotFound
+        with self._lock:
+            self._db.execute("DELETE FROM decision_examples WHERE set_id = ?", (item,))
+            self._db.executemany(
+                "INSERT INTO decision_examples(id, set_id, tenant_id, user_id, position, text, answer) VALUES (?,?,?,?,?,?,?)",
+                [
+                    (new_id(), item, tenant, user, n, r["text"], r["answer"])
+                    for n, r in enumerate(rows)
+                ],
+            )
+            self._db.commit()
+        return len(rows)
+
+    def list_decision_examples(self, tenant: str, user: str, item: str) -> list[dict[str, str]]:
+        rows = self._all(
+            "SELECT text, answer FROM decision_examples WHERE set_id = ? AND tenant_id = ? AND user_id = ? ORDER BY position",
+            (item, tenant, user),
+        )
+        return [{"text": r["text"], "answer": r["answer"]} for r in rows]

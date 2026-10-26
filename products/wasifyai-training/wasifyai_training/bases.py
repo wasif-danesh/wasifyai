@@ -18,6 +18,7 @@ FAMILY_FOR_KIND = {
     "style": "image",
     "object": "image",
     "writing": "language",
+    "decision": "decision",
 }
 
 # id, the words, the technical name, Advanced only
@@ -118,6 +119,41 @@ DESCRIPTORS = (
             "(QLoRA).",
             "full": "Teaching all of a writing model needs an NVIDIA graphics card for now.",
         },
+    ),
+)
+
+_WHOLE = {
+    "lora": "This model is small, so all of it is taught. It is not taught as a small adapter.",
+    "qlora": "This model is small, so all of it is taught. It is not taught as a small adapter.",
+}
+DESCRIPTORS += (
+    Descriptor(
+        id="laya-english",
+        title="Laya",
+        family="decision",
+        engine="laya",
+        licence="Apache-2.0",
+        default_method="full",
+        need_gb=12.0,
+        seconds_per_step=0.85,
+        overhead_s=10.0,
+        note="Reads English texts and answers with how sure it is. Small and quick.",
+        measured="36 steps in 33 s, 11 GB, the whole run 41 s, on a 64 GB Mac (2026-10-26)",
+        methods_not=_WHOLE,
+    ),
+    Descriptor(
+        id="laya-multilingual",
+        title="Laya (many languages)",
+        family="decision",
+        engine="laya",
+        licence="Apache-2.0",
+        default_method="full",
+        need_gb=10.0,
+        seconds_per_step=0.7,
+        overhead_s=6.0,
+        note="For texts in more than 100 languages. A little slower to read long texts.",
+        measured="24 steps in 18 s, 9.3 GB, the whole run 22 s, on a 64 GB Mac (2026-10-26)",
+        methods_not=_WHOLE,
     ),
 )
 

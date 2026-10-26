@@ -38,6 +38,9 @@ from wasifyai_api.audio_runtime import AudioEngine, AudioInstaller, AudioServer
 from wasifyai_api.comfy_music import ComfyMusic
 from wasifyai_api.config import Settings
 from wasifyai_api.creation_index import IndexStore
+from wasifyai_api.decision_setup import LOCK_NAME as DECISION_LOCK_NAME
+from wasifyai_api.decision_setup import DecisionSetup
+from wasifyai_api.desktop_decision_training import LayaTrainer, make_decision_trainer
 from wasifyai_api.desktop_discovery import DiscoveryService
 from wasifyai_api.desktop_fit import assess_fit, need_declared, process_rss_bytes
 from wasifyai_api.desktop_hub import HubService
@@ -98,6 +101,8 @@ class DesktopBackends:
     training_setup: TrainingSetup | None = None  # the trainer's component, set up on request
     language_setup: LanguageSetup | None = None  # the writing trainer's component
     writing: MlxLmTrainer | None = None  # the language trainer: mlx-lm on a Mac (ADR-0074)
+    decision_setup: DecisionSetup | None = None  # the decision trainer's component
+    deciding: LayaTrainer | None = None  # the decision trainer: Laya on a Mac (ADR-0075)
     training: Any = None  # the trainer: a preview until the real one is installed (ADR-0073)
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
@@ -198,6 +203,13 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         cache_dir=cache if cache.is_dir() else None,
         base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
     )
+    decision_setup = DecisionSetup(
+        root,
+        lock=products / "wasifyai-training" / "trainer" / DECISION_LOCK_NAME,
+        uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
+        cache_dir=cache if cache.is_dir() else None,
+        base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
+    )
     return DesktopBackends(
         web=web,
         models=models,
@@ -210,6 +222,8 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         training=make_trainer(settings.desktop_dir, settings.models_dir, setup),
         language_setup=language_setup,
         writing=make_language_trainer(settings.desktop_dir),
+        decision_setup=decision_setup,
+        deciding=make_decision_trainer(settings.desktop_dir),
         language=language,
         vision=vision,
         hub=hub,
@@ -335,6 +349,8 @@ def _build_worker(d: DesktopBackends):
         owners["training"] = d.training.stop  # a training run holds most of the GPU
     if d.writing is not None:
         owners["writing"] = d.writing.stop  # so does teaching a writing model
+    if d.deciding is not None:
+        owners["deciding"] = d.deciding.stop  # and teaching it to decide
     if d.audio is not None:
         owners["audio"] = d.audio.stop  # the speech runtime is another owner of the one slot
         if d.audio.lipsync_sidecar is not None:
@@ -361,6 +377,8 @@ def _build_worker(d: DesktopBackends):
         d.training.slot = slot
     if d.writing is not None:
         d.writing.slot = slot
+    if d.deciding is not None:
+        d.deciding.slot = slot
     processor = JobProcessor(
         ws,
         d.event_log,

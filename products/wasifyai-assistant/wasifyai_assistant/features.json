@@ -224,9 +224,11 @@
   {
     "where": "Train models",
     "actions": [
+      "decision.decide",
       "train.start"
     ],
     "does": [
+      "Decide with a model I taught",
       "Teach a character or style"
     ]
   }

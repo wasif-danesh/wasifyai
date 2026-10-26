@@ -474,3 +474,10 @@ seed 42; scripts were kept outside the repository):
   beats 200 in likeness (no difference seen on one seed and four prompts), and that 512 px equals 768 px on the same data.
 - **Not done:** training the text-stream layers (needs the `txt_*` rename in `comfy_lora.py`, a different layer list) and an A/B of it; the in-app
   Try it on this recipe; a likeness score (only eyes, mine and the owner's).
+
+## Amendment (2026-10-26, owner): the decision card is built, and it is called "Teach it to decide"
+
+The third card is live. Its headline is **Teach it to decide** (the words "sort things" described only one of its three kinds); the
+family label stays "Decision model training". Engine, measurements and what is not built: ADR-0075, "Built (2026-10-26, later)". It is
+taught as a whole model (Laya: 420 million numbers), so decision 3's list of methods shows LoRA and QLoRA with the reason and the
+recommended method is "full" (the model is small enough to teach all of it; a run holds about 11 GB).

@@ -134,3 +134,70 @@ authors used; T0 reads them before anything ships. Clef sharing Qwen3.5-9B's bac
   licence file; it was **not run** (19 GB, not approved), and Studio's code suggests it may run on the Mac, so "GPU only"
   (decision 4) is untested rather than known.
 - **Stage T5: Go, with the licence question.** The `decision.decide` request shape is unchanged.
+
+## Amendment (2026-10-26, owner): the card is "Teach it to decide"
+
+"Teach it to sort" described only one of the three kinds (a category); the model also answers yes or no and gives a score. The
+card, the screen and the help are **"Teach it to decide"** (decision 1's three kinds keep their names: Yes or no, One of several,
+A score). The family label stays "Decision model training" so a person looking for it finds it. The example under the title is
+"Is this review positive?". Decision 1's words "Sorter" and "Teach it to sort" are replaced; the rest of the decision stands.
+
+## Built (2026-10-26, later): stage T5, "Teach it to decide" on the desktop
+
+Built, and run for real on the owner's Mac (M5 Pro, 64 GB), through the real routes and the real engine, with the app's own installer on a
+clean data folder. What is true:
+
+- **Engine: the `laya` package (Apache-2.0, 0.4.15) on PyTorch (MPS), not Unsloth's component.** Laya ships its own trainer
+  (`laya.train.finetune`: it splits off a tenth of the examples to fit how sure the model should be, trains, calibrates, and writes the
+  checkpoint `laya.load` reads). Using it directly removes the AGPL question of decision 5 for this family (the package carries its own
+  `LICENSE`; the weights repository has none and declares Apache-2.0 in its card, which is why `docs/credits.md` says so). **Laya teaches the
+  whole model** (420 million numbers), so a result is a full copy of about **846 MB**, not a small adapter, and the descriptor lists LoRA and
+  QLoRA as "all of it is taught", with the reason. The spike's Studio route did the same (`docs/spikes/training-t0.md`, section 5).
+- **Set up in the app (`decision_setup.py`, `decision_pins.json`):** the same shape as the writing trainer's. 35 packages from a committed
+  hashed lock (`scripts/lock-decision-trainer.sh`; torch 2.14.1, transformers 5.20.2, laya 0.4.15; **168 MB** of wheels by PyPI's metadata,
+  692 MB on disk) and the model's 5 files pinned by size and SHA-256 (`convaiinnovations/laya` at revision `7b928d82`, **846.2 MB**); the model
+  for many languages (`multilingual/`, mmBERT, **678.2 MB**) is fetched when it is chosen. **Run for real:** on a clean folder the screen's
+  offer was 1,013,795,574 bytes and the install took **66 s**, every file checked, `import laya, torch` passing from it; the multilingual model
+  came through the same downloader.
+- **The measurements** (real runs through `POST /train/decision/sets/{id}/runs`, texts written for these runs, so they show the pipeline works
+  and what it costs, not how good a sorter is on someone's data): yes or no (128 examples, 36 steps): **41 s** in all (33 s of learning), **11.0 GB**
+  peak; one of several (171 examples, 48 steps): **45 s**, 11.0 GB; a score 1 to 5 (79 examples, 24 steps): **25 s**, 10.0 GB. About **0.85 s a
+  step** (a step is a batch of 8) and 9 s to load, ask before and after, and save 846 MB. Every model it made is 846 MB. Asking a taught model
+  one text takes **4.3 to 5.0 s** (the model is loaded for each question) and **100 texts take 2.8 s**.
+- **The report (decision 6):** `decision.report` counts, on the texts kept back (about a fifth of every answer, at least one of each, a fixed
+  seed): right before the teaching (the base Laya), right after, and right for **a plain word counter** (multinomial Naive Bayes on the words,
+  trained in milliseconds: the plan's "embeddings baseline" was not built, the word counter is what a person could do without this feature); per
+  answer; the three most common mix-ups; whether its confidence holds ("When it said it was at least 80 percent sure, it was right 10 of 10
+  times"); up to ten texts it got wrong; and the mark: **passed when it is right at least as often as the word counter and as before the
+  teaching**, else "did not pass: a plain word counter did better". A score counts a level off by one as right (and says so). The three
+  test sets above were easy: the word counter scored the same (100, 97 and 100 percent), so the mark said "passed" and the note says the word
+  counter did as well, which is the honest result. **A case where counting words fails** (92 examples where the answer is the feeling after
+  "but", so the same words are on both sides: "The camera is superb, but delivery took a month."): after teaching it was right **15 of 16**
+  (94 percent) on texts it had not seen, before teaching 8 of 16, and the word counter **5 of 16** (31 percent); 25 s, 10 GB; its one mistake was
+  said with full confidence, which the report's confidence line shows ("at least 80 percent sure, right 15 of 16 times"). **The model for many
+  languages** (fetched through the same downloader, 678.2 MB, its first attempt cut off at 525 MB and continued from there): yes or no on
+  reviews in Spanish, French, German and Bengali (81 examples, 24 steps) took **22 s**, **9.3 GB**, and was right 15 of 15 against 12 of 15 for the
+  word counter; the taught model decided a Bengali review correctly where the untaught one did not (0.67 sure of the wrong answer). v1 is
+  English only (the owner's rule); this is offered, labelled and measured, not promised for every language.
+- **Product (`products/wasifyai-training`):** `decision.py` (the question, clean, checks in words, stratified split, steps, word counter,
+  report), `decisions.py` (the run manager and `decide`), `decision_routes.py`
+  (`/train/decision/status|sets|sets/{id}|sets/{id}/examples|sets/{id}/runs|models/{id}/ask|models/{id}/sort`), store tables `decision_sets`
+  and `decision_examples`, model `kind = "decision"`, run `settings.family = "decision"`. One run at a time across pictures, writing and
+  deciding (the picture run refuses while another is going: the slot manager would otherwise stop it). Searchable by name, kind and
+  the question (ADR-0041).
+- **The checks (decision 3), in words:** at least 20 examples; at least two different answers; a warning under 60, for an answer with fewer
+  than 5 examples, for 90 percent or more on one answer, for the same text with different answers, for texts over 2,000 characters (the model
+  reads about that much) and for what looks like personal data; labels that differ only by case or spaces are made the same and rows whose
+  answer is not an option are left out, with a sentence for each.
+- **Using it (decision 7):** the **action `decision.decide`** (effect `read`, up to 100 texts; the catalogue's bound is now 51 and its test says
+  why) with its help file; in the window **Try it** (one text, beside the model it started from) and **Sort a list** (one text a line, a table
+  that can be copied into a spreadsheet; no file is saved: the window has no download). `train.start` takes `decision_set_id` as the third
+  set it can teach.
+- **The screen (`Decide.tsx`):** the card is live ("Teach it to decide"); Start opens the sets; the editor has the question (yes or no, one of several
+  with what each means, a score with what its ends mean), the examples (a grid with an answer list, pasted from two spreadsheet columns or
+  opened from a CSV file: quoted cells, commas, semicolons and tabs, and a header row are read), the check, whose the texts are, the closed
+  "Choose the model and method" line, **Teach it**, the report with three numbers side by side, and the two boxes. Nothing says encoder, loss or
+  calibration.
+- **Not built:** the Hugging Face dataset and JSON/JSONL imports (stage D1); the model kept warm so a first answer is not 4 s; auto-tagging
+  new notes and sources and moving files into folders; the endpoint for other programs; Clef and the LLM decision heads (not run:
+  19 GB and no need yet); the web (the trainer is the desktop's); sharing a sorter; "that was wrong" feedback (T5b).

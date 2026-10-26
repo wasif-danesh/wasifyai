@@ -170,6 +170,90 @@ class FakeWriter:
         return LanguageResult(adapter, 1.5, self.engine, 5.0, 2.5, 0.1, 1_300_000_000)
 
 
+class FakeDecider:
+    """The decision engine without a model: the same calls, the answers a stub makes. A text that
+    names one of the answers gets that answer (sure); anything else gets the first (unsure)."""
+
+    preview = False
+    engine = "fake-laya"
+
+    def __init__(self) -> None:
+        self.slot = None
+        self.stopped = False
+        self.fail_with: str | None = None
+        self.hold = asyncio.Event()
+        self.hold.set()
+        self.missing: frozenset[str] = frozenset()
+        self.asked: list[tuple[str, list[str]]] = []
+
+    def problem(self, base_id=None):  # noqa: ANN001
+        return (
+            "The model to teach is not on this computer yet." if base_id in self.missing else None
+        )
+
+    def ready(self, base_id=None):  # noqa: ANN001
+        return self.problem(base_id) is None
+
+    def fit(self, need_gb):  # noqa: ANN001
+        return {"verdict": "fits", "reason": ""}
+
+    def state(self):
+        return {"engine": self.engine, "preview": False, "setup": None}
+
+    def preflight_blockers(self):
+        return []
+
+    def base_folder(self, base_id):  # noqa: ANN001
+        return Path("/base") / base_id
+
+    async def stop(self):
+        self.stopped = True
+        self.hold.set()
+
+    @staticmethod
+    def said(question, text: str, taught: bool):  # noqa: ANN001
+        from wasifyai_training.decision import Said
+
+        answers = question.answers()
+        named = [a for a in answers if a.lower() in text.lower()]
+        top = named[0] if named and taught else answers[0]
+        sure = 0.95 if named and taught else 0.4
+        rest = (1 - sure) / max(1, len(answers) - 1)
+        return Said(top, sure, {a: (sure if a == top else rest) for a in answers})
+
+    async def answer(self, model, question, texts):  # noqa: ANN001
+        self.asked.append((str(model), list(texts)))
+        taught = not str(model).startswith("/base")
+        return [self.said(question, t, taught) for t in texts]
+
+    async def train(self, job, base_id, folder, report):  # noqa: ANN001
+        from wasifyai_training.decision import DecisionResult
+        from wasifyai_training.language import Stopped
+
+        self.stopped = False
+        for step in range(1, job.steps + 1):
+            report(step, f"Learning, step {step} of {job.steps}")
+            if step == 1:
+                await self.hold.wait()
+            if self.stopped:
+                raise Stopped("It was stopped, so nothing was kept.")
+            await asyncio.sleep(0)
+        if self.fail_with:
+            raise RuntimeError(self.fail_with)
+        out = folder / "model"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "model.safetensors").write_bytes(b"stub-model")
+        q = job.question
+        return DecisionResult(
+            out, 2.0, self.engine,
+            before=[self.said(q, r.text, False) for r in job.held],
+            after=[self.said(q, r.text, True) for r in job.held],
+            peek_before=[self.said(q, t, False) for t in job.peek],
+            peek_after=[self.said(q, t, True) for t in job.peek],
+            loss=[0.9, 0.2], peak_bytes=13 * 1024**3, bytes=10,
+        )  # fmt: skip
+
+
 def make_app(tmp_path: Path) -> tuple[FastAPI, Vision]:
     app = FastAPI()
     app.state.desktop_dir = tmp_path
@@ -177,6 +261,7 @@ def make_app(tmp_path: Path) -> tuple[FastAPI, Vision]:
     trainer.step_s = 0.001
     app.state.training = trainer
     app.state.language_training = FakeWriter()
+    app.state.decision_training = FakeDecider()
     vision = Vision()
     app.state.caps = {"wasifyai-training": SimpleNamespace(text=vision, db=None, config=None)}
     app.state.creation_index = Index()

@@ -140,4 +140,58 @@ describe("the training client", () => {
     await expect(api.status()).rejects.toBeInstanceOf(HttpError);
     expect(unauthorized()).toBe(1);
   });
+  it("teaches it to decide on the decision routes, and asks a taught model one text or many", async () => {
+    const { transport, calls } = fake((path) =>
+      json(
+        path.endsWith("/decision/sets")
+          ? { sets: [] }
+          : path.endsWith("/bases") || path.includes("/bases/")
+            ? { bases: [] }
+            : { id: "s1" },
+      ),
+    );
+    const api = createTrainingApi(transport);
+    await api.decisionStatus();
+    await api.decisionSets();
+    await api.createDecisionSet("Reviews");
+    await api.decisionSet("s1");
+    await api.updateDecisionSet("s1", { kind: "category", question: "Which team?" });
+    await api.setDecisionExamples("s1", [{ text: "Great", answer: "yes" }]);
+    await api.startDecisionRun("s1");
+    await api.askDecision("m1", "A text");
+    await api.sortDecision("m1", ["a", "b"]);
+    await api.removeDecisionSet("s1");
+    await api.decisionBases();
+    await api.installDecisionBase("laya-multilingual", 678_201_636);
+    await api.cancelDecisionBase("laya-multilingual");
+    await api.decisionSetup();
+    await api.installDecisionSetup(1_013_795_574);
+    await api.cancelDecisionSetup();
+    await api.removeDecisionSetup();
+    expect(calls.map((c) => [c.init?.method ?? "GET", c.path])).toEqual([
+      ["GET", `${BASE}/decision/status`],
+      ["GET", `${BASE}/decision/sets`],
+      ["POST", `${BASE}/decision/sets`],
+      ["GET", `${BASE}/decision/sets/s1`],
+      ["PATCH", `${BASE}/decision/sets/s1`],
+      ["PUT", `${BASE}/decision/sets/s1/examples`],
+      ["POST", `${BASE}/decision/sets/s1/runs`],
+      ["POST", `${BASE}/decision/models/m1/ask`],
+      ["POST", `${BASE}/decision/models/m1/sort`],
+      ["DELETE", `${BASE}/decision/sets/s1`],
+      ["GET", "/desktop/decision-setup/bases"],
+      ["POST", "/desktop/decision-setup/bases/laya-multilingual/install"],
+      ["POST", "/desktop/decision-setup/bases/laya-multilingual/cancel"],
+      ["GET", "/desktop/decision-setup"],
+      ["POST", "/desktop/decision-setup/install"],
+      ["POST", "/desktop/decision-setup/install/cancel"],
+      ["POST", "/desktop/decision-setup/uninstall"],
+    ]);
+    expect(JSON.parse(String(calls[5]?.init?.body))).toEqual({
+      rows: [{ text: "Great", answer: "yes" }],
+    });
+    expect(JSON.parse(String(calls[7]?.init?.body))).toEqual({ text: "A text" });
+    expect(JSON.parse(String(calls[8]?.init?.body))).toEqual({ texts: ["a", "b"] });
+    expect(JSON.parse(String(calls[11]?.init?.body))).toEqual({ confirm_bytes: 678_201_636 });
+  });
 });

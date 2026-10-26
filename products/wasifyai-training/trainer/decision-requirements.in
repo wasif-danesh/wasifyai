@@ -1,0 +1,8 @@
+# The decision trainer (ADR-0075): Laya (Apache-2.0) and the packages it needs, in an environment of its own.
+# PyTorch runs on the Mac graphics chip (MPS). Compile with scripts/lock-decision-trainer.sh and commit the result.
+laya==0.4.15
+torch
+transformers
+safetensors
+huggingface_hub
+numpy

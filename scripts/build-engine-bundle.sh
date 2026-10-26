@@ -78,6 +78,13 @@ if [ ! -f "$TRAINER_SRC/language-requirements-aarch64-apple-darwin.lock" ]; then
 fi
 cp "$TRAINER_SRC"/language-requirements-*.lock "$OUT/products/wasifyai-training/trainer/"
 
+# The decision trainer (ADR-0075): Laya and PyTorch, the same way (scripts/lock-decision-trainer.sh writes the lock).
+if [ ! -f "$TRAINER_SRC/decision-requirements-aarch64-apple-darwin.lock" ]; then
+  echo "no decision trainer lock file in $TRAINER_SRC: run scripts/lock-decision-trainer.sh first" >&2
+  exit 1
+fi
+cp "$TRAINER_SRC"/decision-requirements-*.lock "$OUT/products/wasifyai-training/trainer/"
+
 for p in $PRODUCTS; do
   mkdir -p "$OUT/products/$p"
   cp "products/$p/product.yaml" "$OUT/products/$p/"

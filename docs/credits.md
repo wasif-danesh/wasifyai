@@ -159,7 +159,8 @@ Weights have their own licences, recorded per model in `products/*/models.yaml` 
 | TRELLIS.2 | `microsoft/TRELLIS.2` | MIT | The backbone Pixal3D builds on; not offered in v1 |
 | BiRefNet, MoGe-2 | `ZhengPeng7/BiRefNet`, `microsoft/MoGe` | MIT | Background removal and camera estimate inside the 3D runtime |
 | DINOv3 | `facebookresearch/dinov3` | Meta's DINOv3 licence (section 1) | The image encoder carried in the 3D weights |
-| Laya (and Cloudflare's Clef) | `NandhaKishorM/laya`, Hugging Face `Cloudflare/clef-flash` | Apache-2.0 declared (Laya has no licence file; T0) | "Teach it to sort" decision models (0075) |
+| Laya (and Cloudflare's Clef) | `NandhaKishorM/laya` (the `laya` package on PyPI, 0.4.15), Hugging Face `convaiinnovations/laya`, `Cloudflare/clef-flash` | Apache-2.0 (the package ships a `LICENSE`; the weights repository declares it in its card and has no licence file; T0). Clef is not used | "Teach it to decide" decision models (0075): the trainer and runtime, in an environment of its own |
+| PyTorch | `pytorch/pytorch` | BSD-3-Clause | Runs Laya on the Mac's graphics chip (MPS) in the decision trainer's environment (0075) |
 | mlx, mlx-lm | `ml-explore/mlx`, `ml-explore/mlx-lm` | MIT | The Mac training and serving backends behind Unsloth |
 | Hugging Face Transformers | `huggingface/transformers` | Apache-2.0 | Behind the training component |
 | Qwen3.5-9B | Qwen (Hugging Face) | Apache-2.0 | The planned default chat and agent model (0078) |

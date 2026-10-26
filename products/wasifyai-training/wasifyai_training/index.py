@@ -2,6 +2,7 @@
 they were taught. The desktop's table is in `training.db` next to the app's other data."""
 
 import asyncio
+import json
 import sqlite3
 from pathlib import Path
 
@@ -18,6 +19,14 @@ def training_db(engine: AsyncEngine) -> Path | None:
         return None
     path = Path(engine.url.database).parent / "training" / "training.db"
     return path if path.is_file() else None
+
+
+def _question(card: str) -> str:
+    """The question a decision model answers: found by it as well as by its name (ADR-0075)."""
+    try:
+        return str((json.loads(card or "{}").get("question") or {}).get("text", ""))
+    except ValueError:
+        return ""
 
 
 class TrainingIndexSource:
@@ -37,16 +46,18 @@ class TrainingIndexSource:
             return []
         try:
             rows = db.execute(
-                "SELECT id, tenant_id, user_id, name, trigger_word, kind FROM models "
+                "SELECT id, tenant_id, user_id, name, trigger_word, kind, card FROM models "
                 "WHERE (? IS NULL OR id > ?) ORDER BY id LIMIT ?",
                 (after, after, limit),
             ).fetchall()
             return [
                 IndexItem(
                     t, PRODUCT_ID, u, KIND, i,
-                    search_text(". ".join(x for x in (name, word, kind) if x and x.strip())),
+                    search_text(
+                        ". ".join(x for x in (name, word, kind, _question(card)) if x and x.strip())
+                    ),
                 )
-                for i, t, u, name, word, kind in rows
+                for i, t, u, name, word, kind, card in rows
             ]  # fmt: skip
         finally:
             db.close()

@@ -112,6 +112,7 @@ from wasifyai_api.training_setup import router as training_setup_router
 from wasifyai_api.uploads import router as uploads_router
 from wasifyai_api.uploads import sweep_forever
 from wasifyai_api.users import CachedUsers, PostgresUserStore, UserStore
+from wasifyai_api.video_setup import router as video_setup_router
 from wasifyai_api.web_search import WebService
 
 # redis-py defaults to 5 s; stream reads block for the heartbeat interval, so allow well over it.
@@ -637,6 +638,8 @@ def create_app(
             app.state.language_setup = desktop.language_setup  # its component, set up on request
             app.state.decision_training = desktop.deciding  # Laya on a Mac (ADR-0075)
             app.state.decision_setup = desktop.decision_setup  # its component, set up on request
+            app.state.video_training = desktop.teaching_video  # diffusers on a Mac (ADR-0073)
+            app.state.video_setup = desktop.video_setup  # its component, set up on request
             if desktop.video_builder is not None:  # and the model it asks to fill a template
                 desktop.video_builder.language = desktop.language
                 desktop.video_builder.usage = recorder
@@ -772,6 +775,7 @@ def create_app(
         app.include_router(training_setup_router)
         app.include_router(language_setup_router)
         app.include_router(decision_setup_router)
+        app.include_router(video_setup_router)
         app.include_router(desktop_save_router)
         app.include_router(desktop_discovery_router)
         app.include_router(desktop_llm_router)

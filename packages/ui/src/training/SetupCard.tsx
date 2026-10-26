@@ -17,6 +17,7 @@ export function SetupCard({
   onInstall,
   onCancel,
   intro,
+  title = "Set up training",
 }: {
   setup: TrainingSetupState;
   error: string | null;
@@ -24,14 +25,15 @@ export function SetupCard({
   onCancel: () => void;
   /** what is being set up, in a sentence: the picture trainer's by default */
   intro?: string;
+  title?: string;
 }) {
   const { plan, progress } = setup;
   const installing = progress.state === "installing";
   const value = progress.total_bytes > 0 ? progress.done_bytes / progress.total_bytes : undefined;
   const parts = plan.parts.filter((p) => !p.have || p.bytes > 0);
   return (
-    <section className={panel} aria-label="Set up training">
-      <h2 className="m-0 font-semibold text-lg">Set up training</h2>
+    <section className={panel} aria-label={title}>
+      <h2 className="m-0 font-semibold text-lg">{title}</h2>
       <p className="m-0 text-muted-foreground">
         {intro ??
           "Teaching a picture model needs a trainer and the picture model it learns on. They are not in the app. They are downloaded once, every file checked, and kept in the app's own folder. Nothing else on your computer is changed, and your pictures are not sent anywhere."}

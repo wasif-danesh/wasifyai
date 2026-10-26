@@ -108,6 +108,14 @@ def test_a_file_that_is_not_a_gguf_is_not_one(tmp_path):
         (FLUX, "diffusion", "flux"),
         (WAN, "video", "wan"),
         (LORA, "lora", "flux"),
+        (
+            [
+                "transformer_blocks.0.attn1.to_q.lora_A.weight",
+                "transformer_blocks.0.attn2.to_k.lora_B.weight",
+            ],
+            "lora",
+            "ltx-video",
+        ),
         (VAE, "vae", ""),
         (LLM, "language", "transformers"),
         (["encoder.block.0.layer.0.weight", "shared.weight"], "text_encoder", "t5"),

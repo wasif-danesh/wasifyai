@@ -50,6 +50,7 @@ from wasifyai_video.schemas import (
     MAX_PROMPT_CHARS,
     OVERLAP_FRAMES,
     SHAPES,
+    check_looks,
 )
 from wasifyai_video.videos import (
     TAIL_FRAMES,
@@ -85,6 +86,7 @@ class VideoState(TypedDict, total=False):
     seconds: int
     image_key: str
     source_id: str  # extend: the clip to carry on
+    loras: list[dict[str, Any]]  # looks the person taught: [{name, weight}], checked
     # extend: what the check found about it, and the temporary copy the worker reads
     source_video_key: str
     source_mode: str
@@ -215,12 +217,16 @@ def build_video_graph(
             return refuse_with("invalid_request", f"Please choose a length of {lengths} seconds.")
         if mode == "image" and (not key or await find_upload(key) is None):
             return refuse_with("invalid_request", "Please upload your picture again.")
+        loras, why = check_looks(state.get("loras"))
+        if why:
+            return refuse_with("invalid_request", why)
         out: VideoState = {
             "mode": mode,
             "prompt": prompt,
             "shape": str(state.get("shape") or DEFAULT_SHAPE),
             "seconds": seconds,
             "image_key": key if mode == "image" else "",
+            "loras": loras,
             "status": "working",
         }
         if mode == "extend":
@@ -326,6 +332,7 @@ def build_video_graph(
             }
         )
         seed = secrets.randbelow(2**31)
+        looks: dict[str, Any] = {"loras": state["loras"]} if state.get("loras") else {}
         temp_key = ""
         try:
             if extend:
@@ -345,6 +352,7 @@ def build_video_graph(
                     from_frame=from_frame,
                     length=state["new_frames"],
                     seed=seed,
+                    **looks,
                 )
             elif edit:
                 handle = await caps.video.animate(
@@ -352,6 +360,7 @@ def build_video_graph(
                     image_key=state["image_key"],
                     length=LENGTHS[seconds],
                     seed=seed,
+                    **looks,
                 )
             else:
                 width, height = SHAPES[state["shape"]]
@@ -361,6 +370,7 @@ def build_video_graph(
                     height=height,
                     length=LENGTHS[seconds],
                     seed=seed,
+                    **looks,
                 )
         except Exception:
             await fail_clip(

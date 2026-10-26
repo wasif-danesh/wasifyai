@@ -9,6 +9,7 @@ import type {
   TrainStatus,
   TrainedModel,
   TrainingApi,
+  VideoTrainStatus,
 } from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Train } from "./Train";
@@ -103,9 +104,24 @@ const STATUS: TrainStatus = {
   },
 };
 
+const VIDEO_STATUS: VideoTrainStatus = {
+  ready: true,
+  problem: null,
+  needs: [],
+  fit: { verdict: "fits", reason: "" },
+  busy: false,
+  active_run: null,
+  min_items: 4,
+  window_frames: 25,
+  windows_per_clip: 3,
+  min_clip_seconds: 2,
+  choices: { ...CHOICES, family: "video", default_base: "ltx-video-2b", bases: [] },
+};
+
 /** An engine in memory: one set, its pictures and descriptions, one run that finishes when told to. */
-function fake(over: Partial<TrainStatus> = {}) {
+function fake(over: Partial<TrainStatus> = {}, videoOver: Partial<VideoTrainStatus> | null = null) {
   const status = { ...STATUS, ...over };
+  const videoStatus = videoOver === null ? null : { ...VIDEO_STATUS, ...videoOver };
   let set: TrainDataset | null = null;
   let items: TrainPicture[] = [];
   let run: TrainRun | null = null;
@@ -113,9 +129,10 @@ function fake(over: Partial<TrainStatus> = {}) {
   const log: string[] = [];
   const dataset = (): TrainDataset => {
     const d = set as TrainDataset;
+    const min = d.family === "video" ? (videoStatus?.min_items ?? 4) : status.min_pictures;
     const missing =
-      items.length < status.min_pictures
-        ? `Add at least ${status.min_pictures} pictures. 15 to 25 good ones is plenty.`
+      items.length < min
+        ? `Add at least ${min} pictures. 15 to 25 good ones is plenty.`
         : !d.rights
           ? "Say whose it is first."
           : !d.trigger_word
@@ -136,10 +153,11 @@ function fake(over: Partial<TrainStatus> = {}) {
     status: async () => ({ ...status, busy: run?.status === "working", active_run: null }),
     choices: async () => CHOICES,
     datasets: async () => (set ? [dataset()] : []),
-    createDataset: async (kind, name = "") => {
-      log.push("create");
+    createDataset: async (kind, name = "", family = "image") => {
+      log.push(family === "video" ? "create video" : "create");
       set = {
         id: "d".repeat(32),
+        family,
         kind,
         name,
         trigger_word: "",
@@ -165,6 +183,7 @@ function fake(over: Partial<TrainStatus> = {}) {
       const item: TrainPicture = {
         id: `${items.length + 1}`.padStart(32, "0"),
         dataset_id: "d".repeat(32),
+        ...(file.type.startsWith("video/") ? { media: "clip" as const, seconds: 3.2 } : {}),
         name,
         width: 640,
         height: 640,
@@ -249,6 +268,22 @@ function fake(over: Partial<TrainStatus> = {}) {
     checkPlan: async () => ({ items: [], refs: 0 }),
     judge: async () => ({ same: true, reason: "" }),
     saveEvaluation: async (id) => models.find((m) => m.id === id) as TrainedModel,
+    videoStatus: async () => {
+      if (!videoStatus) throw new Error("not available");
+      return videoStatus;
+    },
+    videoSetup: async () => {
+      throw new Error("not in this test");
+    },
+    installVideoSetup: async () => {
+      throw new Error("not in this test");
+    },
+    cancelVideoSetup: async () => {
+      throw new Error("not in this test");
+    },
+    removeVideoSetup: async () => {
+      throw new Error("not in this test");
+    },
     // no trainer component here (the web): nothing to set up
     setup: async () => {
       throw new Error("not available");
@@ -431,7 +466,7 @@ const file = (name: string) =>
 
 describe("Train", () => {
   it("opens on four cards, says it is a preview, and the picture, writing and decision cards are live", async () => {
-    const { api } = fake();
+    const { api } = fake({}, { ready: true });
     render(<Train api={api} pollMs={10} />);
     expect(await screen.findByText("A preview")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Make my own character or style" })).toBeTruthy();
@@ -441,7 +476,7 @@ describe("Train", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Teach it to decide" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Start: teach it to decide/ })).toBeInTheDocument();
-    // each card says which kind of model it trains, and the video one says what it needs
+    // each card says which kind of model it trains
     for (const label of [
       "Image model training",
       "Language model training",
@@ -450,8 +485,13 @@ describe("Train", () => {
     ]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
-    expect(screen.getByText(/Needs an NVIDIA graphics card/)).toBeInTheDocument();
-    expect(screen.getByText("Coming later")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Make my own look or motion for video" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Start: make my own look or motion for video/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/NVIDIA/)).toBeNull();
     expect((screen.getByRole("button", { name: "Start" }) as HTMLButtonElement).disabled).toBe(
       false,
     );
@@ -769,5 +809,116 @@ describe("Train", () => {
     expect(await screen.findByText("Paused at step 75 of 200")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Carry on" }));
     await waitFor(() => expect(engine.log).toContain("resume"));
+  });
+
+  it("makes a set for the video model from pictures and clips, and teaches it", async () => {
+    const user = userEvent.setup();
+    const engine = fake({}, { ready: true });
+    render(<Train api={engine.api} pollMs={10} />);
+    const start = await screen.findByRole("button", {
+      name: /Start: make my own look or motion for video/,
+    });
+    await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+    await user.click(start);
+    expect(engine.log).toContain("create video");
+    expect(
+      await screen.findByRole("heading", { name: "Make my own look or motion for video" }),
+    ).toBeTruthy();
+    const clip = new File([new Uint8Array([0, 0, 0, 24])], "walk.mp4", { type: "video/mp4" });
+    await user.upload(await screen.findByLabelText("Choose pictures and clips"), [
+      file("a.png"),
+      clip,
+      file("b.png"),
+      file("c.png"),
+    ]);
+    expect(await screen.findByText("3.2 s")).toBeTruthy();
+    expect(screen.getByText(/4 pictures and clips\./)).toBeTruthy();
+    await user.click(await screen.findByRole("button", { name: "Next" }));
+    expect(await screen.findByText(/in a video prompt, the app makes your/)).toBeTruthy();
+    await user.click(await screen.findByLabelText("It's a drawing, a character or an animal"));
+    await user.click(await screen.findByRole("button", { name: "marlo" }));
+    await user.click(await screen.findByRole("button", { name: /Write the descriptions \(4\)/ }));
+    await waitFor(() =>
+      expect(screen.getAllByDisplayValue("Standing on a beach.")).toHaveLength(4),
+    );
+    expect(await screen.findByText(/Chat, image and video making pause/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Teach it" }));
+    expect(await screen.findByText("Step 10 of 200")).toBeTruthy();
+  });
+
+  it("does not offer video training while the video trainer is not ready, and says what is missing", async () => {
+    const engine = fake(
+      {},
+      {
+        ready: false,
+        problem: "The video model is not on this computer yet.",
+        needs: [
+          {
+            name: "The video model (LTX-Video 2B) and its text encoder",
+            have: false,
+            bytes: 16_127_000_000,
+            how: "Choose Select video model on a Video screen to get it.",
+          },
+        ],
+      },
+    );
+    render(<Train api={engine.api} pollMs={10} />);
+    const start = await screen.findByRole("button", {
+      name: /Start: make my own look or motion for video/,
+    });
+    expect((start as HTMLButtonElement).disabled).toBe(true);
+    expect(await screen.findByText("The video model is not on this computer yet.")).toBeTruthy();
+    expect(screen.getByText(/Choose Select video model on a Video screen/)).toBeTruthy();
+  });
+
+  it("offers the video trainer's set-up with its sizes first", async () => {
+    const user = userEvent.setup();
+    const engine = fake({}, { ready: false, problem: "The video trainer is not set up." });
+    const installed: number[] = [];
+    engine.api.videoSetup = async () => ({
+      installed: false,
+      tool: null,
+      base: null,
+      problem: null,
+      plan: {
+        supported: true,
+        bytes: 182_500_000,
+        needs_free_bytes: 3_400_000_000,
+        parts: [
+          {
+            name: "Trainer (PyTorch and diffusers)",
+            version: "0.42.0",
+            bytes: 181_700_000,
+            have: false,
+            licence: "Apache-2.0 and BSD-3-Clause",
+            source: "pypi.org",
+          },
+        ],
+      },
+      progress: {
+        state: "idle",
+        step: null,
+        steps: [],
+        message: "",
+        done_bytes: 0,
+        total_bytes: 0,
+      },
+    });
+    engine.api.installVideoSetup = async (bytes) => {
+      installed.push(bytes);
+      throw new Error("stop here");
+    };
+    render(<Train api={engine.api} pollMs={10} />);
+    expect(await screen.findByRole("heading", { name: "Set up video training" })).toBeTruthy();
+    await user.click(await screen.findByRole("button", { name: /Download and set up/ }));
+    expect(installed).toEqual([182_500_000]);
+  });
+
+  it("offers nothing for video where the engine has no video trainer", async () => {
+    const engine = fake();
+    render(<Train api={engine.api} place="service" pollMs={10} />);
+    expect(await screen.findByText("Nothing taught yet.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Start: make my own look/ })).toBeNull();
+    expect(screen.getAllByText("On the desktop app").length).toBeGreaterThan(0);
   });
 });

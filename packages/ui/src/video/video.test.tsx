@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type VideoSummary, type VideosApi, createRunClient } from "@wasifyai/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -100,6 +100,47 @@ describe("VideoWorkspace", () => {
     // "Make another" brings the form back
     await user.click(screen.getByRole("button", { name: /make another/i }));
     await waitFor(() => expect(screen.getByRole("textbox")).toBeInTheDocument());
+  });
+
+  it("shows My looks only when there are any, and sends the chosen look with its strength and magic word", async () => {
+    fetchMock.mockResolvedValueOnce(sse([node("check_request"), node("generate_video"), ready]));
+    const user = userEvent.setup();
+    const looks = [
+      { name: "wasify-video-ena-12345678.safetensors", title: "Ena", word: "enaz" },
+      { name: "wasify-video-fog-87654321.safetensors", title: "Fog", word: "fogzy" },
+    ];
+    const { unmount } = render(<VideoWorkspace mode="text" runs={client} />);
+    expect(screen.queryByRole("region", { name: "My looks" })).toBeNull();
+    unmount();
+
+    render(<VideoWorkspace mode="text" runs={client} looks={looks} />);
+    await user.click(screen.getByRole("button", { name: /My looks/ }));
+    await user.click(screen.getByRole("checkbox", { name: /Ena/ }));
+    const slider = screen.getByRole("slider", { name: "Strength of Ena" });
+    expect((slider as HTMLInputElement).value).toBe("1.5");
+    fireEvent.change(slider, { target: { value: "2" } });
+    await user.type(screen.getByRole("textbox"), "walking in snow");
+    await user.click(screen.getByRole("button", { name: /make my video/i }));
+    await screen.findByText(/saved in your videos/i);
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.input.prompt).toBe("enaz, walking in snow");
+    expect(body.input.loras).toEqual([
+      { name: "wasify-video-ena-12345678.safetensors", weight: 2 },
+    ]);
+  });
+
+  it("allows two looks at most", async () => {
+    const user = userEvent.setup();
+    const looks = ["a", "b", "c"].map((n) => ({
+      name: `${n}.safetensors`,
+      title: n,
+      word: `${n}word`,
+    }));
+    render(<VideoWorkspace mode="text" runs={client} looks={looks} />);
+    await user.click(screen.getByRole("button", { name: /My looks/ }));
+    await user.click(screen.getByRole("checkbox", { name: /^a/ }));
+    await user.click(screen.getByRole("checkbox", { name: /^b/ }));
+    expect((screen.getByRole("checkbox", { name: /^c/ }) as HTMLInputElement).disabled).toBe(true);
   });
 
   it("needs a picture before it can animate one", async () => {

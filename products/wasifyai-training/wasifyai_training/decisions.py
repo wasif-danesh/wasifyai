@@ -100,8 +100,8 @@ class DecisionRunManager:
         return self._run_id if self._teaching else None
 
     def others_busy(self) -> bool:
-        writing = getattr(self._deps.state, "writing_runs", None)
-        return run_manager_for(self._deps).busy() or bool(writing is not None and writing.busy())
+        found = (getattr(self._deps.state, n, None) for n in ("writing_runs", "video_runs"))
+        return run_manager_for(self._deps).busy() or any(f is not None and f.busy() for f in found)
 
     def parts(
         self, identity: Identity, set_id: str

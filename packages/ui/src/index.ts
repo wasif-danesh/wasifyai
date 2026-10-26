@@ -58,6 +58,7 @@ export {
   type VideoWorkspaceProps,
 } from "./video/VideoWorkspace";
 export { VideoLibrary, type VideoLibraryProps } from "./video/VideoLibrary";
+export type { VideoLook } from "./video/Looks";
 export type { ChatScreenProps } from "./chat/ChatScreen";
 export {
   ComposerOptions,

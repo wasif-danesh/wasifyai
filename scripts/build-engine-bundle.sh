@@ -85,6 +85,14 @@ if [ ! -f "$TRAINER_SRC/decision-requirements-aarch64-apple-darwin.lock" ]; then
 fi
 cp "$TRAINER_SRC"/decision-requirements-*.lock "$OUT/products/wasifyai-training/trainer/"
 
+# The video trainer (ADR-0073, video amendment): PyTorch with diffusers and peft, the same way
+# (scripts/lock-video-trainer.sh writes the lock).
+if [ ! -f "$TRAINER_SRC/video-requirements-aarch64-apple-darwin.lock" ]; then
+  echo "no video trainer lock file in $TRAINER_SRC: run scripts/lock-video-trainer.sh first" >&2
+  exit 1
+fi
+cp "$TRAINER_SRC"/video-requirements-*.lock "$OUT/products/wasifyai-training/trainer/"
+
 for p in $PRODUCTS; do
   mkdir -p "$OUT/products/$p"
   cp "products/$p/product.yaml" "$OUT/products/$p/"

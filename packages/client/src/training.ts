@@ -7,6 +7,9 @@ export const TRAINING_PRODUCT_ID = "wasifyai-training";
 
 export type TrainKind = "character" | "style" | "object";
 
+/** What a set is for: pictures for the picture model, or pictures and short clips for the video model. */
+export type TrainFamily = "image" | "video";
+
 /** What a trained model is: pictures of one of the three kinds, or how a person writes. */
 export type TrainedKind = TrainKind | "writing" | "decision";
 export type Statement = "mine" | "permission" | "drawing" | "artwork";
@@ -41,6 +44,24 @@ export type TrainStatus = {
   steps: Record<TrainKind, number>;
   /** "About 25 minutes", by kind */
   estimates: Record<TrainKind, string>;
+};
+
+/** Whether the video model can be taught on this computer, and what it still needs (desktop only). */
+export type VideoTrainStatus = {
+  ready: boolean;
+  problem: string | null;
+  /** what teaching also needs that setup does not fetch, such as the video model itself */
+  needs: { name: string; have: boolean; bytes: number; how: string }[];
+  fit: { verdict: "fits" | "tight" | "too_big"; reason: string } | null;
+  /** What to know before a run starts: whether anything stops it, what to look out for (desktop). */
+  preflight?: TrainPreflight | null;
+  busy: boolean;
+  active_run: string | null;
+  min_items: number;
+  window_frames: number;
+  windows_per_clip: number;
+  min_clip_seconds: number;
+  choices: TrainChoices;
 };
 
 export type TrainMethodId = "lora" | "qlora" | "full";
@@ -89,6 +110,10 @@ export type CaptionState = "none" | "writing" | "done" | "edited" | "failed";
 
 export type TrainPicture = {
   id: string;
+  /** a picture, or a short clip (a video set; the thumbnail is its middle frame) */
+  media?: "picture" | "clip";
+  /** how long a clip is, in seconds */
+  seconds?: number;
   dataset_id: string;
   name: string;
   width: number;
@@ -104,12 +129,15 @@ export type TrainPicture = {
 
 export type TrainDataset = {
   id: string;
+  family?: TrainFamily;
   kind: TrainKind;
   name: string;
   trigger_word: string;
   rights: Statement | "";
   created_at: string;
   pictures: number;
+  /** a video set: how many of its items are clips */
+  clips?: number;
   /** what is missing before a run, in the sentence to show; null when nothing is */
   missing: string | null;
   /** the descriptions are being written */
@@ -435,8 +463,10 @@ export type TrainedModel = {
     steps: number;
     seconds: number;
     trigger_word: string;
-    /** The name the image engine gives it as a style, once it is published there (else null). */
+    /** The name the image or video engine gives it, once it is published there (else null). */
     published?: { lora_name: string } | null;
+    /** a video model: "video"; pictures leave it out */
+    family?: TrainFamily;
     statement: string;
     evaluation: TrainEvaluation;
     trained_at: string;
@@ -467,6 +497,8 @@ export type TrainingSetupState = {
     bytes: number;
     needs_free_bytes: number;
     parts: TrainingSetupPart[];
+    /** what teaching also needs and this setup does not fetch (the video trainer: the video model) */
+    needs?: { name: string; have: boolean; bytes: number; how: string }[];
   };
   progress: {
     state: "idle" | "installing" | "ready" | "failed";
@@ -498,7 +530,7 @@ export type TrainingApi = {
   removeWritingSetup(): Promise<{ freed_bytes: number } & TrainingSetupState>;
   status(): Promise<TrainStatus>;
   datasets(): Promise<TrainDataset[]>;
-  createDataset(kind: TrainKind, name?: string): Promise<TrainDataset>;
+  createDataset(kind: TrainKind, name?: string, family?: TrainFamily): Promise<TrainDataset>;
   dataset(id: string): Promise<TrainDataset>;
   updateDataset(
     id: string,
@@ -517,7 +549,14 @@ export type TrainingApi = {
   pictureUrl(datasetId: string, pictureId: string, which: "thumb" | "picture"): Promise<string>;
   startRun(datasetId: string, choice?: TrainChoice): Promise<TrainRun>;
   /** The models and methods that can be chosen for a kind of teaching. */
-  choices(kind: TrainKind): Promise<TrainChoices>;
+  choices(kind: TrainKind, family?: TrainFamily): Promise<TrainChoices>;
+  /** "Make my own look or motion for video": whether it can be taught here (desktop only). */
+  videoStatus(): Promise<VideoTrainStatus>;
+  /** The video trainer's component, set up the same way. */
+  videoSetup(): Promise<TrainingSetupState>;
+  installVideoSetup(confirmBytes: number): Promise<TrainingSetupState>;
+  cancelVideoSetup(): Promise<TrainingSetupState>;
+  removeVideoSetup(): Promise<{ freed_bytes: number } & TrainingSetupState>;
   runs(): Promise<TrainRun[]>;
   run(id: string): Promise<TrainRun>;
   /** Stop for now and keep the last checkpoint; `resumeRun` picks it up where it stopped. */
@@ -618,8 +657,11 @@ export function createTrainingApi(
   return {
     status: () => json<TrainStatus>(`${base}/status`),
     datasets: async () => (await json<{ datasets: TrainDataset[] }>(`${base}/datasets`)).datasets,
-    createDataset: (kind, name = "") =>
-      json<TrainDataset>(`${base}/datasets`, send("POST", { kind, name })),
+    createDataset: (kind, name = "", family = "image") =>
+      json<TrainDataset>(
+        `${base}/datasets`,
+        send("POST", family === "video" ? { kind, name, family } : { kind, name }),
+      ),
     dataset: (id) => json<TrainDataset>(`${base}/datasets/${enc(id)}`),
     updateDataset: (id, change) =>
       json<TrainDataset>(`${base}/datasets/${enc(id)}`, send("PATCH", change)),
@@ -646,7 +688,23 @@ export function createTrainingApi(
       objectUrl(`${base}/datasets/${enc(datasetId)}/items/${enc(pictureId)}/${which}`),
     startRun: (datasetId, choice) =>
       json<TrainRun>(`${base}/runs`, send("POST", { dataset_id: datasetId, ...choice })),
-    choices: (kind) => json<TrainChoices>(`${base}/choices?kind=${enc(kind)}`),
+    choices: (kind, family = "image") =>
+      json<TrainChoices>(
+        `${base}/choices?kind=${enc(kind)}${family === "video" ? "&family=video" : ""}`,
+      ),
+    videoStatus: () => json<VideoTrainStatus>(`${base}/video/status`),
+    videoSetup: () => json<TrainingSetupState>("/desktop/video-trainer-setup"),
+    installVideoSetup: (confirmBytes) =>
+      json<TrainingSetupState>(
+        "/desktop/video-trainer-setup/install",
+        send("POST", { confirm_bytes: confirmBytes }),
+      ),
+    cancelVideoSetup: () =>
+      json<TrainingSetupState>("/desktop/video-trainer-setup/install/cancel", { method: "POST" }),
+    removeVideoSetup: () =>
+      json<{ freed_bytes: number } & TrainingSetupState>("/desktop/video-trainer-setup/uninstall", {
+        method: "POST",
+      }),
     writingStatus: () => json<WritingStatus>(`${base}/writing/status`),
     writingSets: async () => (await json<{ sets: WritingSet[] }>(`${base}/writing/sets`)).sets,
     createWritingSet: (name = "") =>

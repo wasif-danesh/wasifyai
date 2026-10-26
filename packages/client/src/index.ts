@@ -329,6 +329,7 @@ export {
   type WritingStatus,
   type TrainChoice,
   type TrainChoices,
+  type TrainFamily,
   type TrainKind,
   type TrainMethod,
   type TrainMethodId,
@@ -342,6 +343,7 @@ export {
   type TrainingSetupState,
   type TrainRun,
   type TrainStatus,
+  type VideoTrainStatus,
   type TrainedModel,
   type TrainingApi,
 } from "./training";

@@ -251,6 +251,7 @@ def classify_tensors(names: list[str]) -> tuple[str, str]:
     if has("lora_down") or has("lora_up") or has(".lora_A") or has(".lora_B") or has("lora_unet_"):
         family = (
             "flux" if has("double_blocks") or has("single_blocks")
+            else "ltx-video" if starts("transformer_blocks.") and has("attn1.") and has("attn2.")
             else "wan" if has("patch_embedding")
             else "sdxl" if has("label_emb") or has("lora_unet_input_blocks") else ""
         )  # fmt: skip
@@ -723,7 +724,13 @@ def _assess_lora(it: Found, path: Path, roots: list[Path]) -> None:
         used = any(root.resolve() == r.resolve() for r in roots if r.exists())
     except OSError:
         used = False
-    if used:
+    if it.family == "ltx-video":  # a look for the video model, chosen on the Video screens
+        if used:
+            it.state, it.reason = "ready", "The video engine can apply this look (LoRA)."
+        else:
+            it.state, it.use, it.use_root = "can_use", "folder", str(root)
+            it.reason = "One click lets the video engine read this look where it is."
+    elif used:
         it.state, it.reason = "ready", "The image engine can apply this style (LoRA)."
     else:
         it.state, it.use, it.use_root = "can_use", "folder", str(root)
@@ -1068,7 +1075,8 @@ async def loras(request: Request, _: Identity = Depends(get_identity)) -> dict[s
             "size": i.size, "tool": i.tool_title, "reason": i.reason, "use": i.use,
         }  # fmt: skip
 
-    kind = [i for i in items if i.kind == "lora" and i.lora_name]
+    # looks for the video model are chosen on the Video screens, not offered as picture styles
+    kind = [i for i in items if i.kind == "lora" and i.lora_name and i.family != "ltx-video"]
     return {
         "ready": [row(i) for i in kind if i.state == "ready"],
         "available": [row(i) for i in kind if i.state == "can_use"],

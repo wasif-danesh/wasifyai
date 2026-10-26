@@ -15,6 +15,7 @@ import { client } from "../api";
 import { useGroupReady } from "../choices/use-ready";
 import { useImageEngine, useModelOf } from "../engine-hooks";
 import type { Route } from "../router";
+import { useVideoLooks } from "../video-looks";
 import { videos } from "../videos";
 
 type PageMode = Exclude<VideoMode, "import">;
@@ -38,6 +39,7 @@ export function VideoPage({ mode, go }: { mode: PageMode; go: (r: Route) => void
   const choices = useChoicesFor("video");
   const picker = useRef<ModelSelectHandle>(null);
   const { ensure } = useGroupReady(choices, picker);
+  const looks = useVideoLooks();
 
   // only a real model can be too big: the placeholder engine runs anywhere
   const real = engine?.state === "installed";
@@ -65,6 +67,7 @@ export function VideoPage({ mode, go }: { mode: PageMode; go: (r: Route) => void
           tooBig && model?.fit ? `${model.title} will not fit. ${model.fit.reason}` : null
         }
         beforeMake={ensure}
+        looks={looks}
         notices={
           tight && model?.fit ? (
             <Notice tone="warn" title="This computer is tight on memory">

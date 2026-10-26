@@ -781,6 +781,12 @@
       },
       "DatasetIn": {
         "properties": {
+          "family": {
+            "default": "image",
+            "maxLength": 8,
+            "title": "Family",
+            "type": "string"
+          },
           "kind": {
             "default": "character",
             "maxLength": 12,
@@ -8128,6 +8134,17 @@
               "title": "Kind",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "family",
+            "required": false,
+            "schema": {
+              "default": "image",
+              "maxLength": 8,
+              "title": "Family",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -8174,6 +8191,23 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 8,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Family"
             }
           }
         ],
@@ -9798,6 +9832,52 @@
           }
         },
         "summary": "Status",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/video/status": {
+      "get": {
+        "operationId": "video_status_products_wasifyai_training_train_video_status_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "default": "character",
+              "maxLength": 20,
+              "title": "Kind",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Video Status Products Wasifyai Training Train Video Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Video Status",
         "tags": [
           "wasifyai-training"
         ]

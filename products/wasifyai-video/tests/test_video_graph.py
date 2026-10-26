@@ -278,3 +278,52 @@ async def test_a_picture_job_that_cannot_be_queued_does_not_leave_a_working_row(
     with pytest.raises(ConnectionError):
         await Story(rig).start({"mode": "image", "prompt": "snow", "image_key": up.key})
     assert not await exists(rig, up.key)
+
+
+# ---- looks the person taught (ADR-0073, video amendment) -----------------------------------
+
+
+@pytest.mark.parametrize("mode", ["text", "image"])
+async def test_looks_reach_the_job_in_both_modes(tmp_path, ctx, mode):
+    rig = make_rig(tmp_path)
+    looks = [{"name": "wasify-video-ena-1a2b3c4d.safetensors", "weight": 1.5}]
+    request: dict[str, Any] = {
+        "mode": mode,
+        "prompt": "enav7qx, a woman on a beach",
+        "seconds": 5,
+        "loras": looks,
+    }
+    if mode == "image":
+        request["image_key"] = (await put_upload(rig)).key
+    await Story(rig).start(request)
+    job = rig.sink.submitted[0]
+    assert job.prompt["loras"] == looks
+
+
+async def test_a_run_without_looks_sends_none(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+    await Story(rig).start({"mode": "text", "prompt": "a red fox", "seconds": 5})
+    assert "loras" not in rig.sink.submitted[0].prompt
+
+
+@pytest.mark.parametrize(
+    ("looks", "words"),
+    [
+        ("a look", "choose the looks"),
+        ([{"name": "../x.safetensors"}], "cannot be used"),
+        ([{"name": "x.ckpt"}], "cannot be used"),
+        ([{"name": "a.safetensors", "weight": "high"}], "must be a number"),
+        ([{"name": "a.safetensors", "weight": 9}], "between 0.1 and 2.5"),
+        ([{"name": "a.safetensors"}, {"name": "a.safetensors"}], "once"),
+        ([{"name": f"{c}.safetensors"} for c in "abc"], "at most 2"),
+    ],
+)
+async def test_looks_that_cannot_be_used_are_refused_in_words_before_any_work(
+    tmp_path, ctx, looks, words
+):
+    rig = make_rig(tmp_path)
+    s = await Story(rig).start(
+        {"mode": "text", "prompt": "a red fox", "seconds": 5, "loras": looks}
+    )
+    assert s.state["status"] == "refused" and s.state["refusal"]["code"] == "invalid_request"
+    assert words in s.state["refusal"]["message"] and rig.sink.submitted == []

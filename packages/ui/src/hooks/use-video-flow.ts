@@ -32,6 +32,8 @@ export type VideoRequest = {
   seconds: number;
   imageKey?: string;
   sourceId?: string;
+  /** looks the person taught (LoRAs on the video model), each with its strength */
+  loras?: { name: string; weight: number }[];
 };
 
 const sleep = (ms: number, signal: AbortSignal) =>
@@ -156,7 +158,9 @@ export function useVideoFlow(api: VideoFlowApi) {
                 ? { shape: request.shape }
                 : { image_key: request.imageKey }),
             };
-      void follow((signal) => startRun(VIDEO_PRODUCT, input, signal, onEvent), ctrl.signal);
+      const body =
+        request.loras && request.loras.length > 0 ? { ...input, loras: request.loras } : input;
+      void follow((signal) => startRun(VIDEO_PRODUCT, body, signal, onEvent), ctrl.signal);
     },
     [dispatch, follow, onEvent, startRun],
   );

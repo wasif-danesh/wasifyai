@@ -18,3 +18,12 @@ inputs:
   image: { node: "78", field: image }
 outputs:
   video: { node: "81", type: video }
+# Looks the person taught (ADR-0073, video amendment): the diffusion model's output goes through up to
+# two model-only LoRA loaders before the sampler. A video LoRA patches the diffusion model; the text
+# encoder is not patched. The file names its tensors as the model does (`transformer_blocks.N...`).
+lora_chain:
+  loader: LoraLoaderModelOnly
+  max: 2
+  from: { node: "44", output: 0 }
+  to:
+    - { node: "72", field: model }

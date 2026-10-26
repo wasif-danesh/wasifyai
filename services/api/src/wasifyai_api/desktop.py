@@ -50,6 +50,7 @@ from wasifyai_api.desktop_model3d import Model3dService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
 from wasifyai_api.desktop_training import make_trainer
 from wasifyai_api.desktop_video_builder import VideoBuilderService
+from wasifyai_api.desktop_video_training import VIDEO_MODEL, LtxTrainer, make_video_trainer
 from wasifyai_api.desktop_vision import VisionService
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
 from wasifyai_api.language_setup import LOCK_NAME as LANGUAGE_LOCK_NAME
@@ -60,6 +61,8 @@ from wasifyai_api.runs import RunManager
 from wasifyai_api.safeguards import SettingsStore
 from wasifyai_api.sqlite_stores import SqliteIndexStore, SqliteSettingsStore, SqliteUserStore
 from wasifyai_api.training_setup import HUB, LOCK_NAME, TrainingSetup
+from wasifyai_api.video_setup import LOCK_NAME as VIDEO_LOCK_NAME
+from wasifyai_api.video_setup import VideoSetup
 from wasifyai_api.web_search import WebService, load_or_create_key
 
 log = logging.getLogger("wasifyai_api.desktop")
@@ -103,6 +106,8 @@ class DesktopBackends:
     writing: MlxLmTrainer | None = None  # the language trainer: mlx-lm on a Mac (ADR-0074)
     decision_setup: DecisionSetup | None = None  # the decision trainer's component
     deciding: LayaTrainer | None = None  # the decision trainer: Laya on a Mac (ADR-0075)
+    video_setup: VideoSetup | None = None  # the video trainer's component
+    teaching_video: LtxTrainer | None = None  # the video trainer: diffusers on a Mac (ADR-0073)
     training: Any = None  # the trainer: a preview until the real one is installed (ADR-0073)
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
@@ -120,6 +125,10 @@ class DesktopBackends:
         if self.training is not None and self.discovery is not None:
             # a model just taught (or removed) is a style the image engine can use: look again
             self.training.on_published = self.discovery.scan
+        if self.teaching_video is not None and self.discovery is not None:
+            self.teaching_video.on_published = (
+                self.discovery.scan
+            )  # and a look the video engine can use
         worker, self._worker_cleanup, self.slot = _build_worker(self)
         self._worker_task = asyncio.create_task(worker.run_forever())
         self._consumer = LocalCompletionConsumer(self.queue, runs, self.run_store)
@@ -210,6 +219,18 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         cache_dir=cache if cache.is_dir() else None,
         base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
     )
+    video_setup = VideoSetup(
+        root,
+        lock=products / "wasifyai-training" / "trainer" / VIDEO_LOCK_NAME,
+        uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
+        cache_dir=cache if cache.is_dir() else None,
+        base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
+    )
+    video_entry = models.catalogue.get(VIDEO_MODEL)
+    video_setup.video_model_bytes = video_entry.total_bytes if video_entry is not None else 0
+    teaching_video = make_video_trainer(settings.desktop_dir, models)
+    if teaching_video is not None:
+        video_setup.video_model = teaching_video.model_files
     return DesktopBackends(
         web=web,
         models=models,
@@ -224,6 +245,8 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         writing=make_language_trainer(settings.desktop_dir),
         decision_setup=decision_setup,
         deciding=make_decision_trainer(settings.desktop_dir),
+        video_setup=video_setup,
+        teaching_video=teaching_video,
         language=language,
         vision=vision,
         hub=hub,
@@ -351,6 +374,8 @@ def _build_worker(d: DesktopBackends):
         owners["writing"] = d.writing.stop  # so does teaching a writing model
     if d.deciding is not None:
         owners["deciding"] = d.deciding.stop  # and teaching it to decide
+    if d.teaching_video is not None:
+        owners["teaching_video"] = d.teaching_video.stop  # and teaching the video model
     if d.audio is not None:
         owners["audio"] = d.audio.stop  # the speech runtime is another owner of the one slot
         if d.audio.lipsync_sidecar is not None:
@@ -379,6 +404,8 @@ def _build_worker(d: DesktopBackends):
         d.writing.slot = slot
     if d.deciding is not None:
         d.deciding.slot = slot
+    if d.teaching_video is not None:
+        d.teaching_video.slot = slot
     processor = JobProcessor(
         ws,
         d.event_log,

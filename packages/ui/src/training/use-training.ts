@@ -3,6 +3,7 @@
 import type {
   TrainChoice,
   TrainDataset,
+  TrainFamily,
   TrainKind,
   TrainRun,
   TrainStatus,
@@ -157,10 +158,10 @@ export function useTraining(api: TrainingApi, pollMs = 1500) {
   );
 
   const newDataset = useCallback(
-    async (kind: TrainKind = "character") => {
+    async (kind: TrainKind = "character", family: TrainFamily = "image") => {
       try {
         set({ busy: "dataset", run: null });
-        const d = await api.createDataset(kind);
+        const d = await api.createDataset(kind, "", family);
         set({ current: d, busy: null, error: null });
         return d;
       } catch (e) {

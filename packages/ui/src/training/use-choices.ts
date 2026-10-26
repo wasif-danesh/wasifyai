@@ -3,6 +3,7 @@
 import type {
   TrainChoice,
   TrainChoices,
+  TrainFamily,
   TrainKind,
   TrainMethodId,
   TrainingApi,
@@ -13,7 +14,7 @@ import { useEffect, useMemo, useState } from "react";
  * The models and methods that can be chosen for a kind of teaching (ADR-0073, amendment 2026-10-24). Nothing chosen
  * means the recommendation: `choice` holds only what the person changed, and the engine fills in the rest.
  */
-export function useChoices(api: TrainingApi, kind: TrainKind) {
+export function useChoices(api: TrainingApi, kind: TrainKind, family: TrainFamily = "image") {
   const [choices, setChoices] = useState<TrainChoices | null>(null);
   const [base, setBase] = useState<string | null>(null);
   const [method, setMethod] = useState<TrainMethodId | null>(null);
@@ -22,7 +23,7 @@ export function useChoices(api: TrainingApi, kind: TrainKind) {
     let alive = true;
     setChoices(null);
     api
-      .choices(kind)
+      .choices(kind, family)
       .then((c) => {
         if (alive) setChoices(c);
       })
@@ -32,7 +33,7 @@ export function useChoices(api: TrainingApi, kind: TrainKind) {
     return () => {
       alive = false;
     };
-  }, [api, kind]);
+  }, [api, kind, family]);
 
   const chosenBase = base ?? choices?.default_base ?? "";
   const row = choices?.bases.find((b) => b.id === chosenBase) ?? null;

@@ -384,10 +384,14 @@ class RunManager:
         engine, store = engine_for(state), store_for(state)
         if not engine.ready():
             raise Refused("not_ready", not_ready(engine))
-        others = (getattr(state, name, None) for name in ("writing_runs", "decision_runs"))
+        others = (
+            getattr(state, name, None) for name in ("writing_runs", "decision_runs", "video_runs")
+        )
         if self.busy() or any(o is not None and o.busy() for o in others):
             raise Refused("busy", "A model is being taught. Wait for it to finish.")
         dataset = store.get_dataset(identity.tenant_id, identity.user_id, dataset_id)
+        if dataset["family"] == "video":
+            raise Refused("wrong_family", "That set is for the video model, not the picture model.")
         items = store.list_items(identity.tenant_id, identity.user_id, dataset_id)
         if why := ready_to_train(dataset, items):
             raise Refused("not_ready_to_train", why)
@@ -605,11 +609,11 @@ def run_manager_for(deps: RouteDeps) -> RunManager:
 async def delete_model(deps: RouteDeps, identity: Identity, model_id: str) -> bool:
     store = store_for(deps.state)
     try:
-        published = (
-            store.get_model(identity.tenant_id, identity.user_id, model_id)["card"] or {}
-        ).get("published")
+        card = store.get_model(identity.tenant_id, identity.user_id, model_id)["card"] or {}
+        published = card.get("published")
+        family = card.get("family", "image")
     except NotFound:
-        published = None
+        published, family = None, "image"
     if not store.delete_model(identity.tenant_id, identity.user_id, model_id):
         return False
     lang = getattr(deps.state, "desktop_language", None)
@@ -617,7 +621,8 @@ async def delete_model(deps: RouteDeps, identity: Identity, model_id: str) -> bo
     if lang is not None and chosen == model_id:
         with contextlib.suppress(Exception):
             await lang.end_style()  # a model that is gone is not the one chat answers with
-    unpublish = getattr(engine_for(deps.state), "unpublish", None)
+    taught_on = getattr(deps.state, "video_training", None) if family == "video" else None
+    unpublish = getattr(taught_on or engine_for(deps.state), "unpublish", None)
     if published and unpublish is not None:
         with contextlib.suppress(Exception):
             await unpublish(published["lora_name"])  # the image engine no longer offers it

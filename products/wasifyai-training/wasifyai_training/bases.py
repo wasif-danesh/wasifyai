@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (the sentences shown to people, and made-up media in a test, are easier to read on one line)
 """What can be taught, and how: the base models and the methods the person may choose (ADR-0073,
 amendment 2026-10-24).
 
@@ -20,6 +21,7 @@ FAMILY_FOR_KIND = {
     "writing": "language",
     "decision": "decision",
 }
+VIDEO = "video"  # the family of a set made for the video model (its kinds are the picture kinds)
 
 # id, the words, the technical name, Advanced only
 METHODS = (
@@ -128,6 +130,21 @@ _WHOLE = {
 }
 DESCRIPTORS += (
     Descriptor(
+        id="ltx-video-2b",
+        title="LTX-Video 2B (0.9.5)",
+        family="video",
+        engine="diffusers",
+        licence="OpenRAIL-M",
+        default_method="lora",
+        need_gb=12.0,
+        note="The model Video makes clips with. It learns a look, a motion or a subject from pictures and short clips.",
+        measured="pictures: 0.5 s a step and 7.4 GB; clips of 25 frames at 768x512: 7.7 s a step and 9.8 GB, on a 64 GB Mac (2026-10-26)",
+        methods_not={
+            "qlora": "This model is taught as a small adapter. The less-memory version is for writing models.",
+            "full": "Teaching all of a video model needs far more memory than a Mac has, and the video trainer does not do it.",
+        },
+    ),
+    Descriptor(
         id="laya-english",
         title="Laya",
         family="decision",
@@ -186,6 +203,7 @@ def choices(
     ready: bool,
     installed: list[dict[str, Any]],
     have: Callable[[Descriptor], bool] | None = None,
+    family: str | None = None,
 ) -> dict[str, Any]:
     """The rows of the "Choose the model and method" panel for a kind of teaching.
 
@@ -193,7 +211,7 @@ def choices(
     `ready` whether the engine is set up, `have` whether a base is on this computer (a row that is
     not can still be chosen: the screen offers to get it) and `installed` the models found on this
     computer (`kind`, `name`, `format` at least)."""
-    family = FAMILY_FOR_KIND.get(kind, "image")
+    family = family or FAMILY_FOR_KIND.get(kind, "image")
     rows: list[dict[str, Any]] = []
     for d in descriptors(family):
         can, reason = True, ""
@@ -214,7 +232,7 @@ def choices(
             }
         )  # fmt: skip
     known = {d.title.lower() for d in DESCRIPTORS}
-    for item in installed[:8]:
+    for item in installed[:8] if family == "image" else []:
         name = str(item.get("name", ""))
         if item.get("kind") != "diffusion" or name.lower() in known:
             continue
@@ -234,9 +252,11 @@ def choices(
     }
 
 
-def resolve(kind: str, base: str | None, method: str | None) -> tuple[Descriptor, str]:
+def resolve(
+    kind: str, base: str | None, method: str | None, family: str | None = None
+) -> tuple[Descriptor, str]:
     """The descriptor and method a run will use; `Unavailable` says why a choice cannot be used."""
-    family = FAMILY_FOR_KIND.get(kind, "image")
+    family = family or FAMILY_FOR_KIND.get(kind, "image")
     options = descriptors(family)
     chosen = options[0]
     if base:

@@ -258,9 +258,9 @@ class WritingRunManager:
 
 
 def decision_busy(deps: RouteDeps) -> bool:
-    """Whether a decision model is being taught (they share the one big-model slot)."""
-    found = getattr(deps.state, "decision_runs", None)
-    return bool(found is not None and found.busy())
+    """Whether a decision or a video model is being taught (they share the one big-model slot)."""
+    found = (getattr(deps.state, name, None) for name in ("decision_runs", "video_runs"))
+    return any(f is not None and f.busy() for f in found)
 
 
 def adapter_of(store: Any, identity: Identity, model_id: str) -> Path:

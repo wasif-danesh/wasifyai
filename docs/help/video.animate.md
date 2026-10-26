@@ -18,6 +18,10 @@ Turn a picture of your library into a short clip by saying what should move.
 3. Say what should move and the length.
 4. Choose Create.
 
+## My looks
+
+If you taught the video model a look or a motion (under **Train models**, in the Video model training card), the screen shows **My looks**: choose up to two and a strength for each (1.5 is a good start; above 2 can look rough). The app adds each look's magic word to your prompt if it is missing. A look made for another model does not work here; looks are made for LTX-Video 2B only.
+
 ## Fields
 
 - `image_id`: The picture.

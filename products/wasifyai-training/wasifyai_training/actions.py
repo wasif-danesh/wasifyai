@@ -40,6 +40,7 @@ from wasifyai_training.runtime import (
     words_of,
 )
 from wasifyai_training.store import NotFound
+from wasifyai_training.video import manager_for as video_manager_for
 from wasifyai_training.writing import manager_for as writing_manager_for
 
 ENGINE = need_runtime("training")
@@ -229,12 +230,50 @@ async def _start_decision(p: StartIn, ctx: ActionContext) -> Outcome:
     )  # fmt: skip
 
 
+async def _start_video(p: StartIn, ctx: ActionContext) -> Outcome:
+    deps = need_deps(ctx)
+    store = store_for(deps.state)
+    runs = video_manager_for(deps)
+    try:
+        row = await runs.start(ctx.actor, str(p.dataset_id), p.base, p.method)
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    try:
+        await runs.wait(row["id"])
+    except asyncio.CancelledError:
+        await runs.cancel(ctx.actor, row["id"])
+        raise
+    done = store.get_run(ctx.actor.tenant_id, ctx.actor.user_id, row["id"])
+    if done["status"] != "done" or not done["model_id"]:
+        return Outcome.error(done["error"] or "The model could not be taught.", "failed")
+    model = store.get_model(ctx.actor.tenant_id, ctx.actor.user_id, done["model_id"])
+    mins = max(1, round((done["elapsed_s"] or 0) / 60))
+    return Outcome.ok(
+        {
+            "run_id": done["id"], "model_id": model["id"], "product_id": PRODUCT_ID,
+            "uri": f"wasify://creation/lora/{model['id']}", "name": model["name"],
+            "magic_word": model["trigger_word"], "steps": done["steps"],
+            "seconds": round(done["elapsed_s"] or 0), "preview": False,
+        },
+        f'"{model["name"]}" was taught for video in about {mins} minute{"s" if mins != 1 else ""}. '
+        f'Write "{model["trigger_word"]}" in a video prompt and choose it under My looks.',
+    )  # fmt: skip
+
+
 async def _start(p: StartIn, ctx: ActionContext) -> Outcome:
     if p.decision_set_id is not None:
         return await _start_decision(p, ctx)
     if p.set_id is not None:
         return await _start_writing(p, ctx)
     deps = need_deps(ctx)
+    try:
+        family = store_for(deps.state).get_dataset(
+            ctx.actor.tenant_id, ctx.actor.user_id, str(p.dataset_id)
+        )["family"]
+    except NotFound:
+        return Outcome.refused("That set of pictures does not exist.", "not_found")
+    if family == "video":
+        return await _start_video(p, ctx)
     engine, store = engine_for(deps.state), store_for(deps.state)
     if not engine.ready():
         return Outcome.refused(not_ready(engine), "not_ready")
@@ -363,7 +402,10 @@ def actions() -> list[Action]:
                 "examples do, from a set of questions and answers (made under 'Teach it from "
                 "examples' on the same screen): it takes a minute or two and ends with the "
                 "same questions answered before and after and a mark that says whether it "
-                "learnt."
+                "learnt. Or, when the set was made under 'Make my own look or motion for video' "
+                "(pictures and short clips), it teaches the video model a look, a motion or a "
+                "subject: it takes about half an hour to an hour and pauses chat, image and video "
+                "making, and the result is chosen under My looks on a Video screen."
             ),
             input=StartIn,
             output=StartOut,

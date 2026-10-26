@@ -24,6 +24,7 @@ import { VIDEO_PRODUCT, useVideoFlow } from "../hooks/use-video-flow";
 import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../save";
 import { actions, chips, eyebrow, field, fieldLabel, panel } from "../styles";
 import { ExtendForm } from "./ExtendForm";
+import { type LookChoice, Looks, type VideoLook, withWords } from "./Looks";
 
 export const MAX_VIDEO_PROMPT = 500;
 
@@ -235,6 +236,8 @@ export type VideoWorkspaceProps = {
   /** Called when the clip starts being made (the web app tells its header). */
   onMaking?: () => void;
   onOpenLibrary?: () => void;
+  /** The looks the person taught the video model: "My looks" is shown when there are any. */
+  looks?: VideoLook[];
 };
 
 /** Make a clip from words or from a picture, watch it being made, and see the result. */
@@ -250,12 +253,16 @@ export function VideoWorkspace({
   hint,
   onMaking,
   onOpenLibrary,
+  looks = [],
 }: VideoWorkspaceProps) {
   const { state, start, reset, retry } = useVideoFlow(runs);
   // What the person asked for, kept so a refusal or an error can bring it back for editing.
   const [asked, setAsked] = useState<VideoFormValue | undefined>();
   const [saved, setSaved] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<LookChoice[]>([]);
+  // a look that was taken away (its model removed) cannot stay chosen
+  const usable = chosen.filter((c) => looks.some((l) => l.name === c.name));
   const saveCopy = useSaveCopy();
   const { phase } = state;
   const working = phase === "checking" || phase === "making";
@@ -267,7 +274,8 @@ export function VideoWorkspace({
     setProblem(null);
     start({
       mode: value.mode,
-      prompt: value.prompt,
+      prompt: withWords(value.prompt, looks, usable),
+      loras: usable.length > 0 ? usable : undefined,
       shape: value.shape,
       seconds: value.seconds,
       imageKey: value.picture?.key,
@@ -314,6 +322,7 @@ export function VideoWorkspace({
               {blockedReason}
             </Notice>
           ) : null}
+          <Looks looks={looks} chosen={usable} onChange={setChosen} />
           {mode === "extend" ? (
             videos ? (
               <ExtendForm

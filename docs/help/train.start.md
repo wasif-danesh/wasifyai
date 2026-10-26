@@ -1,7 +1,7 @@
 ---
 action: train.start
 screen: train
-synonyms: [teach it to decide, decision model training, teach it from examples, answer my way, my tone, my format, language model training, write like me, my writing style, train, teach, teach the app, make my own character, my own style, lora, fine tune, my mascot, my pet, my face, my art style, train a character, train a style, magic word, trigger word, custom model]
+synonyms: [video model training, make my own look, my own motion, video look, train a video, video lora, teach it to decide, decision model training, teach it from examples, answer my way, my tone, my format, language model training, write like me, my writing style, train, teach, teach the app, make my own character, my own style, lora, fine tune, my mascot, my pet, my face, my art style, train a character, train a style, magic word, trigger word, custom model]
 ---
 # Teach a character or style
 
@@ -180,3 +180,56 @@ All of the model is taught; it is not taught as a small adapter.
 - **Every example has the same answer** Add examples with the other answers too.
 - **Say whose these texts are first** Choose one of the two statements on the Check step.
 - **A model is being taught** Wait for it to finish or stop it.
+
+---
+
+## Teaching the video model a look or a motion (the same action, with a video set)
+
+### What it is for
+
+Teach the video model a character, a style or a motion of your own from pictures and short clips. You only add
+them: the app checks each one, writes a description of each, suggests a magic word and teaches the model, on this
+computer. Afterwards the result is a **look**: choose it under **My looks** on a Make a video, Animate a picture or
+Extend a video screen, and write its magic word in the prompt. A person's likeness is only partly kept, so do not
+expect a face to come back exactly; a style or a motion works best.
+
+### Steps in the app
+
+1. Open **Train models** and, under **Video model training**, choose **Make my own look or motion for video**.
+2. The first time, the app offers to set up the video trainer (about 180 MB, shown first); nothing is fetched until
+   you press the button. The video model itself (the one the Video screens use, about 16 GB) must already be on this
+   computer: if it is not, the screen says so and where to get it (**Select video model** on a Video screen).
+3. Add pictures and short clips: a few pictures and 5 to 15 clips of 2 to 10 seconds is plenty, at least 8 in all.
+   Each is marked Good, Too short, Too small, Too dark, Blurry, Still or Looks like a copy.
+4. Say what it is, give it a name, choose the magic word and say whose it is, and read the descriptions.
+5. Choose Teach it. It takes about half an hour on a Mac with 64 GB, and chat, image and video making pause.
+6. The result is in My models. Choose it on a Video screen under **My looks** (up to two at once, each with its own
+   strength; 1.5 is a good start).
+
+### Fields
+
+- `dataset_id`: The set made for video. It must have at least 8 pictures or clips, a description for each, a magic
+  word and the statement of whose they are. `base` and `method` can be left out (LTX-Video 2B, as a small adapter).
+
+### Limits
+
+- One run at a time, across every kind of model.
+- The video model taught is LTX-Video 2B 0.9.5 only: a look made for it does not work with another video model.
+- A run needs about 10 GB of free memory for clips at 768 by 512; a Mac with 16 GB has not been tried.
+- The descriptions are in English. The same safeguards as pictures apply, and a picture or a frame they refuse is not
+  kept.
+
+### Needs
+
+- A Mac with Apple silicon, the video trainer (PyTorch with diffusers, set up in the app), the video model and its text
+  encoder on this computer, and about 3 GB of free disk space for the trainer and the result.
+
+### Examples
+
+- Teach the video model my character from the video set "Ena".
+
+### Problems
+
+- **The video model is not on this computer yet** Choose Select video model on a Video screen.
+- **That set is for the video model, not the picture model** The set was made for video; start it from the video card.
+- **Add at least 8 pictures or clips** Add more.

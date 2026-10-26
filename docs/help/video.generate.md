@@ -18,6 +18,10 @@ Make a short video clip (5 or 8 seconds) from a description.
 3. Choose the shape and the length.
 4. Choose Create. It takes minutes; you can leave the screen.
 
+## My looks
+
+If you taught the video model a look or a motion (under **Train models**, in the Video model training card), the screen shows **My looks**: choose up to two and a strength for each (1.5 is a good start; above 2 can look rough). The app adds each look's magic word to your prompt if it is missing. A look made for another model does not work here; looks are made for LTX-Video 2B only.
+
 ## Fields
 
 - `prompt`: What happens in the clip.

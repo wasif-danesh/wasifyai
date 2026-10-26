@@ -21,6 +21,7 @@ SCHEMA = 1
 LEFT_RUNNING = "It was stopped when the app closed. Start it again."
 LEFT_PAUSED = "It was paused when the app closed. You can pick it up where it stopped."
 KINDS = ("character", "style", "object")
+FAMILIES = ("image", "video")  # what a set of pictures (and clips) teaches
 RIGHTS = ("mine", "permission", "drawing", "artwork")
 WRITING_RIGHTS = (
     "mine",
@@ -116,6 +117,7 @@ class TrainingStore:
         with self._lock:
             self._migrate()
             self._db.executescript(DDL)
+            self._add_columns()
             self._db.execute("INSERT OR IGNORE INTO meta VALUES ('schema', ?)", (str(SCHEMA),))
             # a run the app left going: paused when a checkpoint was kept, else stopped
             for row in self._db.execute(
@@ -135,6 +137,18 @@ class TrainingStore:
                 "UPDATE items SET caption_state = 'none' WHERE caption_state = 'writing'"
             )
             self._db.commit()
+
+    def _add_columns(self) -> None:
+        """What a later version added to a table an older one made (video sets, 2026-10-26)."""
+        for table, column, ddl in (
+            ("datasets", "family", "TEXT NOT NULL DEFAULT 'image'"),
+            ("items", "media", "TEXT NOT NULL DEFAULT 'picture'"),
+            ("items", "seconds", "REAL"),
+            ("items", "frames", "INTEGER"),
+        ):
+            have = {r["name"] for r in self._db.execute(f"PRAGMA table_info({table})")}
+            if column not in have:
+                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
     def _migrate(self) -> None:
         """A run can be paused (2026-10-25): the status check of an older table does not allow it."""
@@ -182,13 +196,17 @@ class TrainingStore:
 
     # ---- datasets -----------------------------------------------------------------------------
 
-    def add_dataset(self, tenant: str, user: str, kind: str, name: str) -> dict[str, Any]:
+    def add_dataset(
+        self, tenant: str, user: str, kind: str, name: str, family: str = "image"
+    ) -> dict[str, Any]:
         if kind not in KINDS:
             raise ValueError("kind")
+        if family not in FAMILIES:
+            raise ValueError("family")
         item = new_id()
         self._exec(
-            "INSERT INTO datasets(id, tenant_id, user_id, kind, name, created_at) VALUES (?,?,?,?,?,?)",
-            (item, tenant, user, kind, name.strip()[:60], now()),
+            "INSERT INTO datasets(id, tenant_id, user_id, kind, name, family, created_at) VALUES (?,?,?,?,?,?,?)",
+            (item, tenant, user, kind, name.strip()[:60], family, now()),
         )
         return self.get_dataset(tenant, user, item)
 
@@ -201,10 +219,13 @@ class TrainingStore:
             raise NotFound(item)
         return dict(row)
 
-    def list_datasets(self, tenant: str, user: str, limit: int = 50) -> list[dict[str, Any]]:
+    def list_datasets(
+        self, tenant: str, user: str, limit: int = 50, family: str | None = None
+    ) -> list[dict[str, Any]]:
         rows = self._all(
-            "SELECT * FROM datasets WHERE tenant_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT ?",
-            (tenant, user, limit),
+            "SELECT * FROM datasets WHERE tenant_id = ? AND user_id = ? AND (? IS NULL OR family = ?) "
+            "ORDER BY created_at DESC LIMIT ?",
+            (tenant, user, family, family, limit),
         )
         return [dict(r) for r in rows]
 
@@ -244,15 +265,16 @@ class TrainingStore:
 
     def add_item(
         self, tenant: str, user: str, dataset: str, *, name: str, width: int, height: int,
-        sha256: str, dhash: int, checks: list[dict[str, Any]],
+        sha256: str, dhash: int, checks: list[dict[str, Any]], media: str = "picture",
+        seconds: float | None = None, frames: int | None = None,
     ) -> dict[str, Any]:  # fmt: skip
         self.get_dataset(tenant, user, dataset)  # the owner only
         item = new_id()
         self._exec(
             "INSERT INTO items(id, dataset_id, tenant_id, user_id, name, width, height, sha256, dhash, "
-            "checks, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "checks, media, seconds, frames, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (item, dataset, tenant, user, name[:200], width, height, sha256, format(dhash, "016x"),
-             json.dumps(checks), now()),
+             json.dumps(checks), media, seconds, frames, now()),
         )  # fmt: skip
         return self.get_item(tenant, user, item)
 

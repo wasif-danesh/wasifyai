@@ -1,5 +1,6 @@
 """The run's input contract and the structured output of the guardrail."""
 
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel
@@ -29,6 +30,41 @@ DEFAULT_SECONDS = 5
 # 184: about 5 or 8 seconds). Any clip can be extended, however long; the picture softens a little
 # each round, which the screen says.
 OVERLAP_FRAMES = 9  # LTX wants 8 * n + 1
+
+# Looks the person taught (ADR-0073, video amendment): LoRAs on the video model, named by the file
+# they are kept in under a `loras` folder, with a strength. TV0 found the look needs about 1.5 to 2
+# at the app's guidance of 3, so the range runs higher than for pictures.
+MAX_LOOKS = 2
+LOOK_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()/-]{0,200}\.safetensors$")
+MIN_STRENGTH, MAX_STRENGTH, DEFAULT_STRENGTH = 0.1, 2.5, 1.5
+
+
+def check_looks(raw: object) -> tuple[list[dict[str, Any]], str]:
+    """The looks of a request as `[{name, weight}]`, or why they are refused. A name is a file name
+    relative to a `loras` folder: no `..`, no absolute path, only `.safetensors`."""
+    if raw in (None, []):
+        return [], ""
+    if not isinstance(raw, list):
+        return [], "Please choose the looks from the list."
+    if len(raw) > MAX_LOOKS:
+        return [], f"Please use at most {MAX_LOOKS} looks."
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in raw:
+        name = item.get("name") if isinstance(item, dict) else None
+        weight = item.get("weight", DEFAULT_STRENGTH) if isinstance(item, dict) else None
+        if not isinstance(name, str) or not LOOK_NAME.match(name) or ".." in name:
+            return [], "One of the looks has a name that cannot be used."
+        if isinstance(weight, bool) or not isinstance(weight, int | float):
+            return [], "A look's strength must be a number."
+        if not MIN_STRENGTH <= float(weight) <= MAX_STRENGTH:
+            return [], f"A look's strength must be between {MIN_STRENGTH} and {MAX_STRENGTH}."
+        if name in seen:
+            return [], "Each look can be used once."
+        seen.add(name)
+        out.append({"name": name, "weight": round(float(weight), 2)})
+    return out, ""
+
 
 CATEGORIES = [
     "ok",

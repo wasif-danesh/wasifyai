@@ -44,6 +44,35 @@ describe("the training client", () => {
     });
   });
 
+  it("makes a set for the video model, sends a clip with its own type and reads the video status and set-up", async () => {
+    const { transport, calls } = fake(() => json({ id: "d1" }));
+    const api = createTrainingApi(transport);
+    await api.createDataset("character", "Ena", "video");
+    await api.choices("character", "video");
+    const clip = new Blob([new Uint8Array([0, 0, 0, 24])], { type: "video/mp4" });
+    await api.addPicture("d1", clip, "walk.mp4");
+    await api.videoStatus();
+    await api.videoSetup();
+    await api.installVideoSetup(182_500_000);
+    await api.cancelVideoSetup();
+    await api.removeVideoSetup();
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
+      kind: "character",
+      name: "Ena",
+      family: "video",
+    });
+    expect(calls[1]?.path).toBe(`${BASE}/choices?kind=character&family=video`);
+    expect((calls[2]?.init?.headers as Record<string, string>)["content-type"]).toBe("video/mp4");
+    expect(calls.slice(3).map((c) => [c.init?.method ?? "GET", c.path])).toEqual([
+      ["GET", `${BASE}/video/status`],
+      ["GET", "/desktop/video-trainer-setup"],
+      ["POST", "/desktop/video-trainer-setup/install"],
+      ["POST", "/desktop/video-trainer-setup/install/cancel"],
+      ["POST", "/desktop/video-trainer-setup/uninstall"],
+    ]);
+    expect(JSON.parse(String(calls[5]?.init?.body))).toEqual({ confirm_bytes: 182_500_000 });
+  });
+
   it("sends a picture as the body with its own type, and the name in the address", async () => {
     const { transport, calls } = fake(() => json({ id: "p1" }));
     const api = createTrainingApi(transport);

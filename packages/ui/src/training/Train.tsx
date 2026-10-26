@@ -1,16 +1,17 @@
 "use client";
 
-import type {
-  Statement,
-  TrainDataset,
-  TrainKind,
-  TrainPicture,
-  TrainRun,
-  TrainStatus,
-  TrainedModel,
-  TrainingApi,
+import {
+  type Statement,
+  type TrainDataset,
+  type TrainKind,
+  type TrainPicture,
+  type TrainRun,
+  type TrainStatus,
+  type TrainedModel,
+  type TrainingApi,
+  gigabytes,
 } from "@wasifyai/client";
-import { FlaskConical, Trash2, Upload } from "lucide-react";
+import { Film, FlaskConical, Trash2, Upload } from "lucide-react";
 import { type DragEvent, useId, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
@@ -28,6 +29,7 @@ import { Writing, WritingResult } from "./Writing";
 import { useChoices } from "./use-choices";
 import { useTrainingSetup } from "./use-setup";
 import { type TrainState, useTraining } from "./use-training";
+import { type VideoTraining, useVideoTraining } from "./use-video-training";
 
 const INPUT =
   "flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30";
@@ -36,6 +38,13 @@ const KIND_LABEL: Record<TrainKind, { title: string; note: string }> = {
   character: { title: "A character, pet, person or thing", note: "It appears in every picture." },
   style: { title: "A style", note: "The look of the pictures: how they are drawn or painted." },
   object: { title: "An idea or an object", note: "One kind of thing, shown in different places." },
+};
+
+/** The same notes for a set made for the video model. */
+const KIND_NOTE_VIDEO: Record<TrainKind, string> = {
+  character: "It appears in every picture and clip.",
+  style: "The look of the pictures and clips: how they are drawn, painted or filmed.",
+  object: "One kind of thing, shown in different places.",
 };
 
 /**
@@ -48,8 +57,8 @@ const FAMILIES: {
   title: string;
   text: string;
   live?: boolean;
-  /** which screen Start opens: the pictures (default), the writing examples or the decisions */
-  start?: "writing" | "decide";
+  /** which screen Start opens: the pictures (default), the writing examples, the decisions or a set for the video model */
+  start?: "writing" | "decide" | "video";
   soon?: string;
 }[] = [
   {
@@ -79,8 +88,9 @@ const FAMILIES: {
     id: "video",
     label: "Video model training",
     title: "Make my own look or motion for video",
-    text: "From short clips. Needs an NVIDIA graphics card for now.",
-    soon: "Coming later",
+    text: "Add pictures and short clips of your character, style or motion. Then write its magic word in a video prompt to make it.",
+    live: true,
+    start: "video",
   },
 ];
 
@@ -104,9 +114,12 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
   // the trainer's own component: offered while training is not ready (a desktop engine), read again once set up
   const notReady = state.status !== null && !state.status.ready;
   const setup = useTrainingSetup(api, place === "device", () => void t.refresh(), pollMs);
+  const video = useVideoTraining(api, place === "device", state.status, pollMs);
   const showingRun = state.run !== null;
   const [screen, setScreen] = useState<"writing" | "decide" | null>(null);
   const writing = screen !== null;
+  // a set for the video model: the picture trainer's notices do not apply to it
+  const forVideo = state.current?.family === "video";
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-5 p-[clamp(1rem,3vw,2rem)]">
       <header className="grid gap-1.5">
@@ -117,13 +130,16 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
             : screen === "decide"
               ? "Teach it to decide"
               : state.current || showingRun
-                ? "Make my own character or style"
+                ? state.current?.family === "video"
+                  ? "Make my own look or motion for video"
+                  : "Make my own character or style"
                 : "Teach the app something of your own"}
         </h1>
         {writing ? null : state.current || showingRun ? (
           <p className="max-w-3xl text-muted-foreground">
-            Add pictures and nothing else: the app describes them, suggests a magic word and teaches
-            the image model.{" "}
+            {state.current?.family === "video"
+              ? "Add pictures and short clips and nothing else: the app describes them, suggests a magic word and teaches the video model. "
+              : "Add pictures and nothing else: the app describes them, suggests a magic word and teaches the image model. "}
             {place === "device"
               ? "It is learnt on this computer; your pictures are not sent anywhere."
               : "It is learnt on the service's graphics card."}
@@ -138,13 +154,13 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
         )}
       </header>
 
-      {writing ? null : state.status?.preview ? (
+      {writing || forVideo ? null : state.status?.preview ? (
         <Notice tone="info" title="A preview">
           Training runs every step and shows sample pictures, but it does not learn yet, so the
           models it makes are not real. The real trainer is coming.
         </Notice>
       ) : null}
-      {writing ? null : notReady &&
+      {writing || forVideo ? null : notReady &&
         setup.setup &&
         setup.setup.plan.supported &&
         !setup.setup.installed ? (
@@ -159,9 +175,14 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
           {setup.setup?.problem ?? state.status?.problem ?? "It could not be started."}
         </Notice>
       ) : null}
-      {!writing && state.status?.fit?.verdict === "too_big" ? (
+      {!writing && !forVideo && state.status?.fit?.verdict === "too_big" ? (
         <Notice tone="warn" title="Not enough memory to teach a model">
           {state.status.fit.reason}
+        </Notice>
+      ) : null}
+      {forVideo && video.status?.fit?.verdict === "too_big" ? (
+        <Notice tone="warn" title="Not enough memory to teach a model">
+          {video.status.fit.reason}
         </Notice>
       ) : null}
       {!writing && state.error ? (
@@ -193,16 +214,21 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
       ) : showingRun && state.run ? (
         <RunView t={t} run={state.run} onOpenLibrary={onOpenLibrary} runs={runs} api={api} />
       ) : state.current ? (
-        <MakeView t={t} status={state.status} api={api} />
+        <MakeView t={t} status={state.status} api={api} video={video} />
       ) : (
         <Home
           t={t}
           runs={runs}
           setup={setup}
+          video={video}
           api={api}
           onStart={
             place === "device"
-              ? { writing: () => setScreen("writing"), decide: () => setScreen("decide") }
+              ? {
+                  writing: () => setScreen("writing"),
+                  decide: () => setScreen("decide"),
+                  video: () => void t.newDataset("character", "video"),
+                }
               : undefined
           }
         />
@@ -217,14 +243,16 @@ function Home({
   t,
   runs,
   setup,
+  video,
   api,
   onStart,
 }: {
   t: Hook;
   runs?: ImageFlowApi;
   setup: ReturnType<typeof useTrainingSetup>;
+  video: VideoTraining;
   api: TrainingApi;
-  onStart?: { writing: () => void; decide: () => void };
+  onStart?: { writing: () => void; decide: () => void; video: () => void };
 }) {
   const { state } = t;
   const ready = state.status?.ready === true;
@@ -240,7 +268,7 @@ function Home({
             <span className={eyebrow}>{f.label}</span>
             <h2 className="m-0 font-semibold text-lg">{f.title}</h2>
             <p className="m-0 text-muted-foreground">{f.text}</p>
-            {f.live && (f.start === "writing" || f.start === "decide") ? (
+            {f.live && (f.start === "writing" || f.start === "decide" || f.start === "video") ? (
               onStart ? (
                 <div className={actions}>
                   <Button
@@ -248,9 +276,24 @@ function Home({
                     aria-label={
                       f.start === "writing"
                         ? "Start: teach it from examples"
-                        : "Start: teach it to decide"
+                        : f.start === "decide"
+                          ? "Start: teach it to decide"
+                          : "Start: make my own look or motion for video"
                     }
-                    onClick={f.start === "writing" ? onStart.writing : onStart.decide}
+                    disabled={
+                      f.start === "video" &&
+                      (video.status?.ready !== true ||
+                        video.status.busy ||
+                        state.busy !== null ||
+                        state.status?.busy === true)
+                    }
+                    onClick={
+                      f.start === "writing"
+                        ? onStart.writing
+                        : f.start === "decide"
+                          ? onStart.decide
+                          : onStart.video
+                    }
                   >
                     Start
                   </Button>
@@ -279,6 +322,8 @@ function Home({
         ))}
       </section>
 
+      <VideoSetup video={video} onStart={onStart !== undefined} />
+
       {state.paused.length > 0 ? (
         <section aria-label="Paused" className="grid gap-2">
           <h2 className="m-0 font-semibold text-lg">Paused</h2>
@@ -303,7 +348,7 @@ function Home({
 
       {state.datasets.length > 0 ? (
         <section aria-label="Sets of pictures" className="grid gap-2">
-          <h2 className="m-0 font-semibold text-lg">Sets of pictures</h2>
+          <h2 className="m-0 font-semibold text-lg">Sets of pictures and clips</h2>
           <ul className="m-0 grid list-none gap-2 p-0">
             {state.datasets.map((d) => (
               <li key={d.id} className="flex flex-wrap items-center gap-3 rounded-xl border p-3">
@@ -311,7 +356,13 @@ function Home({
                   <strong>{d.name || "Untitled set"}</strong>{" "}
                   <span className="text-muted-foreground">
                     · {KIND_LABEL[d.kind].title.toLowerCase()} · {d.pictures}{" "}
-                    {d.pictures === 1 ? "picture" : "pictures"}
+                    {d.family === "video"
+                      ? d.pictures === 1
+                        ? "picture or clip"
+                        : "pictures and clips"
+                      : d.pictures === 1
+                        ? "picture"
+                        : "pictures"}
                   </span>
                 </span>
                 <Button
@@ -347,24 +398,71 @@ function Home({
         )}
       </section>
 
-      {setup.setup && (setup.setup.tool === "managed" || setup.setup.base === "managed") ? (
+      {(setup.setup && (setup.setup.tool === "managed" || setup.setup.base === "managed")) ||
+      (video.setup.setup &&
+        (video.setup.setup.tool === "managed" || video.setup.setup.base === "managed")) ? (
         <section aria-label="Training tools" className="grid gap-2">
           <h2 className="m-0 font-semibold text-lg">Training tools</h2>
           <p className={hint}>
-            The trainer and the picture model it learns on are kept in the app's own folder.
+            The trainers and the small files they learn with are kept in the app's own folder.
             Removing them gives the space back; you can set them up again whenever you want to teach
-            something. Your pictures and the models you taught are kept.
+            something. Your pictures, clips and the models you taught are kept.
           </p>
           <div className={actions}>
-            <Sure
-              label="Remove"
-              name="the trainer and the picture model"
-              onSure={() => void setup.remove()}
-            />
+            {setup.setup && (setup.setup.tool === "managed" || setup.setup.base === "managed") ? (
+              <Sure
+                label="Remove"
+                name="the trainer and the picture model"
+                onSure={() => void setup.remove()}
+              />
+            ) : null}
+            {video.setup.setup &&
+            (video.setup.setup.tool === "managed" || video.setup.setup.base === "managed") ? (
+              <Sure
+                label="Remove"
+                name="the video trainer"
+                onSure={() => void video.setup.remove()}
+              />
+            ) : null}
           </div>
         </section>
       ) : null}
     </>
+  );
+}
+
+/**
+ * What the video model needs before it can be taught, shown under the cards while it cannot be: the video
+ * trainer's set-up (sizes first, nothing fetched before the button), and the video model itself, which the
+ * Video screens already get and this screen does not fetch.
+ */
+function VideoSetup({ video, onStart }: { video: VideoTraining; onStart: boolean }) {
+  const { status, setup } = video;
+  if (!onStart || status === null || status.ready) return null;
+  const missing = status.needs.filter((n) => !n.have);
+  const state = setup.setup;
+  return (
+    <section aria-label="Set up video training" className="grid gap-3">
+      {state?.plan.supported && !state.installed && state.progress.state !== "ready" ? (
+        <SetupCard
+          setup={state}
+          error={setup.error}
+          onInstall={(bytes) => void setup.install(bytes)}
+          onCancel={() => void setup.cancel()}
+          title="Set up video training"
+          intro="Teaching the video model needs a trainer. It is not in the app. It is downloaded once, every file checked, and kept in the app's own folder. Nothing else on your computer is changed, and your pictures and clips are not sent anywhere."
+        />
+      ) : (
+        <Notice tone="warn" title="Video training is not ready">
+          {state?.problem ?? status.problem ?? "It could not be started."}
+        </Notice>
+      )}
+      {missing.map((n) => (
+        <Notice key={n.name} tone="info" title="The video model is needed">
+          {n.name} ({gigabytes(n.bytes)}) is what the Video screens use. {n.how}
+        </Notice>
+      ))}
+    </section>
   );
 }
 
@@ -457,9 +555,11 @@ function ModelCard({
         <>
           <p className="m-0 text-sm">
             Magic word: <code>{m.trigger_word}</code>
+            {m.card.family === "video" ? " (use it in a video prompt)" : ""}
           </p>
           <p className={hint}>
-            {KIND_LABEL[m.kind].title}, {m.card.dataset.pictures} pictures, {m.card.steps} steps,{" "}
+            {KIND_LABEL[m.kind].title}, {m.card.dataset.pictures}{" "}
+            {m.card.family === "video" ? "pictures and clips" : "pictures"}, {m.card.steps} steps,{" "}
             {m.card.base_title} · {m.card.licence}.{m.card.note ? ` ${m.card.note}` : ""}
           </p>
         </>
@@ -493,7 +593,7 @@ function ModelCard({
             <DecideResult model={m} api={api} />
           </div>
         </details>
-      ) : runs && !m.preview ? (
+      ) : runs && !m.preview && m.card.family !== "video" ? (
         <details className="rounded-lg border px-3 py-2">
           <summary className="cursor-pointer font-medium text-sm">Check and try it</summary>
           <div className="grid gap-5 pt-3">
@@ -512,21 +612,24 @@ function MakeView({
   t,
   status,
   api,
+  video,
 }: {
   t: Hook;
   status: TrainStatus | null;
   api: TrainingApi;
+  video: VideoTraining;
 }) {
   const d = t.state.current as TrainDataset;
+  const isVideo = d.family === "video";
   const [step, setStep] = useState<1 | 2>(1);
-  const min = status?.min_pictures ?? 8;
+  const min = isVideo ? (video.status?.min_items ?? 8) : (status?.min_pictures ?? 8);
   return (
     <>
       <nav aria-label="Steps" className="flex flex-wrap gap-2 text-sm">
         <span
           className={cn("rounded-full border px-3 py-1", step === 1 && "bg-accent font-medium")}
         >
-          1 Add pictures
+          {isVideo ? "1 Add pictures and clips" : "1 Add pictures"}
         </span>
         <span
           className={cn("rounded-full border px-3 py-1", step === 2 && "bg-accent font-medium")}
@@ -536,9 +639,16 @@ function MakeView({
         <span className="rounded-full border px-3 py-1 text-muted-foreground">3 Teach</span>
       </nav>
       {step === 1 ? (
-        <PicturesStep t={t} d={d} min={min} onNext={() => setStep(2)} />
+        <PicturesStep t={t} d={d} min={min} onNext={() => setStep(2)} video={isVideo} />
       ) : (
-        <CheckStep t={t} d={d} status={status} onBack={() => setStep(1)} api={api} />
+        <CheckStep
+          t={t}
+          d={d}
+          status={status}
+          onBack={() => setStep(1)}
+          api={api}
+          video={isVideo ? video : undefined}
+        />
       )}
       <div>
         <Button type="button" variant="ghost" size="sm" onClick={() => void t.leave()}>
@@ -554,7 +664,8 @@ function PicturesStep({
   d,
   min,
   onNext,
-}: { t: Hook; d: TrainDataset; min: number; onNext: () => void }) {
+  video = false,
+}: { t: Hook; d: TrainDataset; min: number; onNext: () => void; video?: boolean }) {
   const [over, setOver] = useState(false);
   const pickerId = useId();
   const items = d.items ?? [];
@@ -569,9 +680,9 @@ function PicturesStep({
     take(e.dataTransfer.files);
   };
   return (
-    <section className={panel} aria-label="Add pictures">
+    <section className={panel} aria-label={video ? "Add pictures and clips" : "Add pictures"}>
       <section
-        aria-label="Drop pictures here"
+        aria-label={video ? "Drop pictures and clips here" : "Drop pictures here"}
         onDragOver={(e) => {
           e.preventDefault();
           setOver(true);
@@ -584,14 +695,22 @@ function PicturesStep({
         )}
       >
         <Upload className="size-6 text-muted-foreground" aria-hidden="true" />
-        <p className="m-0">Drop pictures here, or choose them.</p>
+        <p className="m-0">
+          {video
+            ? "Drop pictures and clips here, or choose them."
+            : "Drop pictures here, or choose them."}
+        </p>
         <input
           id={pickerId}
           type="file"
           multiple
-          accept="image/png,image/jpeg,image/webp"
+          accept={
+            video
+              ? "image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm"
+              : "image/png,image/jpeg,image/webp"
+          }
           hidden
-          aria-label="Choose pictures"
+          aria-label={video ? "Choose pictures and clips" : "Choose pictures"}
           onChange={(e) => {
             take(e.target.files);
             e.target.value = "";
@@ -603,18 +722,31 @@ function PicturesStep({
           disabled={t.state.busy === "picture"}
           onClick={() => document.getElementById(pickerId)?.click()}
         >
-          {t.state.busy === "picture" ? "Adding…" : "Choose pictures"}
+          {t.state.busy === "picture"
+            ? "Adding…"
+            : video
+              ? "Choose pictures and clips"
+              : "Choose pictures"}
         </Button>
         <p className={hint}>
-          15 to 25 good ones is plenty, and at least {min}. PNG, JPEG or WebP, under 20 MB each.
+          {video
+            ? `A few pictures and 5 to 15 short clips of 2 to 10 seconds is plenty, and at least ${min} in all. The app learns from up to three one-second pieces of each clip. MP4, MOV or WebM; PNG, JPEG or WebP.`
+            : `15 to 25 good ones is plenty, and at least ${min}. PNG, JPEG or WebP, under 20 MB each.`}
         </p>
       </section>
 
       {items.length > 0 ? (
         <>
           <p className="m-0" aria-live="polite">
-            {items.length} {items.length === 1 ? "picture" : "pictures"}.
-            {problems > 0 ? ` ${problems} with a problem.` : " All good."}
+            {items.length}{" "}
+            {video
+              ? items.length === 1
+                ? "picture or clip"
+                : "pictures and clips"
+              : items.length === 1
+                ? "picture"
+                : "pictures"}
+            .{problems > 0 ? ` ${problems} with a problem.` : " All good."}
           </p>
           <ul className="m-0 grid list-none grid-cols-2 gap-3 p-0 sm:grid-cols-3 md:grid-cols-4">
             {items.map((i) => (
@@ -642,7 +774,8 @@ function PicturesStep({
         </Button>
         {items.length < min ? (
           <span className="text-muted-foreground">
-            Add at least {min} pictures ({min - items.length} more).
+            Add at least {min} {video ? "pictures and clips" : "pictures"} ({min - items.length}{" "}
+            more).
           </span>
         ) : null}
       </div>
@@ -659,6 +792,12 @@ function PictureTile({
     <li className="grid gap-1.5">
       <div className="relative aspect-square overflow-hidden rounded-lg border bg-muted">
         {src ? <img src={src} alt={item.name} className="size-full object-cover" /> : null}
+        {item.media === "clip" ? (
+          <span className="absolute start-1 bottom-1 flex items-center gap-1 rounded-full bg-background/90 px-2 py-0.5 text-xs shadow-xs">
+            <Film className="size-3" aria-hidden="true" />
+            {item.seconds ? `${item.seconds.toFixed(1)} s` : "Clip"}
+          </span>
+        ) : null}
         <button
           type="button"
           aria-label={`Remove ${item.name}`}
@@ -687,15 +826,19 @@ function CheckStep({
   status,
   onBack,
   api,
+  video,
 }: {
   t: Hook;
   d: TrainDataset;
   status: TrainStatus | null;
   onBack: () => void;
   api: TrainingApi;
+  /** a set for the video model: its status and set-up */
+  video?: VideoTraining;
 }) {
   const [own, setOwn] = useState("");
-  const choosing = useChoices(api, d.kind);
+  const isVideo = video !== undefined;
+  const choosing = useChoices(api, d.kind, isVideo ? "video" : "image");
   const nameId = useId();
   const ownId = useId();
   const items = d.items ?? [];
@@ -706,7 +849,8 @@ function CheckStep({
   ).length;
   const writing = d.writing || t.state.busy === "captions";
   const estimate = d.estimate ?? status?.estimates?.[d.kind] ?? "";
-  const preflight = status?.preflight ?? null;
+  const noVideo = video?.status && !video.status.ready ? video.status.problem : null;
+  const preflight = (video ? video.status?.preflight : status?.preflight) ?? null;
   return (
     <section className={panel} aria-label="Check">
       <fieldset className={cn(field, "m-0 border-0 p-0")}>
@@ -718,7 +862,7 @@ function CheckStep({
             </Chip>
           ))}
         </div>
-        <p className={hint}>{KIND_LABEL[d.kind].note}</p>
+        <p className={hint}>{isVideo ? KIND_NOTE_VIDEO[d.kind] : KIND_LABEL[d.kind].note}</p>
       </fieldset>
 
       <div className={field}>
@@ -740,7 +884,9 @@ function CheckStep({
       <fieldset className={cn(field, "m-0 border-0 p-0")}>
         <legend className={cn(fieldLabel, "mb-1.5")}>The magic word</legend>
         <p className={hint}>
-          When you write this word in a prompt, the app draws your {d.name || "character"}.
+          {isVideo
+            ? `When you write this word in a video prompt, the app makes your ${d.name || "character"}.`
+            : `When you write this word in a prompt, the app draws your ${d.name || "character"}.`}
         </p>
         <div className={chips}>
           {suggestions.map((w) => (
@@ -823,8 +969,9 @@ function CheckStep({
           </Button>
         </div>
         <p className={hint}>
-          The app describes each picture in words. Read them and change any you like; the magic word
-          goes first.
+          {isVideo
+            ? "The app describes each picture and clip in words. Read them and change any you like; the magic word goes first."
+            : "The app describes each picture in words. Read them and change any you like; the magic word goes first."}
         </p>
         <ul className="m-0 grid list-none gap-3 p-0">
           {items.map((i) => (
@@ -847,6 +994,11 @@ function CheckStep({
           ))}
         </>
       ) : null}
+      {noVideo ? (
+        <Notice tone="warn" title="It cannot start now">
+          {noVideo}
+        </Notice>
+      ) : null}
       <Choose c={choosing} />
       <div className={actions}>
         <Button type="button" variant="outline" onClick={onBack}>
@@ -860,6 +1012,8 @@ function CheckStep({
             writing ||
             t.state.busy === "run" ||
             t.state.status?.busy === true ||
+            video?.status?.ready === false ||
+            video?.status?.busy === true ||
             preflight?.ok === false
           }
           onClick={() => void t.teach(choosing.choice)}
@@ -868,7 +1022,7 @@ function CheckStep({
         </Button>
         <span className="text-muted-foreground">
           {d.missing ??
-            `${estimate}. ${preflight?.pauses ?? "Chat and image making pause while it learns."}`}
+            `${estimate}. ${preflight?.pauses ?? (isVideo ? "Chat, image and video making pause while it learns." : "Chat and image making pause while it learns.")}`}
         </span>
       </div>
     </section>
@@ -994,7 +1148,16 @@ function RunView({
           </h2>
           {model ? (
             <p className="m-0">
-              Write <code>{model.trigger_word}</code> in a prompt to draw it.
+              {model.card.family === "video" ? (
+                <>
+                  Write <code>{model.trigger_word}</code> in a video prompt and choose it under My
+                  looks on a Video screen.
+                </>
+              ) : (
+                <>
+                  Write <code>{model.trigger_word}</code> in a prompt to draw it.
+                </>
+              )}
             </p>
           ) : null}
           {run.preview ? (
@@ -1028,7 +1191,7 @@ function RunView({
         </>
       ) : null}
 
-      {run.status === "done" && model && runs ? (
+      {run.status === "done" && model && runs && model.card.family !== "video" ? (
         <>
           <CheckIt model={model} api={api} runs={runs} auto onSaved={() => void t.refresh()} />
           <TryIt model={model} runs={runs} />
@@ -1054,7 +1217,7 @@ function RunView({
                 void t.openDataset((t.state.current as TrainDataset).id);
               }}
             >
-              Back to the pictures
+              {t.state.current.family === "video" ? "Back to the set" : "Back to the pictures"}
             </Button>
           ) : null}
         </div>

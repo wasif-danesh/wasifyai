@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """A stand-in for the app around the training product: the routes on a FastAPI app with the preview
 trainer, a fake vision model that moderates and describes, and memory for usage and search."""
 
@@ -254,6 +255,80 @@ class FakeDecider:
         )  # fmt: skip
 
 
+class FakeVideoTrainer:
+    """The video engine without a model: the same calls, an adapter a stub makes and a look published."""
+
+    preview = False
+    engine = "fake-diffusers"
+
+    def __init__(self, root: Path) -> None:
+        self.slot = None
+        self.root = root
+        self.stopped = False
+        self.fail_with: str | None = None
+        self.hold = asyncio.Event()
+        self.hold.set()
+        self.not_ready: str | None = None
+        self.jobs: list = []
+        self.published: list[str] = []
+        self.unpublished: list[str] = []
+
+    def problem(self, base_id=None):  # noqa: ANN001
+        return self.not_ready
+
+    def ready(self, base_id=None):  # noqa: ANN001
+        return self.problem(base_id) is None
+
+    def fit(self, need_gb):  # noqa: ANN001
+        return {"verdict": "fits", "reason": ""}
+
+    def state(self):
+        return {"engine": self.engine, "preview": False, "setup": self.problem()}
+
+    def preflight_blockers(self):
+        return []
+
+    async def stop(self):
+        self.stopped = True
+        self.hold.set()
+
+    async def train(self, job, folder, report):  # noqa: ANN001
+        from wasifyai_training.trainer import Stopped
+        from wasifyai_training.video import VideoResult
+
+        self.jobs.append(job)
+        self.stopped = False
+        for step in range(1, job.steps + 1):
+            report(step, f"Learning, step {step} of {job.steps}")
+            if step == 1:
+                await self.hold.wait()
+            if self.stopped:
+                raise Stopped("It was stopped, so nothing was kept.")
+            if step >= 3:
+                break
+            await asyncio.sleep(0)
+        if self.fail_with:
+            raise RuntimeError(self.fail_with)
+        out = folder / "out"
+        out.mkdir(parents=True, exist_ok=True)
+        adapter = out / "pytorch_lora_weights.safetensors"
+        from wasifyai_training.comfy_lora import write_tensors
+
+        a = {"dtype": "BF16", "shape": [2, 4], "data": bytes(16)}
+        b = {"dtype": "BF16", "shape": [4, 2], "data": bytes(16)}
+        base = "transformer.transformer_blocks.0.attn1.to_q"
+        write_tensors(adapter, {f"{base}.lora_A.weight": a, f"{base}.lora_B.weight": b}, {})
+        return VideoResult(adapter, 3.0, self.engine, 9 * 1024**3, 1.2, 0.5)
+
+    async def publish(self, adapter, title, run_id):  # noqa: ANN001
+        name = f"wasify-video-{title.lower().replace(' ', '-')}-{run_id[:8]}.safetensors"
+        self.published.append(name)
+        return name
+
+    async def unpublish(self, name):  # noqa: ANN001
+        self.unpublished.append(name)
+
+
 def make_app(tmp_path: Path) -> tuple[FastAPI, Vision]:
     app = FastAPI()
     app.state.desktop_dir = tmp_path
@@ -262,6 +337,7 @@ def make_app(tmp_path: Path) -> tuple[FastAPI, Vision]:
     app.state.training = trainer
     app.state.language_training = FakeWriter()
     app.state.decision_training = FakeDecider()
+    app.state.video_training = FakeVideoTrainer(tmp_path)
     vision = Vision()
     app.state.caps = {"wasifyai-training": SimpleNamespace(text=vision, db=None, config=None)}
     app.state.creation_index = Index()
@@ -291,8 +367,10 @@ def wait(client, path: str, done, headers=None, tries: int = 300) -> dict[str, A
     raise AssertionError(f"still not: {row}")
 
 
-def new_dataset(client, kind: str = "character", name: str = "Marlo") -> dict[str, Any]:
-    r = client.post(f"{BASE}/datasets", json={"kind": kind, "name": name})
+def new_dataset(
+    client, kind: str = "character", name: str = "Marlo", family: str = "image"
+) -> dict[str, Any]:
+    r = client.post(f"{BASE}/datasets", json={"kind": kind, "name": name, "family": family})
     assert r.status_code == 201, r.text
     return r.json()
 

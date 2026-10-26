@@ -47,7 +47,13 @@ from wasifyai_training.runtime import (
     word_problem,
     words_of,
 )
-from wasifyai_training.store import KINDS, RIGHTS, NotFound
+from wasifyai_training.store import FAMILIES, KINDS, RIGHTS, NotFound
+from wasifyai_training.video import add_clip, ready_to_teach
+from wasifyai_training.video import estimate_words as video_estimate
+from wasifyai_training.video import manager_for as video_manager_for
+from wasifyai_training.video import plan_of as video_plan
+from wasifyai_training.video import seconds_per_step as video_seconds_per_step_tokens
+from wasifyai_training.video_routes import add_video_routes, video_status_of
 from wasifyai_training.writing import estimate_words as writing_estimate
 from wasifyai_training.writing import manager_for as writing_manager_for
 from wasifyai_training.writing_routes import add_writing_routes
@@ -59,6 +65,7 @@ MAX_UPLOAD = 25 * 1024 * 1024
 class DatasetIn(BaseModel):
     kind: str = Field("character", max_length=12)
     name: str = Field("", max_length=60)
+    family: str = Field("image", max_length=8)  # "video": pictures and clips for the video model
 
 
 class DatasetPatch(BaseModel):
@@ -97,6 +104,17 @@ class EvaluationIn(BaseModel):
 
 class RenameIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
+
+
+def video_seconds_per_step(settings: dict[str, Any]) -> float:
+    """What a step of this video run takes: as planned for its mix, else by its size and frames."""
+    from wasifyai_training.video import SIZES, tokens_of
+
+    if settings.get("seconds_per_step"):
+        return float(settings["seconds_per_step"])
+
+    width, height = SIZES.get(str(settings.get("size", "square")), SIZES["square"])
+    return video_seconds_per_step_tokens(tokens_of(width, height, int(settings.get("frames") or 1)))
 
 
 def build_routes(deps: RouteDeps) -> APIRouter:
@@ -147,6 +165,14 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         items = store.list_items(identity.tenant_id, identity.user_id, row["id"])
         out = clean(row)
         out["pictures"] = len(items)
+        if row["family"] == "video":  # pictures and clips, taught to the video model
+            plan = video_plan(items)
+            out["clips"] = plan["clips"]
+            out["missing"] = ready_to_teach(row, items)
+            out["steps"] = plan["steps"]
+            out["estimate"] = video_estimate(plan["seconds"])
+            out["writing"] = caption_manager_for(deps).busy(row["id"])
+            return out
         out["missing"] = ready_to_train(row, items)
         # what teaching this set would take, by its own size: more pictures, more steps
         out["steps"] = trainer.steps_for(row["kind"], len(items))
@@ -166,6 +192,10 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             base = bases.descriptor(row["base"]) or bases.descriptors("language")[0]
             out["estimate"] = writing_estimate(row["steps"], base)
             out["live"] = writing_manager_for(deps).active() == row["id"]
+            return out
+        if settings.get("family") == "video":  # a video run: its own manager and estimate
+            out["estimate"] = video_estimate(row["steps"] * video_seconds_per_step(settings) + 60)
+            out["live"] = video_manager_for(deps).active() == row["id"]
             return out
         if settings.get("family") == "decision":  # a decision run: its own manager and estimate
             base = bases.descriptor(row["base"]) or bases.descriptors("decision")[0]
@@ -191,10 +221,12 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             "preflight": engine.preflight() if hasattr(engine, "preflight") else None,
             "busy": runs.busy()
             or writing_manager_for(deps).busy()
-            or decision_manager_for(deps).busy(),
+            or decision_manager_for(deps).busy()
+            or video_manager_for(deps).busy(),
             "active_run": runs.active()
             or writing_manager_for(deps).active()
-            or decision_manager_for(deps).active(),
+            or decision_manager_for(deps).active()
+            or video_manager_for(deps).active(),
             "place": "device",
             "min_pictures": MIN_PICTURES,
             "max_pictures": MAX_PICTURES,
@@ -207,9 +239,13 @@ def build_routes(deps: RouteDeps) -> APIRouter:
 
     @router.get("/choices")
     async def choices(
-        kind: str = Query("character", max_length=20), identity: Identity = Depends(deps.identity)
+        kind: str = Query("character", max_length=20),
+        family: str = Query("image", max_length=8),
+        identity: Identity = Depends(deps.identity),
     ) -> dict[str, Any]:
         """The base models and methods the person may choose for a kind of teaching."""
+        if family == "video":
+            return (await video_status_of(deps, kind))["choices"]
         engine = guard()
         found = getattr(deps.state, "desktop_discovery", None)
         installed = [i.public() for i in getattr(found, "items", [])]
@@ -227,17 +263,23 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             raise HTTPException(
                 422, {"code": "bad_kind", "message": "Choose a character, a style or an object."}
             )
+        if body.family not in FAMILIES:
+            raise HTTPException(422, {"code": "bad_kind", "message": "Choose pictures or video."})
         row = store_for(deps.state).add_dataset(
-            identity.tenant_id, identity.user_id, body.kind, body.name
+            identity.tenant_id, identity.user_id, body.kind, body.name, body.family
         )
         return dataset_out(identity, row)
 
     @router.get("/datasets")
     async def list_datasets(
-        limit: int = Query(50, ge=1, le=200), identity: Identity = Depends(deps.identity)
+        limit: int = Query(50, ge=1, le=200),
+        family: str | None = Query(None, max_length=8),
+        identity: Identity = Depends(deps.identity),
     ) -> dict[str, Any]:
         guard()
-        rows = store_for(deps.state).list_datasets(identity.tenant_id, identity.user_id, limit)
+        rows = store_for(deps.state).list_datasets(
+            identity.tenant_id, identity.user_id, limit, family if family in FAMILIES else None
+        )
         return {"datasets": [dataset_out(identity, r) for r in rows]}
 
     @router.get("/datasets/{dataset_id}")
@@ -250,7 +292,9 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         items = store.list_items(identity.tenant_id, identity.user_id, dataset_id)
         out = dataset_out(identity, row)
         out["items"] = [item_out(i) for i in items]
-        out["suggestions"] = await suggestions(store, identity, row, guard())
+        # the picture model's tokenizer judges a picture set's words; a video set has T5's own
+        engine = None if row["family"] == "video" else guard()
+        out["suggestions"] = await suggestions(store, identity, row, engine)
         return out
 
     @router.patch("/datasets/{dataset_id}")
@@ -276,7 +320,8 @@ def build_routes(deps: RouteDeps) -> APIRouter:
                         "message": "Use a made-up word of 4 to 12 letters, a to z.",
                     },
                 )
-            if word and (why := await word_problem(guard(), word)):
+            is_video = dataset_or_404(identity, dataset_id)["family"] == "video"
+            if word and not is_video and (why := await word_problem(guard(), word)):
                 raise HTTPException(422, {"code": "bad_word", "message": why})
             fields["trigger_word"] = word
         row = store_for(deps.state).update_dataset(
@@ -302,14 +347,21 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         guard()
         dataset_or_404(identity, dataset_id)
         declared = int(request.headers.get("content-length") or 0)
-        if declared > MAX_UPLOAD:
+        if declared > MAX_UPLOAD and not request.headers.get("content-type", "").startswith(
+            "video/"
+        ):
             raise HTTPException(
                 422,
                 {"code": "bad_picture", "message": "That picture is too big. Use one under 20 MB."},
             )
         data = await request.body()
+        wants_clip = request.headers.get("content-type", "").startswith("video/")
         try:
-            row = await add_picture(deps, identity, dataset_id, name, data)
+            row = (
+                await add_clip(deps, identity, dataset_id, name, data)
+                if wants_clip
+                else await add_picture(deps, identity, dataset_id, name, data)
+            )
         except Refused as e:
             raise refuse(e) from None
         return item_out(row)
@@ -370,11 +422,12 @@ def build_routes(deps: RouteDeps) -> APIRouter:
     @router.post("/runs", status_code=202)
     async def start_run(body: RunIn, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
         guard()
-        dataset_or_404(identity, body.dataset_id)
+        dataset = dataset_or_404(identity, body.dataset_id)
         try:
-            row = await run_manager_for(deps).start(
-                identity, body.dataset_id, body.base, body.method
+            manager = (
+                video_manager_for(deps) if dataset["family"] == "video" else run_manager_for(deps)
             )
+            row = await manager.start(identity, body.dataset_id, body.base, body.method)
         except Refused as e:
             raise refuse(e) from None
         return run_out(row)
@@ -403,6 +456,8 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             return {"cancelled": await writing_manager_for(deps).cancel(identity, run_id)}
         if (row.get("settings") or {}).get("family") == "decision":
             return {"cancelled": await decision_manager_for(deps).cancel(identity, run_id)}
+        if (row.get("settings") or {}).get("family") == "video":
+            return {"cancelled": await video_manager_for(deps).cancel(identity, run_id)}
         return {"cancelled": await run_manager_for(deps).cancel(identity, run_id)}
 
     @router.post("/runs/{run_id}/pause")
@@ -553,4 +608,5 @@ def build_routes(deps: RouteDeps) -> APIRouter:
 
     add_writing_routes(router, deps)
     add_decision_routes(router, deps)
+    add_video_routes(router, deps)
     return router

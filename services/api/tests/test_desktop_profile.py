@@ -232,6 +232,35 @@ def test_styles_the_image_engine_can_apply_are_listed_and_one_click_away(data_di
         assert [r["name"] for r in ready] == ["ink.safetensors"]
 
 
+def test_a_look_taught_for_the_video_model_is_found_but_not_offered_as_a_picture_style(data_dir):
+    import struct
+
+    home = data_dir.parent / "home"
+    tensors = [
+        "transformer_blocks.0.attn1.to_q.lora_A.weight",
+        "transformer_blocks.0.attn2.to_q.lora_B.weight",
+    ]
+    head = json.dumps(
+        {n: {"dtype": "BF16", "shape": [1], "data_offsets": [0, 2]} for n in tensors}
+    ).encode()
+    look = home / "ComfyUI-Shared" / "models" / "loras" / "wasify-video-ena-12345678.safetensors"
+    look.parent.mkdir(parents=True)
+    look.write_bytes(struct.pack("<Q", len(head)) + head + b"\0" * 2_000_000)
+
+    with TestClient(create_app()) as c:
+        c.post("/desktop/discovery/scan", headers=auth())
+        state: dict = {}
+        for _ in range(100):
+            state = c.get("/desktop/discovery", headers=auth()).json()
+            if state["scanned_at"] and not state["running"]:
+                break
+            time.sleep(0.05)
+        (one,) = [i for i in state["items"] if i["kind"] == "lora"]
+        assert one["family"] == "ltx-video" and "video engine" in one["reason"]
+        listing = c.get("/desktop/loras", headers=auth()).json()
+        assert listing == {"ready": [], "available": []}  # not offered as a style for pictures
+
+
 def test_the_engine_refuses_requests_without_the_shells_token(data_dir):
     with TestClient(create_app()) as c:
         body = {"input": {"mode": "text", "prompt": "x"}}

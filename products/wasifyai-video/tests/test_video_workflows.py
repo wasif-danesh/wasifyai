@@ -127,3 +127,29 @@ async def test_an_extend_job_names_the_clip_for_the_worker_and_fills_the_workflo
     assert job.prompt["90"]["inputs"]["file"] == f"wasifyai-{job.job_id}-video.mp4"
     assert job.prompt["92"]["inputs"]["batch_index"] == 80
     assert job.inputs["video_key"] == "uploads/extend-a.mp4" and "extend-a" not in str(job.prompt)
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_every_video_workflow_takes_up_to_two_looks_before_the_sampler(name):
+    wf = Workflow.load(WORKFLOWS, name)
+    assert wf.accepts_loras and wf.map.lora_chain is not None and wf.map.lora_chain.max == 2
+    values = {"prompt": "a fox", "seed": 1, "steps": 20, "length": 49}
+    if name.endswith("t2v"):
+        values.update(width=512, height=512)
+    elif name.endswith("i2v"):
+        values["image"] = "x.png"
+    else:
+        values.update(video="x.mp4", from_frame=9)
+    graph = wf.fill(values, [("a.safetensors", 1.5), ("b.safetensors", 0.8)])
+    loaders = [n for n in graph.values() if n["class_type"] == "LoraLoaderModelOnly"]
+    assert [(n["inputs"]["lora_name"], n["inputs"]["strength_model"]) for n in loaders] == [
+        ("a.safetensors", 1.5), ("b.safetensors", 0.8),
+    ]  # fmt: skip
+    # the sampler's model comes from the last loader, the first loader from the checkpoint
+    last = next(k for k, n in graph.items() if n["inputs"].get("lora_name") == "b.safetensors")
+    assert graph["72"]["inputs"]["model"][0] == last
+    assert graph[
+        next(k for k, n in graph.items() if n["inputs"].get("lora_name") == "a.safetensors")
+    ]["inputs"]["model"] == ["44", 0]
+    with pytest.raises(ValueError, match="at most 2"):
+        wf.fill(values, [("a.safetensors", 1.0), ("b.safetensors", 1.0), ("c.safetensors", 1.0)])

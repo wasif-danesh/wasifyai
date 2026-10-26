@@ -481,3 +481,71 @@ The third card is live. Its headline is **Teach it to decide** (the words "sort 
 family label stays "Decision model training". Engine, measurements and what is not built: ADR-0075, "Built (2026-10-26, later)". It is
 taught as a whole model (Laya: 420 million numbers), so decision 3's list of methods shows LoRA and QLoRA with the reason and the
 recommended method is "full" (the model is small enough to teach all of it; a run holds about 11 GB).
+
+## Spike TV0 result (2026-10-26): the video model can be taught on this Mac
+
+Measured in `docs/spikes/video-training-tv0.md` (decision 3 and 7 of the video amendment asked for it). **LTX-Video 2B 0.9.5, the model the app already uses, was
+taught a look by a LoRA on this Mac's graphics chip** with a small script of ours on PyTorch (MPS), `diffusers` and `peft` (no NVIDIA card): about **0.5 s a step and
+7.4 GB** at 384x256 with 25 frames, **7.7 s a step and 9.8 GB** at 768x512 with 49 frames (2 s) with gradient checkpointing (without it 49.6 GB). The result loads in the
+app's own ComfyUI (fp32) after a rename of its keys (the file as saved is silently ignored there). So decision 4's "Mac path is unproven" and the card's
+"needs an NVIDIA graphics card for now" are **no longer true for this model**; the card's words change when the feature is built (TV1), not before.
+Still open: a real subject (the data was synthetic), the steps needed at a real size (300 at 768x512 were not enough; 800 at 384x256 were), image to video,
+and 16 GB Macs. The only ready-made Mac trainer found (`ltx-trainer-mlx`) teaches LTX-2.3, a different and much larger model that the product does not ship (ADR-0037 avoids its licence). It was **not run because it needs a download of 20 GB or more that was not asked for and its numbers would not transfer to the 2B model**; nothing in ADR-0037 forbids running it as a measurement.
+
+**Real-subject test (2026-10-26, owner's approval and the fictional character Ena):** a video LoRA taught from the 36 Ena pictures alone (no clips) took 12.5 minutes (640x576, 1500 steps,
+7.2 GB) or 36 minutes (768x704, 3000 steps, 9.6 GB), and **worked in the app's own ComfyUI in half precision** (the fp32 setting was not needed). It moved a generic "woman on a
+beach" toward Ena (long dark hair, brown skin, a face turned to the camera) but **the likeness is partial** and weaker than the picture LoRA's; it also leaks into prompts without
+the magic word. Pictures alone teach a subject, so the screen can take pictures as well as clips. Details: `docs/spikes/video-training-tv0.md`, section 8.
+
+## Built (2026-10-26, later): video model training, "Make my own look or motion for video"
+
+The fourth card is live on the desktop (owner: "I want you to finish the whole video training work. I let you decide the order of steps. I approve it so you won't need
+any approval of mine. I'll test it in the morning."). It teaches the app's own **LTX-Video 2B 0.9.5** (ADR-0037) a look, a motion or a subject from pictures and short clips
+and gives the result back as a **look** that the three Video screens can apply. The card's old words ("Needs an NVIDIA graphics card for now", "Coming later") are gone
+(decision 4 of the video amendment is superseded for this model: TV0 showed it works on the Mac's graphics chip).
+
+**What it is, in the order a person meets it**
+
+1. **Train models › Video model training › Make my own look or motion for video.** A set is made with `family: "video"` (`datasets.family`; `items.media`, `seconds`,
+   `frames`). Pictures and clips go in the same set (a still picture teaches a subject well, TV0 section 8; clips teach motion). The set is checked in words, a description
+   is written for each (the clip's middle frame is what the vision model reads), the magic word, the name and whose it is are chosen as for pictures, and the person
+   chooses Teach it. A video set cannot be started by the picture engine (`wrong_family`), and the picture routes still list only picture sets unless asked
+   (`?family=`).
+2. **Clip checks** (`clips.py`, real ffmpeg through `imageio-ffmpeg`, else `ffmpeg` on the path): too short (under 2 s), too small (under 384 px on the shorter side), too
+   dark, blurry, still (a mean grey change between frames, `STILL_BELOW = 1.5`) and a copy. Unreadable files, files under 0.3 s, over 10 minutes or under 64 px on a side are
+   refused in words. The frame goes through the same moderation as a picture (ADR-0047).
+3. **Plan.** The size follows the median shape of the set (wide 768x512, tall 512x768, square 704x704); a clip gives up to three windows of 25 frames (about one second)
+   spread over it; steps are 60 a sample, between 600 and 2,400, capped to a budget of about two hours; **the time is the mean of the samples' costs** (a picture is one
+   frame, a window about four times the tokens), not the cost of the largest. A run with clips always uses gradient checkpointing (without it 49.6 GB, TV0).
+4. **The trainer** is an environment of its own (`components/video-trainer/`): PyTorch with `diffusers`, `peft` and `transformers` from a committed hashed lock
+   (`video-requirements-aarch64-apple-darwin.lock`, 47 packages, about 182 MB, `scripts/lock-video-trainer.sh`) plus five small pinned files of Lightricks' repository
+   (the tokenizer and the text encoder's settings, 0.8 MB, revision `8984fa25…`, each with a size and SHA-256). Set up in the app by the same card as the other trainers
+   (sizes first, nothing fetched before the button). **The 16 GB of the video model and its text encoder are not fetched here**: they are the files the Video screens
+   use, found where the models screen keeps them; when they are missing the card says so and where to get them (**Select video model** on a Video screen).
+   `video_train.py` is the script (flow matching, logit-normal sigma, LoRA of rank 32 on the attention layers, T5 captions of up to 128 tokens, fixed-noise held-out
+   loss), run with the trainer's Python and read as JSON lines like the other two.
+5. **The result.** A model card (`kind: lora`, `card.family: "video"`) and a file `wasify-video-<name>-<run>.safetensors` in the models folder's `loras` folder, with the
+   keys renamed for ComfyUI (`ltx_lora.py`: the `transformer.` prefix removed; without it ComfyUI loads the file and does nothing). It is searchable like every
+   creation (ADR-0041) and removing the model takes the file back.
+6. **Use it** (`products/wasifyai-video`): the three workflow maps carry a `lora_chain` (up to two `LoraLoaderModelOnly` nodes between the model and the sampler), the
+   request takes `loras: [{name, weight}]` (strength 0.1 to 2.5, refused in words outside it), and the Video screens show **My looks** (a closed section, only when a look
+   exists): up to two, a strength each (1.5 to start: TV0 found a look needs 1.5 to 2 at the app's guidance of 3), and the magic word is added to the prompt when it
+   is missing. The discovery scan recognises a video look by its tensor names (`ltx-video`) so it is not offered as a picture style.
+7. **Actions.** `train.start` takes a `dataset_id` of a video set and runs the video engine (no new action: the catalogue stays at 51); `docs/help/train.start.md` and the
+   three Video help files say so.
+
+**Measured on this Mac (64 GB, 2026-10-26)**
+
+- The component's real install through the app's installer: 182.5 MB, 26 s (the packages were in uv's cache).
+- **A real run through the real routes** (`docs/spikes/video-training-tv0.md`, section 9): Ena, 12 pictures and 3 four-second clips, 21 samples, 1,260 steps at 512x768 with
+  checkpointing: **46 minutes (2,769 s), peak 12.0 GB**, training loss 1.16 to 0.50, a 58 MB look published. Made with the product's own workflow maps on the app's installed
+  ComfyUI (no fp32 flag): the same prompt gives the back of a head without the look and a dark-haired woman with Ena's colouring with it at 1.5; **2.0 is over-baked**, so the
+  screens start at 1.5. Image to video with a look runs (it was untested). A run of 10 Ena pictures started from the window took 298 s (600 steps).
+- **A real window check, end to end** (a temporary harness against the real engine, deleted): the card is live, clips and pictures are added and checked in words, the Check step shows the video
+  notices and the video model choice, Teach it runs (298 s for 10 pictures), the model appears in My models, **My looks** on the Video screen lists it, and Make my video with it (strength 1.5, the
+  magic word added) made a real 768x512, 5 s clip in 185 s through the engine, the graph, the workflow's `lora_chain` and the app's own ComfyUI.
+
+**Not built / not verified:** the web (the trainer is desktop only; the card says "On the desktop app"); a 16 GB Mac (untested, memory is 9.8 GB at 768x512 with clips
+but nothing else was measured); a look kept warm; likeness: the look is partial for a person (TV0 section 8), so the screens say a style or motion works best;
+a before-and-after clip on the model's card (the picture card has "Did it learn?"; the video card says "look at it" and offers nothing to judge); the comparison with
+LTX-2.3 (backlog D38, waits for the owner's yes).

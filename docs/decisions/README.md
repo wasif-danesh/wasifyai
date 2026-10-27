@@ -92,5 +92,6 @@
 | [0090](0090-creative-studio.md) | Creative Studio: one project from an idea to a finished video (a plan, shots, a cut), Maestro's concepts built on our own parts; nothing copied | Accepted (2026-10-24; nothing built, CS0 waits for the owner) |
 | [0091](0091-styles-in-the-image-screens.md) | Styles (LoRAs) in the image screens: add, check, stack and reuse them (Unsloth's features as ideas, nothing copied) | Accepted (2026-10-25; nothing built, S0 waits for the owner) |
 | [0092](0092-principals-scopes-and-the-secret-store.md) | Principals, scopes and the secret store: who is calling, what they may do, where keys live (stages F3 and F4 of the 2026-10-27 plan; the API-key part is K1) | Proposed (F3 and F4 built 2026-10-27) |
+| [0093](0093-one-shell-one-make-screen.md) | One shell and one make screen for every product: the UI audit of 2026-10-27 and its plan (`docs/ui-improvement-plan.md`, stages U0 to U12) | Proposed (nothing built) |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

@@ -179,7 +179,8 @@ function GroupTable({ group, place }: { group: GroupId; place: Place }) {
                 return (
                   <tr key={c.id} className="border-b last:border-b-0 align-top">
                     <th scope="row" className="px-4 py-3 text-start font-normal">
-                      <div className="font-medium">
+                      {/* a found file can be named by a long hash: it breaks rather than push the Use button off the edge */}
+                      <div className="font-medium [overflow-wrap:anywhere]">
                         {c.title}
                         {c.tier === "recommended" ? (
                           <span className="ms-2 font-normal text-accent-foreground text-xs">
@@ -192,7 +193,7 @@ function GroupTable({ group, place }: { group: GroupId; place: Place }) {
                       </div>
                     </th>
                     <td className="whitespace-nowrap px-4 py-3">{sizeText(c)}</td>
-                    <td className="px-4 py-3">
+                    <td className="whitespace-nowrap px-4 py-3">
                       <div>{c.licence}</div>
                       {c.commercial !== "yes" ? (
                         <div className="mt-0.5 text-muted-foreground text-xs">
@@ -200,7 +201,7 @@ function GroupTable({ group, place }: { group: GroupId; place: Place }) {
                         </div>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="whitespace-nowrap px-4 py-3">
                       <span className={cn("rounded-md px-2 py-0.5 text-xs", TONE[s.tone])}>
                         {s.text}
                       </span>

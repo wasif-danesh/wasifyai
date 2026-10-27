@@ -80,3 +80,9 @@ export function costLine(m: VoiceModelInfo): string {
   if (memory_gb) bits.push(`${memory_gb} GB of memory while loaded`);
   return bits.join(", ");
 }
+
+/** "1 minute", "3 minutes": a span of seconds as whole minutes, never less than one. */
+export function minutesText(seconds: number): string {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return `${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+}

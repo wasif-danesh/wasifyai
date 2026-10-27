@@ -100,6 +100,20 @@ export function Shell() {
       setCollapsed(false);
     }
   }, [route]);
+  // ⌘K (Ctrl+K) is search, as on the web: My creations, with its box ready to type in
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "k" || !(e.metaKey || e.ctrlKey) || e.altKey) return;
+      e.preventDefault();
+      go("creations");
+      // the screen mounts on the next frame; its search box is the only type="search" field in it
+      requestAnimationFrame(() => {
+        document.querySelector<HTMLInputElement>('#main input[type="search"]')?.focus();
+      });
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [go]);
   const set = (v: boolean) => {
     setCollapsed(v);
     try {

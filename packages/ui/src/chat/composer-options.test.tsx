@@ -78,6 +78,27 @@ describe("useComposerOptions", () => {
     expect(can.result.current.runInput).toEqual({});
   });
 
+  it("shows Servers only once a server is connected", async () => {
+    const control = (servers: { id: string; name: string }[]) => ({
+      servers: async () => servers,
+      resources: async () => [],
+      attachResource: async () => {
+        throw new Error("unused");
+      },
+      prompts: async () => [],
+      promptText: async () => "",
+    });
+    const none = renderHook(() => useComposerOptions(null, { external: control([]) }));
+    await act(async () => {});
+    expect(none.result.current.bar.map((o) => o.id)).toEqual(["approval"]);
+    const one = renderHook(() =>
+      useComposerOptions(null, { external: control([{ id: "s1", name: "GitHub" }]) }),
+    );
+    await waitFor(() =>
+      expect(one.result.current.bar.map((o) => o.id)).toEqual(["approval", "servers"]),
+    );
+  });
+
   it("turns Thinking on for the next message, remembered per conversation", async () => {
     const { result, rerender } = renderHook(
       ({ id }) => useComposerOptions(id, { thinking: true }),

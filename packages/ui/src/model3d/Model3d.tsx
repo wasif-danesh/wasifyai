@@ -96,7 +96,7 @@ export function Model3d({
           <h1 className="font-semibold text-step-2">Make a 3D model</h1>
           <p className="max-w-3xl text-muted-foreground">
             Turn a picture of one object into a 3D model you can turn around and save as a file. It
-            is
+            is{" "}
             {place === "device"
               ? "made on this computer; nothing is sent anywhere."
               : "made on the service's graphics card. The picture is sent there and deleted when the model is made."}

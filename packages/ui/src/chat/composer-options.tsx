@@ -230,6 +230,22 @@ export function useComposerOptions(
   const attachOption = attach.option;
   const external = available.external;
   const [serversOpen, setServersOpen] = useState(false);
+  // the Servers pill is shown only once a server is connected (Settings > Other apps): until then it
+  // could only open a notice that says there is none
+  const [hasServers, setHasServers] = useState(false);
+  useEffect(() => {
+    if (!external) return;
+    let gone = false;
+    external
+      .servers()
+      .then((list) => {
+        if (!gone) setHasServers(list.length > 0);
+      })
+      .catch(() => {});
+    return () => {
+      gone = true;
+    };
+  }, [external]);
   const dictation = useDictation(available.mic, onDictation);
   const { phase: micPhase, toggle: toggleMic } = dictation;
   const hasMic = Boolean(available.mic);
@@ -277,7 +293,7 @@ export function useComposerOptions(
       onPress: () =>
         setApproval(APPROVALS[(APPROVALS.indexOf(approval) + 1) % APPROVALS.length] ?? "ask"),
     });
-    if (external)
+    if (external && hasServers)
       out.push({
         id: "servers",
         label: "Servers",
@@ -317,6 +333,7 @@ export function useComposerOptions(
     micPhase,
     toggleMic,
     external,
+    hasServers,
     serversOpen,
   ]);
   const serversNotice: ReactNode =

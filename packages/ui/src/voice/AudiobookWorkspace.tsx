@@ -15,7 +15,7 @@ import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
 import { ModelPicker, NotReadyText } from "./ModelPicker";
 import { OptionFields } from "./OptionFields";
-import { clock, pickModel } from "./format";
+import { clock, minutesText, pickModel } from "./format";
 import { useVoiceModels } from "./use-voice-models";
 
 export const TEXT_ACCEPT = ".txt,.md,.markdown,text/plain,text/markdown";
@@ -425,8 +425,7 @@ export function AudiobookWorkspace({
               </>
             ) : speed ? (
               <span className="text-muted-foreground text-sm">
-                About {Math.max(1, Math.round(spokenSeconds / speed / 60))} minutes of work on this
-                computer.
+                About {minutesText(spokenSeconds / speed)} of work on this computer.
               </span>
             ) : null}
             {!ready && chosen ? (

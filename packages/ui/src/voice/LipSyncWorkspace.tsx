@@ -23,7 +23,7 @@ import { useChoicesFor } from "../models";
 import { formatBytes } from "../notebook/format";
 import { fileNameFor, useSaveCopy } from "../save";
 import { ModelPicker } from "./ModelPicker";
-import { clock, pickModel } from "./format";
+import { clock, minutesText, pickModel } from "./format";
 import { useVoiceModels } from "./use-voice-models";
 
 export const PICTURE_TEXT: Record<PictureBasis, string> = {
@@ -508,8 +508,8 @@ export function LipSyncWorkspace({
           </>
         ) : speed && voiceSeconds ? (
           <span className="text-muted-foreground text-sm">
-            About {Math.max(1, Math.round(voiceSeconds / speed / 60))} minutes of work on this
-            computer for {clock(voiceSeconds)} of video.
+            About {minutesText(voiceSeconds / speed)} of work on this computer for{" "}
+            {clock(voiceSeconds)} of video.
           </span>
         ) : null}
         {!ready && chosen ? (

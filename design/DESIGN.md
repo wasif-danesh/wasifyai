@@ -38,14 +38,27 @@ spacing, depth, motion) is defined once, in the tokens block at the end of this 
 |---|---|
 | The main action | `Button` (filled, accent). One per area. |
 | A quieter action | `Button` secondary or outline; destructive uses the `danger` token and confirms in a dialog |
-| Pick one of a few | `RadioGroup` or `ToggleGroup`; of many, `Select`; with search, `Command` |
-| A setting that applies at once | `Switch` |
+| Pick one of a few | `RadioGroup` (stacked, with a line under each) or `Segmented` (side by side, one always chosen); of many, `Select`; with search, `Command` |
+| A yes or no | `Checkbox`; a setting that applies at once, `Switch` |
+| A number on a range | `Slider`, with the value in words beside it |
+| A labelled control | `Field`: the label, the control, one hint line, the error |
+| Settings only an expert needs | `Experts`: a collapsed "For experts" section, closed by default |
+| Where a person is in a flow | `Stepper` |
+| Where a result appears | `Stage`: empty, working, error and result, with its actions |
+| What can be done with a thing | `ActionsRow`: three buttons and a `Menu` for the rest |
+| The last things a tool made | `RecentStrip`, fed by the one library |
+| Audio | `Player` (the app's own controls), never the browser's |
 | A message about the page | `Notice` (info, warning, error) at the top of the area it concerns; a toast (`Sonner`) only for a result of an action |
-| Something takes time | a `ProgressBar` with words (what, how far, how long); the work continues if the person leaves |
+| Something takes time | a `ProgressBar` with words (what, how far, how long); the work continues if the person leaves; on a make screen, the `Stage`'s working state |
 | A list of things the person made | cards in a grid with a thumbnail, title and kind filter; the library search is one box |
-| Details for experts | a collapsed "For experts" section, closed by default |
+| An area with nothing in it yet | `EmptyState`: what goes here and the first step |
+| An error | `ErrorNotice`: what happened in plain words (`plainError` strips paths, addresses and codes), what to do, the raw text under "Details for experts" |
 
-Always build from `packages/ui` and `apps/web/components/ui`; do not style a native element by hand.
+Always build from `packages/ui` and `apps/web/components/ui`; do not style a native element by hand, and do not use a
+native `<select>`, checkbox, radio, range or `<audio>` in a screen: the components above replace them. Every component in
+every state, in both themes, is on the web's `/design` page (`apps/web/components/design/DesignPage.tsx`); a new component or
+state is added there in the same change. The words a screen uses for what a person makes come from `packages/ui/src/words.ts`
+("picture", "make"); `words.test.ts` keeps "generate", "image", "asset" and "Takes" from creeping back in.
 
 ## States every component has
 

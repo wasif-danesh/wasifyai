@@ -128,14 +128,21 @@ class DecisionRunManager:
             "missing": missing(row, q, rows) or self._base_missing(d),
         }  # fmt: skip
 
+    @staticmethod
+    def _gone_words(engine: Any, d: bases.Descriptor) -> str:
+        if getattr(engine, "place", "device") == "service":
+            return f"{d.title} is not on the worker yet. Ask an admin to get it."
+        return f"{d.title} is not on this computer yet. Get it first, next to its name."
+
     def _base_missing(self, d: bases.Descriptor) -> str | None:
         """Why the chosen base cannot be taught from yet: it is not on this computer."""
         try:
-            why = engine_for(self._deps.state).problem(d.id)
+            engine = engine_for(self._deps.state)
+            why = engine.problem(d.id)
         except NotAvailable:
             return None
         if why and "not on this computer" in why:
-            return f"{d.title} is not on this computer yet. Get it first, next to its name."
+            return self._gone_words(engine, d)
         return None
 
     async def start(self, identity: Identity, set_id: str) -> dict[str, Any]:
@@ -148,7 +155,7 @@ class DecisionRunManager:
             raise Refused("cannot_teach", str(e)) from None
         if why := engine.problem(chosen.id):
             if "not on this computer" in why:
-                why = f"{chosen.title} is not on this computer yet. Get it first, next to its name."
+                why = self._gone_words(engine, chosen)
             raise Refused("not_ready", why)
         if self.busy() or self.others_busy():
             raise Refused("busy", "A model is being taught. Wait for it to finish.")
@@ -262,6 +269,12 @@ class DecisionRunManager:
             name=row["name"] or "My decision model", trigger_word="", kind=KIND, base=run["base"],
             card=card, preview=False, adapter_bytes=result.bytes,
         )  # fmt: skip
+        adopt = getattr(engine_for(self._deps.state), "adopt", None)
+        if (
+            adopt is not None
+        ):  # on the web the worker already put the files in storage: they are moved there
+            await adopt(identity, model["id"])
+            return model
         target = model_folder(store, identity, model["id"]) / "model"
         await asyncio.to_thread(target.parent.mkdir, parents=True, exist_ok=True)
         await asyncio.to_thread(shutil.move, str(result.folder), str(target))
@@ -309,19 +322,20 @@ async def decide(
     if manager_for(deps).busy() or manager_for(deps).others_busy():
         raise CannotDecide("busy", "A model is being taught. Wait for it to finish.")
     folder = folder_of(store, identity, model_id)
-    if not await asyncio.to_thread((folder / "model.safetensors").is_file):
+    stored = getattr(engine, "answer_stored", None)  # on the web the model's files are in storage
+    if stored is None and not await asyncio.to_thread((folder / "model.safetensors").is_file):
         raise CannotDecide("gone", "The taught model's files are gone.")
-    c = row["card"]["question"]
-    q = Question(
-        c["kind"], c["text"], tuple(decision.Option(o["label"], o["about"]) for o in c["options"]),
-        int(c["levels"]), c["low"], c["high"],
-    )  # fmt: skip
+    q = decision.question_of(row["card"]["question"])
     try:
-        mine = await engine.answer(folder, q, texts)
-        first = None
-        if original:
-            base = engine.base_folder(row["base"])
-            first = await engine.answer(base, q, texts) if base else None
+        if stored is not None:
+            mine = await stored(identity, model_id, q, texts)
+            first = await stored(identity, model_id, q, texts, row["base"]) if original else None
+        else:
+            mine = await engine.answer(folder, q, texts)
+            first = None
+            if original:
+                base = engine.base_folder(row["base"])
+                first = await engine.answer(base, q, texts) if base else None
     except RuntimeError as e:
         raise CannotDecide("not_ready", str(e)) from None
     out: dict[str, Any] = {

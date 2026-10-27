@@ -36,11 +36,9 @@ from wasifyai_training.runtime import (
     delete_dataset,
     delete_model,
     engine_for,
-    item_folder,
-    model_folder,
+    folder_ready,
     ready_to_train,
     remove_picture,
-    run_folder,
     run_manager_for,
     store_for,
     suggestions,
@@ -219,6 +217,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             "engine": engine.state(),
             "fit": engine.fit() if engine.ready() else None,
             "preflight": engine.preflight() if hasattr(engine, "preflight") else None,
+            "can_pause": hasattr(engine, "pause"),  # a run on a worker cannot be paused (yet)
             "busy": runs.busy()
             or writing_manager_for(deps).busy()
             or decision_manager_for(deps).busy()
@@ -227,7 +226,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             or writing_manager_for(deps).active()
             or decision_manager_for(deps).active()
             or video_manager_for(deps).active(),
-            "place": "device",
+            "place": getattr(engine, "place", "device"),
             "min_pictures": MIN_PICTURES,
             "max_pictures": MAX_PICTURES,
             "kinds": list(KINDS),
@@ -396,7 +395,8 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         if which not in files:
             raise HTTPException(404, "not found")
         name, media = files[which]
-        path = item_folder(store_for(deps.state), identity, item_id) / name
+        folder = await folder_ready(deps.state, identity, "items", item_id)
+        path = folder / name
         if not await asyncio.to_thread(path.is_file):
             raise HTTPException(404, "not found")
         return FileResponse(path, media_type=media)
@@ -487,7 +487,8 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         row = run_or_404(identity, run_id)
         if name not in row["samples"]:
             raise HTTPException(404, "not found")
-        path: Path = run_folder(store_for(deps.state), identity, run_id) / "samples" / name
+        folder = await folder_ready(deps.state, identity, "runs", run_id)
+        path: Path = folder / "samples" / name
         if not await asyncio.to_thread(path.is_file):
             raise HTTPException(404, "not found")
         return FileResponse(path, media_type="image/png")
@@ -530,7 +531,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         """The pictures to draw to find out, and how many reference pictures it has."""
         guard()
         row = model_or_404(identity, model_id)
-        folder = model_folder(store_for(deps.state), identity, model_id) / "refs"
+        folder = await folder_ready(deps.state, identity, "models", model_id) / "refs"
         refs = len(await asyncio.to_thread(evaluation.load_refs, folder))
         return {"items": evaluation.check_plan(row["kind"], row["trigger_word"]), "refs": refs}
 
@@ -555,7 +556,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
                     "message": "Choose a model that can read pictures first (in the Model hub).",
                 },
             )
-        folder = model_folder(store_for(deps.state), identity, model_id) / "refs"
+        folder = await folder_ready(deps.state, identity, "models", model_id) / "refs"
         refs = await asyncio.to_thread(evaluation.load_refs, folder)
         token = set_context(RunContext(identity.tenant_id, PRODUCT_ID, identity.user_id))
         try:
@@ -597,7 +598,8 @@ def build_routes(deps: RouteDeps) -> APIRouter:
     ) -> FileResponse:
         guard()
         row = model_or_404(identity, model_id)
-        path = model_folder(store_for(deps.state), identity, model_id) / "adapter.safetensors"
+        folder = await folder_ready(deps.state, identity, "models", model_id)
+        path = folder / "adapter.safetensors"
         if not await asyncio.to_thread(path.is_file):
             raise HTTPException(404, "not found")
         return FileResponse(

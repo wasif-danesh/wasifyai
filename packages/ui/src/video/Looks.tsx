@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useState } from "react";
+import type { TrainedModel, TrainingApi } from "@wasifyai/client";
+import { useEffect, useId, useState } from "react";
 import { hint } from "../styles";
 
 /** A look the person taught the video model (Train models): the file it is kept in, its name and its magic word. */
@@ -116,4 +117,32 @@ export function Looks({
       ) : null}
     </section>
   );
+}
+
+/** The looks among a person's trained models: the video ones that are published to the video engine. */
+export function looksOf(models: TrainedModel[]): VideoLook[] {
+  return models.flatMap((m) => {
+    const name = m.card.published?.lora_name;
+    return m.card.family === "video" && name ? [{ name, title: m.name, word: m.trigger_word }] : [];
+  });
+}
+
+/** Read the looks once when the screen opens; none (or no way to read them) is fine: the chooser stays hidden. */
+export function useVideoLooks(api: Pick<TrainingApi, "models">): VideoLook[] {
+  const [looks, setLooks] = useState<VideoLook[]>([]);
+  useEffect(() => {
+    let alive = true;
+    api
+      .models()
+      .then((models) => {
+        if (alive) setLooks(looksOf(models));
+      })
+      .catch(() => {
+        if (alive) setLooks([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [api]);
+  return looks;
 }

@@ -297,3 +297,89 @@ async def test_a_runner_that_takes_no_files_is_still_called_the_old_way():
     rig = Rig(Plain())
     result = await rig.p.process(job())  # no picture: no files argument
     assert result.status == "completed"
+
+
+# ---- a person's own look, for one job (ADR-0073, docs/train-web-plan.md) ----------
+
+
+class LookRunner:
+    """Notes the graph it was given and whether the look's file was there while it ran."""
+
+    backend = "look-test"
+    local_gpu = False
+
+    def __init__(self, root):
+        self.root, self.graph, self.seen = root, None, None
+
+    async def run(self, job, on_progress, files=None):
+        self.graph = job.prompt
+        name = job.prompt["90"]["inputs"]["lora_name"]
+        self.seen = (self.root / name).read_bytes() if (self.root / name).is_file() else None
+        return {"image": (b"\x89PNG", "image/png", "png")}
+
+
+LOOK = "wasify-video-ena-12345678.safetensors"
+LOOK_GRAPH = {
+    "90": {
+        "class_type": "LoraLoaderModelOnly",
+        "inputs": {"model": ["44", 0], "lora_name": LOOK, "strength_model": 1.5},
+    },
+    "10": {"class_type": "SaveImage", "inputs": {}},
+}  # fmt: skip
+
+
+def look_job(key: str, **over) -> JobRequest:
+    inputs = {"loras": [{"name": LOOK, "weight": 1.5}], "lora_files": {LOOK: key}}
+    return job(LOOK_GRAPH, inputs=inputs, **over)
+
+
+async def test_a_persons_own_look_is_there_while_the_job_runs_and_gone_after(tmp_path):
+    runner = LookRunner(tmp_path)
+    rig = Rig(
+        runner, WorkerSettings(max_attempts=1, ollama_base_url="", media_loras_dir=str(tmp_path))
+    )
+    key = object_key("t1", "wasifyai-training", "u1", "train", "looks", "r1") + f"/{LOOK}"
+    await rig.storage.put(key, b"LOOKBYTES")
+    result = await rig.p.process(look_job(key))
+    assert result.status == "completed", result
+    assert runner.seen == b"LOOKBYTES"
+    assert runner.graph is not None
+    staged = runner.graph["90"]["inputs"]["lora_name"]
+    assert staged.startswith("wasify-user/") and staged.endswith(f"-{LOOK}") and staged != LOOK
+    assert not any(p.is_file() for p in tmp_path.rglob("*.safetensors"))  # removed after the job
+
+
+@pytest.mark.parametrize(
+    "key_of",
+    [
+        lambda: (
+            object_key("t1", "wasifyai-training", "other", "train", "looks", "r1") + f"/{LOOK}"
+        ),  # another person's
+        lambda: (
+            object_key("t1", "wasifyai-training", "u1", "train", "models", "m1")
+            + "/adapter.safetensors"
+        ),  # not a look
+        lambda: (
+            object_key("t1", "wasifyai-training", "u1", "train", "looks", "r1")
+            + f"/../models/m1/{LOOK}"
+        ),
+    ],
+)
+async def test_a_look_that_is_not_the_persons_own_fails_the_job_and_reads_nothing(tmp_path, key_of):
+    runner = LookRunner(tmp_path)
+    rig = Rig(
+        runner, WorkerSettings(max_attempts=1, ollama_base_url="", media_loras_dir=str(tmp_path))
+    )
+    key = key_of()
+    await rig.storage.put(key, b"SECRET") if ".." not in key else None
+    result = await rig.p.process(look_job(key))
+    assert result.status == "failed" and result.error is not None
+    assert result.error.code == "invalid_input"
+    assert runner.graph is None and not list(tmp_path.rglob("*.safetensors"))
+
+
+async def test_a_worker_with_nowhere_to_put_a_look_says_so(tmp_path):
+    rig = Rig(LookRunner(tmp_path), WorkerSettings(max_attempts=1, ollama_base_url=""))
+    result = await rig.p.process(look_job("x"))
+    assert result.status == "failed" and result.error is not None
+    assert "cannot use a look" in result.error.message

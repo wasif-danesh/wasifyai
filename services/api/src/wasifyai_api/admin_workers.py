@@ -102,7 +102,7 @@ async def list_workers(request: Request, who: Identity = Depends(require_admin))
             models=[_model(m) for m in w.models],
             lipsync_engine=w.components.get(admin_wire.LIPSYNC_COMPONENT),
             components={
-                k: {"ready": v.get("ready"), "problem": v.get("problem")}
+                k: {"ready": v.get("ready"), "problem": v.get("problem"), "setup": v.get("setup")}
                 for k, v in w.components.items()
                 if k != admin_wire.LIPSYNC_COMPONENT
             },

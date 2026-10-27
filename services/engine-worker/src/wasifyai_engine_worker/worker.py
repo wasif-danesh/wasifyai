@@ -22,6 +22,7 @@ from wasifyai_engine_worker.handlers import run_job
 log = logging.getLogger("wasifyai_engine_worker")
 
 CANCEL_POLL_S = 2.0
+TRAIN_TIMEOUT_S = 4 * 3600
 
 
 class Worker:
@@ -52,6 +53,10 @@ class Worker:
     @property
     def _model3d(self) -> Any:
         return self._engines.get("model3d") if isinstance(self._engines, dict) else None
+
+    @property
+    def _train(self) -> Any:
+        return self._engines.get("train") if isinstance(self._engines, dict) else None
 
     @property
     def _builder(self) -> Any:
@@ -90,6 +95,12 @@ class Worker:
                 }
             except Exception:
                 log.exception("the 3D component could not report its state")
+        if (train := self._train) is not None:
+            kinds += train.kinds()
+            try:
+                components.update(train.components())
+            except Exception:
+                log.exception("the trainers could not report their state")
         if (builder := self._builder) is not None:
             kinds += builder_wire.KINDS
             try:
@@ -119,16 +130,19 @@ class Worker:
         """A cancelled job: give its process back (a 3D run is a program of its own)."""
         if job.kind.startswith("model3d.") and (service := self._model3d) is not None:
             await service.stop()
+        elif job.kind.startswith("train.") and (train := self._train) is not None:
+            await train.stop(job.kind)
         # a Motion graphics render is a browser the sandbox ends itself when its task is cancelled
 
     async def _run(self, job: EngineJob) -> EngineOutcome:
         async def report(fraction: float, label: str) -> None:
             await self._queue.report(job.id, fraction, label)
 
+        # teaching a model takes far longer than any other job
+        limit = TRAIN_TIMEOUT_S if job.kind.startswith("train.") else self._timeout
         task = asyncio.ensure_future(
             asyncio.wait_for(
-                run_job(self._engines, self._storage, job, self.name, report),
-                timeout=self._timeout,
+                run_job(self._engines, self._storage, job, self.name, report), timeout=limit
             )
         )
         while not task.done():

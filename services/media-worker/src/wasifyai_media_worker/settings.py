@@ -22,6 +22,10 @@ class WorkerSettings(BaseSettings):
     desktop_models_dir: str = ""
     desktop_extra_model_dirs: str = ""
 
+    # where the worker puts a person's own look (a LoRA they taught, ADR-0073) for one job: a
+    # `loras` folder that ComfyUI reads. Empty: the `loras` folder of the models folder above.
+    media_loras_dir: str = ""
+
     media_secrets_key: str = ""  # decrypts the API keys saved in the admin area (ADR-0025)
 
     ollama_base_url: str = ""  # set to unload LLMs from the GPU before each job

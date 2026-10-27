@@ -14,6 +14,8 @@ const words = (e: unknown, fallback: string) =>
  */
 export function useWritingChat(api: TrainingApi, modelId: string, baseId: string, pollMs = 1500) {
   const [inChat, setInChat] = useState<string | null>(null);
+  // where the chat engine is not this computer's (the web, for now) a taught model is not offered for chat
+  const [canChat, setCanChat] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const alive = useRef(true);
@@ -29,7 +31,10 @@ export function useWritingChat(api: TrainingApi, modelId: string, baseId: string
   const read = useCallback(async () => {
     try {
       const s = await api.writingStatus();
-      if (alive.current) setInChat(s.in_chat);
+      if (alive.current) {
+        setInChat(s.in_chat);
+        setCanChat(s.can_chat !== false);
+      }
     } catch {
       /* chat is not offered where the engine has no language service */
     }
@@ -70,6 +75,7 @@ export function useWritingChat(api: TrainingApi, modelId: string, baseId: string
 
   return {
     inChat,
+    canChat,
     base,
     copy,
     busy,

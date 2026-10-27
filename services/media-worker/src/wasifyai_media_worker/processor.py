@@ -1,9 +1,13 @@
 """Runs one job: take the GPU, free it of LLMs, generate, store the outputs, report."""
 
+import asyncio
 import contextlib
+import hashlib
 import logging
 import mimetypes
+import re
 import time
+from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
@@ -37,6 +41,10 @@ PROGRESS_MIN_INTERVAL_S = 0.3
 JOB_COMPLETED = "job.completed"
 GPU_SECONDS = "gpu.seconds"
 REMOTE_SECONDS = "media.remote_seconds"
+
+LOOK_DIR = "wasify-user"  # inside a `loras` folder: a person's own looks, for the length of one job
+LOOK_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.safetensors$")
+TRAINING_PRODUCT = "wasifyai-training"
 
 # What a runner returns: output name -> (bytes, content type, file extension)
 Files = dict[str, tuple[bytes, str, str]]
@@ -190,16 +198,18 @@ class JobProcessor:
             async with hold:
                 if _local(runner) and self.s.unload_llm and self.s.ollama_base_url:
                     await unload_llms(self.s.ollama_base_url, self._http)
+                job_run, looks = await self._stage_looks(job)
                 started = time.monotonic()
                 try:
                     # a runner that takes no input files is called as it always was
                     files = await (
-                        runner.run(job, on_progress, files=given)
+                        runner.run(job_run, on_progress, files=given)
                         if given
-                        else runner.run(job, on_progress)
+                        else runner.run(job_run, on_progress)
                     )
                 finally:
                     elapsed = time.monotonic() - started
+                    await self._unstage_looks(looks)
             outputs = await self._store(job, files)
             result = JobResult(
                 job_id=job.job_id,
@@ -267,6 +277,69 @@ class JobProcessor:
                     "invalid_input", f"The {noun} for this job could not be found."
                 ) from None
         return found
+
+    def _loras_root(self) -> Path | None:
+        if self.s.media_loras_dir:
+            return Path(self.s.media_loras_dir)
+        if self.s.desktop_models_dir:
+            return Path(self.s.desktop_models_dir) / "loras"
+        if self.s.desktop_data_dir:
+            return Path(self.s.desktop_data_dir) / "models" / "loras"
+        return None
+
+    async def _stage_looks(self, job: JobRequest) -> tuple[JobRequest, list[Path]]:
+        """The looks a person taught, fetched from their own part of storage into a folder ComfyUI
+        reads, for this job only; the graph is changed to name the staged files. Anything that is
+        not one of this person's looks fails the job."""
+        files = job.inputs.get("lora_files")
+        if not files:
+            return job, []
+        root = self._loras_root()
+        if root is None or not isinstance(files, dict):
+            raise ComfyError("invalid_input", "This worker cannot use a look.")
+        mine = object_key(job.tenant_id, TRAINING_PRODUCT, job.user_id, "train", "looks") + "/"
+        who = hashlib.sha256(f"{job.tenant_id}/{job.user_id}".encode()).hexdigest()[:12]
+        mapped: dict[str, str] = {}
+        written: list[Path] = []
+        try:
+            for name, key in files.items():
+                if not isinstance(key, str) or not LOOK_NAME.match(str(name)):
+                    raise ComfyError("invalid_input", "One of the looks is not valid.")
+                if not key.startswith(mine) or ".." in key:
+                    raise ComfyError("invalid_input", "One of the looks is not yours.")
+                try:
+                    data = await self.storage.get(key)
+                except (FileNotFoundError, ValueError):
+                    raise ComfyError(
+                        "invalid_input", "One of the looks could not be found."
+                    ) from None
+                rel = f"{LOOK_DIR}/{who}/{job.job_id[:8]}-{name}"
+                path = root / rel
+                await asyncio.to_thread(path.parent.mkdir, parents=True, exist_ok=True)
+                await asyncio.to_thread(path.write_bytes, data)
+                written.append(path)
+                mapped[str(name)] = rel
+        except BaseException:
+            await self._unstage_looks(written)
+            raise
+        graph = {
+            nid: (
+                {
+                    **node,
+                    "inputs": {**node["inputs"], "lora_name": mapped[node["inputs"]["lora_name"]]},
+                }
+                if node.get("class_type") == "LoraLoaderModelOnly"
+                and node.get("inputs", {}).get("lora_name") in mapped
+                else node
+            )
+            for nid, node in job.prompt.items()
+        }
+        return job.model_copy(update={"prompt": graph}), written
+
+    async def _unstage_looks(self, paths: list[Path]) -> None:
+        for path in paths:
+            with contextlib.suppress(OSError):
+                await asyncio.to_thread(path.unlink, True)
 
     def _failed(
         self, job: JobRequest, code: str, message: str, gpu_seconds: float, retryable: bool

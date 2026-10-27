@@ -1,7 +1,6 @@
-// SPDX-License-Identifier: AGPL-3.0-only
 import type { TrainedModel } from "@wasifyai/client";
 import { describe, expect, it } from "vitest";
-import { looksOf } from "./video-looks";
+import { looksOf } from "./Looks";
 
 const model = (over: Record<string, unknown>, card: Record<string, unknown>) =>
   ({

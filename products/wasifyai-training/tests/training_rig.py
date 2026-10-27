@@ -285,6 +285,9 @@ class FakeVideoTrainer:
     def state(self):
         return {"engine": self.engine, "preview": False, "setup": self.problem()}
 
+    def preflight(self, need_gb):  # noqa: ANN001
+        return {"ok": True, "blockers": [], "warnings": [], "pauses": "Everything waits."}
+
     def preflight_blockers(self):
         return []
 

@@ -17,9 +17,10 @@ def _gb(n: int | float) -> str:
 
 
 class AdminComponent:
-    def __init__(self, speech: Any, poll_s: float = POLL_S):
+    def __init__(self, speech: Any, poll_s: float = POLL_S, setups: dict[str, Any] | None = None):
         self._speech = speech
         self._poll = poll_s
+        self._setups = setups or {}  # trainer components that are set up like the lip sync engine
 
     async def fetch_model(self, model_id: str, report: Report) -> dict[str, Any]:
         service = self._speech.models_service
@@ -46,7 +47,28 @@ class AdminComponent:
             raise Failed("download_failed", d.error or "The download did not finish.")
         return {"model_id": model_id, "already": False, "bytes": total, "source": entry.source}
 
+    async def _setup(self, name: str, setup: Any, report: Report) -> dict[str, Any]:
+        """A trainer's component: the same plan, consent size and progress as the desktop's card."""
+        if setup.problem() and not setup.supported:
+            raise Failed("not_supported", setup.problem())
+        if setup.state()["installed"]:
+            return {"name": name, "already": True}
+        try:
+            setup.start(setup.missing_bytes())
+        except Exception as e:
+            raise Failed("install_not_started", str(e)) from None
+        while setup.running:
+            p = setup.progress
+            total = getattr(p, "total_bytes", 0) or 1
+            await report(min(1.0, getattr(p, "done_bytes", 0) / total), p.message or "")
+            await asyncio.sleep(self._poll)
+        if setup.progress.state != "ready":
+            raise Failed("install_failed", setup.progress.message or "The setup did not finish.")
+        return {"name": name, "already": False}
+
     async def fetch_engine(self, name: str, report: Report) -> dict[str, Any]:
+        if name in self._setups:
+            return await self._setup(name, self._setups[name], report)
         if name != "lipsync-engine":
             raise Failed("unknown_engine", "That is not something this worker can set up.")
         sidecar = self._speech.lipsync_sidecar

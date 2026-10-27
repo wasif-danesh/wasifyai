@@ -27,6 +27,7 @@ from wasifyai_training.runtime import (
     NotAvailable,
     Refused,
     add_to_search,
+    folder_saved,
     model_folder,
     run_folder,
     run_manager_for,
@@ -254,6 +255,7 @@ class WritingRunManager:
         target = model_folder(store, identity, model["id"]) / "adapter"
         await asyncio.to_thread(target.parent.mkdir, parents=True, exist_ok=True)
         await asyncio.to_thread(shutil.move, str(result.adapter), str(target))
+        await folder_saved(self._deps.state, identity, "models", model["id"])
         return model
 
 

@@ -22,6 +22,7 @@ from wasifyai_platform_sdk.workflows import Workflow
 RESERVED_INPUTS = {
     *(f"{slot}_key" for slot in PICTURE_SLOTS),
     "loras",
+    "lora_files",  # name -> storage key of the person's own look, fetched by the worker
 }  # for the job, not the workflow
 MAX_LORAS = 8
 

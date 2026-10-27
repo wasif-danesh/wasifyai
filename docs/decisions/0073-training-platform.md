@@ -549,3 +549,20 @@ and gives the result back as a **look** that the three Video screens can apply. 
 but nothing else was measured); a look kept warm; likeness: the look is partial for a person (TV0 section 8), so the screens say a style or motion works best;
 a before-and-after clip on the model's card (the picture card has "Did it learn?"; the video card says "look at it" and offers nothing to judge); the comparison with
 LTX-2.3 (backlog D38, waits for the owner's yes).
+
+## Amendment (2026-10-27, owner): Train on the web, identical to the desktop
+
+"Do the Train work for web. It should be identical to desktop." Plan, stages and the three seams (Postgres rows, files in object storage, a remote trainer that runs the
+desktop engine class on an engine worker): `docs/train-web-plan.md`. The owner's answers: all four cards one at a time; "Use in chat" for a writing model works on the web (a worker
+serves the adapter behind a per-person alias); every signed-in person may train, with the desktop's quotas and safeguards. Models a person taught are never shared with others: a
+generation names the person's own models and the media worker receives them for that job only. On a Linux GPU host the picture and writing trainers need another engine (P7).
+
+## Built (2026-10-27): Train on the web, identical to the desktop
+
+All four cards run on the web (`docs/train-web-plan.md` has the design, the stages and the real runs). **Seams:** the same `TrainingStore` on Postgres (`pgstore.py`; the shared SQL needed two portability fixes
+that running both databases found); the files in object storage under the person's own prefix with the API's disk as a cache (`files.py`, `folder_ready`, `folder_saved`, `folder_gone`); and a **remote trainer** per family
+(`remote_train.py`) that queues an engine job, which a worker runs with the desktop's own engine class (`services/engine-worker/.../train.py`, handlers `train.video`, `train.image`, `train.decision`, `train.writing`, and the
+ask jobs). An admin sets each trainer up on a worker (`POST /admin/workers/engines/<name>/fetch`; Admin > Workers > Trainers). A person's own looks and styles are never shared: a request names them, the graph resolves
+the storage key of **that person's** model (or refuses, "not yours"), and the media worker fetches the file for that one job into its `loras` folder and removes it.
+**Checked for real** through the web stack on this Mac: Ena's video look (2,761 s, the desktop's loss to four decimals, used from the web API for a real 768x512 clip), a decision model (43 s), a writing model (12 s) and a picture
+style. **Not built:** *Use in chat* for a writing model (a worker would have to serve the adapter behind a per-person chat alias), pausing a run, a queue of runs, the Linux GPU trainers (P7).

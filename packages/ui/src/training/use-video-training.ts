@@ -11,10 +11,13 @@ import { useTrainingSetup } from "./use-setup";
  */
 export function useVideoTraining(
   api: TrainingApi,
+  /** whether to read the status at all: where no engine can teach the video model the card is not offered */
   enabled: boolean,
   /** changes whenever the screen read training again: the status is read with it */
   stamp: unknown,
   pollMs = 1500,
+  /** whether this app sets the video trainer up itself (the desktop); on the web an admin does it on the worker */
+  canSetUp = enabled,
 ) {
   const [status, setStatus] = useState<VideoTrainStatus | null>(null);
   const read = useCallback(async () => {
@@ -38,7 +41,7 @@ export function useVideoTraining(
     }),
     [api],
   );
-  const setup = useTrainingSetup(adapter, enabled, () => void read(), pollMs);
+  const setup = useTrainingSetup(adapter, enabled && canSetUp, () => void read(), pollMs);
   return { status, setup, reload: read };
 }
 

@@ -53,6 +53,13 @@ While the trainer is a preview, the run does everything except learn, and says s
 - A model that can read pictures (to write the descriptions), the training engine, enough free disk space for
   the pictures and the samples, and free memory for the run.
 
+## On the web
+
+The same screen, the same sets and the same limits. The teaching runs on a worker of the service, not on your computer: an admin sets each
+trainer up once (Admin, Workers, Trainers), and the card says "Ask an admin" until then. Your pictures, clips, examples and the models you taught
+are kept for you only; no one else can see or use them. A run cannot be paused on the web (Stop works), and **Use in chat** for a writing model is on
+the desktop only for now.
+
 ## Examples
 
 - Teach the app my mascot from the set of pictures I added.

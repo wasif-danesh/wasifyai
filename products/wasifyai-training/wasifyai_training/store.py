@@ -194,6 +194,19 @@ class TrainingStore:
             self._db.commit()
             return cur.rowcount
 
+    def _replace_rows(
+        self,
+        delete_sql: str,
+        delete_args: tuple[Any, ...],
+        insert_sql: str,
+        rows: list[tuple[Any, ...]],
+    ) -> None:
+        """Delete some rows and insert others, together: the examples of a set are replaced whole."""
+        with self._lock:
+            self._db.execute(delete_sql, delete_args)
+            self._db.executemany(insert_sql, rows)
+            self._db.commit()
+
     # ---- datasets -----------------------------------------------------------------------------
 
     def add_dataset(
@@ -223,7 +236,7 @@ class TrainingStore:
         self, tenant: str, user: str, limit: int = 50, family: str | None = None
     ) -> list[dict[str, Any]]:
         rows = self._all(
-            "SELECT * FROM datasets WHERE tenant_id = ? AND user_id = ? AND (? IS NULL OR family = ?) "
+            "SELECT * FROM datasets WHERE tenant_id = ? AND user_id = ? AND (CAST(? AS TEXT) IS NULL OR family = ?) "
             "ORDER BY created_at DESC LIMIT ?",
             (tenant, user, family, family, limit),
         )
@@ -357,9 +370,9 @@ class TrainingStore:
 
     def set_progress(self, item: str, step: int, stage: str) -> None:
         self._exec(
-            "UPDATE runs SET step = ?, stage = ?, progress = CASE WHEN steps > 0 THEN MIN(1.0, ? * 1.0 / steps) "
-            "ELSE 0 END WHERE id = ? AND status = 'working'",
-            (step, stage, step, item),
+            "UPDATE runs SET step = ?, stage = ?, progress = CASE WHEN steps <= 0 THEN 0 "
+            "WHEN CAST(? AS INTEGER) >= steps THEN 1.0 ELSE CAST(? AS INTEGER) * 1.0 / steps END WHERE id = ? AND status = 'working'",
+            (step, stage, step, step, item),
         )
 
     def add_sample(self, item: str, name: str) -> None:
@@ -393,7 +406,7 @@ class TrainingStore:
         # only what is still being worked on: a late failure does not undo a finished run
         self._exec(
             "UPDATE runs SET status = ?, error = ?, elapsed_s = ?, model_id = ?, stage = '', "
-            "progress = CASE WHEN ? = 'done' THEN 1 ELSE progress END, finished_at = ? "
+            "progress = CASE WHEN CAST(? AS TEXT) = 'done' THEN 1 ELSE progress END, finished_at = ? "
             "WHERE id = ? AND status IN ('working', 'paused')",
             (status, error, elapsed_s, model_id, status, now(), item),
         )
@@ -527,16 +540,12 @@ class TrainingStore:
     def set_examples(self, tenant: str, user: str, item: str, rows: list[dict[str, str]]) -> int:
         """Replace the examples of a set with `rows` (`ask` and `answer`), in order."""
         self.get_writing_set(tenant, user, item)  # the owner's, or NotFound
-        with self._lock:
-            self._db.execute("DELETE FROM examples WHERE set_id = ?", (item,))
-            self._db.executemany(
-                "INSERT INTO examples(id, set_id, tenant_id, user_id, position, ask, answer) VALUES (?,?,?,?,?,?,?)",
-                [
-                    (new_id(), item, tenant, user, n, r["ask"], r["answer"])
-                    for n, r in enumerate(rows)
-                ],
-            )
-            self._db.commit()
+        self._replace_rows(
+            "DELETE FROM examples WHERE set_id = ?",
+            (item,),
+            "INSERT INTO examples(id, set_id, tenant_id, user_id, position, ask, answer) VALUES (?,?,?,?,?,?,?)",
+            [(new_id(), item, tenant, user, n, r["ask"], r["answer"]) for n, r in enumerate(rows)],
+        )
         return len(rows)
 
     def list_examples(self, tenant: str, user: str, item: str) -> list[dict[str, str]]:
@@ -637,16 +646,12 @@ class TrainingStore:
     ) -> int:
         """Replace the examples of a set with `rows` (`text` and `answer`), in order."""
         self.get_decision_set(tenant, user, item)  # the owner's, or NotFound
-        with self._lock:
-            self._db.execute("DELETE FROM decision_examples WHERE set_id = ?", (item,))
-            self._db.executemany(
-                "INSERT INTO decision_examples(id, set_id, tenant_id, user_id, position, text, answer) VALUES (?,?,?,?,?,?,?)",
-                [
-                    (new_id(), item, tenant, user, n, r["text"], r["answer"])
-                    for n, r in enumerate(rows)
-                ],
-            )
-            self._db.commit()
+        self._replace_rows(
+            "DELETE FROM decision_examples WHERE set_id = ?",
+            (item,),
+            "INSERT INTO decision_examples(id, set_id, tenant_id, user_id, position, text, answer) VALUES (?,?,?,?,?,?,?)",
+            [(new_id(), item, tenant, user, n, r["text"], r["answer"]) for n, r in enumerate(rows)],
+        )
         return len(rows)
 
     def list_decision_examples(self, tenant: str, user: str, item: str) -> list[dict[str, str]]:

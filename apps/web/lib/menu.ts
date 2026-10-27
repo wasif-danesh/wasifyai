@@ -75,6 +75,8 @@ export function resolveWebItem(
         return live("video") ? page("/video/builder") : undefined;
       case "model3d":
         return live("image") ? page("/image/3d") : undefined; // still the image product's page (D25)
+      case "train":
+        return page("/train");
       case "library":
         return { href: "/creations", current: pathname === "/creations" && !show };
       case "models": // the models of the workers are an admin's to manage; everyone else uses the pickers

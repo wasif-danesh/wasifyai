@@ -114,7 +114,7 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
   // the trainer's own component: offered while training is not ready (a desktop engine), read again once set up
   const notReady = state.status !== null && !state.status.ready;
   const setup = useTrainingSetup(api, place === "device", () => void t.refresh(), pollMs);
-  const video = useVideoTraining(api, place === "device", state.status, pollMs);
+  const video = useVideoTraining(api, true, state.status, pollMs, place === "device");
   const showingRun = state.run !== null;
   const [screen, setScreen] = useState<"writing" | "decide" | null>(null);
   const writing = screen !== null;
@@ -222,15 +222,11 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
           setup={setup}
           video={video}
           api={api}
-          onStart={
-            place === "device"
-              ? {
-                  writing: () => setScreen("writing"),
-                  decide: () => setScreen("decide"),
-                  video: () => void t.newDataset("character", "video"),
-                }
-              : undefined
-          }
+          onStart={{
+            writing: place === "device" ? () => setScreen("writing") : undefined,
+            decide: place === "device" ? () => setScreen("decide") : undefined,
+            video: () => void t.newDataset("character", "video"),
+          }}
         />
       )}
     </div>
@@ -252,7 +248,7 @@ function Home({
   setup: ReturnType<typeof useTrainingSetup>;
   video: VideoTraining;
   api: TrainingApi;
-  onStart?: { writing: () => void; decide: () => void; video: () => void };
+  onStart?: { writing?: () => void; decide?: () => void; video?: () => void };
 }) {
   const { state } = t;
   const ready = state.status?.ready === true;
@@ -269,7 +265,7 @@ function Home({
             <h2 className="m-0 font-semibold text-lg">{f.title}</h2>
             <p className="m-0 text-muted-foreground">{f.text}</p>
             {f.live && (f.start === "writing" || f.start === "decide" || f.start === "video") ? (
-              onStart ? (
+              onStart?.[f.start] ? (
                 <div className={actions}>
                   <Button
                     type="button"
@@ -287,13 +283,7 @@ function Home({
                         state.busy !== null ||
                         state.status?.busy === true)
                     }
-                    onClick={
-                      f.start === "writing"
-                        ? onStart.writing
-                        : f.start === "decide"
-                          ? onStart.decide
-                          : onStart.video
-                    }
+                    onClick={onStart[f.start]}
                   >
                     Start
                   </Button>
@@ -322,7 +312,7 @@ function Home({
         ))}
       </section>
 
-      <VideoSetup video={video} onStart={onStart !== undefined} />
+      <VideoSetup video={video} onStart={onStart?.video !== undefined} />
 
       {state.paused.length > 0 ? (
         <section aria-label="Paused" className="grid gap-2">
@@ -1116,7 +1106,7 @@ function RunView({
             {run.stage || "Starting"}. About {run.estimate.replace(/^About /, "").toLowerCase()} in
             all.
           </p>
-          {run.preview ? null : (
+          {run.preview || t.state.status?.can_pause === false ? null : (
             <div className={actions}>
               <Button type="button" variant="outline" onClick={() => void t.pause()}>
                 Pause

@@ -114,7 +114,7 @@ def add_decision_routes(router: APIRouter, deps: RouteDeps) -> None:
             "fit": engine.fit(base.need_gb) if ready else None,
             "busy": manager_for(deps).busy() or manager_for(deps).others_busy(),
             "active_run": manager_for(deps).active(),
-            "place": "device",
+            "place": getattr(engine, "place", "device"),
             "min_examples": decision.MIN_EXAMPLES,
             "good_examples": decision.GOOD_EXAMPLES,
             "min_per_answer": decision.PER_ANSWER,

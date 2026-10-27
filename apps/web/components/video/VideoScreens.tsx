@@ -1,7 +1,7 @@
 "use client";
 
 import { STARTED_EVENT } from "@/hooks/use-video-activity";
-import { videoDownload, webVideos } from "@/lib/library";
+import { videoDownload, webTraining, webVideos } from "@/lib/library";
 import { webClient } from "@/lib/run-client";
 import type { VideoMode } from "@wasifyai/client";
 import {
@@ -11,6 +11,7 @@ import {
   VideoLibrary,
   VideoWorkspace,
   useChoicesFor,
+  useVideoLooks,
 } from "@wasifyai/ui";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
@@ -28,6 +29,7 @@ const TITLES: Record<Exclude<VideoMode, "import">, [string, string]> = {
 export function VideoScreen({ mode }: { mode: Exclude<VideoMode, "import"> }) {
   const router = useRouter();
   const choices = useChoicesFor("video");
+  const looks = useVideoLooks(webTraining); // what the person taught the video model, if anything
   // tell the header a clip is being made, so its badge shows up at once on every page
   const making = useCallback(() => window.dispatchEvent(new Event(STARTED_EVENT)), []);
   return (
@@ -51,6 +53,7 @@ export function VideoScreen({ mode }: { mode: Exclude<VideoMode, "import"> }) {
           downloadHref={(r) => videoDownload({ videoId: r.videoId })}
           hint="Takes a few minutes for 5 seconds and about twice as long for 8. You can explore the site while it's made."
           onMaking={making}
+          looks={looks}
           onOpenLibrary={() => router.push("/video/library")}
         />
       </div>

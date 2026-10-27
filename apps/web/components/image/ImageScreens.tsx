@@ -1,7 +1,7 @@
 "use client";
 
 import { putHandoff, takeHandoff } from "@/lib/handoff";
-import { imageDownload, webImages } from "@/lib/library";
+import { imageDownload, webImages, webTraining } from "@/lib/library";
 import { webClient } from "@/lib/run-client";
 import type { ImageMode } from "@wasifyai/client";
 import {
@@ -11,6 +11,7 @@ import {
   type WorkspacePreset,
   presetOf,
   useChoicesFor,
+  useImageStyles,
 } from "@wasifyai/ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -25,6 +26,7 @@ type Start = { preset: WorkspacePreset | null; source: { url: string; name: stri
 export function ImageScreen({ mode }: { mode: ImageMode }) {
   const router = useRouter();
   const choices = useChoicesFor("images");
+  const styles = useImageStyles(webTraining); // what the person taught the picture model, if anything
   const [start, setStart] = useState<Start | null>(null);
   useEffect(() => {
     setStart({
@@ -43,6 +45,7 @@ export function ImageScreen({ mode }: { mode: ImageMode }) {
           images={webImages}
           preset={start.preset}
           sourceImage={start.source}
+          loras={styles}
           header={
             choices ? (
               <ModelSelect group="images" api={choices} />

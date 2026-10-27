@@ -87,6 +87,9 @@ class VideoState(TypedDict, total=False):
     image_key: str
     source_id: str  # extend: the clip to carry on
     loras: list[dict[str, Any]]  # looks the person taught: [{name, weight}], checked
+    lora_files: dict[
+        str, str
+    ]  # on the web: the storage key of each look, which is the person's own
     # extend: what the check found about it, and the temporary copy the worker reads
     source_video_key: str
     source_mode: str
@@ -220,6 +223,16 @@ def build_video_graph(
         loras, why = check_looks(state.get("loras"))
         if why:
             return refuse_with("invalid_request", why)
+        lora_files: dict[str, str] = {}
+        resolve_looks = caps.extras.get(
+            "person_looks"
+        )  # the web keeps each person's looks in storage
+        if loras and resolve_looks is not None:
+            ctx = require_context()
+            found = await resolve_looks(ctx.tenant_id, ctx.user_id, [x["name"] for x in loras])
+            if found is None:
+                return refuse_with("invalid_request", "One of those looks is not yours any more.")
+            lora_files = found
         out: VideoState = {
             "mode": mode,
             "prompt": prompt,
@@ -227,6 +240,7 @@ def build_video_graph(
             "seconds": seconds,
             "image_key": key if mode == "image" else "",
             "loras": loras,
+            "lora_files": lora_files,
             "status": "working",
         }
         if mode == "extend":
@@ -333,6 +347,8 @@ def build_video_graph(
         )
         seed = secrets.randbelow(2**31)
         looks: dict[str, Any] = {"loras": state["loras"]} if state.get("loras") else {}
+        if state.get("lora_files"):
+            looks["lora_files"] = state["lora_files"]
         temp_key = ""
         try:
             if extend:

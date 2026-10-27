@@ -61,16 +61,14 @@ describe("the side panel", () => {
     );
   });
 
-  it("shows what the web does not serve yet as disabled, with a Soon tag", async () => {
+  it("links every item the web serves, Train models included", async () => {
     path = "/image";
     query = "";
     panel();
     expect(screen.getByRole("link", { name: /Edit/ })).toHaveAttribute("href", "/image/edit");
     expect(screen.getByRole("link", { name: /Inpaint/ })).toHaveAttribute("href", "/image/inpaint");
     expect(screen.getByRole("link", { name: /3D model/ })).toHaveAttribute("href", "/image/3d");
-    const soon = screen.getByRole("button", { name: /Train/ });
-    expect(soon).toBeDisabled();
-    expect(within(soon).getByText("Soon")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Train/ })).toHaveAttribute("href", "/train");
     expect(screen.getByRole("button", { name: /Notebook/ })).toBeInTheDocument();
     expect(screen.queryByText("Models")).not.toBeInTheDocument(); // the admin picks models here
   });

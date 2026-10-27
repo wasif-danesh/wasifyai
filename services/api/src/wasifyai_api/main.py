@@ -390,6 +390,13 @@ def create_app(
                 caps.extras["tool_host"] = tool_host  # the assistant's tools (ADR-0057)
                 caps.extras["actions"] = executor  # ...which run as actions (ADR-0068)
                 caps.extras["app_state"] = app.state  # notebooks reach their library through it
+                if not desktop and product_id in ("wasifyai-video", "wasifyai-image"):
+                    # the web: a look or a style is the person's own file in storage
+                    from wasifyai_api.person_looks import person_looks
+
+                    caps.extras["person_looks"] = person_looks(
+                        app.state, video=product_id == "wasifyai-video"
+                    )
                 app.state.caps[product_id] = caps
                 graphs[product_id] = reg.build(product_id, caps, saver)
             return graphs
@@ -624,6 +631,50 @@ def create_app(
                 from wasifyai_video.builder.runtime import manager_for as renders_for
 
                 await renders_for(route_deps).resume_all()
+        if (
+            not desktop
+            and store is not None
+            and db is not None
+            and conn is not None
+            and (pdir / "wasifyai-training").is_dir()
+        ):
+            try:
+                from wasifyai_training.files import StorageFiles
+                from wasifyai_training.pgstore import PostgresTrainingStore
+
+                from wasifyai_api.remote_train import (
+                    RemoteDecisionTrainer,
+                    RemoteImageTrainer,
+                    RemoteVideoTrainer,
+                    RemoteWritingTrainer,
+                )
+            except ImportError:  # the training product is not part of this build
+                logging.getLogger("wasifyai_api").warning(
+                    "the training product is not installed: no Train on the web"
+                )
+            else:
+                # Train on engine workers (ADR-0073, docs/train-web-plan.md): Postgres for the
+                # rows, object storage for the files, a worker that has the trainer for the work
+                tstore = await asyncio.to_thread(
+                    PostgresTrainingStore,
+                    settings.database_url,
+                    cache=Path(tempfile.mkdtemp(prefix="wasifyai-training-")),
+                )
+                app.state.training_store = tstore
+                app.state.training_files = StorageFiles(store.backing)
+                tq, tdir = EngineQueue(conn), app.state.engine_workers
+                trainers = {"usage": recorder}
+                app.state.video_training = RemoteVideoTrainer(tq, store.backing, tdir, **trainers)
+                app.state.training = RemoteImageTrainer(tq, store.backing, tdir, **trainers)
+                app.state.language_training = RemoteWritingTrainer(
+                    tq, store.backing, tdir, **trainers
+                )
+                app.state.decision_training = RemoteDecisionTrainer(
+                    tq, store.backing, tdir, **trainers
+                )
+                # a run a gone service left going is failed, and its worker job stopped
+                for run in await asyncio.to_thread(tstore.runs_left_working):
+                    await tq.cancel(run["id"])
         if desktop:
             app.state.local_files = desktop.local_files
             app.state.desktop_models = desktop.models
@@ -712,6 +763,10 @@ def create_app(
                 close_m3d = getattr(m3d_store, "close", None)
                 if close_m3d is not None and not desktop:
                     await asyncio.to_thread(close_m3d)
+            if (t_store := getattr(app.state, "training_store", None)) is not None and not desktop:
+                close_training = getattr(t_store, "close", None)
+                if close_training is not None:
+                    await asyncio.to_thread(close_training)
             if (b_store := getattr(app.state, "builder_store", None)) is not None and not desktop:
                 await asyncio.to_thread(b_store.close)
             if (scratch := getattr(app.state, "builder_scratch", None)) is not None:

@@ -34,10 +34,8 @@ export const PARITY: Record<string, Parity> = {
     note: "for admins, Admin > Models and workers is the Models page (the same tab table, over the workers' models, with the picker on the voice, music and lip sync screens for everyone); other people use the pickers. The models.* actions need the desktop's model service, so the web assistant does not offer them",
   },
   train: {
-    status: "soon",
-    note: "built on the desktop first (ADR-0073, ADR-0076); the web follows as its own stage: a store in Postgres, the run as a job on an engine worker that can train",
-    accepted:
-      "owner, 2026-10-24: desktop first, then the web, so nothing is built twice or half (docs/train-day1-plan.md)",
+    status: "live",
+    note: "the shared Train screen (ADR-0073, docs/train-web-plan.md): rows in Postgres, files in object storage, the teaching a job on an engine worker; a family is offered when a worker lists its trainer (video first, then image, decision, writing)",
   },
 
   "notebook.create": { status: "live", note: "the shared notebooks, with the notebooks worker" },

@@ -160,6 +160,20 @@ class Row:
     answer: str  # one of the question's answers, as `Question.canon` gives it
 
 
+def question_of(c: dict[str, Any]) -> Question:
+    """The question from its `public()` form (a model's card, or a job's parameters)."""
+    return Question(
+        c["kind"], c["text"], tuple(Option(o["label"], o["about"]) for o in c["options"]),
+        int(c["levels"]), c["low"], c["high"],
+    )  # fmt: skip
+
+
+def said_of(d: dict[str, Any]) -> Said:
+    return Said(
+        str(d["answer"]), float(d["confidence"]), {k: float(v) for k, v in d["shares"].items()}
+    )
+
+
 def question_from(row: dict[str, Any]) -> Question:
     """The question of a stored set."""
     return Question(

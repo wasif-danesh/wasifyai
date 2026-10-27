@@ -294,6 +294,28 @@ def _hash_prefix(path: Path, digest: Any) -> Any:
     return digest
 
 
+class FolderModels:
+    """What the trainers use of `ModelsService`, without a settings store: a catalogue and folders.
+    A worker has no window to choose folders in; it reads them from its settings."""
+
+    def __init__(
+        self, catalogue: list[ModelEntry], models_dir: Path, extra_dirs: tuple[Path, ...] = ()
+    ):
+        self.catalogue = {e.id: e for e in catalogue}
+        self.models_dir = models_dir
+        self.extra_dirs = extra_dirs
+
+    def roots(self) -> list[Path]:
+        return [self.models_dir, *self.extra_dirs]
+
+    def locate(self, f: ModelFile) -> Path | None:
+        for root in self.roots():
+            p = root / f.folder / f.name
+            if p.is_file() and p.stat().st_size == f.size:
+                return p
+        return None
+
+
 # ---- the service ------------------------------------------------------------------------------
 
 

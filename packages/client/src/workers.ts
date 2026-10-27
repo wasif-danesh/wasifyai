@@ -23,7 +23,15 @@ export type WorkerInfo = {
   can_fetch: boolean;
   models: WorkerModel[];
   lipsync_engine: { installed: boolean; supported: boolean; bytes: number } | null;
-  components: Record<string, { ready?: boolean; problem?: string | null }>;
+  components: Record<
+    string,
+    {
+      ready?: boolean;
+      problem?: string | null;
+      /** what setting it up would fetch (a trainer): its size, and whether this computer can run it */
+      setup?: { supported: boolean; bytes: number } | null;
+    }
+  >;
 };
 
 export type FetchJob = {
@@ -37,7 +45,7 @@ export type WorkersApi = {
   list(): Promise<WorkerInfo[]>;
   /** Start getting a model onto a worker; the id of the job to follow. */
   fetchModel(modelId: string): Promise<string>;
-  fetchEngine(name: "lipsync-engine"): Promise<string>;
+  fetchEngine(name: "lipsync-engine" | "video-trainer" | "image-trainer"): Promise<string>;
   job(id: string): Promise<FetchJob>;
 };
 

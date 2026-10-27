@@ -914,11 +914,31 @@ describe("Train", () => {
     expect(installed).toEqual([182_500_000]);
   });
 
-  it("offers nothing for video where the engine has no video trainer", async () => {
-    const engine = fake();
+  it("on the service, the video card is offered when a worker can teach it, and writing and deciding wait", async () => {
+    const engine = fake({}, { ready: true });
     render(<Train api={engine.api} place="service" pollMs={10} />);
-    expect(await screen.findByText("Nothing taught yet.")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Start: make my own look/ })).toBeNull();
-    expect(screen.getAllByText("On the desktop app").length).toBeGreaterThan(0);
+    const start = await screen.findByRole("button", {
+      name: /Start: make my own look or motion for video/,
+    });
+    await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+    expect(screen.queryByRole("button", { name: /Start: teach it from examples/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Start: teach it to decide/ })).toBeNull();
+    expect(screen.getAllByText("On the desktop app").length).toBe(2);
+  });
+
+  it("on the service, a video card with no worker that can teach it says why and cannot start", async () => {
+    const engine = fake(
+      {},
+      {
+        ready: false,
+        problem: "No worker here can teach this kind of model. Ask an admin to set it up.",
+      },
+    );
+    render(<Train api={engine.api} place="service" pollMs={10} />);
+    const start = await screen.findByRole("button", {
+      name: /Start: make my own look or motion for video/,
+    });
+    expect((start as HTMLButtonElement).disabled).toBe(true);
+    expect(await screen.findByText(/Ask an admin to set it up/)).toBeTruthy();
   });
 });

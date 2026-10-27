@@ -97,6 +97,35 @@ def model_folder(store: TrainingStore, identity: Identity, model_id: str) -> Pat
     return store.folder_of(identity.tenant_id, identity.user_id, "models", model_id)
 
 
+async def folder_ready(state: Any, identity: Identity, kind: str, item_id: str) -> Path:
+    """The folder of an item with its files in it (on the web: fetched from storage, `files.py`)."""
+    folder = store_for(state).folder_of(identity.tenant_id, identity.user_id, kind, item_id)
+    files = getattr(state, "training_files", None)
+    if files is not None:
+        await files.ensure(identity.tenant_id, identity.user_id, kind, item_id, folder)
+    return folder
+
+
+async def folder_saved(
+    state: Any, identity: Identity, kind: str, item_id: str, only: tuple[str, ...] | None = None
+) -> None:
+    """What was written into a folder is kept: on the web it goes to object storage."""
+    files = getattr(state, "training_files", None)
+    if files is not None:
+        folder = store_for(state).folder_of(identity.tenant_id, identity.user_id, kind, item_id)
+        await files.commit(identity.tenant_id, identity.user_id, kind, item_id, folder, only)
+
+
+async def folder_gone(state: Any, identity: Identity, kind: str, item_id: str) -> None:
+    """An item is deleted: its folder, and on the web its files in object storage."""
+    folder = store_for(state).folder_of(identity.tenant_id, identity.user_id, kind, item_id)
+    files = getattr(state, "training_files", None)
+    if files is not None:
+        await files.drop(identity.tenant_id, identity.user_id, kind, item_id, folder)
+    else:
+        await asyncio.to_thread(shutil.rmtree, folder, True)
+
+
 # ---- search ---------------------------------------------------------------------------------
 
 
@@ -179,6 +208,7 @@ async def add_picture(
     await asyncio.to_thread(folder.mkdir, parents=True, exist_ok=True)
     await asyncio.to_thread((folder / "picture.png").write_bytes, png)
     await asyncio.to_thread((folder / "thumb.jpg").write_bytes, pictures.thumbnail(img))
+    await folder_saved(deps.state, identity, "items", row["id"])
     return row
 
 
@@ -186,7 +216,7 @@ async def remove_picture(deps: RouteDeps, identity: Identity, item_id: str) -> b
     store = store_for(deps.state)
     if not store.delete_item(identity.tenant_id, identity.user_id, item_id):
         return False
-    await asyncio.to_thread(shutil.rmtree, item_folder(store, identity, item_id), True)
+    await folder_gone(deps.state, identity, "items", item_id)
     return True
 
 
@@ -286,9 +316,8 @@ class CaptionManager:
         try:
             for item_id in ids:
                 try:
-                    png = await asyncio.to_thread(
-                        (item_folder(store, identity, item_id) / "picture.png").read_bytes
-                    )
+                    folder = await folder_ready(self._deps.state, identity, "items", item_id)
+                    png = await asyncio.to_thread((folder / "picture.png").read_bytes)
                     text = await captions.describe(caps, png, dataset["kind"], "")
                     store.set_caption(item_id, text, "done")
                 except RunError as e:
@@ -477,6 +506,8 @@ class RunManager:
         folder = run_folder(store, identity, run_id)
         try:
             await asyncio.to_thread((folder / "samples").mkdir, parents=True, exist_ok=True)
+            for i in items:
+                await folder_ready(self._deps.state, identity, "items", i["id"])
             job = trainer.TrainJob(
                 kind=dataset["kind"], word=dataset["trigger_word"], steps=row["steps"],
                 pictures=[item_folder(store, identity, i["id"]) / "picture.png" for i in items],
@@ -489,6 +520,7 @@ class RunManager:
                 lambda name: store.add_sample(run_id, name),
                 **({"resume": True} if resume else {}),
             )
+            await folder_saved(self._deps.state, identity, "runs", run_id, ("samples",))
             model = await self._keep(identity, dataset, items, row, result)
             store.finish_run(run_id, "done", elapsed_s=result.seconds, model_id=model["id"])
             await RouteGuard(self._deps.state, PRODUCT_ID).record(
@@ -543,6 +575,7 @@ class RunManager:
         refs = [item_folder(store, identity, i["id"]) / "picture.png" for i in items]
         await asyncio.to_thread(evaluation.save_refs, refs, folder / "refs")
         await asyncio.to_thread((folder / "card.json").write_text, json.dumps(card, indent=2))
+        await folder_saved(self._deps.state, identity, "models", model["id"])
         return model
 
     async def _publish(
@@ -614,6 +647,10 @@ async def delete_model(deps: RouteDeps, identity: Identity, model_id: str) -> bo
         family = card.get("family", "image")
     except NotFound:
         published, family = None, "image"
+    try:
+        run_of = store.get_model(identity.tenant_id, identity.user_id, model_id)["run_id"]
+    except NotFound:
+        run_of = None
     if not store.delete_model(identity.tenant_id, identity.user_id, model_id):
         return False
     lang = getattr(deps.state, "desktop_language", None)
@@ -626,7 +663,11 @@ async def delete_model(deps: RouteDeps, identity: Identity, model_id: str) -> bo
     if published and unpublish is not None:
         with contextlib.suppress(Exception):
             await unpublish(published["lora_name"])  # the image engine no longer offers it
-    await asyncio.to_thread(shutil.rmtree, model_folder(store, identity, model_id), True)
+    await folder_gone(deps.state, identity, "models", model_id)
+    if published and run_of:
+        await folder_gone(
+            deps.state, identity, "looks", run_of
+        )  # what a run kept for the video engine
     await deps.unindex(identity, PRODUCT_ID, model_id)
     return True
 
@@ -637,5 +678,5 @@ async def delete_dataset(deps: RouteDeps, identity: Identity, dataset_id: str) -
     if not store.delete_dataset(identity.tenant_id, identity.user_id, dataset_id):
         return False
     for i in items:
-        await asyncio.to_thread(shutil.rmtree, item_folder(store, identity, i["id"]), True)
+        await folder_gone(deps.state, identity, "items", i["id"])
     return True

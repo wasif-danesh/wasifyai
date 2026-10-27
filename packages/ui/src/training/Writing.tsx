@@ -563,6 +563,7 @@ export function ChatWithIt({
     copy && copy.progress.total_bytes > 0
       ? copy.progress.done_bytes / copy.progress.total_bytes
       : undefined;
+  if (!c.canChat) return null; // the chat engine is not this computer's: nothing to offer here
   return (
     <section className="grid gap-2 rounded-xl border p-3" aria-label="Chat with it">
       <h3 className="m-0 font-semibold">Chat with it</h3>

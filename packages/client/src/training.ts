@@ -34,6 +34,8 @@ export type TrainStatus = {
   active_run: string | null;
   /** What to know before a run starts: whether anything stops it, what to look out for (desktop). */
   preflight?: TrainPreflight | null;
+  /** whether a run can be paused and picked up again (not on a worker) */
+  can_pause?: boolean;
   place: "device" | "service";
   min_pictures: number;
   max_pictures: number;
@@ -283,6 +285,8 @@ export type WritingStatus = {
   choices: TrainChoices;
   /** the taught model chat answers with now, if any */
   in_chat: string | null;
+  /** whether a taught model can be used in chat here (the desktop's chat engine; not on the web yet) */
+  can_chat?: boolean;
   bases: LanguageBase[];
 };
 

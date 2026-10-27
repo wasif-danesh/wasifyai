@@ -327,3 +327,37 @@ async def test_looks_that_cannot_be_used_are_refused_in_words_before_any_work(
     )
     assert s.state["status"] == "refused" and s.state["refusal"]["code"] == "invalid_request"
     assert words in s.state["refusal"]["message"] and rig.sink.submitted == []
+
+
+async def test_on_the_web_a_look_is_found_among_the_persons_own_and_its_file_goes_to_the_job(
+    tmp_path, ctx
+):
+    rig = make_rig(tmp_path)
+    asked: list[tuple[str, str, list[str]]] = []
+
+    async def mine(tenant, user, names):
+        asked.append((tenant, user, names))
+        return {n: f"{tenant}/wasifyai-training/{user}/train/looks/r1/{n}" for n in names}
+
+    rig.caps.extras["person_looks"] = mine
+    name = "wasify-video-ena-1a2b3c4d.safetensors"
+    await Story(rig).start(
+        {"mode": "text", "prompt": "a fox", "seconds": 5, "loras": [{"name": name, "weight": 1.5}]}
+    )
+    job = rig.sink.submitted[0]
+    assert asked == [("t1", "u1", [name])]
+    assert job.prompt["lora_files"] == {name: f"t1/wasifyai-training/u1/train/looks/r1/{name}"}
+
+
+async def test_a_look_that_is_not_the_persons_own_is_refused_before_any_work(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+
+    async def nobody(tenant, user, names):
+        return None
+
+    rig.caps.extras["person_looks"] = nobody
+    s = await Story(rig).start(
+        {"mode": "text", "prompt": "a fox", "seconds": 5, "loras": [{"name": "x.safetensors"}]}
+    )
+    assert s.state["status"] == "refused" and "not yours" in s.state["refusal"]["message"]
+    assert rig.sink.submitted == []

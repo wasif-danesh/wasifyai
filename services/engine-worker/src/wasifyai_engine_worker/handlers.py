@@ -20,6 +20,7 @@ from wasifyai_platform_sdk import (
     builder_wire,
     model3d_wire,
     speech_wire,
+    train_wire,
 )
 
 Storage = Any  # wasifyai_platform_sdk.Storage: get(key) / put(key, data, content_type)
@@ -57,6 +58,10 @@ class Work:
             self._pending.add(task := asyncio.ensure_future(self._report(fraction, label)))
             task.add_done_callback(self._pending.discard)
 
+    @property
+    def storage(self) -> Storage:
+        return self._storage
+
     def _checked(self, key: str) -> str:
         if not key.startswith(self.job.prefix) or ".." in key:
             raise Refused("That file is not part of this job.")
@@ -68,6 +73,7 @@ class Work:
         if key is None:
             raise Refused(f"The job has no {name}.")
         path = self.folder / name
+        await asyncio.to_thread(path.parent.mkdir, parents=True, exist_ok=True)
         data = await self._storage.get(self._checked(key))
         await asyncio.to_thread(path.write_bytes, data)
         return path
@@ -281,6 +287,244 @@ async def _lint(service: Any, w: Work) -> dict[str, Any]:
     return {"findings": await asyncio.to_thread(service.lint, folder)}
 
 
+async def _train_video(train: Any, w: Work) -> dict[str, Any]:
+    """Teach the video model from the job's pictures and clips; the adapter goes back to storage."""
+    from wasifyai_training.trainer import Stopped
+    from wasifyai_training.video import VideoJob, VideoMedia
+
+    trainer = train.video
+    if trainer is None or not trainer.ready():
+        raise Failed(
+            "not_ready",
+            (trainer.problem() if trainer else None)
+            or "Video training is not set up on this worker.",
+        )
+    p = w.job.params
+    media = [
+        VideoMedia(
+            await w.file(it["name"]), it["kind"], it["caption"], float(it.get("seconds") or 0)
+        )
+        for it in p["items"]
+    ]
+    job = VideoJob(
+        str(p["word"]), media, int(p["width"]), int(p["height"]), int(p["window_frames"]),
+        int(p["steps"]), bool(p["checkpointing"]), rank=int(p["rank"]), lr=float(p["lr"]),
+    )  # fmt: skip
+    steps = max(1, job.steps)
+
+    def report(step: int, stage: str) -> None:
+        w.report_soon(min(1.0, step / steps), stage)
+
+    try:
+        res = await trainer.train(job, w.folder / "run", report)
+    except Stopped:
+        raise Failed("cancelled", "Stopped.") from None
+    except RuntimeError as e:  # the tool's own sentence
+        raise Failed("train_failed", str(e)) from None
+    await w.put(
+        "adapter", await asyncio.to_thread(res.adapter.read_bytes), "application/octet-stream"
+    )
+    return {
+        "seconds": res.seconds,
+        "peak_bytes": res.peak_bytes,
+        "loss_first": res.loss_first,
+        "loss_last": res.loss_last,
+    }
+
+
+async def _train_image(train: Any, w: Work) -> dict[str, Any]:
+    """Teach the picture model from the job's pictures; the samples go to storage as they appear."""
+    from wasifyai_training.trainer import Stopped, TrainJob
+
+    trainer = train.image
+    if trainer is None or not trainer.ready():
+        raise Failed(
+            "not_ready",
+            (trainer.problem() if trainer else None)
+            or "Picture training is not set up on this worker.",
+        )
+    p = w.job.params
+    pictures = [await w.file(name) for name in p["pictures"]]
+    run = w.folder / "run"
+    job = TrainJob(
+        kind=str(p["kind"]), word=str(p["word"]), steps=int(p["steps"]), pictures=pictures,
+        captions=list(p["captions"]), samples=run / "samples",
+        settings=dict(p.get("settings") or {}),
+    )  # fmt: skip
+    steps = max(1, job.steps)
+    loop = asyncio.get_running_loop()
+    uploads: list[Any] = []
+
+    def report(step: int, stage: str) -> None:
+        w.report_soon(min(1.0, step / steps), stage)
+
+    def sample(name: str) -> None:
+        """Called from the trainer's own thread: the picture goes to storage at once."""
+
+        async def up() -> None:
+            data = await asyncio.to_thread((job.samples / name).read_bytes)
+            await w.put(f"samples/{name}", data, "image/png")
+
+        uploads.append(asyncio.run_coroutine_threadsafe(up(), loop))
+
+    try:
+        res = await trainer.train(job, report, sample)
+    except Stopped:
+        raise Failed("cancelled", "Stopped.") from None
+    except RuntimeError as e:  # the tool's own sentence
+        raise Failed("train_failed", str(e)) from None
+    await asyncio.gather(*(asyncio.wrap_future(f) for f in uploads))
+    await w.put(
+        "adapter", await asyncio.to_thread(res.adapter.read_bytes), "application/octet-stream"
+    )
+    return {"seconds": res.seconds, "peak_bytes": res.peak_bytes}
+
+
+async def _tokenize(train: Any, w: Work) -> dict[str, Any]:
+    trainer = train.image
+    if trainer is None:
+        raise Failed("not_ready", "Picture training is not set up on this worker.")
+    return {"words": await trainer.tokenize([str(x) for x in w.job.params["words"]]) or {}}
+
+
+async def _train_decision(train: Any, w: Work) -> dict[str, Any]:
+    """Teach a decision model from the job's rows; its files go to storage as the job's outputs."""
+    from wasifyai_training.decision import DecisionJob, Row, question_of
+    from wasifyai_training.decisions import said_out
+    from wasifyai_training.language import Stopped
+
+    trainer = train.decision
+    p = w.job.params
+    base = str(p["base"])
+    if trainer is None or not trainer.ready(base):
+        raise Failed(
+            "not_ready",
+            (trainer.problem(base) if trainer else None)
+            or "Decision training is not set up on this worker.",
+        )
+    job = DecisionJob(
+        question_of(p["question"]), [Row(t, a) for t, a in p["train"]],
+        [Row(t, a) for t, a in p["held"]], int(p["epochs"]), int(p["steps"]), list(p["peek"]),
+    )  # fmt: skip
+    steps = max(1, job.steps)
+
+    def report(step: int, stage: str) -> None:
+        w.report_soon(min(1.0, step / steps), stage)
+
+    try:
+        res = await trainer.train(job, base, w.folder / "run", report)
+    except Stopped:
+        raise Failed("cancelled", "Stopped.") from None
+    except RuntimeError as e:  # the tool's own sentence
+        raise Failed("train_failed", str(e)) from None
+    folder = Path(res.folder)
+    files = await asyncio.to_thread(lambda: sorted(p for p in folder.rglob("*") if p.is_file()))
+    for f in files:
+        data = await asyncio.to_thread(f.read_bytes)
+        await w.put(f"model/{f.relative_to(folder).as_posix()}", data, "application/octet-stream")
+    return {
+        "seconds": res.seconds, "peak_bytes": res.peak_bytes, "bytes": res.bytes, "loss": res.loss,
+        "before": [said_out(s) for s in res.before], "after": [said_out(s) for s in res.after],
+        "peek_before": [said_out(s) for s in res.peek_before],
+        "peek_after": [said_out(s) for s in res.peek_after],
+    }  # fmt: skip
+
+
+async def _decision_answer(train: Any, w: Work) -> dict[str, Any]:
+    """A decision model (the person's own, or its base) answering the texts of the job."""
+    from wasifyai_training.decision import question_of
+    from wasifyai_training.decisions import said_out
+
+    trainer = train.decision
+    if trainer is None or train.cache is None:
+        raise Failed("not_ready", "Decision models are not set up on this worker.")
+    p = w.job.params
+    if p.get("base"):
+        folder = trainer.base_folder(str(p["base"]))
+        if folder is None:
+            raise Failed("not_ready", "The model it started from is not on this worker.")
+    else:
+        try:
+            folder = await train.cache.folder(
+                w.storage, w.job.tenant_id, w.job.user_id, str(p["model_id"])
+            )
+        except (FileNotFoundError, ValueError):
+            raise Failed("gone", "The taught model's files are gone.") from None
+    try:
+        said = await trainer.answer(
+            folder, question_of(p["question"]), [str(t) for t in p["texts"]]
+        )
+    except RuntimeError as e:
+        raise Failed("not_ready", str(e)) from None
+    return {"answers": [said_out(s) for s in said]}
+
+
+async def _train_writing(train: Any, w: Work) -> dict[str, Any]:
+    """Teach a writing model from the job's examples; its adapter goes back as the job's outputs."""
+    from wasifyai_training.language import LanguageJob, Stopped
+
+    trainer = train.writing
+    p = w.job.params
+    base = str(p["base"])
+    if trainer is None or not trainer.ready(base):
+        raise Failed(
+            "not_ready",
+            (trainer.problem(base) if trainer else None)
+            or "Writing models are not set up on this worker.",
+        )
+    job = LanguageJob(
+        list(p["train"]), list(p["valid"]), int(p["steps"]), list(p["questions"]),
+        batch=int(p.get("batch") or 2),
+    )  # fmt: skip
+    steps = max(1, job.steps)
+
+    def report(step: int, stage: str) -> None:
+        w.report_soon(min(1.0, step / steps), stage)
+
+    try:
+        res = await trainer.train(job, base, w.folder / "run", report)
+    except Stopped:
+        raise Failed("cancelled", "Stopped.") from None
+    except RuntimeError as e:  # the tool's own sentence
+        raise Failed("train_failed", str(e)) from None
+    folder = Path(res.adapter)
+    files = await asyncio.to_thread(lambda: sorted(p for p in folder.iterdir() if p.is_file()))
+    for f in files:
+        await w.put(
+            f"adapter/{f.name}", await asyncio.to_thread(f.read_bytes), "application/octet-stream"
+        )
+    return {
+        "seconds": res.seconds, "peak_bytes": res.peak_bytes, "first_val": res.first_val,
+        "last_val": res.last_val, "last_train": res.last_train,
+    }  # fmt: skip
+
+
+async def _writing_answer(train: Any, w: Work) -> dict[str, Any]:
+    """The base model (or with the adapter the job brings) answering the job's questions."""
+    trainer = train.writing
+    if trainer is None:
+        raise Failed("not_ready", "Writing models are not set up on this worker.")
+    p = w.job.params
+    adapter = None
+    names = [n for n in w.job.files if n.startswith("a/")]
+    if names:
+        adapter = w.folder / "adapter"
+        await asyncio.to_thread(adapter.mkdir, parents=True, exist_ok=True)
+        for n in names:
+            src = await w.file(n)
+            await asyncio.to_thread(src.replace, adapter / n.removeprefix("a/"))
+    try:
+        answers = await trainer.answer(
+            str(p["base"]),
+            [str(q) for q in p["questions"]],
+            adapter,
+            int(p.get("max_tokens") or 120),
+        )
+    except RuntimeError as e:
+        raise Failed("not_ready", str(e)) from None
+    return {"answers": answers}
+
+
 async def _fetch_model(admin: Any, w: Work) -> dict[str, Any]:
     async def report(fraction: float, label: str) -> None:
         w.report_soon(fraction, label)
@@ -304,6 +548,13 @@ HANDLERS: dict[str, Handler] = {
     builder_wire.LINT: _lint,
     model3d_wire.MATTE: _matte,
     model3d_wire.GENERATE: _generate,
+    train_wire.VIDEO: _train_video,
+    train_wire.IMAGE: _train_image,
+    train_wire.IMAGE_TOKENIZE: _tokenize,
+    train_wire.DECISION: _train_decision,
+    train_wire.DECISION_ANSWER: _decision_answer,
+    train_wire.WRITING: _train_writing,
+    train_wire.WRITING_ANSWER: _writing_answer,
     speech_wire.SPEAK: _speak,
     speech_wire.DESIGN: _design,
     speech_wire.CLONE: _clone,
@@ -319,7 +570,7 @@ HANDLERS: dict[str, Handler] = {
 
 def _engine_for(engines: Any, kind: str) -> Any:
     """The component a kind runs on: `speech.*` on the speech engine, `model3d.*` on the 3D service,
-    `admin.*` on the worker's own set-up component.
+    `admin.*` on the worker's own set-up component, `train.*` on its trainers.
     A single engine (not a mapping) is the speech engine."""
     if isinstance(engines, Mapping):
         return engines[kind.split(".", 1)[0]]

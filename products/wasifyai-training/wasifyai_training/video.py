@@ -35,6 +35,8 @@ from wasifyai_training.runtime import (
     NotAvailable,
     Refused,
     add_to_search,
+    folder_ready,
+    folder_saved,
     item_folder,
     model_folder,
     run_folder,
@@ -277,7 +279,7 @@ class VideoRunManager:
             await asyncio.to_thread(folder.mkdir, parents=True, exist_ok=True)
             media = []
             for i in items:
-                where = item_folder(store, identity, i["id"])
+                where = await folder_ready(self._deps.state, identity, "items", i["id"])
                 cap = captions.with_word(i["caption"], dataset["trigger_word"])
                 if i.get("media") == "clip":
                     media.append(
@@ -350,6 +352,7 @@ class VideoRunManager:
         await asyncio.to_thread(folder.mkdir, parents=True, exist_ok=True)
         await asyncio.to_thread(shutil.copyfile, result.adapter, folder / "adapter.safetensors")
         await asyncio.to_thread((folder / "card.json").write_text, json.dumps(card, indent=2))
+        await folder_saved(self._deps.state, identity, "models", model["id"])
         return model
 
 
@@ -424,6 +427,7 @@ async def add_clip(
         await asyncio.to_thread(shutil.move, str(temp), str(folder / "clip.mp4"))
         await asyncio.to_thread((folder / "picture.png").write_bytes, png)
         await asyncio.to_thread((folder / "thumb.jpg").write_bytes, pictures.thumbnail(middle))
+        await folder_saved(deps.state, identity, "items", row["id"])
         return row
     finally:
         await asyncio.to_thread(temp.unlink, True)

@@ -33,7 +33,7 @@ from wasifyai_training.runtime import (
     add_to_search,
     delete_model,
     engine_for,
-    model_folder,
+    folder_ready,
     not_ready,
     run_manager_for,
     store_for,
@@ -352,7 +352,7 @@ async def _adapter(ctx: ActionContext, item_id: str) -> bytes | None:
         store.get_model(ctx.actor.tenant_id, ctx.actor.user_id, item_id)
     except NotFound:
         return None
-    path = model_folder(store, ctx.actor, item_id) / "adapter.safetensors"
+    path = await folder_ready(state, ctx.actor, "models", item_id) / "adapter.safetensors"
     return (
         await asyncio.to_thread(path.read_bytes) if await asyncio.to_thread(path.is_file) else None
     )

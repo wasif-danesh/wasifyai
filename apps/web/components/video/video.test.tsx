@@ -72,6 +72,8 @@ describe("VideoScreen (the web app's mount of the shared screen)", () => {
           `id: ${i + 1}\nevent: ${name}\ndata: ${JSON.stringify({ run_id: "r", thread_id: "t", seq: i + 1, ts: "", ...data })}\n\n`,
       )
       .join("");
+    // the screen first reads the looks the person taught (none here)
+    fetchMock.mockResolvedValueOnce(Response.json({ models: [] }));
     fetchMock.mockResolvedValueOnce(
       new Response(body, { headers: { "content-type": "text/event-stream" } }),
     );
@@ -82,7 +84,10 @@ describe("VideoScreen (the web app's mount of the shared screen)", () => {
       "href",
       "/api/products/wasifyai-video/videos/v9/download",
     );
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/products/wasifyai-video/runs");
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      "/api/products/wasifyai-training/train/models",
+      "/api/products/wasifyai-video/runs",
+    ]);
     await user.click(screen.getByRole("button", { name: /your videos/i }));
     expect(push).toHaveBeenCalledWith("/video/library");
   });
@@ -92,6 +97,8 @@ describe("VideoScreen (the web app's mount of the shared screen)", () => {
     const started = vi.fn();
     window.addEventListener(STARTED_EVENT, started);
     const frame = `id: 1\nevent: node\ndata: ${JSON.stringify({ run_id: "r", thread_id: "t", seq: 1, ts: "", node: "generate_video", status: "started", label: "Making your video" })}\n\n`;
+    // the screen first reads the looks the person taught (none here)
+    fetchMock.mockResolvedValueOnce(Response.json({ models: [] }));
     fetchMock.mockResolvedValueOnce(
       new Response(
         new ReadableStream({

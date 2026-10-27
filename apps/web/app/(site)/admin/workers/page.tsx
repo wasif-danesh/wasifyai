@@ -1,5 +1,6 @@
 import { Notice } from "@/components/Notice";
 import { ModelsAdmin } from "@/components/models/ModelsAdmin";
+import { TrainersAdmin } from "@/components/models/TrainersAdmin";
 import { apiGet } from "@/lib/api";
 import { muted } from "@/lib/styles";
 import type { WorkerInfo } from "@wasifyai/client";
@@ -46,6 +47,7 @@ export default async function Workers() {
           </ul>
         )}
       </section>
+      <TrainersAdmin workers={workers} />
       <ModelsAdmin />
     </>
   );

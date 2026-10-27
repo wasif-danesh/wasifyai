@@ -12,10 +12,18 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from wasifyai_platform_sdk import Identity, RouteDeps
+from wasifyai_platform_sdk import Identity, RouteDeps, RunContext, set_context
+from wasifyai_platform_sdk.context import reset_context
 
 from wasifyai_training import bases, gguf_lora, language
-from wasifyai_training.runtime import Refused, model_or_none, run_manager_for, store_for
+from wasifyai_training.runtime import (
+    PRODUCT_ID,
+    Refused,
+    folder_ready,
+    model_or_none,
+    run_manager_for,
+    store_for,
+)
 from wasifyai_training.store import QUALITIES, WRITING_RIGHTS, NotFound
 from wasifyai_training.writing import KIND, adapter_of, decision_busy, engine_for, manager_for
 
@@ -89,7 +97,7 @@ def add_writing_routes(router: APIRouter, deps: RouteDeps) -> None:
             "fit": engine.fit(base.need_gb) if ready else None,
             "busy": manager_for(deps).busy() or run_manager_for(deps).busy(),
             "active_run": manager_for(deps).active(),
-            "place": "device",
+            "place": getattr(engine, "place", "device"),
             "min_examples": language.MIN_EXAMPLES,
             "good_examples": language.GOOD_EXAMPLES,
             "rights": list(WRITING_RIGHTS),
@@ -102,6 +110,8 @@ def add_writing_routes(router: APIRouter, deps: RouteDeps) -> None:
                 lambda d: setup.has_model(spec) if setup and (spec := setup.spec(d.id)) else ready,
             ),
             "in_chat": getattr(getattr(lang, "selected", None), "style", None),
+            # chat with a taught model needs the chat engine of this computer (not a worker, yet)
+            "can_chat": setup is not None and lang is not None,
             # what is on this computer for each base, and what getting the rest would cost
             "bases": setup.bases_state() if setup is not None else [],
         }
@@ -254,12 +264,18 @@ def add_writing_routes(router: APIRouter, deps: RouteDeps) -> None:
             raise HTTPException(
                 409, {"code": "busy", "message": "A model is being taught. Wait for it to finish."}
             )
+        await folder_ready(
+            deps.state, identity, "models", model_id
+        )  # on the web: fetched from storage
         folder = adapter_of(store_for(deps.state), identity, model_id)
         if not await asyncio.to_thread((folder / "adapters.safetensors").is_file):
             raise HTTPException(404, "the taught model's files are gone")
+        token = set_context(RunContext(identity.tenant_id, PRODUCT_ID, identity.user_id))
         try:
             (original,) = await engine.answer(row["base"], [body.question])
             (mine,) = await engine.answer(row["base"], [body.question], folder)
         except RuntimeError as e:
             raise HTTPException(409, {"code": "not_ready", "message": str(e)}) from None
+        finally:
+            reset_context(token)
         return {"question": body.question, "original": original, "mine": mine}

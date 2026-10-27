@@ -68,6 +68,9 @@ class ImageState(TypedDict, total=False):
     mask_key: str  # the painted area, white on black (inpaint mode)
     seed: int  # optional in the request; always set once the request is checked
     loras: list[dict[str, Any]]  # [{name, weight}], checked: at most MAX_LORAS
+    lora_files: dict[
+        str, str
+    ]  # on the web: the storage key of each style, which is the person's own
     # job and result
     job_id: str
     result_key: str
@@ -275,6 +278,18 @@ def build_image_graph(
         loras, why = check_loras(state.get("loras"))
         if why:
             return await refused("invalid_request", why)
+        lora_files: dict[str, str] = {}
+        resolve_looks = caps.extras.get(
+            "person_looks"
+        )  # the web keeps each person's styles in storage
+        if loras and resolve_looks is not None:
+            ctx = require_context()
+            found = await resolve_looks(ctx.tenant_id, ctx.user_id, [x["name"] for x in loras])
+            if found is None:
+                return await refused(
+                    "invalid_request", "One of those styles is not yours any more."
+                )
+            lora_files = found
         out: ImageState = {
             "mode": mode,
             "prompt": prompt,
@@ -284,6 +299,7 @@ def build_image_graph(
             "mask_key": keys.get("mask_key", ""),
             "seed": seed,
             "loras": loras,
+            "lora_files": lora_files,
             "status": "working",
         }
 
@@ -334,6 +350,8 @@ def build_image_graph(
         )
         seed = state["seed"]
         extra: dict[str, Any] = {"loras": state["loras"]} if state.get("loras") else {}
+        if state.get("lora_files"):
+            extra["lora_files"] = state["lora_files"]
         prompt = state["prompt"]
         if mode == "image":
             handle = await caps.image.edit(

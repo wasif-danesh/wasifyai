@@ -173,6 +173,7 @@ exits with the engine.
 | `DESKTOP_EXTRA_MODEL_DIRS` | read-only model roots with the usual folder layout (`diffusion_models/`, `text_encoders/`, `vae/`, ...), separated by `:` (`;` on Windows); the app never writes there |
 | `DESKTOP_IDLE_UNLOAD_S` | idle time before the model is unloaded |
 | `DESKTOP_COMFYUI_ARGS` | extra ComfyUI arguments, for tuning |
+| `DESKTOP_SECRET_STORE` | `keychain` (the shell sets it on macOS: keys and tokens go to the login keychain under "Wasify AI") or `file` (the default when the engine is started by hand: `secrets.json`, Fernet under `secrets.key`); ADR-0092 |
 
 ### Models (stage A3)
 
@@ -244,7 +245,7 @@ to `@wasifyai/ui` when it is migrated; delete the shim when nothing uses it.
 | Notebooks | `pages/Notebooks.tsx`, `pages/Notebook.tsx`, `notebook-setup.ts` (the web app mounts the same `NotebookList` and `NotebookWorkspace`, with `NotebookPlaceProvider` saying where documents live) | View notebooks (cards, search by title and by what is inside, rename, delete, the setup card) and one notebook (the shared `NotebookWorkspace`) |
 | Library | `pages/Library.tsx` | wraps the shared `ImageLibrary`; "Make it again" sends the recipe to Create (`Shell.tsx` holds it until the route changes) |
 | Attach (chat box) | `packages/ui/src/chat/attachments/`, `services/api/.../attachments.py`, `products/wasifyai-assistant/wasifyai_assistant/attachments.py` | pictures (the model's projector, `--mmproj`, fetched from `projector-shelf.yaml` after a click: `desktop_vision.py`) and documents (read to text on the engine); see the CO2 section of `docs/spikes/composer-co0.md` |
-| Models, Settings | `pages/Models.tsx`, `pages/Settings.tsx` | the model panel; the image engine card, updates, restart and repair; "Searching the web" (`SearchSettings` in `packages/ui`: service, permission, key; the engine side is `web_search.py`, keys encrypted with `secrets.key` in the data folder, ADR-0083) |
+| Models, Settings | `pages/Models.tsx`, `pages/Settings.tsx` | the model panel; the image engine card, updates, restart and repair; "Searching the web" (`SearchSettings` in `packages/ui`: service, permission, key; the engine side is `web_search.py`, keys in the secret store, ADR-0083 and ADR-0092); "Hugging Face token" (`HubToken`: typed once, kept in the keychain, never shown again; `PUT`/`DELETE /desktop/hub/token`) |
 
 **The top bar (2026-10-21).** One row, 36 px high, across both panels (`TitleBar` in `packages/ui`, placed by `Shell.tsx`),
 tinted like the side menu and so a little lighter than the page. On the left, level with the window's buttons: back, forward

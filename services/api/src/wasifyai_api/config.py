@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # for example an existing ComfyUI models folder, so 16 GB are not copied
     desktop_extra_model_dirs: str = ""
     desktop_idle_unload_s: int = 600  # unload the model after this long without a job
+    # where the desktop keeps keys and tokens (ADR-0092): `keychain` (the macOS keychain; the
+    # shell asks for it) or `file` (Fernet under `secrets.key` in the data folder; the default, so
+    # an engine started by hand or by a test never touches the person's keychain)
+    desktop_secret_store: str = "file"
     # extra ComfyUI arguments, space separated (for example `--gpu-only`): memory modes, for tuning
     desktop_comfyui_args: str = ""
     # comma-separated product ids; empty: all (desktop: image, video, assistant, notebooks, voice)

@@ -24,7 +24,17 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncEngine
-from wasifyai_platform_sdk import LocalFileStorage, RunStore, ScopedStorage, SecretBox
+from wasifyai_platform_sdk import (
+    EnvSecretStore,
+    FileSecretStore,
+    KeychainSecretStore,
+    LayeredSecretStore,
+    LocalFileStorage,
+    RunStore,
+    ScopedStorage,
+    SecretBox,
+    SecretStore,
+)
 from wasifyai_platform_sdk.sqlite import (
     SqliteEventLog,
     SqliteJobQueue,
@@ -43,7 +53,7 @@ from wasifyai_api.decision_setup import DecisionSetup
 from wasifyai_api.desktop_decision_training import LayaTrainer, make_decision_trainer
 from wasifyai_api.desktop_discovery import DiscoveryService
 from wasifyai_api.desktop_fit import assess_fit, need_declared, process_rss_bytes
-from wasifyai_api.desktop_hub import HubService
+from wasifyai_api.desktop_hub import TOKEN_ALIASES, HubService
 from wasifyai_api.desktop_language import LanguageService
 from wasifyai_api.desktop_language_training import MlxLmTrainer, make_language_trainer
 from wasifyai_api.desktop_model3d import Model3dService
@@ -96,6 +106,7 @@ class DesktopBackends:
     vision: VisionService | None = None  # the picture reader of the chosen chat model (ADR-0083)
     hub: HubService | None = None
     web: WebService | None = None  # web search: the person's choices and keys (ADR-0083)
+    secrets: SecretStore | None = None  # keys and tokens: the keychain or the file (ADR-0092)
     audio: AudioEngine | None = None
     video_builder: VideoBuilderService | None = (
         None  # the render engine, installed on request (ADR-0077)
@@ -153,6 +164,21 @@ class DesktopBackends:
             await self._worker_cleanup()
 
 
+KEYCHAIN_SERVICE = "Wasify AI"
+
+
+def make_secret_store(root: Path, settings: Settings, box: SecretBox) -> SecretStore:
+    """Where the desktop keeps keys and tokens (ADR-0092): the macOS keychain when the shell asks
+    for it (`DESKTOP_SECRET_STORE=keychain`), else one encrypted file under `secrets.key`. The
+    environment answers behind either, so a developer's `HF_TOKEN` still counts."""
+    env = EnvSecretStore(TOKEN_ALIASES)
+    if settings.desktop_secret_store == "keychain" and KeychainSecretStore.available():
+        return LayeredSecretStore(
+            KeychainSecretStore(KEYCHAIN_SERVICE, root / "secrets.names.json"), env
+        )
+    return LayeredSecretStore(FileSecretStore(root / "secrets.json", box), env)
+
+
 def open_desktop(settings: Settings) -> DesktopBackends:
     if not settings.desktop_data_dir:
         raise RuntimeError(
@@ -190,13 +216,11 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     language = LanguageService(SqliteSettingsStore(engine), llama, models, discovery)
     discovery.language = language
     vision = VisionService(language, models)
-    hub = HubService(SqliteSettingsStore(engine))
+    box = SecretBox(load_or_create_key(root / "secrets.key"))
+    secrets = make_secret_store(root, settings, box)
+    hub = HubService(SqliteSettingsStore(engine), secrets=secrets)
     hub.models, hub.language = models, language
-    models.downloads._token = hub.client.token  # noqa: SLF001 - one place for the token
-    web = WebService(
-        SqliteSettingsStore(engine),
-        SecretBox(load_or_create_key(root / "secrets.key")),
-    )
+    web = WebService(SqliteSettingsStore(engine), secrets, legacy_box=box)
     cache = root / "engine" / "cache"
     setup = TrainingSetup(
         root,
@@ -233,6 +257,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         video_setup.video_model = teaching_video.model_files
     return DesktopBackends(
         web=web,
+        secrets=secrets,
         models=models,
         discovery=discovery,
         llama=llama,

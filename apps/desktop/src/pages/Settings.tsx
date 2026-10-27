@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { Button, SearchSettings } from "@wasifyai/ui";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { assistantApi, discoveryApi, hubApi } from "../api";
 import { engineRepair, engineRestart } from "../engine";
 import { ImageEngineCard, LanguageEngineCard, UpdateBanner } from "../parts";
@@ -124,6 +124,83 @@ function HubSwitch() {
   );
 }
 
+/** The person's Hugging Face token (ADR-0092): typed once, kept in the keychain, never shown again. */
+function HubToken() {
+  const id = useId();
+  const [state, setState] = useState<{ set: boolean; canSave: boolean } | null>(null);
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    hubApi
+      .state()
+      .then((s) => setState({ set: s.token_set === true, canSave: s.can_save_token !== false }))
+      .catch(() => {});
+  }, []);
+  if (state === null) return null;
+  async function run(action: () => Promise<{ token_set: boolean }>) {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await action();
+      setState((s) => (s ? { ...s, set: r.token_set } : s));
+      setValue("");
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : "That could not be saved.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="grid gap-3" aria-label="Hugging Face token">
+      <h2 className="font-semibold text-lg">Hugging Face token</h2>
+      <p className="text-muted-foreground text-sm">
+        Some models on Hugging Face are gated: their authors ask you to accept a licence and sign in
+        before a download. Paste a token from your Hugging Face account to fetch them. It is kept in
+        this computer's keychain, sent only to huggingface.co, and never shown again.
+      </p>
+      <label htmlFor={id} className="text-sm">
+        Token {state.set ? "(saved)" : "(not saved yet)"}
+      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          id={id}
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          value={value}
+          disabled={!state.canSave}
+          placeholder={state.set ? "Type a new token to replace it" : "Paste your token (hf_...)"}
+          onChange={(e) => setValue(e.target.value)}
+          className="h-9 min-w-0 flex-1 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          disabled={busy || !state.canSave || !value.trim()}
+          onClick={() => void run(() => hubApi.setToken(value))}
+        >
+          Save token
+        </Button>
+        {state.set ? (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => void run(() => hubApi.removeToken())}
+          >
+            Remove token
+          </Button>
+        ) : null}
+      </div>
+      {!state.canSave ? (
+        <p className="text-muted-foreground text-xs">Tokens cannot be saved on this computer.</p>
+      ) : null}
+      {error ? <p className="text-destructive text-sm">{error}</p> : null}
+    </section>
+  );
+}
+
 export function SettingsPage() {
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-8 px-8 pt-16 pb-12">
@@ -142,6 +219,8 @@ export function SettingsPage() {
       <FindingModels />
 
       <HubSwitch />
+
+      <HubToken />
 
       <SearchSettings assistant={assistantApi} />
 

@@ -19,7 +19,13 @@ import os
 from pathlib import Path
 from typing import Any
 
-from wasifyai_platform_sdk import SecretBox, SecretsUnavailable, UsageRecorder, require_context
+from wasifyai_platform_sdk import (
+    SecretBox,
+    SecretStore,
+    SecretsUnavailable,
+    UsageRecorder,
+    require_context,
+)
 from wasifyai_platform_sdk.actions import Readiness
 from wasifyai_platform_sdk.usage import UsageEvent, record_safely
 from wasifyai_platform_sdk.web import (
@@ -78,18 +84,22 @@ class WebService:
     def __init__(
         self,
         store: SettingsStore,
-        box: SecretBox | None = None,
+        secrets: SecretStore | None = None,
         usage: UsageRecorder | None = None,
         *,
         reader: WebReader | None = None,
         duckduckgo: DuckDuckGoProvider | None = None,
         per_person: bool = False,
+        legacy_box: SecretBox | None = None,
     ) -> None:
         # on a service (`per_person`) an admin chooses the service and keeps the keys, and each
-        # person allows searching for themself; on the desktop the one person does all of it
+        # person allows searching for themself; on the desktop the one person does all of it.
+        # Keys live in the secret store as `web.search.<service>` (ADR-0092); `legacy_box` reads
+        # the ones saved inside the settings row before the store existed, once, to move them.
         self.per_person = per_person
         self._store = store
-        self._box = box
+        self._secrets = secrets
+        self._legacy_box = legacy_box
         self.usage = usage
         self._ddg = duckduckgo or DuckDuckGoProvider()  # one object: its spacing is per computer
         self.caps = WebCapabilities(self._provider, reader or WebReader())
@@ -115,19 +125,50 @@ class WebService:
         value = saved.get("provider") if isinstance(saved, dict) else None
         return value if value in PROVIDER_IDS else None
 
+    @staticmethod
+    def _secret(provider_id: str) -> str:
+        return f"{KEY}.{provider_id}"
+
+    async def _key_ids(self) -> set[str]:
+        """The services whose key is in the store. Never the keys."""
+        if self._secrets is None:
+            return set()
+        prefix = KEY + "."
+        names = await self._secrets.names()
+        return {n[len(prefix) :] for n in names if n.startswith(prefix)} & set(PROVIDER_IDS)
+
+    async def _move_legacy(self, s: dict[str, Any]) -> None:
+        """Keys saved inside the settings row before the secret store existed move into it,
+        once. One that cannot be read with the current key is dropped: enter it again."""
+        legacy = s.get("keys")
+        if not isinstance(legacy, dict) or not legacy:
+            return
+        if self._secrets is None or not self._secrets.ready or self._legacy_box is None:
+            return
+        for kid, token in legacy.items():
+            if kid in PROVIDER_IDS and isinstance(token, str):
+                try:
+                    await self._secrets.put(self._secret(kid), self._legacy_box.decrypt(token))
+                except SecretsUnavailable:
+                    log.warning("a saved %s key could not be moved to the secret store", kid)
+        await self._store.put(KEY, {k: v for k, v in s.items() if k != "keys"}, "window")
+
     async def _state(self) -> dict[str, Any]:
         saved = await self._store.get(KEY)
         s = saved if isinstance(saved, dict) else {}
+        await self._move_legacy(s)
         provider = s.get("provider") if s.get("provider") in PROVIDER_IDS else DEFAULT_PROVIDER
-        raw_keys = s.get("keys")
-        keys: dict[str, Any] = raw_keys if isinstance(raw_keys, dict) else {}
         return {
             "provider": provider,
             "consented_for": s.get("consented_for")
             if s.get("consented_for") in PROVIDER_IDS
             else None,
-            "keys": {k: v for k, v in keys.items() if k in PROVIDER_IDS and isinstance(v, str)},
+            "keys": await self._key_ids(),
         }
+
+    def _row(self, s: dict[str, Any]) -> dict[str, Any]:
+        """What the settings row keeps: the choices, never a key."""
+        return {"provider": s["provider"], "consented_for": s["consented_for"]}
 
     async def status(self, who: Any = None) -> dict[str, Any]:
         """What Settings and the chat box show. Never a key, only whether one is saved."""
@@ -136,7 +177,7 @@ class WebService:
             "provider": s["provider"],
             "consented": await self._consented_for(s, who) == s["provider"],
             "consent_text": consent_text(s["provider"], self.per_person),
-            "can_save_keys": bool(self._box and self._box.ready),
+            "can_save_keys": bool(self._secrets and self._secrets.ready),
             "providers": [
                 {
                     "id": p.id,
@@ -178,11 +219,13 @@ class WebService:
                     raise ValueError(
                         "That does not look like a key: no spaces, 8 to 300 characters."
                     )
-                if self._box is None or not self._box.ready:
+                if self._secrets is None or not self._secrets.ready:
                     raise ValueError("Keys cannot be saved on this computer.")
-                s["keys"][kid] = self._box.encrypt(value)
-            if remove_key is not None:
-                s["keys"].pop(remove_key, None)
+                await self._secrets.put(self._secret(kid), value)
+                s["keys"].add(kid)
+            if remove_key is not None and remove_key in s["keys"] and self._secrets is not None:
+                await self._secrets.delete(self._secret(remove_key))
+                s["keys"].discard(remove_key)
             if consent is not None:
                 if self.per_person:
                     mine = self._who_key(who)
@@ -193,7 +236,7 @@ class WebService:
                     )
                 else:
                     s["consented_for"] = s["provider"] if consent else None
-            await self._store.put(KEY, s, "window")
+            await self._store.put(KEY, self._row(s), "window")
         return await self.status(who)
 
     async def readiness(self, who: Any = None) -> Readiness:
@@ -218,9 +261,9 @@ class WebService:
     async def _provider(self) -> SearchProvider:
         s = await self._state()
         key = ""
-        if s["provider"] in s["keys"]:
+        if s["provider"] in s["keys"] and self._secrets is not None:
             try:
-                key = self._box.decrypt(s["keys"][s["provider"]]) if self._box else ""
+                key = await self._secrets.get(self._secret(s["provider"])) or ""
             except SecretsUnavailable:
                 raise WebError(
                     "needs_key",

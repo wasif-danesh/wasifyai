@@ -21,6 +21,9 @@ export type ShelfItem = {
 export type HubState = {
   enabled: boolean;
   has_token: boolean;
+  /** a token is kept in the app's secret store (the keychain); never the token itself */
+  token_set?: boolean;
+  can_save_token?: boolean;
   shelf: ShelfItem[];
   capabilities: Capability[];
 };
@@ -127,6 +130,14 @@ export function createHubApi(transport: Transport) {
         headers,
         body: JSON.stringify({ enabled }),
       }),
+    setToken: (token: string) =>
+      json<{ token_set: boolean }>(transport, "/desktop/hub/token", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ token }),
+      }),
+    removeToken: () =>
+      json<{ token_set: boolean }>(transport, "/desktop/hub/token", { method: "DELETE" }),
     search: (q: string, capability: Capability, sort: Sort) =>
       json<{ items: HubResult[]; stale: boolean }>(
         transport,

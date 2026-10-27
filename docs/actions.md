@@ -55,9 +55,13 @@ files and its registration line and changes nothing else.
 ## How a call is run
 
 `ActionExecutor.run_action(action_id, params, origin, ...)` is the only way a surface other than the window does
-anything. `origin` is `window`, `assistant` or `mcp:<connection>`. In order it:
+anything. `origin` is `window`, `assistant`, `mcp:<connection>` or `api:<key id>`. `actor` may be an `Identity` (the
+person) or a `Principal` (ADR-0092: a connection or an API key with scopes; it acts as the person who made it). In
+order it:
 
-1. finds the action and checks that the surface may be offered it (`not_offered`);
+1. finds the action and checks that the surface may be offered it (`not_offered`), and that the principal's scopes
+   cover it (`not_offered`, with the missing scope in the sentence; `scope_of(action)`: the domain's group for
+   `library`, `notebook`, `voice` and `models`, else `read` for a read and `make` for the rest);
 2. validates `params` against the input model and answers in words what to fix (`invalid_input`);
 3. resolves `requires`: `needs_setup` (with the step that fixes it and the screen) or `refused` with code
    `unavailable` (with the reason);

@@ -71,6 +71,14 @@ from wasifyai_platform_sdk.parts import (
     UnsupportedInput,
     part_from_file,
 )
+from wasifyai_platform_sdk.principal import (
+    ALL_SCOPES,
+    SCOPE_WORDS,
+    SCOPES,
+    USER_SCOPES,
+    Principal,
+    Scope,
+)
 from wasifyai_platform_sdk.providers import ProviderDeps, build_capabilities, register_provider
 from wasifyai_platform_sdk.registry import CheckResult, GraphRegistry, ModelCheck
 from wasifyai_platform_sdk.route_guard import RouteGuard
@@ -86,6 +94,16 @@ from wasifyai_platform_sdk.search import (
     search_text,
 )
 from wasifyai_platform_sdk.secretbox import SecretBox, SecretsUnavailable
+from wasifyai_platform_sdk.secrets import (
+    EnvSecretStore,
+    FileSecretStore,
+    InMemorySecretStore,
+    KeychainSecretStore,
+    LayeredSecretStore,
+    SecretStore,
+    SqlSecretStore,
+    secret_name,
+)
 from wasifyai_platform_sdk.slots import Held, OwnerLock, SlotManager
 from wasifyai_platform_sdk.storage import (
     LocalFileStorage,
@@ -186,6 +204,14 @@ __all__ = [
     "PostgresMediaBindingStore",
     "SecretBox",
     "SecretsUnavailable",
+    "SecretStore",
+    "InMemorySecretStore",
+    "FileSecretStore",
+    "KeychainSecretStore",
+    "SqlSecretStore",
+    "EnvSecretStore",
+    "LayeredSecretStore",
+    "secret_name",
     "backends_for",
     "check_backend",
     "family",
@@ -193,6 +219,12 @@ __all__ = [
     "CheckResult",
     "ModelCheck",
     "Identity",
+    "Principal",
+    "Scope",
+    "SCOPES",
+    "SCOPE_WORDS",
+    "ALL_SCOPES",
+    "USER_SCOPES",
     "RouteDeps",
     "RouteGuard",
     "SaveRefused",

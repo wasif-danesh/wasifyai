@@ -3,6 +3,8 @@ download, against a fake Hugging Face."""
 
 import asyncio
 import hashlib
+import json
+import logging
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -360,3 +362,52 @@ async def test_only_files_this_app_downloaded_can_be_removed(tmp_path):
         await desktop_hub.remove_downloaded(models, models.models_dir / ".." / "elsewhere.gguf")
         is False
     )
+
+
+# ---- the token (stage F4; ADR-0092) -----------------------------------------------------------
+
+
+async def test_the_token_lives_in_the_secret_store_and_reaches_huggingface_only(tmp_path):
+    from wasifyai_platform_sdk import InMemorySecretStore
+
+    calls: list[str] = []
+    hub, models = make(tmp_path, calls)
+    secrets = InMemorySecretStore()
+    hub = HubService(hub._store, hub.client, secrets=secrets)
+    hub.models = models
+    await hub.load()
+    assert hub.token_set is False and hub.client.has_token is False
+    with pytest.raises(HubError) as e:
+        await hub.set_token("not a token")
+    assert e.value.code == "bad_token"
+    await hub.set_token("hf_abcdefghijklmnopqrstuvwxyz0123")
+    assert hub.token_set is True and hub.client.token == "hf_abcdefghijklmnopqrstuvwxyz0123"
+    assert models.downloads._token == "hf_abcdefghijklmnopqrstuvwxyz0123"
+    assert await secrets.names() == ["hf.token"]
+    again = HubService(hub._store, hub.client, secrets=secrets)
+    await again.load()
+    assert again.token_set is True  # found again after a restart
+    await hub.clear_token()
+    assert hub.token_set is False and hub.client.has_token is False
+
+
+def test_the_token_route_says_set_or_not_and_never_answers_the_token(tmp_path, caplog):
+    from wasifyai_platform_sdk import InMemorySecretStore
+
+    caplog.set_level(logging.DEBUG)
+    calls: list[str] = []
+    hub, models = make(tmp_path, calls)
+    hub = HubService(hub._store, hub.client, secrets=InMemorySecretStore())
+    hub.models = models
+    token = "hf_abcdefghijklmnopqrstuvwxyz0123"
+    with app_for(hub, models) as c:
+        state = c.get("/desktop/hub/state").json()
+        assert state["token_set"] is False and state["can_save_token"] is True
+        bad = c.put("/desktop/hub/token", json={"token": "nope"})
+        assert bad.status_code == 400 and "hf_" in bad.json()["detail"]
+        assert c.put("/desktop/hub/token", json={"token": token}).json() == {"token_set": True}
+        state = c.get("/desktop/hub/state").json()
+        assert state["token_set"] is True and state["has_token"] is True
+        assert token not in json.dumps(state)
+        assert c.delete("/desktop/hub/token").json() == {"token_set": False}
+    assert token not in caplog.text

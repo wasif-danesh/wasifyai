@@ -11,31 +11,44 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, SkipValidation, model_validator
 
+from wasifyai_platform_sdk.principal import Scope, parse_origin  # noqa: F401 - re-exported
+
 Effect = Literal["read", "make", "change", "destroy"]
 Flag = Literal["costly", "leaves_device", "needs_consent", "private"]
 Surface = Literal["assistant", "mcp"]
 NeedKind = Literal["product", "model", "runtime", "notebooks", "chat", "web"]
 
 ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
-ORIGIN_PATTERN = re.compile(r"^(window|assistant|mcp:[A-Za-z0-9][A-Za-z0-9 ._-]{0,63})$")
 EFFECTS: tuple[str, ...] = ("read", "make", "change", "destroy")
 PLATFORM = "platform"  # the product id of actions that belong to no product
 
 
-def parse_origin(origin: str) -> str:
-    """`window`, `assistant`, or `mcp:<connection>`: who is asking. Anything else is a bug."""
-    if not ORIGIN_PATTERN.match(origin):
-        raise ValueError(f"origin must be window, assistant or mcp:<connection>, not {origin!r}")
-    return origin
+# the scope an action's domain belongs to; a domain not listed is `make` (or `read` for a read)
+SCOPE_OF_DOMAIN: dict[str, Scope] = {
+    "library": "library",
+    "notebook": "notebooks",
+    "voice": "voices",
+    "models": "models",
+}
 
 
 def surface_of(origin: str) -> Surface | None:
-    """The surface an origin comes through (`window` is not one: it is the person)."""
+    """The surface an origin comes through (`window` is not one: it is the person; an API key
+    is not one either until stage K1 says what it is offered)."""
     if origin == "assistant":
         return "assistant"
     if origin.startswith("mcp:"):
         return "mcp"
     return None
+
+
+def scope_of(action: "Action") -> Scope:
+    """The scope a principal needs for this action (ADR-0092): its domain's group when the domain
+    has one (library, notebooks, voices, models), else `read` for a read and `make` for the rest."""
+    group = SCOPE_OF_DOMAIN.get(action.domain)
+    if group is not None:
+        return group
+    return "read" if action.effect == "read" else "make"
 
 
 class Need(BaseModel):

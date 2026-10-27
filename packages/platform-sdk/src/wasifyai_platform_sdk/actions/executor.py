@@ -42,6 +42,7 @@ from wasifyai_platform_sdk.actions.model import (
     Readiness,
     RunBinding,
     parse_origin,
+    scope_of,
     surface_of,
 )
 from wasifyai_platform_sdk.actions.policy import WINDOW_POLICY, ApprovalPolicy, decide
@@ -56,6 +57,7 @@ from wasifyai_platform_sdk.context import (
 )
 from wasifyai_platform_sdk.errors import RunError
 from wasifyai_platform_sdk.identity import Identity
+from wasifyai_platform_sdk.principal import Principal
 from wasifyai_platform_sdk.tools import ToolUnavailable
 from wasifyai_platform_sdk.usage import UsageEvent, UsageRecorder, record_safely
 
@@ -159,7 +161,7 @@ class ActionExecutor:
         params: Mapping[str, Any] | None,
         origin: str,
         *,
-        actor: Identity | None = None,
+        actor: "Identity | Principal | None" = None,
         policy: ApprovalPolicy | None = None,
         wait_seconds: float | None = None,
         on_event: Emit | None = None,
@@ -173,10 +175,13 @@ class ActionExecutor:
         answers `running` with a `job_id`. Without it the call waits for the end.
         `approval_id` is how a caller comes back with the person's yes (see `decide_approval`).
         `person_approved` is for the window only: its own click is the approval. Nothing that
-        comes from an agent can set it."""
+        comes from an agent can set it.
+        A `Principal` as `actor` (a connection, an API key) is held to its scopes: an action
+        outside them is refused with `not_offered` (ADR-0092)."""
         started = time.monotonic()
         origin = parse_origin(origin)
-        who = actor or _actor_of_current_run()
+        principal = actor if isinstance(actor, Principal) else None
+        who = principal.identity if principal else (actor or _actor_of_current_run())
         emit = on_event or _ignore
         action = self.registry.get(action_id)
         if action is None:
@@ -197,6 +202,11 @@ class ActionExecutor:
             return await self._finish(
                 action, who, origin, started,
                 _refused(action, "not_offered", f"{action.title} is not available here."),
+            )  # fmt: skip
+        if principal is not None and not principal.may(scope_of(action)):
+            return await self._finish(
+                action, who, origin, started,
+                _refused(action, "not_offered", principal.refusal(scope_of(action))),
             )  # fmt: skip
         try:
             model = action.input.model_validate(dict(params or {}))

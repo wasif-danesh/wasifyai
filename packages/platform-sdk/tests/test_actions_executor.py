@@ -498,3 +498,32 @@ async def test_a_direct_call_can_be_stopped_and_a_child_run_cannot():
     assert run_job.task is not None
     run_job.task.cancel()
     await asyncio.gather(run_job.task, return_exceptions=True)
+
+
+# ---- principals and scopes (stage F3; ADR-0092) -----------------------------------------------
+
+
+async def test_a_principal_is_held_to_its_scopes_and_the_audit_names_its_origin():
+    from wasifyai_platform_sdk import Principal
+
+    ex, _, _, audit, _ = setup(act("demo.read"), act("library.list"))
+    key = Principal("api_key", "t1", "u1", scopes=frozenset({"read"}), origin="api:k1")
+    ok = await ex.run_action("demo.read", {"text": "hi"}, key.origin, actor=key)
+    assert ok.ok and ok.output == {"echoed": "hi"}
+    no = await ex.run_action("library.list", {"text": "hi"}, key.origin, actor=key)
+    assert no.status == "refused" and no.code == "not_offered"
+    assert no.text == "This key may not list, open and delete creations (the library scope)."
+    assert [(e.action_id, e.origin, e.status) for e in audit.entries] == [
+        ("demo.read", "api:k1", "ok"),
+        ("library.list", "api:k1", "refused"),
+    ]
+    assert audit.entries[0].user_id == "u1"  # the key acts as the person who made it
+
+
+async def test_a_person_principal_changes_nothing_for_the_window():
+    from wasifyai_platform_sdk import Principal
+
+    ex, _, _, _, _ = setup(act("library.list"))
+    me = Principal.person("t1", "u1")
+    r = await ex.run_action("library.list", {"text": "hi"}, "window", actor=me)
+    assert r.ok

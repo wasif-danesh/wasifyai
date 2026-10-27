@@ -43,6 +43,7 @@ from wasifyai_platform_sdk.actions.model import (
     need_product,
     need_runtime,
     parse_origin,
+    scope_of,
     surface_of,
 )
 from wasifyai_platform_sdk.actions.policy import (
@@ -104,6 +105,7 @@ __all__ = [
     "on_the_floor",
     "parse_help",
     "parse_origin",
+    "scope_of",
     "render",
     "surface_of",
 ]

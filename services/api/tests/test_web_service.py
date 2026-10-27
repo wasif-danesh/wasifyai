@@ -10,6 +10,8 @@ import pytest
 from wasifyai_api.safeguards import InMemorySettingsStore
 from wasifyai_api.web_search import KEY, WebService, consent_text, load_or_create_key
 from wasifyai_platform_sdk import (
+    FileSecretStore,
+    InMemorySecretStore,
     InMemoryUsageRecorder,
     RunContext,
     SecretBox,
@@ -33,7 +35,7 @@ def service(**kw: Any) -> tuple[WebService, InMemorySettingsStore, InMemoryUsage
         min_gap_s=0,
         run=lambda q, n: [{"title": "Fox", "href": "https://a.test/fox", "body": "Foxes."}],
     )
-    svc = WebService(store, SecretBox(SecretBox.generate_key()), usage, duckduckgo=ddg, **kw)
+    svc = WebService(store, InMemorySecretStore(), usage, duckduckgo=ddg, **kw)
     return svc, store, usage
 
 
@@ -117,11 +119,13 @@ async def test_settings_refuse_what_makes_no_sense():
     assert (await no_box.status())["can_save_keys"] is False
 
 
-async def test_a_saved_key_that_cannot_be_read_says_to_enter_it_again():
+async def test_a_saved_key_that_cannot_be_read_says_to_enter_it_again(tmp_path):
     store = InMemorySettingsStore()
-    first = WebService(store, SecretBox(SecretBox.generate_key()))
+    path = tmp_path / "secrets.json"
+    first = WebService(store, FileSecretStore(path, SecretBox(SecretBox.generate_key())))
     await first.update(provider="exa", consent=True, key=("exa", "exa-key-123456789"))
-    other_key = WebService(store, SecretBox(SecretBox.generate_key()))  # the key file was replaced
+    # the key file was replaced: the same store file, another key
+    other_key = WebService(store, FileSecretStore(path, SecretBox(SecretBox.generate_key())))
     with pytest.raises(WebError) as e:
         await other_key._provider()
     assert e.value.code == "needs_key" and "Enter it again" in e.value.message

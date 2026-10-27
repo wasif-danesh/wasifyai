@@ -22,6 +22,7 @@ came from.
 | `AUTH_<PROVIDER>_ID` / `_SECRET` | web | One OAuth app per provider and environment (see `apps/web/README.md`) |
 | `SAFEGUARDS_FORCE_ON` | api | `true` in production (Helm `safeguards.forceOn`): moderation and quotas always apply and Admin > Safeguards is read-only. Unset elsewhere: off by default, an admin switches it (ADR-0047) |
 | `ADMIN_EMAILS` | api | Comma-separated; only a verified email becomes admin |
+| `WASIFYAI_SECRET_<NAME>` | api | A read-only secret for the secret store (ADR-0092): `WASIFYAI_SECRET_WEB_SEARCH_EXA` answers `web.search.exa`. On the web what an admin saves goes to the `secrets` table (Fernet under `MEDIA_SECRETS_KEY`); the environment answers behind it. `HF_TOKEN` is read as `hf.token` |
 
 ## Deployment profile (desktop)
 

@@ -21,13 +21,16 @@ from wasifyai_contracts import SseEvent
 from wasifyai_platform_sdk import (
     CapabilityBinding,
     EngineQueue,
+    EnvSecretStore,
     EventLog,
     GraphRegistry,
     InMemoryJobSink,
     InMemoryMediaBindingStore,
+    InMemorySecretStore,
     InMemoryUploadLimiter,
     InMemoryUploadStore,
     JobSink,
+    LayeredSecretStore,
     PostgresMediaBindingStore,
     PostgresUploadStore,
     PostgresUsageRecorder,
@@ -40,6 +43,8 @@ from wasifyai_platform_sdk import (
     RunStore,
     ScopedStorage,
     SecretBox,
+    SecretStore,
+    SqlSecretStore,
     ToolUnavailable,
     UploadLimiter,
     UploadStore,
@@ -225,14 +230,30 @@ def create_app(
             settings.safeguards_force_on,
         )
         app.state.safeguards = guard
+        # who may call with what (ADR-0092): credentials other than a person's token are
+        # verified by prefix (API keys in stage K1, MCP connections in stage M1)
+        app.state.credential_verifiers = {}
+        # keys and tokens (ADR-0092): the desktop's keychain or file; on the web the `secrets`
+        # table under MEDIA_SECRETS_KEY, with what External Secrets put in the environment behind
+        secrets: SecretStore
+        if desktop is not None and desktop.secrets is not None:
+            secrets = desktop.secrets
+        elif injected:
+            secrets = InMemorySecretStore()
+        else:
+            secrets = LayeredSecretStore(
+                SqlSecretStore(db, SecretBox(settings.media_secrets_key)), EnvSecretStore()
+            )
+        app.state.secrets = secrets
         if not desktop and settings.web_search_enabled:
             # web search on a service (ADR-0083): an admin chooses the search service and keeps the
             # keys, and each person allows it for themself; nothing is sent before that
             app.state.web = WebService(
                 InMemorySettingsStore() if injected else PostgresSettingsStore(db),
-                SecretBox(settings.media_secrets_key),
+                secrets,
                 recorder,
                 per_person=True,
+                legacy_box=SecretBox(settings.media_secrets_key),
             )
         deps = ProviderDeps(
             safeguards=guard.enabled,

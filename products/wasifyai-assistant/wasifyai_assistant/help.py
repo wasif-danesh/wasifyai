@@ -20,8 +20,10 @@ MAX_PASSAGE = 1800  # characters of a guide the model is given
 WORD = re.compile(r"[a-z0-9]+")
 STOP = frozenset(
     "a an the to of in on for and or is are it i my me do does can how what with this that "
-    "from into as at be by".split()
+    "from into as at be by make get use want need own app one some here there you your just "
+    "version out up have has had will would could should if then than so very really please".split()
 )
+BODY_CAP = 2.5  # the body's words say less than the title and the synonyms
 
 
 def words(text: str) -> list[str]:
@@ -84,16 +86,22 @@ def _score(guide: Guide, question: str, qwords: list[str]) -> float:
     q = question.lower()
     if guide.action in q or guide.action.replace(".", " ") in q:
         score += 6
+    credited: set[str] = set()  # a stem counts once, however many synonyms hold it
     for s in guide.synonyms:
         s_l = s.lower()
+        s_words = {_stem(w) for w in words(s_l)}
+        new = s_words - credited
         if s_l and s_l in q:
-            score += 4
-        elif {_stem(w) for w in words(s_l)} & stems:
-            score += 1.5
+            score += 8 if new else 2
+        elif s_words and s_words <= stems and new:
+            score += 5 if len(s_words) > 1 else 3  # all its words, in another order
+        elif new & stems:
+            score += 1.5 * len(new & stems) / len(s_words)
+        credited |= s_words & stems
     title = {_stem(w) for w in words(guide.title)}
-    score += 2.5 * len(title & stems)
+    score += 3 * len(title & stems)
     body = {_stem(w) for w in words(guide.body)}
-    score += 0.6 * len(body & stems)
+    score += min(BODY_CAP, 0.5 * len(body & stems))
     return score
 
 

@@ -1,7 +1,7 @@
 ---
 action: video.extend
 screen: video.extend
-synonyms: [make a video longer, continue a video, carry on a video, longer clip]
+synonyms: [make a video longer, continue a video, carry on a video, longer clip, too short, make it longer, extend]
 ---
 # Extend a video
 

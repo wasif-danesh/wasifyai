@@ -2,7 +2,7 @@
 // The options of the chat box (ADR-0083): one bar, token-styled, shared by the current composer and the assistant-ui one. A button is
 // there only when it can work (a model that cannot think has no Thinking button), and every disabled button says why. Attach, Search and
 // Mic plug into the same bar in the next stages.
-import { Brain, Globe, type LucideIcon, Mic, Square } from "lucide-react";
+import { Brain, Globe, type LucideIcon, Mic, ShieldCheck, Square } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
@@ -124,7 +124,22 @@ function SearchNotice({
 const KEY = "wasifyai.composer.options";
 const KEEP = 200;
 
-type Saved = { thinking?: boolean; search?: boolean };
+/** When the assistant asks before making things in a chat (ADR-0071 decision 5). */
+export type Approval = "ask" | "ask_costly" | "auto";
+const APPROVALS: Approval[] = ["ask", "ask_costly", "auto"];
+const APPROVAL_LABEL: Record<Approval, string> = {
+  ask: "Asks first",
+  ask_costly: "Asks for big things",
+  auto: "Doesn't ask",
+};
+const APPROVAL_HINT: Record<Approval, string> = {
+  ask: "The assistant shows a card before it makes or changes anything, and you press Run. Press to ask only for things that take a while or leave this computer.",
+  ask_costly:
+    "The assistant asks only before things that take a while or leave this computer. Press to let it make things without asking.",
+  auto: "The assistant makes things in this chat without asking. Deleting and anything that needs your word still ask. Press to ask first again.",
+};
+
+type Saved = { thinking?: boolean; search?: boolean; approval?: Approval };
 
 function readAll(): Record<string, Saved> {
   try {
@@ -190,6 +205,17 @@ export function useComposerOptions(
     },
     [key, saved],
   );
+  const setApproval = useCallback(
+    (value: Approval) => {
+      const next = { ...saved, approval: value };
+      setSaved(next);
+      write(key, next);
+    },
+    [key, saved],
+  );
+  const approval: Approval = APPROVALS.includes(saved.approval as Approval)
+    ? (saved.approval as Approval)
+    : "ask";
 
   const control = available.search?.available ? available.search : undefined;
   const [asking, setAsking] = useState<"consent" | "key" | null>(null);
@@ -237,6 +263,15 @@ export function useComposerOptions(
           else setSearch(!searching);
         },
       });
+    out.push({
+      id: "approval",
+      label: APPROVAL_LABEL[approval],
+      Icon: ShieldCheck,
+      pressed: approval !== "ask",
+      hint: APPROVAL_HINT[approval],
+      onPress: () =>
+        setApproval(APPROVALS[(APPROVALS.indexOf(approval) + 1) % APPROVALS.length] ?? "ask"),
+    });
     if (hasMic) {
       const recording = micPhase === "recording";
       out.push({
@@ -262,6 +297,8 @@ export function useComposerOptions(
     control,
     searching,
     setSearch,
+    approval,
+    setApproval,
     hasMic,
     micPhase,
     toggleMic,
@@ -319,9 +356,10 @@ export function useComposerOptions(
     () => ({
       ...(thinking ? { thinking: true } : {}),
       ...(searching ? { search: true } : {}),
+      ...(approval !== "ask" ? { approval } : {}),
       ...attachInput,
     }),
-    [thinking, searching, attachInput],
+    [thinking, searching, approval, attachInput],
   );
-  return { bar, thinking, searching, notice, runInput, attach };
+  return { bar, thinking, searching, approval, setApproval, notice, runInput, attach };
 }

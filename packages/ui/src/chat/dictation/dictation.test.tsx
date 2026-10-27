@@ -129,10 +129,12 @@ describe("a failure to open the microphone", () => {
 
 describe("useComposerOptions", () => {
   it("has a Mic only where the engine can write words down", () => {
-    expect(renderHook(() => useComposerOptions(null, {})).result.current.bar).toEqual([]);
+    const ids = (bar: { id: string }[]) => bar.map((o) => o.id).filter((id) => id !== "approval");
+    expect(ids(renderHook(() => useComposerOptions(null, {})).result.current.bar)).toEqual([]);
     const { result } = renderHook(() => useComposerOptions(null, { mic: fakeMic().control }));
-    expect(result.current.bar.map((o) => o.id)).toEqual(["mic"]);
-    expect(result.current.bar[0]).toMatchObject({ label: "Mic", pressed: false, disabled: false });
+    expect(ids(result.current.bar)).toEqual(["mic"]);
+    const mic = result.current.bar.find((o) => o.id === "mic");
+    expect(mic).toMatchObject({ label: "Mic", pressed: false, disabled: false });
     expect(result.current.runInput).toEqual({}); // the microphone changes nothing about the message that is sent
   });
 });

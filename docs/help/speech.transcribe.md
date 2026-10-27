@@ -1,7 +1,7 @@
 ---
 action: speech.transcribe
 screen: voice.transcribe
-synonyms: [transcribe, write down, speech to text, captions, subtitles]
+synonyms: [transcribe, write down, speech to text, captions, recording to text, words from a recording, what was said, subtitles]
 ---
 # Speech to text
 

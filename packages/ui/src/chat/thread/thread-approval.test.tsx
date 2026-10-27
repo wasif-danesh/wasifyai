@@ -192,6 +192,50 @@ describe("the confirm card", () => {
     );
   });
 
+  it("shows how long it took last time and that the chat model pauses, and 'Don't ask again' stops the asking", async () => {
+    const resumed: object[] = [];
+    const started: object[] = [];
+    const user = userEvent.setup();
+    const a = api();
+    const told: Conversation = {
+      ...withFields,
+      messages: withFields.messages.map((m) =>
+        m.id === "t"
+          ? {
+              ...m,
+              parts: [
+                {
+                  ...(m.parts[0] as Extract<(typeof m.parts)[number], { type: "interrupt" }>),
+                  estimate: { seconds: 12, runs: 3 },
+                  pauses_chat: true,
+                },
+              ],
+            }
+          : m,
+      ),
+    };
+    a.get = vi.fn(async () => told);
+    render(
+      <ChatScreen
+        runs={runs(resumed, started)}
+        assistant={a}
+        images={images}
+        conversationId="c1"
+      />,
+    );
+    const card = await screen.findByRole("region", { name: "Make a picture" });
+    expect(card).toHaveTextContent("Takes about 12 s on this computer (your last 3 runs).");
+    expect(card).toHaveTextContent("Pauses the chat model while it runs.");
+    await user.click(screen.getByRole("checkbox", { name: /don't ask again in this chat/i }));
+    await user.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => expect(resumed).toEqual([{ approved: true }]));
+    await screen.findByText("Here is your fox.");
+    await user.type(screen.getByRole("textbox", { name: "Message" }), "another{Enter}");
+    await waitFor(() => expect(started).toHaveLength(1));
+    expect(started[0]).toMatchObject({ text: "another", approval: "auto" }); // this chat no longer asks
+    expect(screen.getByRole("button", { name: /^Doesn't ask/ })).toBeInTheDocument();
+  });
+
   it("Run is held back until a required field is filled and the consent is ticked", async () => {
     const consent: Conversation = {
       ...withFields,

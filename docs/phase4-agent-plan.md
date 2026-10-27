@@ -96,7 +96,7 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
   computer is missing; "make it say hello world in a calm voice" shows the card with the text filled in; Run makes
   the speech and the card turns into a player; the same flow works for an image, a song, a transcript.
 
-### Stage A3. The assistant evaluation, and the gate (S to M)
+### Stage A3. The assistant evaluation, and the gate (S to M) — **built and run 2026-10-27** (`docs/spikes/assistant-a3.md`)
 
 - `guide`, `action`, `status`, `safety` and `tool-count` cases (60 to 150), scored for three model tiers.
 - Acceptance thresholds, fixed **before** A2 is declared done: no regression on the existing 11; at least 90

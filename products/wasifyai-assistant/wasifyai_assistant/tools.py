@@ -7,11 +7,18 @@ they said it may run), `open_screen` offers a button, and the searches and the w
 they were. Only the tools listed here exist: adding one is a code change that is reviewed."""
 
 import json
-from collections.abc import Callable, Collection
+from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass, field
 from typing import Any
 
-from wasifyai_platform_sdk.actions import Action, ActionExecutor, ActionResult, ApprovalPolicy
+from wasifyai_platform_sdk.actions import (
+    Action,
+    ActionExecutor,
+    ActionResult,
+    ApprovalPolicy,
+    Readiness,
+    RunBinding,
+)
 from wasifyai_platform_sdk.actions.model import ID_PATTERN
 
 from wasifyai_assistant import help as guides
@@ -58,8 +65,9 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "description": (
                 "How the app does something: the steps with the exact names of its screens and "
                 "fields, the limits, what must be installed, and the common problems. Call it "
-                "when the person asks how to do something or whether the app can, and before "
-                "explaining any feature; answer only from what it returns."
+                "only when the person asks HOW to do something or WHETHER the app can, and answer "
+                "from what it returns. When they ask you to make something, do not look it up: "
+                "call propose_action."
             ),
             "parameters": {
                 "type": "object",
@@ -127,9 +135,10 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "function": {
             "name": "open_screen",
             "description": (
-                "Offer the person a button that opens a screen of the app. Use it when the screen "
-                "is the better place for what they want (many options, a file to pick). The "
-                "screen id comes from how_to."
+                "Offer the person a button that opens a screen of the app. Use it only when the "
+                "screen is the better place for what they want (many options, a file to pick), "
+                "never instead of propose_action for something you can propose. The screen id "
+                "comes from how_to."
             ),
             "parameters": {
                 "type": "object",
@@ -336,14 +345,44 @@ def _web_outcome(result: ActionResult) -> ToolOutcome:
 # ---- the local tools: the help corpus and the screens ------------------------------------------
 
 
-def how_to(question: str, served: Collection[str] | None) -> ToolOutcome:
+Ready = Callable[[str], Awaitable[Readiness | None]]
+
+
+def status_line(ready: Readiness | None) -> str:
+    """What this computer says about an action, under its guide (ADR-0071 decision 6)."""
+    if ready is None:
+        return ""
+    if ready.state == "needs_setup":
+        return f"This computer: needs a step first: {ready.step}"
+    if ready.state == "unavailable":
+        return f"This computer: cannot do this: {ready.reason}"
+    return "This computer: ready."
+
+
+async def how_to(
+    question: str, served: Collection[str] | None, ready: Ready | None = None
+) -> ToolOutcome:
+    """The best guides for a question, each with where its screen is and what this computer
+    says about it (ready, or the step that is missing), so an answer is honest without a
+    second call."""
     found = guides.search(question, served)
     if not found:
         return ToolOutcome("ok", {"guides": []}, NO_GUIDE)
     rows = guides.as_rows(found)
     for row in rows:
         row["where"] = where_of(row["action"])
-    text = "\n\n".join((f"Where: {r['where']}\n" if r["where"] else "") + r["text"] for r in rows)
+        state = await ready(row["action"]) if ready else None
+        row["status"] = status_line(state)
+        if state is not None:
+            row["state"] = state.state
+            row["step"] = state.step
+            row["setup_screen"] = state.ui
+    text = "\n\n".join(
+        (f"Where: {r['where']}\n" if r["where"] else "")
+        + r["text"]
+        + (f"\n{r['status']}" if r["status"] else "")
+        for r in rows
+    )
     return ToolOutcome("ok", {"guides": rows}, text)
 
 
@@ -414,8 +453,41 @@ def card_fields(action: Action, params: dict[str, Any]) -> list[dict[str, Any]]:
     return fields
 
 
+ESTIMATE_RUNS = 5  # the last runs an estimate is the median of
+
+
+def estimate_of(action_id: str, recent: list[Any]) -> dict[str, Any] | None:
+    """How long this action took for this person lately (ADR-0071 decision 4), from the audit
+    log: the median of the last few runs that ended well, in whole seconds. None until one ran."""
+    times = [
+        e.duration_ms
+        for e in recent
+        if e.action_id == action_id and e.status == "ok" and e.duration_ms > 0
+    ][:ESTIMATE_RUNS]
+    if not times:
+        return None
+    times.sort()
+    median = times[len(times) // 2]
+    return {"seconds": max(1, round(median / 1000)), "runs": len(times)}
+
+
+def pauses_chat(action: Action) -> bool:
+    """Whether running this action takes the one memory slot the chat model holds (ADR-0056): a
+    child run that makes something (a picture, speech, a video: a model of its own), or an action
+    that names a model or runtime it needs. A direct call (export, rename, a notebook) does not."""
+    if any(n.kind in ("model", "runtime") for n in action.requires):
+        return True
+    return action.effect == "make" and isinstance(action.bind, RunBinding)
+
+
 def card_of(
-    action: Action | None, action_id: str, summary: str, params: dict[str, Any]
+    action: Action | None,
+    action_id: str,
+    summary: str,
+    params: dict[str, Any],
+    *,
+    estimate: dict[str, Any] | None = None,
+    pauses_chat: bool = False,
 ) -> dict[str, Any]:
     """The card's payload: what the person sees before deciding (plain values only)."""
     shown = {
@@ -438,6 +510,8 @@ def card_of(
         "consent": action.consent,
         "fields": card_fields(action, params),
         "screen": action.ui,
+        "estimate": estimate,
+        "pauses_chat": pauses_chat,
     }
 
 
@@ -465,7 +539,12 @@ async def call_tool(
     if isinstance(params, str):
         return ToolOutcome("error", text=params)
     if name == "how_to":
-        return how_to(params["question"], served)
+
+        async def ready(action_id: str) -> Readiness | None:
+            action = executor.registry.get(action_id)
+            return await executor.readiness(action) if action else None
+
+        return await how_to(params["question"], served, ready)
     if name == "open_screen":
         return open_screen(params["screen_id"], served)
     if name == PROPOSE:

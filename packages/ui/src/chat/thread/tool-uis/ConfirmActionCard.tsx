@@ -126,12 +126,27 @@ function Field({
   );
 }
 
+function estimateText(a: { estimate?: { seconds: number; runs: number }; pauses_chat?: boolean }) {
+  const lines: string[] = [];
+  if (a.estimate) {
+    const s = a.estimate.seconds;
+    const time = s >= 90 ? `about ${Math.round(s / 60)} min` : `about ${s} s`;
+    const runs = a.estimate.runs === 1 ? "your last run" : `your last ${a.estimate.runs} runs`;
+    lines.push(`Takes ${time} on this computer (${runs}).`);
+  }
+  if (a.pauses_chat) lines.push("Pauses the chat model while it runs.");
+  return lines;
+}
+
 export function ConfirmActionCard({
   tool,
   onDecide,
+  onAutoRun,
 }: {
   tool: Tool;
   onDecide?: (approved: boolean, params?: Record<string, unknown>) => void;
+  /** the person ticked "Don't ask again in this chat" and pressed Run */
+  onAutoRun?: () => void;
 }) {
   const a = tool.approval;
   const fields = useMemo(() => a?.fields ?? [], [a?.fields]);
@@ -141,6 +156,7 @@ export function ConfirmActionCard({
   );
   const [values, setValues] = useState<Values>(initial);
   const [consented, setConsented] = useState(false);
+  const [noMoreAsking, setNoMoreAsking] = useState(false);
   if (!a) return null;
   // what the card says about itself is not a parameter
   const params = Object.entries(a.params ?? tool.arguments)
@@ -193,6 +209,11 @@ export function ConfirmActionCard({
           ))}
         </dl>
       ) : null}
+      {estimateText(a).map((line) => (
+        <p key={line} className="text-muted-foreground text-xs">
+          {line}
+        </p>
+      ))}
       {a.consent && !decided ? (
         <label className="flex items-start gap-2">
           <input
@@ -202,6 +223,16 @@ export function ConfirmActionCard({
             className="mt-1"
           />
           <span>{a.consent}</span>
+        </label>
+      ) : null}
+      {onAutoRun && !decided && a.effect === "make" && !a.consent ? (
+        <label className="flex items-center gap-2 text-muted-foreground text-xs">
+          <input
+            type="checkbox"
+            checked={noMoreAsking}
+            onChange={(e) => setNoMoreAsking(e.target.checked)}
+          />
+          Don't ask again in this chat
         </label>
       ) : null}
       {decided ? (
@@ -214,7 +245,10 @@ export function ConfirmActionCard({
           <Button
             type="button"
             size="sm"
-            onClick={() => onDecide?.(true, changed ? asParams(fields, values) : undefined)}
+            onClick={() => {
+              if (noMoreAsking) onAutoRun?.();
+              onDecide?.(true, changed ? asParams(fields, values) : undefined);
+            }}
             disabled={!canRun}
           >
             Run

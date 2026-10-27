@@ -13,6 +13,7 @@ from wasifyai_assistant.tools import (
     action_input,
     card_fields,
     card_of,
+    estimate_of,
     outcome_of,
 )
 from wasifyai_image.actions import actions as image_actions
@@ -164,6 +165,7 @@ async def test_how_to_and_open_screen_read_the_apps_own_files(tmp_path, ctx):
     assert [r["status"] for r in results] == ["ok", "ok", "refused"]
     guide = results[0]["output"]["guides"][0]
     assert guide["action"] == "speech.speak" and guide["where"] == "Voice › Text to speech"
+    assert guide["state"] == "ready" and guide["status"] == "This computer: ready."
     told = rig.model.chats[1]["messages"]
     assert "Voice › Text to speech" in told[-3]["content"]  # the passage, verbatim
     assert results[1]["output"] == {
@@ -227,3 +229,121 @@ async def test_the_card_is_the_default_and_the_person_can_edit_it_before_running
     card = rows[2].parts[0]  # the stored card says what was really run
     assert card["type"] == "interrupt" and card["status"] == "approved"
     assert card["params"] == {"prompt": "a red fox", "size": "wide"}
+
+
+async def test_the_chats_setting_decides_when_a_card_is_shown(tmp_path, ctx):
+    """ADR-0071 decision 5: ask (default), ask only for what is costly or leaves, or never."""
+
+    def turns():
+        return [
+            {"tool_calls": [
+                {"name": PROPOSE,
+                 "arguments": {"action_id": "image.generate", "params": {"prompt": "a fox"}}}]},
+            {"text": "Done."},
+        ]  # fmt: skip
+
+    for n, (approval, waits) in enumerate(
+        [(None, True), ("ask", True), ("ask_costly", False), ("auto", False)]
+    ):
+        folder = tmp_path / str(n)
+        folder.mkdir()
+        host = FakeHost()
+        rig = Rig(folder, turns(), host)
+        body: dict = {"text": "draw a fox", "approvals": True}
+        if approval:
+            body["approval"] = approval
+        await rig.turn_with(body)
+        assert (await rig.paused() is not None) is waits, approval
+        assert (host.runs == []) is waits, approval
+    # ask_costly is the executor's own "ask for what is costly or leaves" policy
+    from wasifyai_assistant.graph import POLICIES
+
+    assert POLICIES["ask_costly"].make == "ask_costly" and POLICIES["auto"] is POLICY
+    assert POLICIES["ask"] is ASK
+
+
+def test_the_estimate_is_the_median_of_this_persons_last_runs():
+    from wasifyai_platform_sdk.actions import AuditEntry
+
+    def entry(action, ms, status="ok"):
+        return AuditEntry(
+            tenant_id="t", product_id="p", user_id="u", action_id=action, origin="assistant",
+            status=status, duration_ms=ms,
+        )  # fmt: skip
+
+    recent = [  # newest first, as the audit log answers
+        entry("image.generate", 9000), entry("image.generate", 0),
+        entry("image.generate", 30000, "error"), entry("speech.speak", 2000),
+        entry("image.generate", 11000), entry("image.generate", 7000),
+    ]  # fmt: skip
+    assert estimate_of("image.generate", recent) == {"seconds": 9, "runs": 3}
+    assert estimate_of("speech.speak", recent) == {"seconds": 2, "runs": 1}
+    assert estimate_of("music.generate", recent) is None
+    assert estimate_of("image.generate", [entry("image.generate", 400)]) == {
+        "seconds": 1,
+        "runs": 1,
+    }
+
+
+async def test_the_card_carries_the_estimate_and_says_when_the_chat_model_pauses(tmp_path, ctx):
+    from wasifyai_platform_sdk.actions import AuditEntry
+
+    class SlotHost(FakeHost):
+        def facts(self):
+            return {"one_slot": True}
+
+    host = SlotHost()
+    propose = {
+        "tool_calls": [
+            {"name": PROPOSE,
+             "arguments": {"action_id": "image.generate", "params": {"prompt": "a fox"}}}
+        ]
+    }  # fmt: skip
+    rig = Rig(tmp_path, [propose, {"text": "ok"}], host)
+    # an earlier run of this person, as the audit log keeps it (the fake run itself takes no time)
+    rig.executor.audit.entries.append(  # type: ignore[attr-defined]
+        AuditEntry(
+            tenant_id="t1",
+            product_id="wasifyai-image",
+            user_id="u1",
+            action_id="image.generate",
+            origin="window",
+            status="ok",
+            duration_ms=4200,
+        )  # fmt: skip
+    )
+    await rig.turn_with({"text": "again", "approvals": True})
+    ask = await rig.paused()
+    assert ask and ask["estimate"] == {"seconds": 4, "runs": 1}
+    assert ask["pauses_chat"] is True  # image.generate needs the image model: the slot
+    (tmp_path / "plain").mkdir()
+    plain = Rig(tmp_path / "plain", [propose, {"text": "ok"}], FakeHost())
+    await plain.turn_with({"text": "draw", "approvals": True})
+    asked = await plain.paused()
+    assert asked and asked["estimate"] is None and asked["pauses_chat"] is False
+
+
+async def test_a_guide_says_what_this_computer_is_missing(tmp_path, ctx):
+    from wasifyai_platform_sdk.actions import Need, Readiness
+
+    class Missing(FakeHost):
+        async def readiness(self, need: Need) -> Readiness:
+            if need.kind == "model" and need.name == "speak":
+                return Readiness.needs_setup("Get a speech model in the Model hub.", "models")
+            return Readiness.ready()
+
+    rig = Rig(
+        tmp_path,
+        [{"tool_calls": [{"name": "how_to", "arguments": {"question": "text to speech"}}]},
+         {"text": "Get a speech model first."}],
+        Missing(),
+    )  # fmt: skip
+    _, events = await rig.turn("how do I do text to speech?")
+    guide = next(e for e in events if e["type"] == "tool_result")["output"]["guides"][0]
+    assert guide["action"] == "speech.speak" and guide["state"] == "needs_setup"
+    assert (
+        guide["step"] == "Get a speech model in the Model hub."
+        and guide["setup_screen"] == "models"
+    )
+    told = rig.model.chats[1]["messages"][-1]["content"]
+    assert "This computer: needs a step first: Get a speech model in the Model hub." in told

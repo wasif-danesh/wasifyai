@@ -20,6 +20,8 @@ export type ThreadEnv = {
   onDecide?: (approved: boolean, params?: Record<string, unknown>) => void;
   /** Open a screen of the app by its menu item id (the assistant's open_screen button, ADR-0071) */
   onOpenScreen?: (screenId: string) => void;
+  /** The person ticked "Don't ask again in this chat" on a card: the chat stops asking before it makes things */
+  onAutoRun?: () => void;
   /** The notebook chat (CU4) is a plain back-and-forth: no edit, no "answer again", no versions. */
   linear?: boolean;
   /** What a waiting answer says (default: "Thinking…"). */

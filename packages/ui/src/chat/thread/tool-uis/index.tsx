@@ -40,11 +40,11 @@ export function toolOf(p: ToolCallMessagePartProps): Tool {
 
 function adapt(Card: ComponentType<ToolCardProps>) {
   function ToolUI(p: ToolCallMessagePartProps) {
-    const { images, tracks, onOpenCreation, onOpenSettings, onDecide } = useThreadEnv();
+    const { images, tracks, onOpenCreation, onOpenSettings, onDecide, onAutoRun } = useThreadEnv();
     const tool = toolOf(p);
     // a call that waits for the person (or was just answered and is still running) shows its card, not its result
     if (tool.approval && tool.status === "running")
-      return <ConfirmActionCard tool={tool} onDecide={onDecide} />;
+      return <ConfirmActionCard tool={tool} onDecide={onDecide} onAutoRun={onAutoRun} />;
     return (
       <Card
         tool={tool}
@@ -60,19 +60,20 @@ function adapt(Card: ComponentType<ToolCardProps>) {
 
 /** A tool call named `confirm_action` (the card of a model that proposes an action): the same card. */
 function Confirm(p: ToolCallMessagePartProps) {
-  const { onDecide } = useThreadEnv();
+  const { onDecide, onAutoRun } = useThreadEnv();
   const tool = toolOf(p);
   if (!tool.approval) return null;
-  return <ConfirmActionCard tool={tool} onDecide={onDecide} />;
+  return <ConfirmActionCard tool={tool} onDecide={onDecide} onAutoRun={onAutoRun} />;
 }
 
 /** `propose_action` (ADR-0071): the card while the person decides, then the result drawn for the action it ran: a
  * picture or a player for the actions that have one, a plain result card for the rest. */
 function Propose(p: ToolCallMessagePartProps) {
-  const { images, tracks, onOpenCreation, onOpenSettings, onDecide, onOpenScreen } = useThreadEnv();
+  const { images, tracks, onOpenCreation, onOpenSettings, onDecide, onOpenScreen, onAutoRun } =
+    useThreadEnv();
   const tool = toolOf(p);
   if (tool.approval && tool.status === "running")
-    return <ConfirmActionCard tool={tool} onDecide={onDecide} />;
+    return <ConfirmActionCard tool={tool} onDecide={onDecide} onAutoRun={onAutoRun} />;
   const actionId = String(tool.arguments.action_id ?? tool.output?.action_id ?? "");
   const shared = { tool, images, tracks, onOpenCreation, onOpenSettings };
   if (actionId === "image.generate") return <ImageToolCard {...shared} />;

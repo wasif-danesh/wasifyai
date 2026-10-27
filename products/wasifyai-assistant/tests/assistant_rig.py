@@ -156,9 +156,9 @@ class Rig:
 
     async def turn(self, text: str, conversation_id: str | None = None) -> tuple[dict, list[dict]]:
         """Run one turn in a chat where the person said the assistant may make things without a
-        card (`auto_run`); return the final state and the custom events the run manager would
-        emit. `turn_with` is for a turn that tests the card."""
-        graph_input: dict[str, Any] = {"text": text, "auto_run": True}
+        card (`approval: "auto"`); return the final state and the custom events the run manager
+        would emit. `turn_with` is for a turn that tests the card."""
+        graph_input: dict[str, Any] = {"text": text, "approval": "auto"}
         if conversation_id:
             graph_input["conversation_id"] = conversation_id
         return await self.turn_with(graph_input)

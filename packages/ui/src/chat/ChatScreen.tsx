@@ -106,8 +106,18 @@ export function ChatScreen({
       thinkingOn: options.thinking,
       onDecide: (approved: boolean, params?: Record<string, unknown>) =>
         void chat.answer(approved, false, params),
+      onAutoRun: () => options.setApproval("auto"),
     }),
-    [images, tracks, onOpenCreation, onOpenSettings, onOpenScreen, options.thinking, chat.answer],
+    [
+      images,
+      tracks,
+      onOpenCreation,
+      onOpenSettings,
+      onOpenScreen,
+      options.thinking,
+      options.setApproval,
+      chat.answer,
+    ],
   );
   const last = state.chat.messages[state.chat.messages.length - 1];
   const lastAnswer = last && last.role === "assistant" ? textOf(last) : "";

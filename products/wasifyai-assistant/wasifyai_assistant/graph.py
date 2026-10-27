@@ -66,8 +66,10 @@ from wasifyai_assistant.tools import (
     ToolOutcome,
     call_tool,
     card_of,
+    estimate_of,
     outcome_of,
     parse_arguments,
+    pauses_chat,
     taint_outcome,
 )
 
@@ -87,8 +89,9 @@ SYSTEM_PROMPT = (
     "app_status, then answer only from what they return: give the steps, name the screens and "
     "fields exactly as written, and say which step this computer is missing. Never describe a "
     "feature that is not in the guides. End such an answer by offering to do it for them. "
-    "When the person asks you to make, change or get something, call propose_action with the "
-    "action's id and its params: they see a card and decide, and nothing is made until they do. "
+    "When the person asks you to make, change or get something (draw, paint, say, compose, "
+    "make a video), call propose_action at once with the action's id and its params, without "
+    "looking it up first: they see a card and decide, and nothing is made until they do. "
     "Ask for a required field you do not have instead of guessing; if the tool says what to fix, "
     "fix it and propose again. Use open_screen when a screen is the better place. Use a tool "
     "only when the person asks for it. Never say you made something unless a tool reported that "
@@ -104,6 +107,9 @@ WEB_PROMPT = (
 )
 
 NO_ANSWER_REPLY = "I did not do that, because it was not approved."
+ESTIMATE_SAMPLE = 200  # audit entries read to find this person's last runs of an action
+# the chat's setting (ADR-0071 decision 5) as the executor's policy
+POLICIES = {"ask": ASK, "ask_costly": ApprovalPolicy(make="ask_costly"), "auto": POLICY}
 
 Status = Literal["working", "done", "refused"]
 
@@ -125,9 +131,11 @@ class AssistantState(TypedDict, total=False):
     # this client can show a card and send the answer back (the new chat does). Without it an
     # action that needs the person's yes is refused in words, as it always was.
     approvals: bool
-    # the person said the assistant may make things in this chat without a card (ADR-0071
-    # decision 5); never for deleting or anything that needs their word
-    auto_run: bool
+    # when the assistant asks before making things in this chat (ADR-0071 decision 5): "ask"
+    # (the default: a card for every make), "ask_costly" (only for what takes a while or leaves
+    # this computer) or "auto" (no card); deleting and anything that needs the person's word
+    # always ask
+    approval: str
     # files attached to this message (ADR-0083, CO2): `[{id, name}]` of uploads made just before
     attachments: list[dict[str, Any]]
     # where in the conversation's tree this turn goes (ADR-0082, stage CU2): left out, the turn goes
@@ -409,12 +417,26 @@ def build_assistant_graph(
 
     async def describe_card(executor: Any, action_id: str, rec_id: str) -> dict[str, Any]:
         """What the card tells the person (ADR-0071 decision 4): the action, its fields with the
-        values proposed, its badges and consent statement (plain values only)."""
+        values proposed, its badges and consent statement, how long it took last time on this
+        computer, and whether it pauses the chat model (plain values only)."""
         ctx = require_context()
         action = executor.registry.get(action_id)
         rec = await executor.approvals.get(ctx.tenant_id, ctx.user_id, rec_id)
         summary = rec.summary if rec else (action.title if action else action_id)
-        return card_of(action, action_id, summary, dict((rec.params if rec else None) or {}))
+        try:
+            recent = await executor.audit.recent(ctx.tenant_id, ctx.user_id, ESTIMATE_SAMPLE)
+        except Exception:
+            log.exception("could not read the audit log for an estimate")
+            recent = []
+        facts = executor.host.facts() if hasattr(executor.host, "facts") else {}
+        return card_of(
+            action,
+            action_id,
+            summary,
+            dict((rec.params if rec else None) or {}),
+            estimate=estimate_of(action_id, recent),
+            pauses_chat=bool(facts.get("one_slot")) and pauses_chat(action),
+        )
 
     async def run_turn(state: AssistantState) -> AssistantState:
         ctx = require_context()
@@ -428,7 +450,7 @@ def build_assistant_graph(
         )
         features = actions_prompt(served)
         thinking = bool(state.get("thinking"))
-        auto_run = bool(state.get("auto_run"))
+        approval = str(state.get("approval") or "ask")
         reply_id = client_id(state.get("client_reply_id"))
         saved: dict[str, Any] = dict(state.get("loop") or {})  # a turn that waited for an answer
         decision: dict[str, Any] = dict(state.get("decision") or {})
@@ -497,8 +519,8 @@ def build_assistant_graph(
                     return ToolOutcome("refused", {"message": msg}, msg)
                 args = {**args, "url": norm_url(str(args.get("url", "")))}  # as it was checked
             if policy is None or tainted:
-                # the card unless the person said it may run; always the card after outside text
-                policy = POLICY if auto_run and not tainted else ASK
+                # the chat's setting, except that after outside text everything asks
+                policy = ASK if tainted else POLICIES.get(approval, ASK)
             return await call_tool(
                 c["name"], args, executor, write, c["id"], policy, approval_id, served=served
             )

@@ -172,5 +172,8 @@ data: {"run_id":"…","thread_id":"…","seq":57,"ts":"…","outputs":{"title":"
   shows a second card for the edited request. `{"approved": false, "expired": true}` is "the person went on without answering": the turn closes without another
   model call. The part becomes `approved` or `declined`; the tool's `tool_result` follows in the same row and the stream goes on in the same message. A second
   answer is `409`. The window's click is the only way an approval is decided: no action exposes it.
-- **Auto-run (ADR-0071 decision 5).** Run input **`auto_run`** (bool, default false): the person said the assistant may make things in this chat without a card.
-  Deleting and anything that needs their word still ask, and after the web or a file is in the chat everything that is not a read asks (the taint rule).
+- **When the assistant asks (ADR-0071 decision 5).** Run input **`approval`**: `ask` (the default: a card before every make), `ask_costly` (a card only
+  for what takes a while or leaves this computer) or `auto` (no card). The box's Ask button and the card's "Don't ask again in this chat" set it per
+  conversation. Deleting and anything that needs the person's word still ask, and after the web or a file is in the chat everything that is not a read
+  asks (the taint rule). The card also carries `estimate {seconds, runs}` (the median of this person's last runs of the action, from the audit log; absent
+  until one ran) and `pauses_chat` (on the desktop: the action takes the one memory slot, so the chat model pauses).

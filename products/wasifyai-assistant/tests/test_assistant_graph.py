@@ -739,7 +739,7 @@ async def test_without_the_web_in_the_chat_things_are_still_made_at_once(tmp_pat
          {"text": "Here."}],
         host,
     )  # fmt: skip
-    _, events = await rig.turn_with({"text": "draw a fox", "search": True, "auto_run": True})
+    _, events = await rig.turn_with({"text": "draw a fox", "search": True, "approval": "auto"})
     made = next(e for e in events if e["type"] == "tool_result")
     assert made["status"] == "ok" and len(host.runs) == 1
 

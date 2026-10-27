@@ -70,10 +70,10 @@ beforeEach(() => {
 describe("useComposerOptions", () => {
   it("offers Thinking only when the model can think, and starts with it off", () => {
     const none = renderHook(() => useComposerOptions(null, {}));
-    expect(none.result.current.bar).toEqual([]);
+    expect(none.result.current.bar.map((o) => o.id)).toEqual(["approval"]); // the ask setting is always there
     expect(none.result.current.runInput).toEqual({});
     const can = renderHook(() => useComposerOptions(null, { thinking: true }));
-    expect(can.result.current.bar.map((o) => o.id)).toEqual(["thinking"]);
+    expect(can.result.current.bar.map((o) => o.id)).toEqual(["thinking", "approval"]);
     expect(can.result.current.thinking).toBe(false);
     expect(can.result.current.runInput).toEqual({});
   });
@@ -106,6 +106,30 @@ describe("useComposerOptions", () => {
     rerender({ id: null });
     rerender({ id: "c9" });
     await waitFor(() => expect(result.current.thinking).toBe(true)); // it was written under the new id
+  });
+
+  it("cycles the ask setting (ADR-0071 decision 5), sends it when it is not the default, and remembers it", async () => {
+    const { result, rerender } = renderHook(({ id }) => useComposerOptions(id, {}), {
+      initialProps: { id: "a" as string | null },
+    });
+    const ask = () => result.current.bar.find((o) => o.id === "approval");
+    expect(ask()?.label).toBe("Asks first");
+    expect(ask()?.pressed).toBe(false);
+    expect(result.current.runInput).toEqual({});
+    act(() => ask()?.onPress());
+    expect(ask()?.label).toBe("Asks for big things");
+    expect(result.current.runInput).toEqual({ approval: "ask_costly" });
+    act(() => ask()?.onPress());
+    expect(ask()?.label).toBe("Doesn't ask");
+    expect(ask()?.pressed).toBe(true);
+    expect(result.current.runInput).toEqual({ approval: "auto" });
+    act(() => ask()?.onPress());
+    expect(result.current.approval).toBe("ask");
+    act(() => result.current.setApproval("auto")); // the card's "Don't ask again in this chat"
+    rerender({ id: "b" });
+    await waitFor(() => expect(result.current.approval).toBe("ask"));
+    rerender({ id: "a" });
+    await waitFor(() => expect(result.current.approval).toBe("auto"));
   });
 
   it("does not turn on for a model that cannot think, whatever was remembered", () => {

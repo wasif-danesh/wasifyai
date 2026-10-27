@@ -455,6 +455,9 @@
    "write down",
    "speech to text",
    "captions",
+   "recording to text",
+   "words from a recording",
+   "what was said",
    "subtitles"
   ],
   "body": "# Speech to text\n\nAction: `speech.transcribe`\n\n## What it is for\n\nWrite down what a recording in your library says and keep it as a transcript.\n\n## Steps in the app\n\n1. Open **Voice › Speech to text**.\n2. Choose a recording or add a file.\n3. Choose Transcribe. The transcript appears in your library.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `title`: Optional name.\n\n## Limits\n\n- The recording must be in your library.\n\n## Needs\n\n- A transcription model (Models).\n\n## Examples\n\n- Write down what that speech says.\n\n## Problems\n\n- **Recording is no longer there** Choose another one."
@@ -517,7 +520,10 @@
    "make a video longer",
    "continue a video",
    "carry on a video",
-   "longer clip"
+   "longer clip",
+   "too short",
+   "make it longer",
+   "extend"
   ],
   "body": "# Extend a video\n\nAction: `video.extend`\n\n## What it is for\n\nMake a video longer. Its last second starts a new part, and the two are joined, so the movement carries\non. You choose how much is added: about 5 or about 8 seconds. The result is a new video; the original\nstays. The video can be one of your library or a video file you add from your computer.\n\n## Steps in the app\n\n1. Open **Video › Extend video**.\n2. Choose one of your videos, or choose **Add a video from this computer** and pick a file (MP4, MOV or\n   WebM, up to 30 seconds). It is made to fit the model and added to Your videos; the file you picked is\n   not changed.\n3. Say what should keep happening. The words of a video made here are filled in from its own; change\n   them if you like.\n4. Choose how much to add (about 5 or about 8 seconds).\n5. Choose Carry on my video.\n\n## My looks\n\nIf you taught the video model a look or a motion (under **Train models**, in the Video model training card), the screen shows **My looks**: choose up to two and a strength for each (1.5 is a good start; above 2 can look rough). The app adds each look's magic word to your prompt if it is missing. A look made for another model does not work here; looks are made for LTX-Video 2B only.\n\n## Fields\n\n- `video_id`: The video to carry on.\n- `prompt`: What should keep happening.\n- `seconds`: How much is added: 5 or 8 (5 unless you say otherwise).\n\n## Limits\n\n- 500 characters.\n- There is no limit on the length of the video, and a video can be carried on again and again. The picture gets a\n  little softer each time, so two or three rounds is a sensible stop.\n- What you write steers only weakly. The movement of the last second carries on whatever it says.\n- One clip at a time.\n- An added video is made at the size the model uses (the longer side at most 768), 24 frames a second,\n  without sound. It must be under 200 MB.\n## Needs\n\n- The video engine (Models).\n\n## Examples\n\n- The fox keeps walking through the snow.\n\n## Problems\n\n- **Not in the library** Choose a video that still exists and is finished.\n- **Not a video this app can read** Try an MP4 or MOV file.\n- **Longer than 30 seconds** Cut the video shorter first."
  },

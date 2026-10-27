@@ -299,6 +299,10 @@ export type CardDetails = {
   fields?: CardField[];
   /** the screen that does the same thing (a menu item id) */
   screen?: string;
+  /** how long this took for this person lately, on this computer (the median of the last few runs) */
+  estimate?: { seconds: number; runs: number };
+  /** running it takes the one memory slot: the chat model pauses while it runs (ADR-0056) */
+  pauses_chat?: boolean;
 };
 
 /** A tool call that waits for the person's answer (an `interrupt` event: the `confirm_action` card of ADR-0071). */
@@ -321,6 +325,13 @@ export function cardDetails(raw: Record<string, unknown>): CardDetails {
   if (typeof raw.effect === "string") out.effect = raw.effect;
   if (typeof raw.consent === "string" && raw.consent) out.consent = raw.consent;
   if (typeof raw.screen === "string") out.screen = raw.screen;
+  if (raw.pauses_chat === true) out.pauses_chat = true;
+  const est = raw.estimate;
+  if (est && typeof est === "object") {
+    const e = est as Record<string, unknown>;
+    if (typeof e.seconds === "number" && typeof e.runs === "number")
+      out.estimate = { seconds: e.seconds, runs: e.runs };
+  }
   if (Array.isArray(raw.badges)) out.badges = raw.badges.filter((b) => typeof b === "string");
   if (Array.isArray(raw.fields)) {
     const fields = raw.fields.flatMap((f): CardField[] => {

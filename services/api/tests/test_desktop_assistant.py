@@ -176,7 +176,7 @@ def choose_the_model(c: TestClient) -> None:
 
 def ask(c: TestClient, text: str, conversation_id: str | None = None) -> list:
     """A turn in a chat where the person let the assistant make things without a card."""
-    graph_input: dict[str, object] = {"text": text, "auto_run": True}
+    graph_input: dict[str, object] = {"text": text, "approval": "auto"}
     if conversation_id:
         graph_input["conversation_id"] = conversation_id
     body = {"input": graph_input}
@@ -294,7 +294,7 @@ def test_the_window_names_the_run_and_the_two_messages_and_the_engine_keeps_thos
         body = {
             "input": {
                 "text": "Please draw a red teapot",
-                "auto_run": True,
+                "approval": "auto",
                 "client_message_id": UID,
                 "client_reply_id": RID,
             },

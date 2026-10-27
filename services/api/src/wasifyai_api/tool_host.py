@@ -194,4 +194,7 @@ class ApiToolHost:
                 1 for e in svc.catalogue.values() if all(svc.locate(f) is not None for f in e.files)
             )
         facts["export_folder_set"] = getattr(state, "export_dir", None) is not None
+        # the desktop runs models in one memory slot (ADR-0056): an action that needs a model of its
+        # own pauses the chat model while it runs; the card says so
+        facts["one_slot"] = svc is not None
         return facts

@@ -1,5 +1,7 @@
 [package]
 name = "wasifyai-desktop"
+# two binaries live here (the shell and the wasify-mcp launcher): `cargo run` and `tauri dev` start the shell
+default-run = "wasifyai-desktop"
 version = "0.0.0"
 description = "wasifyai desktop shell: starts the engine and shows the app"
 authors = ["Wasif Danesh"]

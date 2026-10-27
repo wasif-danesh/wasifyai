@@ -46,6 +46,11 @@ def result_of(result: ActionResult, connection: Connection) -> CallToolResult:
         "output": result.output,
     }
     text = result.text or f"{result.action_id}: {result.status}."
+    # the ids go in the sentence too: a client may hand its model the text alone (OpenCode does)
+    if result.job_id and result.job_id not in text:
+        text += f" job_id: {result.job_id}"
+    if result.approval_id and result.approval_id not in text:
+        text += f" approval_id: {result.approval_id}"
     if len(json.dumps(structured)) > MAX_RESULT_CHARS:
         structured["output"] = {"truncated": True, "note": "The output was too large to send."}
     return CallToolResult(

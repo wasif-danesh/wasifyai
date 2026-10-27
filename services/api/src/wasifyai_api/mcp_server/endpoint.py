@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.streamable_http_manager import StreamableHTTPASGIApp
-from mcp_types import CallToolResult, ToolAnnotations
+from mcp_types import CallToolResult, TextContent, ToolAnnotations
 from mcp_types import Tool as MCPTool
 from starlette.responses import JSONResponse
 from starlette.routing import Route
@@ -69,7 +69,16 @@ class WasifyMCP(MCPServer):
             p = await desk.wait(approval_id, max(0, min(int(wait_seconds), 50)))
             if p is None or connection is None or p.connection_id != connection.id:
                 return {"approval_id": approval_id, "status": "unknown"}
-            return p.public()
+            out = p.public()
+            # the sentence carries the ids too, for a client that hands its model the text alone
+            words = f"Approval {approval_id}: {p.status}."
+            if out.get("job_id"):
+                words += f" job_id: {out['job_id']}"
+            if out.get("text"):
+                words += f" {out['text']}"
+            return CallToolResult(
+                content=[TextContent(text=words)], structured_content=out, is_error=False
+            )
 
         self.add_tool(
             approval_status,

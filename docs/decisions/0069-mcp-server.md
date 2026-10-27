@@ -228,5 +228,10 @@ Windows and Linux, the Rust launcher and its signing, OAuth, and the 1 MiB limit
 - **Not built in M1:** the `library`, `notebooks` and `voices` groups are choosable but `library_export` and file
   inputs (decision 6's folders) wait for M2; the opt-in fixed HTTP port; `input_required` as a courtesy; the
   launcher is built beside the shell but not yet placed in the bundle (release work, Q2); Windows and Linux not run;
-  the three real clients were not driven in this stage (the SDK's client and the raw protocol were); the
-  `notifications/tools/list_changed` refresh after the app starts (open question 5) is still open.
+  the `notifications/tools/list_changed` refresh after the app starts (open question 5) is still open.
+- **The three real clients, driven 2026-10-27** (`docs/spikes/mcp-m1-clients.md`): Claude Code 2.1.302, Codex 0.163.0
+  and OpenCode 1.19.3 through `wasify-mcp` against a desktop engine, with S1's scripted model: the tour (status,
+  models, a picture approved in the window, the job followed), a late approval (`needs_approval`, then
+  `approval_status`, then the job) and the app closed, all three clients, all three scenarios. The run changed two
+  things: the launcher's path is read from `WASIFYAI_MCP_LAUNCHER` (the name the shell sets), and every result's
+  sentence carries its `job_id` and `approval_id`, because OpenCode hands its model the text alone.

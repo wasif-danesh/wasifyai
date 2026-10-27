@@ -173,7 +173,8 @@ impl Bridge {
             }
             "tools/list" => json!({"jsonrpc": "2.0", "id": id, "result": with(json!({"tools": [{
                 "name": "app_status", "description": "Tells whether Wasify AI is running.",
-                "inputSchema": {"type": "object", "properties": {}}}]}).as_object().unwrap().clone())}),
+                "inputSchema": {"type": "object", "properties": {}},
+                "annotations": {"readOnlyHint": true}}]}).as_object().unwrap().clone())}),
             "tools/call" => json!({"jsonrpc": "2.0", "id": id, "result": with(json!({
                 "content": [{"type": "text", "text": DOWN}], "isError": true}).as_object().unwrap().clone())}),
             "ping" => json!({"jsonrpc": "2.0", "id": id, "result": Value::Object(extra.clone())}),

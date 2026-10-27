@@ -176,7 +176,7 @@ async def connection_snippets(
     request: Request, _: Identity = Depends(get_identity)
 ) -> dict[str, Any]:
     settings = get_settings()
-    launcher = settings.mcp_launcher_path or LAUNCHER_PLACEHOLDER
+    launcher = settings.wasifyai_mcp_launcher or LAUNCHER_PLACEHOLDER
     port = getattr(getattr(request.app.state, "launcher", None), "port", None)
     return {"launcher": launcher, "snippets": snippets(launcher, port)}
 

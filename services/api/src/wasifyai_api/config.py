@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     desktop_secret_store: str = "file"
     # the stdio launcher other apps run to reach this engine (ADR-0069); the shell passes the
     # path of the bundled `wasify-mcp` so Settings can show the exact command to paste
-    mcp_launcher_path: str = ""
+    wasifyai_mcp_launcher: str = ""  # the env var the shell sets is WASIFYAI_MCP_LAUNCHER
     # extra ComfyUI arguments, space separated (for example `--gpu-only`): memory modes, for tuning
     desktop_comfyui_args: str = ""
     # comma-separated product ids; empty: all (desktop: image, video, assistant, notebooks, voice)

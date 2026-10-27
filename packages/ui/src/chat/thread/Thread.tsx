@@ -69,9 +69,10 @@ export function Thread({
         <PageHeader
           className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-6 pt-1"
           pageOnly={<div className="flex items-center gap-1">{actions}</div>}
+          title={Boolean(title)}
         >
           {title ? (
-            <h1 className="pointer-events-none min-w-0 flex-1 truncate ps-2 font-medium text-sm">
+            <h1 className="pointer-events-none min-w-0 max-w-[24rem] truncate ps-2 font-medium text-sm">
               {title}
             </h1>
           ) : null}

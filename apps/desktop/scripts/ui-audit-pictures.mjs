@@ -179,21 +179,19 @@ for (const scheme of ["light", "dark"]) {
       await shot(page, "menu-hidden");
       await page.getByRole("button", { name: "Show the side menu" }).click();
     });
-    await attempt("menu-open", async () => {
+    await attempt("search", async () => {
       await open(page, "/images/create");
-      const nav = page.locator("nav").first();
-      for (const group of ["Notebook", "Images", "Video", "Voice", "Music"]) {
-        const button = nav.getByRole("button", { name: group, exact: true });
-        if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
-        await page.waitForTimeout(150);
-      }
-      await shot(page, "menu-open", 1500);
+      await page.keyboard.press("Meta+K");
+      await page.waitForTimeout(500);
+      await shot(page, "search");
+      await page.keyboard.press("Escape");
     });
-    await attempt("search-sidebar", async () => {
-      await open(page, "/");
-      await page.getByRole("button", { name: "Search My creations" }).click();
-      await page.waitForTimeout(1500);
-      await shot(page, "search-sidebar");
+    await attempt("tray", async () => {
+      await open(page, "/images/create");
+      await page.getByRole("button", { name: /running|Nothing running/ }).click();
+      await page.waitForTimeout(500);
+      await shot(page, "tray");
+      await page.keyboard.press("Escape");
     });
     // Train: the next screen of each card whose Start works (the video card waits for its trainer)
     for (const [i, name] of [

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // What each item of the shared side menu opens in this window (packages/ui, `MENU_GROUPS`). An item that is
 // not listed here is not built on the desktop yet and shows as "Soon".
-import { type ItemResolver, type ItemView, MENU_GROUPS } from "@wasifyai/ui";
+import { type BarTab, type ItemResolver, type ItemView, placeOf } from "@wasifyai/ui";
 import { type Route, newNotebook, openChat } from "./router";
 
 /** The screen each item opens. */
@@ -72,23 +72,36 @@ export function resolveItem(
 }
 
 const OTHER_TITLES: Partial<Record<Route, string>> = {
-  home: "New chat",
+  home: "Chat",
   notebooks: "Notebooks",
   notebook: "Notebook",
   videobuilder: "Motion graphics",
   model3d: "3D model",
-  creations: "My creations",
+  creations: "Library",
   models: "Model hub",
   train: "Train models",
   settings: "Settings",
 };
 
-/** What the top bar of the window says for a screen that gives no title of its own. */
+/** What the top bar shows for a screen: the entry's name as the title, and the entry's tools as tabs. */
+export function barFor(resolve: ItemResolver, route: Route): { title: string; tabs: BarTab[] } {
+  const place = placeOf(resolve);
+  if (!place) return { title: OTHER_TITLES[route] ?? "Wasify AI", tabs: [] };
+  return {
+    title: place.entry.label,
+    tabs: place.tabs.map(({ item, view }) => ({
+      id: item.id,
+      label: item.label,
+      current: view.current === true,
+      onSelect: view.onSelect,
+    })),
+  };
+}
+
+/** What the top bar of the window says for a screen (the entry's name; "Settings" and the like outside the menu). */
 export function routeTitle(route: Route): string {
-  const id = Object.keys(ROUTES).find((k) => ROUTES[k] === route);
-  for (const group of MENU_GROUPS) {
-    const item = group.items.find((i) => i.id === id);
-    if (item) return `${group.label}: ${item.label}`;
-  }
-  return OTHER_TITLES[route] ?? "Wasify AI";
+  return barFor(
+    resolveItem(route, () => {}, { conversationId: null, notebook: null }),
+    route,
+  ).title;
 }

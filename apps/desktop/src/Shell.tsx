@@ -1,28 +1,35 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ImageSummary } from "@wasifyai/client";
 import {
+  AppBar,
   ApprovalCards,
   AudiobookPage,
   DubPage,
   ElicitationCards,
+  JobTray,
   LipSyncPage,
   LyricsPage,
+  MENU_ENTRIES,
   MusicPage,
+  SearchPalette,
   SpeakPage,
-  TitleBar,
   ToolPage,
   TracksPage,
   TranscribePage,
+  type TrayJob,
   VoicesPage,
   WindowBarProvider,
+  cn,
+  jobLabel,
   presetOf,
 } from "@wasifyai/ui";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, PanelLeft } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
-import { client, connectionsApi, externalApi, voiceApi } from "./api";
-import { routeTitle } from "./menu";
+import { client, connectionsApi, creationsApi, externalApi, voiceApi } from "./api";
+import { barFor, resolveItem } from "./menu";
 import { CreatePage } from "./pages/Create";
-import { CreationsPage } from "./pages/Creations";
+import { CreationsPage, navFor } from "./pages/Creations";
 import { HomePage } from "./pages/Home";
 import { LibraryPage } from "./pages/Library";
 import { Model3dPage } from "./pages/Model3d";
@@ -38,6 +45,50 @@ import { remembered } from "./remember";
 import { useHistoryButtons, useRoute } from "./router";
 
 const COLLAPSED_KEY = "wasifyai:sidebar-collapsed";
+
+// the overlay title bar (and its traffic lights) exists on macOS only
+const MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent);
+
+function Tool({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="grid size-7 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** The running jobs of this window's engine, for the tray: what each is doing, and Stop where it can be. */
+async function runningJobs(): Promise<TrayJob[]> {
+  const { jobs } = await connectionsApi.jobs();
+  return jobs.map((j) => ({
+    id: j.job_id,
+    label: jobLabel(j.action_id),
+    from: j.from,
+    seconds: j.seconds,
+    onStop: j.cancellable
+      ? async () => {
+          await connectionsApi.cancelJob(j.job_id);
+        }
+      : undefined,
+  }));
+}
 
 function readCollapsed(): boolean {
   try {
@@ -100,20 +151,26 @@ export function Shell() {
       setCollapsed(false);
     }
   }, [route]);
-  // ⌘K (Ctrl+K) is search, as on the web: My creations, with its box ready to type in
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() !== "k" || !(e.metaKey || e.ctrlKey) || e.altKey) return;
-      e.preventDefault();
-      go("creations");
-      // the screen mounts on the next frame; its search box is the only type="search" field in it
-      requestAnimationFrame(() => {
-        document.querySelector<HTMLInputElement>('#main input[type="search"]')?.focus();
-      });
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [go]);
+  // the one search (⌘K and the bar's button): any tool by name, or a creation by what it is about
+  const [searching, setSearching] = useState(false);
+  const openSearch = useCallback(() => setSearching(true), []);
+  const resolve = useMemo(
+    () => resolveItem(route, go, { conversationId, notebook }),
+    [route, go, conversationId, notebook],
+  );
+  const barView = useMemo(() => barFor(resolve, route), [resolve, route]);
+  const places = useMemo(() => {
+    const out = MENU_ENTRIES.flatMap((entry) =>
+      entry.items.flatMap((item) => {
+        const view = resolve(item.id);
+        if (!view || "hidden" in view || !view.onSelect) return [];
+        const label = entry.items.length > 1 ? `${entry.label}: ${item.label}` : entry.label;
+        return [{ id: item.id, label, onSelect: view.onSelect }];
+      }),
+    );
+    out.push({ id: "settings", label: "Settings", onSelect: () => go("settings") });
+    return out;
+  }, [resolve, go]);
   const set = (v: boolean) => {
     setCollapsed(v);
     try {
@@ -131,14 +188,44 @@ export function Shell() {
       >
         <ApprovalCards api={connectionsApi} />
         <ElicitationCards external={externalApi} connections={connectionsApi} />
-        <TitleBar
-          menuOpen={!collapsed}
-          onToggleMenu={() => set(!collapsed)}
-          canGoBack={history.back}
-          canGoForward={history.forward}
-          title={routeTitle(route)}
+        <AppBar
+          drag
+          nav={
+            <div
+              data-tauri-drag-region
+              className={cn("flex h-full items-center gap-0.5 pe-1", MAC ? "ps-[84px]" : "ps-3")}
+            >
+              <Tool label="Back" disabled={!history.back} onClick={() => window.history.back()}>
+                <ArrowLeft className="size-4" />
+              </Tool>
+              <Tool
+                label="Forward"
+                disabled={!history.forward}
+                onClick={() => window.history.forward()}
+              >
+                <ArrowRight className="size-4" />
+              </Tool>
+              <Tool
+                label={collapsed ? "Show the side menu" : "Hide the side menu"}
+                onClick={() => set(!collapsed)}
+              >
+                <PanelLeft className="size-4" />
+              </Tool>
+            </div>
+          }
+          title={barView.title}
           showTitle={claims === 0}
+          tabs={barView.tabs}
           slot={setSlot}
+          tray={<JobTray load={runningJobs} />}
+          onSearch={openSearch}
+        />
+        <SearchPalette
+          open={searching}
+          onClose={() => setSearching(false)}
+          places={places}
+          creations={creationsApi}
+          onOpenCreation={(entry) => navFor(go).open(entry)}
         />
         <div className="flex min-h-0 flex-1">
           {collapsed ? null : (

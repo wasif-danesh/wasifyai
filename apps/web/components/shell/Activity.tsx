@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { useVideoActivity } from "@/hooks/use-video-activity";
 import { clamp2 } from "@/lib/styles";
 import { cn } from "@/lib/utils";
@@ -20,29 +19,29 @@ const WORDS = {
   verb: "Watch it",
 };
 
-/** The top bar's "being made" badges and the notice when something finishes (ADR-0037). */
-export function Activity({ enabled }: { enabled: boolean }) {
+/**
+ * The notice when something being made finishes or fails (ADR-0037). What is being made shows in the bar's job
+ * tray (stage U2); `activity` is the shell's own poll, so the page asks once.
+ */
+export function Activity({
+  enabled = true,
+  activity,
+}: {
+  enabled?: boolean;
+  activity?: ReturnType<typeof useVideoActivity>;
+}) {
   // The notice is fixed to the window, but the top bar's blur makes it the containing block of
   // everything fixed inside it: the notice must be put on the page itself to stay in view.
   const [page, setPage] = useState<HTMLElement | null>(null);
   useEffect(() => setPage(document.body), []);
   const onPage = (node: ReactNode) => (page ? createPortal(node, page) : null);
-  const video = useVideoActivity(enabled);
+  const polled = useVideoActivity(enabled && !activity);
+  const video = activity ?? polled;
   const shown: { notice: Notice; dismiss: () => void } | null = video.notice
     ? { notice: video.notice, dismiss: video.dismiss }
     : null;
   return (
     <>
-      {video.working.length > 0 ? (
-        <Link
-          href="/creations?show=videos"
-          title="Open My creations"
-          className="inline-flex items-center gap-2 rounded-full border bg-accent px-3 py-1.5 text-step--1 whitespace-nowrap text-foreground no-underline hover:text-foreground"
-        >
-          <Spinner />
-          {WORDS.working}
-        </Link>
-      ) : null}
       {onPage(
         <div
           className="pointer-events-none fixed inset-x-0 bottom-4 z-50 grid justify-items-end px-4"

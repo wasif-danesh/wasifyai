@@ -66,10 +66,14 @@ for (const screen of SCREENS) {
     await settle(page);
     await noSideScroll(page);
     const nav = await menu(page);
-    for (const group of ["Notebook", "Images", "Video", "Voice", "Music"]) {
-      await expect(nav.getByRole("button", { name: group, exact: true })).toBeVisible();
+    for (const entry of ["Chat", "Notebooks", "Images", "Video", "Speech", "Music", "Library"]) {
+      await expect(nav.getByRole("link", { name: entry, exact: true })).toBeVisible();
     }
     await expect(nav.getByRole("link", { name: "Wasify AI, home" })).toBeVisible();
+    // one bar of one height on every screen (ADR-0093 decision 1)
+    const bar = page.locator('[data-slot="app-bar"]');
+    await expect(bar).toBeVisible();
+    expect((await bar.boundingBox())?.height).toBe(48);
   });
 
   test(`${screen.name} looks right @visual`, async ({ page }) => {

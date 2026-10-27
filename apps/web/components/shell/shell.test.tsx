@@ -1,8 +1,7 @@
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 // @vitest-environment jsdom
-import { render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AppSidebar } from "./AppSidebar";
 
@@ -25,52 +24,31 @@ function panel(isAdmin = false) {
 }
 
 describe("the side panel", () => {
-  it("is the desktop's menu: the groups in order, with the page's group open", () => {
+  it("is the desktop's menu: eleven entries, one click each, the page's entry marked", () => {
     path = "/voice/speak";
     query = "";
     panel(false);
-    for (const name of ["Notebook", "Images", "Video", "Voice", "Music"]) {
-      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    for (const name of ["Chat", "Notebooks", "Images", "Video", "Speech", "Library"]) {
+      expect(screen.getByRole("link", { name })).toBeInTheDocument();
     }
-    expect(screen.getByRole("button", { name: "Voice" })).toHaveAttribute("aria-expanded", "true");
-    const here = screen.getByRole("link", { name: /Text to speech/ });
+    // music and the studio tools are linked only where a ready model can run them: Soon until then
+    expect(screen.getByRole("button", { name: /^Music/ })).toBeDisabled();
+    const here = screen.getByRole("link", { name: "Speech" });
     expect(here).toHaveAttribute("href", "/voice/speak");
     expect(here).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: /Speech to text/ })).toHaveAttribute(
-      "href",
-      "/voice/transcribe",
-    );
-    // the other voice screens are linked only where a ready model can run them
-    expect(screen.queryByRole("link", { name: /Lip sync/ })).toBeNull();
+    expect(screen.queryByRole("button", { expanded: true })).toBeNull(); // no group to open
+    expect(screen.getByRole("button", { name: /^Studio/ })).toBeDisabled();
   });
 
-  it("links each product's create page and its saved results", async () => {
-    path = "/image";
+  it("opens each product on its create page and stays on the page that is open", () => {
+    path = "/image/library";
     query = "";
     panel();
-    expect(screen.getByRole("link", { name: /Create/ })).toHaveAttribute("href", "/image");
-    expect(screen.getByRole("link", { name: /Your images/ })).toHaveAttribute(
-      "href",
-      "/image/library",
-    );
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /^Video/ }));
-    expect(screen.getByRole("link", { name: /Your videos/ })).toHaveAttribute(
-      "href",
-      "/video/library",
-    );
-  });
-
-  it("links every item the web serves, Train models included", async () => {
-    path = "/image";
-    query = "";
-    panel();
-    expect(screen.getByRole("link", { name: /Edit/ })).toHaveAttribute("href", "/image/edit");
-    expect(screen.getByRole("link", { name: /Inpaint/ })).toHaveAttribute("href", "/image/inpaint");
-    expect(screen.getByRole("link", { name: /3D model/ })).toHaveAttribute("href", "/image/3d");
-    expect(screen.getByRole("link", { name: /Train/ })).toHaveAttribute("href", "/train");
-    expect(screen.getByRole("button", { name: /Notebook/ })).toBeInTheDocument();
-    expect(screen.queryByText("Models")).not.toBeInTheDocument(); // the admin picks models here
+    expect(screen.getByRole("link", { name: "Images" })).toHaveAttribute("href", "/image/library");
+    expect(screen.getByRole("link", { name: "Video" })).toHaveAttribute("href", "/video");
+    expect(screen.getByRole("link", { name: "3D model" })).toHaveAttribute("href", "/image/3d");
+    expect(screen.getByRole("link", { name: "Train models" })).toHaveAttribute("href", "/train");
+    expect(screen.queryByText("Model hub")).not.toBeInTheDocument(); // the admin picks models here
   });
 
   it("starts a new chat from the home page, marks a chat that is open, and lists Explore", async () => {
@@ -91,8 +69,8 @@ describe("the side panel", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     panel();
-    expect(screen.getByRole("link", { name: /new chat/i })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: /new chat/i })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Chat" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "Chat" })).not.toHaveAttribute("aria-current");
     expect(await screen.findByRole("button", { name: "Fox poem" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -102,44 +80,20 @@ describe("the side panel", () => {
     vi.unstubAllGlobals();
   });
 
-  it("marks the page being shown, a saved result as its library, and the filter of My creations", () => {
-    path = "/video/library";
-    query = "";
-    const first = render(
-      <TooltipProvider>
-        <SidebarProvider>
-          <AppSidebar isAdmin={false} footer={null} />
-        </SidebarProvider>
-      </TooltipProvider>,
-    );
-    expect(screen.getByRole("link", { name: /Your videos/ })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    first.unmount();
-
+  it("marks a product's saved result as that product", () => {
     path = "/image/creations/abc";
-    const second = render(
-      <TooltipProvider>
-        <SidebarProvider>
-          <AppSidebar isAdmin={false} footer={null} />
-        </SidebarProvider>
-      </TooltipProvider>,
-    );
-    expect(screen.getByRole("link", { name: /Your images/ })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    expect(screen.getByRole("link", { name: /Create/ })).not.toHaveAttribute("aria-current");
-    second.unmount();
+    query = "";
+    panel();
+    expect(screen.getByRole("link", { name: "Images" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Video" })).not.toHaveAttribute("aria-current");
   });
 
   it("shows My creations as the library, and the admin link only to admins", () => {
     path = "/creations";
     query = "";
     panel(false);
-    expect(screen.getByRole("link", { name: /Library/ })).toHaveAttribute("href", "/creations");
-    expect(screen.getByRole("link", { name: /Library/ })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Library" })).toHaveAttribute("href", "/creations");
+    expect(screen.getByRole("link", { name: "Library" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("link", { name: /Admin/ })).not.toBeInTheDocument();
   });
 
@@ -148,21 +102,11 @@ describe("the side panel", () => {
     query = "";
     panel(true);
     expect(screen.getByRole("link", { name: /Admin/ })).toHaveAttribute("href", "/admin");
+    expect(screen.getByRole("link", { name: "Model hub" })).toHaveAttribute(
+      "href",
+      "/admin/workers",
+    );
     expect(screen.getByRole("link", { name: "Wasify AI, home" })).toHaveAttribute("href", "/");
     expect(screen.getByText("Ada")).toBeInTheDocument();
-  });
-
-  it("opens the shared speech screens when the voice product is on", async () => {
-    path = "/voice/speak";
-    query = "";
-    panel(false);
-    expect(screen.getByRole("link", { name: /Text to speech/ })).toHaveAttribute(
-      "href",
-      "/voice/speak",
-    );
-    expect(screen.getByRole("link", { name: /Speech to text/ })).toHaveAttribute(
-      "href",
-      "/voice/transcribe",
-    );
   });
 });

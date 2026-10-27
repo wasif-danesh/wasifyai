@@ -237,7 +237,7 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader className="flex h-14 shrink-0 items-center gap-3 border-b px-5 pt-1">
+      <PageHeader className="flex h-14 shrink-0 items-center gap-3 border-b px-5 pt-1" title>
         <input
           aria-label="Notebook name"
           value={draftTitle}

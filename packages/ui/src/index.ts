@@ -41,6 +41,11 @@ export { type RecentItem, RecentStrip } from "./components/recent-strip";
 export { Skeleton } from "./components/skeleton";
 export { Input } from "./components/input";
 export { AVOID, NOUNS, type Noun, appearsHere, makeLabel, makingLabel, plural } from "./words";
+// the one shell (ADR-0093, stage U2)
+export { APP_BAR_PX, AppBar, type BarTab, ThemeButton } from "./app-bar";
+export { type Theme, useTheme } from "./shell/theme";
+export { type Place, SearchPalette } from "./shell/search-palette";
+export { JobTray, TRAY_POLL_MS, type TrayJob, jobLabel } from "./shell/job-tray";
 
 export { type Picture, type PictureApi, usePicture } from "./hooks/use-picture";
 export { usePictureEvents } from "./hooks/use-picture-events";
@@ -186,13 +191,18 @@ export {
   type VoiceTarget,
 } from "./voice/pages";
 export {
+  type BarPlace,
   CHAT_ITEM,
   EXTRA_ITEMS,
+  MENU_ENTRIES,
   MENU_GROUPS,
   type ItemResolver,
   type ItemView,
+  type MenuEntryDef,
   type MenuGroupDef,
   type MenuItemDef,
+  entryOf,
+  placeOf,
 } from "./shell/menu";
 export { type MenuLink, SideMenu, type SideMenuProps } from "./shell/SideMenu";
 export type { RecentChat, Recents } from "./shell/RecentChats";
@@ -209,7 +219,6 @@ export {
   useSaveCopy,
 } from "./save";
 export { PageHeader, TopBarSlot, type WindowBar, WindowBarProvider } from "./window-bar";
-export { TITLE_BAR_PX, TitleBar } from "./title-bar";
 export * from "./models";
 export { Train, type TrainProps } from "./training/Train";
 export { MyCreations } from "./creations/MyCreations";

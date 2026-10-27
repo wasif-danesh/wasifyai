@@ -11,7 +11,9 @@ test.beforeEach(async ({ page }) => {
 
 const phone = (width: number | undefined) => (width ?? 1280) < 768;
 
-test("every item of the side menu opens a page that draws @layout", async ({ page }) => {
+test("every entry of the side menu and every tab it leads to opens a page that draws @layout", async ({
+  page,
+}) => {
   await page.goto("/image");
   const open = async () => {
     if (phone(page.viewportSize()?.width)) {
@@ -21,20 +23,23 @@ test("every item of the side menu opens a page that draws @layout", async ({ pag
   };
   const nav = await open();
   const hrefs = new Set<string>();
-  // one group is open at a time: open each in turn and note what it offers
-  for (const group of ["Notebook", "Images", "Video", "Voice", "Music"]) {
-    const button = nav.getByRole("button", { name: group, exact: true });
-    // retried: a click can land before the page is interactive
-    await expect(async () => {
-      if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
-      await expect(button).toHaveAttribute("aria-expanded", "true", { timeout: 1000 });
-    }).toPass({ timeout: 10_000 });
-    for (const link of await nav.getByRole("link").all()) {
-      const href = await link.getAttribute("href");
-      if (href?.startsWith("/")) hrefs.add(href);
+  // the menu has no groups since stage U2: every entry is a link (or a Soon button); a product's tools are the
+  // tabs of the top bar on its page
+  for (const link of await nav.getByRole("link").all()) {
+    const href = await link.getAttribute("href");
+    if (href?.startsWith("/")) hrefs.add(href);
+  }
+  expect(hrefs.size).toBeGreaterThan(8);
+  for (const href of [...hrefs]) {
+    await page.goto(href);
+    for (const tab of await page
+      .getByRole("navigation", { name: "Modes" })
+      .getByRole("link")
+      .all()) {
+      const h = await tab.getAttribute("href");
+      if (h?.startsWith("/")) hrefs.add(h);
     }
   }
-  // the groups of the desktop menu all contribute links, so the walk is not empty
   expect(hrefs.size).toBeGreaterThan(12);
   for (const href of hrefs) {
     const response = await page.goto(href);

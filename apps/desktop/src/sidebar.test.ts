@@ -80,9 +80,11 @@ describe("the window's side menu", () => {
 
 describe("the title the top bar shows when a screen gives none", () => {
   it("is the menu's own words for every screen that has a menu item", () => {
-    expect(routeTitle("create")).toBe("Images: Create");
-    expect(routeTitle("extend")).toBe("Video: Extend video");
-    expect(routeTitle("speak")).toBe("Voice: Text to speech");
+    expect(routeTitle("create")).toBe("Images");
+    expect(routeTitle("extend")).toBe("Video");
+    expect(routeTitle("speak")).toBe("Speech");
+    expect(routeTitle("dub")).toBe("Studio");
+    expect(routeTitle("home")).toBe("Chat");
     expect(routeTitle("models")).toBe("Model hub");
     expect(routeTitle("train")).toBe("Train models");
     expect(routeTitle("settings")).toBe("Settings");

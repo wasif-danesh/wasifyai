@@ -5,7 +5,7 @@ import { creationsApi } from "../api";
 import type { Route } from "../router";
 
 /** Where an entry of My creations opens in this window, and the screens that make something new. */
-function navFor(go: (r: Route) => void): CreationsNav {
+export function navFor(go: (r: Route) => void): CreationsNav {
   const screen = {
     image: "library",
     video: "videos",

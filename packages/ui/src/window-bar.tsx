@@ -33,15 +33,18 @@ export function PageHeader({
   className,
   children,
   pageOnly,
+  title,
 }: {
   /** the classes of the header where there is no window bar */
   className?: string;
   children: ReactNode;
   /** tools that stay in a header of the page and are left out of the window's bar (it is kept bare for now) */
   pageOnly?: ReactNode;
+  /** this header carries the screen's own title (a chat's, a notebook's): the bar then hides its own */
+  title?: boolean;
 }) {
   const bar = useContext(WindowBarContext);
-  useEffect(() => bar?.claim(), [bar]);
+  useEffect(() => (title ? bar?.claim() : undefined), [bar, title]);
   if (bar) return bar.target ? createPortal(children, bar.target) : null;
   return (
     <header data-tauri-drag-region className={cn(className)}>

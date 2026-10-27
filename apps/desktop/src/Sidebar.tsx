@@ -24,7 +24,6 @@ export function Sidebar({
     <div className="h-full w-64 shrink-0 border-e bg-card/60">
       <SideMenu
         resolve={resolveItem(route, go, { conversationId, notebook })}
-        onSearch={() => go("creations")}
         recents={{
           items: recents.map((c) => ({
             id: c.id,

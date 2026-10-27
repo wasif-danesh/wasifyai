@@ -11,7 +11,7 @@ import {
   sizeName,
   when,
 } from "@wasifyai/client";
-import { Heart, ImageIcon, Info, Library, Pencil, RotateCw, Save, Shuffle } from "lucide-react";
+import { Heart, ImageIcon, Info, Pencil, RotateCw, Save, Shuffle } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
@@ -171,7 +171,6 @@ export function ImageWorkspace({
   header,
   notices,
   preset,
-  onOpenLibrary,
   canSave = false,
   downloadHref,
   blockedReason = null,
@@ -388,20 +387,9 @@ export function ImageWorkspace({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PageHeader className="flex h-14 shrink-0 items-center justify-between gap-4 border-b px-6 pt-1">
+      {/* the model button, in the top bar; the modes and the library are the bar's tabs (ADR-0093, stage U2) */}
+      <PageHeader className="flex h-14 shrink-0 items-center gap-4 border-b px-6 pt-1">
         <div className="flex min-w-0 items-center gap-2 ps-2 text-sm">{header}</div>
-        <div className="flex shrink-0 items-center gap-1 text-sm">
-          <span className="rounded-full bg-accent px-3 py-1.5 font-medium">{COPY[mode].tab}</span>
-          {onOpenLibrary ? (
-            <button
-              type="button"
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-muted-foreground hover:bg-accent"
-              onClick={onOpenLibrary}
-            >
-              <Library className="size-4" /> <span className="max-sm:sr-only">Library</span>
-            </button>
-          ) : null}
-        </div>
       </PageHeader>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto md:grid-cols-[minmax(19rem,28rem)_minmax(0,1fr)] md:overflow-visible">

@@ -172,6 +172,10 @@ not hidden, so the menu keeps its final shape.
 
 ### The side menu's final shape (decided 2026-10-16; built in stage E3, with Video, Voice and Music shown as Soon)
 
+> Since stage U2 of the UI plan (2026-10-27, ADR-0093) the menu shows eleven entries with no groups to open; a product's
+> modes are tabs in the top bar. The groups below are still the list of item ids (`MENU_GROUPS`); what the menu shows is
+> `MENU_ENTRIES` in `packages/ui/src/shell/menu.ts`.
+
 Every product is one expandable group, the pattern *Images* already uses: clicking the group only opens or
 closes it, and the items inside are the tools. Items whose product is not built on the desktop yet are shown
 disabled with the **Soon** pill, so the menu keeps its final shape (as above).

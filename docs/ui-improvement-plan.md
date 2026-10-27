@@ -221,7 +221,21 @@ the web's `/design` page (`apps/web/components/design/DesignPage.tsx`) with ever
 (`design.png`, `design-dark.png`, `design-phone.png`). No screen changed. The unit tests are
 `components/foundation.test.tsx`.
 
-About 44 days of work in thirteen stages; U0 and U1 are done, U2 next, then the products in the order a
+**Built:** U2 on 2026-10-27: `AppBar` (`packages/ui/src/app-bar.tsx`: nav, title, the screen's header slot,
+tabs, the tray, search, the theme; 48 px on both apps), `MENU_ENTRIES` with `placeOf` in `shell/menu.ts` (eleven
+entries; `MENU_GROUPS` stays as the list of item ids the actions and the parity rows name), the `SideMenu` without
+groups, `SearchPalette` (⌘K: any tool by name, a creation by what it is about), `JobTray` with Stop (`jobLabel`
+for the action ids), `useTheme` and `ThemeButton` shared by both apps; the desktop's `Shell.tsx` and the web's
+`WebShell.tsx` use them, the web's `TopBar`, breadcrumb and `CommandMenu` are gone, the desktop's `TitleBar` is
+gone; `PageHeader` claims the bar's title only when it carries one (`title`), so the Images, Video, Speech, 3D and
+chat screens keep the entry's name as the title and put only the model button in the bar. The eight voice tools
+are split between **Speech** (Text to speech, Speech to text, Voices, Change a voice, Edit speech) and **Studio**
+(Dub, Audiobook, Lip sync); "Images", "Train models" and "Model hub" keep their names until decision 1 is taken
+(a one-line change each in `MENU_ENTRIES`). The tray lists the engine's running actions on the desktop and the
+clips being made on the web (the web has no `/actions/jobs` yet). Checked with the menu walk, the shared-screens
+layout checks (one bar height on every screen), the unit tests of both shells and the pictures taken again.
+
+About 44 days of work in thirteen stages; U0 to U2 are done, U3 next, then the products in the order a
 new person meets them (Pictures, Video, Speech), with the Library before the home so the quick starts and the
 recent strips have one source.
 

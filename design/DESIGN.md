@@ -84,6 +84,14 @@ Short and quiet: entrances ease out (`--ease-out-soft`); nothing moves for more 
 Logical CSS properties (`ms-`, `me-`, `ps-`, `pe-`, `start`, `end`) instead of left and right. No fixed-width text boxes. Fonts are
 files we ship with their licences recorded; the desktop never fetches fonts from the network.
 
+## The shell (ADR-0093, stage U2)
+
+One side menu of eleven entries, each one click to a tool; a product's modes are tabs in the top bar, never a second
+level of the menu. One top bar (`AppBar`, 48 px) on the desktop window and on the web: the app's navigation buttons, the
+entry's name as the title, the screen's model button (put there with `PageHeader`), the tabs, then the job tray, search
+(⌘K, `SearchPalette`) and the theme. No breadcrumb, no second bar, no "Group: Item" title. A screen that has a title of
+its own (a chat, a notebook) passes `title` to `PageHeader` and the bar shows that instead.
+
 ## Screen patterns (written before the screens are built)
 
 - **Long work never blocks the window (ADR-0086 amendment, 2026-10-25).** A model download asks first in a dialog (files, size, licence) that closes the moment the person agrees; the work goes on in a **tray** at the top right, under the top bar, on every screen: name, percentage, a thin bar, a stop button; queued rows say "Waiting"; a finished row says "Ready" and leaves after a few seconds; a failed row stays with its reason and "Try again". The tray is a labelled region with a polite live line; it never takes focus and the page behind stays usable.

@@ -1,11 +1,10 @@
 import { WebModelChoices } from "@/components/models/WebModelChoices";
 import { AppSidebar } from "@/components/shell/AppSidebar";
-import { TopBar } from "@/components/shell/TopBar";
 import { UserMenu } from "@/components/shell/UserMenu";
+import { WebShell } from "@/components/shell/WebShell";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getMe } from "@/lib/me";
-import { page } from "@/lib/styles";
 import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 
@@ -19,10 +18,9 @@ export default async function ProductLayout({ children }: { children: ReactNode 
       <SidebarProvider defaultOpen={defaultOpen}>
         <AppSidebar isAdmin={isAdmin} footer={<UserMenu />} />
         <SidebarInset>
-          <TopBar />
-          <main id="main" className={page}>
+          <WebShell isAdmin={isAdmin}>
             <WebModelChoices isAdmin={isAdmin}>{children}</WebModelChoices>
-          </main>
+          </WebShell>
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>

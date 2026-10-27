@@ -101,6 +101,7 @@ from wasifyai_api.local_embedder import MODEL as LOCAL_EMBEDDER_MODEL
 from wasifyai_api.local_embedder import hashing_embed
 from wasifyai_api.logging import configure_logging, request_id
 from wasifyai_api.mcp_client.client import ExternalClient
+from wasifyai_api.mcp_client.forms import FormDesk
 from wasifyai_api.mcp_client.routes import router as external_router
 from wasifyai_api.mcp_client.servers import InMemoryServerStore, ServersService, SqlServerStore
 from wasifyai_api.mcp_server.approvals import ApprovalDesk
@@ -440,6 +441,7 @@ def create_app(
                     app.state.secrets,
                 ),
                 Path(settings.desktop_data_dir) if desktop else None,
+                FormDesk(app.state.events),  # a server's question becomes a card (C3)
             )
         # the opt-in fixed port for HTTP clients (stage M3), remembered in the settings store
         app.state.fixed_port = FixedPort(

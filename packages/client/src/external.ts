@@ -21,7 +21,7 @@ export type ExternalServer = {
   host: string;
   env_names: string[];
   has_token: boolean;
-  trust: "ask" | "blocked";
+  trust: "ask" | "trusted_read_only" | "blocked";
   allowed_tools: string[];
   timeout_s: number;
   keep_content: boolean;
@@ -45,7 +45,7 @@ export type ExternalServerIn = {
   args?: string[] | string;
   env?: Record<string, string>;
   token?: string;
-  trust?: "ask" | "blocked";
+  trust?: "ask" | "trusted_read_only" | "blocked";
   allowed_tools?: string[] | string;
   timeout_s?: number;
   /** stdio: the name typed again (adding a program is installing software). */
@@ -66,6 +66,62 @@ export type ExternalTest = {
   tools: ExternalTool[];
   ms?: number;
   server: ExternalServer;
+};
+
+/** Something a server offers to read (ADR-0070 decision 10): the person attaches it to a message. */
+export type ExternalResource = {
+  server: string;
+  uri: string;
+  name: string;
+  description: string;
+  mime_type: string;
+};
+
+/** A prompt a server offers: a template for the box, with its arguments. */
+export type ExternalPrompt = {
+  server: string;
+  name: string;
+  title: string;
+  description: string;
+  arguments: { name: string; description: string; required: boolean }[];
+};
+
+/** A question an outside server is waiting on, shown as a form in the window. */
+export type PendingForm = {
+  form_id: string;
+  server: string;
+  message: string;
+  /** a JSON schema of top-level fields: string, number, integer, boolean, enum */
+  schema: Record<string, unknown>;
+  created_at: string;
+};
+
+export type FormAction = "accept" | "decline" | "cancel";
+
+/** A server definition found in another client's config (values stay on the engine). */
+export type ImportDefinition = {
+  source: string;
+  name: string;
+  transport: "http" | "stdio";
+  command: string;
+  args: string[];
+  url: string;
+  env_names: string[];
+  has_token: boolean;
+  /** why it cannot be added as it is */
+  note: string;
+};
+
+export type ImportSource = "claude_code" | "claude_desktop" | "codex";
+
+export type ImportWhere = { source: ImportSource; path?: string; folder?: string };
+
+export type AttachedResource = {
+  id: string;
+  kind: "document";
+  name: string;
+  chars: number;
+  truncated: boolean;
 };
 
 export type ExternalActivity = {
@@ -114,8 +170,48 @@ export function createExternalApi(transport: Transport) {
     remove: (id: string) =>
       json<{ removed: string }>(transport, `/external/${id}`, { method: "DELETE" }),
     test: (id: string) => json<ExternalTest>(transport, `/external/${id}/test`, { method: "POST" }),
+    /** The last part of a program's output (stdio servers). */
+    log: (id: string) => json<{ log: string }>(transport, `/external/${id}/log`),
     activity: (id: string) =>
       json<{ activity: ExternalActivity[] }>(transport, `/external/${id}/activity`),
+    resources: (id: string) =>
+      json<{ resources: ExternalResource[] }>(transport, `/external/${id}/resources`),
+    /** Read a text resource and keep it as a document the next message can attach. */
+    attachResource: (id: string, uri: string) =>
+      json<AttachedResource>(transport, `/external/${id}/resources/attach`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ uri }),
+      }),
+    prompts: (id: string) =>
+      json<{ prompts: ExternalPrompt[] }>(transport, `/external/${id}/prompts`),
+    promptText: (id: string, name: string, args: Record<string, string>) =>
+      json<{ text: string }>(transport, `/external/${id}/prompts/get`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name, arguments: args }),
+      }),
+    forms: () => json<{ forms: PendingForm[] }>(transport, "/external/forms"),
+    answerForm: (formId: string, action: FormAction, content?: Record<string, unknown>) =>
+      json<{ form_id: string; action: string }>(transport, `/external/forms/${formId}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action, content: content ?? null }),
+      }),
+    /** The definitions another client's config holds; nothing is added yet. */
+    importFind: (where: ImportWhere) =>
+      json<{ found: ImportDefinition[] }>(transport, "/external/import", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(where),
+      }),
+    /** Add one of them, as the file has it (its variables go to the keychain on the engine). */
+    importAdd: (where: ImportWhere, name: string) =>
+      json<{ server: ExternalServer }>(transport, "/external/import/add", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ ...where, name }),
+      }),
   };
 }
 

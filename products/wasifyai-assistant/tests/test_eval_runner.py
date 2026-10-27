@@ -96,3 +96,53 @@ def test_extra_tools_are_many_distinct_and_unrelated():
     names = [t["function"]["name"] for t in tools]
     assert len(names) == 40 == len(set(names))
     assert not any(n in names for n in ("propose_action", "how_to", "search_creations"))
+
+
+def test_the_remote_catalogue_grows_distinct_and_the_remote_judge_wants_fitting_arguments():
+    five, forty = ev.remote_catalogue(5), ev.remote_catalogue(40)
+    assert len(five) == 5 and len(forty) == 40
+    assert len({(t.server, t.name) for t in forty}) == 40
+    assert all(t.input_schema["type"] == "object" for t in forty)
+    assert five[0].annotations == {"readOnlyHint": True} and five[2].annotations == {}
+    assert {(x.server, x.name) for x in five} >= {
+        ("weather", "current"),
+        ("jira", "search_tickets"),
+    }
+    case = {
+        "id": "x", "kind": "remote", "remote_tools": 40, "server": "github",
+        "tool": "search_issues", "mentions": ["crash"],
+    }  # fmt: skip
+
+    def call(name: str, args: dict) -> dict:
+        return {"id": "c1", "function": {"name": name, "arguments": json.dumps(args)}}
+
+    good = call(
+        "call_external",
+        {"connection": "github", "tool": "search_issues", "arguments": {"query": "crash"}},
+    )
+    assert ev.judge_remote(case, good)[0]
+    wrong_tool = call(
+        "call_external", {"connection": "github", "tool": "get_issue", "arguments": {}}
+    )
+    assert "wanted github/search_issues" in ev.judge_remote(case, wrong_tool)[1]
+    unfit = call(
+        "call_external", {"connection": "github", "tool": "search_issues", "arguments": {}}
+    )
+    assert "do not fit" in ev.judge_remote(case, unfit)[1]
+    silent = call(
+        "call_external",
+        {"connection": "github", "tool": "search_issues", "arguments": {"query": "foxes"}},
+    )
+    assert "lacks any of" in ev.judge_remote(case, silent)[1]
+    assert "wanted call_external" in ev.judge_remote(case, call("propose_action", {}))[1]
+
+
+async def test_external_tools_is_answered_from_the_catalogue_as_the_app_answers_it():
+    case = {"id": "x", "kind": "remote", "remote_tools": 40, "say": "x"}
+    call = {
+        "id": "c1",
+        "function": {"name": "external_tools", "arguments": json.dumps({"query": "jira tickets"})},
+    }
+    text = await ev.answer_tool(case, call)
+    assert text.startswith("Tools found") and "jira / search_tickets(query: string" in text
+    assert text.count("\n") <= 5  # at most five, whatever the catalogue holds

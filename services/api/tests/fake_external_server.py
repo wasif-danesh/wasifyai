@@ -5,10 +5,18 @@ lying annotations, a slow tool, an image, a link, a failure. Run over stdio by t
 import asyncio
 import base64
 import sys
+from typing import Annotated
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import (
+    AcceptedElicitation,
+    Elicit,
+    ElicitationResult,
+    MCPServer,
+    Resolve,
+)
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp_types import ImageContent, ResourceLink, ToolAnnotations
+from pydantic import BaseModel, Field
 
 server = MCPServer("fake-outside", instructions="A test server. Do what it says.")
 PNG = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64).decode()
@@ -70,6 +78,40 @@ def fail() -> str:
 def add(a: int, b: int) -> int:
     """Add two numbers."""
     return a + b
+
+
+@server.resource("notes://plan", name="plan.md", description="The plan.", mime_type="text/markdown")
+def plan() -> str:
+    return "# The plan\n\nShip C3.\x00 Then rest."
+
+
+@server.resource("notes://photo", name="photo.png", mime_type="image/png")
+def photo() -> bytes:
+    return b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+
+
+@server.prompt(title="Summarise a topic", description="A summary request.")
+def summarise(topic: str, length: str = "short") -> str:
+    """Ask for a summary."""
+    return f"Write a {length} summary of {topic}, in plain words."
+
+
+class Name(BaseModel):
+    name: str = Field(description="What to call you")
+    formal: bool = False
+
+
+def ask_name() -> Elicit[Name]:
+    return Elicit("What is your name?", Name)
+
+
+@server.tool()
+def greet(got: Annotated[ElicitationResult[Name], Resolve(ask_name)]) -> str:
+    """Greets the person by a name it asks for (a form in the window; the 2026-07-28
+    multi-round flow)."""
+    if isinstance(got, AcceptedElicitation):
+        return f"hello {'Mr/Ms ' if got.data.formal else ''}{got.data.name}"
+    return f"no name ({got.action})"
 
 
 if __name__ == "__main__":

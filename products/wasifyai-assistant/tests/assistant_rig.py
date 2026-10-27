@@ -46,6 +46,7 @@ class FakeHost:
         self.web_error: Exception | None = None
         self.external: list[dict[str, Any]] = []  # what external_tools finds (ADR-0070)
         self.external_searches: list[str] = []
+        self.trusted: set[tuple[str, str]] = set()  # (server, tool) pairs that run unasked
         self.passages: list[dict[str, Any]] = [
             {"notebook_id": "nb-1", "notebook": "Budget", "document_id": "d-1",
              "title": "plan.md", "text": "The launch budget is 40,000 dollars."}
@@ -83,6 +84,12 @@ class FakeHost:
     async def external_tools(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         self.external_searches.append(query)
         return list(self.external)[:limit]
+
+    async def external_servers(self) -> list[str]:
+        return sorted({str(t["server"]) for t in self.external})
+
+    async def external_trusted(self, connection: str, tool: str) -> bool:
+        return (connection, tool) in self.trusted
 
     async def web_search(self, query: str, limit: int = 5) -> Any:
         self.web_searches.append(query)

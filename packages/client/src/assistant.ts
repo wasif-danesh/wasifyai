@@ -303,6 +303,8 @@ export type CardDetails = {
   estimate?: { seconds: number; runs: number };
   /** running it takes the one memory slot: the chat model pauses while it runs (ADR-0056) */
   pauses_chat?: boolean;
+  /** why the card asks when outside text is in the chat: "after reading a result from github" (ADR-0070) */
+  provenance?: string;
 };
 
 /** A tool call that waits for the person's answer (an `interrupt` event: the `confirm_action` card of ADR-0071). */
@@ -326,6 +328,7 @@ export function cardDetails(raw: Record<string, unknown>): CardDetails {
   if (typeof raw.consent === "string" && raw.consent) out.consent = raw.consent;
   if (typeof raw.screen === "string") out.screen = raw.screen;
   if (raw.pauses_chat === true) out.pauses_chat = true;
+  if (typeof raw.provenance === "string" && raw.provenance) out.provenance = raw.provenance;
   const est = raw.estimate;
   if (est && typeof est === "object") {
     const e = est as Record<string, unknown>;

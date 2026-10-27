@@ -214,6 +214,9 @@ export function ConfirmActionCard({
           {line}
         </p>
       ))}
+      {a.provenance ? (
+        <p className="text-muted-foreground text-xs">Asking because this came {a.provenance}.</p>
+      ) : null}
       {a.consent && !decided ? (
         <label className="flex items-start gap-2">
           <input

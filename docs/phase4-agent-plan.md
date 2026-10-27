@@ -142,13 +142,13 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
 - **Acceptance:** a real remote server (read-only) works through the assistant; a malicious fake server (huge
   result, hidden instructions, redirects, lying annotations, slow) cannot make the app act or leak.
 
-### Stage C2. Taint rule, trust, evaluation (M)
+### Stage C2. Taint rule, trust, evaluation (M) — built 2026-10-27 (ADR-0070 "Built"; `docs/spikes/assistant-c2.md`)
 
 - The taint rule with provenance on cards; `Trusted read-only`; stdio confirm dialog and minimal environment.
 - Evaluation: external-tool selection with 5 and 40 remote tools; the per-tier decision on whether remote tools
   are offered to local models.
 
-### Stage C3. Reach (S to M)
+### Stage C3. Reach (S to M) — built 2026-10-27 (ADR-0070 "Built"; the tasks extension and the sandbox left)
 
 - Resources attached to a message; prompts as templates; elicitation forms; the tasks extension; import from
   other clients' configs; sandbox for stdio if S5 says yes.

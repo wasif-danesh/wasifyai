@@ -176,4 +176,6 @@ data: {"run_id":"…","thread_id":"…","seq":57,"ts":"…","outputs":{"title":"
   for what takes a while or leaves this computer) or `auto` (no card). The box's Ask button and the card's "Don't ask again in this chat" set it per
   conversation. Deleting and anything that needs the person's word still ask, and after the web or a file is in the chat everything that is not a read
   asks (the taint rule). The card also carries `estimate {seconds, runs}` (the median of this person's last runs of the action, from the audit log; absent
-  until one ran) and `pauses_chat` (on the desktop: the action takes the one memory slot, so the chat model pauses).
+  until one ran), `pauses_chat` (on the desktop: the action takes the one memory slot, so the chat model pauses) and, when outside text is in
+  the chat, `provenance` (why it asks: "after reading a result from github", "after reading the web"; ADR-0070 decision 5). A tool of an
+  outside server the person marked trusted read-only, which the server says only reads, runs without a card, taint or not (decision 4).

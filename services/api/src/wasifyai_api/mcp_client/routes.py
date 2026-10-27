@@ -9,6 +9,7 @@ from wasifyai_platform_sdk.identity import Identity
 
 from wasifyai_api.identity import require_person
 from wasifyai_api.mcp_client.client import ExternalClient
+from wasifyai_api.mcp_client.imports import SOURCES, default_path, read_definitions
 
 router = APIRouter(tags=["external"])
 
@@ -26,6 +27,30 @@ class ServerIn(BaseModel):
     timeout_s: int = 60
     # decision 3: adding a program is installing software; the person types its name
     confirm_name: str | None = None
+
+
+class AttachIn(BaseModel):
+    uri: str = Field(min_length=1, max_length=2000)
+
+
+class PromptIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    arguments: dict[str, str] = Field(default_factory=dict)
+
+
+class FormAnswer(BaseModel):
+    action: str
+    content: dict[str, Any] | None = None
+
+
+class ImportIn(BaseModel):
+    source: str
+    path: str | None = None  # a file the person named; else the client's usual place
+    folder: str | None = None  # claude_code: the project folder whose .mcp.json to read
+
+
+class ImportAdd(ImportIn):
+    name: str = Field(min_length=1, max_length=200)  # the definition to add, as listed
 
 
 class ServerPatch(BaseModel):
@@ -130,6 +155,167 @@ async def test_server(
     out = await client.test(s)
     fresh = await client.servers.store.get(s.id) or s
     return {**out, "server": _row(client, fresh)}
+
+
+@router.get("/external/{server_id}/log")
+async def server_log(
+    server_id: str, request: Request, me: Identity = Depends(require_person)
+) -> dict[str, Any]:
+    """The last part of a program's output (ADR-0070 decision 3); "" for an address."""
+    client = _client(request)
+    try:
+        s = await client.servers.mine(me.tenant_id, me.user_id, server_id)
+    except KeyError:
+        raise HTTPException(404, "no such server") from None
+    return {"log": client.log_tail(s)}
+
+
+async def _mine(client: ExternalClient, me: Identity, server_id: str) -> Any:
+    try:
+        return await client.servers.mine(me.tenant_id, me.user_id, server_id)
+    except KeyError:
+        raise HTTPException(404, "no such server") from None
+
+
+@router.get("/external/{server_id}/resources")
+async def server_resources(
+    server_id: str, request: Request, me: Identity = Depends(require_person)
+) -> dict[str, Any]:
+    """What the server offers to read (ADR-0070 decision 10): the person picks one to attach."""
+    client = _client(request)
+    s = await _mine(client, me, server_id)
+    try:
+        return {"resources": [r.public() for r in await client.resources(s)]}
+    except ConnectionError as exc:
+        raise HTTPException(502, str(exc)) from None
+
+
+@router.post("/external/{server_id}/resources/attach", status_code=201)
+async def attach_resource(
+    server_id: str, body: AttachIn, request: Request, me: Identity = Depends(require_person)
+) -> dict[str, Any]:
+    """Read a text resource and keep it as a document the next chat message can attach, the
+    way an uploaded file is kept (the same record, the same storage)."""
+    from wasifyai_platform_sdk import new_upload
+
+    client = _client(request)
+    s = await _mine(client, me, server_id)
+    state: Any = request.app.state
+    storage = getattr(state, "storage", None)
+    uploads = getattr(state, "uploads", None)
+    if storage is None or uploads is None:
+        raise HTTPException(503, "file storage is not available")
+    try:
+        text, cut = await client.read_resource(s, body.uri)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    except ConnectionError as exc:
+        raise HTTPException(502, str(exc)) from None
+    kept = text.encode("utf-8")
+    record = new_upload(me.tenant_id, "wasifyai-assistant", me.user_id, len(kept), "text")
+    await storage.put_for(record.owner, record.key, kept, "text/plain; charset=utf-8")
+    await uploads.add(record)
+    name = body.uri.rsplit("/", 1)[-1][:120] or body.uri[:120]
+    return {
+        "id": record.id, "kind": "document", "name": f"{s.name}: {name}",
+        "chars": len(text), "truncated": cut,
+    }  # fmt: skip
+
+
+@router.get("/external/{server_id}/prompts")
+async def server_prompts(
+    server_id: str, request: Request, me: Identity = Depends(require_person)
+) -> dict[str, Any]:
+    """The server's prompts: templates for the box."""
+    client = _client(request)
+    s = await _mine(client, me, server_id)
+    try:
+        return {"prompts": [p.public() for p in await client.prompts(s)]}
+    except ConnectionError as exc:
+        raise HTTPException(502, str(exc)) from None
+
+
+@router.post("/external/{server_id}/prompts/get")
+async def server_prompt_text(
+    server_id: str, body: PromptIn, request: Request, me: Identity = Depends(require_person)
+) -> dict[str, Any]:
+    client = _client(request)
+    s = await _mine(client, me, server_id)
+    try:
+        return {"text": await client.get_prompt(s, body.name, body.arguments)}
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    except ConnectionError as exc:
+        raise HTTPException(502, str(exc)) from None
+
+
+@router.get("/external/forms")
+async def pending_forms(request: Request, me: Identity = Depends(require_person)) -> dict[str, Any]:
+    """The questions outside servers are waiting on (ADR-0070 decision 10)."""
+    client = _client(request)
+    return {"forms": [f.public() for f in client.forms.pending_for(me.tenant_id, me.user_id)]}
+
+
+@router.post("/external/forms/{form_id}")
+async def answer_form(
+    form_id: str, body: FormAnswer, request: Request, me: Identity = Depends(require_person)
+) -> dict[str, Any]:
+    """The person's answer to a form: accept with the values, decline, or cancel."""
+    client = _client(request)
+    try:
+        form = client.forms.answer(me.tenant_id, me.user_id, form_id, body.action, body.content)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    if form is None:
+        raise HTTPException(404, "no such form")
+    return {"form_id": form.id, "action": body.action}
+
+
+def _definitions(body: ImportIn) -> list[Any]:
+    if body.source not in SOURCES:
+        raise HTTPException(422, "the source is claude_code, claude_desktop or codex")
+    from pathlib import Path
+
+    if body.path:
+        path = Path(body.path).expanduser()
+    else:
+        folder = Path(body.folder).expanduser() if body.folder else None
+        path = default_path(body.source, folder)
+    try:
+        return read_definitions(body.source, path)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+
+
+@router.post("/external/import")
+async def import_definitions(
+    body: ImportIn, request: Request, _: Identity = Depends(require_person)
+) -> dict[str, Any]:
+    """The server definitions another client's config holds (ADR-0070 decision 2): shown to the
+    person, who adds each one they want with `/external/import/add`. Values stay on the engine."""
+    _client(request)
+    return {"found": [d.public() for d in _definitions(body)]}
+
+
+@router.post("/external/import/add", status_code=201)
+async def import_add(
+    body: ImportAdd, request: Request, me: Identity = Depends(require_person)
+) -> dict[str, Any]:
+    """Add one definition as the file has it; its variables and token go to the secret store."""
+    client = _client(request)
+    d = next((x for x in _definitions(body) if x.name == body.name), None)
+    if d is None:
+        raise HTTPException(404, "no such definition in that file")
+    if d.note:
+        raise HTTPException(422, d.note)
+    try:
+        s = await client.servers.create(
+            me.tenant_id, me.user_id, d.name, d.transport, url=d.url, command=d.command,
+            args=list(d.args), env=d.env, token=d.token or None,
+        )  # fmt: skip
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    return {"server": _row(client, s)}
 
 
 @router.get("/external/{server_id}/activity")

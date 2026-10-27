@@ -17,9 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk.sqlite.engine import ensure_tables, from_iso, is_sqlite, to_iso
 
 Transport = Literal["http", "stdio"]
-Trust = Literal["ask", "blocked"]  # `trusted_read_only` arrives with stage C2
+Trust = Literal["ask", "trusted_read_only", "blocked"]
 TRANSPORTS: tuple[Transport, ...] = ("http", "stdio")
-TRUSTS: tuple[Trust, ...] = ("ask", "blocked")
+TRUSTS: tuple[Trust, ...] = ("ask", "trusted_read_only", "blocked")
 NAME_MAX = 40
 ENV_NAME = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 DEFAULT_TIMEOUT_S = 60
@@ -505,7 +505,7 @@ class ServersService:
         if transport not in TRANSPORTS:
             raise ValueError("the transport is http or stdio")
         if trust not in TRUSTS:
-            raise ValueError("trust is ask or blocked")
+            raise ValueError("trust is ask, trusted_read_only or blocked")
         env = dict(env or {})
         env_names = check_env_names(list(env))
         sid = new_id()
@@ -548,7 +548,7 @@ class ServersService:
             fields["name"] = check_name(changes["name"])
         if "trust" in changes:
             if changes["trust"] not in TRUSTS:
-                raise ValueError("trust is ask or blocked")
+                raise ValueError("trust is ask, trusted_read_only or blocked")
             fields["trust"] = changes["trust"]
         if "allowed_tools" in changes:
             fields["allowed_tools"] = check_tools(changes["allowed_tools"])

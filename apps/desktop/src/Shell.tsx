@@ -4,6 +4,7 @@ import {
   ApprovalCards,
   AudiobookPage,
   DubPage,
+  ElicitationCards,
   LipSyncPage,
   LyricsPage,
   MusicPage,
@@ -18,7 +19,7 @@ import {
 } from "@wasifyai/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
-import { client, connectionsApi, voiceApi } from "./api";
+import { client, connectionsApi, externalApi, voiceApi } from "./api";
 import { routeTitle } from "./menu";
 import { CreatePage } from "./pages/Create";
 import { CreationsPage } from "./pages/Creations";
@@ -115,6 +116,7 @@ export function Shell() {
         className="flex h-dvh flex-col overflow-hidden bg-background text-foreground"
       >
         <ApprovalCards api={connectionsApi} />
+        <ElicitationCards external={externalApi} connections={connectionsApi} />
         <TitleBar
           menuOpen={!collapsed}
           onToggleMenu={() => set(!collapsed)}

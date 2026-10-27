@@ -73,6 +73,16 @@ export type ApprovalEvent = {
   summary: string;
 };
 
+/** An outside server asks the person something mid-call (ADR-0070 decision 10): a form card. */
+export type ElicitationEvent = {
+  kind: "elicitation";
+  form_id: string;
+  server: string;
+  message: string;
+};
+
+export type WindowEvent = ApprovalEvent | ElicitationEvent;
+
 async function json<T>(transport: Transport, path: string, init?: RequestInit): Promise<T> {
   const res = await transport.fetch(path, init);
   if (!res.ok) {
@@ -163,8 +173,9 @@ export function createConnectionsApi(transport: Transport) {
         headers,
         body: JSON.stringify({ approved }),
       }),
-    /** The window's event stream: `approval` events while an agent waits. Ends when `signal` aborts. */
-    async events(onEvent: (event: ApprovalEvent) => void, signal: AbortSignal): Promise<void> {
+    /** The window's event stream: `approval` events while an agent waits, `elicitation` events while an outside
+     * server waits for an answer. Ends when `signal` aborts. */
+    async events(onEvent: (event: WindowEvent) => void, signal: AbortSignal): Promise<void> {
       const res = await transport.fetch("/desktop/events", { signal });
       if (!res.ok || !res.body) throw new HttpError(res.status, "no event stream");
       const reader = res.body.getReader();
@@ -186,8 +197,9 @@ export function createConnectionsApi(transport: Transport) {
             .join("\n");
           if (!data) continue;
           try {
-            const parsed = JSON.parse(data) as ApprovalEvent;
-            if (parsed && parsed.kind === "approval") onEvent(parsed);
+            const parsed = JSON.parse(data) as WindowEvent;
+            if (parsed && (parsed.kind === "approval" || parsed.kind === "elicitation"))
+              onEvent(parsed);
           } catch {
             // not ours
           }

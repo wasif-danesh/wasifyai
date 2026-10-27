@@ -4,6 +4,7 @@ import {
   type AssistantApi,
   type ChatOptions,
   type DictationReadiness,
+  type ExternalApi,
   type ImagesApi,
   type ReadAloudReadiness,
   type SpeechModelOffer,
@@ -21,6 +22,7 @@ import type { ComposerOptionsAvailable } from "./composer-options";
 import { startRecording } from "./dictation/recorder";
 import type { MicControl, MicSetup } from "./dictation/use-dictation";
 import type { ReadAloudControl } from "./read-aloud/use-read-aloud";
+import type { ExternalControl } from "./servers-panel";
 import { conversationsChanged } from "./use-conversations";
 
 export function greeting(hour: number): string {
@@ -72,6 +74,8 @@ export type AssistantHomeProps = {
   voice?: VoiceApi;
   /** Fetch the speech model (desktop only: the web has no models to fetch). Reports how far it is, 0 to 1. */
   getSpeechModel?: (modelId: string, onProgress: (fraction: number) => void) => Promise<void>;
+  /** the outside servers the person connected (ADR-0070): the box offers their resources and prompts */
+  external?: ExternalApi;
 };
 
 /** The assistant is the home screen (ADR-0057): a greeting and "Ask anything", then the conversation, with
@@ -95,6 +99,7 @@ export function AssistantHome({
   composerOptions,
   voice,
   getSpeechModel,
+  external,
 }: AssistantHomeProps) {
   const [title, setTitle] = useState("");
   // what the box can offer with the model in use (a Thinking switch only for a model that can think, a Search switch
@@ -226,12 +231,38 @@ export function AssistantHome({
       },
     };
   }, [offered, assistant]);
+  const externalControl = useMemo<ExternalControl | undefined>(
+    () =>
+      external
+        ? {
+            servers: async () =>
+              (await external.list()).servers
+                .filter((s) => s.trust !== "blocked" && !s.unhealthy)
+                .map((s) => ({ id: s.id, name: s.name })),
+            resources: async (id) => (await external.resources(id)).resources,
+            attachResource: async (id, uri) => {
+              const r = await external.attachResource(id, uri);
+              return {
+                id: r.id,
+                kind: "document",
+                name: r.name,
+                chars: r.chars,
+                truncated: r.truncated,
+              };
+            },
+            prompts: async (id) => (await external.prompts(id)).prompts,
+            promptText: async (id, name, args) => (await external.promptText(id, name, args)).text,
+          }
+        : undefined,
+    [external],
+  );
   const engineOptions = useMemo<ComposerOptionsAvailable>(() => {
     const s = offered?.search;
     const a = offered?.attach;
     return {
       mic,
       readAloud,
+      external: externalControl,
       // files: only where the engine can keep them (a model that cannot read pictures still takes documents)
       attach: a?.available
         ? {
@@ -258,7 +289,17 @@ export function AssistantHome({
           }
         : undefined,
     };
-  }, [offered, allowSearch, onOpenSettings, onOpenNotebooks, mic, readAloud, assistant, reader]);
+  }, [
+    offered,
+    allowSearch,
+    onOpenSettings,
+    onOpenNotebooks,
+    mic,
+    readAloud,
+    assistant,
+    reader,
+    externalControl,
+  ]);
   // the hour is read in the browser, so a page rendered on a server says the same as the person's clock
   const [hour, setHour] = useState<number | null>(null);
   useEffect(() => setHour(new Date().getHours()), []);

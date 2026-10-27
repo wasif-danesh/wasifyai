@@ -8,11 +8,14 @@ import type {
   ConnectionsApi,
   ExternalApi,
   ExternalServer,
+  ImportDefinition,
   PendingApproval,
+  PendingForm,
 } from "@wasifyai/client";
 import { describe, expect, it, vi } from "vitest";
 import { ApprovalCards } from "./ApprovalCards";
 import { ConnectionsSettings } from "./ConnectionsSettings";
+import { ElicitationCards, FormCard, fieldsOf } from "./ElicitationCards";
 import { ExternalServers } from "./ExternalServers";
 
 const codex: Connection = {
@@ -230,64 +233,79 @@ describe("the approval cards", () => {
   });
 });
 
-describe("Tools from other apps (ADR-0070)", () => {
-  const github: ExternalServer = {
-    id: "s1",
-    name: "github",
-    transport: "http",
-    url: "https://mcp.github.example/mcp",
-    command: "",
-    args: [],
-    host: "mcp.github.example",
-    env_names: [],
-    has_token: true,
-    trust: "ask",
-    allowed_tools: [],
-    timeout_s: 60,
-    keep_content: false,
-    created_at: "2026-10-27T00:00:00Z",
-    last_used_at: null,
-    calls: 3,
-    bytes_sent: 2048,
-    bytes_received: 40960,
-    failures: 0,
-    unhealthy: false,
-    last_error: "",
-    tools: null,
-  };
-  function externalApi(over: Partial<ExternalApi> = {}): ExternalApi {
-    return {
-      list: vi.fn(async () => ({ servers: [github] })),
-      add: vi.fn(async (body) => ({
-        server: { ...github, id: "s2", name: body.name, transport: body.transport },
-      })),
-      update: vi.fn(async (id, body) => ({ server: { ...github, id, ...body } as ExternalServer })),
-      remove: vi.fn(async (id) => ({ removed: id })),
-      test: vi.fn(async () => ({
-        ok: true,
-        error: "",
-        ms: 12,
-        tools: [],
-        server: {
-          ...github,
-          tools: [
-            {
-              server: "github",
-              name: "search_issues",
-              description: "Search issues",
-              annotations: { readOnlyHint: true },
-              input_schema: {},
-            },
-          ],
-        },
-      })),
-      activity: vi.fn(async () => ({ activity: [] })),
-      ...over,
-    };
-  }
+const github: ExternalServer = {
+  id: "s1",
+  name: "github",
+  transport: "http",
+  url: "https://mcp.github.example/mcp",
+  command: "",
+  args: [],
+  host: "mcp.github.example",
+  env_names: [],
+  has_token: true,
+  trust: "ask",
+  allowed_tools: [],
+  timeout_s: 60,
+  keep_content: false,
+  created_at: "2026-10-27T00:00:00Z",
+  last_used_at: null,
+  calls: 3,
+  bytes_sent: 2048,
+  bytes_received: 40960,
+  failures: 0,
+  unhealthy: false,
+  last_error: "",
+  tools: null,
+};
 
+function externalApiWith(over: Partial<ExternalApi> = {}): ExternalApi {
+  return {
+    list: vi.fn(async () => ({ servers: [github] })),
+    add: vi.fn(async (body) => ({
+      server: { ...github, id: "s2", name: body.name, transport: body.transport },
+    })),
+    update: vi.fn(async (id, body) => ({ server: { ...github, id, ...body } as ExternalServer })),
+    remove: vi.fn(async (id) => ({ removed: id })),
+    test: vi.fn(async () => ({
+      ok: true,
+      error: "",
+      ms: 12,
+      tools: [],
+      server: {
+        ...github,
+        tools: [
+          {
+            server: "github",
+            name: "search_issues",
+            description: "Search issues",
+            annotations: { readOnlyHint: true },
+            input_schema: {},
+          },
+        ],
+      },
+    })),
+    activity: vi.fn(async () => ({ activity: [] })),
+    log: vi.fn(async () => ({ log: "server started" })),
+    resources: vi.fn(async () => ({ resources: [] })),
+    attachResource: vi.fn(async () => ({
+      id: "u1",
+      kind: "document" as const,
+      name: "github: plan",
+      chars: 20,
+      truncated: false,
+    })),
+    prompts: vi.fn(async () => ({ prompts: [] })),
+    promptText: vi.fn(async () => ({ text: "" })),
+    forms: vi.fn(async () => ({ forms: [] })),
+    answerForm: vi.fn(async (form_id, action) => ({ form_id, action })),
+    importFind: vi.fn(async () => ({ found: [] })),
+    importAdd: vi.fn(async (_where, name) => ({ server: { ...github, id: "s9", name } })),
+    ...over,
+  };
+}
+describe("Tools from other apps (ADR-0070)", () => {
   it("shows a server with what it talks to and what it sent, and Test lists its tools", async () => {
-    const a = externalApi();
+    const a = externalApiWith();
     const user = userEvent.setup();
     render(<ExternalServers api={a} />);
     expect(await screen.findByText("github")).toBeInTheDocument();
@@ -296,12 +314,16 @@ describe("Tools from other apps (ADR-0070)", () => {
     await user.click(screen.getByRole("button", { name: "Test" }));
     expect(await screen.findByText("search_issues")).toBeInTheDocument();
     expect(screen.getByText(/says it only reads/)).toBeInTheDocument();
-    await user.selectOptions(screen.getByRole("combobox", { name: /this server/i }), "blocked");
-    await waitFor(() => expect(a.update).toHaveBeenCalledWith("s1", { trust: "blocked" }));
+    const trust = screen.getByRole("combobox", { name: /this server/i });
+    expect(screen.getByText(/runs the tools it says only read/)).toBeInTheDocument();
+    await user.selectOptions(trust, "trusted_read_only");
+    await waitFor(() =>
+      expect(a.update).toHaveBeenCalledWith("s1", { trust: "trusted_read_only" }),
+    );
   });
 
   it("adds a program only once its name is typed again, with its variables", async () => {
-    const a = externalApi();
+    const a = externalApiWith();
     const user = userEvent.setup();
     render(<ExternalServers api={a} />);
     await user.type(await screen.findByLabelText("Add a server"), "files");
@@ -327,7 +349,7 @@ describe("Tools from other apps (ADR-0070)", () => {
   });
 
   it("Remove asks first and then deletes the server", async () => {
-    const a = externalApi();
+    const a = externalApiWith();
     const user = userEvent.setup();
     render(<ExternalServers api={a} />);
     await user.click(await screen.findByRole("button", { name: "Remove" }));
@@ -336,5 +358,130 @@ describe("Tools from other apps (ADR-0070)", () => {
     await user.click(buttons[buttons.length - 1] as HTMLElement);
     await waitFor(() => expect(a.remove).toHaveBeenCalledWith("s1"));
     await waitFor(() => expect(screen.queryByText("github")).toBeNull());
+  });
+});
+
+describe("a server's question as a form (ADR-0070 decision 10)", () => {
+  const form: PendingForm = {
+    form_id: "f1",
+    server: "github",
+    message: "What is your name?",
+    schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "What to call you" },
+        age: { type: "integer" },
+        formal: { type: "boolean" },
+        tone: { type: "string", enum: ["warm", "plain"] },
+      },
+      required: ["name"],
+    },
+    created_at: "2026-10-27T00:00:00Z",
+  };
+
+  it("draws the fields from the schema", () => {
+    const fields = fieldsOf(form.schema);
+    expect(fields.map((f) => [f.name, f.kind, f.required])).toEqual([
+      ["name", "text", true],
+      ["age", "number", false],
+      ["formal", "bool", false],
+      ["tone", "choice", false],
+    ]);
+  });
+
+  it("sends the typed values, as numbers and booleans where the schema says", async () => {
+    const onAnswer = vi.fn();
+    const user = userEvent.setup();
+    render(<FormCard form={form} onAnswer={onAnswer} />);
+    expect(screen.getByText("github asks")).toBeInTheDocument();
+    const send = screen.getByRole("button", { name: "Send" });
+    expect(send).toBeDisabled();
+    await user.type(screen.getByLabelText(/^name/), "Ada");
+    await user.type(screen.getByLabelText(/^age/), "36");
+    await user.click(screen.getByLabelText(/^formal/));
+    await user.selectOptions(screen.getByLabelText(/^tone/), "warm");
+    await user.click(send);
+    expect(onAnswer).toHaveBeenCalledWith("accept", {
+      name: "Ada",
+      age: 36,
+      formal: true,
+      tone: "warm",
+    });
+    await user.click(screen.getByRole("button", { name: "Decline" }));
+    expect(onAnswer).toHaveBeenLastCalledWith("decline");
+  });
+
+  it("shows a form from the pending list after an event, and the answer goes to the engine", async () => {
+    const got: { on?: (e: ApprovalEvent | { kind: "elicitation" }) => void } = {};
+    const pending = vi
+      .fn()
+      .mockResolvedValueOnce({ forms: [] })
+      .mockResolvedValue({ forms: [form] });
+    const connections = api({
+      events: vi.fn(async (on, signal) => {
+        got.on = on;
+        await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve()));
+      }),
+    });
+    const external = externalApiWith({ forms: pending });
+    const user = userEvent.setup();
+    render(<ElicitationCards external={external} connections={connections} />);
+    await waitFor(() => expect(got.on).toBeDefined());
+    expect(screen.queryByText("github asks")).toBeNull();
+    got.on?.({ kind: "elicitation", form_id: "f1", server: "github", message: "x" } as never);
+    expect(await screen.findByText("github asks")).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/^name/), "Ada");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() =>
+      expect(external.answerForm).toHaveBeenCalledWith("f1", "accept", {
+        name: "Ada",
+        formal: false,
+      }),
+    );
+  });
+
+  it("imports a definition from another client's config on a click", async () => {
+    const found: ImportDefinition[] = [
+      {
+        source: "codex",
+        name: "jira",
+        transport: "stdio",
+        command: "jira-mcp",
+        args: [],
+        url: "",
+        env_names: ["JIRA_TOKEN"],
+        has_token: false,
+        note: "",
+      },
+      {
+        source: "codex",
+        name: "old",
+        transport: "http",
+        command: "",
+        args: [],
+        url: "https://old.example/sse",
+        env_names: [],
+        has_token: false,
+        note: "sse is not supported",
+      },
+    ];
+    const external = externalApiWith({
+      importFind: vi.fn(async () => ({
+        found,
+      })),
+    });
+    const user = userEvent.setup();
+    render(<ExternalServers api={external} />);
+    await user.selectOptions(await screen.findByLabelText("From"), "codex");
+    await user.click(screen.getByRole("button", { name: "Find servers" }));
+    expect(await screen.findByText("jira")).toBeInTheDocument();
+    expect(screen.getByText(/with JIRA_TOKEN/)).toBeInTheDocument();
+    expect(screen.getByText(/sse is not supported/)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Add" })).toHaveLength(2); // the form's Add and jira's
+    await user.click(screen.getAllByRole("button", { name: "Add" })[1] as HTMLElement);
+    await waitFor(() =>
+      expect(external.importAdd).toHaveBeenCalledWith({ source: "codex" }, "jira"),
+    );
+    expect(await screen.findByText("added")).toBeInTheDocument();
   });
 });

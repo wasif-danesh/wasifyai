@@ -8,7 +8,7 @@ port; the stdio launcher `wasify-mcp` (built beside the shell) is what the agent
 | Piece | Where |
 |---|---|
 | Engine | `services/api/src/wasifyai_api/mcp_server/`: `connections.py` (store, service, principals), `tools.py` (one tool per catalogue action offered to `mcp`), `calls.py` (the executor runs it; jobs, progress, approvals), `approvals.py` (the desk), `endpoint.py` (the SDK's server and the gate), `routes.py` (Settings and the window's answer), `runtime_file.py` (`engine.json`, the switch), `fixed_port.py` (the opt-in HTTP port), `skill.py` (the skill file for Claude Code) |
-| Window events | `GET /desktop/events` (server-sent; `approval` when an agent waits), `wasifyai_api/desktop_events.py` |
+| Window events | `GET /desktop/events` (server-sent; `approval` when an agent waits, `elicitation` when an outside server asks the person something), `wasifyai_api/desktop_events.py` |
 | Launcher | `apps/desktop/src-tauri/src/bin/wasify_mcp.rs`; `cargo build --bin wasify-mcp`; the shell passes its path as `WASIFYAI_MCP_LAUNCHER` |
 | Settings | `packages/ui/src/connections/ConnectionsSettings.tsx` in Settings > Other apps; the cards `ApprovalCards.tsx` in the window |
 | Tables | `mcp_connections`, `mcp_activity` (SQLite on first use; Alembic 0023, 0024 adds the daily quota) |
@@ -46,7 +46,17 @@ address (https, or loopback) or a program (the name typed again: it is installin
 in the keychain; trust "asks you before every call" or "is never called"; Test lists the tools with their
 annotations; the row shows the host and the bytes sent and received. In the chat, `external_tools` finds a tool and
 `call_external` proposes it on a card; the result reaches the model as labelled, cut, untrusted text, and after one
-everything that is not a read asks. OAuth is not built (a pasted token works).
+everything that is not a read asks, and the card says why ("Asking because this came after reading a result from
+github"; C2). A server marked "runs the tools it says only read, without asking" (`trusted_read_only`, C2) runs those
+tools without a card, taint or not; "Its output" shows a program's last output (`stderr.log` under its folder). OAuth
+is not built (a pasted token works). The evaluation with 5 and 40 outside tools on Qwen3 8B is
+`docs/spikes/assistant-c2.md`.
+
+**Reach (C3).** The box's "Servers" button lists what each server offers: a resource is attached to the next message
+as a document (read on the engine, cut like a file), a prompt is filled in and put in the box. A server's question
+mid-call is a card in the window ("github asks: What is your name?", a form from its schema, Send or Decline; five
+minutes, then it is a cancel). "Already set up elsewhere?" reads Claude Code's, Claude Desktop's or Codex's config
+and adds a definition on a click, values to the keychain.
 
 **What is not done.** Image previews and `resource_link` results; placing `wasify-mcp` in the app bundle; Windows
 and Linux (not compiled); notifications for background approvals (needs a dependency); the "from Codex" label on

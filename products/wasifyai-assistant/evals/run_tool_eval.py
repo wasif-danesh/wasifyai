@@ -11,7 +11,10 @@ A `guide`, `status` or `safety` case goes on: the tools the model called are ans
 app answers them (`how_to` and `app_status` for real, from the shipped help corpus; searches and
 the web from the case's script; a proposal stops at the card), and the final answer is judged.
 A case with `extra_tools` is sent that many extra, unrelated tools (the remote tools of ADR-0070)
-to see whether the choice still holds. One JSON line per case, then a summary per kind.
+to see whether the choice still holds. A `remote` case (stage C2) connects a catalogue of
+`remote_tools` outside tools (5 or 40) behind `external_tools`, as decision 8 of ADR-0070 has it,
+and is judged on the `call_external` the model reaches: the right server and tool, arguments that
+fit the tool's schema. One JSON line per case, then a summary per kind and per catalogue size.
 """
 
 import argparse
@@ -23,25 +26,336 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import jsonschema
 import yaml
+from wasifyai_api.mcp_client.client import ToolInfo, rank_tools
 from wasifyai_assistant import help as guides
 from wasifyai_assistant.features import actions_prompt, where_of
-from wasifyai_assistant.graph import SYSTEM_PROMPT
-from wasifyai_assistant.tools import TOOL_DEFINITIONS, how_to
+from wasifyai_assistant.graph import SYSTEM_PROMPT, external_prompt
+from wasifyai_assistant.tools import TOOL_DEFINITIONS, how_to, signature_of
 from wasifyai_platform_sdk.actions import Readiness
 
 CASES = Path(__file__).with_name("cases.yaml")
 SIZES = ("square", "landscape", "portrait", "wide", "tall")
 SERVED = {g.action for g in guides.guides()}
-# what the assistant is really sent: its prompt and the list of actions it may propose
+# what the assistant is really sent on the desktop: its prompt and the list of actions it may
+# propose; since stage C1 the outside-tools pair is always offered there, so the prompt also names
+# the connected servers (`prompt_for`)
 PROMPT = SYSTEM_PROMPT + actions_prompt(SERVED)
+DEFAULT_REMOTE = 5  # the catalogue behind external_tools when a case does not say
 MAX_ROUNDS = 4
 LOOKUPS = (
     "how_to",
     "app_status",
 )  # reads of the app's own files and state: never wrong, only slower
 # the kinds, and whether the case goes on after the first answer
-KINDS = ("tool", "guide", "status", "safety")
+KINDS = ("tool", "guide", "status", "safety", "remote")
+
+# the outside servers' tools (ADR-0070): server, name, arguments (name: type), required,
+# what it does
+# The first five are the ones the remote cases want (so a catalogue of 5 holds them); the rest are
+# what a real set of servers brings.
+REMOTE_TOOLS: list[tuple[str, str, dict[str, str], list[str], str]] = [
+    (
+        "github",
+        "search_issues",
+        {"query": "string", "repo": "string"},
+        ["query"],
+        "Search issues and pull requests in the person's GitHub repositories by words.",
+    ),
+    (
+        "files",
+        "read_file",
+        {"path": "string"},
+        ["path"],
+        "Read a text file under the shared folder, by its path.",
+    ),
+    (
+        "slack",
+        "send_message",
+        {"channel": "string", "text": "string"},
+        ["channel", "text"],
+        "Post a message to a Slack channel.",
+    ),
+    ("weather", "current", {"city": "string"}, ["city"], "The weather right now in a city."),
+    (
+        "jira",
+        "search_tickets",
+        {"query": "string", "project": "string"},
+        ["query"],
+        "Find Jira tickets by words in their title or description.",
+    ),
+    (
+        "github",
+        "create_issue",
+        {"repo": "string", "title": "string", "body": "string"},
+        ["repo", "title"],
+        "Open a new issue in a GitHub repository.",
+    ),
+    (
+        "github",
+        "list_pull_requests",
+        {"repo": "string"},
+        ["repo"],
+        "List the open pull requests of a repository.",
+    ),
+    (
+        "calendar",
+        "add_event",
+        {"title": "string", "when": "string"},
+        ["title", "when"],
+        "Add an event to the person's calendar.",
+    ),
+    (
+        "db",
+        "run_query",
+        {"sql": "string"},
+        ["sql"],
+        "Run a read-only SQL query on the orders database.",
+    ),
+    (
+        "notion",
+        "search_pages",
+        {"query": "string"},
+        ["query"],
+        "Search the person's Notion pages by words.",
+    ),
+    (
+        "github",
+        "get_issue",
+        {"repo": "string", "number": "integer"},
+        ["repo", "number"],
+        "One issue by number, with its comments.",
+    ),
+    (
+        "github",
+        "add_comment",
+        {"repo": "string", "number": "integer", "body": "string"},
+        ["repo", "number", "body"],
+        "Comment on an issue or pull request.",
+    ),
+    ("github", "list_repositories", {}, [], "The repositories the person can see."),
+    (
+        "github",
+        "get_file",
+        {"repo": "string", "path": "string", "ref": "string"},
+        ["repo", "path"],
+        "A file from a repository at a branch.",
+    ),
+    (
+        "github",
+        "list_commits",
+        {"repo": "string", "since": "string"},
+        ["repo"],
+        "Recent commits of a repository.",
+    ),
+    (
+        "files",
+        "list_directory",
+        {"path": "string"},
+        ["path"],
+        "The files in a folder under the shared folder.",
+    ),
+    (
+        "files",
+        "write_file",
+        {"path": "string", "content": "string"},
+        ["path", "content"],
+        "Write a text file under the shared folder.",
+    ),
+    (
+        "files",
+        "search_files",
+        {"pattern": "string"},
+        ["pattern"],
+        "Find files under the shared folder by name.",
+    ),
+    (
+        "files",
+        "move_file",
+        {"source": "string", "destination": "string"},
+        ["source", "destination"],
+        "Move or rename a file under the shared folder.",
+    ),
+    ("slack", "list_channels", {}, [], "The channels of the workspace."),
+    (
+        "slack",
+        "read_channel",
+        {"channel": "string", "limit": "integer"},
+        ["channel"],
+        "The last messages of a channel.",
+    ),
+    (
+        "slack",
+        "add_reaction",
+        {"channel": "string", "timestamp": "string", "emoji": "string"},
+        ["channel", "timestamp", "emoji"],
+        "React to a message with an emoji.",
+    ),
+    (
+        "jira",
+        "create_ticket",
+        {"project": "string", "summary": "string", "description": "string"},
+        ["project", "summary"],
+        "Create a Jira ticket.",
+    ),
+    (
+        "jira",
+        "transition_ticket",
+        {"key": "string", "status": "string"},
+        ["key", "status"],
+        "Move a ticket to another status.",
+    ),
+    ("jira", "get_ticket", {"key": "string"}, ["key"], "One ticket by key."),
+    (
+        "weather",
+        "forecast",
+        {"city": "string", "days": "integer"},
+        ["city"],
+        "The forecast for the next days in a city.",
+    ),
+    (
+        "weather",
+        "alerts",
+        {"region": "string"},
+        ["region"],
+        "Weather warnings in force for a region.",
+    ),
+    (
+        "calendar",
+        "list_events",
+        {"from": "string", "to": "string"},
+        ["from", "to"],
+        "The events between two dates.",
+    ),
+    (
+        "calendar",
+        "find_free_time",
+        {"minutes": "integer", "day": "string"},
+        ["minutes"],
+        "Free slots for a meeting of a length.",
+    ),
+    ("db", "list_tables", {}, [], "The tables of the orders database."),
+    ("db", "describe_table", {"table": "string"}, ["table"], "The columns of a table."),
+    ("notion", "get_page", {"page_id": "string"}, ["page_id"], "One Notion page by id, as text."),
+    (
+        "notion",
+        "create_page",
+        {"parent_id": "string", "title": "string", "content": "string"},
+        ["parent_id", "title"],
+        "A new Notion page under a parent.",
+    ),
+    ("stocks", "quote", {"ticker": "string"}, ["ticker"], "The latest price of a ticker."),
+    (
+        "stocks",
+        "history",
+        {"ticker": "string", "days": "integer"},
+        ["ticker"],
+        "Daily prices of a ticker over a period.",
+    ),
+    (
+        "mail",
+        "search_mail",
+        {"query": "string"},
+        ["query"],
+        "Search the person's mailbox by words.",
+    ),
+    (
+        "mail",
+        "send_mail",
+        {"to": "string", "subject": "string", "body": "string"},
+        ["to", "subject", "body"],
+        "Send an email.",
+    ),
+    (
+        "maps",
+        "directions",
+        {"origin": "string", "destination": "string"},
+        ["origin", "destination"],
+        "Directions between two places.",
+    ),
+    (
+        "maps",
+        "places_nearby",
+        {"kind": "string", "near": "string"},
+        ["kind", "near"],
+        "Places of a kind near an address.",
+    ),
+    (
+        "translate",
+        "translate_text",
+        {"text": "string", "to": "string"},
+        ["text", "to"],
+        "Translate text into a language.",
+    ),
+]
+
+
+def remote_catalogue(n: int) -> list[ToolInfo]:
+    """The first `n` outside tools, as the client would list them (the reads say so in their
+    annotations)."""
+    out = []
+    for server, name, props, required, description in REMOTE_TOOLS[:n]:
+        reads = name.split("_")[0] in ("search", "list", "read", "get", "current", "forecast",
+                                       "quote", "history", "describe", "find", "directions",
+                                       "places", "alerts")  # fmt: skip
+        out.append(
+            ToolInfo(
+                server=server,
+                name=name,
+                description=description,
+                input_schema={
+                    "type": "object",
+                    "properties": {k: {"type": v} for k, v in props.items()},
+                    "required": required,
+                },
+                annotations={"readOnlyHint": True} if reads else {},
+            )  # fmt: skip
+        )
+    return out
+
+
+def remote_size(case: dict) -> int:
+    return int(case.get("remote_tools") or DEFAULT_REMOTE)
+
+
+def prompt_for(case: dict) -> str:
+    """The system prompt of a case: the assistant's own, with the outside servers of its
+    catalogue named, as the desktop names the ones the person connected."""
+    names = sorted({t.server for t in remote_catalogue(remote_size(case))})
+    return PROMPT + external_prompt(names)
+
+
+def judge_remote(case: dict, call: dict) -> tuple[bool, str]:
+    """(passed, why) for the `call_external` a remote case reaches: the server and tool the case
+    names, arguments that fit the tool's schema, and the words that should be in them."""
+    fn = call["function"]
+    if fn["name"] != "call_external":
+        return False, f"called {fn['name']}, wanted call_external"
+    try:
+        args = json.loads(fn.get("arguments") or "{}")
+    except ValueError:
+        return False, "arguments are not JSON"
+    server, tool = str(args.get("connection", "")), str(args.get("tool", ""))
+    if (server, tool) != (case["server"], case["tool"]):
+        return False, f"called {server}/{tool}, wanted {case['server']}/{case['tool']}"
+    info = next(
+        (t for t in remote_catalogue(remote_size(case)) if (t.server, t.name) == (server, tool)),
+        None,
+    )
+    assert info is not None, case["id"]
+    inner = args.get("arguments")
+    if not isinstance(inner, dict):
+        return False, "the arguments are not an object"
+    try:
+        jsonschema.validate(inner, info.input_schema)
+    except jsonschema.ValidationError as e:
+        return False, f"the arguments do not fit the tool: {e.message}"
+    mentions = [str(m).lower() for m in case.get("mentions") or []]
+    text = json.dumps(inner, ensure_ascii=False).lower()
+    if mentions and not any(m in text for m in mentions):
+        return False, f"{text!r} lacks any of {mentions}"
+    return True, f"called {server}/{tool} with fitting arguments"
 
 
 def extra_tools(n: int) -> list[dict[str, Any]]:
@@ -103,6 +417,17 @@ async def answer_tool(case: dict, call: dict) -> str:
         return status_text(case.get("status") or {})
     if name == "propose_action":
         return "Proposed. The person sees a card with the details and decides."
+    if name == "external_tools":
+        found = rank_tools(remote_catalogue(remote_size(case)), str(args.get("query") or ""))
+        if not found:
+            return "No outside tool matches. Try other words, or answer without one."
+        lines = [f"{t.server} / {signature_of(t.public())}: {t.description}" for t in found]
+        return (
+            "Tools found (server / tool(arguments): what it does); call_external takes the "
+            "server, the tool and an arguments object:\n" + "\n".join(lines)
+        )
+    if name == "call_external":
+        return "Proposed. The person sees a card with the server, the tool and the arguments."
     if name == "open_screen":
         return f"A button that opens {where_of(str(args.get('screen_id', '')))} is shown."
     if name in ("search_creations", "search_notebooks"):
@@ -219,13 +544,64 @@ async def ask(
     )
 
 
+async def run_remote(
+    client: httpx.AsyncClient, base: str, model: str, case: dict, tools: list[dict]
+) -> dict:
+    """A remote case: `external_tools` (and the lookups) are answered until the model calls
+    `call_external`, which is judged; words instead are a miss."""
+    messages: list[dict] = [
+        {"role": "system", "content": prompt_for(case)},
+        {"role": "user", "content": case["say"]},
+    ]
+    seconds, tokens, rounds, searched = 0.0, 0, 0, 0
+    while rounds < MAX_ROUNDS:
+        message, s, t = await ask(client, base, model, messages, tools)
+        seconds, tokens, rounds = seconds + s, tokens + t, rounds + 1
+        calls = calls_of(message)
+        if not calls:
+            said = (message.get("content") or "")[:120]
+            why = f"answered in words after {searched} search: {said!r}"
+            return {"ok": False, "why": why, "seconds": seconds, "tokens": tokens, "rounds": rounds}
+        judged = next((c for c in calls if c["function"]["name"] == "call_external"), None)
+        if judged is not None:
+            ok, why = judge_remote(case, judged)
+            return {
+                "ok": ok, "why": why + (f" (after {searched} search)" if searched else ""),
+                "seconds": seconds, "tokens": tokens, "rounds": rounds, "searched": searched,
+            }  # fmt: skip
+        names = [c["function"]["name"] for c in calls]
+        if not all(n in (*LOOKUPS, "external_tools") for n in names):
+            return {
+                "ok": False, "why": f"called {names}, wanted external_tools then call_external",
+                "seconds": seconds, "tokens": tokens, "rounds": rounds,
+            }  # fmt: skip
+        searched += names.count("external_tools")
+        messages.append(
+            {"role": "assistant", "content": message.get("content") or None, "tool_calls": calls}
+        )
+        for call in calls:
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call["id"],
+                    "content": await answer_tool(case, call),
+                }
+            )
+    return {
+        "ok": False, "why": "never reached call_external", "seconds": seconds,
+        "tokens": tokens, "rounds": rounds,
+    }  # fmt: skip
+
+
 async def run_case(client: httpx.AsyncClient, base: str, model: str, case: dict) -> dict:
     kind = case.get("kind", "tool")
     tools = [*TOOL_DEFINITIONS, *extra_tools(int(case.get("extra_tools") or 0))]
     if not case.get("search"):
         tools = [t for t in tools if not t["function"]["name"].startswith("web_")]
+    if kind == "remote":
+        return await run_remote(client, base, model, case, tools)
     messages: list[dict] = [
-        {"role": "system", "content": PROMPT},
+        {"role": "system", "content": prompt_for(case)},
         {"role": "user", "content": case["say"]},
     ]
     seconds, tokens = 0.0, 0
@@ -331,6 +707,12 @@ async def run(base: str, model: str, server=None, only: str | None = None) -> di
         k = by_kind.setdefault(r["kind"], {"passed": 0, "total": 0})
         k["total"] += 1
         k["passed"] += int(r["ok"])
+    by_size: dict[str, dict[str, int]] = {}
+    for r, c in zip(results, cases, strict=True):
+        if c.get("kind") == "remote":
+            size = by_size.setdefault(str(remote_size(c)), {"passed": 0, "total": 0})
+            size["total"] += 1
+            size["passed"] += int(bool(r["ok"]))
     counted = sum(1 for r, c in zip(results, cases, strict=True) if int(c.get("extra_tools") or 0))
     counted_ok = sum(
         r["ok"] for r, c in zip(results, cases, strict=True) if int(c.get("extra_tools") or 0)
@@ -343,6 +725,7 @@ async def run(base: str, model: str, server=None, only: str | None = None) -> di
         "by_kind": by_kind,
         "tool_cases_after_a_lookup": sum(1 for r in results if r.get("looked_up")),
         "with_extra_tools": {"passed": counted_ok, "total": counted},
+        "remote_by_size": by_size,
         "median_seconds": sorted(r["seconds"] for r in results)[len(results) // 2]
         if results
         else 0,
@@ -366,7 +749,9 @@ async def main() -> int:
     ap.add_argument("--context", type=int, default=8192)
     ap.add_argument("--base-url", help="an OpenAI-compatible base URL, ending in /v1")
     ap.add_argument("--model", default="", help="the model name to send")
-    ap.add_argument("--only", help="run one kind (tool, guide, status, safety) or an id prefix")
+    ap.add_argument(
+        "--only", help="run one kind (tool, guide, status, safety, remote) or an id prefix"
+    )
     args = ap.parse_args()
     if args.gguf:
         from wasifyai_api.llama_server import LlamaServer

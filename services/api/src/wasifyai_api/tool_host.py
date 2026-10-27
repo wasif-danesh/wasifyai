@@ -103,6 +103,24 @@ class ApiToolHost:
         ctx = require_context()
         return [t.public() for t in await client.search(ctx.tenant_id, ctx.user_id, query, limit)]
 
+    async def external_servers(self) -> list[str]:
+        """The names of the outside servers the person can use now (ADR-0070 decision 8: the
+        model is told they exist); none where the client is not part of this deployment."""
+        client = getattr(self._app_state(), "mcp_client", None)
+        if client is None:
+            return []
+        ctx = require_context()
+        rows = await client.servers.store.for_person(ctx.tenant_id, ctx.user_id)
+        return [s.name for s in rows if s.trust != "blocked" and not s.unhealthy]
+
+    async def external_trusted(self, connection: str, tool: str) -> bool:
+        """Whether a tool of an outside server runs without a card (ADR-0070 decision 4)."""
+        client = getattr(self._app_state(), "mcp_client", None)
+        if client is None:
+            return False
+        ctx = require_context()
+        return await client.trusted_read_only(ctx.tenant_id, ctx.user_id, connection, tool)
+
     async def web_read(self, url: str) -> Any:
         web = getattr(self._app_state(), "web", None)
         if web is None:

@@ -152,6 +152,29 @@ export function useAttachments(control: AttachControl | undefined) {
     [patch, set],
   );
 
+  /** A document the engine already keeps (a resource of an outside server, ADR-0070): no upload. */
+  const addUploaded = useCallback(
+    (done: UploadedAttachment) => {
+      if (now.current.length >= MAX_ATTACHMENTS) return false;
+      const key = `kept-${++seq.current}`;
+      const cut = Boolean(done.truncated) || (done.chars ?? 0) > DOC_CHARS;
+      set([
+        ...now.current,
+        {
+          key,
+          kind: done.kind,
+          id: done.id,
+          name: done.name,
+          state: "ready",
+          detail: detailOf({ ...done, truncated: cut }),
+          cut,
+        },
+      ]);
+      return true;
+    },
+    [set],
+  );
+
   const remove = useCallback(
     (key: string) => {
       const gone = now.current.find((i) => i.key === key);
@@ -305,6 +328,8 @@ export function useAttachments(control: AttachControl | undefined) {
 
   return {
     option,
+    /** attach a document the engine already keeps (no upload) */
+    addUploaded,
     picker,
     chips,
     /** the card that offers the picture reader */

@@ -2,7 +2,7 @@
 // The home screen is the assistant (ADR-0057): the shared home (packages/ui) with this window's setup notice.
 import { AssistantHome, ModelSelect, type ModelSelectHandle, useChoicesFor } from "@wasifyai/ui";
 import { useRef } from "react";
-import { assistantApi, client, modelsApi, voiceApi } from "../api";
+import { assistantApi, client, externalApi, modelsApi, voiceApi } from "../api";
 import { ChatStart } from "../choices/ChatStart";
 import { images } from "../images";
 import { ROUTES } from "../menu";
@@ -25,6 +25,7 @@ export function HomePage({
     <AssistantHome
       runs={client}
       assistant={assistantApi}
+      external={externalApi}
       images={images}
       tracks={(id) => voiceApi.track(id)}
       voice={voiceApi}

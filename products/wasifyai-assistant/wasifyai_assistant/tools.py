@@ -234,11 +234,11 @@ TOOL_DEFINITIONS += [
         "function": {
             "name": EXTERNAL_TOOLS,
             "description": (
-                "Find a tool on the outside servers the person connected (Settings > Other apps > "
-                "Tools from other apps): a code host, a database, a chat, anything the app itself "
-                "cannot do. Returns up to five tools with their server, name, description and "
-                "input schema. Call it before call_external, and only when the person asks for "
-                "something such a server could do."
+                "Find a tool on the outside servers the person connected, named in your "
+                "instructions (a code host, a ticket tracker, a chat, files on a server, weather, "
+                "a database). Call it first whenever the person names one of those servers or "
+                "asks for something one of them would do; it returns up to five tools with their "
+                "server, name, signature and description, for call_external."
             ),
             "parameters": {
                 "type": "object",
@@ -420,8 +420,28 @@ async def external_tools(query: str, executor: ActionExecutor) -> ToolOutcome:
     found = await fn(query)
     if not found:
         return ToolOutcome("ok", {"tools": []}, NO_SERVERS)
-    lines = [f"{t['server']} / {t['name']}: {t['description'][:200]}" for t in found]
-    return ToolOutcome("ok", {"tools": found}, "Tools found:\n" + "\n".join(lines))
+    lines = [f"{t['server']} / {signature_of(t)}: {t['description'][:200]}" for t in found]
+    return ToolOutcome(
+        "ok",
+        {"tools": found},
+        "Tools found (server / tool(arguments): what it does); call_external takes the server, "
+        "the tool and an arguments object:\n" + "\n".join(lines),
+    )
+
+
+def signature_of(tool: dict[str, Any]) -> str:
+    """`search_issues(query: string, repo?: string)`: what the model needs to form the arguments
+    (the schema itself is in the output, which the model does not see)."""
+    raw_schema = tool.get("input_schema")
+    schema: dict[str, Any] = raw_schema if isinstance(raw_schema, dict) else {}
+    raw_props = schema.get("properties")
+    props: dict[str, Any] = raw_props if isinstance(raw_props, dict) else {}
+    required = set(schema.get("required") or ())
+    parts = []
+    for name, spec in list(props.items())[:8]:
+        kind = str(spec.get("type", "any")) if isinstance(spec, dict) else "any"
+        parts.append(f"{name}{'' if name in required else '?'}: {kind}")
+    return f"{tool['name']}({', '.join(parts)})"
 
 
 Ready = Callable[[str], Awaitable[Readiness | None]]
@@ -567,8 +587,11 @@ def card_of(
     *,
     estimate: dict[str, Any] | None = None,
     pauses_chat: bool = False,
+    provenance: str = "",
 ) -> dict[str, Any]:
-    """The card's payload: what the person sees before deciding (plain values only)."""
+    """The card's payload: what the person sees before deciding (plain values only).
+    `provenance` (ADR-0070 decision 5): why the card is asking, when outside text is in the
+    chat ("after reading a result from github")."""
     shown = {
         str(k): (v[:300] if isinstance(v, str) else v)
         for k, v in params.items()
@@ -591,6 +614,7 @@ def card_of(
         "screen": action.ui,
         "estimate": estimate,
         "pauses_chat": pauses_chat,
+        "provenance": provenance,
     }
 
 

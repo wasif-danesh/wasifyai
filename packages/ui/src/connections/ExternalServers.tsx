@@ -2,15 +2,24 @@
 // Settings > Other apps > "Tools from other apps" (ADR-0070 decisions 2, 3, 4, 6): the outside MCP
 // servers the person added, what each one talks to and did, its trust, its tools after a Test, and
 // the form that adds one (a program is "installing software": the name is typed again).
-import type { ExternalApi, ExternalServer, ExternalTool } from "@wasifyai/client";
+import type {
+  ExternalApi,
+  ExternalServer,
+  ExternalTool,
+  ImportDefinition,
+  ImportSource,
+  ImportWhere,
+} from "@wasifyai/client";
 import { useCallback, useEffect, useId, useState } from "react";
 import { Button } from "../components/button";
 import { ConfirmDialog } from "../components/dialog";
 
 const TRUSTS: [string, string][] = [
   ["ask", "asks you before every call"],
+  ["trusted_read_only", "runs the tools it says only read, without asking"],
   ["blocked", "is never called"],
 ];
+type Trust = "ask" | "trusted_read_only" | "blocked";
 
 function problem(e: unknown): string {
   return e instanceof Error && e.message ? e.message : "That did not work.";
@@ -79,6 +88,15 @@ function Row({
       setTesting(false);
     }
   }
+  const [log, setLog] = useState<string | null>(null);
+  async function showLog() {
+    setError(null);
+    try {
+      setLog((await api.log(server.id)).log || "(nothing written yet)");
+    } catch (e) {
+      setError(problem(e));
+    }
+  }
   const where =
     server.transport === "http" ? server.url : [server.command, ...server.args].join(" ");
   return (
@@ -109,9 +127,7 @@ function Row({
           value={server.trust}
           onChange={(e) =>
             void run(
-              async () =>
-                (await api.update(server.id, { trust: e.target.value as "ask" | "blocked" }))
-                  .server,
+              async () => (await api.update(server.id, { trust: e.target.value as Trust })).server,
             )
           }
         >
@@ -139,10 +155,20 @@ function Row({
         >
           {testing ? "Testing…" : "Test"}
         </Button>
+        {server.transport === "stdio" ? (
+          <Button type="button" size="sm" variant="outline" onClick={() => void showLog()}>
+            Its output
+          </Button>
+        ) : null}
         <Button type="button" size="sm" variant="outline" onClick={() => setConfirm(true)}>
           Remove
         </Button>
       </div>
+      {log !== null ? (
+        <pre className="m-0 max-h-40 overflow-auto rounded-md border bg-muted/40 p-2 text-xs">
+          {log}
+        </pre>
+      ) : null}
       {confirm ? (
         <ConfirmDialog
           title={`Remove ${server.name}?`}
@@ -160,6 +186,121 @@ function Row({
       ) : null}
       {error ? <p className="m-0 text-destructive">{error}</p> : null}
     </li>
+  );
+}
+
+const SOURCES: [ImportSource, string, string][] = [
+  ["claude_code", "Claude Code", "the .mcp.json of a project folder, or ~/.claude.json"],
+  ["claude_desktop", "Claude Desktop", "its claude_desktop_config.json"],
+  ["codex", "Codex", "its ~/.codex/config.toml"],
+];
+
+/** Definitions from another client's config (ADR-0070 decision 2): each one is shown and added only on a click. */
+function ImportSection({
+  api,
+  onAdded,
+}: { api: ExternalApi; onAdded: (s: ExternalServer) => void }) {
+  const id = useId();
+  const [source, setSource] = useState<ImportSource>("claude_code");
+  const [folder, setFolder] = useState("");
+  const [found, setFound] = useState<ImportDefinition[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [added, setAdded] = useState<Set<string>>(new Set());
+  const where = (): ImportWhere =>
+    source === "claude_code" && folder.trim() ? { source, folder: folder.trim() } : { source };
+  async function find() {
+    setError(null);
+    setFound(null);
+    try {
+      setFound((await api.importFind(where())).found);
+    } catch (e) {
+      setError(problem(e));
+    }
+  }
+  async function add(d: ImportDefinition) {
+    setError(null);
+    try {
+      const r = await api.importAdd(where(), d.name);
+      setAdded((s) => new Set(s).add(d.name));
+      onAdded(r.server);
+    } catch (e) {
+      setError(problem(e));
+    }
+  }
+  return (
+    <div className="grid gap-2" aria-label="Import from another app">
+      <p className="m-0 text-sm">
+        <span className="font-medium">Already set up elsewhere?</span> Read the servers another app
+        knows and add the ones you want. Their keys and variables go to the keychain; nothing is
+        added until you say so.
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <label htmlFor={`${id}-source`} className="grid gap-1 text-sm">
+          <span>From</span>
+          <select
+            id={`${id}-source`}
+            className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+            value={source}
+            onChange={(e) => setSource(e.target.value as ImportSource)}
+          >
+            {SOURCES.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {source === "claude_code" ? (
+          <label htmlFor={`${id}-folder`} className="grid gap-1 text-sm">
+            <span>Project folder (optional; else ~/.claude.json)</span>
+            <input
+              id={`${id}-folder`}
+              value={folder}
+              placeholder="/Users/me/Projects/app"
+              onChange={(e) => setFolder(e.target.value)}
+              className="h-9 min-w-64 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            />
+          </label>
+        ) : null}
+        <Button type="button" variant="outline" onClick={() => void find()}>
+          Find servers
+        </Button>
+      </div>
+      <p className="m-0 text-muted-foreground text-xs">
+        {SOURCES.find(([v]) => v === source)?.[2]}
+      </p>
+      {found?.length === 0 ? (
+        <p className="m-0 text-muted-foreground text-sm">No server definitions were found there.</p>
+      ) : null}
+      {found?.length ? (
+        <ul className="m-0 grid list-none gap-1 p-0">
+          {found.map((d) => (
+            <li key={d.name} className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-medium">{d.name}</span>
+              <code className="text-muted-foreground text-xs">
+                {d.transport === "http" ? d.url : [d.command, ...d.args].join(" ")}
+              </code>
+              {d.env_names.length ? (
+                <span className="text-muted-foreground text-xs">with {d.env_names.join(", ")}</span>
+              ) : null}
+              {d.has_token ? (
+                <span className="text-muted-foreground text-xs">with a token</span>
+              ) : null}
+              {d.note ? (
+                <span className="text-destructive text-xs">{d.note}</span>
+              ) : added.has(d.name) ? (
+                <span className="text-muted-foreground text-xs">added</span>
+              ) : (
+                <Button type="button" size="sm" variant="outline" onClick={() => void add(d)}>
+                  Add
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {error ? <p className="m-0 text-destructive text-sm">{error}</p> : null}
+    </div>
   );
 }
 
@@ -341,6 +482,7 @@ export function ExternalServers({ api }: { api: ExternalApi }) {
         </div>
       </form>
       {error ? <p className="m-0 text-destructive text-sm">{error}</p> : null}
+      <ImportSection api={api} onAdded={(s) => setServers((ss) => [...ss, s])} />
     </section>
   );
 }

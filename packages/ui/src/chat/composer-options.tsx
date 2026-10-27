@@ -2,13 +2,14 @@
 // The options of the chat box (ADR-0083): one bar, token-styled, shared by the current composer and the assistant-ui one. A button is
 // there only when it can work (a model that cannot think has no Thinking button), and every disabled button says why. Attach, Search and
 // Mic plug into the same bar in the next stages.
-import { Brain, Globe, type LucideIcon, Mic, ShieldCheck, Square } from "lucide-react";
+import { Brain, Globe, type LucideIcon, Mic, Plug, ShieldCheck, Square } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { type AttachControl, useAttachments } from "./attachments/use-attachments";
 import { type MicControl, useDictation } from "./dictation/use-dictation";
 import type { ReadAloudControl } from "./read-aloud/use-read-aloud";
+import { ComposerServersPanel, type ExternalControl } from "./servers-panel";
 
 export type ComposerOption = {
   id: string;
@@ -83,6 +84,8 @@ export type ComposerOptionsAvailable = {
   /** reading a reply aloud: absent where this engine has no voice to offer (no button under a reply). Not a button of the box, but it
    * comes from the same engine facts and reaches both chat screens the same way. */
   readAloud?: ReadAloudControl;
+  /** outside servers (ADR-0070): their resources to attach and prompts to use; absent where there is no MCP client */
+  external?: ExternalControl;
 };
 
 /** The card that asks before a search is first allowed, or says what is missing. Plain words, no jargon. */
@@ -225,6 +228,8 @@ export function useComposerOptions(
 
   const attach = useAttachments(available.attach);
   const attachOption = attach.option;
+  const external = available.external;
+  const [serversOpen, setServersOpen] = useState(false);
   const dictation = useDictation(available.mic, onDictation);
   const { phase: micPhase, toggle: toggleMic } = dictation;
   const hasMic = Boolean(available.mic);
@@ -272,6 +277,15 @@ export function useComposerOptions(
       onPress: () =>
         setApproval(APPROVALS[(APPROVALS.indexOf(approval) + 1) % APPROVALS.length] ?? "ask"),
     });
+    if (external)
+      out.push({
+        id: "servers",
+        label: "Servers",
+        Icon: Plug,
+        pressed: serversOpen,
+        hint: "What the servers you connected offer: attach something they hold, or use one of their prompts.",
+        onPress: () => setServersOpen((o) => !o),
+      });
     if (hasMic) {
       const recording = micPhase === "recording";
       out.push({
@@ -302,7 +316,17 @@ export function useComposerOptions(
     hasMic,
     micPhase,
     toggleMic,
+    external,
+    serversOpen,
   ]);
+  const serversNotice: ReactNode =
+    external && serversOpen ? (
+      <ComposerServersPanel
+        control={external}
+        onAttach={(done) => attach.addUploaded(done)}
+        onClose={() => setServersOpen(false)}
+      />
+    ) : null;
 
   const searchNotice: ReactNode =
     control && asking === "consent" ? (
@@ -342,9 +366,10 @@ export function useComposerOptions(
       />
     ) : null;
   const notice: ReactNode =
-    searchNotice || dictation.notice || attach.notice ? (
+    searchNotice || dictation.notice || attach.notice || serversNotice ? (
       <>
         {searchNotice}
+        {serversNotice}
         {dictation.notice}
         {attach.notice}
       </>

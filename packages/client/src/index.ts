@@ -101,6 +101,8 @@ export {
   type ActivityEntry,
   type ApprovalEvent,
   type Connection,
+  type ElicitationEvent,
+  type WindowEvent,
   type ConnectionsApi,
   type FixedPortState,
   type LauncherState,
@@ -110,13 +112,21 @@ export {
   createConnectionsApi,
 } from "./connections";
 export {
+  type AttachedResource,
   type ExternalActivity,
   type ExternalApi,
+  type ExternalPrompt,
+  type ExternalResource,
   type ExternalServer,
   type ExternalServerIn,
   type ExternalServerPatch,
   type ExternalTest,
   type ExternalTool,
+  type FormAction,
+  type ImportDefinition,
+  type ImportSource,
+  type ImportWhere,
+  type PendingForm,
   createExternalApi,
 } from "./external";
 export {

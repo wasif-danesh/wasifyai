@@ -539,6 +539,9 @@ async fn run_once(
         // reachable (ADR-0092)
         .env("DESKTOP_SECRET_STORE", "keychain")
         .env("PRODUCTS_DIR", &cfg.products_dir)
+        // the stdio launcher other apps run (ADR-0069), built beside this shell: Settings shows
+        // the exact command to paste
+        .env("WASIFYAI_MCP_LAUNCHER", launcher_path())
         .env("WASIFYAI_PORT", "0")
         .env("WASIFYAI_EXIT_ON_STDIN_EOF", "1")
         .env("PYTHONUNBUFFERED", "1")
@@ -803,4 +806,13 @@ mod tests {
             "stopped"
         );
     }
+}
+
+/// Where `wasify-mcp` is: beside this shell's own binary (the same bundle, the same build).
+fn launcher_path() -> String {
+    std::env::current_exe()
+        .ok()
+        .map(|p| p.with_file_name(if cfg!(windows) { "wasify-mcp.exe" } else { "wasify-mcp" }))
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }

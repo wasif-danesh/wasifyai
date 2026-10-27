@@ -3,6 +3,7 @@
 // them see stable functions.
 import {
   createAssistantApi,
+  createConnectionsApi,
   createCreationsApi,
   createNotebooksApi,
   createRunClient,
@@ -18,6 +19,7 @@ import { createEngineTransport } from "./transport";
 
 export const transport = createEngineTransport(engineSession);
 export const client = createRunClient(transport);
+export const connectionsApi = createConnectionsApi(transport);
 export const modelsApi = createModelsApi(transport);
 export const discoveryApi = createDiscoveryApi(transport);
 export const languageApi = createLanguageApi(transport);

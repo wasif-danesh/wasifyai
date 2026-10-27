@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { Button, SearchSettings } from "@wasifyai/ui";
+import { Button, ConnectionsSettings, SearchSettings } from "@wasifyai/ui";
 import { useEffect, useId, useState } from "react";
-import { assistantApi, discoveryApi, hubApi } from "../api";
+import { assistantApi, connectionsApi, discoveryApi, hubApi } from "../api";
 import { engineRepair, engineRestart } from "../engine";
 import { ImageEngineCard, LanguageEngineCard, UpdateBanner } from "../parts";
 
@@ -223,6 +223,8 @@ export function SettingsPage() {
       <HubToken />
 
       <SearchSettings assistant={assistantApi} />
+
+      <ConnectionsSettings api={connectionsApi} />
 
       <section className="grid gap-3" aria-label="Updates">
         <h2 className="font-semibold text-lg">Updates</h2>

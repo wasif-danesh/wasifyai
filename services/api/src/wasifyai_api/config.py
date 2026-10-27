@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # shell asks for it) or `file` (Fernet under `secrets.key` in the data folder; the default, so
     # an engine started by hand or by a test never touches the person's keychain)
     desktop_secret_store: str = "file"
+    # the stdio launcher other apps run to reach this engine (ADR-0069); the shell passes the
+    # path of the bundled `wasify-mcp` so Settings can show the exact command to paste
+    mcp_launcher_path: str = ""
     # extra ComfyUI arguments, space separated (for example `--gpu-only`): memory modes, for tuning
     desktop_comfyui_args: str = ""
     # comma-separated product ids; empty: all (desktop: image, video, assistant, notebooks, voice)

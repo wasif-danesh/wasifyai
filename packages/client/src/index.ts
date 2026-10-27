@@ -98,6 +98,16 @@ export {
   cardDetails,
 } from "./assistant";
 export {
+  type ActivityEntry,
+  type ApprovalEvent,
+  type Connection,
+  type ConnectionsApi,
+  type LauncherState,
+  type PendingApproval,
+  type Snippets,
+  createConnectionsApi,
+} from "./connections";
+export {
   initialTree,
   pathTo,
   treeReducer,

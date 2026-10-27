@@ -105,7 +105,7 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
   ADR.
 - Runs on demand and in the release checklist.
 
-### Stage M1. The MCP server, make-only (M)
+### Stage M1. The MCP server, make-only (M) — **built 2026-10-27** (ADR-0069, "Built 2026-10-27"; `docs/desktop/connections.md`)
 
 - The endpoint in the engine on the `mcp` SDK; the `wasify-mcp` launcher; the runtime file `engine.json`.
 - Settings > Connections: the switch, the first connection, the secret, "Copy for Claude Code / Codex /

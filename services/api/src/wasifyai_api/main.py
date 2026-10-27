@@ -9,6 +9,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -64,7 +65,7 @@ from wasifyai_api.admin_models import router as admin_models_router
 from wasifyai_api.admin_safeguards import router as admin_safeguards_router
 from wasifyai_api.admin_workers import router as admin_workers_router
 from wasifyai_api.attachments import router as attachments_router
-from wasifyai_api.auth import MIN_SECRET_BYTES
+from wasifyai_api.auth import MIN_SECRET_BYTES, Claims
 from wasifyai_api.config import get_settings
 from wasifyai_api.creation_index import (
     ContextIndexer,
@@ -80,6 +81,8 @@ from wasifyai_api.decision_setup import router as decision_setup_router
 from wasifyai_api.desktop import files_router, open_desktop
 from wasifyai_api.desktop_audio import router as desktop_audio_router
 from wasifyai_api.desktop_discovery import router as desktop_discovery_router
+from wasifyai_api.desktop_events import EventBus
+from wasifyai_api.desktop_events import router as desktop_events_router
 from wasifyai_api.desktop_hub import router as desktop_hub_router
 from wasifyai_api.desktop_language import LocalTextProvider
 from wasifyai_api.desktop_lipsync import router as desktop_lipsync_router
@@ -90,13 +93,24 @@ from wasifyai_api.desktop_save import router as desktop_save_router
 from wasifyai_api.desktop_video_builder import router as desktop_video_builder_router
 from wasifyai_api.engine_workers import WorkerDirectory
 from wasifyai_api.graphs import default_registry
-from wasifyai_api.identity import get_identity
+from wasifyai_api.identity import Identity, get_identity
 from wasifyai_api.jobs_consumer import JobCompletionConsumer
 from wasifyai_api.language_setup import router as language_setup_router
 from wasifyai_api.litellm_admin import BackendError, InMemoryModelBackend, LiteLLMBackend
 from wasifyai_api.local_embedder import MODEL as LOCAL_EMBEDDER_MODEL
 from wasifyai_api.local_embedder import hashing_embed
 from wasifyai_api.logging import configure_logging, request_id
+from wasifyai_api.mcp_server.approvals import ApprovalDesk
+from wasifyai_api.mcp_server.connections import (
+    ConnectionsService,
+    InMemoryConnectionStore,
+    SqlConnectionStore,
+)
+from wasifyai_api.mcp_server.endpoint import attach as attach_mcp
+from wasifyai_api.mcp_server.endpoint import build_server as build_mcp_server
+from wasifyai_api.mcp_server.endpoint import mount as mount_mcp
+from wasifyai_api.mcp_server.routes import router as connections_router
+from wasifyai_api.mcp_server.runtime_file import Launcher, remove_runtime_file
 from wasifyai_api.media_access import MediaAccess, media_capabilities_from
 from wasifyai_api.metrics import MetricsMiddleware
 from wasifyai_api.metrics import serve as serve_metrics
@@ -393,6 +407,22 @@ def create_app(
             usage=recorder,
         )
         app.state.actions = executor
+        # the MCP server (ADR-0069): connections, the approval desk the window answers, the
+        # events the window listens to, and the SDK's server over the same executor
+        app.state.events = EventBus()
+        connections = ConnectionsService(
+            InMemoryConnectionStore() if injected else SqlConnectionStore(db)
+        )
+        app.state.connections = connections
+        app.state.approval_desk = ApprovalDesk(executor)
+        attach_mcp(
+            app, build_mcp_server(executor, app.state.approval_desk, app.state.events), connections
+        )
+        if desktop is not None:
+            port = urlparse(settings.desktop_public_url).port
+            app.state.launcher = Launcher(
+                Path(settings.desktop_data_dir), secrets, connections, port
+            )
 
         def build_graphs(saver: Any) -> dict[str, Any]:
             graphs: dict[str, Any] = {}
@@ -750,7 +780,22 @@ def create_app(
                     await consumer.start()
                 if desktop:  # the worker runs in this process
                     await desktop.start(app.state.runs)
-                yield
+                    # the person this desktop belongs to: the launcher's connection is theirs
+                    me = await app.state.users.resolve(
+                        settings.default_tenant_id,
+                        Claims("desktop", "local", None, False, None, None),
+                        settings.admin_email_set,
+                    )
+                    await app.state.launcher.write_if_enabled(
+                        Identity(settings.default_tenant_id, me.id, me.role)
+                    )
+                # the SDK's session manager lives as long as the engine (spike S1)
+                async with app.state.mcp.session_manager.run():
+                    try:
+                        yield
+                    finally:
+                        if desktop:
+                            remove_runtime_file(app.state.launcher.path)
         finally:
             # Stop the background tasks and wait for them before the database goes: a task that is
             # cancelled in the middle of a query rolls back through its connection, and a connection
@@ -834,6 +879,9 @@ def create_app(
     app.include_router(admin_workers_router)
     app.include_router(admin_safeguards_router)
     app.include_router(uploads_router)
+    app.include_router(connections_router)
+    app.include_router(desktop_events_router)
+    mount_mcp(app)
     app.include_router(attachments_router)
     app.include_router(creations_router)
     app.include_router(models_in_use_router)

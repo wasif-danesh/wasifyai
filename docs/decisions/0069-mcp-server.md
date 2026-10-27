@@ -195,3 +195,38 @@ with these corrections. None changes a stage.
 Added open question: **5.** how the tool list refreshes once the app starts (`notifications/tools/list_changed`), since
 the clients read it once. Not verified by the spike: the clients' interactive screens, behaviour with a real model,
 Windows and Linux, the Rust launcher and its signing, OAuth, and the 1 MiB limit under load.
+
+## Built 2026-10-27 (stage M1, make-only; spike S2 first)
+
+- **Spike S2** (`docs/spikes/mcp-s2.md`): the file rules of decision 6 are `wasifyai_platform_sdk.folders`
+  (`AllowedFolders.resolve`), held under 26 hostile paths. The macOS folder prompt is noted, not measured.
+- **Decisions 1, 4, 5, 11, 12 and the amendment:** `services/api/src/wasifyai_api/mcp_server/`: the SDK's server
+  (`mcp` 2.3.0, `stateless_http=True`, 1 MiB body) behind an ASGI gate that turns a connection secret
+  (`wsc_<id>_<random>`, hashed with a salt per row) into the connection, holds its rate (429), logs each call
+  without content (`mcp_activity`), and refuses a missing or wrong secret (401; the SDK's own `Origin` 403 and
+  `Host` 421 stay). One tool per catalogue action offered to `mcp`, named `domain_verb`, with the action's schema and
+  annotations; which tools a connection sees follows its scopes (ADR-0092's groups; a new connection gets `make`,
+  `models` and `read`). The conformance tests drive it with the SDK's client on the legacy, auto and 2026-07-28
+  modes (`services/api/tests/test_mcp_server.py`).
+- **Decisions 7 and 8 as the amendment reads them:** a long action becomes a job after 25 s with progress at least
+  every 5 s; an action that needs the person's yes is parked on the **approval desk**, the window gets an event on
+  `GET /desktop/events` and shows a card (Allow once / Deny; never "always"), the answer runs the action with the
+  approval the executor recorded (as a job when long), and the agent follows it with `approval_status` and `job_wait`.
+  A call that is not answered within 25 s returns `needs_approval` with the id, as the amendment says.
+- **Decision 2:** `wasify-mcp` is a second binary of the shell's crate (`src/bin/wasify_mcp.rs`, about 330 lines of
+  Rust): reads `engine.json` on every request with the checks on the open descriptor (`O_NOFOLLOW`, owner, mode
+  0600, the folder not writable by others, loopback host, live pid), derives the three headers of 2026-07-28,
+  carries a legacy session and re-initializes it after an engine restart, streams server-sent events to stdout,
+  closes the request on `notifications/cancelled`, and answers `initialize`, `server/discover`, `tools/list` and
+  `tools/call` itself when the app is closed ("Open Wasify AI, then restart your agent"). Tested through the SDK's
+  stdio client on both eras, with the app closed, and with a readable-by-others, stale and non-loopback file.
+  `engine.json` is written by the **engine**, not the shell: the switch creates a launcher connection whose secret
+  lives in the secret store (ADR-0092), and each launch rewrites the file with the new port and pid.
+- **Decision 3:** Settings > Other apps (`packages/ui/src/connections/`): the switch, the generated snippets for the
+  three clients (the launcher's path comes from the shell, `WASIFYAI_MCP_LAUNCHER`), the connections with scopes in
+  words and the approval setting, a new secret shown once, revoke.
+- **Not built in M1:** the `library`, `notebooks` and `voices` groups are choosable but `library_export` and file
+  inputs (decision 6's folders) wait for M2; the opt-in fixed HTTP port; `input_required` as a courtesy; the
+  launcher is built beside the shell but not yet placed in the bundle (release work, Q2); Windows and Linux not run;
+  the three real clients were not driven in this stage (the SDK's client and the raw protocol were); the
+  `notifications/tools/list_changed` refresh after the app starts (open question 5) is still open.

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ImageSummary } from "@wasifyai/client";
 import {
+  ApprovalCards,
   AudiobookPage,
   DubPage,
   LipSyncPage,
@@ -17,7 +18,7 @@ import {
 } from "@wasifyai/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
-import { client, voiceApi } from "./api";
+import { client, connectionsApi, voiceApi } from "./api";
 import { routeTitle } from "./menu";
 import { CreatePage } from "./pages/Create";
 import { CreationsPage } from "./pages/Creations";
@@ -113,6 +114,7 @@ export function Shell() {
         data-menu-collapsed={collapsed}
         className="flex h-dvh flex-col overflow-hidden bg-background text-foreground"
       >
+        <ApprovalCards api={connectionsApi} />
         <TitleBar
           menuOpen={!collapsed}
           onToggleMenu={() => set(!collapsed)}

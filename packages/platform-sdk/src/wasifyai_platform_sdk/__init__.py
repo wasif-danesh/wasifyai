@@ -30,6 +30,7 @@ from wasifyai_platform_sdk.enhance import (
 )
 from wasifyai_platform_sdk.errors import RunError
 from wasifyai_platform_sdk.eventlog import EventLog, InMemoryEventLog, RedisEventLog
+from wasifyai_platform_sdk.folders import AllowedFolders, PathRefused
 from wasifyai_platform_sdk.identity import Identity
 from wasifyai_platform_sdk.jobqueue import RedisJobSink
 from wasifyai_platform_sdk.jobs import (
@@ -219,6 +220,8 @@ __all__ = [
     "CheckResult",
     "ModelCheck",
     "Identity",
+    "AllowedFolders",
+    "PathRefused",
     "Principal",
     "Scope",
     "SCOPES",

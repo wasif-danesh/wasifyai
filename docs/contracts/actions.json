@@ -1809,13 +1809,27 @@
             "minLength": 1,
             "title": "Id",
             "type": "string"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The full path of a folder this connection may write to (ADR-0069 decision 6). Left out, the person's own export folder.",
+            "title": "Folder"
           }
         },
         "required": [
           "kind",
           "id"
         ],
-        "title": "RefIn",
+        "title": "ExportIn",
         "type": "object"
       },
       "output": {
@@ -1840,6 +1854,11 @@
         {
           "kind": "image",
           "id": "0b7c1f9e"
+        },
+        {
+          "kind": "image",
+          "id": "0b7c1f9e",
+          "folder": "/Users/me/Documents/exports"
         }
       ],
       "effect": "change",
@@ -4496,6 +4515,7 @@
       "description": "Write down what a recording in the library says (a track or a speech) and save it as a transcript. Returns the start of the text and the transcript's id.",
       "input": {
         "additionalProperties": false,
+        "description": "A recording of the library (`source_kind` and `source_id`), or, for a connection with read\nfolders (ADR-0069 decision 6), a file under one of them (`path`).",
         "properties": {
           "source_kind": {
             "default": "track",
@@ -4508,11 +4528,33 @@
             "type": "string"
           },
           "source_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
             "description": "The id of the recording.",
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Source Id",
-            "type": "string"
+            "title": "Source Id"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Instead of a recording of the library: the full path of an audio or video file inside a folder this connection may read.",
+            "title": "Path"
           },
           "model": {
             "anyOf": [
@@ -4541,9 +4583,6 @@
             "title": "Title"
           }
         },
-        "required": [
-          "source_id"
-        ],
         "title": "TranscribeIn",
         "type": "object"
       },

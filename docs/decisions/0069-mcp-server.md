@@ -235,3 +235,23 @@ Windows and Linux, the Rust launcher and its signing, OAuth, and the 1 MiB limit
   `approval_status`, then the job) and the app closed, all three clients, all three scenarios. The run changed two
   things: the launcher's path is read from `WASIFYAI_MCP_LAUNCHER` (the name the shell sets), and every result's
   sentence carries its `job_id` and `approval_id`, because OpenCode hands its model the text alone.
+
+## Built 2026-10-27 (stage M2: the rest of the groups, and files)
+
+- **Decision 6, files:** a connection's folders ride on its principal (`Principal.folders`, ADR-0092) and reach the
+  action through `ActionContext.principal`. `library_export` takes a `folder` that must be one of the connection's
+  write folders (resolved by spike S2's rules; a folder outside, missing or reached through a link is refused with
+  the rule named); `speech_transcribe` takes a `path` that must be a file under one of its read folders, decoded the
+  way an upload is (first bytes checked, a clean 16 kHz WAV made in a limited child process), so the person's file
+  itself is never used. The person in the window, who has no folders, keeps the app's own export folder and the
+  library's recordings. A new connection may write into `~/Documents/Wasify AI exports` (made when the connection
+  is) and read nothing until a folder is added in Settings.
+- **The groups:** `library`, `notebooks` and `voices` were already choosable; the audio, dub, audiobook and lip sync
+  actions are `make`; rename and delete are `library`. Settings > Other apps gained the three presets of the plan
+  ("Make things", "Make and use my library", "Everything": the last two differ only once an `admin` group exists)
+  and the read and write folders of each connection.
+- **Tested** on the real desktop engine through the SDK's client: an export lands in the connection's folder and
+  nowhere else; and at the action level, a connection transcribes a file under its read folder and is refused
+  outside it, a relative path, and a path from the window.
+- **Not built:** image previews of at most 256 KB and `resource_link` results (decision 6's "preview: true"); an
+  `admin` group of its own; the file path through the three real clients (the test engine has no speech model).

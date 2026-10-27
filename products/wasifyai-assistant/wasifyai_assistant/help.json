@@ -181,7 +181,7 @@
    "export",
    "copy out"
   ],
-  "body": "# Save a copy to a folder\n\nAction: `library.export`\n\n## What it is for\n\nPut a copy of a creation in the export folder so other programs can use it. The library keeps the original. This is the only way a file leaves the library.\n\n## Steps in the app\n\n1. Open **Library** and choose the creation.\n2. Choose Save, then pick the file type if asked.\n\n## Fields\n\n- `kind`: Which sort of creation.\n- `id`: Its id.\n\n## Limits\n\n- A copy never replaces a file: a second copy gets a number.\n- Voices cannot be saved as files.\n\n## Needs\n\n- An export folder (the app sets one; the default is Downloads).\n\n## Examples\n\n- Save that picture to my folder.\n\n## Problems\n\n- **Saving to a folder is not available** Set the export folder in the app, then try again."
+  "body": "# Save a copy to a folder\n\nAction: `library.export`\n\n## What it is for\n\nPut a copy of a creation in the export folder so other programs can use it. The library keeps the original. This is the only way a file leaves the library.\n\n## Steps in the app\n\n1. Open **Library** and choose the creation.\n2. Choose Save, then pick the file type if asked.\n\n## Fields\n\n- `kind`: Which sort of creation.\n- `id`: Its id.\n- `folder`: For another app connected to Wasify AI: the full path of a folder that connection may save into (Settings › Other apps). Left out, your own export folder.\n\n## Limits\n\n- A copy never replaces a file: a second copy gets a number.\n- Voices cannot be saved as files.\n\n## Needs\n\n- An export folder (the app sets one; the default is Downloads).\n\n## Examples\n\n- Save that picture to my folder.\n\n## Problems\n\n- **Saving to a folder is not available** Set the export folder in the app, then try again."
  },
  {
   "action": "library.get",
@@ -460,7 +460,7 @@
    "what was said",
    "subtitles"
   ],
-  "body": "# Speech to text\n\nAction: `speech.transcribe`\n\n## What it is for\n\nWrite down what a recording in your library says and keep it as a transcript.\n\n## Steps in the app\n\n1. Open **Voice › Speech to text**.\n2. Choose a recording or add a file.\n3. Choose Transcribe. The transcript appears in your library.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `title`: Optional name.\n\n## Limits\n\n- The recording must be in your library.\n\n## Needs\n\n- A transcription model (Models).\n\n## Examples\n\n- Write down what that speech says.\n\n## Problems\n\n- **Recording is no longer there** Choose another one."
+  "body": "# Speech to text\n\nAction: `speech.transcribe`\n\n## What it is for\n\nWrite down what a recording in your library says and keep it as a transcript.\n\n## Steps in the app\n\n1. Open **Voice › Speech to text**.\n2. Choose a recording or add a file.\n3. Choose Transcribe. The transcript appears in your library.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `path`: For another app connected to Wasify AI: the full path of an audio or video file inside a folder that connection may read (Settings › Other apps), instead of a recording of the library.\n- `title`: Optional name.\n\n## Limits\n\n- The recording must be in your library.\n\n## Needs\n\n- A transcription model (Models).\n\n## Examples\n\n- Write down what that speech says.\n\n## Problems\n\n- **Recording is no longer there** Choose another one."
  },
  {
   "action": "train.start",

@@ -117,7 +117,7 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
   makes a picture and a speech file, finds the job when it takes longer than its timeout, and a request that needs
   approval shows a card in the app and waits. Conformance suite green for each protocol revision we claim.
 
-### Stage M2. The rest of the tools, and files (M to L)
+### Stage M2. The rest of the tools, and files (M to L) — **built 2026-10-27** (ADR-0069, "Built 2026-10-27 (stage M2)")
 
 - `library` (search, list, get, **export** to allowed folders), `notebooks`, `voices` (design, clone with
   consent), `audio` tools, `dub`, `audiobook`, `lipsync` (consent), `admin` (rename, delete).

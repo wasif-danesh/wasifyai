@@ -82,7 +82,12 @@ export function createConnectionsApi(transport: Transport) {
         headers,
         body: JSON.stringify(body),
       }),
-    update: (id: string, body: Partial<Pick<Connection, "name" | "scopes" | "approval">>) =>
+    update: (
+      id: string,
+      body: Partial<
+        Pick<Connection, "name" | "scopes" | "approval" | "read_folders" | "write_folders">
+      >,
+    ) =>
       json<Connection>(transport, `/connections/${id}`, {
         method: "PATCH",
         headers,

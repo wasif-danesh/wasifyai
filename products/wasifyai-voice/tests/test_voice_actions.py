@@ -15,6 +15,7 @@ from wasifyai_platform_sdk import RouteDeps, RunError
 from wasifyai_platform_sdk.actions import (
     ActionExecutor,
     ActionRegistry,
+    ApprovalPolicy,
     LibraryItem,
     LibraryKind,
     builtin_actions,
@@ -390,3 +391,46 @@ def test_every_voice_action_is_run_in_this_file():
     source = Path(__file__).read_text()
     missing = [a.id for a in actions() if f'"{a.id}"' not in source]
     assert not missing, f"no test runs {missing}"
+
+
+# ---- a file from a connection's folder (ADR-0069 decision 6, stage M2) ------------------------
+
+
+async def test_a_connection_transcribes_a_file_under_its_folder_and_nothing_outside(tmp_path, ctx):  # noqa: F811
+    from voice_rig import wav
+    from wasifyai_platform_sdk import AllowedFolders, Principal
+
+    h = Harness(tmp_path)
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "meeting.wav").write_bytes(wav(1.0))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "private.wav").write_bytes(wav(1.0))
+    codex = Principal(
+        "connection", "t1", "u1", scopes=frozenset({"read", "make"}), origin="mcp:Codex",
+        folders=AllowedFolders.of(read=[str(inbox)]),
+    )  # fmt: skip
+    ok = await h.ex.run_action(
+        "speech.transcribe", {"path": str(inbox / "meeting.wav")}, codex.origin, actor=codex,
+        policy=ApprovalPolicy(make="auto"),
+    )  # fmt: skip
+    assert ok.status == "ok", ok.text
+    assert ok.output["title"] == "meeting.wav" and h.engine.transcribed
+    outside = await h.ex.run_action(
+        "speech.transcribe", {"path": str(elsewhere / "private.wav")}, codex.origin, actor=codex,
+        policy=ApprovalPolicy(make="auto"),
+    )  # fmt: skip
+    assert (outside.status, outside.code) == ("refused", "outside")
+    relative = await h.ex.run_action(
+        "speech.transcribe", {"path": "meeting.wav"}, codex.origin, actor=codex,
+        policy=ApprovalPolicy(make="auto"),
+    )  # fmt: skip
+    assert (relative.status, relative.code) == ("refused", "not_absolute")
+    # the person in the window has no read folders: a path is not for them
+    window = await h.go("speech.transcribe", {"path": str(inbox / "meeting.wav")})
+    assert (window.status, window.code) == ("refused", "not_allowed")
+    both = await h.go("speech.transcribe", {"source_id": "x", "path": str(inbox / "meeting.wav")})
+    assert (both.status, both.code) == ("refused", "invalid_input")
+    neither = await h.go("speech.transcribe", {})
+    assert (neither.status, neither.code) == ("refused", "invalid_input")

@@ -87,6 +87,19 @@ class AllowedFolders:
                 return root
         return None
 
+    def resolve_folder(self, raw: object) -> Path:
+        """A folder the connection may write into: inside (or exactly) one of its write folders,
+        existing, a directory, not reached through a link out; else `PathRefused`."""
+        p = _well_formed(raw)
+        resolved = p.resolve(strict=False)
+        if self._folder_for(resolved, "write") is None:
+            raise PathRefused(
+                "outside", "That folder is outside the folders this connection may write to."
+            )
+        if not resolved.is_dir():
+            raise PathRefused("no_folder", "That folder does not exist.")
+        return resolved
+
     def resolve(self, raw: object, mode: Mode) -> Path:
         """The real place `raw` points at, when the connection may use it for `mode`; else a
         `PathRefused` with the rule that failed."""

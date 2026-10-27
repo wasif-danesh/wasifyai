@@ -20,6 +20,7 @@ Put a copy of a creation in the export folder so other programs can use it. The 
 
 - `kind`: Which sort of creation.
 - `id`: Its id.
+- `folder`: For another app connected to Wasify AI: the full path of a folder that connection may save into (Settings › Other apps). Left out, your own export folder.
 
 ## Limits
 

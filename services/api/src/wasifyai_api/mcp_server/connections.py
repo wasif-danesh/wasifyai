@@ -12,6 +12,7 @@ import re
 import secrets
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Literal, Protocol
 from uuid import uuid4
 
@@ -28,6 +29,20 @@ SECRET_PATTERN = re.compile(r"^wsc_([a-f0-9]{16})_([A-Za-z0-9_-]{20,64})$")
 NAME_MAX = 60
 DEFAULT_SCOPES: tuple[str, ...] = ("make", "models", "read")  # decision 5, sorted
 DEFAULT_RATE = 60  # calls per minute
+
+
+def default_export_folder() -> str:
+    """Where a new connection may write (ADR-0069 decision 6; spike S2): a folder of the app's
+    own under Documents, made when the connection is, so the system's folder prompt (macOS)
+    comes in Settings, not in the middle of an agent's call."""
+    folder = Path.home() / "Documents" / "Wasify AI exports"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return str(Path.home() / "Wasify AI exports")
+    return str(folder)
+
+
 Kind = Literal["client", "launcher"]
 
 
@@ -133,7 +148,7 @@ class Connection:
     def principal(self, role: str = "user") -> Principal:
         return Principal(
             "connection", self.tenant_id, self.user_id, role,
-            frozenset(self.scopes), self.origin, self.id,
+            frozenset(self.scopes), self.origin, self.id, self.folders,
         )  # fmt: skip
 
     def public(self) -> dict[str, Any]:
@@ -417,7 +432,10 @@ class ConnectionsService:
             secret_hash=hash_secret(secret),
             scopes=check_scopes(scopes) if scopes is not None else DEFAULT_SCOPES,
             policy=check_policy(policy), read_folders=tuple(read_folders or ()),
-            write_folders=tuple(write_folders or ()), kind=kind,
+            write_folders=(
+                tuple(write_folders) if write_folders is not None else (default_export_folder(),)
+            ),
+            kind=kind,
         )  # fmt: skip
         await self.store.create(connection)
         return connection, secret

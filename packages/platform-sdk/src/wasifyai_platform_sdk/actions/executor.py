@@ -81,6 +81,9 @@ class ActionContext:
     host: ActionHost
     executor: "ActionExecutor"
     emit: Emit
+    # the connection or key behind the call (ADR-0092), with its scopes and folders; None when
+    # the person in the window or the assistant asked
+    principal: Principal | None = None
 
     @property
     def deps(self) -> Any:
@@ -222,7 +225,7 @@ class ActionExecutor:
 
         token = _ensure_context(who, action)
         try:
-            ctx = ActionContext(who, origin, action, self.host, self, emit)
+            ctx = ActionContext(who, origin, action, self.host, self, emit, principal)
             ready = await self.readiness(action)
             if ready.state == "unavailable":
                 why = ready.reason or f"{action.title} is unavailable."
@@ -406,7 +409,7 @@ class ActionExecutor:
             job.progress = {k: v for k, v in ev.items() if k != "event"}
             ctx.emit(ev)
 
-        job_ctx = ActionContext(ctx.actor, ctx.origin, action, self.host, self, note)
+        job_ctx = ActionContext(ctx.actor, ctx.origin, action, self.host, self, note, ctx.principal)
 
         async def work() -> None:
             try:

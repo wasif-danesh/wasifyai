@@ -35,6 +35,8 @@ from wasifyai_platform_sdk.actions import (
     need_product,
 )
 from wasifyai_platform_sdk.actions.helpers import need_deps, save_copy
+from wasifyai_platform_sdk.folders import PathRefused
+from wasifyai_platform_sdk.media_upload import process_audio
 from wasifyai_platform_sdk.uploads import UploadError
 from wasifyai_platform_sdk.voice_models import MAX_DESCRIPTION_CHARS, MAX_SPEAK_CHARS
 
@@ -228,9 +230,69 @@ class SourceIn(Strict):
     source_id: str = Field(min_length=1, max_length=64, description="The id of the recording.")
 
 
-class TranscribeIn(SourceIn):
+class TranscribeIn(Strict):
+    """A recording of the library (`source_kind` and `source_id`), or, for a connection with read
+    folders (ADR-0069 decision 6), a file under one of them (`path`)."""
+
+    source_kind: SourceKind = Field(
+        "track", description="Whether the recording is a track or a speech."
+    )
+    source_id: str | None = Field(
+        None, min_length=1, max_length=64, description="The id of the recording."
+    )
+    path: str | None = Field(
+        None,
+        max_length=4096,
+        description=(
+            "Instead of a recording of the library: the full path of an audio or video file "
+            "inside a folder this connection may read."
+        ),
+    )
     model: str | None = Field(None, max_length=100)
     title: str | None = Field(None, max_length=200)
+
+    @model_validator(mode="after")
+    def _one_source(self) -> "TranscribeIn":
+        if bool(self.source_id) == bool(self.path):
+            raise ValueError("give either a recording of the library or a file path, not both")
+        return self
+
+
+MAX_FILE_BYTES = 100 * 1024 * 1024
+
+
+async def _file_recording(ctx: ActionContext, path: str) -> tuple[bytes, dict[str, Any]]:
+    """A file a connection named: inside one of its read folders (spike S2's rules), decoded the
+    way an upload is (the first bytes checked, a clean 16 kHz mono WAV made in a limited child
+    process), never the person's file itself."""
+    allowed = ctx.principal.folders if ctx.principal is not None else None
+    if allowed is None:
+        raise ActionRefused(
+            "not_allowed",
+            "Only a connection with read folders can name a file; choose a recording of the "
+            "library instead.",
+        )
+    try:
+        real = allowed.resolve(path, "read")
+    except PathRefused as e:
+        raise ActionRefused(e.code, e.message) from None
+    size = real.stat().st_size
+    rule: Any = None
+    rules = getattr(getattr(ctx.deps, "state", None), "upload_rules", None)
+    if callable(rules):
+        rule = rules(PRODUCT_ID, "audio")
+    max_bytes = rule.max_bytes if rule is not None else MAX_FILE_BYTES
+    max_seconds = rule.max_seconds if rule is not None else 1800
+    if size > max_bytes:
+        raise ActionRefused(
+            "too_large", f"That file is too large. The limit is {max_bytes // (1024 * 1024)} MB."
+        )
+    data = await asyncio.to_thread(real.read_bytes)
+    try:
+        audio = await asyncio.to_thread(process_audio, data, max_seconds)
+    except UploadError as e:
+        raise ActionRefused("bad_file", e.message) from None
+    return audio.wav, {"title": real.name, "seconds": audio.seconds}
 
 
 class TranscriptOut(BaseModel):
@@ -265,10 +327,20 @@ async def _check_source(p: SourceIn, ctx: ActionContext) -> None:
     await _recording(ctx, p.source_kind, p.source_id)
 
 
+async def _check_transcribe(p: TranscribeIn, ctx: ActionContext) -> None:
+    if p.path:
+        await _file_recording(ctx, p.path)
+    else:
+        await _recording(ctx, p.source_kind, str(p.source_id))
+
+
 @_in_engine
 async def _transcribe(p: TranscribeIn, ctx: ActionContext) -> Outcome:
     eng = _engine(ctx)
-    data, row = await _recording(ctx, p.source_kind, p.source_id)
+    if p.path:
+        data, row = await _file_recording(ctx, p.path)
+    else:
+        data, row = await _recording(ctx, p.source_kind, str(p.source_id))
     chosen = eng.resolve("transcribe", p.model)
     options = check_transcribe(chosen, None)
     try:
@@ -825,7 +897,7 @@ def actions() -> list[Action]:
             input=TranscribeIn, output=TranscriptOut,
             examples=({"source_kind": "track", "source_id": SAMPLE_ID},),
             effect="make", flags=("private",), requires=(HERE, need_model("transcribe")), long=True,
-            product=PRODUCT_ID, bind=CallBinding(_transcribe, check=_check_source),
+            product=PRODUCT_ID, bind=CallBinding(_transcribe, check=_check_transcribe),
             ui="voice.transcribe",
         ),
         Action(

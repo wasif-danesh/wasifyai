@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Literal
 
+from wasifyai_platform_sdk.folders import AllowedFolders
 from wasifyai_platform_sdk.identity import Identity
 
 Kind = Literal["person", "connection", "api_key"]
@@ -57,6 +58,9 @@ class Principal:
     scopes: frozenset[str] = field(default_factory=frozenset)
     origin: str = "window"
     connection_id: str | None = None  # the connection or key this credential belongs to
+    # the folders a connection may read from and write to (ADR-0069 decision 6); None for a
+    # person in the window, who picks folders with the app's own dialogs
+    folders: AllowedFolders | None = None
 
     def __post_init__(self) -> None:
         unknown = set(self.scopes) - ALL_SCOPES

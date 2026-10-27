@@ -19,6 +19,12 @@ const APPROVALS: [string, string][] = [
   ["ask_costly", "asks only for things that take a while or leave this computer"],
   ["auto", "makes things without asking"],
 ];
+/** Scope presets (ADR-0069 stage M2): what a connection may do, in one click. */
+const PRESETS: [string, string[]][] = [
+  ["Make things", ["make", "models"]],
+  ["Make and use my library", ["make", "models", "library", "notebooks", "voices"]],
+  ["Everything", ["make", "models", "library", "notebooks", "voices"]],
+];
 const CLIENTS: [string, string, string][] = [
   ["Claude Code", "claude_code_command", "Run this in a terminal:"],
   ["Codex", "codex_toml", "Add this to ~/.codex/config.toml:"],
@@ -43,6 +49,53 @@ function Secret({ secret, onDone }: { secret: string; onDone: () => void }) {
           I have copied it
         </Button>
       </div>
+    </div>
+  );
+}
+
+function sameScopes(a: string[], b: string[]): boolean {
+  const x = new Set(a.filter((s) => s !== "read"));
+  const y = new Set(b.filter((s) => s !== "read"));
+  return x.size === y.size && [...x].every((s) => y.has(s));
+}
+
+/** The folders a connection may read from or write into (spike S2): full paths, one per line. */
+function Folders({
+  label,
+  value,
+  onSave,
+}: {
+  label: string;
+  value: string[];
+  onSave: (folders: string[]) => Promise<void>;
+}) {
+  const id = useId();
+  const [text, setText] = useState(value.join("\n"));
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const changed = lines.join("\n") !== value.join("\n");
+  return (
+    <div className="grid gap-1">
+      <label htmlFor={id} className="text-muted-foreground text-xs">
+        {label}
+      </label>
+      <textarea
+        id={id}
+        value={text}
+        rows={2}
+        spellCheck={false}
+        onChange={(e) => setText(e.target.value)}
+        className="min-h-12 w-full rounded-md border border-input bg-transparent px-3 py-1 font-mono text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      />
+      {changed ? (
+        <div>
+          <Button type="button" size="sm" variant="outline" onClick={() => void onSave(lines)}>
+            Save folders
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -81,6 +134,19 @@ function Row({
       </div>
       {!connection.revoked ? (
         <>
+          <div className="flex flex-wrap gap-1">
+            {PRESETS.map(([label, scopes]) => (
+              <Button
+                key={label}
+                type="button"
+                size="sm"
+                variant={sameScopes(connection.scopes, scopes) ? "default" : "outline"}
+                onClick={() => void run(() => api.update(connection.id, { scopes }))}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
           <fieldset className="m-0 grid gap-1 border-0 p-0">
             <legend className="text-muted-foreground text-xs">It may</legend>
             {CHOOSABLE.map((scope) => (
@@ -118,6 +184,16 @@ function Row({
           <p className="m-0 text-muted-foreground text-xs">
             Deleting and anything that needs your word always ask you, whatever this says.
           </p>
+          <Folders
+            label="Folders it may read files from (one per line)"
+            value={connection.read_folders}
+            onSave={(read_folders) => run(() => api.update(connection.id, { read_folders }))}
+          />
+          <Folders
+            label="Folders it may save files into (one per line)"
+            value={connection.write_folders}
+            onSave={(write_folders) => run(() => api.update(connection.id, { write_folders }))}
+          />
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"

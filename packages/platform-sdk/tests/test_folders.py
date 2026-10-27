@@ -108,3 +108,22 @@ def test_an_empty_connection_may_read_and_write_nothing(world):
         none.resolve(str(docs / "note.txt"), "read")
     with pytest.raises(PathRefused, match="outside"):
         none.resolve(str(docs / "new.txt"), "write")
+
+
+def test_a_folder_to_write_into_must_be_one_of_the_write_folders(world):
+    root, docs, pics, _, f = world
+    assert f.resolve_folder(str(docs)) == docs
+    assert f.resolve_folder(str(docs / "sub")) == docs / "sub"
+    assert f.resolve_folder(str(root / "home" / "Docs")) == docs  # the folder by another name
+    for raw, code in [
+        (str(pics), "outside"),  # read only
+        (str(root / "home"), "outside"),
+        (str(docs / "outdir"), "outside"),  # a link that leaves
+        (str(docs / "nowhere"), "no_folder"),
+        (str(docs / "note.txt"), "no_folder"),  # a file, not a folder
+        ("Documents", "not_absolute"),
+        (str(docs / ".." / "Documents"), "dotdot"),
+    ]:
+        with pytest.raises(PathRefused) as e:
+            f.resolve_folder(raw)
+        assert e.value.code == code, raw

@@ -20,5 +20,10 @@ page then shows the command to paste for each client. The agent's tool list is t
 connection's scopes; a `make` shows a card in the window unless the connection's setting says otherwise; deleting
 and consent always ask. A call that waits more than 25 s answers with a `job_id` or an `approval_id` to follow.
 
-**What is not done.** Exporting files and giving the app a file (M2, with the folders of spike S2); the fixed HTTP
-port; placing `wasify-mcp` in the app bundle; Windows and Linux; the three real clients driven end to end.
+**Files (M2).** A connection's read and write folders (Settings > Other apps; a new connection may write into
+`~/Documents/Wasify AI exports`) ride on its principal: `library_export` takes a `folder` inside a write folder,
+`speech_transcribe` a `path` under a read folder, both held to spike S2's rules (`wasifyai_platform_sdk.folders`).
+
+**What is not done.** Image previews and `resource_link` results; the fixed HTTP port; placing `wasify-mcp` in the
+app bundle; Windows and Linux. The three real clients were driven end to end on 2026-10-27
+(`docs/spikes/mcp-m1-clients.md`), not yet with files.

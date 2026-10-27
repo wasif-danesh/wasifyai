@@ -19,6 +19,7 @@ from wasifyai_platform_sdk.actions.model import (
     Outcome,
     surface_of,
 )
+from wasifyai_platform_sdk.folders import PathRefused
 from wasifyai_platform_sdk.web import WebError, site_of
 
 LIBRARY_KINDS = (
@@ -247,19 +248,47 @@ class ExportOut(BaseModel):
     path: str
 
 
-async def _export(p: RefIn, ctx: ActionContext) -> Outcome:
-    kind = _kind(ctx, p.kind)
-    folder = getattr(getattr(ctx.deps, "state", None), "export_dir", None)
-    if kind.export is None or folder is None:
-        return Outcome.refused("Saving to a folder is not available here.", "unavailable")
+class ExportIn(RefIn):
+    folder: str | None = Field(
+        None,
+        max_length=4096,
+        description=(
+            "The full path of a folder this connection may write to (ADR-0069 decision 6). "
+            "Left out, the person's own export folder."
+        ),
+    )
+
+
+async def _export(p: ExportIn, ctx: ActionContext) -> Outcome:
     from pathlib import Path
 
-    written = await kind.export(ctx, p.id, Path(folder))
+    kind = _kind(ctx, p.kind)
+    if kind.export is None:
+        return Outcome.refused("Saving to a folder is not available here.", "unavailable")
+    if p.folder:
+        # a connection names a folder: only one of its own write folders (spike S2's rules)
+        allowed = ctx.principal.folders if ctx.principal is not None else None
+        if allowed is None:
+            return Outcome.refused(
+                "Only a connection with write folders can name a folder; leave it out to use "
+                "the person's export folder.",
+                "not_allowed",
+            )
+        try:
+            folder = allowed.resolve_folder(p.folder)
+        except PathRefused as e:
+            return Outcome.refused(e.message, e.code)
+    else:
+        chosen = getattr(getattr(ctx.deps, "state", None), "export_dir", None)
+        if chosen is None:
+            return Outcome.refused("Saving to a folder is not available here.", "unavailable")
+        folder = Path(chosen)
+    written = await kind.export(ctx, p.id, folder)
     if written is None:
         return Outcome.refused("That is not in the library.", "not_found")
     return Outcome.ok(
         {"name": written.name, "path": str(written)},
-        f"A copy was saved as {written.name} in the export folder.",
+        f"A copy was saved as {written.name} in {folder}.",
     )
 
 
@@ -504,7 +533,11 @@ def builtin_actions() -> list[Action]:
                 "the file's name and path. It never replaces a file. This is the only way a file "
                 "leaves the library."
             ),
-            input=RefIn, output=ExportOut, examples=({"kind": "image", "id": "0b7c1f9e"},),
+            input=ExportIn, output=ExportOut,
+            examples=(
+                {"kind": "image", "id": "0b7c1f9e"},
+                {"kind": "image", "id": "0b7c1f9e", "folder": "/Users/me/Documents/exports"},
+            ),
             effect="change", flags=("private",), bind=CallBinding(_export), ui="library",
         ),
         Action(

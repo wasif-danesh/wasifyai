@@ -527,3 +527,22 @@ async def test_a_person_principal_changes_nothing_for_the_window():
     me = Principal.person("t1", "u1")
     r = await ex.run_action("library.list", {"text": "hi"}, "window", actor=me)
     assert r.ok
+
+
+async def test_the_action_sees_the_principal_behind_the_call():
+    from wasifyai_platform_sdk import AllowedFolders, Principal
+
+    seen: list[Any] = []
+
+    async def peek(p: In, ctx) -> Outcome:
+        seen.append(ctx.principal)
+        return Outcome.ok({"echoed": p.text}, "ok")
+
+    ex, _, _, _, _ = setup(act("demo.read", bind=CallBinding(peek)))
+    await ex.run_action("demo.read", {"text": "hi"}, "assistant", actor=ME)
+    folders = AllowedFolders.of(read=["/tmp/in"], write=["/tmp/out"])
+    key = Principal(
+        "api_key", "t1", "u1", scopes=frozenset({"read"}), origin="api:k1", folders=folders
+    )
+    await ex.run_action("demo.read", {"text": "hi"}, key.origin, actor=key)
+    assert seen[0] is None and seen[1] is key and seen[1].folders is folders

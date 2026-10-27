@@ -393,3 +393,62 @@ async def test_the_launcher_refuses_a_runtime_file_it_cannot_trust(tmp_path):
     async with Client(launcher(far), mode="2026-07-28") as client:
         r = await client.call_tool("app_status", {})
         assert r.is_error and "Open Wasify AI" in text_of(r)
+
+
+# ---- files (ADR-0069 decision 6; spike S2; stage M2) --------------------------------------------
+
+
+async def test_a_connection_exports_into_its_own_folder_and_nowhere_else(engine, tmp_path):
+    out = tmp_path / "exports"
+    out.mkdir()
+    r = engine.post(
+        "/connections",
+        {
+            "name": "Exporter",
+            "scopes": ["make", "library"],
+            "approval": {"make": "auto", "change": "auto"},  # an export is a change
+            "write_folders": [str(out)],
+        },  # fmt: skip
+    )
+    assert r.status_code == 201, r.text
+    c, secret = r.json()["connection"], r.json()["secret"]
+    assert c["write_folders"] == [str(out)]
+    async with sdk(engine, secret, "2026-07-28") as client:
+        tools = {t.name for t in (await client.list_tools()).tools}
+        assert {"library_export", "library_search", "library_list"} <= tools
+        made = await client.call_tool("image_generate", {"prompt": "a teapot to export"})
+        s = made.structured_content
+        if s["status"] == "running":
+            done = await client.call_tool("job_wait", {"job_id": s["job_id"], "seconds": 30})
+            s = done.structured_content
+        image_id = json.loads(json.dumps(s["output"]))
+        image_id = image_id.get("image_id") or image_id.get("result", {}).get("image_id")
+        assert image_id, s
+        saved = await client.call_tool(
+            "library_export", {"kind": "image", "id": image_id, "folder": str(out)}
+        )
+        assert saved.structured_content["status"] == "ok", saved
+        written = Path(saved.structured_content["output"]["path"])
+        exists, size = await asyncio.to_thread(
+            lambda: (written.is_file(), written.stat().st_size if written.is_file() else 0)
+        )
+        assert written.parent == out and exists and size > 0
+        outside = await client.call_tool(
+            "library_export", {"kind": "image", "id": image_id, "folder": str(tmp_path)}
+        )
+        o = outside.structured_content
+        assert o["status"] == "refused" and o["code"] == "outside"
+        missing = await client.call_tool(
+            "library_export", {"kind": "image", "id": image_id, "folder": str(out / "nope")}
+        )
+        assert missing.structured_content["code"] == "no_folder"
+        transcribe = await client.call_tool("speech_transcribe", {"path": str(out / "x.wav")})
+        t = transcribe.structured_content
+        # no speech model on the test engine: the step comes first; the path is never read
+        assert t["status"] in ("needs_setup", "refused"), t
+
+
+def test_a_new_connection_gets_the_apps_export_folder_by_default(engine):
+    c, _ = engine.connection("Default")
+    assert len(c["write_folders"]) == 1 and c["write_folders"][0].endswith("Wasify AI exports")
+    assert c["read_folders"] == []

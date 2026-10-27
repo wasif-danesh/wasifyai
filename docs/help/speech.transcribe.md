@@ -21,6 +21,7 @@ Write down what a recording in your library says and keep it as a transcript.
 
 - `source_kind`: track or speech.
 - `source_id`: The recording.
+- `path`: For another app connected to Wasify AI: the full path of an audio or video file inside a folder that connection may read (Settings › Other apps), instead of a recording of the library.
 - `title`: Optional name.
 
 ## Limits

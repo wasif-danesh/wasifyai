@@ -10,12 +10,14 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from wasifyai_api.config import get_settings
 from wasifyai_api.identity import Identity, get_identity
 from wasifyai_api.mcp_server.approvals import ApprovalDesk
-from wasifyai_api.mcp_server.connections import ConnectionsService
+from wasifyai_api.mcp_server.connections import DEFAULT_SCOPES, ConnectionsService
+from wasifyai_api.mcp_server.skill import skill_markdown
 
 router = APIRouter(tags=["connections"])
 LAUNCHER_PLACEHOLDER = "<path to wasify-mcp>"
@@ -41,6 +43,7 @@ class ConnectionIn(BaseModel):
     approval: dict[str, str] | None = None
     read_folders: list[str] | None = None
     write_folders: list[str] | None = None
+    calls_per_day: int | None = None
 
 
 class ConnectionPatch(BaseModel):
@@ -50,6 +53,11 @@ class ConnectionPatch(BaseModel):
     read_folders: list[str] | None = None
     write_folders: list[str] | None = None
     rate_per_minute: int | None = None
+    calls_per_day: int | None = None
+
+
+class FixedPortIn(BaseModel):
+    port: int | None = Field(None, ge=1024, le=65535)
 
 
 class Decision(BaseModel):
@@ -83,6 +91,7 @@ async def create_connection(
         c, secret = await svc.create(
             me.tenant_id, me.user_id, body.name, scopes=body.scopes, policy=body.approval,
             read_folders=body.read_folders, write_folders=body.write_folders,
+            calls_per_day=body.calls_per_day,
         )  # fmt: skip
     except ValueError as exc:
         raise _bad(exc) from None
@@ -177,7 +186,8 @@ async def connection_snippets(
 ) -> dict[str, Any]:
     settings = get_settings()
     launcher = settings.wasifyai_mcp_launcher or LAUNCHER_PLACEHOLDER
-    port = getattr(getattr(request.app.state, "launcher", None), "port", None)
+    # the HTTP forms name the opt-in fixed port (stage M3), never the engine's per-launch port
+    port = getattr(getattr(request.app.state, "fixed_port", None), "port", None)
     return {"launcher": launcher, "snippets": snippets(launcher, port)}
 
 
@@ -203,6 +213,87 @@ async def launcher_set(
     else:
         await launcher.disable(me)
     return {"available": True, **(await launcher.state(me))}
+
+
+@router.get("/connections/skill")
+async def connection_skill(
+    request: Request, _: Identity = Depends(get_identity)
+) -> PlainTextResponse:
+    """A SKILL.md for Claude Code, generated from the catalogue (stage M3): how to use the tools
+    the launcher's connection offers."""
+    executor = getattr(request.app.state, "actions", None)
+    if executor is None:
+        raise HTTPException(404, "not available in this deployment")
+    return PlainTextResponse(
+        skill_markdown(executor.registry, DEFAULT_SCOPES), media_type="text/markdown"
+    )
+
+
+@router.get("/connections/fixed-port")
+async def fixed_port_state(request: Request, _: Identity = Depends(get_identity)) -> dict[str, Any]:
+    fixed = getattr(request.app.state, "fixed_port", None)
+    if fixed is None:
+        return {"available": False, "port": None, "url": None}
+    return {"available": True, **fixed.state()}
+
+
+@router.put("/connections/fixed-port")
+async def fixed_port_set(
+    body: FixedPortIn, request: Request, _: Identity = Depends(get_identity)
+) -> dict[str, Any]:
+    """The opt-in fixed port for HTTP clients: a port number turns it on, null turns it off."""
+    fixed = getattr(request.app.state, "fixed_port", None)
+    if fixed is None:
+        raise HTTPException(404, "not available in this deployment")
+    try:
+        if body.port is None:
+            await fixed.stop()
+        else:
+            await fixed.start(body.port)
+    except OSError as exc:
+        raise HTTPException(
+            409, f"Port {body.port} cannot be opened: {exc.strerror or exc}."
+        ) from None
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    return {"available": True, **fixed.state()}
+
+
+@router.get("/actions/jobs")
+async def running_jobs(request: Request, me: Identity = Depends(get_identity)) -> dict[str, Any]:
+    """The jobs running for this person, with who started them ("from Codex")."""
+    executor = getattr(request.app.state, "actions", None)
+    if executor is None:
+        raise HTTPException(404, "not available in this deployment")
+    jobs = executor.jobs.running(me.tenant_id, me.user_id)
+    return {
+        "jobs": [
+            {
+                "job_id": j.id,
+                "action_id": j.action_id,
+                "origin": j.origin,
+                "from": j.origin[4:] if j.origin.startswith("mcp:") else None,
+                "seconds": j.seconds,
+                "cancellable": j.cancellable,
+            }  # fmt: skip
+            for j in jobs
+        ]
+    }
+
+
+@router.post("/actions/jobs/{job_id}/cancel")
+async def cancel_running_job(
+    job_id: str, request: Request, me: Identity = Depends(get_identity)
+) -> dict[str, Any]:
+    """The person stops a job, their own or one an agent started."""
+    executor = getattr(request.app.state, "actions", None)
+    if executor is None:
+        raise HTTPException(404, "not available in this deployment")
+    job = executor.jobs.get(me.tenant_id, me.user_id, job_id)
+    if job is None:
+        raise HTTPException(404, "no such job")
+    stopped = await executor.cancel_job(job)
+    return {"job_id": job.id, "status": job.status, "stopped": stopped}
 
 
 @router.get("/actions/approvals")

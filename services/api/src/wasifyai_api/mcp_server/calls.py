@@ -7,6 +7,7 @@ in the window and otherwise answers `needs_approval` with the id to follow."""
 import asyncio
 import json
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 from mcp.server.mcpserver import Context
@@ -81,6 +82,47 @@ async def _heartbeat(ctx: Context, started: float, stop: asyncio.Event, last: di
             log.debug("could not send progress", exc_info=True)
 
 
+BUSY = (
+    "This connection already has a job running ({job_id}). Wait for it with job_wait, then "
+    "try again: a connection runs one job at a time."
+)
+QUOTA = (
+    "This connection has used its {quota} calls for today. The person can raise the quota in "
+    "Settings > Other apps."
+)
+
+
+def _day_start() -> datetime:
+    now = datetime.now(UTC)
+    return now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+async def over_the_limits(
+    executor: ActionExecutor, store: Any, connection: Connection, action: Action
+) -> ActionResult | None:
+    """ADR-0069 decision 10: one running job per connection, and a daily quota of calls. The
+    answer is the refusal, or None when the call may go ahead."""
+    if action.long:
+        running = [
+            j
+            for j in executor.jobs.running(connection.tenant_id, connection.user_id)
+            if j.origin == connection.origin and j.status == "running"
+        ]
+        if running:
+            return ActionResult(
+                status="refused", action_id=action.id, code="busy",
+                text=BUSY.format(job_id=running[0].id), job_id=running[0].id,
+            )  # fmt: skip
+    if store is not None:
+        used = await store.calls_since(connection.id, _day_start())
+        if used >= connection.calls_per_day:
+            return ActionResult(
+                status="refused", action_id=action.id, code="quota",
+                text=QUOTA.format(quota=connection.calls_per_day),
+            )  # fmt: skip
+    return None
+
+
 async def run_call(
     executor: ActionExecutor,
     desk: ApprovalDesk,
@@ -89,8 +131,12 @@ async def run_call(
     action: Action,
     arguments: dict[str, Any],
     ctx: Context,
+    store: Any = None,
 ) -> CallToolResult:
     principal = connection.principal()
+    stopped = await over_the_limits(executor, store, connection, action)
+    if stopped is not None:
+        return result_of(stopped, connection)
     last: dict[str, Any] = {}
 
     def on_event(ev: dict[str, Any]) -> None:

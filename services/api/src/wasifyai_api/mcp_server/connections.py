@@ -20,7 +20,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import USER_SCOPES, AllowedFolders, Principal
 from wasifyai_platform_sdk.actions import ApprovalPolicy, PolicyError
-from wasifyai_platform_sdk.sqlite.engine import ensure_tables, from_iso, is_sqlite, to_iso
+from wasifyai_platform_sdk.sqlite.engine import (
+    ensure_columns,
+    ensure_tables,
+    from_iso,
+    is_sqlite,
+    to_iso,
+)
 
 from wasifyai_api.auth import AuthError
 
@@ -29,6 +35,7 @@ SECRET_PATTERN = re.compile(r"^wsc_([a-f0-9]{16})_([A-Za-z0-9_-]{20,64})$")
 NAME_MAX = 60
 DEFAULT_SCOPES: tuple[str, ...] = ("make", "models", "read")  # decision 5, sorted
 DEFAULT_RATE = 60  # calls per minute
+DEFAULT_DAILY = 1000  # tool calls per day (ADR-0069 decision 10; stage M3)
 
 
 def default_export_folder() -> str:
@@ -124,6 +131,7 @@ class Connection:
     read_folders: tuple[str, ...] = ()
     write_folders: tuple[str, ...] = ()
     rate_per_minute: int = DEFAULT_RATE
+    calls_per_day: int = DEFAULT_DAILY
     kind: Kind = "client"
     created_at: datetime = field(default_factory=_now)
     last_used_at: datetime | None = None
@@ -157,6 +165,7 @@ class Connection:
             "id": self.id, "name": self.name, "kind": self.kind, "scopes": list(self.scopes),
             "approval": dict(self.policy), "read_folders": list(self.read_folders),
             "write_folders": list(self.write_folders), "rate_per_minute": self.rate_per_minute,
+            "calls_per_day": self.calls_per_day,
             "created_at": self.created_at.isoformat(),
             "last_used_at": self.last_used_at.isoformat() if self.last_used_at else None,
             "revoked": self.revoked,
@@ -196,6 +205,10 @@ class ConnectionStore(Protocol):
 
     async def activity(self, connection_id: str, limit: int = 50) -> list[ActivityEntry]: ...
 
+    async def calls_since(self, connection_id: str, since: datetime) -> int:
+        """How many tool calls the connection made since `since` (the daily quota)."""
+        ...
+
 
 class InMemoryConnectionStore:
     def __init__(self) -> None:
@@ -222,6 +235,15 @@ class InMemoryConnectionStore:
         mine = [e for e in self.entries if e.connection_id == connection_id]
         return list(reversed(mine))[:limit]
 
+    async def calls_since(self, connection_id: str, since: datetime) -> int:
+        return sum(
+            1
+            for e in self.entries
+            if e.connection_id == connection_id
+            and e.method == "tools/call"
+            and e.created_at >= since
+        )
+
 
 _DDL = (
     """
@@ -236,6 +258,7 @@ _DDL = (
         read_folders TEXT NOT NULL,
         write_folders TEXT NOT NULL,
         rate_per_minute INTEGER NOT NULL,
+        calls_per_day INTEGER NOT NULL DEFAULT 1000,
         kind TEXT NOT NULL,
         created_at TEXT NOT NULL,
         last_used_at TEXT,
@@ -260,8 +283,10 @@ _DDL = (
 )
 COLUMNS = (
     "id, tenant_id, user_id, name, secret_hash, scopes, policy, read_folders, write_folders, "
-    "rate_per_minute, kind, created_at, last_used_at, revoked_at"
+    "rate_per_minute, calls_per_day, kind, created_at, last_used_at, revoked_at"
 )
+# columns added after the table first shipped (SQLite files from before get them on first use)
+LATER_COLUMNS = {"calls_per_day": "INTEGER NOT NULL DEFAULT 1000"}
 
 
 def _split(value: Any) -> tuple[str, ...]:
@@ -278,6 +303,7 @@ class SqlConnectionStore:
     async def _ready(self) -> None:
         if is_sqlite(self._engine):
             await ensure_tables(self._engine, "mcp_connections", _DDL)
+            await ensure_columns(self._engine, "mcp_connections", "mcp_connections", LATER_COLUMNS)
 
     def _stamp(self, when: datetime | None) -> Any:
         if when is None:
@@ -296,7 +322,7 @@ class SqlConnectionStore:
             "secret_hash": c.secret_hash, "scopes": "\n".join(c.scopes),
             "policy": "\n".join(f"{k}={v}" for k, v in c.policy.items()),
             "read_folders": "\n".join(c.read_folders), "write_folders": "\n".join(c.write_folders),
-            "rate_per_minute": c.rate_per_minute, "kind": c.kind,
+            "rate_per_minute": c.rate_per_minute, "calls_per_day": c.calls_per_day, "kind": c.kind,
             "created_at": self._stamp(c.created_at), "last_used_at": self._stamp(c.last_used_at),
             "revoked_at": self._stamp(c.revoked_at),
         }  # fmt: skip
@@ -308,7 +334,8 @@ class SqlConnectionStore:
             id=m["id"], tenant_id=m["tenant_id"], user_id=m["user_id"], name=m["name"],
             secret_hash=m["secret_hash"], scopes=_split(m["scopes"]), policy=policy,
             read_folders=_split(m["read_folders"]), write_folders=_split(m["write_folders"]),
-            rate_per_minute=int(m["rate_per_minute"]), kind=m["kind"],
+            rate_per_minute=int(m["rate_per_minute"]), calls_per_day=int(m["calls_per_day"]),
+            kind=m["kind"],
             created_at=self._moment(m["created_at"]) or _now(),
             last_used_at=self._moment(m["last_used_at"]),
             revoked_at=self._moment(m["revoked_at"]),
@@ -321,7 +348,8 @@ class SqlConnectionStore:
                 text(
                     f"INSERT INTO mcp_connections ({COLUMNS}) VALUES (:id, :tenant_id, :user_id, "
                     ":name, :secret_hash, :scopes, :policy, :read_folders, :write_folders, "
-                    ":rate_per_minute, :kind, :created_at, :last_used_at, :revoked_at)"
+                    ":rate_per_minute, :calls_per_day, :kind, :created_at, :last_used_at, "
+                    ":revoked_at)"
                 ),
                 self._params(connection),
             )
@@ -357,6 +385,7 @@ class SqlConnectionStore:
                     "UPDATE mcp_connections SET name = :name, secret_hash = :secret_hash, "
                     "scopes = :scopes, policy = :policy, read_folders = :read_folders, "
                     "write_folders = :write_folders, rate_per_minute = :rate_per_minute, "
+                    "calls_per_day = :calls_per_day, "
                     "last_used_at = :last_used_at, revoked_at = :revoked_at WHERE id = :id"
                 ),
                 self._params(connection),
@@ -405,6 +434,20 @@ class SqlConnectionStore:
                 for r in rows
             ]
 
+    async def calls_since(self, connection_id: str, since: datetime) -> int:
+        await self._ready()
+        async with self._engine.connect() as conn:
+            row = (
+                await conn.execute(
+                    text(
+                        "SELECT COUNT(*) FROM mcp_activity WHERE connection_id = :c "
+                        "AND method = 'tools/call' AND created_at >= :s"
+                    ),
+                    {"c": connection_id, "s": self._stamp(since)},
+                )
+            ).first()
+        return int(row[0]) if row else 0
+
 
 class ConnectionsService:
     """What Settings does with connections, and what the gate asks."""
@@ -422,11 +465,14 @@ class ConnectionsService:
         policy: Any = None,
         read_folders: list[str] | None = None,
         write_folders: list[str] | None = None,
+        calls_per_day: int | None = None,
         kind: Kind = "client",
     ) -> tuple[Connection, str]:
         """A new connection and its secret, which is shown once and never stored in the open."""
         cid = new_id()
         secret = new_secret(cid)
+        if calls_per_day is not None and not 1 <= calls_per_day <= 100_000:
+            raise ValueError("the daily quota is 1 to 100,000 calls")
         connection = Connection(
             id=cid, tenant_id=tenant_id, user_id=user_id, name=check_name(name),
             secret_hash=hash_secret(secret),
@@ -435,6 +481,7 @@ class ConnectionsService:
             write_folders=(
                 tuple(write_folders) if write_folders is not None else (default_export_folder(),)
             ),
+            calls_per_day=calls_per_day if calls_per_day is not None else DEFAULT_DAILY,
             kind=kind,
         )  # fmt: skip
         await self.store.create(connection)
@@ -463,6 +510,11 @@ class ConnectionsService:
                 if not isinstance(value, list) or not all(isinstance(p, str) for p in value):
                     raise ValueError(f"{key} must be a list of folder paths")
                 fields[key] = tuple(value)
+        if "calls_per_day" in changes:
+            daily = int(changes["calls_per_day"])
+            if not 1 <= daily <= 100_000:
+                raise ValueError("the daily quota is 1 to 100,000 calls")
+            fields["calls_per_day"] = daily
         if "rate_per_minute" in changes:
             rate = int(changes["rate_per_minute"])
             if not 1 <= rate <= 600:

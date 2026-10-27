@@ -2,7 +2,13 @@
 // Settings > Connections (ADR-0069 decision 3): the switch "Let other apps use Wasify AI", the connections the person
 // allowed (scopes in plain words, the approval setting, revoke, a new secret), the activity, and the exact command to
 // paste for each client. A secret is shown once, when it is made.
-import type { Connection, ConnectionsApi, Snippets } from "@wasifyai/client";
+import type {
+  Connection,
+  ConnectionsApi,
+  FixedPortState,
+  RunningJob,
+  Snippets,
+} from "@wasifyai/client";
 import { useCallback, useEffect, useId, useState } from "react";
 import { Button } from "../components/button";
 
@@ -30,6 +36,8 @@ const CLIENTS: [string, string, string][] = [
   ["Codex", "codex_toml", "Add this to ~/.codex/config.toml:"],
   ["OpenCode", "opencode_json", "Add this to opencode.json:"],
 ];
+
+const JOBS_EVERY_MS = 3000;
 
 function problem(e: unknown): string {
   return e instanceof Error && e.message ? e.message : "That did not work.";
@@ -96,6 +104,212 @@ function Folders({
           </Button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** The daily quota (ADR-0069 decision 10): how many tool calls a day, saved on blur or Enter. */
+function Quota({ value, onSave }: { value: number; onSave: (n: number) => void }) {
+  const id = useId();
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  function save() {
+    const n = Number.parseInt(text, 10);
+    if (Number.isFinite(n) && n >= 1 && n !== value) onSave(n);
+    else setText(String(value));
+  }
+  return (
+    <label htmlFor={id} className="flex flex-wrap items-center gap-2">
+      <span className="text-muted-foreground text-xs">Tool calls a day, at most</span>
+      <input
+        id={id}
+        type="number"
+        min={1}
+        max={100000}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            save();
+          }
+        }}
+        className="h-8 w-24 rounded-md border border-input bg-transparent px-2 text-sm"
+      />
+      <span className="text-muted-foreground text-xs">(it runs one job at a time)</span>
+    </label>
+  );
+}
+
+/** What is running now and who started it (ADR-0069 decision 10: jobs are labelled and the person can stop them). */
+function RunningJobs({ api }: { api: ConnectionsApi }) {
+  const [jobs, setJobs] = useState<RunningJob[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const tick = () =>
+      api
+        .jobs()
+        .then((r) => {
+          if (alive) setJobs(r.jobs);
+        })
+        .catch(() => {});
+    tick();
+    const timer = setInterval(tick, JOBS_EVERY_MS);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [api]);
+  if (jobs.length === 0) return null;
+  async function stop(job: RunningJob) {
+    setError(null);
+    try {
+      await api.cancelJob(job.job_id);
+      setJobs((js) => js.filter((j) => j.job_id !== job.job_id));
+    } catch (e) {
+      setError(problem(e));
+    }
+  }
+  return (
+    <div className="grid gap-1" aria-label="Running now">
+      <h3 className="m-0 font-medium text-base">Running now</h3>
+      <ul className="m-0 grid list-none gap-1 p-0">
+        {jobs.map((j) => (
+          <li key={j.job_id} className="flex flex-wrap items-center gap-2 text-sm">
+            <span>
+              {j.action_id}
+              {j.from ? ` from ${j.from}` : ""}
+            </span>
+            <span className="text-muted-foreground text-xs">{Math.round(j.seconds)} s</span>
+            {j.cancellable ? (
+              <Button type="button" size="sm" variant="outline" onClick={() => void stop(j)}>
+                Stop
+              </Button>
+            ) : (
+              <span className="text-muted-foreground text-xs">(finishes on its own)</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {error ? <p className="m-0 text-destructive text-sm">{error}</p> : null}
+    </div>
+  );
+}
+
+/** The opt-in fixed HTTP port (ADR-0069 decision 2) for a client that cannot run the launcher. */
+function FixedPort({
+  api,
+  onChange,
+}: {
+  api: ConnectionsApi;
+  onChange: () => void;
+}) {
+  const id = useId();
+  const [state, setState] = useState<FixedPortState | null>(null);
+  const [port, setPort] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    api
+      .fixedPort()
+      .then((s) => {
+        setState(s);
+        if (s.port) setPort(String(s.port));
+      })
+      .catch(() => setState({ available: false, port: null, url: null }));
+  }, [api]);
+  if (!state?.available) return null;
+  async function apply(next: number | null) {
+    setError(null);
+    try {
+      const s = await api.setFixedPort(next);
+      setState(s);
+      setPort(s.port ? String(s.port) : "");
+      onChange();
+    } catch (e) {
+      setError(problem(e));
+    }
+  }
+  return (
+    <div className="grid gap-1" aria-label="Fixed port">
+      <h3 className="m-0 font-medium text-base">A fixed port, for apps that connect over HTTP</h3>
+      <p className="m-0 text-muted-foreground text-xs">
+        Off unless you turn it on. Only this computer can reach it, and every app still needs a
+        connection secret from the list below.
+      </p>
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const n = Number.parseInt(port, 10);
+          if (Number.isFinite(n)) void apply(n);
+        }}
+      >
+        <label htmlFor={id} className="grid gap-1 text-sm">
+          <span>Port</span>
+          <input
+            id={id}
+            type="number"
+            min={1024}
+            max={65535}
+            value={port}
+            placeholder="8765"
+            onChange={(e) => setPort(e.target.value)}
+            className="h-9 w-28 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          />
+        </label>
+        <Button type="submit" variant="outline" disabled={!port.trim()}>
+          {state.port ? "Change" : "Turn on"}
+        </Button>
+        {state.port ? (
+          <Button type="button" variant="outline" onClick={() => void apply(null)}>
+            Turn off
+          </Button>
+        ) : null}
+      </form>
+      {state.url ? (
+        <p className="m-0 text-sm">
+          Listening at <code>{state.url}</code>.
+        </p>
+      ) : null}
+      {error ? <p className="m-0 text-destructive text-sm">{error}</p> : null}
+    </div>
+  );
+}
+
+/** The skill file for Claude Code: words that tell an agent how to use the tools well, made from the catalogue. */
+function SkillFile({ api }: { api: ConnectionsApi }) {
+  const [text, setText] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  async function show() {
+    setError(null);
+    try {
+      setText(await api.skill());
+    } catch (e) {
+      setError(problem(e));
+    }
+  }
+  return (
+    <div className="grid gap-1" aria-label="Skill file">
+      <h3 className="m-0 font-medium text-base">A skill file for Claude Code</h3>
+      <p className="m-0 text-muted-foreground text-xs">
+        Optional. Save it as <code>.claude/skills/wasify-ai/SKILL.md</code> in a project (or under{" "}
+        <code>~/.claude/skills/</code>) and Claude Code knows when and how to use Wasify AI. It is
+        made from what this app can do, so make it again after an update.
+      </p>
+      {text === null ? (
+        <div>
+          <Button type="button" size="sm" variant="outline" onClick={() => void show()}>
+            Show the skill file
+          </Button>
+        </div>
+      ) : (
+        <pre className="m-0 max-h-80 overflow-auto rounded-md border bg-muted/40 p-2 text-xs">
+          {text}
+        </pre>
+      )}
+      {error ? <p className="m-0 text-destructive text-sm">{error}</p> : null}
     </div>
   );
 }
@@ -184,6 +398,10 @@ function Row({
           <p className="m-0 text-muted-foreground text-xs">
             Deleting and anything that needs your word always ask you, whatever this says.
           </p>
+          <Quota
+            value={connection.calls_per_day}
+            onSave={(calls_per_day) => run(() => api.update(connection.id, { calls_per_day }))}
+          />
           <Folders
             label="Folders it may read files from (one per line)"
             value={connection.read_folders}
@@ -292,6 +510,7 @@ export function ConnectionsSettings({ api }: { api: ConnectionsApi }) {
         picture or a speech file, check a job, list models. Each one acts as you, with only what you
         allow here, and anything that deletes or needs your word shows a card in this window first.
       </p>
+      <RunningJobs api={api} />
       {launcher ? (
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -319,6 +538,23 @@ export function ConnectionsSettings({ api }: { api: ConnectionsApi }) {
             The launcher is {snippets.launcher}. When this app is closed it tells the agent to open
             Wasify AI and start again.
           </p>
+        </div>
+      ) : null}
+      {launcher?.enabled ? (
+        <>
+          <SkillFile api={api} />
+          <FixedPort api={api} onChange={load} />
+        </>
+      ) : null}
+      {launcher?.enabled && snippets?.snippets.claude_code_http ? (
+        <div className="grid gap-1">
+          <p className="m-0 text-sm">
+            <span className="font-medium">Over HTTP.</span> With a connection secret in{" "}
+            <code>WASIFY_MCP_SECRET</code>, Claude Code takes:
+          </p>
+          <pre className="m-0 overflow-x-auto rounded-md border bg-muted/40 p-2 text-xs">
+            {snippets.snippets.claude_code_http}
+          </pre>
         </div>
       ) : null}
       <h3 className="m-0 font-medium text-base">Connections</h3>

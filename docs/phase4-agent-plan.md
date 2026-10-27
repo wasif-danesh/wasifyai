@@ -126,7 +126,7 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
 - **Acceptance:** an agent can transcribe a file under its allowed folder and cannot read outside it; delete and
   clone need the window; a library search is refused unless the scope has it; the 20 hostile-path test passes.
 
-### Stage M3. Hardening and reach (M)
+### Stage M3. Hardening and reach (M) — built 2026-10-27 (ADR-0069 "Built"; the review is `docs/mcp-security-review.md`)
 
 - Rate limits and per-connection quotas; a visible "from Codex" label on jobs and creations; notifications for
   background approvals.

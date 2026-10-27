@@ -102,8 +102,10 @@ export {
   type ApprovalEvent,
   type Connection,
   type ConnectionsApi,
+  type FixedPortState,
   type LauncherState,
   type PendingApproval,
+  type RunningJob,
   type Snippets,
   createConnectionsApi,
 } from "./connections";

@@ -16,6 +16,7 @@ const codex: Connection = {
   read_folders: [],
   write_folders: [],
   rate_per_minute: 60,
+  calls_per_day: 1000,
   created_at: "2026-10-27T00:00:00Z",
   last_used_at: null,
   revoked: false,
@@ -43,6 +44,15 @@ function api(over: Partial<ConnectionsApi> = {}): ConnectionsApi {
       },
     })),
     launcher: vi.fn(async () => ({ available: true, enabled: false })),
+    skill: vi.fn(async () => "---\nname: wasify-ai\n---\n\n# Wasify AI\n"),
+    fixedPort: vi.fn(async () => ({ available: true, port: null, url: null })),
+    setFixedPort: vi.fn(async (port) => ({
+      available: true,
+      port,
+      url: port ? `http://127.0.0.1:${port}/mcp` : null,
+    })),
+    jobs: vi.fn(async () => ({ jobs: [] })),
+    cancelJob: vi.fn(async (job_id) => ({ job_id, status: "cancelled", stopped: true })),
     setLauncher: vi.fn(async (enabled) => ({ available: true, enabled })),
     pendingApprovals: vi.fn(async () => ({ approvals: [] })),
     decide: vi.fn(async (approval_id) => ({ approval_id, status: "approved" })),
@@ -84,6 +94,68 @@ describe("Settings > Connections", () => {
     await waitFor(() =>
       expect(a.update).toHaveBeenCalledWith("c1", { approval: { make: "auto" } }),
     );
+  });
+
+  it("saves the daily quota of a connection", async () => {
+    const a = api();
+    const user = userEvent.setup();
+    render(<ConnectionsSettings api={a} />);
+    const quota = await screen.findByLabelText(/tool calls a day/i);
+    expect(quota).toHaveValue(1000);
+    await user.clear(quota);
+    await user.type(quota, "50{Enter}");
+    await waitFor(() => expect(a.update).toHaveBeenCalledWith("c1", { calls_per_day: 50 }));
+  });
+
+  it("shows what runs now, who started it, and Stop ends it", async () => {
+    const a = api({
+      jobs: vi.fn(async () => ({
+        jobs: [
+          {
+            job_id: "j1",
+            action_id: "image.generate",
+            origin: "mcp:Codex",
+            from: "Codex",
+            seconds: 12,
+            cancellable: true,
+          },
+        ],
+      })),
+    });
+    const user = userEvent.setup();
+    render(<ConnectionsSettings api={a} />);
+    expect(await screen.findByText("image.generate from Codex")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Stop" }));
+    await waitFor(() => expect(a.cancelJob).toHaveBeenCalledWith("j1"));
+    expect(screen.queryByText("image.generate from Codex")).toBeNull();
+  });
+
+  it("turns the fixed port on once the launcher is on, and the HTTP command follows", async () => {
+    const a = api({
+      launcher: vi.fn(async () => ({ available: true, enabled: true })),
+      snippets: vi
+        .fn()
+        .mockResolvedValueOnce({
+          launcher: "/x/wasify-mcp",
+          snippets: { claude_code_command: "a" },
+        })
+        .mockResolvedValue({
+          launcher: "/x/wasify-mcp",
+          snippets: {
+            claude_code_command: "a",
+            claude_code_http: "claude mcp add --transport http wasify http://127.0.0.1:8765/mcp",
+          },
+        }),
+    });
+    const user = userEvent.setup();
+    render(<ConnectionsSettings api={a} />);
+    await user.type(await screen.findByLabelText("Port"), "8765");
+    await user.click(screen.getByRole("button", { name: "Turn on" }));
+    await waitFor(() => expect(a.setFixedPort).toHaveBeenCalledWith(8765));
+    expect(await screen.findByText("http://127.0.0.1:8765/mcp")).toBeInTheDocument();
+    expect(await screen.findByText(/--transport http/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Show the skill file" }));
+    expect(await screen.findByText(/name: wasify-ai/)).toBeInTheDocument();
   });
 
   it("adds a connection and shows its secret once", async () => {

@@ -12,6 +12,7 @@ export type Connection = {
   read_folders: string[];
   write_folders: string[];
   rate_per_minute: number;
+  calls_per_day: number;
   created_at: string;
   last_used_at: string | null;
   revoked: boolean;
@@ -36,6 +37,22 @@ export type LauncherState = {
   enabled: boolean;
   connection?: Connection | null;
   file?: string;
+};
+
+export type RunningJob = {
+  job_id: string;
+  action_id: string;
+  origin: string;
+  /** The connection's name when an agent started it ("Codex"); null for the window or the assistant. */
+  from: string | null;
+  seconds: number;
+  cancellable: boolean;
+};
+
+export type FixedPortState = {
+  available: boolean;
+  port: number | null;
+  url: string | null;
 };
 
 export type PendingApproval = {
@@ -85,7 +102,16 @@ export function createConnectionsApi(transport: Transport) {
     update: (
       id: string,
       body: Partial<
-        Pick<Connection, "name" | "scopes" | "approval" | "read_folders" | "write_folders">
+        Pick<
+          Connection,
+          | "name"
+          | "scopes"
+          | "approval"
+          | "read_folders"
+          | "write_folders"
+          | "rate_per_minute"
+          | "calls_per_day"
+        >
       >,
     ) =>
       json<Connection>(transport, `/connections/${id}`, {
@@ -108,6 +134,28 @@ export function createConnectionsApi(transport: Transport) {
         headers,
         body: JSON.stringify({ enabled }),
       }),
+    /** A SKILL.md for Claude Code, generated from the catalogue (stage M3). */
+    skill: async (): Promise<string> => {
+      const res = await transport.fetch("/connections/skill");
+      if (!res.ok) throw new HttpError(res.status, "no skill file");
+      return await res.text();
+    },
+    fixedPort: () => json<FixedPortState>(transport, "/connections/fixed-port"),
+    /** A port turns the HTTP option on; null turns it off. */
+    setFixedPort: (port: number | null) =>
+      json<FixedPortState>(transport, "/connections/fixed-port", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ port }),
+      }),
+    /** The jobs running for this person, with who started each ("from Codex"). */
+    jobs: () => json<{ jobs: RunningJob[] }>(transport, "/actions/jobs"),
+    cancelJob: (jobId: string) =>
+      json<{ job_id: string; status: string; stopped: boolean }>(
+        transport,
+        `/actions/jobs/${jobId}/cancel`,
+        { method: "POST" },
+      ),
     pendingApprovals: () => json<{ approvals: PendingApproval[] }>(transport, "/actions/approvals"),
     decide: (approvalId: string, approved: boolean) =>
       json<{ approval_id: string; status: string }>(transport, `/actions/approvals/${approvalId}`, {

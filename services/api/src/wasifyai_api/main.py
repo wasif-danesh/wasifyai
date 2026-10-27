@@ -109,6 +109,7 @@ from wasifyai_api.mcp_server.connections import (
 from wasifyai_api.mcp_server.endpoint import attach as attach_mcp
 from wasifyai_api.mcp_server.endpoint import build_server as build_mcp_server
 from wasifyai_api.mcp_server.endpoint import mount as mount_mcp
+from wasifyai_api.mcp_server.fixed_port import FixedPort
 from wasifyai_api.mcp_server.routes import router as connections_router
 from wasifyai_api.mcp_server.runtime_file import Launcher, remove_runtime_file
 from wasifyai_api.media_access import MediaAccess, media_capabilities_from
@@ -416,13 +417,22 @@ def create_app(
         app.state.connections = connections
         app.state.approval_desk = ApprovalDesk(executor)
         attach_mcp(
-            app, build_mcp_server(executor, app.state.approval_desk, app.state.events), connections
+            app,
+            build_mcp_server(executor, app.state.approval_desk, app.state.events, connections),
+            connections,
         )
         if desktop is not None:
             port = urlparse(settings.desktop_public_url).port
             app.state.launcher = Launcher(
                 Path(settings.desktop_data_dir), secrets, connections, port
             )
+        # the opt-in fixed port for HTTP clients (stage M3), remembered in the settings store
+        app.state.fixed_port = FixedPort(
+            app.state.mcp_gate,
+            InMemorySettingsStore()
+            if injected
+            else (desktop.settings_store if desktop else PostgresSettingsStore(db)),
+        )
 
         def build_graphs(saver: Any) -> dict[str, Any]:
             graphs: dict[str, Any] = {}
@@ -791,9 +801,11 @@ def create_app(
                     )
                 # the SDK's session manager lives as long as the engine (spike S1)
                 async with app.state.mcp.session_manager.run():
+                    await app.state.fixed_port.start_if_saved()
                     try:
                         yield
                     finally:
+                        await app.state.fixed_port.stop(forget=False)
                         if desktop:
                             remove_runtime_file(app.state.launcher.path)
         finally:

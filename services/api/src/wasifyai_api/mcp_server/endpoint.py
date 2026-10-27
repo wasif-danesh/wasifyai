@@ -44,18 +44,26 @@ TOUCH_EVERY_S = 60.0
 class WasifyMCP(MCPServer):
     """The SDK's server with the catalogue's tools, offered per connection by scope."""
 
-    def __init__(self, executor: ActionExecutor, desk: ApprovalDesk, events: Any):
+    def __init__(
+        self,
+        executor: ActionExecutor,
+        desk: ApprovalDesk,
+        events: Any,
+        connections: ConnectionsService | None = None,
+    ):
         super().__init__("wasify", instructions=INSTRUCTIONS)
         self.executor = executor
         self.desk = desk
         self.events = events
+        self.connections = connections
         self.catalogue: dict[str, Action] = {}
 
         async def body(action: Action, arguments: dict[str, Any], ctx: Context) -> Any:
             connection = current_connection.get()
             if connection is None:
                 raise ToolError("no connection")
-            return await run_call(executor, desk, events, connection, action, arguments, ctx)
+            store = self.connections.store if self.connections is not None else None
+            return await run_call(executor, desk, events, connection, action, arguments, ctx, store)
 
         for name, (action, tool) in tools_of(executor.registry, body).items():
             self.catalogue[name] = action
@@ -226,8 +234,13 @@ class ConnectionGate:
             log.exception("mcp: could not record the call")
 
 
-def build_server(executor: ActionExecutor, desk: ApprovalDesk, events: Any) -> WasifyMCP:
-    server = WasifyMCP(executor, desk, events)
+def build_server(
+    executor: ActionExecutor,
+    desk: ApprovalDesk,
+    events: Any,
+    connections: ConnectionsService | None = None,
+) -> WasifyMCP:
+    server = WasifyMCP(executor, desk, events, connections)
     # the SDK's own Starlette app is not mounted (FastAPI would not run its lifespan); this call
     # builds the session manager the gate wraps, with the loopback Host/Origin checks on
     server.streamable_http_app(

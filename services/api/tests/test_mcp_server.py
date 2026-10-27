@@ -22,6 +22,7 @@ from wasifyai_api.config import get_settings
 from wasifyai_api.main import create_app
 from wasifyai_api.mcp_server import calls
 from wasifyai_api.mcp_server.connections import (
+    Connection,
     ConnectionsService,
     InMemoryConnectionStore,
     SqlConnectionStore,
@@ -29,6 +30,7 @@ from wasifyai_api.mcp_server.connections import (
     hash_secret,
     secret_matches,
 )
+from wasifyai_platform_sdk.actions import ActionResult
 from wasifyai_platform_sdk.sqlite import create_sqlite_engine
 
 from tests.test_desktop_profile import SECRET, auth, data_dir  # noqa: F401
@@ -146,6 +148,16 @@ class Engine:
 
     def get(self, path: str) -> httpx.Response:
         return httpx.get(f"{self.base}{path}", headers=auth(), timeout=30)
+
+    def put(self, path: str, body: dict | None = None) -> httpx.Response:
+        return httpx.put(f"{self.base}{path}", json=body, headers=auth(), timeout=30)
+
+    def patch(self, path: str, body: dict | None = None) -> httpx.Response:
+        return httpx.patch(f"{self.base}{path}", json=body, headers=auth(), timeout=30)
+
+    def raw(self, method: str, url: str) -> httpx.Response:
+        """A request to any address, with no token: what a stranger on this computer gets."""
+        return httpx.request(method, url, json={}, timeout=10)
 
     def connection(self, name: str = "Codex", **body: Any) -> tuple[dict, str]:
         r = self.post("/connections", {"name": name, **body})
@@ -452,3 +464,130 @@ def test_a_new_connection_gets_the_apps_export_folder_by_default(engine):
     c, _ = engine.connection("Default")
     assert len(c["write_folders"]) == 1 and c["write_folders"][0].endswith("Wasify AI exports")
     assert c["read_folders"] == []
+
+
+# ---- stage M3: quotas, jobs from other apps, the fixed port, the skill file ----------------
+
+
+async def test_a_connection_runs_one_job_at_a_time_and_is_told_which(engine):
+    """ADR-0069 decision 10, at the seam: a second long call while one runs is refused with the
+    running job named, so the agent can wait for it instead of piling up."""
+    from wasifyai_api.mcp_server.calls import over_the_limits
+    from wasifyai_platform_sdk.actions.jobs import JobBook
+
+    class Executor:
+        jobs = JobBook()
+
+    offered = list(engine.app.state.actions.registry.for_surface("mcp"))
+    c = Connection(id="c1", tenant_id="t", user_id="u", name="Codex", secret_hash="x")
+    running = Executor.jobs.start("image.generate", "t", "u", c.origin, True)
+    long_action = next(a for a in offered if a.long)
+    quick = next(a for a in offered if not a.long)
+    ex: Any = Executor()
+    stopped = await over_the_limits(ex, None, c, long_action)
+    assert stopped is not None and stopped.code == "busy" and running.id in stopped.text
+    assert await over_the_limits(ex, None, c, quick) is None  # a read is never busy
+    other = Connection(id="c2", tenant_id="t", user_id="u", name="Other", secret_hash="x")
+    assert await over_the_limits(ex, None, other, long_action) is None
+
+
+async def test_the_daily_quota_counts_tool_calls_and_then_refuses(engine):
+    c, secret = engine.connection("Thrifty", scopes=["make", "models"], calls_per_day=2)
+    assert c["calls_per_day"] == 2
+    async with sdk(engine, secret, "2026-07-28") as client:
+        await client.list_tools()  # a list is not a call
+        first = await client.call_tool("models_list", {})
+        assert not first.is_error, text_of(first)
+        await _recorded(engine, c["id"], 1)  # the activity is written after the answer, in a task
+        second = await client.call_tool("models_list", {})
+        assert not second.is_error, text_of(second)
+        await _recorded(engine, c["id"], 2)
+        third = await client.call_tool("models_list", {})
+        s = third.structured_content
+        assert s["status"] == "refused" and s["code"] == "quota", third
+        assert "used its 2 calls for today" in text_of(third)
+    r = engine.patch(f"/connections/{c['id']}", {"calls_per_day": 0})
+    assert r.status_code == 422 and "1 to 100,000" in r.text
+
+
+def test_the_person_sees_jobs_from_other_apps_and_can_stop_them(engine):
+    """Decision 10: jobs carry who started them, and the window can stop them."""
+    executor = engine.app.state.actions
+    me = executor.jobs  # the book is shared; start a job as the launcher's agent would
+    c, _ = engine.connection("Codex")
+    tenant, user = _person_of(engine)
+    job = me.start("image.generate", tenant, user, f"mcp:{c['name']}", True)
+    try:
+        r = engine.get("/actions/jobs")
+        assert r.status_code == 200, r.text
+        mine = [j for j in r.json()["jobs"] if j["job_id"] == job.id]
+        assert mine and mine[0]["from"] == "Codex" and mine[0]["cancellable"] is True
+        r = engine.post(f"/actions/jobs/{job.id}/cancel")
+        assert r.status_code == 200 and r.json()["job_id"] == job.id
+        assert r.json()["stopped"] is False  # no task to cancel in this bare-book job
+        assert engine.post("/actions/jobs/nope/cancel").status_code == 404
+    finally:
+        me.finish(
+            job, "cancelled", ActionResult(status="refused", action_id="image.generate", text="x")
+        )
+
+
+async def _recorded(engine: Engine, connection_id: str, count: int) -> None:
+    for _ in range(60):
+        got = await asyncio.to_thread(engine.get, f"/connections/{connection_id}/activity")
+        if len(got.json()["activity"]) >= count:
+            return
+        await asyncio.sleep(0.05)
+    raise AssertionError(f"{count} calls were not recorded in time")
+
+
+def _person_of(engine: Engine) -> tuple[str, str]:
+    """The tenant and user id the engine resolves the test token to."""
+    me = engine.get("/me").json()
+    return me["tenant_id"], me["user_id"]
+
+
+async def test_the_fixed_port_serves_mcp_through_the_gate_and_stops_on_request(engine):
+    """Decision 2's opt-in HTTP form: a second loopback port, the same gate, remembered in the
+    settings store, off by default."""
+    assert engine.get("/connections/fixed-port").json() == {
+        "available": True,
+        "port": None,
+        "url": None,
+    }
+    assert "claude_code_http" not in engine.get("/connections/snippets").json()["snippets"]
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    r = engine.put("/connections/fixed-port", {"port": port})
+    assert r.status_code == 200 and r.json()["url"] == f"http://127.0.0.1:{port}/mcp", r.text
+    assert (
+        f"127.0.0.1:{port}/mcp"
+        in engine.get("/connections/snippets").json()["snippets"]["claude_code_http"]
+    )
+    bare = engine.raw("POST", f"http://127.0.0.1:{port}/mcp")
+    assert bare.status_code == 401  # the gate, not the SDK, answers first
+    assert engine.raw("GET", f"http://127.0.0.1:{port}/health").status_code == 404  # only /mcp
+    _, secret = engine.connection("Over HTTP")
+    hc = httpx2.AsyncClient(headers={"Authorization": f"Bearer {secret}"}, timeout=60)
+    async with Client(
+        streamable_http_client(f"http://127.0.0.1:{port}/mcp", http_client=hc), mode="2026-07-28"
+    ) as client:
+        assert "image_generate" in {t.name for t in (await client.list_tools()).tools}
+    r = engine.put("/connections/fixed-port", {"port": None})
+    assert r.status_code == 200 and r.json()["port"] is None
+    with pytest.raises(httpx.ConnectError):
+        engine.raw("POST", f"http://127.0.0.1:{port}/mcp")
+    r = engine.put("/connections/fixed-port", {"port": 80})
+    assert r.status_code == 422  # below 1024
+
+
+def test_the_skill_file_is_made_from_the_catalogue(engine):
+    r = engine.get("/connections/skill")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/markdown")
+    text = r.text
+    assert text.startswith("---\nname: wasify-ai\n")
+    assert "`image_generate`" in text and "`models_list`" in text and "`job_wait`" in text
+    assert "`library_delete`" not in text  # the launcher's default scopes have no library
+    assert "takes a while" in text and "approval_status" in text

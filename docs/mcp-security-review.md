@@ -1,0 +1,46 @@
+# MCP server: security review (stage M3, 2026-10-27)
+
+The review the phase 4 plan asks for in stage M3 (`docs/phase4-agent-plan.md`, "Security checklist"): every row of
+the checklist, what is built for it, where it is tested, and what is still open. Rows that belong to the MCP
+**client** (ADR-0070) are not built yet and are marked "before C1": they are reviewed again when that stage ships.
+
+Reviewed: the engine's `services/api/src/wasifyai_api/mcp_server/`, the launcher
+`apps/desktop/src-tauri/src/bin/wasify_mcp.rs`, Settings > Other apps (`packages/ui/src/connections/`), and the
+principals and secret store of ADR-0092. Tests named below are in `services/api/tests/test_mcp_server.py` unless
+another file is given.
+
+## The checklist, row by row
+
+| Threat | Control (as built) | Where | Checked by | Open |
+|---|---|---|---|---|
+| A web page calls the local endpoint (DNS rebinding, CSRF) | Only `POST`/`GET`/`DELETE` on `/mcp`; a bearer connection secret is required before the SDK sees the request (401 otherwise); the SDK's own `Origin` (403) and `Host` (421) checks are on, bound to loopback; no CORS headers anywhere on `/mcp`; a browser has no secret and its `Origin` is refused | `endpoint.py` `ConnectionGate`, `build_server` (`transport_security`) | `test_the_gate_refuses_what_it_must`; `test_the_fixed_port_serves_mcp_through_the_gate_and_stops_on_request` (the fixed port refuses a bare request and serves only `/mcp`) | none |
+| Another local user or program reads the secret | `engine.json` is written 0600 by the engine, atomically; the launcher opens it with `O_NOFOLLOW`, refuses a file owned by someone else, readable by others, in a folder writable by others, with a dead pid or a non-loopback host; a connection secret is shown once in Settings and stored as `sha256$salt$hex`; the launcher's secret lives in the secret store (keychain on the desktop); revoke and "New secret" per connection | `runtime_file.py`, `wasify_mcp.rs` (`check_file`), `connections.py` (`hash_secret`, `secret_matches`), ADR-0092 | `test_the_launcher_refuses_a_runtime_file_it_cannot_trust`, `test_the_launcher_switch_writes_and_removes_the_runtime_file`, `test_a_secret_names_its_connection_and_is_checked_against_its_hash`; `packages/platform-sdk/tests/test_secrets.py` | The fixed HTTP port is opt-in and loopback-only; its clients hold a connection secret in their own config, which is their keeping (said in Settings) |
+| An agent tricked into harm (prompt injection through what it reads) | Effects are enforced by the executor from the catalogue, never from a tool's description; `destroy` and `needs_consent` always ask a person in the window (the floor cannot be lowered by a connection's setting); the approval is answered in the Wasify window, so text an agent reads cannot answer it; a connection's scopes filter both the tool list and the call | `executor.py` (`ApprovalPolicy` floor), `approvals.py` (the desk), `endpoint.py` (`list_tools`/`call_tool` by scope) | `test_a_make_asks_in_the_window_and_the_persons_yes_runs_it_as_a_job`, `test_the_three_protocol_revisions_list_and_call_what_the_scopes_offer`; `packages/platform-sdk/tests/test_actions_executor.py` (the floor) | none |
+| Our assistant tricked by a remote tool result | Not built: the assistant has no remote tools yet | ADR-0070 decision 5 | — | **before C1** |
+| Arbitrary file read or write | `AllowedFolders.resolve`: absolute paths only, no `..`, no backslash, NUL or newline, symlinks followed and the target must be inside a folder, a prefix of a folder is not the folder, a read needs a regular file, a write never goes through a link and its parent must exist in a write folder; a connection reads nothing until a folder is added in Settings and writes only into its write folders (default: `~/Documents/Wasify AI exports`); the window's person has no folders and keeps the app's own export folder | `wasifyai_platform_sdk/folders.py`, `Principal.folders`, `library.export` (`folder`), `speech.transcribe` (`path`, decoded as an upload is) | `packages/platform-sdk/tests/test_folders.py` (26 hostile paths), `test_a_connection_exports_into_its_own_folder_and_nowhere_else`, `test_a_new_connection_gets_the_apps_export_folder_by_default`, `products/wasifyai-voice/tests/test_voice_actions.py` | none |
+| Private data sent to an agent's provider without the person knowing | `library`, `notebooks` and `voices` are off for a new connection and chosen in Settings in plain words ("see and change your creations (private)"); the presets say what each includes; results are references and ids, not the content of a notebook or a file | `connections.py` (`DEFAULT_SCOPES`), `ConnectionsSettings.tsx` | `test_the_three_protocol_revisions_list_and_call_what_the_scopes_offer` (library tools absent without the scope); `packages/ui/src/connections/connections.test.tsx` | The wording says what is shared, not to whom: a connection's name is the only hint of the provider behind it |
+| A stdio server steals secrets or the library | Not built: the app runs no outside servers yet | ADR-0070 decision 3 | — | **before C1** |
+| SSRF through a remote server address | Not built: the app connects to no remote servers yet | ADR-0070 decision 6 | — | **before C1** |
+| Token or key in a log | The gate logs a rejection without the credential; the activity log holds connection id, method, tool name, status, duration and byte count, never arguments or results; the secret store logs nothing on put or get; `engine.json` is never logged | `endpoint.py`, `connections.py` (`ActivityEntry`), `secrets.py` | `packages/platform-sdk/tests/test_secrets.py::test_nothing_is_logged_when_a_secret_is_kept_or_read`; `test_the_sql_store_keeps_connections_and_their_activity` (the entry's fields) | A test that greps the engine log for `wsc_` during a conformance run is not written |
+| Resource exhaustion (an agent loops) | Per connection: a rate per minute (429 from the gate; 1 to 600, default 60), a daily quota of tool calls (`calls_per_day`, 1 to 100,000, default 1,000, counted from the activity log; a call over it is refused with `quota`), and **one running job at a time** (a second long call is refused with `busy` and the running `job_id`); request bodies at most 1 MiB; results cut at 10,000 characters; waits bounded at 50 s; the executor's own one-slot rule and queue stay the app's | `endpoint.py` (`RateLimiter`), `calls.py` (`over_the_limits`), `connections.py` | `test_the_gate_refuses_what_it_must` (429), `test_the_daily_quota_counts_tool_calls_and_then_refuses`, `test_a_connection_runs_one_job_at_a_time_and_is_told_which` | Decision 10's "eight waiting" is not a separate queue: a second long call is refused rather than queued, which is stricter |
+| Voice cloning or lip sync without a person's word | `needs_consent` actions always show the statement in the window; a connection's approval setting cannot skip it | `executor.py` floor, `approvals.py`, `ApprovalCards.tsx` (the consent line) | `packages/platform-sdk/tests/test_actions_executor.py`; `products/wasifyai-voice/tests/test_voice_actions.py` | none |
+| Memory slot fights (agent and window) | One memory slot, first in first out, is the executor's; every job carries `origin` (`mcp:<connection>`); Settings > Other apps shows "Running now" with the connection's name and a Stop button, and `POST /actions/jobs/{id}/cancel` stops a cancellable job (a child run of a product graph finishes on its own, as before) | `routes.py` (`/actions/jobs`), `ConnectionsSettings.tsx` (`RunningJobs`) | `test_the_person_sees_jobs_from_other_apps_and_can_stop_them`; `connections.test.tsx` ("shows what runs now") | Creations made by an agent carry `origin` in the audit log; the library card does not yet show "from Codex" |
+
+## Findings outside the checklist
+
+- **The approval desk is in memory.** A pending approval is lost when the engine restarts; the agent's
+  `approval_status` then answers "unknown" and the card is gone. Acceptable for a desktop app (the person restarted
+  it), noted so nobody relies on it.
+- **The fixed port and the per-launch port share one gate and one rate limiter**, so a client cannot double its
+  rate by using both.
+- **Settings are reachable only with the person's token**, never with a connection secret: `/connections/*`,
+  `/actions/jobs` and `/actions/approvals` depend on `get_identity`, and a connection's principal never has the
+  `admin` scope.
+- **What a connection may change is bounded in the store**, not only in the route: scopes, policy and the quota are
+  checked in `ConnectionsService.update` (`check_scopes`, `check_policy`), so a future caller cannot slip past.
+
+## Verdict
+
+Every server row is closed by code and a test. Three rows belong to the MCP client (ADR-0070) and are reviewed
+before stage C1 ships. Two notes stand for later: a log-grep test for secrets during a conformance run, and the
+"from Codex" label on library cards.

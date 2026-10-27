@@ -255,3 +255,39 @@ Windows and Linux, the Rust launcher and its signing, OAuth, and the 1 MiB limit
   outside it, a relative path, and a path from the window.
 - **Not built:** image previews of at most 256 KB and `resource_link` results (decision 6's "preview: true"); an
   `admin` group of its own; the file path through the three real clients (the test engine has no speech model).
+
+## Built 2026-10-27 (stage M3: hardening and reach)
+
+- **Decision 10, quotas:** a connection runs **one job at a time** (a second long call while one runs is refused
+  with `busy` and the running `job_id`, so the agent waits for it with `job_wait` instead of piling up) and has a
+  **daily quota** of tool calls (`calls_per_day`, 1 to 100,000, default 1,000; Settings > Other apps, "Tool calls a
+  day, at most"), counted from the activity log (Alembic 0024; SQLite files from before get the column on first
+  use); over it, a call is refused with `quota` and a sentence that names Settings. The rate per minute (M1) stays.
+  "Eight waiting" is not built as a queue: refusing the second call is simpler and stricter.
+- **Decision 10, the label and the stop:** `GET /actions/jobs` lists the person's running jobs with `from` (the
+  connection's name when `origin` is `mcp:<name>`), and `POST /actions/jobs/{id}/cancel` stops one that can be
+  stopped. Settings > Other apps shows "Running now" ("image.generate from Codex", the seconds, Stop) while anything
+  runs. The library card does not yet say "from Codex" (the audit log holds the origin).
+- **Decision 2, the opt-in fixed port:** `PUT /connections/fixed-port {port}` opens a second loopback listener that
+  serves nothing but `/mcp` through the same gate and rate limiter; the port is kept in the settings store
+  (`mcp.fixed_port`) and opened again at the next launch; `{port: null}` closes and forgets it. The HTTP snippets
+  (Claude Code with `--transport http`, the secret in `WASIFY_MCP_SECRET`) name this port, never the engine's own.
+  Off by default; the client holds a connection secret of its own.
+- **A skill file for Claude Code:** `GET /connections/skill` is a `SKILL.md` generated from the catalogue for the
+  launcher's scopes (how calls behave: jobs, approvals, folders, `app_status` first; the tools by group with
+  "takes a while" and "asks the person in the app"; three example prompts). Settings shows it with where to save
+  it (`.claude/skills/wasify-ai/SKILL.md`). The alternative "skills instead of MCP" stays rejected: this is words
+  in addition to the connection.
+- **The security review:** `docs/mcp-security-review.md` goes through every row of the phase 4 checklist with the
+  control as built, where it lives, the test that holds it and what is open. Every server row is closed; the three
+  rows of ADR-0070 (remote tool results, outside stdio servers, SSRF) are reviewed before C1.
+- **Tested** on the real desktop engine: the quota refuses the third of two allowed calls; the one-job rule at the
+  seam (`over_the_limits`); the jobs list and the stop; the fixed port serves the SDK's client, refuses a bare
+  request, serves only `/mcp`, stops on request and refuses a port below 1024; the skill file names the launcher's
+  tools and not the library's. Settings: the quota field, "Running now" with Stop, the fixed port and the skill
+  file (`connections.test.tsx`).
+- **Not built:** notifications for background approvals (needs `tauri-plugin-notification`, a dependency the
+  owner has not approved; the card in the window is the only signal); Windows and Linux launchers (the Rust source
+  has the `cfg` branches but CI has no Rust job and a Linux build of the shell's crate needs WebKitGTK, so neither
+  was compiled); the self-test that makes a speech file through the launcher (the test engine has no speech model;
+  the three real clients were driven in M1 without files); the "from Codex" label on library cards.

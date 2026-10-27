@@ -1,5 +1,6 @@
 [
   {
+    "screen": "notebook.create",
     "where": "Notebook › Create",
     "actions": [
       "notebook.create"
@@ -9,6 +10,7 @@
     ]
   },
   {
+    "screen": "notebook.list",
     "where": "Notebook › View notebooks",
     "actions": [
       "notebook.add_source",
@@ -26,6 +28,7 @@
     ]
   },
   {
+    "screen": "images.create",
     "where": "Images › Create",
     "actions": [
       "image.generate"
@@ -35,6 +38,7 @@
     ]
   },
   {
+    "screen": "images.edit",
     "where": "Images › Edit",
     "actions": [
       "image.edit"
@@ -44,6 +48,7 @@
     ]
   },
   {
+    "screen": "images.inpaint",
     "where": "Images › Inpaint",
     "actions": [
       "image.inpaint"
@@ -53,6 +58,7 @@
     ]
   },
   {
+    "screen": "images.reference",
     "where": "Images › Reference",
     "actions": [
       "image.reference"
@@ -62,6 +68,7 @@
     ]
   },
   {
+    "screen": "video.create",
     "where": "Video › Create",
     "actions": [
       "video.generate"
@@ -71,6 +78,7 @@
     ]
   },
   {
+    "screen": "video.animate",
     "where": "Video › Animate an image",
     "actions": [
       "video.animate"
@@ -80,6 +88,7 @@
     ]
   },
   {
+    "screen": "video.extend",
     "where": "Video › Extend video",
     "actions": [
       "video.extend"
@@ -89,6 +98,7 @@
     ]
   },
   {
+    "screen": "voice.speak",
     "where": "Voice › Text to speech",
     "actions": [
       "speech.speak"
@@ -98,6 +108,7 @@
     ]
   },
   {
+    "screen": "voice.transcribe",
     "where": "Voice › Speech to text",
     "actions": [
       "speech.transcribe"
@@ -107,6 +118,7 @@
     ]
   },
   {
+    "screen": "voice.lipsync",
     "where": "Voice › Lip sync",
     "actions": [
       "lipsync.make"
@@ -116,6 +128,7 @@
     ]
   },
   {
+    "screen": "voice.voices",
     "where": "Voice › Voices",
     "actions": [
       "voice.clone",
@@ -129,6 +142,7 @@
     ]
   },
   {
+    "screen": "voice.convert",
     "where": "Voice › Change a voice",
     "actions": [
       "voice.convert"
@@ -138,6 +152,7 @@
     ]
   },
   {
+    "screen": "voice.edit",
     "where": "Voice › Edit speech",
     "actions": [
       "voice.edit_speech"
@@ -147,6 +162,7 @@
     ]
   },
   {
+    "screen": "voice.dub",
     "where": "Voice › Dub a recording",
     "actions": [
       "dub.make",
@@ -158,6 +174,7 @@
     ]
   },
   {
+    "screen": "voice.audiobook",
     "where": "Voice › Audiobook",
     "actions": [
       "audiobook.make",
@@ -169,6 +186,7 @@
     ]
   },
   {
+    "screen": "music.create",
     "where": "Music › Create",
     "actions": [
       "music.generate"
@@ -178,6 +196,7 @@
     ]
   },
   {
+    "screen": "music.lyrics",
     "where": "Music › Lyrics",
     "actions": [
       "music.lyrics"
@@ -187,6 +206,7 @@
     ]
   },
   {
+    "screen": "music.separate",
     "where": "Music › Split into parts",
     "actions": [
       "music.separate"
@@ -196,6 +216,7 @@
     ]
   },
   {
+    "screen": "motion",
     "where": "Motion graphics",
     "actions": [
       "motion.make",
@@ -213,6 +234,7 @@
     ]
   },
   {
+    "screen": "model3d",
     "where": "3D model",
     "actions": [
       "model3d.generate"
@@ -222,6 +244,7 @@
     ]
   },
   {
+    "screen": "train",
     "where": "Train models",
     "actions": [
       "decision.decide",

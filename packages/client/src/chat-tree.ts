@@ -12,6 +12,7 @@ import {
   type ChatState,
   type Conversation,
   type StoredMessage,
+  cardDetails,
   chatReducer,
   fromStored,
   initialChat,
@@ -216,6 +217,7 @@ function interrupted(s: TreeState, e: ParsedEvent): TreeState {
       payload.params && typeof payload.params === "object"
         ? (payload.params as Record<string, unknown>)
         : undefined,
+    ...cardDetails(payload),
   };
   // the card belongs to the tool call it is about, when the engine names one
   const callId = typeof payload.tool_call_id === "string" ? payload.tool_call_id : null;

@@ -3,7 +3,13 @@ import { HttpError, type Transport, errorMessage } from "./transport";
 
 export type SongInput = { idea: string; genre?: string; mood?: string };
 /** The window's answer to a `confirm_action` card (ADR-0071): a clear yes, or no; `expired` = the person went on without answering. */
-export type ConfirmAnswer = { approved: boolean; expired?: boolean };
+/** The answer to a confirm card (ADR-0071): yes or no, `expired` when the person went on without answering, and
+ * `params` when they edited the card's fields before pressing Run. */
+export type ConfirmAnswer = {
+  approved: boolean;
+  expired?: boolean;
+  params?: Record<string, unknown>;
+};
 
 export type Approval = {
   action: "approve" | "regenerate";

@@ -93,6 +93,9 @@ export {
   type StoredPart,
   type ToolApproval,
   type ToolStatus,
+  type CardDetails,
+  type CardField,
+  cardDetails,
 } from "./assistant";
 export {
   initialTree,

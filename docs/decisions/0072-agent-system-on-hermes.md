@@ -1,6 +1,8 @@
 # ADR-0072: An agent system for long tasks, built on Hermes Agent
 
-- **Status:** Accepted (2026-10-18, by the owner), together with the components it names.
+- **Status:** Accepted (2026-10-18, by the owner), together with the components it names. The owner's answers
+  (2026-10-18) and the amendment after spike G0 (2026-10-19) are part of the decision: the sentences marked *amended*
+  are read with them. Stage G1 has not started; `docs/improvement-plan-2026-10-27.md` section 7 is the current design.
 - **Date:** 2026-10-18
 - **Depends on:** ADR-0068 (action catalogue, approvals), ADR-0069 (our MCP server), ADR-0070 (MCP client),
   ADR-0071 (the assistant), ADR-0056 (one engine; one memory slot), ADR-0047 (safeguards), ADR-0041 (everything
@@ -59,13 +61,13 @@ What that means for this app:
    offered ("Research a topic", "Compare things", "Summarise a GitHub repo", "Turn these notes into a report"),
    each a goal with fields, not a script. The assistant (ADR-0071) may offer an Agent card (`agent.run`,
    ADR-0068) when a request is too big for a chat turn.
-2. **Hermes runs as a managed component, not inside our engine.** Like the notebooks' reader and ComfyUI, it is
+2. **Hermes runs as a managed component, not inside our engine.** *(amended below: pre-built from the lock, about 660 MB)* Like the notebooks' reader and ComfyUI, it is
    installed on request after showing its size and source, into `<app data>/components/agent/` in a virtual
    environment of its own, from a **pinned version with a hashed lock** (never a `curl | sh`), with its own data
    folder (`HERMES_HOME`) inside the app data. The engine starts it as a child when a task starts and stops it when
    idle or when the app quits, as it does for ComfyUI. This keeps Hermes's Python version and dependencies
    (it names Python 3.14) away from the engine's.
-3. **One adapter, `AgentEngine`, so Hermes can be replaced.** The engine talks to the agent through an interface
+3. **One adapter, `AgentEngine`, so Hermes can be replaced.** *(decided by G0: the TUI gateway over stdio, one process per task)* The engine talks to the agent through an interface
    (start a task with a goal, tools and limits; stream events; answer approvals; cancel; list artifacts). Hermes
    through its **TUI-gateway JSON-RPC over stdio** is the first implementation, chosen because its own
    documentation recommends it for desktop hosts and because it lets the host answer approvals; spike G0 checks
@@ -73,7 +75,7 @@ What that means for this app:
    (a LangGraph loop over our actions and the MCP client of ADR-0070) is kept possible as the fallback if Hermes
    proves unfit or unstable. Its events are translated to ours: `node`, `token`, `tool_call`, `tool_result`,
    `interrupt`, `job_progress`, `done`, so a task is an ordinary run with a replayable log (ADR-0021).
-4. **Tool profiles decide what an agent can do, chosen per task and shown before it starts.**
+4. **Tool profiles decide what an agent can do, chosen per task and shown before it starts.** *(amended below: the profile is a toolset allow-list; file reads only through our MCP server)*
 
    | Profile | Tools | Backend | Default |
    |---|---|---|---|
@@ -96,7 +98,7 @@ What that means for this app:
    tokens (a hosted model shows an estimated cost range first and stops at the cap), pages fetched, workspace size,
    files written. A task that reaches a limit stops and says so. A watchdog stops a task that has made no progress
    for five minutes.
-7. **Models.** The agent needs a **model that is agent-capable**: context of at least 64,000 tokens, reliable tool
+7. **Models.** *(the owner's answers and G0 below: Qwen3.5-9B, "limited" for agents until G3; Hugging Face Inference Providers as the first hosted provider)* The agent needs a **model that is agent-capable**: context of at least 64,000 tokens, reliable tool
    calling, enough speed. The Models page marks each model (local or hosted) `agent-ready`, `limited` (with why:
    "context 8,192; Hermes needs 64,000") or `not suitable`, from the model's measured context, memory fit and a
    short tool-calling check (the assistant's evaluation runner, ADR-0071). For a local model the engine starts the
@@ -110,7 +112,7 @@ What that means for this app:
    the skill or note and accepts or deletes it), on. Skills are installed only from a **reviewed list we ship**,
    with Hermes's skill scanner on. `~/.hermes` is never read: the app does not adopt logins or files from other
    installs (`auth.adopt_external_logins` is false).
-9. **Network.** Hermes's SSRF protection stays on (private, loopback, link-local and metadata addresses blocked, redirects
+9. **Network.** *(secrets through the secret store of ADR-0092)* Hermes's SSRF protection stays on (private, loopback, link-local and metadata addresses blocked, redirects
    re-checked). A per-task list of allowed domains is offered in "Advanced", default "any public site". Secrets for
    a service (a GitHub token to raise rate limits) are stored in the keychain (ADR-0070 decision 7), given to the
    one tool that needs them and never put in the environment of a shell or in the prompt.
@@ -154,11 +156,13 @@ What that means for this app:
 ## Open questions
 
 1. Which integration path survives spike G0 (gateway over stdio, ACP, the HTTP API), and whether the host can set
-   the toolset, the working directory and the write-root per task through it. The documentation did not say.
+   the toolset, the working directory and the write-root per task through it. The documentation did not say. **Answered by G0** (amendment below).
 2. How much context a good local agent model needs in memory on a 32 and a 64 GB Mac, measured.
 3. Windows and Linux: the container backend is easier there; the Mac comes first.
 4. Whether `smart` approval (a second model judges commands) is ever acceptable. Not in v1.
-5. How the agent's web search is provided without an API key (a free provider, the person's key, or ours).
+5. How the agent's web search is provided without an API key (a free provider, the person's key, or ours). **Partly answered by G0:**
+   a deterministic `web.github_top` read action for the example task; keyless search stays an owner decision
+   (improvement plan, section 10).
 
 ## Not in v1
 

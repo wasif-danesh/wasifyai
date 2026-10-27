@@ -30,7 +30,7 @@ export type StoredPart =
       url?: string;
     }
   /** a card that waits for the person's answer (ADR-0071): stored when the turn parks, updated when it is answered */
-  | {
+  | ({
       type: "interrupt";
       kind: string;
       status: "pending" | "approved" | "declined";
@@ -40,7 +40,7 @@ export type StoredPart =
       title?: string;
       summary?: string;
       params?: Record<string, unknown>;
-    }
+    } & CardDetails)
   | {
       type: "tool_result";
       id: string;
@@ -274,6 +274,33 @@ export function createAssistantApi(transport: Transport): AssistantApi {
 
 export type ToolStatus = "ok" | "refused" | "error";
 
+/** One editable field of a confirm card, drawn from the action's own schema (ADR-0071 decision 4). */
+export type CardField = {
+  name: string;
+  label: string;
+  kind: "text" | "long_text" | "number" | "bool" | "choice";
+  required: boolean;
+  description?: string;
+  choices?: string[];
+  min?: number;
+  max?: number;
+  max_length?: number;
+  /** what the assistant proposed */
+  value?: string | number | boolean;
+};
+
+/** What a confirm card knows about its action, beyond the title and summary (all plain values). */
+export type CardDetails = {
+  action_id?: string;
+  effect?: string;
+  badges?: string[];
+  /** a `needs_consent` action: the statement the person agrees to before it runs */
+  consent?: string;
+  fields?: CardField[];
+  /** the screen that does the same thing (a menu item id) */
+  screen?: string;
+};
+
 /** A tool call that waits for the person's answer (an `interrupt` event: the `confirm_action` card of ADR-0071). */
 export type ToolApproval = {
   /** the interrupt's id (a stored card: the approval's id) */
@@ -285,7 +312,42 @@ export type ToolApproval = {
   title?: string;
   summary?: string;
   params?: Record<string, unknown>;
-};
+} & CardDetails;
+
+/** The card's details, read from a stored part or an event payload (unknown shapes are dropped). */
+export function cardDetails(raw: Record<string, unknown>): CardDetails {
+  const out: CardDetails = {};
+  if (typeof raw.action_id === "string") out.action_id = raw.action_id;
+  if (typeof raw.effect === "string") out.effect = raw.effect;
+  if (typeof raw.consent === "string" && raw.consent) out.consent = raw.consent;
+  if (typeof raw.screen === "string") out.screen = raw.screen;
+  if (Array.isArray(raw.badges)) out.badges = raw.badges.filter((b) => typeof b === "string");
+  if (Array.isArray(raw.fields)) {
+    const fields = raw.fields.flatMap((f): CardField[] => {
+      if (!f || typeof f !== "object") return [];
+      const r = f as Record<string, unknown>;
+      if (typeof r.name !== "string") return [];
+      const kind = String(r.kind);
+      const kinds: CardField["kind"][] = ["text", "long_text", "number", "bool", "choice"];
+      const field: CardField = {
+        name: r.name,
+        label: typeof r.label === "string" ? r.label : r.name,
+        kind: kinds.includes(kind as CardField["kind"]) ? (kind as CardField["kind"]) : "text",
+        required: r.required === true,
+      };
+      if (typeof r.description === "string") field.description = r.description;
+      if (Array.isArray(r.choices)) field.choices = r.choices.map(String);
+      if (typeof r.min === "number") field.min = r.min;
+      if (typeof r.max === "number") field.max = r.max;
+      if (typeof r.max_length === "number") field.max_length = r.max_length;
+      if (["string", "number", "boolean"].includes(typeof r.value))
+        field.value = r.value as string | number | boolean;
+      return [field];
+    });
+    out.fields = fields;
+  }
+  return out;
+}
 
 /** A file attached to a message, as a message shows it. */
 export type AttachmentInfo = {
@@ -424,6 +486,7 @@ export function fromStored(messages: StoredMessage[]): ChatMessage[] {
                     title: card.title,
                     summary: card.summary,
                     params: card.params,
+                    ...cardDetails(card as unknown as Record<string, unknown>),
                   },
                 }
               : {}),

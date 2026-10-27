@@ -15,6 +15,7 @@ import {
 } from "../../ToolCard";
 import type { ToolArtifact, ToolResult } from "../convert";
 import { useThreadEnv } from "../env";
+import { ActionResultCard, GuideCard, OpenScreenCard } from "./ActionCards";
 import { ConfirmActionCard } from "./ConfirmActionCard";
 
 type Tool = Extract<ChatPart, { type: "tool" }>;
@@ -65,9 +66,36 @@ function Confirm(p: ToolCallMessagePartProps) {
   return <ConfirmActionCard tool={tool} onDecide={onDecide} />;
 }
 
+/** `propose_action` (ADR-0071): the card while the person decides, then the result drawn for the action it ran: a
+ * picture or a player for the actions that have one, a plain result card for the rest. */
+function Propose(p: ToolCallMessagePartProps) {
+  const { images, tracks, onOpenCreation, onOpenSettings, onDecide, onOpenScreen } = useThreadEnv();
+  const tool = toolOf(p);
+  if (tool.approval && tool.status === "running")
+    return <ConfirmActionCard tool={tool} onDecide={onDecide} />;
+  const actionId = String(tool.arguments.action_id ?? tool.output?.action_id ?? "");
+  const shared = { tool, images, tracks, onOpenCreation, onOpenSettings };
+  if (actionId === "image.generate") return <ImageToolCard {...shared} />;
+  if (actionId === "music.generate") return <MusicToolCard {...shared} />;
+  return (
+    <ActionResultCard tool={tool} onOpenCreation={onOpenCreation} onOpenScreen={onOpenScreen} />
+  );
+}
+
+function HowTo(p: ToolCallMessagePartProps) {
+  const { onOpenScreen } = useThreadEnv();
+  return <GuideCard tool={toolOf(p)} onOpenScreen={onOpenScreen} />;
+}
+
+function OpenScreen(p: ToolCallMessagePartProps) {
+  const { onOpenScreen } = useThreadEnv();
+  return <OpenScreenCard tool={toolOf(p)} onOpenScreen={onOpenScreen} />;
+}
+
 export const toolUIs = {
-  generate_image: adapt(ImageToolCard),
-  make_music: adapt(MusicToolCard),
+  propose_action: Propose,
+  how_to: HowTo,
+  open_screen: OpenScreen,
   search_creations: adapt(LibrarySearchCard),
   search_notebooks: adapt(NotebookSearchCard),
   web_search: adapt(WebSearchCard),

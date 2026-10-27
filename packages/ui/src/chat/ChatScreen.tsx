@@ -36,6 +36,8 @@ export type ChatScreenProps = {
   onOpenCreation?: (kind: string, id: string) => void;
   /** Take the person to Settings (a search service that fails: add a key there). */
   onOpenSettings?: () => void;
+  /** Open a screen of the app by its menu item id (the assistant offers a button; ADR-0071). */
+  onOpenScreen?: (screenId: string) => void;
   /** Where a "No language model" error should send the person. */
   onNeedModel?: () => void;
   /** Title bar actions (rename, delete). */
@@ -64,6 +66,7 @@ export function ChatScreen({
   blockedReason,
   onOpenCreation,
   onOpenSettings,
+  onOpenScreen,
   onNeedModel,
   actions,
   title,
@@ -99,10 +102,12 @@ export function ChatScreen({
       tracks,
       onOpenCreation,
       onOpenSettings,
+      onOpenScreen,
       thinkingOn: options.thinking,
-      onDecide: (approved: boolean) => void chat.answer(approved),
+      onDecide: (approved: boolean, params?: Record<string, unknown>) =>
+        void chat.answer(approved, false, params),
     }),
-    [images, tracks, onOpenCreation, onOpenSettings, options.thinking, chat.answer],
+    [images, tracks, onOpenCreation, onOpenSettings, onOpenScreen, options.thinking, chat.answer],
   );
   const last = state.chat.messages[state.chat.messages.length - 1];
   const lastAnswer = last && last.role === "assistant" ? textOf(last) : "";

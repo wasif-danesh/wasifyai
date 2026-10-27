@@ -133,11 +133,15 @@ export function useThreadChat({
    * without answering: the engine closes the turn without another model call.
    */
   const answer = useCallback(
-    async (approved: boolean, expired = false) => {
+    async (approved: boolean, expired = false, params?: Record<string, unknown>) => {
       const runId = local.current.pendingRunId;
       const resume = clients.current.runs.resumeRun;
       if (!runId || !resume) return;
-      const value: ConfirmAnswer = expired ? { approved: false, expired: true } : { approved };
+      const value: ConfirmAnswer = expired
+        ? { approved: false, expired: true }
+        : approved && params
+          ? { approved, params } // the person edited the card's fields before pressing Run
+          : { approved };
       dispatch({ type: "answered", approved });
       // the parked run is followed on from where it stopped (a card read from a saved chat starts at the beginning)
       const follow = newRunFollow(runId);

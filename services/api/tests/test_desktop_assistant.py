@@ -70,8 +70,11 @@ class H(http.server.BaseHTTPRequestHandler):
                 return {"tool_calls": [{"index": 0, "id": "call_1", "type": "function",
                                         "function": fn}]}
             events.append(chunk({"content": "Let me draw that. "}))
-            events.append(chunk(call("generate_image", "")))
-            half = json.dumps({"prompt": "a red teapot on a table", "size": "square"})
+            events.append(chunk(call("propose_action", "")))
+            half = json.dumps(
+                {"action_id": "image.generate",
+                 "params": {"prompt": "a red teapot on a table", "size": "square"}}
+            )
             for piece in (half[:12], half[12:]):
                 fn = {"arguments": piece}
                 events.append(chunk({"tool_calls": [{"index": 0, "function": fn}]}))
@@ -172,7 +175,8 @@ def choose_the_model(c: TestClient) -> None:
 
 
 def ask(c: TestClient, text: str, conversation_id: str | None = None) -> list:
-    graph_input: dict[str, str] = {"text": text}
+    """A turn in a chat where the person let the assistant make things without a card."""
+    graph_input: dict[str, object] = {"text": text, "auto_run": True}
     if conversation_id:
         graph_input["conversation_id"] = conversation_id
     body = {"input": graph_input}
@@ -231,8 +235,11 @@ def test_asking_for_a_picture_makes_one_through_the_image_product(data_dir):
         assert names.index("tool_call") < names.index("tool_result") < names.index("done")
 
         call = next(d for e, d in events if e == "tool_call")
-        assert call["name"] == "generate_image"
-        assert call["arguments"] == {"prompt": "a red teapot on a table", "size": "square"}
+        assert call["name"] == "propose_action"
+        assert call["arguments"] == {
+            "action_id": "image.generate",
+            "params": {"prompt": "a red teapot on a table", "size": "square"},
+        }
         result = next(d for e, d in events if e == "tool_result")
         assert result["status"] == "ok" and result["id"] == call["id"]
         image_id = result["output"]["image_id"]
@@ -287,6 +294,7 @@ def test_the_window_names_the_run_and_the_two_messages_and_the_engine_keeps_thos
         body = {
             "input": {
                 "text": "Please draw a red teapot",
+                "auto_run": True,
                 "client_message_id": UID,
                 "client_reply_id": RID,
             },
@@ -467,7 +475,7 @@ def test_a_picture_asked_for_after_the_web_was_read_waits_for_a_click_then_is_ma
         names = [e for e, _ in resumed]
         assert "job_progress" in names and names[-1] == "done", names
         result = next(d for e, d in resumed if e == "tool_result")
-        assert result["name"] == "generate_image" and result["status"] == "ok"
+        assert result["name"] == "propose_action" and result["status"] == "ok"
         assert (
             c.post(
                 f"/runs/{run_id}/resume", json={"value": {"approved": True}}, headers=auth()

@@ -1,0 +1,661 @@
+[
+ {
+  "action": "app.status",
+  "title": "What this computer can do",
+  "screen": null,
+  "synonyms": [
+   "what can you do",
+   "is it set up",
+   "what is missing",
+   "status"
+  ],
+  "body": "# What this computer can do\n\nAction: `app.status`\n\n## What it is for\n\nTells which actions are ready here, which need a step first (and the step), and which cannot run on this computer. The assistant uses it so its answers say what is missing.\n\n## Steps in the app\n\nThis has no screen of its own: the assistant and other apps use it.\n\n## Fields\n\n- `domain`: Optional: only one area, for example speech.\n\n## Limits\n\n- Nothing.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- What can this computer do?\n\n## Problems\n\n- None known."
+ },
+ {
+  "action": "audiobook.make",
+  "title": "Make an audiobook",
+  "screen": "voice.audiobook",
+  "synonyms": [
+   "audiobook",
+   "read a book",
+   "narrate a book"
+  ],
+  "body": "# Make an audiobook\n\nAction: `audiobook.make`\n\n## What it is for\n\nRead a long text aloud, one track per chapter, optionally one track of the whole.\n\n## Steps in the app\n\n1. Open **Voice › Audiobook**.\n2. Paste the text and check the chapters.\n3. Choose a voice.\n4. Choose Make. It can take a long time and keeps each chapter as it is done.\n\n## Fields\n\n- `text`: The book.\n- `title`: A name.\n- `whole`: Also one track of everything.\n- `voice`: A built-in voice.\n- `saved_voice`: A saved voice.\n\n## Limits\n\n- Up to 400,000 characters.\n- One track of the whole is for books up to about two hours.\n\n## Needs\n\n- A speech model (Models).\n\n## Examples\n\n- Read this story as an audiobook.\n\n## Problems\n\n- **Stopped halfway** Chapters already done are kept in your library."
+ },
+ {
+  "action": "audiobook.plan",
+  "title": "Find the chapters",
+  "screen": "voice.audiobook",
+  "synonyms": [
+   "chapters",
+   "split a book",
+   "audiobook plan"
+  ],
+  "body": "# Find the chapters\n\nAction: `audiobook.plan`\n\n## What it is for\n\nFind the chapters of a long text and how long each takes to read aloud. Nothing is spoken.\n\n## Steps in the app\n\n1. Open **Voice › Audiobook**.\n2. Paste the text; the chapters are listed.\n\n## Fields\n\n- `text`: The book.\n- `target`: About how long a chapter is, when the text has no headings.\n\n## Limits\n\n- Up to 400,000 characters; 200 chapters.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- How many chapters is this book?\n\n## Problems\n\n- **Too long** Split the text into two books."
+ },
+ {
+  "action": "decision.decide",
+  "title": "Decide with a model I taught",
+  "screen": "train",
+  "synonyms": [
+   "teach it to decide",
+   "decision model",
+   "decide",
+   "yes or no",
+   "is it positive",
+   "sort my messages",
+   "sort into categories",
+   "label my texts",
+   "classify",
+   "tag my texts",
+   "score a text",
+   "how sure is it",
+   "spam or not spam",
+   "triage",
+   "which team",
+   "rate a text"
+  ],
+  "body": "# Decide with a model I taught\n\nAction: `decision.decide`\n\n## What it is for\n\nAsk a model you taught under **Teach it to decide** to answer its question about one or many texts. The question was\nchosen when it was taught: yes or no (\"Is this review positive?\"), one of several categories (\"billing, bug or\nother?\") or a score (\"how angry, 1 to 5\"). Each text comes back with its answer and how sure the model is. It\nruns on this computer, quickly, and nothing is sent anywhere. It is for sorting and flagging things, not for\ndeciding about a person's job, credit or safety.\n\n## Steps in the app\n\n1. Open **Train models** and, under **Decision model training**, choose **Teach it to decide**.\n2. Choose New set of examples. Write the question and choose the kind of answer: yes or no, a category (name each\n   one and say what it means) or a score (say what the lowest and the highest mean).\n3. Add examples: a text and the right answer for each. Type them, or paste two columns from a spreadsheet. At least\n   20 are needed; 60 or more is a good start, and at least 5 of each answer.\n4. Read the check and say whose the texts are. Choose Teach it. It takes about a minute or two on a Mac.\n5. Read the report: how often it was right on texts it had not seen, beside a plain word counter, where it went\n   wrong and whether its confidence can be trusted.\n6. Choose **Try it** to paste a text and see its answer and how sure it is, beside the model it started from. Choose\n   **Sort a list** to paste or open many texts and see every answer.\n\n## Fields\n\n- `model_id`: The decision model to ask (its id is in the library).\n- `texts`: The texts to decide about, up to 100. Each is answered on its own.\n\n## Limits\n\n- It answers the one question it was taught, in the way it was taught: a model taught to sort messages into\n  billing, bug and other cannot answer a different question.\n- The confidence is the model's own, checked on texts kept back when it was taught: the report says how far to trust it.\n- Texts are read up to about 2,000 characters; the rest is cut.\n- It cannot run while another model is being taught, because both need the one big-model slot.\n- Laya reads English, or more than 100 languages with the other Laya; the choice is made when it is taught.\n\n## Needs\n\n- A decision model taught on this computer, the trainer's environment (set up on the Train screen) and a few\n  seconds to load the model.\n\n## Examples\n\n- Is this review positive? \"The battery lasts all day.\"\n- Which team should handle these 30 messages?\n\n## Problems\n\n- **That decision model does not exist** Choose one from My models, or teach one first.\n- **A model is being taught** Wait for it to finish or stop it.\n- **The taught model's files are gone** The model was taken off this computer. Teach it again.\n- **Training is not set up on this computer yet** Choose Download and set up on the Train screen."
+ },
+ {
+  "action": "dub.make",
+  "title": "Dub a recording",
+  "screen": "voice.dub",
+  "synonyms": [
+   "dub",
+   "voice over in another language"
+  ],
+  "body": "# Dub a recording\n\nAction: `dub.make`\n\n## What it is for\n\nThe second step: speak the checked lines in the new language and mix them with the background.\n\n## Steps in the app\n\n1. Open **Voice › Dub a recording**.\n2. Check the script.\n3. Choose a voice and Dub.\n\n## Fields\n\n- `segments`: The lines with start and end times and the new text.\n- `voice_from`: builtin or saved.\n- `saved_voice`: When voice_from is saved.\n\n## Limits\n\n- Needs ffmpeg for the mix.\n- Copying the original speaker's voice is only offered on the screen.\n\n## Needs\n\n- A speech model for the language.\n\n## Examples\n\n- Dub it with the script I just checked.\n\n## Problems\n\n- **Needs ffmpeg** Install ffmpeg, then try again."
+ },
+ {
+  "action": "dub.script",
+  "title": "Write the dub script",
+  "screen": "voice.dub",
+  "synonyms": [
+   "dubbing",
+   "translate a recording",
+   "dub script"
+  ],
+  "body": "# Write the dub script\n\nAction: `dub.script`\n\n## What it is for\n\nThe first step of a dub: write down what is said and translate it line by line, with times, so you can check it.\n\n## Steps in the app\n\n1. Open **Voice › Dub a recording**.\n2. Choose the recording and the language to dub into.\n3. Choose to write the script and read the lines.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `language`: For example fr, es, de.\n- `background`: Separate the voice from the music first.\n\n## Limits\n\n- 28 languages.\n- Up to 400 lines.\n\n## Needs\n\n- Transcription and speech models, and the chat model for translation.\n\n## Examples\n\n- Dub that recording into French.\n\n## Problems\n\n- **No voice for the language** Get a speech model that speaks it (Models)."
+ },
+ {
+  "action": "image.edit",
+  "title": "Change a picture",
+  "screen": "images.edit",
+  "synonyms": [
+   "edit a picture",
+   "change an image",
+   "image to image",
+   "retouch"
+  ],
+  "body": "# Change a picture\n\nAction: `image.edit`\n\n## What it is for\n\nChange a picture you already have by saying what to change. The original stays.\n\n## Steps in the app\n\n1. Open **Images › Edit**.\n2. Choose a picture from your library.\n3. Say what to change.\n4. Choose Create.\n\n## Fields\n\n- `image_id`: The picture to change.\n- `prompt`: What to change.\n\n## Limits\n\n- 500 characters.\n\n## Needs\n\n- The image engine (Models).\n\n## Examples\n\n- Make the sky a sunset.\n\n## Problems\n\n- **Not in the library** Choose a picture that still exists."
+ },
+ {
+  "action": "image.generate",
+  "title": "Make a picture",
+  "screen": "images.create",
+  "synonyms": [
+   "draw",
+   "paint",
+   "generate an image",
+   "text to image",
+   "make a picture"
+  ],
+  "body": "# Make a picture\n\nAction: `image.generate`\n\n## What it is for\n\nMake a new picture from a description and keep it in your library.\n\n## Steps in the app\n\n1. Open **Images › Create**.\n2. Describe the picture in the text box.\n3. Choose a shape (square, landscape, portrait, wide or tall).\n4. Choose Create and wait: it shows progress.\n\n## Fields\n\n- `prompt`: A clear, concrete description, in English works best.\n- `size`: square, landscape, portrait, wide or tall.\n\n## Limits\n\n- 500 characters.\n- Safeguards may refuse some descriptions; the reason is shown.\n\n## Needs\n\n- The image engine to be set up (Models).\n\n## Examples\n\n- A red teapot on a wooden table.\n- A cat dressed as an astronaut on the moon, wide.\n\n## Problems\n\n- **It says the image engine is not set up** Open **Model hub** and set up image generation first.\n- **Refused** The description was not allowed; change it."
+ },
+ {
+  "action": "image.inpaint",
+  "title": "Change part of a picture",
+  "screen": "images.inpaint",
+  "synonyms": [
+   "inpaint",
+   "change part of a picture",
+   "paint over",
+   "replace an area",
+   "fill an area",
+   "edit a region"
+  ],
+  "body": "# Change part of a picture\n\nAction: `image.inpaint`\n\n## What it is for\n\nChange only one area of a picture and leave everything outside it exactly as it was: put a cup on the table, change a cushion's colour,\nreplace the animal. The original stays.\n\n## Steps in the app\n\n1. Open **Images › Inpaint**.\n2. Choose a picture.\n3. Paint the area to change, or drag a rectangle over it.\n4. Say what to put there.\n5. Choose Create.\n\n## Fields\n\n- `image_id`: The picture to change.\n- `prompt`: What to put in the area.\n- `region`: The area, as a rectangle: `left`, `top`, `width` and `height` as shares of the picture (0 to 1). In the app you paint it.\n\n## Limits\n\n- 500 characters.\n- The area must cover something and not nearly all of the picture.\n- The picture is worked on at about one megapixel, so a larger picture comes back at that size.\n- A small area is sometimes ignored by the model; a larger one works better.\n\n## Needs\n\n- The image engine (Models).\n\n## Examples\n\n- A white coffee cup with steam, in a rectangle at the lower right of a plant photo.\n- A plush red velvet cushion, painted over the seat of a chair.\n\n## Problems\n\n- **Not in the library** Choose a picture that still exists.\n- **Paint the part of the picture you want to change** The area was empty.\n- **Leave part of the picture unpainted** The area covered almost everything; use Edit to change the whole picture.\n- **Nothing changed** Make the area larger and describe the thing plainly."
+ },
+ {
+  "action": "image.reference",
+  "title": "Make a picture from two pictures",
+  "screen": "images.reference",
+  "synonyms": [
+   "combine pictures",
+   "two pictures",
+   "picture from pictures",
+   "use a reference",
+   "reference image"
+  ],
+  "body": "# Make a picture from two pictures\n\nAction: `image.reference`\n\n## What it is for\n\nMake a new picture that uses what you say from two pictures you already have: for example the cat from the first picture on the\nchair from the second. The two originals stay. You choose the shape of the new picture.\n\n## Steps in the app\n\n1. Open **Images › Reference**.\n2. Add the first picture, then the second. The order matters: you can call them \"picture 1\" and \"picture 2\" in your words.\n3. Say what to make.\n4. Choose a size, then Create.\n\n## Fields\n\n- `image_ids`: Two pictures of your library, in order.\n- `prompt`: What to make from them.\n- `size`: The shape of the new picture (square, landscape, portrait, wide or tall).\n\n## Limits\n\n- Exactly two pictures, and they must be different.\n- 500 characters.\n- It takes about a minute: each picture adds to the work the model does.\n\n## Needs\n\n- The image engine (Models).\n\n## Examples\n\n- The cat from picture 1 sitting on the chair from picture 2, in a sunlit room.\n- The sneaker from picture 1 on a wooden table next to the plant from picture 2.\n\n## Problems\n\n- **Not in the library** Choose pictures that still exist.\n- **The same picture twice** Choose two different pictures.\n- **One subject is missing or changed** Name what to take from each picture (\"the cat from picture 1\"), or try another seed."
+ },
+ {
+  "action": "job.cancel",
+  "title": "Stop a long job",
+  "screen": null,
+  "synonyms": [
+   "long job",
+   "job"
+  ],
+  "body": "# Stop a long job\n\nAction: `job.cancel`\n\n## What it is for\n\nStop a job that can be stopped. Work that already runs as a product's own run finishes and is kept. This has no screen of its own: the assistant and other apps use it.\n\n## Steps in the app\n\nThis has no screen of its own: the assistant and other apps use it.\n\n## Fields\n\n- `job_id`: The id an action returned while it was still running.\n\n## Limits\n\n- A job lives while the app runs; after a restart only how it ended is known.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Is the video done yet?\n\n## Problems\n\n- **Not found** The id is wrong or belongs to someone else."
+ },
+ {
+  "action": "job.status",
+  "title": "Check a long job",
+  "screen": null,
+  "synonyms": [
+   "long job",
+   "job"
+  ],
+  "body": "# Check a long job\n\nAction: `job.status`\n\n## What it is for\n\nHow a long job started earlier is going. This has no screen of its own: the assistant and other apps use it.\n\n## Steps in the app\n\nThis has no screen of its own: the assistant and other apps use it.\n\n## Fields\n\n- `job_id`: The id an action returned while it was still running.\n\n## Limits\n\n- A job lives while the app runs; after a restart only how it ended is known.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Is the video done yet?\n\n## Problems\n\n- **Not found** The id is wrong or belongs to someone else."
+ },
+ {
+  "action": "job.wait",
+  "title": "Wait for a long job",
+  "screen": null,
+  "synonyms": [
+   "long job",
+   "job"
+  ],
+  "body": "# Wait for a long job\n\nAction: `job.wait`\n\n## What it is for\n\nWait a little while (at most 50 seconds) for a job to end. This has no screen of its own: the assistant and other apps use it.\n\n## Steps in the app\n\nThis has no screen of its own: the assistant and other apps use it.\n\n## Fields\n\n- `job_id`: The id an action returned while it was still running.\n\n## Limits\n\n- A job lives while the app runs; after a restart only how it ended is known.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Is the video done yet?\n\n## Problems\n\n- **Not found** The id is wrong or belongs to someone else."
+ },
+ {
+  "action": "library.delete",
+  "title": "Delete a creation",
+  "screen": "library",
+  "synonyms": [
+   "delete",
+   "remove",
+   "get rid of"
+  ],
+  "body": "# Delete a creation\n\nAction: `library.delete`\n\n## What it is for\n\nDelete one creation and its files for good. It cannot be undone, so the app always asks you first.\n\n## Steps in the app\n\n1. Open **Library** and choose the creation.\n2. Choose Delete and confirm.\n\n## Fields\n\n- `kind`: Which sort of creation.\n- `id`: Its id.\n\n## Limits\n\n- Always needs your yes in the app window. A video that is still being made cannot be deleted.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Delete that picture.\n\n## Problems\n\n- **Still being made** Wait until the video is ready, then delete it."
+ },
+ {
+  "action": "library.export",
+  "title": "Save a copy to a folder",
+  "screen": "library",
+  "synonyms": [
+   "download",
+   "save as",
+   "export",
+   "copy out"
+  ],
+  "body": "# Save a copy to a folder\n\nAction: `library.export`\n\n## What it is for\n\nPut a copy of a creation in the export folder so other programs can use it. The library keeps the original. This is the only way a file leaves the library.\n\n## Steps in the app\n\n1. Open **Library** and choose the creation.\n2. Choose Save, then pick the file type if asked.\n\n## Fields\n\n- `kind`: Which sort of creation.\n- `id`: Its id.\n\n## Limits\n\n- A copy never replaces a file: a second copy gets a number.\n- Voices cannot be saved as files.\n\n## Needs\n\n- An export folder (the app sets one; the default is Downloads).\n\n## Examples\n\n- Save that picture to my folder.\n\n## Problems\n\n- **Saving to a folder is not available** Set the export folder in the app, then try again."
+ },
+ {
+  "action": "library.get",
+  "title": "Look at one creation",
+  "screen": "library",
+  "synonyms": [
+   "details",
+   "open one"
+  ],
+  "body": "# Look at one creation\n\nAction: `library.get`\n\n## What it is for\n\nShow what is known about one creation: its name, when it was made and its size or length.\n\n## Steps in the app\n\n1. Open **Library** and choose the creation.\n\n## Fields\n\n- `kind`: Which sort of creation.\n- `id`: Its id, from a search or a list.\n\n## Limits\n\n- Only your own creations.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Tell me about that song.\n\n## Problems\n\n- **Not in the library** It was deleted, or the id is wrong. Search again."
+ },
+ {
+  "action": "library.list",
+  "title": "List my creations",
+  "screen": "library",
+  "synonyms": [
+   "browse",
+   "newest",
+   "recent",
+   "my library"
+  ],
+  "body": "# List my creations\n\nAction: `library.list`\n\n## What it is for\n\nShow the newest creations of one kind (pictures, videos, speech, songs, transcripts, voices, talking videos or notebooks).\n\n## Steps in the app\n\n1. Open **Library**.\n2. Choose the kind you want to see.\n\n## Fields\n\n- `kind`: Which sort of creation.\n- `limit`: How many, at most 50.\n\n## Limits\n\n- At most 50 at a time.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Show my last five pictures.\n\n## Problems\n\n- **The list is empty** Nothing of that kind has been made yet."
+ },
+ {
+  "action": "library.rename",
+  "title": "Rename a creation",
+  "screen": "library",
+  "synonyms": [
+   "rename",
+   "change the title",
+   "call it"
+  ],
+  "body": "# Rename a creation\n\nAction: `library.rename`\n\n## What it is for\n\nGive a song, a transcript, a voice, a notebook or a talking video a new name.\n\n## Steps in the app\n\n1. Open **Library** and choose the creation.\n2. Edit its name and confirm.\n\n## Fields\n\n- `kind`: Which sort of creation.\n- `id`: Its id.\n- `title`: The new name, up to 200 characters.\n\n## Limits\n\n- Pictures, videos and speech have no name to change.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Rename that song to Rain song.\n\n## Problems\n\n- **Cannot be renamed** That kind of creation is named by what it says; it has no title."
+ },
+ {
+  "action": "library.search",
+  "title": "Search my creations",
+  "screen": "library",
+  "synonyms": [
+   "find",
+   "search",
+   "where is",
+   "look for",
+   "my pictures",
+   "my songs"
+  ],
+  "body": "# Search my creations\n\nAction: `library.search`\n\n## What it is for\n\nFind something you made earlier by what it was about: a picture, a video, a song, a speech, a transcript, a voice or a notebook.\n\n## Steps in the app\n\n1. Open **Library**.\n2. Type a few words about what you remember in the search box.\n3. Choose a result to open it.\n\n## Fields\n\n- `query`: What to look for, in your own words.\n\n## Limits\n\n- Two or more characters.\n- It searches names, prompts, titles and the start of transcripts, not the inside of documents (use `notebook.search` for that).\n\n## Needs\n\n- Nothing. Search by meaning works better when the search model is installed (**Model hub**).\n\n## Examples\n\n- Find the song I made about the rain.\n- Which teapot picture did I make last week?\n\n## Problems\n\n- **Nothing is found** Try other words, or choose a kind to browse the newest ones instead (`library.list`)."
+ },
+ {
+  "action": "lipsync.make",
+  "title": "Lip sync",
+  "screen": "voice.lipsync",
+  "synonyms": [
+   "talking picture",
+   "make a picture talk",
+   "avatar",
+   "lip sync"
+  ],
+  "body": "# Lip sync\n\nAction: `lipsync.make`\n\n## What it is for\n\nMake a picture talk: a video of the face saying words or a recording. Every video is marked AI-generated.\n\n## Steps in the app\n\n1. Open **Voice › Lip sync**.\n2. Choose a picture and say what it is (a drawing, you, or someone who agreed).\n3. Type the words or choose a recording, and say whose voice it is.\n4. Choose Make.\n\n## Fields\n\n- `image_id`: The picture.\n- `text`: Words for the face to say.\n- `picture_is`: drawn, own or permission.\n- `voice_is`: For a recording: own or permission.\n\n## Limits\n\n- Always needs your word in the app window.\n- Short pictures and voices only; the screen shows the limits.\n\n## Needs\n\n- The lip sync engine (Models).\n\n## Examples\n\n- Make this drawing say: Hello, I am your guide.\n\n## Problems\n\n- **The lip sync engine is not set up** Open **Model hub** and set it up.\n- **Needs your word** Approve in the app window."
+ },
+ {
+  "action": "model3d.generate",
+  "title": "Make a 3D model",
+  "screen": "model3d",
+  "synonyms": [
+   "3d model",
+   "make a 3d model",
+   "3d object",
+   "glb",
+   "3d from a picture",
+   "image to 3d",
+   "text to 3d",
+   "turn a picture into 3d",
+   "model of my mascot",
+   "3d print",
+   "turntable"
+  ],
+  "body": "# Make a 3D model\n\nAction: `model3d.generate`\n\n## What it is for\n\nTurn a picture of one object into a textured 3D model you can turn around on the screen and save as a\nGLB file. You can start from a picture of your own, or describe the object in words: the app makes four\npictures of it, you pick one, and only then does the long step start. Everything is made on this\ncomputer and nothing is sent anywhere. 3D models are experimental.\n\n## Steps in the app\n\n1. Open **3D model** The first time, choose\n   Download and set up: it shows the size (about 9 GB) before it starts.\n2. Choose a picture, or choose Words, describe the object and choose Make 4 pictures, then Use this\n   picture on the one you like.\n3. Look at the cut-out (\"is this the object?\") and what the app found: one object, all of it in the\n   picture, in the middle. Warnings do not stop you; a picture with no object does.\n4. Choose Light, Standard or Detailed, say that you may use the picture, and choose Make the 3D model.\n5. It takes about 5 to 25 minutes. You can leave the screen; the model will be in Your 3D models. Drag\n   to turn it, scroll to zoom, choose Save a copy (GLB) to keep the file.\n\n## Fields\n\n- `image_id`: The picture of the library to make a model of.\n- `title`: A name for the model.\n- `prompt`: The words the picture was made from, so the model can be found by them.\n- `detail`: light, standard or detailed (the size of the texture: 1024, 2048 or 4096 pixels).\n- `seed`: The same seed gives the same model. Make it again uses it.\n\n## Limits\n\n- One model at a time. Choose Cancel to stop one that is running; nothing is kept.\n- About 19 GB of memory is held while it works, so a Mac with 16 GB cannot make one, and other big\n  models (the chat model, the image model) are put away first.\n- The model has about a million triangles and is not watertight, so it suits viewing and rendering\n  better than 3D printing. A straight-on picture at eye level on a plain background works best; glass,\n  mirrors, thin parts, fur and several objects do not come out well.\n- Pictures of real people need their agreement: you are asked to confirm it.\n- Built with DINOv3: the picture encoder is under Meta's DINOv3 licence, which is shown on the setup card\n  and the screen.\n\n## Needs\n\n- 3D set up (a download of about 9 GB, shown before it starts), about 9 GB of free disk space, and about\n  19 GB of free memory. Only Apple-silicon Macs for now. To start from words, the image model too.\n\n## Examples\n\n- Make a 3D model of the picture of my mascot.\n- Turn the picture of a ceramic frog mug into a 3D model, detailed.\n\n## Problems\n\n- **No object was found in this picture** Use a picture of one object on a plain background.\n- **A 3D model is already being made** Wait for it to finish or cancel it.\n- **Not enough memory** Close other apps, or use a Mac with more memory.\n- **The 3D component is not set up** Open **3D model** and choose Download and set up."
+ },
+ {
+  "action": "models.download",
+  "title": "Get a model",
+  "screen": "models",
+  "synonyms": [
+   "download a model",
+   "install a model",
+   "get a model"
+  ],
+  "body": "# Get a model\n\nAction: `models.download`\n\n## What it is for\n\nDownload a model that is missing. You are shown the files and their size and must agree.\n\n## Steps in the app\n\n1. Open **Model hub**.\n2. Choose the model and read the size.\n3. Choose Get and confirm.\n\n## Fields\n\n- `model_id`: The model, from the list.\n\n## Limits\n\n- One download at a time.\n- Always needs your yes in the app window.\n- A model that will not fit this computer is refused.\n\n## Needs\n\n- Free disk space.\n\n## Examples\n\n- Get the speech model.\n\n## Problems\n\n- **A download is already running** Wait for it, or cancel it in **Model hub**.\n- **Will not fit** Choose a smaller model."
+ },
+ {
+  "action": "models.list",
+  "title": "Models on this computer",
+  "screen": "models",
+  "synonyms": [
+   "models",
+   "what is installed",
+   "downloaded models"
+  ],
+  "body": "# Models on this computer\n\nAction: `models.list`\n\n## What it is for\n\nSee which models are on this computer, partly downloaded or missing.\n\n## Steps in the app\n\n1. Open **Model hub**.\n\n## Fields\n\n- `task`: Optional: speak, music, transcribe ...\n\n## Limits\n\n- Nothing.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Which speech models do I have?\n\n## Problems\n\n- **Desktop only** Models are managed in the desktop app."
+ },
+ {
+  "action": "models.status",
+  "title": "Model and download status",
+  "screen": "models",
+  "synonyms": [
+   "download progress",
+   "is it installed"
+  ],
+  "body": "# Model and download status\n\nAction: `models.status`\n\n## What it is for\n\nSee whether one model is ready, how far a download is, and the free disk space.\n\n## Steps in the app\n\n1. Open **Model hub**.\n\n## Fields\n\n- `model_id`: Optional: one model.\n\n## Limits\n\n- Nothing.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Is the speech model ready?\n\n## Problems\n\n- **Desktop only** Models are managed in the desktop app."
+ },
+ {
+  "action": "motion.make",
+  "title": "Make a motion graphic",
+  "screen": "motion",
+  "synonyms": [
+   "motion graphic",
+   "lower third",
+   "name strap",
+   "bar chart video",
+   "chart from my csv",
+   "animated quote",
+   "captions",
+   "animated title",
+   "text on screen",
+   "overlay"
+  ],
+  "body": "# Make a motion graphic\n\nAction: `motion.make`\n\n## What it is for\n\nMake a finished animated graphic in one step: an animated title, a quote that appears word by word,\na bar chart from your own numbers, a lower third (a name strap) or captions. The words and numbers\ngo in exactly as you typed them. Before anything is drawn the page is opened and every word on the\nscreen is checked against what you typed; a misspelt name, a cut-off line or a word too close to\nthe edge stops the video and says which. The video is saved to Your videos, and the project stays\nin your library so you can change it. Motion graphics is experimental.\n\n## Steps in the app\n\n1. Open **Motion graphics**.\n2. Say what to make in your own words, for example `Lower third for \"Maya Chen\", Head of Design`,\n   and press the arrow. You can attach a CSV file to chart, and pick a shape. The form opens filled\n   in, with what was understood; check anything it flags. (Or choose \"Or fill in the form\n   yourself\" and pick Animated title, Quote, Bar chart, Lower third or Captions.)\n3. Check the form. For a chart, one line per bar like `Sales, 120`; for captions, one caption per\n   line. Choose a length of 30, 60 or 90 seconds, or type another from 3 to 90.\n4. Choose Preview to see three stills, Check the words to test them alone, then Make the video.\n5. For a lower third or captions, choose WebM or MOV to keep the background clear.\n\n## Fields\n\n- `template`: title, quote, chart, lower_third or captions.\n- `fields`: The words and settings of that template. Title: `title`, `subtitle`. Quote: `quote`,\n  `author`. Chart: `title`, `data` (lines like `North, 120`; 2 to 8 lines; numbers are shown as\n  typed, such as `$1,200` or `45%`). Lower third: `name`, `role`. Captions: `lines` (one per line)\n  and `per_line` (2, 3 or 4 seconds each). All of them also take `shape` (landscape, portrait or\n  square), `seconds` (3 to 90, 30 unless given), `theme` (midnight, sunrise, forest or paper) and\n  `font` (sans or serif).\n- `format`: mp4, webm or mov. webm and mov keep the background clear and are offered for lower\n  thirds and captions.\n- `render`: Set to false to write the project without making the video.\n\n## Limits\n\n- Five templates; the page is built from them, so a freely written page is not possible here.\n- Up to 90 seconds. A 90 second video takes about 15 to 35 seconds to draw on an Apple-silicon\n  Mac and about 2.3 GB of memory, the same as a short one; a transparent MOV of that length is\n  about 140 MB.\n- One video at a time. A video that asks for too much memory or takes too long is stopped.\n- English text is the supported language for now. Other scripts such as Bengali are drawn with the\n  Mac's own fonts and pass the same check.\n- It does not make pictures of things; use image or video generation for those.\n\n## Needs\n\n- Motion graphics set up (a download of about 320 MB, shown before it starts; FFmpeg is part of it) and\n  about 3 GB of free memory. Only Apple-silicon Macs for now.\n\n## Examples\n\n- A lower third for \"Maya Chen\", \"Head of Design\", as a transparent WebM.\n- A chart from the lines `North, 120`, `South, 95` and `East, 150`, titled \"Sales by region\".\n\n## Problems\n\n- **The words on the screen are not exactly what you wrote** The check stopped the video; the\n  message says which word and why. Change the words or choose a shorter text and try again.\n- **Give at least two lines** A chart needs two to eight lines, each like `Sales, 120`.\n- **Choose a language model first** The box that reads your description needs a chat model\n  (Settings › Language). The form works without one.\n- **A video is already being made** Wait for it to finish or cancel it.\n- **Motion graphics needs FFmpeg** This should not happen: FFmpeg comes with Motion graphics. If it does,\n  run `brew install ffmpeg` in Terminal, then choose Check again.\n- **Motion graphics is not set up** Open **Motion graphics** and choose Set up."
+ },
+ {
+  "action": "motion.revise",
+  "title": "Change a motion graphic",
+  "screen": "motion",
+  "synonyms": [
+   "change the video",
+   "fix the typo",
+   "use another look",
+   "change the lower third",
+   "edit the chart",
+   "change the colours",
+   "undo"
+  ],
+  "body": "# Change a motion graphic\n\nAction: `motion.revise`\n\n## What it is for\n\nChange a project you made with Motion graphics and make the video again. Give only what changes: the\nrest stays as it was. The new words are checked against what you typed before anything is drawn. The\nearlier version is kept, and **Undo the last change** on the Motion graphics screen brings it back\n(the last 20 changes are kept).\n\n## Steps in the app\n\n1. Open **Motion graphics** and open the project.\n2. Change the words or the look in the form.\n3. Choose Make the video. Use Undo the last change if you prefer how it was.\n\n## Fields\n\n- `composition_id`: The project to change.\n- `fields`: Only the fields that change, as for Make a motion graphic.\n- `format`: mp4, webm or mov, as the template allows.\n- `render`: Set to false to change the project without making the video again.\n\n## Limits\n\n- A change always asks you first when an assistant proposes it.\n- Twenty earlier versions are kept for each project; older ones are dropped.\n\n## Needs\n\n- Motion graphics set up and about 3 GB of free memory, to make the video again.\n\n## Examples\n\n- Use the forest look for the project \"Launch day\".\n- Fix the spelling of the name in a lower third.\n\n## Problems\n\n- **The length must be between 3 and 90 seconds** Choose a length in the range the message names.\n- **The project does not exist** It may have been deleted; open Motion graphics to see what is left.\n- **The words on the screen are not exactly what you wrote** The change was kept but no video was\n  made; change the words and try again, or choose Undo."
+ },
+ {
+  "action": "music.generate",
+  "title": "Make music",
+  "screen": "music.create",
+  "synonyms": [
+   "compose",
+   "make a song",
+   "make music",
+   "music generation",
+   "sound effect"
+  ],
+  "body": "# Make music\n\nAction: `music.generate`\n\n## What it is for\n\nMake a piece of music, a song with words, or a sound effect and keep it in your library.\n\n## Steps in the app\n\n1. Open **Music › Create**.\n2. Describe the style and mood.\n3. Add lyrics if you want singing, or choose instrumental.\n4. Choose the length and Create.\n\n## Fields\n\n- `description`: Style and mood in a few words.\n- `lyrics`: The words, with [verse] and [chorus] lines.\n- `instrumental`: No singing.\n- `seconds`: 5 to 120.\n\n## Limits\n\n- 500 characters of description, 5,000 of lyrics.\n- 5 to 120 seconds.\n\n## Needs\n\n- A music model (Models).\n\n## Examples\n\n- Calm piano, rainy evening.\n- Upbeat pop about summer, 60 seconds.\n\n## Problems\n\n- **Model missing** Open **Model hub** and get a music model.\n- **Takes a while** Longer pieces take minutes; it keeps working in the background."
+ },
+ {
+  "action": "music.lyrics",
+  "title": "Write lyrics",
+  "screen": "music.lyrics",
+  "synonyms": [
+   "write lyrics",
+   "song words",
+   "lyrics"
+  ],
+  "body": "# Write lyrics\n\nAction: `music.lyrics`\n\n## What it is for\n\nWrite song lyrics from an idea. Nothing is saved; use them in Music › Create.\n\n## Steps in the app\n\n1. Open **Music › Lyrics**.\n2. Say what the song is about and the style.\n3. Choose Write.\n\n## Fields\n\n- `idea`: What the song is about.\n- `style`: The kind of music.\n- `language`: The language.\n\n## Limits\n\n- Idea of 3 to 500 characters.\n\n## Needs\n\n- The chat model.\n\n## Examples\n\n- A song about a lighthouse keeper, folk.\n\n## Problems\n\n- **Too short** Say a little more about the song."
+ },
+ {
+  "action": "music.separate",
+  "title": "Split into parts",
+  "screen": "music.separate",
+  "synonyms": [
+   "stems",
+   "isolate vocals",
+   "karaoke",
+   "remove vocals"
+  ],
+  "body": "# Split into parts\n\nAction: `music.separate`\n\n## What it is for\n\nSplit a recording into its parts (voice, drums, bass, other); each part is saved.\n\n## Steps in the app\n\n1. Open **Music › Split into parts**.\n2. Choose a recording.\n3. Choose the parts to keep.\n4. Choose Split.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `stems`: Which parts, or all.\n\n## Limits\n\n- Recordings up to an hour.\n\n## Needs\n\n- A separation model (Models).\n\n## Examples\n\n- Give me just the vocals of that song.\n\n## Problems\n\n- **No such part** That model does not make that part; choose from the list."
+ },
+ {
+  "action": "notebook.add_source",
+  "title": "Add a note to a notebook",
+  "screen": "notebook.list",
+  "synonyms": [
+   "add a source",
+   "add a note",
+   "add text"
+  ],
+  "body": "# Add a note to a notebook\n\nAction: `notebook.add_source`\n\n## What it is for\n\nAdd a text note as a source of a notebook. Files and web pages are added in the app.\n\n## Steps in the app\n\n1. Open **Notebook › View notebooks** and choose the notebook.\n2. Add a source and choose a note.\n\n## Fields\n\n- `notebook_id`: The notebook.\n- `title`: A name for the note.\n- `content`: The text.\n\n## Limits\n\n- Up to 1,000,000 characters per note.\n\n## Needs\n\n- Notebooks to be set up.\n\n## Examples\n\n- Add my budget numbers as a note.\n\n## Problems\n\n- **Still being read** Wait a moment before asking about it."
+ },
+ {
+  "action": "notebook.ask",
+  "title": "Ask a notebook",
+  "screen": "notebook.list",
+  "synonyms": [
+   "ask my documents",
+   "chat with a notebook",
+   "question about my sources"
+  ],
+  "body": "# Ask a notebook\n\nAction: `notebook.ask`\n\n## What it is for\n\nAsk one notebook a question; the answer comes from its sources only, with numbered citations.\n\n## Steps in the app\n\n1. Open **Notebook › View notebooks** and choose the notebook.\n2. Type the question in the chat.\n\n## Fields\n\n- `notebook_id`: The notebook.\n- `question`: The question.\n- `document_ids`: Only these sources.\n- `conversation_id`: Continue a conversation.\n\n## Limits\n\n- 4,000 characters.\n\n## Needs\n\n- Ready sources and the chat model.\n\n## Examples\n\n- What is the budget in the Budget notebook?\n\n## Problems\n\n- **Sources are still being read** Try again in a moment."
+ },
+ {
+  "action": "notebook.create",
+  "title": "Create a notebook",
+  "screen": "notebook.create",
+  "synonyms": [
+   "new notebook",
+   "start a notebook"
+  ],
+  "body": "# Create a notebook\n\nAction: `notebook.create`\n\n## What it is for\n\nMake an empty notebook, then add sources to it.\n\n## Steps in the app\n\n1. Open **Notebook › Create**.\n2. Give it a name.\n\n## Fields\n\n- `title`: A name, up to 200 characters.\n\n## Limits\n\n- Nothing.\n\n## Needs\n\n- Notebooks to be set up.\n\n## Examples\n\n- Make a notebook called Trip to Lisbon.\n\n## Problems\n\n- **Limit reached** Delete a notebook you no longer need."
+ },
+ {
+  "action": "notebook.list",
+  "title": "My notebooks",
+  "screen": "notebook.list",
+  "synonyms": [
+   "notebooks",
+   "my notebooks",
+   "projects"
+  ],
+  "body": "# My notebooks\n\nAction: `notebook.list`\n\n## What it is for\n\nList your notebooks, to use one by id.\n\n## Steps in the app\n\n1. Open **Notebook › View notebooks**.\n\n## Fields\n\n- None.\n\n## Limits\n\n- Nothing.\n\n## Needs\n\n- Notebooks to be set up on this computer.\n\n## Examples\n\n- Which notebooks do I have?\n\n## Problems\n\n- **Not available** Notebooks need the desktop app."
+ },
+ {
+  "action": "notebook.search",
+  "title": "Search inside notebooks",
+  "screen": "notebook.list",
+  "synonyms": [
+   "search my documents",
+   "what do my notes say",
+   "find in my notebooks"
+  ],
+  "body": "# Search inside notebooks\n\nAction: `notebook.search`\n\n## What it is for\n\nFind passages about a topic across all your notebooks.\n\n## Steps in the app\n\n1. Open **Notebook › View notebooks** and search inside a notebook, or ask the assistant.\n\n## Fields\n\n- `query`: What to look for.\n\n## Limits\n\n- Up to 300 characters.\n\n## Needs\n\n- The notebooks' search model (Models).\n\n## Examples\n\n- What is the launch budget?\n\n## Problems\n\n- **Search model missing** Open **Model hub** and get the search model."
+ },
+ {
+  "action": "notebook.studio_output",
+  "title": "Make a Studio output",
+  "screen": "notebook.list",
+  "synonyms": [
+   "report",
+   "quiz",
+   "flashcards",
+   "slides",
+   "mind map",
+   "study guide",
+   "audio overview"
+  ],
+  "body": "# Make a Studio output\n\nAction: `notebook.studio_output`\n\n## What it is for\n\nMake a report, study guide, flashcards, quiz, mind map, Word or PDF file, slides, data table, audio overview or infographic from a notebook's sources.\n\n## Steps in the app\n\n1. Open **Notebook › View notebooks** and choose the notebook.\n2. In Studio choose the kind of output.\n3. Add a focus if you want one and Make.\n\n## Fields\n\n- `notebook_id`: The notebook.\n- `format`: The kind of output.\n- `prompt`: What to focus on.\n\n## Limits\n\n- At least one ready source.\n\n## Needs\n\n- The chat model; some outputs need more models.\n\n## Examples\n\n- Make a quiz from my Biology notebook.\n\n## Problems\n\n- **Add a source first** The notebook has no sources yet."
+ },
+ {
+  "action": "speech.speak",
+  "title": "Text to speech",
+  "screen": "voice.speak",
+  "synonyms": [
+   "read aloud",
+   "voice over",
+   "tts",
+   "text to speech",
+   "speak",
+   "say this",
+   "narrate"
+  ],
+  "body": "# Text to speech\n\nAction: `speech.speak`\n\n## What it is for\n\nRead a text aloud in a voice and keep the recording in your library.\n\n## Steps in the app\n\n1. Open **Voice › Text to speech**.\n2. Type or paste the text.\n3. Choose a voice: one that comes with the model, or one of your saved voices.\n4. Choose Speak. The recording appears under Made before.\n\n## Fields\n\n- `text`: What to say.\n- `voice`: A built-in voice of the model.\n- `saved_voice`: One of your saved voices (see `voice.list`).\n- `model`: Optional: a model id.\n\n## Limits\n\n- 5,000 characters.\n- A voice is either built-in or saved, not both.\n\n## Needs\n\n- A speech model (Models) and the speech runtime.\n\n## Examples\n\n- Hello, and welcome.\n- Read this paragraph in my calm narrator voice.\n\n## Problems\n\n- **It says a model is missing** Open **Model hub**, get a speech model, then try again.\n- **The text is too long** Split it, or use the Audiobook screen."
+ },
+ {
+  "action": "speech.transcribe",
+  "title": "Speech to text",
+  "screen": "voice.transcribe",
+  "synonyms": [
+   "transcribe",
+   "write down",
+   "speech to text",
+   "captions",
+   "subtitles"
+  ],
+  "body": "# Speech to text\n\nAction: `speech.transcribe`\n\n## What it is for\n\nWrite down what a recording in your library says and keep it as a transcript.\n\n## Steps in the app\n\n1. Open **Voice › Speech to text**.\n2. Choose a recording or add a file.\n3. Choose Transcribe. The transcript appears in your library.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `title`: Optional name.\n\n## Limits\n\n- The recording must be in your library.\n\n## Needs\n\n- A transcription model (Models).\n\n## Examples\n\n- Write down what that speech says.\n\n## Problems\n\n- **Recording is no longer there** Choose another one."
+ },
+ {
+  "action": "train.start",
+  "title": "Teach a character or style",
+  "screen": "train",
+  "synonyms": [
+   "video model training",
+   "make my own look",
+   "my own motion",
+   "video look",
+   "train a video",
+   "video lora",
+   "teach it to decide",
+   "decision model training",
+   "teach it from examples",
+   "answer my way",
+   "my tone",
+   "my format",
+   "language model training",
+   "write like me",
+   "my writing style",
+   "train",
+   "teach",
+   "teach the app",
+   "make my own character",
+   "my own style",
+   "lora",
+   "fine tune",
+   "my mascot",
+   "my pet",
+   "my face",
+   "my art style",
+   "train a character",
+   "train a style",
+   "magic word",
+   "trigger word",
+   "custom model"
+  ],
+  "body": "# Teach a character or style\n\nAction: `train.start`\n\n## What it is for\n\nTeach the image model something of your own from your pictures: a character, a pet, a person (with their\nagreement), your art style or an object. You only add pictures. The app checks each one, writes a\ndescription of each, suggests a magic word, and teaches the model. Then writing the magic word in a prompt\ndraws it. The set of pictures is made on the **Train models** screen; an agent starts the run on a set that is ready.\nWhile the trainer is a preview, the run does everything except learn, and says so.\n\n## Steps in the app\n\n1. Open **Train models** and, under **Image model training**, choose Make my own character or style.\n2. Add pictures: 15 to 25 good ones is plenty, at least 8. Each is marked Good, Too small, Blurry or Looks like\n   a copy; remove what you do not want, or choose Remove the ones with a problem.\n3. Say what it is (a character, a style or an object), give it a name, choose one of the three magic words (or\n   type your own) and say whose it is.\n4. Read the descriptions the app wrote; change any, or choose Describe again.\n5. Leave **Choose the model and method** closed to use the recommendation (FLUX.2 klein base 4B, as a small\n   adapter). Open it to see every model on this computer and how each can be taught, with the reason beside\n   anything that cannot be used.\n6. Choose Teach it. It takes about 25 minutes on a Mac and chat and image making pause. A new sample picture\n   appears now and then. You can stop it; nothing is kept.\n7. The result is in My models and in the library, found by its name and magic word.\n\n## Fields\n\n- `dataset_id`: The set of pictures to teach from. It must have at least 8 pictures, a description for each, a\n  magic word and the statement of whose it is.\n- `base`: Optional. The model to teach. Leave it out for the recommended one (FLUX.2 klein base 4B).\n- `method`: Optional. `lora` (a small adapter, the recommended and only method for pictures), `qlora` (less\n  memory, for writing models) or `full` (teach all of it, Advanced). A method the model cannot use is refused\n  with the reason.\n\n## Limits\n\n- One run at a time: a run holds most of the GPU and the one big-model slot, so other models are put away.\n- Pictures of a real person need the person's agreement: you are asked whose it is, and the answer is kept with\n  the model.\n- The descriptions are in English. Pictures are checked by the safeguards when they are on, and a picture they\n  refuse is not kept.\n- Daily limits apply while the safeguards are on: 3 runs and 200 pictures a day.\n\n## Needs\n\n- A model that can read pictures (to write the descriptions), the training engine, enough free disk space for\n  the pictures and the samples, and free memory for the run.\n\n## On the web\n\nThe same screen, the same sets and the same limits. The teaching runs on a worker of the service, not on your computer: an admin sets each\ntrainer up once (Admin, Workers, Trainers), and the card says \"Ask an admin\" until then. Your pictures, clips, examples and the models you taught\nare kept for you only; no one else can see or use them. A run cannot be paused on the web (Stop works), and **Use in chat** for a writing model is on\nthe desktop only for now.\n\n## Examples\n\n- Teach the app my mascot from the set of pictures I added.\n- Start the training for the style set \"Ink\".\n\n## Problems\n\n- **Add at least 8 pictures** Add more, 15 to 25 good ones is plenty.\n- **Write the descriptions first** Choose Write the descriptions on the screen.\n- **Say whose it is first** Choose one of the statements on the Check step.\n- **A model is being taught** Wait for it to finish or stop it.\n- **This model cannot be taught yet** Choose the recommended model, or leave the choice closed.\n- **You've reached today's limit** Try again tomorrow.\n\n---\n\n## Teaching a language model from examples (the same action, with `set_id`)\n\n### What it is for\n\nShow a small language model questions and the answers you want, many times, and it learns to answer that way: a\ntone, a format, a set of labels, the way you reply. It learns how to answer, not new facts (for facts, put your\ndocuments in a notebook). It is taught on this computer and your examples are not sent anywhere. Afterwards the\nscreen shows the same questions answered before it learnt and after, side by side, and a mark that says whether the\nanswers got closer to yours.\n\n### Steps in the app\n\n1. Open **Train models** and, under **Language model training**, choose **Teach it from examples**.\n2. The first time, the app offers to set up the trainer and a small model (about 0.4 GB, shown first); nothing\n   is fetched until you press the button.\n3. Choose New set of examples. Type each question and the answer you want (\"What it is asked\", \"What it should\n   answer\"), or paste two columns from a spreadsheet. It saves as you type. At least 10 are needed; 50 or more is a\n   good start.\n4. Read the check. It leaves out empty and repeated rows, and warns about very long answers and about anything\n   that looks like an email address, a phone number or a card number.\n5. Say whose the examples are (you wrote them, or you have permission).\n6. Choose Teach it. It takes about a minute on a Mac and chat and image making pause.\n7. The result is in My models. Ask both the original and your taught model something new with Ask both.\n8. To chat with it, choose **Use in chat** under the result (or under it in My models). The first time the app asks to\n   download the same model in the form the chat engine runs (shown first). Choose **Back to my chat model** to\n   return to the model chat used before.\n\nTo use a different model or to take more care, open **Choose the model and method** (closed by default, with the\nrecommendation). It lists Qwen3 0.6B (small and quick), 1.7B and 4B (they follow the examples more closely and take\nlonger), and Quick or Better. One that is not on this computer has **Get it** next to its name, with its size;\nnothing is fetched until you press it.\n\n### Fields\n\n- `set_id`: Instead of `dataset_id`: the set of examples to teach a language model from. It needs at least 10\n  examples and the statement of whose they are.\n\n### Limits\n\n- One run at a time: a run holds most of the GPU and the one big-model slot, so other models are put away.\n- The models it is taught on are small (Qwen3 0.6B, 1.7B or 4B, 4-bit): they copy how the examples answer and can\n  still answer wrongly about facts.\n- Examples in English work best; the base model reads other languages but this has not been measured.\n- Daily limits apply while the safeguards are on, the same as pictures.\n\n### Needs\n\n- A Mac with Apple silicon, the trainer and its small model (set up in the app), a little free disk space.\n\n### Examples\n\n- Teach it from the set of examples \"Customer replies\".\n\n### Problems\n\n- **Add at least 10 examples** Add more questions and answers; 50 or more is better.\n- **Say whose these examples are first** Choose one of the two statements on the Check step.\n- **A model is being taught** Wait for it to finish or stop it.\n- **Training is not set up on this computer yet** Choose Download and set up on the Train screen.\n\n---\n\n## Teaching it to decide (the same action, with `decision_set_id`)\n\n### What it is for\n\nShow a model texts with the right answer to one question about them, and it learns to answer that question about\nnew texts, and to say how sure it is. The answer is yes or no, one of your categories, or a score. It is taught on\nthis computer and your texts are not sent anywhere. Afterwards the screen reports how often it was right on texts\nit had not seen, beside a plain word counter, where it went wrong, and whether its confidence can be trusted.\n\n### Steps in the app\n\n1. Open **Train models** and, under **Decision model training**, choose **Teach it to decide**.\n2. The first time, the app offers to set up the trainer and a small model (about 1 GB, shown first); nothing is\n   fetched until you press the button.\n3. Choose New set of examples. Write the question and choose yes or no, a category or a score. Add a text and the\n   right answer for each, or paste two columns from a spreadsheet. At least 20 are needed; 60 or more is a good start.\n4. Read the check: it leaves out empty and repeated rows and rows whose answer is not one of the options, and warns\n   about thin or lopsided answers, texts that appear twice with different answers, long texts and personal data.\n5. Say whose the texts are, and choose Teach it. It takes a minute or two on a Mac; chat and image making pause.\n6. Read the report, then choose **Try it** or **Sort a list**. The model is kept in My models, about 840 MB.\n\nTo use the model for many languages or to take more care, open **Choose the model and method** (closed by default).\nAll of the model is taught; it is not taught as a small adapter.\n\n### Fields\n\n- `decision_set_id`: Instead of `dataset_id`: the set of texts and answers to teach a decision model from. It needs the\n  question, at least 20 examples with at least two different answers, and the statement of whose they are.\n\n### Limits\n\n- One run at a time, and not while a picture or writing model is being taught.\n- A run needs about 13 GB of free memory. Each model it makes takes about 840 MB on disk.\n- Only English (or the many-languages model) is read; texts are read up to about 2,000 characters.\n\n### Needs\n\n- A Mac with Apple silicon, the trainer (PyTorch and Laya, set up in the app) and about 3 GB of free disk space.\n\n### Examples\n\n- Teach it to decide from the set \"Support messages\".\n\n### Problems\n\n- **Add at least 20 examples** Add more texts with their answers; 60 or more is better.\n- **Every example has the same answer** Add examples with the other answers too.\n- **Say whose these texts are first** Choose one of the two statements on the Check step.\n- **A model is being taught** Wait for it to finish or stop it.\n\n---\n\n## Teaching the video model a look or a motion (the same action, with a video set)\n\n### What it is for\n\nTeach the video model a character, a style or a motion of your own from pictures and short clips. You only add\nthem: the app checks each one, writes a description of each, suggests a magic word and teaches the model, on this\ncomputer. Afterwards the result is a **look**: choose it under **My looks** on a Make a video, Animate a picture or\nExtend a video screen, and write its magic word in the prompt. A person's likeness is only partly kept, so do not\nexpect a face to come back exactly; a style or a motion works best.\n\n### Steps in the app\n\n1. Open **Train models** and, under **Video model training**, choose **Make my own look or motion for video**.\n2. The first time, the app offers to set up the video trainer (about 180 MB, shown first); nothing is fetched until\n   you press the button. The video model itself (the one the Video screens use, about 16 GB) must already be on this\n   computer: if it is not, the screen says so and where to get it (**Select video model** on a Video screen).\n3. Add pictures and short clips: a few pictures and 5 to 15 clips of 2 to 10 seconds is plenty, at least 8 in all.\n   Each is marked Good, Too short, Too small, Too dark, Blurry, Still or Looks like a copy.\n4. Say what it is, give it a name, choose the magic word and say whose it is, and read the descriptions.\n5. Choose Teach it. It takes about half an hour on a Mac with 64 GB, and chat, image and video making pause.\n6. The result is in My models. Choose it on a Video screen under **My looks** (up to two at once, each with its own\n   strength; 1.5 is a good start).\n\n### Fields\n\n- `dataset_id`: The set made for video. It must have at least 8 pictures or clips, a description for each, a magic\n  word and the statement of whose they are. `base` and `method` can be left out (LTX-Video 2B, as a small adapter).\n\n### Limits\n\n- One run at a time, across every kind of model.\n- The video model taught is LTX-Video 2B 0.9.5 only: a look made for it does not work with another video model.\n- A run needs about 10 GB of free memory for clips at 768 by 512; a Mac with 16 GB has not been tried.\n- The descriptions are in English. The same safeguards as pictures apply, and a picture or a frame they refuse is not\n  kept.\n\n### Needs\n\n- A Mac with Apple silicon, the video trainer (PyTorch with diffusers, set up in the app), the video model and its text\n  encoder on this computer, and about 3 GB of free disk space for the trainer and the result.\n\n### Examples\n\n- Teach the video model my character from the video set \"Ena\".\n\n### Problems\n\n- **The video model is not on this computer yet** Choose Select video model on a Video screen.\n- **That set is for the video model, not the picture model** The set was made for video; start it from the video card.\n- **Add at least 8 pictures or clips** Add more."
+ },
+ {
+  "action": "video.animate",
+  "title": "Animate a picture",
+  "screen": "video.animate",
+  "synonyms": [
+   "make a picture move",
+   "image to video",
+   "bring to life"
+  ],
+  "body": "# Animate a picture\n\nAction: `video.animate`\n\n## What it is for\n\nTurn a picture of your library into a short clip by saying what should move.\n\n## Steps in the app\n\n1. Open **Video › Animate an image**.\n2. Choose a picture.\n3. Say what should move and the length.\n4. Choose Create.\n\n## My looks\n\nIf you taught the video model a look or a motion (under **Train models**, in the Video model training card), the screen shows **My looks**: choose up to two and a strength for each (1.5 is a good start; above 2 can look rough). The app adds each look's magic word to your prompt if it is missing. A look made for another model does not work here; looks are made for LTX-Video 2B only.\n\n## Fields\n\n- `image_id`: The picture.\n- `prompt`: What should move.\n- `seconds`: 5 or 8 (5 unless you say otherwise).\n\n## Limits\n\n- 500 characters.\n- One clip at a time.\n\n## Needs\n\n- The video engine (Models).\n\n## Examples\n\n- The clouds drift slowly to the left.\n\n## Problems\n\n- **Not in the library** Choose a picture that still exists."
+ },
+ {
+  "action": "video.extend",
+  "title": "Extend a video",
+  "screen": "video.extend",
+  "synonyms": [
+   "make a video longer",
+   "continue a video",
+   "carry on a video",
+   "longer clip"
+  ],
+  "body": "# Extend a video\n\nAction: `video.extend`\n\n## What it is for\n\nMake a video longer. Its last second starts a new part, and the two are joined, so the movement carries\non. You choose how much is added: about 5 or about 8 seconds. The result is a new video; the original\nstays. The video can be one of your library or a video file you add from your computer.\n\n## Steps in the app\n\n1. Open **Video › Extend video**.\n2. Choose one of your videos, or choose **Add a video from this computer** and pick a file (MP4, MOV or\n   WebM, up to 30 seconds). It is made to fit the model and added to Your videos; the file you picked is\n   not changed.\n3. Say what should keep happening. The words of a video made here are filled in from its own; change\n   them if you like.\n4. Choose how much to add (about 5 or about 8 seconds).\n5. Choose Carry on my video.\n\n## My looks\n\nIf you taught the video model a look or a motion (under **Train models**, in the Video model training card), the screen shows **My looks**: choose up to two and a strength for each (1.5 is a good start; above 2 can look rough). The app adds each look's magic word to your prompt if it is missing. A look made for another model does not work here; looks are made for LTX-Video 2B only.\n\n## Fields\n\n- `video_id`: The video to carry on.\n- `prompt`: What should keep happening.\n- `seconds`: How much is added: 5 or 8 (5 unless you say otherwise).\n\n## Limits\n\n- 500 characters.\n- There is no limit on the length of the video, and a video can be carried on again and again. The picture gets a\n  little softer each time, so two or three rounds is a sensible stop.\n- What you write steers only weakly. The movement of the last second carries on whatever it says.\n- One clip at a time.\n- An added video is made at the size the model uses (the longer side at most 768), 24 frames a second,\n  without sound. It must be under 200 MB.\n## Needs\n\n- The video engine (Models).\n\n## Examples\n\n- The fox keeps walking through the snow.\n\n## Problems\n\n- **Not in the library** Choose a video that still exists and is finished.\n- **Not a video this app can read** Try an MP4 or MOV file.\n- **Longer than 30 seconds** Cut the video shorter first."
+ },
+ {
+  "action": "video.generate",
+  "title": "Make a video",
+  "screen": "video.create",
+  "synonyms": [
+   "make a video",
+   "text to video",
+   "animate a scene",
+   "clip"
+  ],
+  "body": "# Make a video\n\nAction: `video.generate`\n\n## What it is for\n\nMake a short video clip (5 or 8 seconds) from a description.\n\n## Steps in the app\n\n1. Open **Video › Create**.\n2. Describe what happens.\n3. Choose the shape and the length.\n4. Choose Create. It takes minutes; you can leave the screen.\n\n## My looks\n\nIf you taught the video model a look or a motion (under **Train models**, in the Video model training card), the screen shows **My looks**: choose up to two and a strength for each (1.5 is a good start; above 2 can look rough). The app adds each look's magic word to your prompt if it is missing. A look made for another model does not work here; looks are made for LTX-Video 2B only.\n\n## Fields\n\n- `prompt`: What happens in the clip.\n- `shape`: landscape, portrait or square.\n- `seconds`: 5 or 8 (5 unless you say otherwise).\n\n## Limits\n\n- 500 characters.\n- One clip at a time.\n\n## Needs\n\n- The video engine (Models).\n\n## Examples\n\n- Waves rolling onto a beach at sunrise.\n\n## Problems\n\n- **You already have a video being made** Wait for it to finish.\n- **Not set up** Open **Model hub** and set up the video engine."
+ },
+ {
+  "action": "video_builder.create",
+  "title": "Write a video project",
+  "screen": "motion",
+  "synonyms": [
+   "title card",
+   "animated title",
+   "write a video",
+   "video from a template",
+   "text on screen",
+   "quote",
+   "bar chart",
+   "lower third",
+   "captions"
+  ],
+  "body": "# Write a video project\n\nAction: `video_builder.create`\n\n## What it is for\n\nStart a video from one of five templates: an animated title, a quote, a bar chart from your own\nnumbers, a lower third (a name strap) or captions. Nothing is made yet; the project is kept in your\nlibrary and you make the video from it. Motion graphics is experimental.\n\n## Steps in the app\n\n1. Open **Motion graphics**.\n2. Choose New video, then what to make.\n3. Fill in the form: the words, and the shape, length, look and letters.\n4. Choose Preview to see three stills, then Make the video.\n\n## Fields\n\n- `template`: title, quote, chart, lower_third or captions.\n- `fields`: The words and settings of that template (for a title: `title`, `subtitle`; for a chart:\n  `title` and `data`, lines like `North, 120`; see Make a motion graphic for the rest). Every\n  template also takes `shape`, `seconds` (3 to 90, 30 unless given), `theme` and `font`. Words are\n  shown exactly as typed.\n\n## Limits\n\n- Five templates. A word limit applies to each field and the message names it.\n- English text is the supported language for now.\n\n## Needs\n\n- Nothing to write the project. Making the video needs Motion graphics to be set up (a download of\n  a few hundred megabytes).\n\n## Examples\n\n- A title card that says \"Launch day\" with the line \"Wasify AI is here\".\n- A bar chart titled \"Sales\" from the lines `North, 120` and `South, 95`.\n\n## Problems\n\n- **The title is too long** Shorten it to 80 characters or fewer.\n- **The length must be between 3 and 90 seconds** Choose a length in that range."
+ },
+ {
+  "action": "video_builder.lint",
+  "title": "Check a video project",
+  "screen": "motion",
+  "synonyms": [
+   "check a video",
+   "is it safe",
+   "check the project"
+  ],
+  "body": "# Check a video project\n\nAction: `video_builder.lint`\n\n## What it is for\n\nCheck that a video project reaches nothing outside its own folder: no pictures or scripts from the\ninternet, no files from elsewhere on the computer. Making a video runs it in a locked box and does\nthis check first.\n\n## Steps in the app\n\n1. Open **Motion graphics**.\n2. Open a project.\n3. Choose Check (it also runs by itself before every video is made).\n\n## Fields\n\n- `composition_id`: The project, as shown in the list.\n\n## Limits\n\n- It checks the project's own files. It is a first check, not the only protection: the render\n  itself cannot reach the internet or other services on the computer.\n\n## Needs\n\n- Motion graphics set up (Motion graphics).\n\n## Examples\n\n- Check the project \"Launch day\".\n\n## Problems\n\n- **Motion graphics is not set up** Open **Motion graphics** and choose Set up.\n- **That video project does not exist** It may have been deleted."
+ },
+ {
+  "action": "video_builder.render",
+  "title": "Make the video",
+  "screen": "motion",
+  "synonyms": [
+   "make the video",
+   "render",
+   "export video",
+   "make it"
+  ],
+  "body": "# Make the video\n\nAction: `video_builder.render`\n\n## What it is for\n\nMake the video of a Motion graphics project. First every word on the screen is checked against what\nyou typed; if one is wrong the video is not made and the message says which. Then it is drawn frame\nby frame in a locked box, saved as an MP4 (or WebM or MOV, which keep a clear background) and kept\nin Your videos. It takes seconds to a minute for a short video and only one is made at a time.\n\n## Steps in the app\n\n1. Open **Motion graphics**.\n2. Open a project.\n3. Choose a file kind if the template offers more than one, then Make the video; watch the\n   progress (checking the words, then drawing), or leave the screen.\n4. Choose Save a copy to keep the file, or find it in Your videos.\n\n## Fields\n\n- `composition_id`: The project to make.\n- `format`: mp4, webm or mov, as the template allows (a title, quote or chart is an MP4).\n\n## Limits\n\n- One video at a time. Choose Cancel to stop one that is running; nothing is kept.\n- A video that asks for too much memory or takes too long is stopped, and the screen says so.\n\n## Needs\n\n- Motion graphics set up (Motion graphics; FFmpeg is part of it) and enough free memory (about\n  3 GB).\n\n## Examples\n\n- Make the video of \"Launch day\".\n\n## Problems\n\n- **The words on the screen are not exactly what you wrote** Nothing was drawn. Change the words\n  and try again.\n- **A video is already being made** Wait for it to finish or cancel it.\n- **Not enough memory** Close other apps, or choose a shorter, smaller video.\n- **Motion graphics needs FFmpeg** This should not happen: FFmpeg comes with Motion graphics. If it does,\n  run `brew install ffmpeg` in Terminal, then choose Check again.\n- **Motion graphics is not set up** Open **Motion graphics** and choose Set up."
+ },
+ {
+  "action": "voice.clone",
+  "title": "Copy a voice",
+  "screen": "voice.voices",
+  "synonyms": [
+   "clone a voice",
+   "copy a voice",
+   "my voice",
+   "voice cloning"
+  ],
+  "body": "# Copy a voice\n\nAction: `voice.clone`\n\n## What it is for\n\nSave a voice copied from a short recording, to speak in it later.\n\n## Steps in the app\n\n1. Open **Voice › Voices**.\n2. Choose to copy a voice and pick a recording.\n3. Say whose voice it is: yours, or someone who agreed.\n4. Save.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `name`: A name.\n- `voice_is`: own or permission.\n\n## Limits\n\n- A few seconds up to 30 seconds of one person speaking clearly.\n- Always needs your word in the app window.\n\n## Needs\n\n- Nothing beyond the recording.\n\n## Examples\n\n- Copy my voice from that speech.\n\n## Problems\n\n- **Too short** Use a recording of at least a few seconds.\n- **Needs your word** Approve in the app window; the question names whose voice it is."
+ },
+ {
+  "action": "voice.convert",
+  "title": "Change a voice",
+  "screen": "voice.convert",
+  "synonyms": [
+   "voice changer",
+   "sound like",
+   "change the voice"
+  ],
+  "body": "# Change a voice\n\nAction: `voice.convert`\n\n## What it is for\n\nMake a recording sound like one of your copied voices. The original stays.\n\n## Steps in the app\n\n1. Open **Voice › Change a voice**.\n2. Choose the recording and the voice.\n3. Choose Change.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `saved_voice`: A copied voice.\n\n## Limits\n\n- The voice must be one copied from a recording.\n\n## Needs\n\n- A voice-changing model (Models).\n\n## Examples\n\n- Make this song sound like my voice.\n\n## Problems\n\n- **A described voice cannot be used** Choose a voice copied from a recording."
+ },
+ {
+  "action": "voice.design",
+  "title": "Describe a voice",
+  "screen": "voice.voices",
+  "synonyms": [
+   "describe a voice",
+   "design a voice",
+   "new voice",
+   "voice from words"
+  ],
+  "body": "# Describe a voice\n\nAction: `voice.design`\n\n## What it is for\n\nSave a voice described in words (age, tone, pace) to use again. No recording is needed.\n\n## Steps in the app\n\n1. Open **Voice › Voices**.\n2. Choose to describe a voice.\n3. Give it a name and a description.\n4. Save.\n\n## Fields\n\n- `name`: A name.\n- `description`: The voice in words, up to 300 characters, without brackets.\n\n## Limits\n\n- 300 characters; no brackets.\n\n## Needs\n\n- Nothing to save it; a model that can use it to speak.\n\n## Examples\n\n- Calm narrator: a calm middle-aged woman, slow and warm.\n\n## Problems\n\n- **Brackets** Take the brackets out of the description."
+ },
+ {
+  "action": "voice.edit_speech",
+  "title": "Edit speech",
+  "screen": "voice.edit",
+  "synonyms": [
+   "change words",
+   "fix a word",
+   "edit a recording"
+  ],
+  "body": "# Edit speech\n\nAction: `voice.edit_speech`\n\n## What it is for\n\nChange some of the words a recording says, keeping the voice.\n\n## Steps in the app\n\n1. Open **Voice › Edit speech**.\n2. Choose the recording; its words are shown.\n3. Change the words and choose Edit.\n\n## Fields\n\n- `old_text`: What it says now.\n- `text`: What it should say.\n\n## Limits\n\n- 1,000 characters.\n\n## Needs\n\n- A speech-editing model (Models).\n\n## Examples\n\n- Change 'meet at noon' to 'meet at one'.\n\n## Problems\n\n- **Nothing to change** The new words must differ from the old."
+ },
+ {
+  "action": "voice.list",
+  "title": "My saved voices",
+  "screen": "voice.voices",
+  "synonyms": [
+   "my voices",
+   "saved voices",
+   "which voices"
+  ],
+  "body": "# My saved voices\n\nAction: `voice.list`\n\n## What it is for\n\nList the voices you saved, so you can use one by name or id.\n\n## Steps in the app\n\n1. Open **Voice › Voices**.\n\n## Fields\n\n- `kind`: Optional: design (described) or clone (copied).\n\n## Limits\n\n- Nothing.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Which voices do I have?\n\n## Problems\n\n- **No voices** Describe or copy one (`voice.design`, `voice.clone`)."
+ },
+ {
+  "action": "web.read",
+  "title": "Read a web page",
+  "screen": null,
+  "synonyms": [
+   "read a page",
+   "open a link",
+   "website",
+   "article",
+   "url"
+  ],
+  "body": "# Read a web page\n\nAction: `web.read`\n\n## What it is for\n\nRead the main text of one public web page, so the assistant can answer from it. This has no screen of its own: it is part of **Search** in the chat box.\n\n## Steps in the app\n\n1. Switch **Search** on in the chat box.\n2. Ask a question, or paste a link and ask about it.\n3. The assistant reads pages that came from its search or that you pasted, and names them in the answer.\n\n## Fields\n\n- `url`: the address of a public web page.\n\n## Limits\n\n- It opens only addresses from a search or that you typed, never an address a page asked for.\n- It refuses addresses on this computer or a private network, and anything that is not an ordinary web page.\n- Pages that need JavaScript to show, and sites that refuse programs, cannot be read; it says so.\n- Long pages are cut to the first 12,000 characters.\n\n## Needs\n\n- Search switched on and allowed (see **Search the web**).\n\n## Examples\n\n- Read this article and give me the three main points: https://example.com/article\n\n## Problems\n\n- **\"could not be read\"** The page may need JavaScript, or be a list of links. Try another page from the search.\n- **\"refused\"** The site would not show the page to the assistant (for example a login or a paywall)."
+ },
+ {
+  "action": "web.search",
+  "title": "Search the web",
+  "screen": null,
+  "synonyms": [
+   "search the web",
+   "internet",
+   "look up",
+   "google",
+   "news",
+   "current",
+   "online"
+  ],
+  "body": "# Search the web\n\nAction: `web.search`\n\n## What it is for\n\nLook something up on the internet: news, prices, documentation, anything that is not in your own library. This has no screen of its own: switch **Search** on in the chat box and ask.\n\n## Steps in the app\n\n1. Open **Home** and press **Search** under the message box (it is off until you press it).\n2. The first time, read who receives your question and press **Allow**. Choose another service, or add your own key, in **Settings**.\n3. Ask your question. The answer says which sites it used, with their links.\n\n## Fields\n\n- `query`: what to look up, in words.\n- `limit`: how many results at most (1 to 8).\n\n## Limits\n\n- It is off until you allow it, and allowing is for one search service: choosing another asks again.\n- Your question leaves this computer and goes to the service you chose (DuckDuckGo by default).\n- DuckDuckGo limits automated searches, so it can say it is busy for a few minutes. A key from Ollama, Tavily, Exa or Brave Search avoids that.\n- What comes back is text from the internet, which anyone can write. The assistant quotes it and names the site; it never follows instructions inside it, and after it has read the web it asks you before it makes or changes anything.\n\n## Needs\n\n- Your permission, once, for the service shown to you.\n- A key for Ollama, Tavily, Exa or Brave Search, if you chose one of those (**Settings**).\n\n## Examples\n\n- What is the latest version of Python?\n- Look up how to give a Tauri app microphone access on macOS.\n\n## Problems\n\n- **\"Web search is off\"** Press Search in the chat box and allow it, or allow it in **Settings**.\n- **\"DuckDuckGo gave no results\"** It may be limiting searches from this computer. Wait a few minutes, or add a key in **Settings**.\n- **\"did not accept the key\"** Check the key in **Settings**; it may have been copied with a missing character."
+ }
+]

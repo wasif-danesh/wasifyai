@@ -16,8 +16,10 @@ export type ThreadEnv = {
   imageOrigins?: string[];
   /** Thinking is on for this chat: a pending answer says it takes longer */
   thinkingOn?: boolean;
-  /** The person answered a card that waits for them (ADR-0071): yes or no */
-  onDecide?: (approved: boolean) => void;
+  /** The person answered a card that waits for them (ADR-0071): yes or no, with the fields as they edited them */
+  onDecide?: (approved: boolean, params?: Record<string, unknown>) => void;
+  /** Open a screen of the app by its menu item id (the assistant's open_screen button, ADR-0071) */
+  onOpenScreen?: (screenId: string) => void;
   /** The notebook chat (CU4) is a plain back-and-forth: no edit, no "answer again", no versions. */
   linear?: boolean;
   /** What a waiting answer says (default: "Thinking…"). */

@@ -45,7 +45,7 @@ from wasifyai_assistant.attachments import (
     user_content,
     valid_id,
 )
-from wasifyai_assistant.features import features_prompt
+from wasifyai_assistant.features import actions_prompt
 from wasifyai_assistant.store import (
     HEAD,
     PRODUCT_ID,
@@ -55,13 +55,17 @@ from wasifyai_assistant.store import (
     SqlConversationStore,
 )
 from wasifyai_assistant.tools import (
+    ASK,
     DECLINED,
+    EDITED,
     MOVED_ON,
     POLICY,
+    PROPOSE,
     TOOL_DEFINITIONS,
     WEB_TOOLS,
     ToolOutcome,
     call_tool,
+    card_of,
     outcome_of,
     parse_arguments,
     taint_outcome,
@@ -75,12 +79,20 @@ MAX_CALLS_PER_ROUND = 3
 HISTORY_MESSAGES = 40  # what the model is shown of the conversation
 TITLE_CHARS = 60
 
+# ADR-0071 decision 6: guides are grounded, honest about this computer, and offer the card
 SYSTEM_PROMPT = (
     "You are Wasify AI, a helpful assistant inside a creative app that runs on the person's own "
-    "computer. Answer in the language the person writes in, clearly and briefly. You can make "
-    "pictures with the generate_image tool and find things the person made earlier with the "
-    "search_creations tool. Use a tool only when the person asks for it. Never say you made "
-    "something unless the tool reported that it did."
+    "computer. Answer in the language the person writes in, clearly and briefly. "
+    "When the person asks how to do something, or whether the app can, call how_to and "
+    "app_status, then answer only from what they return: give the steps, name the screens and "
+    "fields exactly as written, and say which step this computer is missing. Never describe a "
+    "feature that is not in the guides. End such an answer by offering to do it for them. "
+    "When the person asks you to make, change or get something, call propose_action with the "
+    "action's id and its params: they see a card and decide, and nothing is made until they do. "
+    "Ask for a required field you do not have instead of guessing; if the tool says what to fix, "
+    "fix it and propose again. Use open_screen when a screen is the better place. Use a tool "
+    "only when the person asks for it. Never say you made something unless a tool reported that "
+    "it did."
 )
 
 WEB_PROMPT = (
@@ -113,6 +125,9 @@ class AssistantState(TypedDict, total=False):
     # this client can show a card and send the answer back (the new chat does). Without it an
     # action that needs the person's yes is refused in words, as it always was.
     approvals: bool
+    # the person said the assistant may make things in this chat without a card (ADR-0071
+    # decision 5); never for deleting or anything that needs their word
+    auto_run: bool
     # files attached to this message (ADR-0083, CO2): `[{id, name}]` of uploads made just before
     attachments: list[dict[str, Any]]
     # where in the conversation's tree this turn goes (ADR-0082, stage CU2): left out, the turn goes
@@ -161,7 +176,7 @@ def model_messages(
 ) -> list[dict[str, Any]]:
     """The conversation as OpenAI-style messages (assistant text and tool calls, tool results).
     `attached`: what the person attached, as the model is given it (`attachments.py`).
-    `features`: the sentence about the app's screens (`features.py`)."""
+    `features`: the list of actions the model may propose (`features.actions_prompt`)."""
     prompt = SYSTEM_PROMPT + features + (WEB_PROMPT if search else "")
     if attachments_in(history):
         prompt += ATTACH_PROMPT
@@ -392,21 +407,14 @@ def build_assistant_graph(
     async def refuse(state: AssistantState) -> AssistantState:
         return {}
 
-    async def describe_approval(
-        executor: Any, action_id: str, rec_id: str
-    ) -> tuple[str, str, dict[str, Any]]:
-        """What the card tells the person: the action's name, one line, and a few of its parameters
-        (short text only: the card is plain text)."""
+    async def describe_card(executor: Any, action_id: str, rec_id: str) -> dict[str, Any]:
+        """What the card tells the person (ADR-0071 decision 4): the action, its fields with the
+        values proposed, its badges and consent statement (plain values only)."""
         ctx = require_context()
         action = executor.registry.get(action_id)
-        title = action.title if action else action_id
         rec = await executor.approvals.get(ctx.tenant_id, ctx.user_id, rec_id)
-        summary = rec.summary if rec else title
-        params: dict[str, Any] = {}
-        for k, v in ((rec.params if rec else None) or {}).items():
-            if isinstance(v, str | int | float | bool):
-                params[str(k)] = v if not isinstance(v, str) else v[:300]
-        return title, summary, params
+        summary = rec.summary if rec else (action.title if action else action_id)
+        return card_of(action, action_id, summary, dict((rec.params if rec else None) or {}))
 
     async def run_turn(state: AssistantState) -> AssistantState:
         ctx = require_context()
@@ -415,10 +423,12 @@ def build_assistant_graph(
         search = bool(state.get("search"))
         tools = offered_tools(host(), search)
         catalogue = caps.extras.get("actions")
-        features = features_prompt(
-            {a.id for a in catalogue.registry.for_surface("assistant")} if catalogue else ()
+        served: set[str] = (
+            {a.id for a in catalogue.registry.for_surface("assistant")} if catalogue else set()
         )
+        features = actions_prompt(served)
         thinking = bool(state.get("thinking"))
+        auto_run = bool(state.get("auto_run"))
         reply_id = client_id(state.get("client_reply_id"))
         saved: dict[str, Any] = dict(state.get("loop") or {})  # a turn that waited for an answer
         decision: dict[str, Any] = dict(state.get("decision") or {})
@@ -470,7 +480,9 @@ def build_assistant_graph(
                 await store.set_parts(ctx.tenant_id, ctx.user_id, conv_id, tool_row, parts)
 
         async def call(
-            c: dict[str, Any], approval_id: str | None = None
+            c: dict[str, Any],
+            approval_id: str | None = None,
+            policy: ApprovalPolicy | None = None,
         ) -> ToolOutcome | ActionResult:
             args = c["arguments"]
             executor = caps.extras.get("actions")
@@ -484,8 +496,12 @@ def build_assistant_graph(
                     )
                     return ToolOutcome("refused", {"message": msg}, msg)
                 args = {**args, "url": norm_url(str(args.get("url", "")))}  # as it was checked
-            policy = ApprovalPolicy() if tainted or approval_id else POLICY
-            return await call_tool(c["name"], args, executor, write, c["id"], policy, approval_id)
+            if policy is None or tainted:
+                # the card unless the person said it may run; always the card after outside text
+                policy = POLICY if auto_run and not tainted else ASK
+            return await call_tool(
+                c["name"], args, executor, write, c["id"], policy, approval_id, served=served
+            )
 
         while round_no <= MAX_ROUNDS:
             if pending is None:
@@ -559,7 +575,8 @@ def build_assistant_graph(
                             "arguments": c["arguments"],
                         }
                     )  # fmt: skip
-                outcome: ToolOutcome
+                outcome: ToolOutcome | None = None
+                found: ToolOutcome | ActionResult | None = None
                 if skip_rest:
                     outcome = ToolOutcome("refused", {"message": MOVED_ON}, MOVED_ON)
                 elif answered:
@@ -569,18 +586,29 @@ def build_assistant_graph(
                     await executor.decide_approval(who, saved["approval_id"], approved)
                     verdict = "approved" if approved else "declined"
                     results.append({**saved["interrupt_part"], "status": verdict})
+                    edited = decision.get("params")
                     if decision.get("expired"):
                         skip_rest = True
                         outcome = ToolOutcome("refused", {"message": MOVED_ON}, MOVED_ON)
                     elif not approved:
                         outcome = ToolOutcome("refused", {"message": DECLINED}, DECLINED)
+                    elif (
+                        c["name"] == PROPOSE
+                        and isinstance(edited, dict)
+                        and edited
+                        and edited != c["arguments"].get("params")
+                    ):
+                        # the person changed the fields and pressed Run: that click is the
+                        # approval of what they typed; the floor still asks (a second card)
+                        c = {**c, "arguments": {**c["arguments"], "params": edited}}
+                        pending[i] = c
+                        results[-1]["params"] = edited  # the card keeps what was really run
+                        found = await call(c, policy=EDITED)
                     else:
-                        done = await call(c, saved["approval_id"])
-                        outcome = (
-                            done if isinstance(done, ToolOutcome) else outcome_of(c["name"], done)
-                        )
+                        found = await call(c, saved["approval_id"])
                 else:
                     found = await call(c)
+                if found is not None:
                     if (
                         isinstance(found, ActionResult)
                         and found.status == "needs_approval"
@@ -589,14 +617,13 @@ def build_assistant_graph(
                         found = taint_outcome(found) or found
                     if isinstance(found, ActionResult) and found.status == "needs_approval":
                         executor = caps.extras["actions"]
-                        title, summary, shown = await describe_approval(
+                        card = await describe_card(
                             executor, found.action_id, str(found.approval_id)
                         )
                         part = {
                             "type": "interrupt", "kind": "confirm_action", "status": "pending",
                             "tool_call_id": c["id"], "approval_id": found.approval_id,
-                            "run_id": ctx.run_id, "title": title, "summary": summary,
-                            "params": shown,
+                            "run_id": ctx.run_id, **card,
                         }  # fmt: skip
                         await save_tool_row([*results, part])
                         loop = {
@@ -606,10 +633,7 @@ def build_assistant_graph(
                             "awaiting_call": c["id"], "approval_id": found.approval_id,
                             "interrupt_part": part,
                         }  # fmt: skip
-                        ask = {
-                            "kind": "confirm_action", "tool_call_id": c["id"], "title": title,
-                            "summary": summary, "params": shown,
-                        }  # fmt: skip
+                        ask = {"kind": "confirm_action", "tool_call_id": c["id"], **card}
                         return {"loop": loop, "awaiting": ask, "decision": {}}
                     outcome = (
                         found if isinstance(found, ToolOutcome) else outcome_of(c["name"], found)
@@ -619,6 +643,7 @@ def build_assistant_graph(
                         if c["name"] == "web_search":
                             for r in outcome.output.get("results", []):
                                 openable.add(norm_url(r["url"]))
+                assert outcome is not None
                 write(
                     {
                         "type": "tool_result", "id": c["id"], "name": c["name"],
@@ -651,10 +676,12 @@ def build_assistant_graph(
         window's answer, `{approved: bool}`, comes back through `POST /runs/{id}/resume`."""
         answer = interrupt(state.get("awaiting") or {})
         value = answer if isinstance(answer, dict) else {"approved": answer is True}
+        edited = value.get("params")
         return {
             "decision": {
                 "approved": value.get("approved") is True,
                 "expired": value.get("expired") is True,
+                "params": edited if isinstance(edited, dict) else None,
             }
         }
 

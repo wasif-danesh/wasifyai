@@ -59,6 +59,8 @@ export type AssistantHomeProps = {
   onOpenCreation?: (kind: string, id: string) => void;
   /** Take the person to Settings, where the search service and its key are chosen (ADR-0083). */
   onOpenSettings?: () => void;
+  /** Open a screen of the app by its menu item id (the assistant's open_screen button; ADR-0071). */
+  onOpenScreen?: (screenId: string) => void;
   /** Take the person to the notebooks (a document too long for the chat can be added to one). */
   onOpenNotebooks?: () => void;
   /** Which options of the box the chat offers; by default what the engine says the model in use can do (ADR-0083). */
@@ -88,6 +90,7 @@ export function AssistantHome({
   onNeedModel,
   onOpenCreation,
   onOpenSettings,
+  onOpenScreen,
   onOpenNotebooks,
   composerOptions,
   voice,
@@ -335,6 +338,7 @@ export function AssistantHome({
     onNeedModel,
     onOpenCreation,
     onOpenSettings,
+    onOpenScreen,
     composerOptions: composerOptions ?? engineOptions,
     title: conversationId ? title || "Chat" : undefined,
     actions: conversationId ? (

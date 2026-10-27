@@ -162,9 +162,15 @@ data: {"run_id":"…","thread_id":"…","seq":57,"ts":"…","outputs":{"title":"
   the `message`. It is not an action (`docs/actions.md`, "Not actions").
 - **Cards that wait for the person (ADR-0071).** Run input **`approvals`** (bool): this client shows a card and sends the answer back. Only then does an action that
   needs the person's yes (after the web was read, a picture or a song; a `destroy` action) park the turn. Without it that action is refused in words, as before.
-  The turn emits `interrupt` with `kind: "confirm_action"` and `payload {kind, tool_call_id, title, summary, params}` (`params`: a few short parameters, plain text),
-  stores a `tool` row with a part `{type: "interrupt", kind, status: "pending", tool_call_id, approval_id, run_id, title, summary, params}` so a reload shows the card,
-  and waits (`waiting_input`). **`POST /runs/{run_id}/resume {"value": {"approved": true}}`** answers it; anything but a literal `true` is a no. `{"approved": false,
-  "expired": true}` is "the person went on without answering": the turn closes without another model call. The part becomes `approved` or `declined`; the tool's
-  `tool_result` follows in the same row and the stream goes on in the same message. A second answer is `409`. The window's click is the only way an approval is
-  decided: no action exposes it.
+  The turn emits `interrupt` with `kind: "confirm_action"` and `payload {kind, tool_call_id, title, summary, params, action_id, effect, badges, consent, fields,
+  screen}` (`params`: a few short parameters, plain text; `fields`: one row per field of the action's input, drawn from its schema: `{name, label, kind: text |
+  long_text | number | bool | choice, required, description?, choices?, min?, max?, max_length?, value?}`; `badges`: short words such as "leaves this computer";
+  `consent`: the statement a `needs_consent` action needs ticked; `screen`: the menu item that does the same thing; stage A2 of ADR-0071), stores a `tool` row with
+  a part `{type: "interrupt", kind, status: "pending", tool_call_id, approval_id, run_id, ...the same}` so a reload shows the card, and waits (`waiting_input`).
+  **`POST /runs/{run_id}/resume {"value": {"approved": true}}`** answers it; anything but a literal `true` is a no. `{"approved": true, "params": {...}}` is a yes
+  with the fields as the person edited them: the action runs with those (the stored part keeps them in `params`), and an action on the floor (delete, consent)
+  shows a second card for the edited request. `{"approved": false, "expired": true}` is "the person went on without answering": the turn closes without another
+  model call. The part becomes `approved` or `declined`; the tool's `tool_result` follows in the same row and the stream goes on in the same message. A second
+  answer is `409`. The window's click is the only way an approval is decided: no action exposes it.
+- **Auto-run (ADR-0071 decision 5).** Run input **`auto_run`** (bool, default false): the person said the assistant may make things in this chat without a card.
+  Deleting and anything that needs their word still ask, and after the web or a file is in the chat everything that is not a read asks (the taint rule).

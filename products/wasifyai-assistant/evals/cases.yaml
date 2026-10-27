@@ -3,30 +3,35 @@
 # any OpenAI-compatible server or a GGUF file. Add a case for every mistake a model makes in real use.
 #
 #   expect:  tool name, or "none" (answer in words)
+#   action:  for propose_action: the action id it must propose (ADR-0071 decision 3)
 #   args:    for a tool: argument names that must be present and non-empty
-#   mentions: words the tool's text argument should contain (any one of them, case-insensitive)
+#   mentions: words the tool's arguments should contain (any one of them, case-insensitive)
 #   answer:  for "none": words the answer should contain (any one of them)
 cases:
   - id: draw-plain
     say: "Please draw a red teapot on a wooden table."
-    expect: generate_image
-    args: [prompt]
+    expect: propose_action
+    action: image.generate
+    args: [action_id, params]
     mentions: [teapot]
   - id: draw-wide
     say: "Make me a wide picture of a cat dressed as an astronaut on the moon."
-    expect: generate_image
-    args: [prompt]
+    expect: propose_action
+    action: image.generate
+    args: [action_id, params]
     mentions: [cat]
     size: wide
   - id: draw-spanish
     say: "Dibuja un faro al amanecer."
-    expect: generate_image
-    args: [prompt]
+    expect: propose_action
+    action: image.generate
+    args: [action_id, params]
     mentions: [lighthouse, faro]
   - id: draw-verb-paint
     say: "Paint a quiet mountain lake at dusk for me."
-    expect: generate_image
-    args: [prompt]
+    expect: propose_action
+    action: image.generate
+    args: [action_id, params]
     mentions: [lake, mountain]
   - id: search-picture
     say: "Which teapot picture did I make last week?"

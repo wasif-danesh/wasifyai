@@ -9,6 +9,8 @@ from collections.abc import Collection
 from functools import cache
 from pathlib import Path
 
+from wasifyai_assistant.help import titles
+
 FILE = Path(__file__).with_name("features.json")
 
 FEATURES_PROMPT = (
@@ -34,3 +36,40 @@ def features_prompt(served: Collection[str]) -> str:
         if any(a in served for a in row["actions"]):
             lines.append(f"{row['where']}: {'; '.join(row['does']).lower()}")
     return FEATURES_PROMPT.format(list=" | ".join(lines)) if lines else ""
+
+
+def where_of(action_id: str) -> str:
+    """The menu path of an action's screen ("Voice › Text to speech"), or ""."""
+    for row in _rows():
+        if action_id in row["actions"]:
+            return str(row["where"])
+    return ""
+
+
+def where_of_screen(screen_id: str) -> str:
+    """The menu path of a screen (a menu item id), or ""."""
+    for row in _rows():
+        if row.get("screen") == screen_id:
+            return str(row["where"])
+    return ""
+
+
+NOT_PROPOSED = frozenset({"web", "app", "job"})
+ACTIONS_PROMPT = (
+    " Actions you may propose with propose_action (id: what it does; where it is in the app): "
+    "{list}."
+)
+
+
+def actions_prompt(served: Collection[str]) -> str:
+    """The compact map of the actions this engine serves (ADR-0071 decision 3): about 600 tokens,
+    made from the guides' titles and the menu, never typed by hand ("" if none)."""
+    named = titles(served)
+    lines = []
+    for action_id in sorted(served):
+        # the web, the app's state and jobs have tools of their own; they are not proposed
+        if action_id not in named or action_id.split(".", 1)[0] in NOT_PROPOSED:
+            continue
+        where = where_of(action_id)
+        lines.append(f"{action_id}: {named[action_id]}" + (f"; {where}" if where else ""))
+    return ACTIONS_PROMPT.format(list=" | ".join(lines)) if lines else ""

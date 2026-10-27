@@ -146,7 +146,14 @@ async def test_after_a_file_is_attached_making_something_waits_for_the_persons_a
     rig = Rig(
         tmp_path,
         [
-            {"tool_calls": [{"name": "generate_image", "arguments": {"prompt": "a fox"}}]},
+            {
+                "tool_calls": [
+                    {
+                        "name": "propose_action",
+                        "arguments": {"action_id": "image.generate", "params": {"prompt": "a fox"}},
+                    }
+                ]
+            },
             {"text": "ok"},
         ],
         host,

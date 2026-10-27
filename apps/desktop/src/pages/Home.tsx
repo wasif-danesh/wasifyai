@@ -5,6 +5,7 @@ import { useRef } from "react";
 import { assistantApi, client, modelsApi, voiceApi } from "../api";
 import { ChatStart } from "../choices/ChatStart";
 import { images } from "../images";
+import { ROUTES } from "../menu";
 import { type Route, openChat, openNotebook } from "../router";
 import { getSpeechModel } from "../speech-model";
 
@@ -35,6 +36,10 @@ export function HomePage({
       modelPicker={<ModelSelect group="chat" api={choices} handleRef={picker} />}
       onNeedModel={() => picker.current?.open()}
       onOpenSettings={() => go("settings")}
+      onOpenScreen={(id) => {
+        const route = ROUTES[id];
+        if (route) go(route);
+      }}
       onOpenNotebooks={() => go("notebooks")}
       onOpenCreation={(kind, id) => {
         if (kind === "image") go("library");

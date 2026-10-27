@@ -374,12 +374,8 @@ def create_app(
             needs is served (images by the image product, music by the speech runtime, notebooks by
             the desktop's library), so the model is never told about something that cannot run."""
             served = set(enabled(reg.products()))
-            tools = {"search_creations"}
-            if "wasifyai-image" in served:
-                tools.add("generate_image")
-            audio = getattr(app.state, "audio", None)
-            if "wasifyai-voice" in served and audio is not None and audio.models("music"):
-                tools.add("make_music")
+            # the meta-tools of ADR-0071: what an action needs is checked when it is proposed
+            tools = {"how_to", "app_status", "propose_action", "open_screen", "search_creations"}
             notebooks_here = desktop_profile or getattr(app.state, "notebooks_web", None)
             if notebooks_here and "wasifyai-notebooks" in served:
                 tools.add("search_notebooks")

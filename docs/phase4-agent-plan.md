@@ -79,7 +79,7 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
   the executor with a fake engine produces the documented result; `destroy` and `needs_consent` cannot be set to
   auto; usage and audit entries exist; no change visible to the person yet.
 
-### Stage A2. The assistant guides and proposes (M) — first thing the owner sees
+### Stage A2. The assistant guides and proposes (M) — first thing the owner sees — **first slice built 2026-10-27** (ADR-0071, "Built 2026-10-27")
 
 > **Note (2026-10-19, ADR-0082):** the chat UI moves to assistant-ui. Build A2's backend (help corpus, `propose_action`, `confirm_action`) as planned, but write its **cards as assistant-ui tool UIs** after chat stage CU1 (`docs/chat-ui-migration-plan.md`), not as new `ToolCard` code.
 > **Update (2026-10-20, CU1 built behind Labs):** tool UIs are registered by tool name in `packages/ui/src/chat/thread/tool-uis/index.tsx`

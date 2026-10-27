@@ -53,8 +53,8 @@ async def test_a_tool_call_runs_the_image_product_and_reports_each_step(tmp_path
         tmp_path,
         [
             {"text": "Sure, drawing it.",
-             "tool_calls": [{"name": "generate_image",
-                             "arguments": {"prompt": "a red fox in snow", "size": "wide"}}]},
+             "tool_calls": [{"name": "propose_action", "arguments": {"action_id": "image.generate",
+                 "params": {"prompt": "a red fox in snow", "size": "wide"}}}]},
             {"text": "Here is your fox."},
         ],
         host,
@@ -77,7 +77,7 @@ async def test_a_tool_call_runs_the_image_product_and_reports_each_step(tmp_path
     # the model saw the result as a tool message on its second round
     second = rig.model.chats[1]["messages"]
     assert second[-1]["role"] == "tool" and "saved to the library" in second[-1]["content"]
-    assert second[-2]["tool_calls"][0]["function"]["name"] == "generate_image"
+    assert second[-2]["tool_calls"][0]["function"]["name"] == "propose_action"
 
 
 async def test_a_refused_picture_is_reported_to_the_person_and_the_model(tmp_path, ctx):
@@ -90,7 +90,8 @@ async def test_a_refused_picture_is_reported_to_the_person_and_the_model(tmp_pat
     ]
     rig = Rig(
         tmp_path,
-        [{"tool_calls": [{"name": "generate_image", "arguments": {"prompt": "x"}}]},
+        [{"tool_calls": [{"name": "propose_action", "arguments": {"action_id": "image.generate",
+            "params": {"prompt": "x"}}}]},
          {"text": "I can't make that one."}],
         host,
     )  # fmt: skip
@@ -107,7 +108,8 @@ async def test_a_failed_child_run_is_an_error_result_not_a_failed_turn(tmp_path,
     ]
     rig = Rig(
         tmp_path,
-        [{"tool_calls": [{"name": "generate_image", "arguments": {"prompt": "a fox"}}]},
+        [{"tool_calls": [{"name": "propose_action", "arguments": {"action_id": "image.generate",
+            "params": {"prompt": "a fox"}}}]},
          {"text": "Sorry, that failed."}],
         host,
     )  # fmt: skip
@@ -181,8 +183,9 @@ async def test_music_is_made_through_the_voice_product_and_the_answer_names_it(t
     ]  # fmt: skip
     rig = Rig(
         tmp_path,
-        [{"tool_calls": [{"name": "make_music", "arguments": {
-            "description": "upbeat pop", "lyrics": "la la la", "seconds": 500}}]},
+        [{"tool_calls": [{"name": "propose_action", "arguments": {"action_id": "music.generate",
+            "params": {
+            "description": "upbeat pop", "lyrics": "la la la", "seconds": 120}}}]},
          {"text": "Here is your song."}],
         host,
     )  # fmt: skip
@@ -207,11 +210,12 @@ async def test_music_that_was_refused_or_failed_is_told_in_words(tmp_path, ctx):
             "outputs": {"status": "refused", "refusal": {"message": "Describe the music."}},
         }
     ]
-    call = {"tool_calls": [{"name": "make_music", "arguments": {"description": "x"}}]}
+    call = {"tool_calls": [{"name": "propose_action", "arguments": {"action_id": "music.generate",
+        "params": {"description": "x"}}}]}
     rig = Rig(tmp_path, [call, {"text": "Sorry."}], host)
     _, events = await rig.turn("music")
     result = next(e for e in events if e["type"] == "tool_result")
-    assert result["status"] == "refused" and result["output"] == {"message": "Describe the music."}
+    assert result["status"] == "refused" and result["output"]["message"] == "Describe the music."
     host2 = FakeHost()
     host2.child_events = [{"event": "error", "message": "The speech runtime is not set up yet."}]
     (tmp_path / "b").mkdir()
@@ -219,23 +223,25 @@ async def test_music_that_was_refused_or_failed_is_told_in_words(tmp_path, ctx):
     rig2 = Rig(tmp_path / "b", [call, {"text": "Sorry."}], host2)
     _, events2 = await rig2.turn("music")
     assert next(e for e in events2 if e["type"] == "tool_result")["status"] == "error"
-    empty = {"tool_calls": [{"name": "make_music", "arguments": {}}]}
+    empty = {"tool_calls": [{"name": "propose_action", "arguments": {"action_id": "music.generate",
+        "params": {}}}]}
     rig3 = Rig(tmp_path / "c", [empty, {"text": "Sorry."}], FakeHost())
     _, events3 = await rig3.turn("music")
-    assert next(e for e in events3 if e["type"] == "tool_result")["status"] == "error"
+    assert next(e for e in events3 if e["type"] == "tool_result")["status"] == "refused"
 
 
 async def test_an_unknown_tool_and_bad_arguments_do_not_break_the_turn(tmp_path, ctx):
     rig = Rig(
         tmp_path,
         [{"tool_calls": [{"name": "delete_everything", "arguments": {}},
-                         {"name": "generate_image", "arguments": {}}]},
+                         {"name": "propose_action", "arguments": {"action_id": "image.generate",
+                             "params": {}}}]},
          {"text": "Done."}],
         FakeHost(),
     )  # fmt: skip
     state, events = await rig.turn("go")
     statuses = [e["status"] for e in events if e["type"] == "tool_result"]
-    assert statuses == ["error", "error"]
+    assert statuses == ["error", "refused"]  # no such tool; a proposal with no prompt
     assert state["reply"] == "Done."
 
 
@@ -337,11 +343,11 @@ def test_the_model_is_only_told_about_tools_the_host_can_run():
     ]
     assert offered_tools(FakeHost(), search=True) == TOOL_DEFINITIONS
     assert offered_tools(Limited(None), search=True) == TOOL_DEFINITIONS
-    assert names(offered_tools(Limited({"web_search", "web_read", "generate_image"}))) == [
-        "generate_image"
+    assert names(offered_tools(Limited({"web_search", "web_read", "propose_action"}))) == [
+        "propose_action"
     ]
-    assert names(offered_tools(Limited({"search_creations", "generate_image"}))) == [
-        "generate_image",
+    assert names(offered_tools(Limited({"search_creations", "propose_action"}))) == [
+        "propose_action",
         "search_creations",
     ]
     assert offered_tools(Limited(set())) is None
@@ -368,7 +374,8 @@ async def test_the_reply_id_goes_to_the_first_assistant_message_of_the_turn(tmp_
     rig = Rig(
         tmp_path,
         [{"text": "Drawing.",
-          "tool_calls": [{"name": "generate_image", "arguments": {"prompt": "a fox"}}]},
+          "tool_calls": [{"name": "propose_action", "arguments": {"action_id": "image.generate",
+              "params": {"prompt": "a fox"}}}]},
          {"text": "Done."}],
         host,
     )  # fmt: skip
@@ -409,7 +416,8 @@ async def test_job_progress_names_the_tool_call_it_belongs_to(tmp_path, ctx):
     host = FakeHost()
     rig = Rig(
         tmp_path,
-        [{"tool_calls": [{"name": "generate_image", "arguments": {"prompt": "a fox"}}]},
+        [{"tool_calls": [{"name": "propose_action", "arguments": {"action_id": "image.generate",
+            "params": {"prompt": "a fox"}}}]},
          {"text": "ok"}],
         host,
     )  # fmt: skip
@@ -494,7 +502,8 @@ async def test_a_thinking_turn_with_a_tool_stores_the_thought_of_each_round(tmp_
     rig = Rig(
         tmp_path,
         [{"reasoning": "I should draw.",
-          "tool_calls": [{"name": "generate_image", "arguments": {"prompt": "a fox"}}]},
+          "tool_calls": [{"name": "propose_action", "arguments": {"action_id": "image.generate",
+              "params": {"prompt": "a fox"}}}]},
          {"text": "Here it is.", "reasoning": "It worked."}],
         host,
     )  # fmt: skip
@@ -600,7 +609,8 @@ async def test_only_an_address_from_a_search_or_the_person_can_be_opened(tmp_pat
 def drawing_after_a_search(host):
     return [
         {"tool_calls": [{"name": "web_search", "arguments": {"query": "fox"}}]},
-        {"tool_calls": [{"name": "generate_image", "arguments": {"prompt": "a fox"}}]},
+        {"tool_calls": [{"name": "propose_action", "arguments": {"action_id": "image.generate",
+            "params": {"prompt": "a fox"}}}]},
         {"text": "Done thinking."},
     ]
 
@@ -635,7 +645,7 @@ async def test_approving_the_card_makes_the_thing_and_the_turn_goes_on(tmp_path,
     await rig.turn_with({"text": "fox then draw", "search": True, "approvals": True})
     state, events = await rig.answer({"approved": True})
     assert len(host.runs) == 1  # now it was made
-    made = next(e for e in events if e["type"] == "tool_result" and e["name"] == "generate_image")
+    made = next(e for e in events if e["type"] == "tool_result" and e["name"] == "propose_action")
     assert made["status"] == "ok"
     assert state["status"] == "done" and state["reply"] == "Done thinking."
     assert "loop" not in state or not state["loop"]
@@ -655,7 +665,7 @@ async def test_declining_the_card_makes_nothing_and_tells_the_model(tmp_path, ct
     await rig.turn_with({"text": "fox then draw", "search": True, "approvals": True})
     state, events = await rig.answer({"approved": False})
     assert host.runs == []
-    made = next(e for e in events if e["type"] == "tool_result" and e["name"] == "generate_image")
+    made = next(e for e in events if e["type"] == "tool_result" and e["name"] == "propose_action")
     assert made["status"] == "refused" and "chose not to" in made["output"]["message"]
     assert "chose not to" in rig.model.chats[2]["messages"][-1]["content"]
     assert state["status"] == "done"
@@ -672,7 +682,7 @@ async def test_moving_on_without_answering_closes_the_turn_without_asking_the_mo
     state, events = await rig.answer({"approved": False, "expired": True})
     assert host.runs == [] and len(rig.model.chats) == chats  # no further model call
     assert state["reply"] == "I did not do that, because it was not approved."
-    made = next(e for e in events if e["type"] == "tool_result" and e["name"] == "generate_image")
+    made = next(e for e in events if e["type"] == "tool_result" and e["name"] == "propose_action")
     assert made["status"] == "refused" and "went on without answering" in made["output"]["message"]
 
 
@@ -682,7 +692,8 @@ async def test_the_taint_stays_for_the_rest_of_the_conversation(tmp_path, ctx):
         tmp_path,
         [{"tool_calls": [{"name": "web_search", "arguments": {"query": "fox"}}]},
          {"text": "Here."},
-         {"tool_calls": [{"name": "generate_image", "arguments": {"prompt": "a fox"}}]},
+         {"tool_calls": [{"name": "propose_action", "arguments": {"action_id": "image.generate",
+             "params": {"prompt": "a fox"}}}]},
          {"text": "No."}],
         host,
     )  # fmt: skip
@@ -703,7 +714,7 @@ async def test_a_client_that_cannot_show_the_card_is_told_no_in_words(tmp_path, 
     rig = Rig(tmp_path, drawing_after_a_search(host), host)
     state, events = await rig.turn_with({"text": "fox then draw", "search": True})
     assert await rig.paused() is None and state["status"] == "done"
-    made = next(e for e in events if e["type"] == "tool_result" and e["name"] == "generate_image")
+    made = next(e for e in events if e["type"] == "tool_result" and e["name"] == "propose_action")
     assert made["status"] == "refused" and "approval" in made["output"]["message"]
     assert host.runs == []
 
@@ -723,11 +734,12 @@ async def test_without_the_web_in_the_chat_things_are_still_made_at_once(tmp_pat
     host = web_host()
     rig = Rig(
         tmp_path,
-        [{"tool_calls": [{"name": "generate_image", "arguments": {"prompt": "a fox"}}]},
+        [{"tool_calls": [{"name": "propose_action", "arguments": {"action_id": "image.generate",
+            "params": {"prompt": "a fox"}}}]},
          {"text": "Here."}],
         host,
     )  # fmt: skip
-    _, events = await rig.turn_with({"text": "draw a fox", "search": True})
+    _, events = await rig.turn_with({"text": "draw a fox", "search": True, "auto_run": True})
     made = next(e for e in events if e["type"] == "tool_result")
     assert made["status"] == "ok" and len(host.runs) == 1
 

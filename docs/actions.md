@@ -4,7 +4,8 @@ ADR-0068. Everything the product can do for a person or an agent is described on
 run by one **executor**. The assistant's tools (ADR-0071) and the MCP tools (ADR-0069) are read from it; nothing
 is exposed that is not in it. `docs/contracts/actions.json` is the catalogue as one file, so a reviewer can read
 everything an agent can do in one place. Stage A1 (this document) built the catalogue and executor and moved the
-assistant's four tools onto it; nothing else is wired yet, so nothing changed for the person.
+assistant's tools onto it; stage A2 (2026-10-27) gave the assistant its meta-tools, so any action a product
+declares can be proposed in the chat and run from its card (ADR-0071).
 
 ## What is where
 

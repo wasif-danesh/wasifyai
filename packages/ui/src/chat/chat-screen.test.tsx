@@ -142,12 +142,16 @@ describe("ChatScreen", () => {
   it("shows a picture the assistant made, with a way to open it", async () => {
     const runs = runsThat([
       ev("token", { text: "Drawing. " }),
-      ev("tool_call", { id: "t1", name: "generate_image", arguments: { prompt: "a red teapot" } }),
+      ev("tool_call", {
+        id: "t1",
+        name: "propose_action",
+        arguments: { action_id: "image.generate", params: { prompt: "a red teapot" } },
+      }),
       ev("tool_result", {
         id: "t1",
-        name: "generate_image",
+        name: "propose_action",
         status: "ok",
-        output: { image_id: "img-1" },
+        output: { action_id: "image.generate", message: "Made.", image_id: "img-1" },
       }),
       ev("done", { outputs: { status: "done", conversation_id: "c1", title: "Teapot" } }),
     ]);
@@ -219,12 +223,16 @@ describe("ChatScreen", () => {
 
   it("plays the music the assistant made, in the chat, with a way to open it", async () => {
     const runs = runsThat([
-      ev("tool_call", { id: "t1", name: "make_music", arguments: { description: "upbeat pop" } }),
+      ev("tool_call", {
+        id: "t1",
+        name: "propose_action",
+        arguments: { action_id: "music.generate", params: { description: "upbeat pop" } },
+      }),
       ev("tool_result", {
         id: "t1",
-        name: "make_music",
+        name: "propose_action",
         status: "ok",
-        output: { track_id: "tr1", title: "Summer pop", seconds: 30 },
+        output: { action_id: "music.generate", track_id: "tr1", title: "Summer pop", seconds: 30 },
       }),
       ev("token", { text: "Here is your song." }),
       ev("done", { outputs: { status: "done", conversation_id: "c1", title: "Song" } }),
@@ -251,8 +259,17 @@ describe("ChatScreen", () => {
 
   it("says when the music could not be made", async () => {
     const runs = runsThat([
-      ev("tool_call", { id: "t1", name: "make_music", arguments: { description: "x" } }),
-      ev("tool_result", { id: "t1", name: "make_music", status: "error", output: {} }),
+      ev("tool_call", {
+        id: "t1",
+        name: "propose_action",
+        arguments: { action_id: "music.generate", params: { description: "x" } },
+      }),
+      ev("tool_result", {
+        id: "t1",
+        name: "propose_action",
+        status: "error",
+        output: { action_id: "music.generate" },
+      }),
       ev("done", { outputs: { status: "done", conversation_id: "c1", title: "Song" } }),
     ]);
     const user = userEvent.setup();

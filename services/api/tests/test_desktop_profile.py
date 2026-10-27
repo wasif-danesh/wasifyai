@@ -490,12 +490,14 @@ def test_the_assistant_is_offered_the_tools_the_desktop_can_run(data_dir):
     app = create_app()
     with TestClient(app):
         host = app.state.caps["wasifyai-assistant"].extras["tool_host"]
-        # the speech runtime, the notebooks and web search are served by the desktop engine (the
-        # assistant offers the two web tools to the model only while the person has Search on)
+        # the meta-tools of ADR-0071 always; the notebooks and web search are served by the desktop
+        # engine (the assistant offers the two web tools to the model only while Search is on)
         assert host.available_tools() == {
+            "how_to",
+            "app_status",
+            "propose_action",
+            "open_screen",
             "search_creations",
-            "generate_image",
-            "make_music",
             "search_notebooks",
             "web_search",
             "web_read",

@@ -20,15 +20,15 @@ from pathlib import Path
 
 import httpx
 import yaml
-from wasifyai_assistant.features import FILE, features_prompt
+from wasifyai_assistant import help as guides
+from wasifyai_assistant.features import actions_prompt
 from wasifyai_assistant.graph import SYSTEM_PROMPT
-from wasifyai_assistant.tools import SIZES, TOOL_DEFINITIONS
+from wasifyai_assistant.tools import TOOL_DEFINITIONS
 
 CASES = Path(__file__).with_name("cases.yaml")
-# what the assistant is really sent: its prompt and the sentence about the app's screens
-PROMPT = SYSTEM_PROMPT + features_prompt(
-    {a for row in json.loads(FILE.read_text()) for a in row["actions"]}
-)
+SIZES = ("square", "landscape", "portrait", "wide", "tall")
+# what the assistant is really sent: its prompt and the list of actions it may propose
+PROMPT = SYSTEM_PROMPT + actions_prompt({g.action for g in guides.guides()})
 
 
 def judge(case: dict, message: dict) -> tuple[bool, str]:
@@ -57,14 +57,19 @@ def judge(case: dict, message: dict) -> tuple[bool, str]:
     for name in case.get("args", []):
         if not str(args.get(name, "")).strip():
             return False, f"argument {name} is missing"
+    # a proposal: the right action, and its params are where the words are
+    params = args.get("params") if isinstance(args.get("params"), dict) else {}
+    if case.get("action") and args.get("action_id") != case["action"]:
+        return False, f"proposed {args.get('action_id')!r}, wanted {case['action']}"
     mentions = [str(m).lower() for m in case.get("mentions") or []]
-    text_arg = str(args.get("prompt") or args.get("query") or "").lower()
+    text_arg = json.dumps({**args, **params}, ensure_ascii=False).lower()
     if mentions and not any(m in text_arg for m in mentions):
         return False, f"{text_arg!r} lacks any of {mentions}"
-    if "size" in args and args["size"] not in SIZES:
-        return False, f"size {args['size']!r} is not one of the sizes"
-    if case.get("size") and args.get("size") != case["size"]:
-        return False, f"size {args.get('size')!r}, wanted {case['size']}"
+    size = params.get("size", args.get("size"))
+    if size is not None and size not in SIZES:
+        return False, f"size {size!r} is not one of the sizes"
+    if case.get("size") and size != case["size"]:
+        return False, f"size {size!r}, wanted {case['size']}"
     return True, f"called {expect}"
 
 

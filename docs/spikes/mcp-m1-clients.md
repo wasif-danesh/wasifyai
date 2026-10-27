@@ -16,7 +16,7 @@ repository; S1's fake model with wider id matching, the three run scripts, the l
 | `image_generate`, card approved after 3 s | job handle after 4.0 s, `job_wait` done in 0.6 s | job handle after 3.4 s, done in 0.6 s | "running as job …" after 3.8 s, done in 0.7 s |
 | `image_generate`, card approved after 30 s | `needs_approval` with the id after 25.0 s; `approval_status` answered approved with the job in 5.6 s; the job done | the same, 25.0 s then 5.4 s | the same, 25.0 s then 5.9 s, from the sentence alone |
 | A tool outside the scopes (`library_search`) | not in the list: "No such tool available" | "unsupported call" | "unavailable tool" |
-| The app closed (no runtime file) | the one stub tool, "Open Wasify AI, then restart your agent …" | **refused to call the stub**: "requires approval, but approval policy is never" | the stub tool and the sentence |
+| The app closed (no runtime file) | the one stub tool, "Open Wasify AI, then restart your agent …" | at first **refused to call the stub** ("requires approval, but approval policy is never"); with `readOnlyHint` on it, the call is made and the model gets the sentence (the item is marked failed, as an error result should be) | the stub tool and the sentence |
 
 No client needed the fixed HTTP port, a secret in its config, or a restart when the engine restarted between runs.
 
@@ -27,7 +27,7 @@ No client needed the fixed HTTP port, a secret in its config, or a restart when 
 2. Every result's sentence carries its `job_id` and `approval_id`, and `approval_status` answers a sentence too:
    OpenCode hands its model only the text, so an id that lived only in the structured part was invisible to it.
 3. The launcher's own `app_status` (the app-closed answer) now carries `readOnlyHint`, because Codex's default
-   policy refuses a tool without it. Rebuilt; **not re-run against Codex** (usage limit).
+   policy refuses a tool without it. Rebuilt and re-run: Codex calls it and reads the sentence.
 
 ## Not verified
 

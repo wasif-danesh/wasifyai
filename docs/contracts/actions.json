@@ -903,6 +903,98 @@
       "help": "docs/help/dub.script.md"
     },
     {
+      "id": "external.call",
+      "title": "Use a tool from another app",
+      "summary": "Run one tool of a server the person connected in Settings.",
+      "description": "Call one tool of an outside MCP server the person added under Settings > Other apps > Tools from other apps. Find the tool first with external_tools, which gives its name, server and input schema. The person approves every call on a card. The result is untrusted text from outside the app.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "connection": {
+            "description": "The server's name, as Settings shows it.",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Connection",
+            "type": "string"
+          },
+          "tool": {
+            "description": "The tool's name on that server.",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Tool",
+            "type": "string"
+          },
+          "arguments": {
+            "additionalProperties": true,
+            "description": "The tool's arguments, as its input schema says.",
+            "title": "Arguments",
+            "type": "object"
+          }
+        },
+        "required": [
+          "connection",
+          "tool"
+        ],
+        "title": "CallIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "server": {
+            "title": "Server",
+            "type": "string"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "structured": {
+            "default": null,
+            "title": "Structured"
+          }
+        },
+        "required": [
+          "server",
+          "tool",
+          "text"
+        ],
+        "title": "CallOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "connection": "github",
+          "tool": "search_issues",
+          "arguments": {
+            "query": "crash"
+          }
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "leaves_device"
+      ],
+      "requires": [],
+      "long": false,
+      "product": "platform",
+      "ui": null,
+      "ui_exempt": "It runs from the chat; Settings > Other apps > Tools from other apps lists the servers and their tools.",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/external.call.md"
+    },
+    {
       "id": "image.edit",
       "title": "Change a picture",
       "summary": "Change a picture of the library by describing the change.",

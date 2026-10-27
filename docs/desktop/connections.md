@@ -38,6 +38,16 @@ launch; the HTTP snippet for Claude Code appears once it is on. Off by default.
 to save under `.claude/skills/wasify-ai/`; it tells Claude Code when and how to use the tools, in addition to the
 connection.
 
+**Tools from other apps (the MCP client, ADR-0070, stage C1).** The other direction: the assistant uses outside
+MCP servers the person adds under the same Settings page (`packages/ui/src/connections/ExternalServers.tsx`; engine
+`services/api/src/wasifyai_api/mcp_client/`; routes `/external`; tables `mcp_servers`, `mcp_client_activity`,
+Alembic 0025; tests `services/api/tests/test_mcp_client.py` with the malicious `fake_external_server.py`). An
+address (https, or loopback) or a program (the name typed again: it is installing software); a token or variables
+in the keychain; trust "asks you before every call" or "is never called"; Test lists the tools with their
+annotations; the row shows the host and the bytes sent and received. In the chat, `external_tools` finds a tool and
+`call_external` proposes it on a card; the result reaches the model as labelled, cut, untrusted text, and after one
+everything that is not a read asks. OAuth is not built (a pasted token works).
+
 **What is not done.** Image previews and `resource_link` results; placing `wasify-mcp` in the app bundle; Windows
 and Linux (not compiled); notifications for background approvals (needs a dependency); the "from Codex" label on
 library cards. The three real clients were driven end to end on 2026-10-27 (`docs/spikes/mcp-m1-clients.md`), not

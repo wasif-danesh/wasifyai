@@ -491,7 +491,8 @@ def test_the_assistant_is_offered_the_tools_the_desktop_can_run(data_dir):
     with TestClient(app):
         host = app.state.caps["wasifyai-assistant"].extras["tool_host"]
         # the meta-tools of ADR-0071 always; the notebooks and web search are served by the desktop
-        # engine (the assistant offers the two web tools to the model only while Search is on)
+        # engine (the assistant offers the two web tools to the model only while Search is on);
+        # the outside-tools pair of ADR-0070 on the desktop, where the MCP client lives
         assert host.available_tools() == {
             "how_to",
             "app_status",
@@ -501,6 +502,8 @@ def test_the_assistant_is_offered_the_tools_the_desktop_can_run(data_dir):
             "search_notebooks",
             "web_search",
             "web_read",
+            "external_tools",
+            "call_external",
         }
 
 

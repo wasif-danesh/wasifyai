@@ -112,6 +112,16 @@ def require_scope(scope: str) -> Callable[..., Awaitable[Principal]]:
     return dependency
 
 
+async def require_person(request: Request, identity: Identity = Depends(get_identity)) -> Identity:
+    """The person themself (a token from the window or the web app), never a connection or an
+    API key: what Settings that add outside software or spend the person's trust need
+    (ADR-0070 decision 2)."""
+    principal = _principal_of(request, identity)
+    if principal.kind != "person":
+        raise HTTPException(403, "only the person can change this, in the app")
+    return identity
+
+
 async def require_admin(request: Request, identity: Identity = Depends(get_identity)) -> Identity:
     principal = _principal_of(request, identity)
     if principal.role != "admin":

@@ -100,6 +100,9 @@ from wasifyai_api.litellm_admin import BackendError, InMemoryModelBackend, LiteL
 from wasifyai_api.local_embedder import MODEL as LOCAL_EMBEDDER_MODEL
 from wasifyai_api.local_embedder import hashing_embed
 from wasifyai_api.logging import configure_logging, request_id
+from wasifyai_api.mcp_client.client import ExternalClient
+from wasifyai_api.mcp_client.routes import router as external_router
+from wasifyai_api.mcp_client.servers import InMemoryServerStore, ServersService, SqlServerStore
 from wasifyai_api.mcp_server.approvals import ApprovalDesk
 from wasifyai_api.mcp_server.connections import (
     ConnectionsService,
@@ -396,6 +399,8 @@ def create_app(
                 tools.add("search_notebooks")
             if getattr(app.state, "web", None) is not None:
                 tools.update({"web_search", "web_read"})
+            if getattr(app.state, "mcp_client", None) is not None:  # ADR-0070 decision 8
+                tools.update({"external_tools", "call_external"})
             return tools
 
         # The action catalogue and its one executor (ADR-0068): the assistant runs its tools
@@ -425,6 +430,16 @@ def create_app(
             port = urlparse(settings.desktop_public_url).port
             app.state.launcher = Launcher(
                 Path(settings.desktop_data_dir), secrets, connections, port
+            )
+        # the MCP client (ADR-0070, stage C1): the servers the person added, one session each
+        # (desktop only: ADR-0070 keeps the web deployment out; tests get an in-memory store)
+        if desktop is not None or injected:
+            app.state.mcp_client = ExternalClient(
+                ServersService(
+                    InMemoryServerStore() if injected or db is None else SqlServerStore(db),
+                    app.state.secrets,
+                ),
+                Path(settings.desktop_data_dir) if desktop else None,
             )
         # the opt-in fixed port for HTTP clients (stage M3), remembered in the settings store
         app.state.fixed_port = FixedPort(
@@ -806,6 +821,8 @@ def create_app(
                         yield
                     finally:
                         await app.state.fixed_port.stop(forget=False)
+                        if getattr(app.state, "mcp_client", None) is not None:
+                            await app.state.mcp_client.close_all()
                         if desktop:
                             remove_runtime_file(app.state.launcher.path)
         finally:
@@ -892,6 +909,7 @@ def create_app(
     app.include_router(admin_safeguards_router)
     app.include_router(uploads_router)
     app.include_router(connections_router)
+    app.include_router(external_router)
     app.include_router(desktop_events_router)
     mount_mcp(app)
     app.include_router(attachments_router)

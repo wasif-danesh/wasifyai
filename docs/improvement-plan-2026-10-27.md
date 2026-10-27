@@ -358,7 +358,7 @@ environment. Each case has an assertion that nothing was called, leaked or run.
 
 | Stage | What | Size |
 |---|---|---|
-| **C1 read-only** | the store, HTTP and stdio, the keychain, OAuth, `external_tools` and `external.call`, Settings > "Tools from other apps", trust `ask` and `blocked`; the malicious fake | M |
+| **C1 read-only** (built 2026-10-27; ADR-0070 "Built"; left: OAuth, a real model and a real server) | the store, HTTP and stdio, the keychain, OAuth, `external_tools` and `external.call`, Settings > "Tools from other apps", trust `ask` and `blocked`; the malicious fake | M |
 | **C2 taint and trust** | the taint rule with provenance on the card; `trusted_read_only`; the stdio confirmation and minimal environment; the evaluation with 5 and 40 remote tools per model tier, which decides whether local models are offered remote tools at all | M |
 | **C3 reach** | resources attached to a message; prompts as templates; elicitation as a form card; the tasks extension when a server offers it; import from Claude Code's `.mcp.json`, Claude Desktop's and Codex's `config.toml` (each definition shown and confirmed); a macOS sandbox for stdio if spike S5 says yes | S to M |
 

@@ -41,6 +41,7 @@ from wasifyai_platform_sdk.actions import (
 )
 
 from wasifyai_api.desktop_fit import assess_fit, need_declared
+from wasifyai_api.mcp_client.actions import external_actions
 
 ROOT = Path(__file__).resolve().parents[4]
 CONTRACT = ROOT / "docs" / "contracts" / "actions.json"
@@ -253,7 +254,7 @@ def build_registry(reg: GraphRegistry, served: Iterable[str] | None = None) -> A
     """Every action of the products this deployment serves, plus the platform's own. A product
     that declares none exposes nothing (ADR-0057)."""
     ok = None if served is None else set(served)
-    out = ActionRegistry([*builtin_actions(), *engine_actions()])
+    out = ActionRegistry([*builtin_actions(), *engine_actions(), *external_actions()])
     for product_id, provider in sorted(reg.action_providers().items()):
         if ok is None or product_id in ok:
             out.add_all(provider())

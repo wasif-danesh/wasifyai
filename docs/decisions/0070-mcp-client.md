@@ -137,3 +137,58 @@ local model degrades as the number of tools grows**, and a third-party server ma
 Servers added by the assistant or by any text; remote servers that need a browser session the app cannot hold; a
 marketplace; sampling (servers asking our model to think for them); running servers on a schedule; sharing
 connections between people; the web deployment.
+
+## Built 2026-10-27 (stage C1: the client, read-only trust levels)
+
+- **Decision 1:** `services/api/src/wasifyai_api/mcp_client/` on the SDK's client (`mcp` 2.3.0): Streamable HTTP
+  and stdio. One session per server, held by a task of its own (the SDK's transport must be left by the task that
+  entered it); calls come from the assistant's tasks. A session idle for ten minutes is closed, and every session
+  when the engine stops. HTTP+SSE and WebSocket are not offered.
+- **Decision 2:** Settings > Other apps > "Tools from other apps" (`packages/ui/src/connections/ExternalServers.tsx`,
+  routes `/external`): name, kind (an address, or a program), address or command with arguments, the variables a
+  program needs (names on the row, values in the secret store), a token for an address (the secret store), trust,
+  Test, Remove. The routes take the person's own token only (`require_person`): a connection or a key is refused,
+  and the assistant has no tool that adds one. Import from other clients' configs waits for C3.
+- **Decision 3:** the form says that adding a program is installing software and asks for the name typed again
+  (the engine refuses without it); the program runs as the user with the variables listed (over the SDK's safe
+  subset: `PATH`, `HOME` and the like), in `<app data>/mcp-servers/<id>`, and is stopped when idle or when the app
+  quits. Its output is not yet size-limited or logged; no sandbox (open question 2 stands).
+- **Decision 4:** trust `ask` and `blocked`. `external.call` is a `make` that `leaves_device`, so on an `ask` server
+  every call shows the chat's card, whatever the tool's annotations say; a `blocked` server lists no tools and is
+  never called. `trusted_read_only` arrives with C2.
+- **Decision 5, the part that is in C1:** a result is text only, control characters stripped, cut at 20,000
+  characters, handed to the model under a label that names the server and says it is untrusted; an image is
+  named with its size and not shown, a `resource_link` is named and never followed, an embedded resource is not
+  read. The taint rule itself (every action that is not a read asks for the rest of the turn) already held for the
+  web and now counts `call_external` too; the provenance on the card ("after reading a result from github") is C2.
+- **Decision 6:** `https` only except loopback, no credentials in the address, a name that resolves to a private
+  or link-local address refused unless the person typed that address (checked when added and again when
+  connecting), certificates verified, and a redirect to another host not followed (the SDK follows only within
+  the origin). The row shows the host, the counters of calls and bytes sent and received, and the tools with their
+  annotations after a Test.
+- **Decision 7:** values go to the secret store of ADR-0092 (`mcp.client.<id>.token`, `mcp.client.<id>.env.<name>`),
+  the keychain on the desktop; removing a server removes them. **OAuth 2.1 is not built:** a server that takes a
+  bearer token works with the token pasted in Settings; the browser flow (PKCE, a loopback callback, CIMD) is
+  left for a later stage, because it cannot be tested here without an authorization server to run against.
+- **Decision 8:** the assistant has `external_tools(query)` (at most five matches, by the words of the query against
+  tool names and descriptions, not yet the embedder) and `call_external(connection, tool, arguments)`, which
+  proposes the one catalogue action `external.call`: arguments validated against the tool's input schema
+  (`jsonschema`, which `mcp` brings), the card, the executor's audit entry and usage event. The model's tool list
+  grows by two whatever is connected. The prompt tells the model what outside text is.
+- **Decision 9:** a per-server timeout (5 to 600 s, default 60) the person sets, at most four calls in flight per
+  server, three failures in a row mark the server unhealthy until Test clears it, `tools/list` cached for its
+  `ttlMs` and at least 30 s. A cancel button and the refusal of oversized results before they are read are not
+  built: a result is cut after it arrives.
+- **Decision 11:** every call writes an activity entry (server, tool, status, duration, bytes each way; the
+  arguments and the first 4,000 characters of the result only when "keep the content" is on for that server) and,
+  through the executor, a usage event. The web deployment gets no client (decision 10 of the plan; the engine
+  creates it on the desktop only).
+- **Tested** (`services/api/tests/test_mcp_client.py`) against a malicious fake server (`fake_external_server.py`:
+  a 100,000-character result, hidden instructions with control characters, a tool whose annotation lies, a slow
+  tool, an image, a link, a failing tool) over stdio and over HTTP on loopback with a token; a redirect to another
+  host; the address rules; the secret store; the SQL store; the routes on the desktop engine; the assistant's two
+  meta-tools at the tool level (a card first, the labelled text once run); the prompt and the taint. Not driven
+  with a real language model or a real third-party server yet (C2's evaluation).
+- **Not built in C1:** OAuth; resources, prompts, elicitation and tasks (C3); import from other clients' configs
+  (C3); `trusted_read_only`, the provenance on the card, the stdio output limit and log (C2); the embedder in
+  `external_tools`; a cancel button.

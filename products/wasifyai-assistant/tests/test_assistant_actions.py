@@ -38,7 +38,7 @@ def test_the_tool_list_is_fixed_and_every_bound_tool_runs_an_offered_action():
     reg = registry()
     assert TOOL_NAMES == [
         "how_to", "app_status", "propose_action", "open_screen", "search_creations",
-        "search_notebooks", "web_search", "web_read",
+        "search_notebooks", "web_search", "web_read", "external_tools", "call_external",
     ]  # fmt: skip
     assert set(TOOL_ACTIONS) < set(TOOL_NAMES)
     for tool, action_id in TOOL_ACTIONS.items():

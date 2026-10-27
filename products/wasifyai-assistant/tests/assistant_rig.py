@@ -44,6 +44,8 @@ class FakeHost:
         self.web_response: Any = None  # a `web.SearchResponse`
         self.web_page: Any = None  # a `web.WebPage`
         self.web_error: Exception | None = None
+        self.external: list[dict[str, Any]] = []  # what external_tools finds (ADR-0070)
+        self.external_searches: list[str] = []
         self.passages: list[dict[str, Any]] = [
             {"notebook_id": "nb-1", "notebook": "Budget", "document_id": "d-1",
              "title": "plan.md", "text": "The launch budget is 40,000 dollars."}
@@ -77,6 +79,10 @@ class FakeHost:
 
     def facts(self) -> dict[str, Any]:
         return {}
+
+    async def external_tools(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        self.external_searches.append(query)
+        return list(self.external)[:limit]
 
     async def web_search(self, query: str, limit: int = 5) -> Any:
         self.web_searches.append(query)

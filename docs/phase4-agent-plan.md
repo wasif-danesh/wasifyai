@@ -134,7 +134,7 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
   generated skill file and example prompts for Claude Code; Windows and Linux launchers (after the Mac ships).
 - A security review against the checklist below.
 
-### Stage C1. The MCP client, read-only (M)
+### Stage C1. The MCP client, read-only (M) — built 2026-10-27 (ADR-0070 "Built"; OAuth left)
 
 - Engine module on the SDK; Settings > "Tools from other apps"; HTTP (https and loopback) and stdio; keychain;
   OAuth 2.1 with CIMD; `tools/list` caching; activity log; the `external_tools` and `call_external` meta-tools.

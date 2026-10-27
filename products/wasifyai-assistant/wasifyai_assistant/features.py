@@ -54,7 +54,7 @@ def where_of_screen(screen_id: str) -> str:
     return ""
 
 
-NOT_PROPOSED = frozenset({"web", "app", "job"})
+NOT_PROPOSED = frozenset({"web", "app", "job", "external"})  # these have tools of their own
 ACTIONS_PROMPT = (
     " Actions you may propose with propose_action (id: what it does; where it is in the app): "
     "{list}."

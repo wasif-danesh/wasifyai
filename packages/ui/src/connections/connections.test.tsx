@@ -2,10 +2,18 @@
 // Settings > Connections and the approval cards (ADR-0069 decisions 3 and 8), on a scripted engine.
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ApprovalEvent, Connection, ConnectionsApi, PendingApproval } from "@wasifyai/client";
+import type {
+  ApprovalEvent,
+  Connection,
+  ConnectionsApi,
+  ExternalApi,
+  ExternalServer,
+  PendingApproval,
+} from "@wasifyai/client";
 import { describe, expect, it, vi } from "vitest";
 import { ApprovalCards } from "./ApprovalCards";
 import { ConnectionsSettings } from "./ConnectionsSettings";
+import { ExternalServers } from "./ExternalServers";
 
 const codex: Connection = {
   id: "c1",
@@ -219,5 +227,114 @@ describe("the approval cards", () => {
     render(<ApprovalCards api={a} />);
     await user.click(await screen.findByRole("button", { name: "Deny" }));
     await waitFor(() => expect(a.decide).toHaveBeenCalledWith("ap1", false));
+  });
+});
+
+describe("Tools from other apps (ADR-0070)", () => {
+  const github: ExternalServer = {
+    id: "s1",
+    name: "github",
+    transport: "http",
+    url: "https://mcp.github.example/mcp",
+    command: "",
+    args: [],
+    host: "mcp.github.example",
+    env_names: [],
+    has_token: true,
+    trust: "ask",
+    allowed_tools: [],
+    timeout_s: 60,
+    keep_content: false,
+    created_at: "2026-10-27T00:00:00Z",
+    last_used_at: null,
+    calls: 3,
+    bytes_sent: 2048,
+    bytes_received: 40960,
+    failures: 0,
+    unhealthy: false,
+    last_error: "",
+    tools: null,
+  };
+  function externalApi(over: Partial<ExternalApi> = {}): ExternalApi {
+    return {
+      list: vi.fn(async () => ({ servers: [github] })),
+      add: vi.fn(async (body) => ({
+        server: { ...github, id: "s2", name: body.name, transport: body.transport },
+      })),
+      update: vi.fn(async (id, body) => ({ server: { ...github, id, ...body } as ExternalServer })),
+      remove: vi.fn(async (id) => ({ removed: id })),
+      test: vi.fn(async () => ({
+        ok: true,
+        error: "",
+        ms: 12,
+        tools: [],
+        server: {
+          ...github,
+          tools: [
+            {
+              server: "github",
+              name: "search_issues",
+              description: "Search issues",
+              annotations: { readOnlyHint: true },
+              input_schema: {},
+            },
+          ],
+        },
+      })),
+      activity: vi.fn(async () => ({ activity: [] })),
+      ...over,
+    };
+  }
+
+  it("shows a server with what it talks to and what it sent, and Test lists its tools", async () => {
+    const a = externalApi();
+    const user = userEvent.setup();
+    render(<ExternalServers api={a} />);
+    expect(await screen.findByText("github")).toBeInTheDocument();
+    expect(screen.getByText(/talks to mcp.github.example/)).toBeInTheDocument();
+    expect(screen.getByText(/3 calls, 2 KB sent, 40 KB received/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Test" }));
+    expect(await screen.findByText("search_issues")).toBeInTheDocument();
+    expect(screen.getByText(/says it only reads/)).toBeInTheDocument();
+    await user.selectOptions(screen.getByRole("combobox", { name: /this server/i }), "blocked");
+    await waitFor(() => expect(a.update).toHaveBeenCalledWith("s1", { trust: "blocked" }));
+  });
+
+  it("adds a program only once its name is typed again, with its variables", async () => {
+    const a = externalApi();
+    const user = userEvent.setup();
+    render(<ExternalServers api={a} />);
+    await user.type(await screen.findByLabelText("Add a server"), "files");
+    await user.selectOptions(screen.getByLabelText("Kind"), "stdio");
+    await user.type(screen.getByLabelText(/command, with its arguments/i), "npx -y server-fs /tmp");
+    await user.type(screen.getByLabelText(/variables it needs/i), "API_KEY=abc");
+    const add = screen.getByRole("button", { name: "Add" });
+    expect(add).toBeDisabled();
+    expect(screen.getByText(/installing software/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/type the name to confirm/i), "files");
+    await user.click(add);
+    await waitFor(() =>
+      expect(a.add).toHaveBeenCalledWith({
+        name: "files",
+        transport: "stdio",
+        command: "npx",
+        args: ["-y", "server-fs", "/tmp"],
+        env: { API_KEY: "abc" },
+        confirm_name: "files",
+      }),
+    );
+    expect(await screen.findByText("files")).toBeInTheDocument();
+  });
+
+  it("Remove asks first and then deletes the server", async () => {
+    const a = externalApi();
+    const user = userEvent.setup();
+    render(<ExternalServers api={a} />);
+    await user.click(await screen.findByRole("button", { name: "Remove" }));
+    expect(screen.getByText(/token or variables are deleted/i)).toBeInTheDocument();
+    const buttons = screen.getAllByRole("button", { name: "Remove" });
+    await user.click(buttons[buttons.length - 1] as HTMLElement);
+    await waitFor(() => expect(a.remove).toHaveBeenCalledWith("s1"));
+    await waitFor(() => expect(screen.queryByText("github")).toBeNull());
   });
 });

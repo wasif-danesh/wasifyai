@@ -110,6 +110,16 @@ export {
   createConnectionsApi,
 } from "./connections";
 export {
+  type ExternalActivity,
+  type ExternalApi,
+  type ExternalServer,
+  type ExternalServerIn,
+  type ExternalServerPatch,
+  type ExternalTest,
+  type ExternalTool,
+  createExternalApi,
+} from "./external";
+export {
   initialTree,
   pathTo,
   treeReducer,

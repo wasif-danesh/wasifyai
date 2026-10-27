@@ -70,6 +70,7 @@ export {
 export { Reasoning } from "./chat/Reasoning";
 export { SearchSettings, type SearchSettingsProps } from "./chat/SearchSettings";
 export { ConnectionsSettings } from "./connections/ConnectionsSettings";
+export { ExternalServers } from "./connections/ExternalServers";
 export { ApprovalCard, ApprovalCards, useApprovals } from "./connections/ApprovalCards";
 export { AssistantHome, type AssistantHomeProps, greeting } from "./chat/AssistantHome";
 export { conversationsChanged, useConversations } from "./chat/use-conversations";

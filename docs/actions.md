@@ -14,6 +14,7 @@ declares can be proposed in the chat and run from its card (ADR-0071).
 | `Action`, `ActionRegistry`, `ActionExecutor`, `ActionResult`, approvals policy, audit and approval stores, job handles | `packages/platform-sdk/src/wasifyai_platform_sdk/actions/` |
 | `library.*`, `app.status`, `job.*` (they belong to no product) | `actions/builtin.py` |
 | `models.*` (the desktop's model library), the catalogue of this engine, the export | `services/api/src/wasifyai_api/actions_engine.py` |
+| `external.call` (a tool of an outside MCP server, ADR-0070) | `services/api/src/wasifyai_api/mcp_client/actions.py` |
 | `image.*`, `video.*`, `speech.*`, `voice.*`, `music.*`, `dub.*`, `audiobook.*`, `lipsync.*`, `notebook.*` | `actions.py` of the product that owns them |
 | The engine's side (readiness, stores, child runs) | `ApiToolHost` in `services/api/src/wasifyai_api/tool_host.py` |
 | Help for each action | `docs/help/<action id>.md` |

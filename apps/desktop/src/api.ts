@@ -5,6 +5,7 @@ import {
   createAssistantApi,
   createConnectionsApi,
   createCreationsApi,
+  createExternalApi,
   createNotebooksApi,
   createRunClient,
   createVoiceApi,
@@ -20,6 +21,7 @@ import { createEngineTransport } from "./transport";
 export const transport = createEngineTransport(engineSession);
 export const client = createRunClient(transport);
 export const connectionsApi = createConnectionsApi(transport);
+export const externalApi = createExternalApi(transport);
 export const modelsApi = createModelsApi(transport);
 export const discoveryApi = createDiscoveryApi(transport);
 export const languageApi = createLanguageApi(transport);

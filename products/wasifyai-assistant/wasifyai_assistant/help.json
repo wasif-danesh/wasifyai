@@ -79,6 +79,19 @@
   "body": "# Write the dub script\n\nAction: `dub.script`\n\n## What it is for\n\nThe first step of a dub: write down what is said and translate it line by line, with times, so you can check it.\n\n## Steps in the app\n\n1. Open **Voice › Dub a recording**.\n2. Choose the recording and the language to dub into.\n3. Choose to write the script and read the lines.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `language`: For example fr, es, de.\n- `background`: Separate the voice from the music first.\n\n## Limits\n\n- 28 languages.\n- Up to 400 lines.\n\n## Needs\n\n- Transcription and speech models, and the chat model for translation.\n\n## Examples\n\n- Dub that recording into French.\n\n## Problems\n\n- **No voice for the language** Get a speech model that speaks it (Models)."
  },
  {
+  "action": "external.call",
+  "title": "Use a tool from another app",
+  "screen": null,
+  "synonyms": [
+   "outside tool",
+   "other app",
+   "mcp server",
+   "connected tool",
+   "call a tool"
+  ],
+  "body": "# Use a tool from another app\n\nAction: `external.call`\n\n## What it is for\n\nRun one tool of an outside MCP server you connected under Settings > Other apps > Tools from other apps: a code host, a database, a chat, anything the app itself cannot do. The assistant finds the tool first and shows you a card with the server, the tool and what it would send; nothing leaves this computer until you say so.\n\n## Steps in the app\n\n1. Open Settings > Other apps > Tools from other apps and add the server (its address, or the program that starts it), then Test it to see its tools.\n2. In the chat, ask for what the tool does. The assistant proposes the call on a card: check the server, the tool and the arguments, then choose Run.\n\n## Fields\n\n- `connection`: The server's name, as Settings shows it.\n- `tool`: The tool's name on that server.\n- `arguments`: The tool's arguments, as its input schema says (edit them on the card as JSON).\n\n## Limits\n\n- Every call asks you first; a server set to Blocked is never called.\n- A result is cut at 20,000 characters; images and links in it are named, not shown or followed.\n- A server that fails three times in a row is left alone until you Test it again.\n- A call is given 60 seconds unless the server's timeout says otherwise.\n\n## Needs\n\n- A server added in Settings (desktop only).\n\n## Examples\n\n- Search the issues on github for \"crash\".\n- Ask the database server how many orders came in today.\n\n## Problems\n\n- **There is no server called ...** Check the name under Settings > Other apps > Tools from other apps.\n- **... is blocked in Settings** Set its trust to Ask to use it again.\n- **... did not answer in 60 seconds** Try again later, or raise the server's timeout in Settings."
+ },
+ {
   "action": "image.edit",
   "title": "Change a picture",
   "screen": "images.edit",

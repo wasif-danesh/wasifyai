@@ -93,6 +93,16 @@ class ApiToolHost:
             raise WebError("search_off", "Web search is not available here.")
         return await web.search(query, limit)
 
+    async def external_tools(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        """The tools of the servers the person connected (ADR-0070 decision 8), best matches
+        first; [] where the client is not part of this deployment. The person is the one of the
+        current run, as every tool's."""
+        client = getattr(self._app_state(), "mcp_client", None)
+        if client is None:
+            return []
+        ctx = require_context()
+        return [t.public() for t in await client.search(ctx.tenant_id, ctx.user_id, query, limit)]
+
     async def web_read(self, url: str) -> Any:
         web = getattr(self._app_state(), "web", None)
         if web is None:

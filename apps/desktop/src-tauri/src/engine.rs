@@ -534,9 +534,10 @@ async fn run_once(
         .env("DESKTOP_IMAGE_ENGINE", &cfg.image_engine)
         .env("API_AUTH_SECRET", &shared.secret)
         .env("AUTH_MODE", "jwt")
-        // keys and tokens go to the OS keychain when there is one (ADR-0092); the engine
-        // falls back to its encrypted file elsewhere
-        .env("DESKTOP_SECRET_STORE", if cfg!(target_os = "macos") { "keychain" } else { "file" })
+        // keys and tokens go to the OS keychain (macOS), the Credential Manager (Windows) or
+        // the Secret Service (Linux); the engine keeps its encrypted file where none is
+        // reachable (ADR-0092)
+        .env("DESKTOP_SECRET_STORE", "keychain")
         .env("PRODUCTS_DIR", &cfg.products_dir)
         .env("WASIFYAI_PORT", "0")
         .env("WASIFYAI_EXIT_ON_STDIN_EOF", "1")

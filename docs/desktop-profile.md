@@ -173,7 +173,7 @@ exits with the engine.
 | `DESKTOP_EXTRA_MODEL_DIRS` | read-only model roots with the usual folder layout (`diffusion_models/`, `text_encoders/`, `vae/`, ...), separated by `:` (`;` on Windows); the app never writes there |
 | `DESKTOP_IDLE_UNLOAD_S` | idle time before the model is unloaded |
 | `DESKTOP_COMFYUI_ARGS` | extra ComfyUI arguments, for tuning |
-| `DESKTOP_SECRET_STORE` | `keychain` (the shell sets it on macOS: keys and tokens go to the login keychain under "Wasify AI") or `file` (the default when the engine is started by hand: `secrets.json`, Fernet under `secrets.key`); ADR-0092 |
+| `DESKTOP_SECRET_STORE` | `keychain` (the shell sets it: keys and tokens go to the macOS keychain, the Windows Credential Manager or the Linux Secret Service under "Wasify AI", with the encrypted file where none is reachable) or `file` (the default when the engine is started by hand: `secrets.json`, Fernet under `secrets.key`); ADR-0092 |
 
 ### Models (stage A3)
 

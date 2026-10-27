@@ -39,16 +39,21 @@ client (C1) all need both seams.
 4. **A `SecretStore` interface:** `put(name, value)`, `get(name)`, `delete(name)`, `names()`, `ready`. Names are
    `area.thing` (`hf.token`, `web.search.exa`, later `mcp.client.<server>`, `hosted.<provider>`). It never lists
    values; logs, audit and settings rows never hold one. Implementations: `FileSecretStore` (one 0600 JSON file of
-   Fernet tokens under `secrets.key`; the desktop without a keychain, and tests), `KeychainSecretStore` (the macOS
-   keychain through the Security framework with ctypes, no subprocess and no new dependency; the names in a 0600
-   file so listing needs no keychain walk), `SqlSecretStore` (a `secrets` table, Fernet under `MEDIA_SECRETS_KEY`;
+   Fernet tokens under `secrets.key`; a desktop without a native store, and tests), `KeychainSecretStore` (the
+   operating system's own store on every desktop platform, with no new dependency: the macOS keychain through the
+   Security framework with ctypes, the Windows Credential Manager through `advapi32` with ctypes, the Linux Secret
+   Service through libsecret's `secret-tool` with the value on stdin; a value is never on a command line; the names
+   in a 0600 file so listing needs no store walk), `SqlSecretStore` (a `secrets` table, Fernet under `MEDIA_SECRETS_KEY`;
    Alembic 0022 on Postgres, created on first use on SQLite), `EnvSecretStore` (read-only: `WASIFYAI_SECRET_<NAME>`
    and well-known aliases such as `HF_TOKEN`, for External Secrets and a developer's shell), `LayeredSecretStore`
    (a writable store in front of read-only ones).
-5. **Who owns the keychain: the engine, through the framework, when the shell asks for it.** Spike S4 of
-   `docs/phase4-agent-plan.md` is answered: not Python `keyring` (a dependency) and not the shell (which would need an
-   IPC path for every secret). The shell sets `DESKTOP_SECRET_STORE=keychain` on macOS; an engine started by hand or
-   by a test keeps the file, so nothing ever writes a test value into a person's keychain. Keys saved inside the web
+5. **Who owns the keychain: the engine, through each platform's own API, when the shell asks for it.** Spike S4 of
+   `docs/phase4-agent-plan.md` is answered: not Python `keyring` (a dependency, and its backends make the same
+   calls) and not the shell (which would need an IPC path for every secret). The shell sets
+   `DESKTOP_SECRET_STORE=keychain` on every platform; the engine uses the native store when `available()` (always on
+   macOS and Windows; on Linux when `secret-tool` and a session bus exist) and the encrypted file otherwise, so a
+   headless Linux or a container still works. An engine started by hand or by a test keeps the file, so nothing ever
+   writes a test value into a person's keychain. Keys saved inside the web
    search settings row before this ADR move into the store once (`legacy_box`), then the row holds choices only.
 6. **What goes through the store now:** the web search keys (desktop and web) and the person's Hugging Face token
    (Settings > Hugging Face token on the desktop: typed once, kept in the keychain, sent only to huggingface.co, shown
@@ -66,14 +71,17 @@ client (C1) all need both seams.
 - A connection or key can never do more than the person who made it, and never approves for itself (ADR-0068
   decision 4 holds: `person_approved` is the window's alone).
 - A 403 or a `not_offered` says which scope was missing, in words; a 401 says nothing about why.
-- The keychain code is ours to maintain (about 150 lines of ctypes); the one real test (`WASIFYAI_TEST_KEYCHAIN=1`)
-  writes and removes an item under "Wasify AI (test)".
-- Windows and Linux desktops keep the encrypted file until a keychain store is written for them.
+- The native store code is ours to maintain (three small modules, about 350 lines); the one real test
+  (`WASIFYAI_TEST_KEYCHAIN=1`) writes and removes an item under "Wasify AI (test)" on whichever platform runs it,
+  and the Linux backend is also tested everywhere with a stand-in `secret-tool`. The Windows module was not run on a
+  Windows machine yet.
+- The Windows Credential Manager caps a value at 2,560 bytes (enough for any token; a file never belongs here).
 
 ## Alternatives considered
 
 - **Scopes per action id** (fine-grained): more to explain, more to get wrong in a config file; the groups match
   what a person can say ("let it make pictures, not read my library").
-- **Python `keyring`:** one more dependency, and its macOS backend does the same ctypes calls.
+- **Python `keyring`:** one more dependency (plus `secretstorage` and `jeepney` on Linux), and its backends make
+  the same calls these modules make.
 - **The shell as keychain owner:** right by licence boundary and process identity, but every secret would cross a
   new IPC path; the engine already runs as the app's identity and the framework grants the login keychain to it.

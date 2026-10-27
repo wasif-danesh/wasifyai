@@ -168,9 +168,11 @@ KEYCHAIN_SERVICE = "Wasify AI"
 
 
 def make_secret_store(root: Path, settings: Settings, box: SecretBox) -> SecretStore:
-    """Where the desktop keeps keys and tokens (ADR-0092): the macOS keychain when the shell asks
-    for it (`DESKTOP_SECRET_STORE=keychain`), else one encrypted file under `secrets.key`. The
-    environment answers behind either, so a developer's `HF_TOKEN` still counts."""
+    """Where the desktop keeps keys and tokens (ADR-0092): the operating system's store (the
+    macOS keychain, the Windows Credential Manager, the Linux Secret Service) when the shell
+    asks for it (`DESKTOP_SECRET_STORE=keychain`) and this computer has one, else one encrypted
+    file under `secrets.key`. The environment answers behind either, so a developer's
+    `HF_TOKEN` still counts."""
     env = EnvSecretStore(TOKEN_ALIASES)
     if settings.desktop_secret_store == "keychain" and KeychainSecretStore.available():
         return LayeredSecretStore(

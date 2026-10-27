@@ -7,8 +7,10 @@ deployment's choice:
     InMemorySecretStore    tests
     FileSecretStore        one JSON file of Fernet tokens next to the data (the desktop without a
                            keychain; the key comes from `secrets.key` as before)
-    KeychainSecretStore    the macOS keychain through the Security framework; the names are kept
-                           in a small file so `names()` needs no keychain walk
+    KeychainSecretStore    the operating system's own store: the macOS keychain (Security
+                           framework), the Windows Credential Manager (advapi32) or the Linux
+                           Secret Service (libsecret's secret-tool); the names are kept in a
+                           small file so `names()` needs no keychain walk
     SqlSecretStore         a `secrets` table, Fernet under MEDIA_SECRETS_KEY (the web)
     EnvSecretStore         read-only: the values External Secrets or an operator put in the
                            environment, `WASIFYAI_SECRET_<NAME>` (dots and dashes as underscores)
@@ -293,10 +295,12 @@ class SqlSecretStore:
 
 
 class KeychainSecretStore:
-    """The macOS keychain: one generic password per secret, under one service name, through the
-    Security framework (no subprocess, so a value is never on a command line). The names are kept
-    in `index_path` (0600) because listing a service's items would need a keychain walk and a
-    prompt. Only on macOS; elsewhere `available()` is false and the desktop uses the file."""
+    """The operating system's own store, one item per secret under one service name: the macOS
+    keychain through the Security framework, the Windows Credential Manager through advapi32,
+    the Linux Secret Service through libsecret's `secret-tool` (value on stdin). A value is
+    never on a command line. The names are kept in `index_path` (0600) because listing a
+    service's items would need a store walk and a prompt. `available()` says whether this
+    platform has one; the desktop uses the encrypted file when it does not."""
 
     def __init__(self, service: str, index_path: Path):
         self._service = service
@@ -304,8 +308,21 @@ class KeychainSecretStore:
         self._api: Any = None
 
     @staticmethod
-    def available() -> bool:
-        return sys.platform == "darwin"
+    def platform() -> str:
+        """`macos`, `windows`, `linux` or `` (no native store here)."""
+        if sys.platform == "darwin":
+            return "macos"
+        if sys.platform == "win32":
+            return "windows"
+        if sys.platform.startswith("linux"):
+            from wasifyai_platform_sdk import keychain_linux
+
+            return "linux" if keychain_linux.available() else ""
+        return ""
+
+    @classmethod
+    def available(cls) -> bool:
+        return cls.platform() != ""
 
     @property
     def ready(self) -> bool:
@@ -313,8 +330,19 @@ class KeychainSecretStore:
 
     def _keychain(self) -> Any:
         if self._api is None:
-            from wasifyai_platform_sdk.keychain_macos import Keychain
-
+            which = self.platform()
+            if which == "macos":
+                from wasifyai_platform_sdk.keychain_macos import Keychain
+            elif which == "windows":
+                from wasifyai_platform_sdk.keychain_windows import (
+                    Keychain,  # type: ignore[assignment]
+                )
+            elif which == "linux":
+                from wasifyai_platform_sdk.keychain_linux import (
+                    Keychain,  # type: ignore[assignment]
+                )
+            else:
+                raise SecretsUnavailable("this computer has no keychain the app can use")
             self._api = Keychain(self._service)
         return self._api
 

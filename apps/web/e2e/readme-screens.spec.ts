@@ -158,8 +158,8 @@ test("a card that asks first", async ({ page }) => {
         {
           type: "tool_call",
           id: "t1",
-          name: "generate_image",
-          arguments: { prompt: "a red fox in snow" },
+          name: "propose_action",
+          arguments: { action_id: "image.generate", params: { prompt: "a red fox in snow" } },
         },
       ]),
       row("t", 3, "tool", "a1", [

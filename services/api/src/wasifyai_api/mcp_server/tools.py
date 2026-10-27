@@ -56,12 +56,8 @@ def description_of(action: Action) -> str:
 def arg_model_of(action: Action) -> type[ArgModelBase]:
     """The action's input, as the model the SDK validates arguments with."""
     fields = {name: (info.annotation, info) for name, info in action.input.model_fields.items()}
-    model = create_model(  # type: ignore[call-overload]
-        f"{tool_name(action.id)}_arguments",
-        __base__=ArgModelBase,
-        __config__=None,
-        **fields,
-    )
+    make: Any = create_model  # the keyword form of create_model is not typed for a dict of fields
+    model = make(f"{tool_name(action.id)}_arguments", __base__=ArgModelBase, **fields)
     model.model_config = ConfigDict(
         extra="forbid", arbitrary_types_allowed=True, str_strip_whitespace=True
     )

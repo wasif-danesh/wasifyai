@@ -24,7 +24,7 @@ import os
 import re
 import sys
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -163,8 +163,8 @@ class EnvSecretStore:
 
     PREFIX = "WASIFYAI_SECRET_"
 
-    def __init__(self, aliases: dict[str, Sequence[str]] | None = None):
-        self._aliases = aliases or {}
+    def __init__(self, aliases: Mapping[str, Sequence[str]] | None = None):
+        self._aliases: Mapping[str, Sequence[str]] = aliases or {}
 
     @property
     def ready(self) -> bool:

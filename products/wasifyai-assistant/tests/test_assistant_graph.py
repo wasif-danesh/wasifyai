@@ -210,8 +210,14 @@ async def test_music_that_was_refused_or_failed_is_told_in_words(tmp_path, ctx):
             "outputs": {"status": "refused", "refusal": {"message": "Describe the music."}},
         }
     ]
-    call = {"tool_calls": [{"name": "propose_action", "arguments": {"action_id": "music.generate",
-        "params": {"description": "x"}}}]}
+    call = {
+        "tool_calls": [
+            {
+                "name": "propose_action",
+                "arguments": {"action_id": "music.generate", "params": {"description": "x"}},
+            }
+        ]
+    }
     rig = Rig(tmp_path, [call, {"text": "Sorry."}], host)
     _, events = await rig.turn("music")
     result = next(e for e in events if e["type"] == "tool_result")
@@ -223,8 +229,11 @@ async def test_music_that_was_refused_or_failed_is_told_in_words(tmp_path, ctx):
     rig2 = Rig(tmp_path / "b", [call, {"text": "Sorry."}], host2)
     _, events2 = await rig2.turn("music")
     assert next(e for e in events2 if e["type"] == "tool_result")["status"] == "error"
-    empty = {"tool_calls": [{"name": "propose_action", "arguments": {"action_id": "music.generate",
-        "params": {}}}]}
+    empty = {
+        "tool_calls": [
+            {"name": "propose_action", "arguments": {"action_id": "music.generate", "params": {}}}
+        ]
+    }
     rig3 = Rig(tmp_path / "c", [empty, {"text": "Sorry."}], FakeHost())
     _, events3 = await rig3.turn("music")
     assert next(e for e in events3 if e["type"] == "tool_result")["status"] == "refused"
@@ -609,8 +618,14 @@ async def test_only_an_address_from_a_search_or_the_person_can_be_opened(tmp_pat
 def drawing_after_a_search(host):
     return [
         {"tool_calls": [{"name": "web_search", "arguments": {"query": "fox"}}]},
-        {"tool_calls": [{"name": "propose_action", "arguments": {"action_id": "image.generate",
-            "params": {"prompt": "a fox"}}}]},
+        {
+            "tool_calls": [
+                {
+                    "name": "propose_action",
+                    "arguments": {"action_id": "image.generate", "params": {"prompt": "a fox"}},
+                }
+            ]
+        },
         {"text": "Done thinking."},
     ]
 

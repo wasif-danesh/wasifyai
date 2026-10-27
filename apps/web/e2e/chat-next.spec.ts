@@ -177,8 +177,23 @@ test("a picture is made: progress first, then the picture with a way to open it 
 }) => {
   await answers(page, [
     ["token", { node: "agent", text: "Drawing it. " }],
-    ["tool_call", { id: "t1", name: "generate_image", arguments: { prompt: "a lighthouse" } }],
-    ["tool_result", { id: "t1", name: "generate_image", status: "ok", output: { image_id: "i1" } }],
+    [
+      "tool_call",
+      {
+        id: "t1",
+        name: "propose_action",
+        arguments: { action_id: "image.generate", params: { prompt: "a lighthouse" } },
+      },
+    ],
+    [
+      "tool_result",
+      {
+        id: "t1",
+        name: "propose_action",
+        status: "ok",
+        output: { action_id: "image.generate", message: "Made.", image_id: "i1" },
+      },
+    ],
     ["token", { node: "agent", text: "Here it is." }],
     DONE,
   ]);
@@ -317,8 +332,23 @@ test("the new chat looks right, empty and answered @visual", async ({ page }) =>
         text: "Here is **bold** text and a list:\n\n- one\n- two\n\n```ts\nconst x: number = 1;\n```\n\n$$E = mc^2$$\n\nA [link](https://example.com).",
       },
     ],
-    ["tool_call", { id: "t1", name: "generate_image", arguments: { prompt: "a lighthouse" } }],
-    ["tool_result", { id: "t1", name: "generate_image", status: "ok", output: { image_id: "i1" } }],
+    [
+      "tool_call",
+      {
+        id: "t1",
+        name: "propose_action",
+        arguments: { action_id: "image.generate", params: { prompt: "a lighthouse" } },
+      },
+    ],
+    [
+      "tool_result",
+      {
+        id: "t1",
+        name: "propose_action",
+        status: "ok",
+        output: { action_id: "image.generate", message: "Made.", image_id: "i1" },
+      },
+    ],
     DONE,
   ]);
   await page.goto("/");

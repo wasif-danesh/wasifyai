@@ -180,8 +180,12 @@ class ActionExecutor:
         outside them is refused with `not_offered` (ADR-0092)."""
         started = time.monotonic()
         origin = parse_origin(origin)
-        principal = actor if isinstance(actor, Principal) else None
-        who = principal.identity if principal else (actor or _actor_of_current_run())
+        principal: Principal | None
+        who: Identity
+        if isinstance(actor, Principal):
+            principal, who = actor, actor.identity
+        else:
+            principal, who = None, actor or _actor_of_current_run()
         emit = on_event or _ignore
         action = self.registry.get(action_id)
         if action is None:

@@ -3,7 +3,15 @@
 import pytest
 from pydantic import BaseModel
 from wasifyai_platform_sdk import ALL_SCOPES, SCOPE_WORDS, SCOPES, USER_SCOPES, Principal
-from wasifyai_platform_sdk.actions import Action, CallBinding, parse_origin, scope_of
+from wasifyai_platform_sdk.actions import (
+    Action,
+    ActionContext,
+    CallBinding,
+    Outcome,
+    parse_origin,
+    scope_of,
+)
+from wasifyai_platform_sdk.actions.model import Effect
 from wasifyai_platform_sdk.principal import parse_origin as parse_origin_here
 
 
@@ -11,11 +19,11 @@ class In(BaseModel):
     pass
 
 
-async def _call(p, ctx):
-    return None
+async def _call(p: BaseModel, ctx: ActionContext) -> Outcome:
+    return Outcome.ok({}, "")
 
 
-def act(id: str, effect: str = "read") -> Action:
+def act(id: str, effect: Effect = "read") -> Action:
     return Action(
         id=id, title=id, summary="s", description="d", input=In, output=In, effect=effect,
         bind=CallBinding(_call), ui="x",

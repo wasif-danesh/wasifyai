@@ -186,8 +186,9 @@ async def test_the_three_protocol_revisions_list_and_call_what_the_scopes_offer(
             "approval_status",
         } <= set(tools)
         assert "library_search" not in tools and "library_delete" not in tools  # not in the scopes
-        assert tools["image_generate"].annotations.read_only_hint is False
-        assert tools["app_status"].annotations.read_only_hint is True
+        make, read = tools["image_generate"].annotations, tools["app_status"].annotations
+        assert make is not None and make.read_only_hint is False
+        assert read is not None and read.read_only_hint is True
         assert "prompt" in tools["image_generate"].input_schema["properties"]
         status = await client.call_tool("app_status", {})
         assert not status.is_error and status.structured_content["status"] == "ok"

@@ -264,8 +264,9 @@ async def test_the_chats_setting_decides_when_a_card_is_shown(tmp_path, ctx):
 
 def test_the_estimate_is_the_median_of_this_persons_last_runs():
     from wasifyai_platform_sdk.actions import AuditEntry
+    from wasifyai_platform_sdk.actions.audit import AuditStatus
 
-    def entry(action, ms, status="ok"):
+    def entry(action: str, ms: int, status: AuditStatus = "ok") -> AuditEntry:
         return AuditEntry(
             tenant_id="t", product_id="p", user_id="u", action_id=action, origin="assistant",
             status=status, duration_ms=ms,

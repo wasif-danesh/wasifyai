@@ -6,8 +6,10 @@ credential blob (the Credential Manager caps a blob at 2,560 bytes). Used by
 
 import ctypes
 import sys
+from collections.abc import Callable
 from ctypes import POINTER, Structure, byref, c_void_p, c_wchar_p
 from ctypes import wintypes as wt
+from typing import Any
 
 from wasifyai_platform_sdk.secretbox import SecretsUnavailable
 
@@ -40,7 +42,13 @@ class _Credential(Structure):
     ]
 
 
+# `ctypes.get_last_error` exists on Windows only; elsewhere this module is never used
+_last_error: Callable[[], int] = getattr(ctypes, "get_last_error", lambda: 0)
+
+
 class _Api:
+    adv: Any
+
     def __init__(self) -> None:
         if sys.platform != "win32":
             raise SecretsUnavailable("the Credential Manager is only on Windows")
@@ -74,7 +82,7 @@ class Keychain:
         out = POINTER(_Credential)()
         ok = self._api.adv.CredReadW(self._target(name), CRED_TYPE_GENERIC, 0, byref(out))
         if not ok:
-            code = ctypes.get_last_error()
+            code = _last_error()
             if code == ERROR_NOT_FOUND:
                 return None
             raise _refused(code, "read a secret")
@@ -102,10 +110,10 @@ class Keychain:
         cred.Persist = CRED_PERSIST_LOCAL_MACHINE
         cred.UserName = name
         if not self._api.adv.CredWriteW(byref(cred), 0):
-            raise _refused(ctypes.get_last_error(), "keep a secret")
+            raise _refused(_last_error(), "keep a secret")
 
     def delete(self, name: str) -> None:
         if not self._api.adv.CredDeleteW(self._target(name), CRED_TYPE_GENERIC, 0):
-            code = ctypes.get_last_error()
+            code = _last_error()
             if code != ERROR_NOT_FOUND:
                 raise _refused(code, "remove a secret")

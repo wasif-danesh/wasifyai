@@ -61,14 +61,19 @@ class WasifyMCP(MCPServer):
             self.catalogue[name] = action
             self._tool_manager._tools[name] = tool  # noqa: SLF001 - a prebuilt Tool; pinned SDK
 
-        async def approval_status(approval_id: str, wait_seconds: int = 0) -> dict[str, Any]:
+        async def approval_status(approval_id: str, wait_seconds: int = 0) -> CallToolResult:
             """Follow an approval the person was asked for in the Wasify AI window: pending,
             approved (with what the action came to, or its job_id), denied or expired. Waits up
             to wait_seconds (at most 50) for the answer."""
             connection = current_connection.get()
             p = await desk.wait(approval_id, max(0, min(int(wait_seconds), 50)))
             if p is None or connection is None or p.connection_id != connection.id:
-                return {"approval_id": approval_id, "status": "unknown"}
+                unknown = {"approval_id": approval_id, "status": "unknown"}
+                return CallToolResult(
+                    content=[TextContent(text=f"Approval {approval_id}: unknown.")],
+                    structured_content=unknown,
+                    is_error=False,
+                )
             out = p.public()
             # the sentence carries the ids too, for a client that hands its model the text alone
             words = f"Approval {approval_id}: {p.status}."

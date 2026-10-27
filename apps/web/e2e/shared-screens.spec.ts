@@ -148,7 +148,7 @@ test("the menu marks the page and opens the group that holds it @layout", async 
 test("a picture is made, and can be downloaded @layout", async ({ page }) => {
   await page.goto("/image");
   await page.getByRole("textbox").first().fill("A lighthouse on a cliff at sunrise");
-  await page.getByRole("button", { name: "Generate" }).click();
+  await page.getByRole("button", { name: "Make the picture" }).click();
   await expect(page.getByRole("link", { name: /download/i })).toHaveAttribute(
     "href",
     "/api/products/wasifyai-image/images/i1/download",

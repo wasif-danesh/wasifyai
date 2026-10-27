@@ -1,15 +1,7 @@
 "use client";
 
 import { ChevronDown, Download, Eye } from "lucide-react";
-import {
-  type Ref,
-  useEffect,
-  useId,
-  useImperativeHandle,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { type Ref, useEffect, useId, useImperativeHandle, useRef, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Modal } from "../components/dialog";
@@ -103,9 +95,6 @@ export function ModelSelect({
   const [tab, setTab] = useState<Tab>("recommended");
   const [asking, setAsking] = useState<ModelChoice | null>(null);
   const root = useRef<HTMLDivElement>(null);
-  // where the panel opens: below the button, or above it when the button sits low (the notebook box), and no taller than the room there
-  const [room, setRoom] = useState({ up: false, max: 0 });
-
   const rows = useRef<ModelChoice[]>([]);
   rows.current = m.list?.choices ?? [];
   useImperativeHandle(
@@ -119,30 +108,6 @@ export function ModelSelect({
     }),
     [],
   );
-
-  useLayoutEffect(() => {
-    if (!open || !root.current) return;
-    const r = root.current.getBoundingClientRect();
-    const below = window.innerHeight - r.bottom - 24;
-    const above = r.top - 24;
-    const up = below < 360 && above > below;
-    setRoom({ up, max: Math.max(160, up ? above : below) });
-  }, [open]);
-
-  // a click outside or Escape closes the panel
-  useEffect(() => {
-    if (!open) return;
-    const down = (e: MouseEvent) => {
-      if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
-    };
-    const key = (e: KeyboardEvent) => e.key === "Escape" && !asking && setOpen(false);
-    document.addEventListener("mousedown", down);
-    document.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("mousedown", down);
-      document.removeEventListener("keydown", key);
-    };
-  }, [open, asking]);
 
   // opening starts on what suits: the model in use is shown first; with nothing on the computer, the recommended ones
   const choices = (m.list?.choices ?? []).map((c) =>
@@ -217,116 +182,114 @@ export function ModelSelect({
       </Button>
 
       {open ? (
-        <section
-          id={`${id}-panel`}
-          aria-label={g.select}
-          style={{ maxHeight: room.max || undefined }}
-          className={cn(
-            "absolute start-0 z-30 grid w-[min(26rem,calc(100vw-2rem))] grid-cols-[minmax(0,1fr)] content-start gap-3 overflow-y-auto rounded-xl border bg-background p-3 shadow-card",
-            room.up ? "bottom-full mb-2" : "top-full mt-2",
-          )}
-        >
+        // a dialog in the middle of the window (stage U3 of the UI plan), never a panel over the form
+        <Modal label={g.select} onClose={() => setOpen(false)}>
           <div
-            role="tablist"
-            aria-label="Models"
-            className="flex gap-1 rounded-full border p-1 text-sm"
+            id={`${id}-panel`}
+            className="grid max-h-[70vh] grid-cols-[minmax(0,1fr)] content-start gap-3 overflow-y-auto"
           >
-            {(
-              [
-                ["recommended", "Recommended"],
-                ["device", "On this computer"],
-                ...(api?.more || choices.some((c) => c.tier === "advanced")
-                  ? [["more", "More"]]
-                  : []),
-              ] as [Tab, string][]
-            ).map(([key, text]) => (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={tab === key}
-                className={cn(
-                  "flex-1 rounded-full px-3 py-1.5",
-                  tab === key ? "bg-accent font-medium" : "text-muted-foreground hover:bg-accent",
-                )}
-                onClick={() => setTab(key)}
-              >
-                {text}
-              </button>
-            ))}
-          </div>
-
-          {m.error ? (
-            <p role="alert" className="text-destructive text-sm">
-              {m.error}
-            </p>
-          ) : null}
-          {m.problem ? (
-            <p role="alert" className="text-destructive text-sm">
-              {m.problem}
-            </p>
-          ) : null}
-
-          {!m.list && !m.error ? <p className="text-muted-foreground text-sm">Looking…</p> : null}
-          {m.list && shown.length === 0 && tab !== "more" ? (
-            <p className="text-muted-foreground text-sm">
-              {tab === "device"
-                ? "Nothing is on this computer yet. Choose one under Recommended."
-                : "No models for this yet."}
-            </p>
-          ) : null}
-
-          <ul
-            className="m-0 grid list-none gap-1 p-0"
-            aria-label={tab === "device" ? "On this computer" : "Models"}
-          >
-            {shown.map((c) => (
-              <li key={c.id}>
+            <div
+              role="tablist"
+              aria-label="Models"
+              className="flex gap-1 rounded-full border p-1 text-sm"
+            >
+              {(
+                [
+                  ["recommended", "Recommended"],
+                  ["device", "On this computer"],
+                  ...(api?.more || choices.some((c) => c.tier === "advanced")
+                    ? [["more", "More"]]
+                    : []),
+                ] as [Tab, string][]
+              ).map(([key, text]) => (
                 <button
+                  key={key}
                   type="button"
-                  disabled={c.state === "too_big" || c.state === "unavailable"}
-                  aria-current={c.chosen ? "true" : undefined}
+                  role="tab"
+                  aria-selected={tab === key}
                   className={cn(
-                    "grid w-full grid-cols-[minmax(0,1fr)] gap-0.5 rounded-lg px-3 py-2 text-start outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 disabled:hover:bg-transparent",
-                    c.chosen && "bg-accent",
+                    "flex-1 rounded-full px-3 py-1.5",
+                    tab === key ? "bg-accent font-medium" : "text-muted-foreground hover:bg-accent",
                   )}
-                  onClick={() => void pick(c)}
+                  onClick={() => setTab(key)}
                 >
-                  <span className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate font-medium text-sm" title={c.title}>
-                      {c.title}
-                    </span>
-                    {c.readsPictures ? (
-                      <span title="Can read pictures" className="text-muted-foreground">
-                        <Eye className="size-3.5" aria-label="Can read pictures" />
-                      </span>
-                    ) : null}
-                    {c.tier === "recommended" ? (
-                      <span className="rounded-full border px-2 py-0.5 text-xs">Recommended</span>
-                    ) : null}
-                  </span>
-                  <span className="text-muted-foreground text-sm [overflow-wrap:anywhere]">
-                    {c.plain}
-                  </span>
-                  <span
-                    className={cn(
-                      "flex items-center gap-1.5 text-xs",
-                      c.state === "ready" ? "text-ok" : "text-muted-foreground",
-                    )}
-                  >
-                    {c.state === "needs_download" ? (
-                      <Download className="size-3" aria-hidden="true" />
-                    ) : null}
-                    {stateLine(c)}
-                    {c.fit === "tight" ? " · may be slow here" : ""}
-                  </span>
+                  {text}
                 </button>
-              </li>
-            ))}
-          </ul>
+              ))}
+            </div>
 
-          {tab === "more" && api?.more ? <div className="grid gap-2">{api.more}</div> : null}
-        </section>
+            {m.error ? (
+              <p role="alert" className="text-destructive text-sm">
+                {m.error}
+              </p>
+            ) : null}
+            {m.problem ? (
+              <p role="alert" className="text-destructive text-sm">
+                {m.problem}
+              </p>
+            ) : null}
+
+            {!m.list && !m.error ? <p className="text-muted-foreground text-sm">Looking…</p> : null}
+            {m.list && shown.length === 0 && tab !== "more" ? (
+              <p className="text-muted-foreground text-sm">
+                {tab === "device"
+                  ? "Nothing is on this computer yet. Choose one under Recommended."
+                  : "No models for this yet."}
+              </p>
+            ) : null}
+
+            <ul
+              className="m-0 grid list-none gap-1 p-0"
+              aria-label={tab === "device" ? "On this computer" : "Models"}
+            >
+              {shown.map((c) => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    disabled={c.state === "too_big" || c.state === "unavailable"}
+                    aria-current={c.chosen ? "true" : undefined}
+                    className={cn(
+                      "grid w-full grid-cols-[minmax(0,1fr)] gap-0.5 rounded-lg px-3 py-2 text-start outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 disabled:hover:bg-transparent",
+                      c.chosen && "bg-accent",
+                    )}
+                    onClick={() => void pick(c)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate font-medium text-sm" title={c.title}>
+                        {c.title}
+                      </span>
+                      {c.readsPictures ? (
+                        <span title="Can read pictures" className="text-muted-foreground">
+                          <Eye className="size-3.5" aria-label="Can read pictures" />
+                        </span>
+                      ) : null}
+                      {c.tier === "recommended" ? (
+                        <span className="rounded-full border px-2 py-0.5 text-xs">Recommended</span>
+                      ) : null}
+                    </span>
+                    <span className="text-muted-foreground text-sm [overflow-wrap:anywhere]">
+                      {c.plain}
+                    </span>
+                    <span
+                      className={cn(
+                        "flex items-center gap-1.5 text-xs",
+                        c.state === "ready" ? "text-ok" : "text-muted-foreground",
+                      )}
+                    >
+                      {c.state === "needs_download" ? (
+                        <Download className="size-3" aria-hidden="true" />
+                      ) : null}
+                      {stateLine(c)}
+                      {c.fit === "tight" ? " · may be slow here" : ""}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            {tab === "more" && api?.more ? <div className="grid gap-2">{api.more}</div> : null}
+          </div>
+        </Modal>
       ) : null}
 
       {asking ? (

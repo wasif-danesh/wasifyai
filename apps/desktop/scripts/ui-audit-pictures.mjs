@@ -6,6 +6,8 @@
 //   apps/desktop/scripts/ui-audit.sh            light and dark
 //   apps/desktop/scripts/ui-audit.sh light      one scheme
 //   apps/desktop/scripts/ui-audit.sh light home,image-create   only these screens
+//   apps/desktop/scripts/ui-audit.sh light image-make           a real picture, made in the window (pictures of
+//                                                                the stage while it is made and when it is done)
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -162,7 +164,29 @@ for (const scheme of ["light", "dark"]) {
       if (scheme === "light" && TALL.has(name)) await shot(page, `${name}-tall`, 2000);
     });
   }
-  if (scheme === "light") {
+  if (scheme === "light" && names.has("image-make")) {
+    // the check of stage U3: a real picture made in the window, the stage pictured while it works and when it is done
+    await attempt("image-make", async () => {
+      await open(page, "/images/create");
+      await page
+        .getByRole("textbox", { name: /prompt/i })
+        .fill("A red ceramic teapot on a wooden table, soft morning light");
+      await page.getByRole("button", { name: "Make the picture" }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(1500);
+      await shot(page, "image-making");
+      await page
+        .locator('[data-slot="stage"][data-state="result"] img')
+        .waitFor({ timeout: 300_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "image-made");
+      await page.getByRole("button", { name: "More" }).click();
+      await page.waitForTimeout(400);
+      await shot(page, "image-made-more");
+      await page.keyboard.press("Escape");
+    });
+  }
+  if (scheme === "light" && names.size === 0) {
     for (const [name, path] of [
       ["picker-images", "/images/create"],
       ["picker-speech", "/voice/speak"],

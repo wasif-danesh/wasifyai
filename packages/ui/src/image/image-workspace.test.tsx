@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type ImageSummary, type ImagesApi, createRunClient } from "@wasifyai/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -106,20 +106,27 @@ describe("ImageWorkspace", () => {
     const user = userEvent.setup();
     render(<ImageWorkspace mode="text" runs={runs} images={api} canSave />);
     await user.type(screen.getByRole("textbox"), "a lighthouse");
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Make the picture" }));
 
     expect(await screen.findByRole("img", { name: "a lighthouse" })).toBeInTheDocument();
     // the full record arrives: the recipe is there to show and to run again
     await screen.findByRole("button", { name: /make it again/i });
 
-    await user.click(screen.getByRole("button", { name: /add to favourites/i }));
+    // three actions stay as buttons; the rest are behind More (ADR-0093 decision 8)
+    await user.click(screen.getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: /add to favourites/i }));
     await waitFor(() => expect(api.calls).toContain("favourite:i1:true"));
-    expect(await screen.findByRole("button", { name: "Favourite" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "More" }));
+    expect(
+      await screen.findByRole("menuitem", { name: /remove from favourites/i }),
+    ).toBeInTheDocument();
+    await user.keyboard("{Escape}");
 
     await user.click(screen.getByRole("button", { name: /save a copy/i }));
     expect(await screen.findByText("Saved as a-lighthouse.png in Downloads.")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /^recipe$/i }));
+    await user.click(screen.getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: /^recipe$/i }));
     expect(screen.getByText("4242")).toBeInTheDocument();
   });
 
@@ -155,13 +162,14 @@ describe("ImageWorkspace", () => {
     const user = userEvent.setup();
     render(<ImageWorkspace mode="text" runs={runs} images={api} />);
     await user.type(screen.getByRole("textbox"), "a lighthouse");
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Make the picture" }));
+    // with no recipe yet there are three actions, so the heart is a button, not a menu item
     await user.click(await screen.findByRole("button", { name: /add to favourites/i }));
     await waitFor(() => expect(api.calls).toContain("favourite:i1:true"));
-    expect(await screen.findByRole("button", { name: "Favourite" })).toBeInTheDocument();
+    expect(await screen.findByText(/· favourite/)).toBeInTheDocument();
     release();
     await new Promise((r) => setTimeout(r, 50));
-    expect(screen.getByRole("button", { name: "Favourite" })).toBeInTheDocument();
+    expect(screen.getByText(/· favourite/)).toBeInTheDocument(); // the stage's caption still says so
   });
 
   it("makes it again with the same prompt, size and seed", async () => {
@@ -200,7 +208,7 @@ describe("ImageWorkspace", () => {
 
     await user.click(screen.getByRole("button", { name: /use a new one/i }));
     expect(screen.queryByText("7")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Make the picture" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(String(init.body)).input).toEqual({
@@ -266,7 +274,7 @@ describe("ImageWorkspace when the model cannot run", () => {
       />,
     );
     await user.type(screen.getByRole("textbox"), "a lighthouse");
-    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Make the picture" })).toBeDisabled();
     expect(screen.getByRole("alert")).toHaveTextContent("will not fit");
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -300,12 +308,12 @@ describe("styles, Vary and the edit source", () => {
         ]}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /styles/i }));
     await user.click(screen.getByRole("checkbox", { name: "Ink" }));
     const slider = screen.getByRole("slider", { name: "Strength of Ink" });
-    fireEvent.change(slider, { target: { value: "0.6" } });
+    slider.focus();
+    await user.keyboard("{ArrowLeft}".repeat(8)); // 1.00 down to 0.60, a step of 0.05 at a time
     await user.type(screen.getByRole("textbox", { name: /prompt/i }), "a fox");
-    await user.click(screen.getByRole("button", { name: "Generate" }));
+    await user.click(screen.getByRole("button", { name: "Make the picture" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(String(init.body)).input.loras).toEqual([
@@ -324,7 +332,6 @@ describe("styles, Vary and the edit source", () => {
         preset={{ prompt: "x", size: null, seed: 1, loras: [] }}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /styles/i }));
     for (const n of ["a", "b", "c"]) await user.click(screen.getByRole("checkbox", { name: n }));
     expect(screen.getByRole("checkbox", { name: "d" })).toBeDisabled();
   });
@@ -341,7 +348,6 @@ describe("styles, Vary and the edit source", () => {
         onUseLora={onUse}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /styles/i }));
     await user.click(screen.getByRole("button", { name: "Use it" }));
     expect(onUse).toHaveBeenCalledWith("l1");
   });
@@ -393,9 +399,10 @@ describe("styles, Vary and the edit source", () => {
       <ImageWorkspace mode="text" runs={runs} images={fakeApi([withStyles])} onEditThis={onEdit} />,
     );
     await user.click(await screen.findByRole("button", { name: "Open: a lighthouse" }));
-    await user.click(screen.getByRole("button", { name: /^recipe$/i }));
+    await user.click(screen.getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: /^recipe$/i }));
     expect(screen.getByText("ink.safetensors (0.8)")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /edit this result/i }));
+    await user.click(screen.getByRole("button", { name: /^edit this$/i }));
     expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: "i1" }));
   });
 });

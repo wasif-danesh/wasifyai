@@ -22,7 +22,15 @@ export type StageState =
       value?: number;
       onStop?: () => void;
     }
-  | { kind: "error"; message: string; details?: string; onRetry?: () => void; onReset?: () => void }
+  | {
+      kind: "error";
+      /** "That did not work" unless the error is of another kind ("We can't make that one") */
+      title?: string;
+      message: string;
+      details?: string;
+      onRetry?: () => void;
+      onReset?: () => void;
+    }
   | { kind: "result"; children: ReactNode; actions?: Action[]; caption?: ReactNode };
 
 /**
@@ -77,6 +85,7 @@ export function Stage({
       {state.kind === "error" ? (
         <div className="w-full max-w-xl">
           <ErrorNotice
+            title={state.title}
             message={state.message}
             details={state.details}
             onRetry={state.onRetry}
@@ -86,7 +95,7 @@ export function Stage({
       ) : null}
       {state.kind === "result" ? (
         <>
-          <div className="grid place-items-center overflow-hidden rounded-md [&>img]:max-h-[70vh] [&>video]:max-h-[70vh]">
+          <div className="grid max-w-full place-items-center overflow-hidden rounded-md [&>img]:max-h-[calc(100dvh-22rem)] [&>img]:max-w-full [&>video]:max-h-[calc(100dvh-22rem)]">
             {state.children}
           </div>
           {state.caption ? (

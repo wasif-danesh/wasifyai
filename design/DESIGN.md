@@ -44,6 +44,7 @@ spacing, depth, motion) is defined once, in the tokens block at the end of this 
 | A labelled control | `Field`: the label, the control, one hint line, the error |
 | Settings only an expert needs | `Experts`: a collapsed "For experts" section, closed by default |
 | Where a person is in a flow | `Stepper` |
+| A screen that makes something | `MakeScreen`: ask on the left with the main button in view, the `Stage` on the right, the `RecentStrip` under it |
 | Where a result appears | `Stage`: empty, working, error and result, with its actions |
 | What can be done with a thing | `ActionsRow`: three buttons and a `Menu` for the rest |
 | The last things a tool made | `RecentStrip`, fed by the one library |

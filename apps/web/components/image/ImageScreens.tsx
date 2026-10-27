@@ -36,7 +36,7 @@ export function ImageScreen({ mode }: { mode: ImageMode }) {
   }, [mode]);
 
   return (
-    <div data-workspace className="h-[calc(100dvh-3.5rem)] min-h-[32rem]">
+    <div data-workspace className="h-[calc(100dvh-3rem)] min-h-[32rem]">
       {start ? (
         <ImageWorkspace
           key={`${mode}-${start.preset?.seed ?? ""}-${start.source?.url ?? ""}`}

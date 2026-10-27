@@ -138,7 +138,7 @@ describe("the model picker button and panel", () => {
     render(<ModelSelect group="music" api={fake([choice()])} handleRef={handle} />);
     await screen.findByRole("button", { name: /Select music model/ });
     act(() => handle.current?.open());
-    expect(await screen.findByRole("region", { name: /Select music model/ })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: /Select music model/ })).toBeInTheDocument();
   });
 });
 
@@ -168,8 +168,9 @@ describe("choosing a model that is not on the computer", () => {
     expect(within(dialog).getByText(/Commercial use allowed/)).toBeInTheDocument();
     expect(api.get).not.toHaveBeenCalled(); // nothing yet
     await user.click(within(dialog).getByRole("button", { name: "Not now" }));
+    // the question closes; the picker, a dialog of its own since stage U3, stays open
     expect(api.get).not.toHaveBeenCalled();
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Download FLUX.2 klein 4B?" })).toBeNull();
 
     await user.click(screen.getByRole("button", { name: /FLUX.2 klein 4B/ }));
     await user.click(screen.getByRole("button", { name: "Download and use" }));

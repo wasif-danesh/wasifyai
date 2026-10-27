@@ -6,10 +6,11 @@ import { AVOID, appearsHere, makeLabel, makingLabel, plural } from "./words";
 /**
  * How often the screens still say a word the design guide avoids, in what a person reads (JSX text and quoted
  * sentences; not identifiers, not class names). The numbers are the state on 2026-10-27, when stage U1 of the UI
- * plan added `words.ts`. A later stage lowers a number when it rewrites a screen; this test keeps a number from
- * going up. Lower a number here when the run says it can be lowered.
+ * plan added `words.ts` (stage U3 lowered "generate" to 1 and "image" to 28 when it rebuilt the Images screen). A
+ * later stage lowers a number when it rewrites a screen; this test keeps a number from going up. Lower a number
+ * here when the run says it can be lowered.
  */
-const BASELINE: Record<string, number> = { generate: 3, image: 36, asset: 0, Takes: 4 };
+const BASELINE: Record<string, number> = { generate: 1, image: 28, asset: 0, Takes: 4 };
 
 function files(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {

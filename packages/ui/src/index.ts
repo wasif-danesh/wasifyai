@@ -37,6 +37,7 @@ export { Menu, type MenuItem } from "./components/menu";
 export { type Action, ActionsRow } from "./components/actions-row";
 export { Player } from "./components/player";
 export { Stage, type StageState } from "./components/stage";
+export { MakeScreen } from "./components/make-screen";
 export { type RecentItem, RecentStrip } from "./components/recent-strip";
 export { Skeleton } from "./components/skeleton";
 export { Input } from "./components/input";
@@ -225,4 +226,8 @@ export { MyCreations } from "./creations/MyCreations";
 export { CreationsList } from "./creations/CreationsList";
 export { longEnough, toRow } from "./creations/model";
 export { useCreationSearch } from "./creations/use-creation-search";
-export type { CreationsNav, Entry as CreationEntry, MakeScreen } from "./creations/model";
+export type {
+  CreationsNav,
+  Entry as CreationEntry,
+  MakeScreen as MakeTarget,
+} from "./creations/model";

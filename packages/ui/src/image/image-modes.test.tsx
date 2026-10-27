@@ -145,7 +145,7 @@ describe("Reference", () => {
     expect(
       screen.getByRole("heading", { name: "Make a picture from two pictures" }),
     ).toBeInTheDocument();
-    const generate = screen.getByRole("button", { name: "Generate" });
+    const generate = screen.getByRole("button", { name: "Make the picture" });
     await user.type(
       screen.getByRole("textbox"),
       "the cat from picture 1 on the chair from picture 2",
@@ -197,7 +197,7 @@ describe("Inpaint", () => {
     const user = userEvent.setup({ applyAccept: false });
     await withPicture(user);
     await user.type(screen.getByRole("textbox"), "a white cup");
-    const generate = screen.getByRole("button", { name: "Generate" });
+    const generate = screen.getByRole("button", { name: "Make the picture" });
     expect(generate).toBeDisabled();
     expect(screen.getByText("Nothing painted yet.")).toBeInTheDocument();
 
@@ -243,7 +243,7 @@ describe("Inpaint", () => {
     fetchMock.mockResolvedValueOnce(made("inpaint"));
     await user.type(screen.getByRole("textbox"), "a white cup");
     await paintRectangle(user);
-    await user.click(await screen.findByRole("button", { name: "Generate" }));
+    await user.click(await screen.findByRole("button", { name: "Make the picture" }));
     await waitFor(() => expect(startedRun()).not.toBeNull());
 
     const [path, init] = fetchMock.mock.calls[1];
@@ -267,10 +267,10 @@ describe("Inpaint", () => {
     );
     await user.type(screen.getByRole("textbox"), "a white cup");
     await paintRectangle(user);
-    await user.click(await screen.findByRole("button", { name: "Generate" }));
+    await user.click(await screen.findByRole("button", { name: "Make the picture" }));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(startedRun()).toBeNull();
-    expect(screen.getByRole("button", { name: "Generate" })).toBeEnabled(); // and it can be tried again
+    expect(screen.getByRole("button", { name: "Make the picture" })).toBeEnabled(); // and it can be tried again
   });
 });
 

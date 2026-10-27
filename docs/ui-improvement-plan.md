@@ -235,7 +235,19 @@ are split between **Speech** (Text to speech, Speech to text, Voices, Change a v
 clips being made on the web (the web has no `/actions/jobs` yet). Checked with the menu walk, the shared-screens
 layout checks (one bar height on every screen), the unit tests of both shells and the pictures taken again.
 
-About 44 days of work in thirteen stages; U0 to U2 are done, U3 next, then the products in the order a
+**Built:** U3 on 2026-10-28: `MakeScreen` (`packages/ui/src/components/make-screen.tsx`: ask, stage, recent;
+the main button in view, the three parts stacked on a phone) and the Images screen rebuilt on it
+(`image/ImageWorkspace.tsx`): "Make the picture" (`makeLabel`), the keyboard hint on the button, the Styles row in
+view with the app's own checkbox and strength slider (ADR-0091), the seed under "For experts", the `Stage` with
+its four states (progress with how long the last picture took, Stop, the plain-words error, the result with a
+caption), three actions and a More menu on the result (`ActionsRow`), the `RecentStrip` titled "Recent pictures"
+with See all to the library, and the model picker as a dialog (`ModelSelect`), on the window and the web. The
+words test's baseline fell to "generate" 1 and "image" 28. Not in this stage: "Animate this" (it needs the
+picture handed to Video, stage U4) and the strip reading the one Library (stage U8). Checked with the image unit
+tests, the shared-screens specs, a real picture made in the window (`ui-audit.sh light image-make` pictures the
+stage while it works and when it is done) and the pictures taken again.
+
+About 44 days of work in thirteen stages; U0 to U3 are done, U4 next, then the products in the order a
 new person meets them (Pictures, Video, Speech), with the Library before the home so the quick starts and the
 recent strips have one source.
 

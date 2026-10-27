@@ -1,6 +1,6 @@
-import type { CreationEntry, CreationsNav, MakeScreen } from "@wasifyai/ui";
+import type { CreationEntry, CreationsNav, MakeTarget } from "@wasifyai/ui";
 
-const MAKE: Record<MakeScreen, string> = {
+const MAKE: Record<MakeTarget, string> = {
   music: "/voice/music",
   image: "/image",
   video: "/video",
@@ -10,7 +10,7 @@ const MAKE: Record<MakeScreen, string> = {
 };
 
 /** Where an entry of My creations opens on the web: its own page where it has one, else the shared screen that holds the history. */
-export function hrefOf(target: CreationEntry | MakeScreen): string {
+export function hrefOf(target: CreationEntry | MakeTarget): string {
   if (typeof target === "string") return MAKE[target];
   switch (target.kind) {
     case "song":

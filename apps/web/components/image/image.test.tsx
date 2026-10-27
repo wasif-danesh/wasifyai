@@ -108,13 +108,17 @@ describe("ImageScreen (the web app's mount of the shared screen)", () => {
     });
     render(<ImageScreen mode="text" />);
     await user.type(await screen.findByRole("textbox"), "a lighthouse");
-    await user.click(screen.getByRole("button", { name: /generate/i }));
+    await user.click(screen.getByRole("button", { name: /make the picture/i }));
 
     expect(await screen.findByRole("img", { name: "a lighthouse" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /download/i })).toHaveAttribute(
-      "href",
+    // Download is one of the stage's actions; it opens the BFF's download address
+    const opened = vi.spyOn(window, "open").mockImplementation(() => null);
+    await user.click(screen.getByRole("button", { name: /download/i }));
+    expect(opened).toHaveBeenCalledWith(
       "/api/products/wasifyai-image/images/i9/download",
+      "_blank",
     );
+    opened.mockRestore();
   });
 
   it("starts from a recipe sent from the library, once", async () => {

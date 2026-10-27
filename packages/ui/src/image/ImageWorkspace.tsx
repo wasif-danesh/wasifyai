@@ -11,21 +11,27 @@ import {
   sizeName,
   when,
 } from "@wasifyai/client";
-import { Heart, ImageIcon, Info, Pencil, RotateCw, Save, Shuffle } from "lucide-react";
+import { Heart, ImageIcon, Pencil, Save } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
-import { cn } from "../cn";
+import type { Action } from "../components/actions-row";
 import { Button } from "../components/button";
+import { Checkbox } from "../components/checkbox";
 import { Chip } from "../components/chip";
-import { FailedNotice, JobMeter, PromptField } from "../components/create";
+import { PromptField } from "../components/create";
 import { EnhanceButton } from "../components/enhance-button";
-import { Notice } from "../components/notice";
+import { Experts } from "../components/experts";
+import { MakeScreen } from "../components/make-screen";
 import { PictureInput } from "../components/picture-input";
+import { type RecentItem, RecentStrip } from "../components/recent-strip";
+import { Slider } from "../components/slider";
 import { Spinner } from "../components/spinner";
+import { Stage, type StageState } from "../components/stage";
 import { IMAGE_PRODUCT, useImageFlow } from "../hooks/use-image-flow";
 import { usePicture } from "../hooks/use-picture";
 import { usePictureEvents } from "../hooks/use-picture-events";
 import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../save";
 import { PageHeader } from "../window-bar";
+import { appearsHere, makeLabel, makingLabel } from "../words";
 import { MAX_PROMPT, SIZES } from "./ImageForm";
 import { MaskPainter, type MaskPainterHandle } from "./MaskPainter";
 
@@ -56,8 +62,8 @@ const EXAMPLES = {
 const COPY: Record<ImageMode, { tab: string; title: string; blurb: string; label: string }> = {
   text: {
     tab: "Create",
-    title: "Create images",
-    blurb: "Generate a new image from a prompt.",
+    title: "Make a picture",
+    blurb: "Describe it in any language.",
     label: "Prompt",
   },
   image: {
@@ -92,6 +98,16 @@ export type WorkspacePreset = {
 export type LoraOption = { id?: string; name: string; title: string; size?: number };
 
 const MAX_STYLES = 3;
+const LAST_SECONDS_KEY = "wasifyai-image:last-seconds";
+
+function lastSeconds(): number | null {
+  try {
+    const v = Number(localStorage.getItem(LAST_SECONDS_KEY));
+    return v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 export function presetOf(image: ImageSummary): WorkspacePreset | null {
   const r = image.recipe;
@@ -179,6 +195,7 @@ export function ImageWorkspace({
   availableLoras = [],
   onUseLora,
   onEditThis,
+  onOpenLibrary,
   sourceImage = null,
 }: ImageWorkspaceProps) {
   const id = useId();
@@ -192,7 +209,8 @@ export function ImageWorkspace({
   const [size, setSize] = useState<string>(preset?.size ?? "square");
   const [seed, setSeed] = useState<number | null>(preset?.seed ?? null);
   const [styles, setStyles] = useState<LoraChoice[]>(preset?.loras ?? []);
-  const [stylesOpen, setStylesOpen] = useState((preset?.loras ?? []).length > 0);
+  const startedAt = useRef<number | null>(null);
+  const [took, setTook] = useState<number | null>(lastSeconds);
   const [picked, setPicked] = useState<ImageSummary | null>(null);
   const [made, setMade] = useState<ImageSummary | null>(null);
   const [recipeOpen, setRecipeOpen] = useState(false);
@@ -209,6 +227,19 @@ export function ImageWorkspace({
   const { state } = flow;
   const working = state.phase === "checking" || state.phase === "working" || sending;
   const [recent, setRecent] = useRecent(state.result?.imageId, images);
+  // how long the last picture took, said while the next one is made
+  useEffect(() => {
+    if (state.phase === "done" && startedAt.current) {
+      const seconds = Math.max(1, Math.round((Date.now() - startedAt.current) / 1000));
+      startedAt.current = null;
+      setTook(seconds);
+      try {
+        localStorage.setItem(LAST_SECONDS_KEY, String(seconds));
+      } catch {
+        // it is only a hint
+      }
+    }
+  }, [state.phase]);
 
   // the full record of what was just made: its recipe and favourite flag
   const resultId = state.phase === "done" ? state.result?.imageId : undefined;
@@ -284,6 +315,7 @@ export function ImageWorkspace({
           setSending(false);
         }
       }
+      startedAt.current = Date.now();
       if (mode !== "text") pic.handOver(); // the run owns the pictures from here
       if (mode === "reference") pic2.handOver();
       flow.start({
@@ -384,6 +416,131 @@ export function ImageWorkspace({
   }
 
   const job = jobText(state.job);
+  const keyboardHint = "Ctrl or ⌘ + Enter makes it too";
+
+  // what can be done with the picture on the stage: three buttons and a menu (ADR-0093 decision 8)
+  const resultActions: Action[] = shown
+    ? [
+        ...(onEditThis
+          ? [
+              {
+                label: "Edit this",
+                onSelect: () => onEditThis(shown),
+                icon: <Pencil aria-hidden="true" />,
+              },
+            ]
+          : []),
+        ...(canSave
+          ? [
+              {
+                label: "Save a copy",
+                onSelect: () => void save(shown),
+                icon: <Save aria-hidden="true" />,
+              },
+            ]
+          : []),
+        ...(downloadHref && shown.id
+          ? [
+              {
+                label: "Download",
+                onSelect: () => window.open(downloadHref(shown), "_blank"),
+                icon: <Save aria-hidden="true" />,
+              },
+            ]
+          : []),
+        ...(canRunAgain(shown)
+          ? [
+              { label: "Make it again", onSelect: () => again(shown), disabled: working },
+              { label: "Vary", onSelect: () => vary(shown), disabled: working },
+            ]
+          : []),
+        {
+          label: shown.favourite ? "Remove from favourites" : "Add to favourites",
+          onSelect: () => void toggleFavourite(shown),
+          icon: <Heart aria-hidden="true" />,
+        },
+        { label: "Use this prompt", onSelect: () => setPrompt(shown.prompt) },
+        {
+          label: recipeOpen ? "Hide the recipe" : "Recipe",
+          onSelect: () => setRecipeOpen((v) => !v),
+        },
+      ]
+    : [];
+
+  const stageState: StageState = working
+    ? {
+        kind: "working",
+        label: makingLabel("picture"),
+        text: [job.text, took ? `the last one took ${took} s` : null].filter(Boolean).join(" · "),
+        value: state.phase === "working" ? job.value : undefined,
+        onStop: flow.reset,
+      }
+    : state.phase === "refused" && state.refusal
+      ? {
+          kind: "error",
+          title: "We can't make that one",
+          message: state.refusal.message,
+          onReset: flow.reset,
+        }
+      : state.phase === "error" && state.error
+        ? {
+            kind: "error",
+            message: state.error.message,
+            onRetry: state.error.retryable ? flow.retry : undefined,
+            onReset: flow.reset,
+          }
+        : shown
+          ? {
+              kind: "result",
+              children: (
+                <img
+                  src={shown.image_url}
+                  alt={shown.prompt}
+                  width={shown.width || undefined}
+                  height={shown.height || undefined}
+                  className="rounded-lg object-contain shadow-card"
+                />
+              ),
+              caption: (
+                <div className="grid gap-2">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="min-w-0 truncate">{shown.prompt}</span>
+                    <span className="shrink-0 text-xs">
+                      {shown.width}×{shown.height}
+                      {shown.favourite ? " · favourite" : ""}
+                    </span>
+                  </div>
+                  {recipeOpen ? <RecipeList image={shown} /> : null}
+                  {saved ? <output className="text-sm">{saved}</output> : null}
+                  {problem ? (
+                    <p className="m-0 text-destructive text-sm" role="alert">
+                      {problem}
+                    </p>
+                  ) : null}
+                </div>
+              ),
+              actions: resultActions,
+            }
+          : {
+              kind: "empty",
+              icon: ImageIcon,
+              title: appearsHere("picture"),
+              text:
+                mode === "text"
+                  ? "Describe it on the left, then press Make the picture."
+                  : "Choose a picture and say what to change, then press Make the picture.",
+            };
+
+  const recentItems: RecentItem[] = recent.map((img) => ({
+    id: img.id,
+    cover: <img src={img.thumb_url} alt="" className="size-full object-cover" />,
+    label: `Open: ${img.prompt}`,
+    current: picked?.id === img.id,
+    onOpen: () => {
+      flow.reset();
+      setPicked(img);
+    },
+  }));
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -392,211 +549,186 @@ export function ImageWorkspace({
         <div className="flex min-w-0 items-center gap-2 ps-2 text-sm">{header}</div>
       </PageHeader>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto md:grid-cols-[minmax(19rem,28rem)_minmax(0,1fr)] md:overflow-visible">
-        <section
-          className="flex flex-col border-b md:min-h-0 md:border-e md:border-b-0"
-          aria-label="Controls"
-        >
-          <div className="flex-1 px-6 py-6 md:min-h-0 md:overflow-auto">
-            <h1 className="font-semibold text-2xl tracking-tight">{COPY[mode].title}</h1>
-            <p className="mt-1 text-muted-foreground text-sm">{COPY[mode].blurb}</p>
+      <MakeScreen
+        title={COPY[mode].title}
+        lead={COPY[mode].blurb}
+        ask={
+          <>
+            {notices}
 
-            <div className="mt-6 grid gap-5">
-              {notices}
-
-              {mode !== "text" ? (
-                <PictureInput
-                  label={mode === "reference" ? "Picture 1" : "Your picture"}
-                  preview={mode !== "inpaint"}
-                  picture={pic.picture}
-                  status={pic.status}
-                  error={pic.error}
-                  dragging={dragging}
-                  onChoose={(f) => void pic.choose(f)}
-                  onRemove={pic.clear}
-                  onCancel={pic.cancel}
-                />
-              ) : null}
-
-              {mode === "reference" ? (
-                <>
-                  <PictureInput
-                    label="Picture 2"
-                    picture={pic2.picture}
-                    status={pic2.status}
-                    error={pic2.error}
-                    dragging={dragging && pic.picture !== null && pic2.picture === null}
-                    onChoose={(f) => void pic2.choose(f)}
-                    onRemove={pic2.clear}
-                    onCancel={pic2.cancel}
-                  />
-                  <p className="text-muted-foreground text-sm">
-                    Call them “picture 1” and “picture 2” in your words. It takes about a minute.
-                  </p>
-                </>
-              ) : null}
-
-              {mode === "inpaint" && pic.picture ? (
-                <MaskPainter
-                  picture={pic.picture}
-                  disabled={working}
-                  onCoverage={setPainted}
-                  handleRef={painter}
-                />
-              ) : null}
-
-              <PromptField
-                id={id}
-                label={COPY[mode].label}
-                value={prompt}
-                onChange={setPrompt}
-                placeholder={EXAMPLES[mode][0]}
-                hintText="Press Ctrl or ⌘ + Enter to generate."
-                max={MAX_PROMPT}
-                examples={[...EXAMPLES[mode]]}
-                exampleLabel={(ex) => ex.split(",")[0] ?? ex}
-                enhance={
-                  mode === "text" || mode === "image" ? (
-                    <EnhanceButton
-                      enhance={runs.enhancePrompt}
-                      product={IMAGE_PRODUCT}
-                      kind={mode === "text" ? "text_to_image" : "edit_image"}
-                      value={prompt}
-                      uploadId={pic.picture?.uploadId}
-                      needsPicture={mode === "image"}
-                      maxChars={MAX_PROMPT}
-                      disabled={working || pic.status === "uploading"}
-                      onChange={setPrompt}
-                    />
-                  ) : undefined
-                }
-                onSubmit={generate}
+            {mode !== "text" ? (
+              <PictureInput
+                label={mode === "reference" ? "Picture 1" : "Your picture"}
+                preview={mode !== "inpaint"}
+                picture={pic.picture}
+                status={pic.status}
+                error={pic.error}
+                dragging={dragging}
+                onChoose={(f) => void pic.choose(f)}
+                onRemove={pic.clear}
+                onCancel={pic.cancel}
               />
+            ) : null}
 
-              {mode === "text" || mode === "reference" ? (
-                <fieldset className="m-0 grid gap-2 border-0 p-0">
-                  <legend className="mb-1 font-semibold text-ui-lg">Aspect ratio</legend>
-                  <div className="flex flex-wrap gap-2">
-                    {SIZES.map((s) => (
-                      <Chip key={s.id} aria-pressed={size === s.id} onClick={() => setSize(s.id)}>
-                        {s.label} <span className="opacity-70">{s.hint}</span>
-                      </Chip>
-                    ))}
-                  </div>
-                </fieldset>
-              ) : (
-                <p className="text-muted-foreground text-sm">
-                  {mode === "inpaint"
-                    ? "Only the painted area changes; the rest stays as it is. A larger area works better than a small one."
-                    : "The result keeps the size of your picture."}
+            {mode === "reference" ? (
+              <>
+                <PictureInput
+                  label="Picture 2"
+                  picture={pic2.picture}
+                  status={pic2.status}
+                  error={pic2.error}
+                  dragging={dragging && pic.picture !== null && pic2.picture === null}
+                  onChoose={(f) => void pic2.choose(f)}
+                  onRemove={pic2.clear}
+                  onCancel={pic2.cancel}
+                />
+                <p className="m-0 text-muted-foreground text-sm">
+                  Call them “picture 1” and “picture 2” in your words. It takes about a minute.
                 </p>
-              )}
+              </>
+            ) : null}
 
-              {loras.length > 0 || availableLoras.length > 0 || styles.length > 0 ? (
-                <section className="grid gap-2" aria-label="Styles">
-                  <button
-                    type="button"
-                    className="flex items-center justify-between font-semibold text-ui-lg"
-                    aria-expanded={stylesOpen}
-                    onClick={() => setStylesOpen((v) => !v)}
-                  >
-                    <span>
-                      Styles{" "}
-                      <span className="font-normal text-muted-foreground">
-                        {styles.length ? `(${styles.length} chosen)` : "(optional)"}
-                      </span>
-                    </span>
-                    <span aria-hidden="true">{stylesOpen ? "−" : "+"}</span>
-                  </button>
-                  {stylesOpen ? (
-                    <div className="grid gap-2">
-                      <p className="text-muted-foreground text-xs">
-                        A style (LoRA) changes the look. Use ones made for FLUX.2 klein 4B; others
-                        give noise. Up to {MAX_STYLES}.
-                      </p>
-                      {loras.map((l) => {
-                        const on = styles.find((s) => s.name === l.name);
-                        return (
-                          <div key={l.name} className="grid gap-1 rounded-md border px-3 py-2">
-                            <label className="flex items-center gap-2 text-sm">
-                              <input
-                                type="checkbox"
-                                checked={Boolean(on)}
-                                disabled={!on && styles.length >= MAX_STYLES}
-                                onChange={() => toggleStyle(l.name)}
-                              />
-                              <span className="min-w-0 flex-1 truncate" title={l.name}>
-                                {l.title}
-                              </span>
-                            </label>
-                            {on ? (
-                              <label className="flex items-center gap-2 text-muted-foreground text-xs">
-                                Strength
-                                <input
-                                  type="range"
-                                  min={0.1}
-                                  max={2}
-                                  step={0.05}
-                                  value={on.weight}
-                                  aria-label={`Strength of ${l.title}`}
-                                  className="flex-1"
-                                  onChange={(e) => setStrength(l.name, Number(e.target.value))}
-                                />
-                                <span className="w-9 text-end tabular-nums">
-                                  {on.weight.toFixed(2)}
-                                </span>
-                              </label>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                      {styles
-                        .filter((s) => !loras.some((l) => l.name === s.name))
-                        .map((s) => (
-                          <p key={s.name} className="rounded-md border px-3 py-2 text-sm">
-                            {s.name}{" "}
-                            <span className="text-muted-foreground">is not available here</span>{" "}
-                            <button
-                              type="button"
-                              className="underline underline-offset-4"
-                              onClick={() => toggleStyle(s.name)}
-                            >
-                              Take it out
-                            </button>
-                          </p>
-                        ))}
-                      {availableLoras.map((l) => (
-                        <div
-                          key={l.id ?? l.name}
-                          className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm"
+            {mode === "inpaint" && pic.picture ? (
+              <MaskPainter
+                picture={pic.picture}
+                disabled={working}
+                onCoverage={setPainted}
+                handleRef={painter}
+              />
+            ) : null}
+
+            <PromptField
+              id={id}
+              label={COPY[mode].label}
+              value={prompt}
+              onChange={setPrompt}
+              placeholder={EXAMPLES[mode][0]}
+              hintText={
+                mode === "inpaint"
+                  ? "Only the painted area changes; a larger area works better than a small one."
+                  : mode === "image"
+                    ? "The result keeps the size of your picture."
+                    : "Say what to see and how it should look."
+              }
+              max={MAX_PROMPT}
+              examples={[...EXAMPLES[mode]]}
+              exampleLabel={(ex) => ex.split(",")[0] ?? ex}
+              enhance={
+                mode === "text" || mode === "image" ? (
+                  <EnhanceButton
+                    enhance={runs.enhancePrompt}
+                    product={IMAGE_PRODUCT}
+                    kind={mode === "text" ? "text_to_image" : "edit_image"}
+                    value={prompt}
+                    uploadId={pic.picture?.uploadId}
+                    needsPicture={mode === "image"}
+                    maxChars={MAX_PROMPT}
+                    disabled={working || pic.status === "uploading"}
+                    onChange={setPrompt}
+                  />
+                ) : undefined
+              }
+              onSubmit={generate}
+            />
+
+            {mode === "text" || mode === "reference" ? (
+              <fieldset className="m-0 grid gap-2 border-0 p-0">
+                <legend className="mb-1 font-semibold text-ui-lg">Aspect ratio</legend>
+                <div className="flex flex-wrap gap-2">
+                  {SIZES.map((s) => (
+                    <Chip key={s.id} aria-pressed={size === s.id} onClick={() => setSize(s.id)}>
+                      {s.label} <span className="opacity-70">{s.hint}</span>
+                    </Chip>
+                  ))}
+                </div>
+              </fieldset>
+            ) : null}
+
+            {loras.length > 0 || availableLoras.length > 0 || styles.length > 0 ? (
+              // the styles are in view (ADR-0091): a row of the ones that are here, each with its strength once chosen
+              <section className="grid gap-2" aria-label="Styles">
+                <h2 className="m-0 font-semibold text-ui-lg">
+                  Styles{" "}
+                  <span className="font-normal text-muted-foreground">
+                    {styles.length ? `(${styles.length} chosen)` : "(optional)"}
+                  </span>
+                </h2>
+                <div className="grid gap-2">
+                  {loras.map((l) => {
+                    const on = styles.find((s) => s.name === l.name);
+                    return (
+                      <div key={l.name} className="grid gap-2 rounded-md border px-3 py-2">
+                        <Checkbox
+                          checked={Boolean(on)}
+                          disabled={!on && styles.length >= MAX_STYLES}
+                          onCheckedChange={() => toggleStyle(l.name)}
+                          label={l.title}
+                        />
+                        {on ? (
+                          <Slider
+                            label={`Strength of ${l.title}`}
+                            value={on.weight}
+                            min={0.1}
+                            max={2}
+                            step={0.05}
+                            format={(v) => v.toFixed(2)}
+                            onValueChange={(v) => setStrength(l.name, v)}
+                          />
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                  {styles
+                    .filter((s) => !loras.some((l) => l.name === s.name))
+                    .map((s) => (
+                      <p key={s.name} className="m-0 rounded-md border px-3 py-2 text-sm">
+                        {s.name}{" "}
+                        <span className="text-muted-foreground">is not available here</span>{" "}
+                        <button
+                          type="button"
+                          className="underline underline-offset-4"
+                          onClick={() => toggleStyle(s.name)}
                         >
-                          <span
-                            className="min-w-0 flex-1 truncate text-muted-foreground"
-                            title={l.name}
-                          >
-                            {l.title}
-                          </span>
-                          {onUseLora && l.id ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void onUseLora(l.id as string)}
-                            >
-                              Use it
-                            </Button>
-                          ) : null}
-                        </div>
-                      ))}
+                          Take it out
+                        </button>
+                      </p>
+                    ))}
+                  {availableLoras.map((l) => (
+                    <div
+                      key={l.id ?? l.name}
+                      className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm"
+                    >
+                      <span
+                        className="min-w-0 flex-1 truncate text-muted-foreground"
+                        title={l.name}
+                      >
+                        {l.title}
+                      </span>
+                      {onUseLora && l.id ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void onUseLora(l.id as string)}
+                        >
+                          Use it
+                        </Button>
+                      ) : null}
                     </div>
-                  ) : null}
-                </section>
-              ) : null}
+                  ))}
+                </div>
+                <p className="m-0 text-muted-foreground text-xs">
+                  A style changes the look. Use ones made for the model in use; others give noise.
+                  Up to {MAX_STYLES}.
+                </p>
+              </section>
+            ) : null}
 
-              {mode === "text" && seed !== null ? (
-                <p className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+            {mode === "text" && seed !== null ? (
+              <Experts summary="seed">
+                <p className="m-0 flex flex-wrap items-center gap-2 text-sm">
                   <span>
-                    Using seed <span className="font-mono">{seed}</span> from an earlier image.
+                    Using seed <span className="font-mono">{seed}</span> from an earlier picture.
                   </span>
                   <button
                     type="button"
@@ -606,19 +738,23 @@ export function ImageWorkspace({
                     Use a new one
                   </button>
                 </p>
-              ) : null}
-            </div>
-          </div>
-          <div className="shrink-0 border-t px-6 py-4">
+              </Experts>
+            ) : null}
+          </>
+        }
+        action={
+          <>
             <Button
               type="button"
               size="lg"
-              className="rounded-full px-10"
+              className="w-full rounded-full md:w-auto md:px-10"
               disabled={!valid || working}
+              title={keyboardHint}
+              aria-keyshortcuts="Control+Enter Meta+Enter"
               onClick={generate}
             >
               {working ? <Spinner /> : null}
-              Generate
+              {makeLabel("picture")}
             </Button>
             {blockedReason ? (
               <p className="mt-2 text-destructive text-sm" role="alert">
@@ -630,158 +766,18 @@ export function ImageWorkspace({
                 {problem}
               </p>
             ) : null}
-          </div>
-        </section>
-
-        <section className="flex min-h-[22rem] min-w-0 flex-col md:min-h-0" aria-label="Result">
-          <div className="grid flex-1 place-items-center p-6 md:min-h-0 md:overflow-auto">
-            {working ? (
-              <output className="grid w-full max-w-md gap-4">
-                <div className="flex items-center gap-3 font-semibold">
-                  <Spinner />
-                  <span>{state.label || "Working"}</span>
-                </div>
-                {state.phase === "working" ? (
-                  <JobMeter
-                    title="Painting your image"
-                    text={job.text}
-                    value={job.value}
-                    label="Image progress"
-                  />
-                ) : null}
-                <div>
-                  <Button type="button" variant="outline" onClick={flow.reset}>
-                    Cancel
-                  </Button>
-                </div>
-              </output>
-            ) : state.phase === "refused" && state.refusal ? (
-              <div className="w-full max-w-md">
-                <Notice tone="warn" title="We can't make that one">
-                  {state.refusal.message}
-                </Notice>
-              </div>
-            ) : state.phase === "error" && state.error ? (
-              <div className="w-full max-w-md">
-                <FailedNotice
-                  message={state.error.message}
-                  retryable={state.error.retryable}
-                  onRetry={flow.retry}
-                  onReset={flow.reset}
-                />
-              </div>
-            ) : shown ? (
-              <figure className="m-0 grid max-w-full justify-items-center gap-4">
-                <img
-                  className="max-h-[calc(100dvh-26rem)] max-w-full rounded-xl object-contain shadow-card"
-                  src={shown.image_url}
-                  alt={shown.prompt}
-                  width={shown.width || undefined}
-                  height={shown.height || undefined}
-                />
-                <figcaption className="sr-only">Your image is ready</figcaption>
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    aria-pressed={shown.favourite}
-                    onClick={() => void toggleFavourite(shown)}
-                  >
-                    <Heart className={cn("size-4", shown.favourite && "fill-current")} />
-                    {shown.favourite ? "Favourite" : "Add to favourites"}
-                  </Button>
-                  {canSave ? (
-                    <Button type="button" variant="outline" onClick={() => void save(shown)}>
-                      <Save className="size-4" /> Save a copy
-                    </Button>
-                  ) : null}
-                  {downloadHref && shown.id ? (
-                    <Button asChild variant="outline">
-                      <a href={downloadHref(shown)} download>
-                        <Save className="size-4" /> Download
-                      </a>
-                    </Button>
-                  ) : null}
-                  {canRunAgain(shown) ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={working}
-                      onClick={() => again(shown)}
-                    >
-                      <RotateCw className="size-4" /> Make it again
-                    </Button>
-                  ) : null}
-                  {canRunAgain(shown) ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={working}
-                      onClick={() => vary(shown)}
-                    >
-                      <Shuffle className="size-4" /> Vary
-                    </Button>
-                  ) : null}
-                  {onEditThis ? (
-                    <Button type="button" variant="outline" onClick={() => onEditThis(shown)}>
-                      <Pencil className="size-4" /> Edit this result
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    aria-expanded={recipeOpen}
-                    onClick={() => setRecipeOpen((v) => !v)}
-                  >
-                    <Info className="size-4" /> Recipe
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => setPrompt(shown.prompt)}>
-                    Use this prompt
-                  </Button>
-                </div>
-                {recipeOpen ? <RecipeList image={shown} /> : null}
-                {saved ? <output className="text-sm">{saved}</output> : null}
-                {problem ? (
-                  <p className="text-destructive text-sm" role="alert">
-                    {problem}
-                  </p>
-                ) : null}
-              </figure>
-            ) : (
-              <div className="grid justify-items-center gap-3 text-center text-muted-foreground">
-                <ImageIcon className="size-12 opacity-40" aria-hidden="true" />
-                <p>Your image appears here.</p>
-              </div>
-            )}
-          </div>
-
-          {recent.length > 0 ? (
-            <div className="shrink-0 border-t px-6 py-3">
-              <ul className="flex gap-3 overflow-x-auto" aria-label="Recent images">
-                {recent.map((img) => (
-                  <li key={img.id} className="shrink-0">
-                    <button
-                      type="button"
-                      aria-label={`Open: ${img.prompt}`}
-                      aria-pressed={picked?.id === img.id}
-                      className={cn(
-                        "overflow-hidden rounded-lg border-2 border-transparent outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        picked?.id === img.id && "border-primary",
-                      )}
-                      onClick={() => {
-                        flow.reset();
-                        setPicked(img);
-                      }}
-                    >
-                      <img src={img.thumb_url} alt="" className="size-20 object-cover" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </section>
-      </div>
+          </>
+        }
+        stage={<Stage state={stageState} className="w-full" />}
+        recent={
+          <RecentStrip
+            title="Recent pictures"
+            items={recentItems}
+            onSeeAll={onOpenLibrary}
+            empty="Nothing made here yet. Your first picture will show up here."
+          />
+        }
+      />
     </div>
   );
 }

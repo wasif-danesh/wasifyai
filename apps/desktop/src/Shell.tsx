@@ -190,11 +190,13 @@ export function Shell() {
         <ElicitationCards external={externalApi} connections={connectionsApi} />
         <AppBar
           drag
+          navClassName={cn(
+            "gap-0.5 pe-1",
+            MAC ? "ps-[84px]" : "ps-3",
+            !collapsed && "w-64 border-e",
+          )}
           nav={
-            <div
-              data-tauri-drag-region
-              className={cn("flex h-full items-center gap-0.5 pe-1", MAC ? "ps-[84px]" : "ps-3")}
-            >
+            <>
               <Tool label="Back" disabled={!history.back} onClick={() => window.history.back()}>
                 <ArrowLeft className="size-4" />
               </Tool>
@@ -211,7 +213,7 @@ export function Shell() {
               >
                 <PanelLeft className="size-4" />
               </Tool>
-            </div>
+            </>
           }
           title={barView.title}
           showTitle={claims === 0}

@@ -23,6 +23,14 @@ _UTF8 = 0x08000100
 
 
 class _Api:
+    # declared here so a type checker on Linux or Windows, which treats the platform check below
+    # as always failing, still knows the attributes exist
+    sec: ctypes.CDLL
+    cf: ctypes.CDLL
+    key_callbacks: c_void_p
+    value_callbacks: c_void_p
+    true: c_void_p
+
     def __init__(self) -> None:
         if sys.platform != "darwin":
             raise SecretsUnavailable("the keychain is only on macOS")

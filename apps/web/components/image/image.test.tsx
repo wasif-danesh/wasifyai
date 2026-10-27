@@ -97,7 +97,7 @@ const ready = {
 };
 
 describe("ImageScreen (the web app's mount of the shared screen)", () => {
-  it("goes through the BFF, and offers the download and the library", async () => {
+  it("goes through the BFF, and offers the download (the library is a tab of the top bar)", async () => {
     const user = userEvent.setup();
     routes({
       "/api/products/wasifyai-image/runs": () =>
@@ -115,8 +115,6 @@ describe("ImageScreen (the web app's mount of the shared screen)", () => {
       "href",
       "/api/products/wasifyai-image/images/i9/download",
     );
-    await user.click(screen.getByRole("button", { name: /library/i }));
-    expect(push).toHaveBeenCalledWith("/image/library");
   });
 
   it("starts from a recipe sent from the library, once", async () => {

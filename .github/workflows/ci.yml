@@ -32,7 +32,10 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: uv run ruff check . && uv run ruff format --check .
       - run: uv run pyright
+      # the test steps run even when a check before them failed, so one run shows every problem; the
+      # migration must run with them, or every Postgres test fails on a missing table instead
       - name: Migrate (also proves 0001-0003 apply on an empty database)
+        if: ${{ !cancelled() }}
         run: cd services/api && uv run alembic upgrade head
       # Integration tests for Postgres/pgvector and the Redis media pipeline (with a stub worker)
       # run here; the storage, LiteLLM and ComfyUI ones skip themselves.
@@ -49,6 +52,7 @@ jobs:
       # October. Nothing reproduces it (the same command passes in 3 minutes in a Linux container with 7 GB and 2 CPUs and
       # the same Postgres and Redis). A step that has finished keeps its log, so the step that never ends names the group.
       - name: Tests, the platform SDK
+        if: ${{ !cancelled() }}
         timeout-minutes: 6
         shell: bash
         env:

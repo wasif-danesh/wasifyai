@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import {
   ActionsRow,
   Button,
@@ -38,13 +39,19 @@ const VOICES = [
 ];
 
 const noop = () => {};
-const cover = (hue: number) => (
+// covers for the examples, from the brand's own colours (no raw colour: ADR-0081)
+const COVERS = [
+  "from-primary to-brand-2",
+  "from-brand-2 to-brand-3",
+  "from-brand-3 to-primary",
+  "from-primary/70 to-brand-3",
+  "from-brand-2/70 to-primary",
+  "from-brand-3/70 to-brand-2",
+];
+const cover = (i: number) => (
   <span
     aria-hidden="true"
-    className="block size-full"
-    style={{
-      background: `linear-gradient(135deg, oklch(70% 0.12 ${hue}), oklch(45% 0.14 ${hue + 40}))`,
-    }}
+    className={cn("block size-full bg-linear-to-br", COVERS[i % COVERS.length])}
   />
 );
 
@@ -87,9 +94,9 @@ export function DesignPage() {
     { label: "Rename", onSelect: noop },
     { label: "Delete", onSelect: noop, destructive: true },
   ];
-  const recent = [200, 260, 320, 30, 90, 150].map((hue, i) => ({
+  const recent = [0, 1, 2, 3, 4, 5].map((i) => ({
     id: String(i),
-    cover: cover(hue),
+    cover: cover(i),
     label: `Picture ${i + 1}`,
     onOpen: noop,
     current: i === 0,
@@ -448,7 +455,7 @@ export function DesignPage() {
                 kind: "result",
                 children: (
                   <div className="aspect-[3/2] w-full max-w-sm overflow-hidden rounded-md">
-                    {cover(230)}
+                    {cover(0)}
                   </div>
                 ),
                 caption: "A lighthouse on a cliff at sunrise · 1024 × 683 · 24 s",

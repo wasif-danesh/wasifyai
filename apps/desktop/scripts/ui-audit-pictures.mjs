@@ -5,6 +5,7 @@
 //
 //   apps/desktop/scripts/ui-audit.sh            light and dark
 //   apps/desktop/scripts/ui-audit.sh light      one scheme
+//   apps/desktop/scripts/ui-audit.sh light home,image-create   only these screens
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -18,6 +19,8 @@ const BASE = process.env.WASIFYAI_AUDIT_BASE ?? "http://127.0.0.1:8765";
 const TOKEN = process.env.WASIFYAI_AUDIT_TOKEN ?? "";
 const WINDOW = "http://localhost:1420";
 const only = process.argv[2] ?? "";
+const names = new Set((process.argv[3] ?? "").split(",").filter(Boolean));
+const wanted = (name) => names.size === 0 || names.has(name);
 mkdirSync(OUT, { recursive: true });
 
 const polyfill = `
@@ -151,6 +154,7 @@ for (const scheme of ["light", "dark"]) {
   const page = await ctx.newPage();
   const suffix = scheme === "dark" ? "-dark" : "";
   for (const [name, path] of SCREENS) {
+    if (!wanted(name)) continue;
     if (scheme === "dark" && !DARK.has(name)) continue;
     await attempt(name, async () => {
       await open(page, path);

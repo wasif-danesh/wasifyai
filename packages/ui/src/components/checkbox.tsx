@@ -35,7 +35,7 @@ export function Checkbox({
         disabled={disabled}
         aria-describedby={hint ? hintId : undefined}
         className={cn(
-          "peer mt-0.5 grid size-5 shrink-0 place-items-center rounded-[0.3rem] border border-input bg-transparent outline-none transition-[color,box-shadow,background-color]",
+          "peer mt-0.5 grid size-5 shrink-0 place-items-center rounded-sm border border-input bg-transparent outline-none transition-[color,box-shadow,background-color]",
           "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
           "disabled:cursor-not-allowed disabled:opacity-50",
           "data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",

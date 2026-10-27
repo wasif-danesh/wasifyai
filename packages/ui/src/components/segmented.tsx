@@ -40,7 +40,7 @@ export function Segmented({
           value={o.value}
           disabled={o.disabled}
           className={cn(
-            "inline-flex shrink-0 items-center gap-1.5 rounded-[0.3rem] px-3 font-medium text-muted-foreground text-sm outline-none transition-[background-color,color,box-shadow]",
+            "inline-flex shrink-0 items-center gap-1.5 rounded-sm px-3 font-medium text-muted-foreground text-sm outline-none transition-[background-color,color,box-shadow]",
             size === "sm" ? "h-7 px-2.5 text-xs" : "h-8",
             "hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
             "data-[state=on]:bg-surface data-[state=on]:text-foreground data-[state=on]:shadow-xs",

@@ -48,6 +48,7 @@ export function ThemeButton() {
  */
 export function AppBar({
   nav,
+  navClassName,
   title,
   showTitle = true,
   tabs,
@@ -61,6 +62,9 @@ export function AppBar({
 }: {
   /** back, forward, the menu toggle: whatever the app puts at the start */
   nav?: ReactNode;
+  /** classes for the block the nav sits in: the desktop gives it the side menu's width while the menu is open, so
+   * the title starts where the panel does */
+  navClassName?: string;
   title: string;
   /** false while a screen has put its own title in the slot (a chat's, a notebook's) */
   showTitle?: boolean;
@@ -94,23 +98,30 @@ export function AppBar({
       className={cn("flex shrink-0 items-center gap-2 border-b bg-card/60 pe-2", className)}
       style={{ height: APP_BAR_PX }}
     >
-      {nav}
+      {nav ? (
+        <div {...dragRegion} className={cn("flex h-full shrink-0 items-center", navClassName)}>
+          {nav}
+        </div>
+      ) : null}
       {showTitle ? (
         <h1
           {...dragRegion}
-          className="pointer-events-none m-0 max-w-[14rem] shrink-0 truncate font-semibold text-sm max-sm:max-w-[8rem]"
+          className="pointer-events-none m-0 max-w-[14rem] shrink-0 truncate ps-2 font-semibold text-sm max-sm:max-w-[8rem]"
         >
           {title}
         </h1>
       ) : null}
-      {/* a screen's own header goes in here, as items of this row */}
-      <div ref={slot} className="contents" />
+      {/* a screen's own header goes in here, as items of this row, every control at the bar's one height */}
+      <div
+        ref={slot}
+        className="flex min-w-0 items-center gap-2 [&_[data-slot=button]]:h-8 [&_h1]:max-w-[24rem] [&_h1]:truncate [&_h1]:font-semibold [&_h1]:text-sm"
+      />
       {tabs && tabs.length > 0 ? (
         <nav aria-label="Modes" className="ms-2 min-w-0 overflow-x-auto">
           <ul className="m-0 flex list-none items-center gap-0.5 rounded-md bg-muted/60 p-0.5">
             {tabs.map((t) => {
               const look = cn(
-                "inline-flex h-7 shrink-0 items-center whitespace-nowrap rounded-[0.3rem] px-2.5 font-medium text-sm no-underline outline-none transition-colors",
+                "inline-flex h-7 shrink-0 items-center whitespace-nowrap rounded-sm px-2.5 font-medium text-sm no-underline outline-none transition-colors",
                 t.current
                   ? "bg-surface text-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground",

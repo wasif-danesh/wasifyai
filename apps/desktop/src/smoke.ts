@@ -89,14 +89,23 @@ export async function runSmoke(): Promise<void> {
     }
     await until("the caption", () => document.body.textContent?.includes(PROMPT));
 
-    // the recipe: favourite it, read its seed, then make it again and expect the same recipe. Three actions are
-    // buttons; the rest (the heart, the recipe) are behind More
+    // the recipe: favourite it, read its seed, then make it again and expect the same recipe. The stage shows
+    // three actions as buttons and the rest behind More, and which three depends on the screen, so an
+    // action is a button when it is one and a menu item otherwise
     const buttonNamed = (name: string | RegExp) => () =>
       [...document.querySelectorAll("button")].find((b) =>
         typeof name === "string" ? b.textContent?.trim() === name : name.test(b.textContent ?? ""),
       );
-    const menuItem = async (name: string) => {
-      (await until("More", buttonNamed("More"))).click();
+    const act = async (name: string) => {
+      const button = buttonNamed(name)();
+      if (button) {
+        button.click();
+        return;
+      }
+      // the menu opens on a press (pointerdown), as Radix has it; a bare click() opens nothing
+      (await until("More", buttonNamed("More"))).dispatchEvent(
+        new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" }),
+      );
       const item = await until(name, () =>
         [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
           (el) => el.textContent?.trim() === name,
@@ -105,21 +114,21 @@ export async function runSmoke(): Promise<void> {
       item.click();
     };
     const readSeed = async () => {
-      if (!document.querySelector("dl")) await menuItem("Recipe");
+      if (!document.querySelector("dl")) await act("Recipe");
       const dd = await until("the seed", () => document.querySelector("dl dd.font-mono"));
       return Number(dd.textContent);
     };
-    await menuItem("Add to favourites");
+    await act("Add to favourites");
     await until("the favourite mark", () => document.body.textContent?.includes("· favourite"));
     const seed = await readSeed();
     if (!Number.isInteger(seed)) throw new Error(`the recipe has no seed: ${seed}`);
-    (await until("Make it again", buttonNamed(/Make it again/))).click();
+    await act("Make it again");
     const again = await until("the second picture", () => {
       const img = onStage(PROMPT);
       return img?.complete && img.naturalWidth > 0 && img.src !== picture.src ? img : null;
     });
     const secondSize = `${again.naturalWidth}x${again.naturalHeight}`;
-    await until("the second recipe", buttonNamed(/Make it again/));
+    await until("the second recipe", buttonNamed("More"));
     const seedAgain = await readSeed();
     if (seedAgain !== seed) throw new Error(`the seed changed: ${seed} then ${seedAgain}`);
     if (secondSize !== firstSize) {

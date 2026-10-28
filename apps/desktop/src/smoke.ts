@@ -66,15 +66,20 @@ export async function runSmoke(): Promise<void> {
     await new Promise((r) => setTimeout(r, 100));
     const box = await until("the prompt box", () => document.querySelector("textarea"));
     type(box, PROMPT);
-    const go = await until("the Generate button", () =>
+    const go = await until("the Make the picture button", () =>
       [...document.querySelectorAll("button")].find(
-        (b) => b.textContent?.trim() === "Generate" && !b.disabled,
+        (b) => b.textContent?.trim() === "Make the picture" && !b.disabled,
       ),
     );
     go.click();
 
+    // the picture lands on the stage (stage U3 of the UI plan)
+    const onStage = (alt: string) =>
+      document.querySelector<HTMLImageElement>(
+        `[data-slot="stage"][data-state="result"] img[alt="${alt}"]`,
+      );
     const picture = await until("the finished picture", () => {
-      const img = document.querySelector<HTMLImageElement>(`figure img[alt="${PROMPT}"]`);
+      const img = onStage(PROMPT);
       return img?.complete && img.naturalWidth > 0 ? img : null;
     });
     // read now: the screen re-renders on the way to the second picture, and an element it let go of can read 0x0
@@ -82,27 +87,35 @@ export async function runSmoke(): Promise<void> {
     if (!picture.src.startsWith("http://127.0.0.1:") || !picture.src.includes("/files/")) {
       throw new Error(`the picture did not come from the engine: ${picture.src}`);
     }
-    await until("the ready message", () =>
-      document.body.textContent?.includes("Your image is ready"),
-    );
+    await until("the caption", () => document.body.textContent?.includes(PROMPT));
 
-    // the recipe: favourite it, read its seed, then make it again and expect the same recipe
+    // the recipe: favourite it, read its seed, then make it again and expect the same recipe. Three actions are
+    // buttons; the rest (the heart, the recipe) are behind More
     const buttonNamed = (name: string | RegExp) => () =>
       [...document.querySelectorAll("button")].find((b) =>
         typeof name === "string" ? b.textContent?.trim() === name : name.test(b.textContent ?? ""),
       );
+    const menuItem = async (name: string) => {
+      (await until("More", buttonNamed("More"))).click();
+      const item = await until(name, () =>
+        [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+          (el) => el.textContent?.trim() === name,
+        ),
+      );
+      item.click();
+    };
     const readSeed = async () => {
-      if (!document.querySelector("dl")) (await until("Recipe", buttonNamed("Recipe"))).click();
+      if (!document.querySelector("dl")) await menuItem("Recipe");
       const dd = await until("the seed", () => document.querySelector("dl dd.font-mono"));
       return Number(dd.textContent);
     };
-    (await until("Add to favourites", buttonNamed("Add to favourites"))).click();
-    await until("the favourite mark", buttonNamed("Favourite"));
+    await menuItem("Add to favourites");
+    await until("the favourite mark", () => document.body.textContent?.includes("· favourite"));
     const seed = await readSeed();
     if (!Number.isInteger(seed)) throw new Error(`the recipe has no seed: ${seed}`);
     (await until("Make it again", buttonNamed(/Make it again/))).click();
     const again = await until("the second picture", () => {
-      const img = document.querySelector<HTMLImageElement>(`figure img[alt="${PROMPT}"]`);
+      const img = onStage(PROMPT);
       return img?.complete && img.naturalWidth > 0 && img.src !== picture.src ? img : null;
     });
     const secondSize = `${again.naturalWidth}x${again.naturalHeight}`;

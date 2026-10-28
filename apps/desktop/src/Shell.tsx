@@ -9,7 +9,6 @@ import {
   JobTray,
   LipSyncPage,
   LyricsPage,
-  MENU_ENTRIES,
   MusicPage,
   SearchPalette,
   SpeakPage,
@@ -21,13 +20,14 @@ import {
   WindowBarProvider,
   cn,
   jobLabel,
+  placesOf,
   presetOf,
 } from "@wasifyai/ui";
 import { ArrowLeft, ArrowRight, PanelLeft } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { client, connectionsApi, creationsApi, externalApi, voiceApi } from "./api";
-import { barFor, resolveItem } from "./menu";
+import { resolveItem, titleFor } from "./menu";
 import { CreatePage } from "./pages/Create";
 import { CreationsPage, navFor } from "./pages/Creations";
 import { HomePage } from "./pages/Home";
@@ -158,19 +158,16 @@ export function Shell() {
     () => resolveItem(route, go, { conversationId, notebook }),
     [route, go, conversationId, notebook],
   );
-  const barView = useMemo(() => barFor(resolve, route), [resolve, route]);
-  const places = useMemo(() => {
-    const out = MENU_ENTRIES.flatMap((entry) =>
-      entry.items.flatMap((item) => {
-        const view = resolve(item.id);
-        if (!view || "hidden" in view || !view.onSelect) return [];
-        const label = entry.items.length > 1 ? `${entry.label}: ${item.label}` : entry.label;
-        return [{ id: item.id, label, onSelect: view.onSelect }];
-      }),
-    );
-    out.push({ id: "settings", label: "Settings", onSelect: () => go("settings") });
-    return out;
-  }, [resolve, go]);
+  const title = useMemo(() => titleFor(resolve, route), [resolve, route]);
+  const places = useMemo(
+    () => [
+      ...placesOf(resolve).flatMap((p) =>
+        p.view.onSelect ? [{ id: p.id, label: p.label, onSelect: p.view.onSelect }] : [],
+      ),
+      { id: "settings", label: "Settings", onSelect: () => go("settings") },
+    ],
+    [resolve, go],
+  );
   const set = (v: boolean) => {
     setCollapsed(v);
     try {
@@ -215,9 +212,8 @@ export function Shell() {
               </Tool>
             </>
           }
-          title={barView.title}
+          title={title}
           showTitle={claims === 0}
-          tabs={barView.tabs}
           slot={setSlot}
           tray={<JobTray load={runningJobs} />}
           onSearch={openSearch}

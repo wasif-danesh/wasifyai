@@ -51,7 +51,7 @@ const SCREENS = [
     path: "/chat/0f3c1a52-7a49-4d1e-9a31-8f1d5b6c7d80",
     ready: /a poem about a fox/i,
   },
-  { name: "image-create", path: "/image", ready: /create images/i },
+  { name: "image-create", path: "/image", ready: /make a picture/i },
   { name: "image-edit", path: "/image/edit", ready: /edit a picture/i },
   { name: "image-library", path: "/image/library", ready: /your images|library/i },
   { name: "video-create", path: "/video", ready: /make a video/i },
@@ -66,8 +66,8 @@ for (const screen of SCREENS) {
     await settle(page);
     await noSideScroll(page);
     const nav = await menu(page);
-    for (const entry of ["Chat", "Notebooks", "Images", "Video", "Speech", "Music", "Library"]) {
-      await expect(nav.getByRole("link", { name: entry, exact: true })).toBeVisible();
+    for (const group of ["Notebook", "Images", "Video", "Voice", "Music"]) {
+      await expect(nav.getByRole("button", { name: group, exact: true })).toBeVisible();
     }
     await expect(nav.getByRole("link", { name: "Wasify AI, home" })).toBeVisible();
     // one bar of one height on every screen (ADR-0093 decision 1)

@@ -10,7 +10,10 @@ test.beforeEach(async ({ page }) => {
 
 test("the design page shows every component without sideways scroll @layout", async ({ page }) => {
   await page.goto("/design");
-  await expect(page.getByRole("heading", { name: "Design", level: 1 })).toBeVisible();
+  // the page's own heading, inside its content (the bar carries a title of its own)
+  await expect(
+    page.locator("#main").getByRole("heading", { name: "Design", level: 1 }),
+  ).toBeVisible();
   for (const section of ["Words", "Field", "Select", "Stage", "RecentStrip"]) {
     await expect(page.getByRole("region", { name: section })).toBeVisible();
   }
@@ -23,7 +26,9 @@ test("the design page shows every component without sideways scroll @layout", as
 
 test("the design page looks right @visual", async ({ page }) => {
   await page.goto("/design");
-  await expect(page.getByRole("heading", { name: "Design", level: 1 })).toBeVisible();
+  await expect(
+    page.locator("#main").getByRole("heading", { name: "Design", level: 1 }),
+  ).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(300);
   await expect(page).toHaveScreenshot("design.png", { fullPage: true });

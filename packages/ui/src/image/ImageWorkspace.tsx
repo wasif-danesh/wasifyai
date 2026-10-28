@@ -443,7 +443,8 @@ export function ImageWorkspace({
           ? [
               {
                 label: "Download",
-                onSelect: () => window.open(downloadHref(shown), "_blank"),
+                href: downloadHref(shown),
+                download: true,
                 icon: <Save aria-hidden="true" />,
               },
             ]

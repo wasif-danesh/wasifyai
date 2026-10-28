@@ -67,6 +67,21 @@ for (const [name, path] of SCREENS) {
   });
 }
 
+test("side menu open with every group", async ({ page }) => {
+  await page.goto("/image");
+  const width = page.viewportSize()?.width ?? 1280;
+  if (width < 768) {
+    await page.getByRole("button", { name: /show or hide the side panel/i }).click();
+  }
+  const nav = page.getByRole("navigation", { name: "Main" });
+  for (const group of ["Notebook", "Images", "Video", "Voice", "Music"]) {
+    const button = nav.getByRole("button", { name: group, exact: true });
+    if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+    await page.waitForTimeout(150);
+  }
+  await shot(page, "menu-open");
+});
+
 test("search open", async ({ page }) => {
   await page.goto("/image");
   await page.keyboard.press("Meta+K");

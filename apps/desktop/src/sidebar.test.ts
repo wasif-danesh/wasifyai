@@ -82,8 +82,8 @@ describe("the title the top bar shows when a screen gives none", () => {
   it("is the menu's own words for every screen that has a menu item", () => {
     expect(routeTitle("create")).toBe("Images");
     expect(routeTitle("extend")).toBe("Video");
-    expect(routeTitle("speak")).toBe("Speech");
-    expect(routeTitle("dub")).toBe("Studio");
+    expect(routeTitle("speak")).toBe("Voice");
+    expect(routeTitle("dub")).toBe("Voice");
     expect(routeTitle("home")).toBe("Chat");
     expect(routeTitle("models")).toBe("Model hub");
     expect(routeTitle("train")).toBe("Train models");

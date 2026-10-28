@@ -246,7 +246,7 @@ test("what a model writes is not markup, and only http(s) links open @layout", a
     DONE,
   ]);
   await ask(page, "x");
-  await expect(page.getByRole("link", { name: "ok" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "ok", exact: true })).toHaveAttribute(
     "href",
     "https://example.com/",
   );

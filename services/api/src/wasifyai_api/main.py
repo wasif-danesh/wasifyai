@@ -818,7 +818,10 @@ def create_app(
                     )
                 # the SDK's session manager lives as long as the engine (spike S1)
                 async with app.state.mcp.session_manager.run():
-                    await app.state.fixed_port.start_if_saved()
+                    # the opt-in fixed port is the desktop's (ADR-0069, M3); a service listens on
+                    # its own port, and its database may not be migrated yet when it starts
+                    if desktop:
+                        await app.state.fixed_port.start_if_saved()
                     try:
                         yield
                     finally:

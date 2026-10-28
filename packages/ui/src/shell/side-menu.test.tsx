@@ -4,12 +4,12 @@ import userEvent from "@testing-library/user-event";
 import { Shield } from "lucide-react";
 import { describe, expect, it, vi } from "vitest";
 import { SideMenu } from "./SideMenu";
-import { type ItemResolver, MENU_ENTRIES, MENU_GROUPS, entryOf, placeOf } from "./menu";
+import { type ItemResolver, MENU_GROUPS, placesOf, titleOf } from "./menu";
 
 const none: ItemResolver = () => undefined;
 
 describe("the menu definition", () => {
-  it("has the items in groups, each id once, and eleven entries over them", () => {
+  it("has the groups in order, each with its items", () => {
     expect(MENU_GROUPS.map((g) => g.label)).toEqual([
       "Notebook",
       "Images",
@@ -17,129 +17,149 @@ describe("the menu definition", () => {
       "Voice",
       "Music",
     ]);
+    const items = (id: string) => MENU_GROUPS.find((g) => g.id === id)?.items.map((i) => i.label);
+    expect(items("notebook")).toEqual(["Create", "View notebooks"]);
+    expect(items("video")).toEqual(["Create", "Animate an image", "Extend video", "Your videos"]);
+    expect(items("music")).toEqual(["Create", "Your music", "Lyrics", "Split into parts"]);
+    expect(items("voice")).toHaveLength(8);
     const ids = MENU_GROUPS.flatMap((g) => g.items.map((i) => i.id));
     expect(new Set(ids).size).toBe(ids.length); // every id is unique
-    expect(MENU_ENTRIES.map((e) => e.label)).toEqual([
-      "Chat",
-      "Notebooks",
-      "Images",
-      "Video",
-      "Motion graphics",
-      "Speech",
-      "Studio",
-      "Music",
-      "3D model",
-      "Library",
-      "Train models",
-      "Model hub",
-    ]);
-    // every entry's items are real items, and the eight voice tools are split between Speech and Studio
-    const items = (id: string) => MENU_ENTRIES.find((e) => e.id === id)?.items.map((i) => i.label);
-    expect(items("images")).toEqual(["Create", "Edit", "Inpaint", "Reference", "Your images"]);
-    expect(items("speech")).toEqual([
-      "Text to speech",
-      "Speech to text",
-      "Voices",
-      "Change a voice",
-      "Edit speech",
-    ]);
-    expect(items("studio")).toEqual(["Dub a recording", "Audiobook", "Lip sync"]);
-    expect(entryOf("voice.dub")?.id).toBe("studio");
-    expect(entryOf("notebook.create")).toBeUndefined(); // reached from the Notebooks screen, not the menu
-  });
-
-  it("says where a person is from what is current, with tabs when the entry has several tools", () => {
-    const at =
-      (current: string): ItemResolver =>
-      (id) => ({ href: `/${id}`, current: id === current });
-    const images = placeOf(at("images.edit"));
-    expect(images?.entry.id).toBe("images");
-    expect(images?.item?.id).toBe("images.edit");
-    expect(images?.tabs.map((t) => t.item.label)).toEqual([
-      "Create",
-      "Edit",
-      "Inpaint",
-      "Reference",
-      "Your images",
-    ]);
-    const train = placeOf(at("train"));
-    expect(train?.entry.label).toBe("Train models");
-    expect(train?.tabs).toEqual([]); // one tool: no tabs
-    expect(placeOf(() => undefined)).toBeNull();
-    // a tool the app does not serve is not a tab
-    const some: ItemResolver = (id) =>
-      id === "voice.speak"
-        ? { href: "/speak", current: true }
-        : id === "voice.transcribe"
-          ? { href: "/t" }
-          : undefined;
-    expect(placeOf(some)?.tabs.map((t) => t.item.id)).toEqual(["voice.speak", "voice.transcribe"]);
   });
 });
 
 describe("SideMenu", () => {
-  it("shows what an app does not serve as disabled and marked Soon", () => {
-    render(<SideMenu resolve={none} />);
-    const chat = screen.getByRole("button", { name: /^Chat/ });
-    expect(chat).toBeDisabled();
-    expect(within(chat).getByText("Soon")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Video/ })).toBeDisabled();
-  });
-
-  it("is one click to a tool: an entry opens its first tool, or stays on the open one", async () => {
+  it("shows what an app does not serve as disabled and marked Soon", async () => {
     const user = userEvent.setup();
-    const go = vi.fn();
-    const resolve: ItemResolver = (id) =>
-      id.startsWith("video.") || id === "chat"
-        ? { current: id === "video.extend", onSelect: () => go(id) }
-        : undefined;
-    render(<SideMenu resolve={resolve} />);
-    const video = screen.getByRole("button", { name: "Video" });
-    expect(video).toHaveAttribute("aria-current", "page");
-    await user.click(video);
-    expect(go).toHaveBeenCalledWith("video.extend"); // the open tool
-    await user.click(screen.getByRole("button", { name: "Chat" }));
-    expect(go).toHaveBeenCalledWith("chat");
-    // no group to open, no second level
-    expect(screen.queryByRole("button", { name: /Your videos/ })).toBeNull();
-    expect(screen.queryByRole("button", { expanded: true })).toBeNull();
+    render(<SideMenu resolve={none} />);
+    expect(screen.getByRole("button", { name: /new chat/i })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /^Video/ }));
+    const create = screen.getByRole("button", { name: /Create/ });
+    expect(create).toBeDisabled();
+    expect(within(create).getByText("Soon")).toBeInTheDocument();
   });
 
-  it("links an entry where the app has addresses and marks the page", () => {
+  it("opens one group at a time", async () => {
+    const user = userEvent.setup();
+    render(<SideMenu resolve={none} />);
+    await user.click(screen.getByRole("button", { name: /^Images/ }));
+    expect(screen.getByRole("button", { name: /Your images/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Music/ }));
+    expect(screen.queryByRole("button", { name: /Your images/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Your music/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Music/ }));
+    expect(screen.queryByRole("button", { name: /Your music/ })).toBeNull();
+  });
+
+  it("keeps the group of the current page open and marks the page", () => {
     const resolve: ItemResolver = (id) =>
-      id === "video.library"
-        ? { href: "/video/library", current: true }
-        : id === "video.create"
-          ? { href: "/video" }
-          : undefined;
+      id === "video.library" ? { href: "/video/library", current: true } : undefined;
     render(<SideMenu resolve={resolve} />);
-    const here = screen.getByRole("link", { name: "Video" });
-    expect(here).toHaveAttribute("href", "/video/library"); // stays on the open tool
+    const here = screen.getByRole("link", { name: /Your videos/ });
+    expect(here).toHaveAttribute("href", "/video/library");
     expect(here).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Video" })).toHaveAttribute("aria-expanded", "true");
   });
 
-  it("leaves out an entry the app hides on purpose", () => {
-    const resolve: ItemResolver = (id) => (id === "models" ? { hidden: true } : undefined);
+  it("lets a person open another group while on a page, and follows them to the next page", async () => {
+    const user = userEvent.setup();
+    let page = "video.library";
+    const resolve: ItemResolver = (id) =>
+      id === page ? { href: `/${id}`, current: true } : id.startsWith("music.") ? {} : undefined;
+    const { rerender } = render(<SideMenu resolve={resolve} />);
+    expect(screen.getByRole("link", { name: /Your videos/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Music/ }));
+    expect(screen.getByRole("button", { name: /Your music/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Your videos/ })).toBeNull();
+    // opening a page of another group opens that group again
+    page = "images.library";
+    rerender(<SideMenu resolve={resolve} />);
+    expect(screen.getByRole("link", { name: /Your images/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Your music/ })).toBeNull();
+    // and the group of the current page can be closed
+    await user.click(screen.getByRole("button", { name: /^Images/ }));
+    expect(screen.queryByRole("link", { name: /Your images/ })).toBeNull();
+  });
+
+  it("runs what an item does and leaves hidden items out", async () => {
+    const onSelect = vi.fn();
+    const resolve: ItemResolver = (id) =>
+      id === "chat"
+        ? { onSelect, current: true }
+        : id === "models"
+          ? { hidden: true }
+          : id === "library"
+            ? { href: "/creations" }
+            : undefined;
+    const user = userEvent.setup();
     render(<SideMenu resolve={resolve} />);
+    const chat = screen.getByRole("button", { name: /new chat/i });
+    expect(chat).toHaveAttribute("aria-current", "page");
+    await user.click(chat);
+    expect(onSelect).toHaveBeenCalledOnce();
     expect(screen.queryByText("Model hub")).toBeNull();
-    expect(screen.getByRole("button", { name: /Train models/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Library/ })).toHaveAttribute("href", "/creations");
+    expect(screen.getByRole("button", { name: /Train/ })).toBeDisabled();
   });
 
-  it("shows the extra items, the recents and the footer it is given", () => {
-    const select = vi.fn();
+  it("draws links with the app's own component", () => {
+    const Custom = ({ href, children }: { href: string; children: React.ReactNode }) => (
+      <a href={href} data-custom="yes">
+        {children}
+      </a>
+    );
     render(
+      <SideMenu resolve={(id) => (id === "library" ? { href: "/x" } : undefined)} link={Custom} />,
+    );
+    expect(screen.getByRole("link", { name: /Library/ })).toHaveAttribute("data-custom", "yes");
+  });
+
+  it("makes the brand a link when it has somewhere to go", () => {
+    const { rerender } = render(<SideMenu resolve={none} />);
+    expect(screen.queryByRole("link", { name: /home/i })).toBeNull();
+    rerender(<SideMenu resolve={none} brandHref="/" />);
+    expect(screen.getByRole("link", { name: "Wasify AI, home" })).toHaveAttribute("href", "/");
+  });
+
+  it("shows recents, extra items and the footer only when given", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<SideMenu resolve={none} />);
+    expect(screen.queryByText("Recents")).toBeNull();
+
+    const open = vi.fn();
+    rerender(
       <SideMenu
         resolve={none}
-        recents={{ items: [{ id: "a", title: "Fox poem", current: true, onSelect: select }] }}
-        extra={[{ id: "admin", label: "Admin", icon: Shield, href: "/admin", current: false }]}
-        footer={<span>Ada</span>}
+        recents={{ items: [{ id: "c1", title: "Fox poem", current: true, onSelect: open }] }}
+        extra={[{ id: "admin", label: "Admin", icon: Shield, href: "/admin" }]}
+        footer={<p>Signed in as Sam</p>}
       />,
     );
+    const chat = screen.getByRole("button", { name: "Fox poem" });
+    expect(chat).toHaveAttribute("aria-current", "page");
+    await user.click(chat);
+    expect(open).toHaveBeenCalled();
     expect(screen.getByRole("link", { name: /Admin/ })).toHaveAttribute("href", "/admin");
-    expect(screen.getByRole("button", { name: "Fox poem" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    expect(screen.getByText("Ada")).toBeInTheDocument();
+    expect(screen.getByText("Signed in as Sam")).toBeInTheDocument();
+
+    rerender(<SideMenu resolve={none} recents={{ items: [] }} />);
+    expect(screen.getByText("No chats yet")).toBeInTheDocument();
+  });
+});
+
+describe("the bar's words for the menu", () => {
+  it("names the group a person is in, and lists every served tool for the search", () => {
+    const at =
+      (current: string): ItemResolver =>
+      (id) =>
+        id === "models" ? { hidden: true } : { href: `/${id}`, current: id === current };
+    expect(titleOf(at("images.edit"))).toBe("Images");
+    expect(titleOf(at("voice.dub"))).toBe("Voice");
+    expect(titleOf(at("train"))).toBe("Train models");
+    expect(titleOf(at("chat"))).toBe("Chat");
+    expect(titleOf(() => undefined)).toBeNull();
+    const places = placesOf(at("chat"));
+    expect(places.map((p) => p.label)).toContain("Images: Edit");
+    expect(places.map((p) => p.label)).toContain("Motion graphics");
+    expect(places.some((p) => p.id === "models")).toBe(false); // hidden on purpose: not offered
   });
 });

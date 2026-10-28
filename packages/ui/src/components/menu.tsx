@@ -7,6 +7,9 @@ import { cn } from "../cn";
 export type MenuItem = {
   label: string;
   onSelect: () => void;
+  /** an address instead: the item is a real link */
+  href?: string;
+  download?: boolean;
   icon?: ReactNode;
   destructive?: boolean;
   disabled?: boolean;
@@ -36,7 +39,8 @@ export function Menu({
             <MenuPrimitive.Item
               key={item.label}
               disabled={item.disabled}
-              onSelect={item.onSelect}
+              onSelect={item.href ? undefined : item.onSelect}
+              asChild={Boolean(item.href)}
               className={cn(
                 "flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden",
                 "focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
@@ -45,8 +49,17 @@ export function Menu({
                 "[&_svg]:size-4 [&_svg]:shrink-0",
               )}
             >
-              {item.icon}
-              {item.label}
+              {item.href ? (
+                <a href={item.href} download={item.download || undefined}>
+                  {item.icon}
+                  {item.label}
+                </a>
+              ) : (
+                <>
+                  {item.icon}
+                  {item.label}
+                </>
+              )}
             </MenuPrimitive.Item>
           ))}
         </MenuPrimitive.Content>

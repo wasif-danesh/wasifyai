@@ -36,29 +36,9 @@ function Window({ header }: { header: "none" | "tools" | "title" }) {
 }
 
 describe("the one top bar", () => {
-  it("shows the title and the screen's tabs, the current one marked", async () => {
-    const go = vi.fn();
-    render(
-      <AppBar
-        title="Images"
-        theme={false}
-        tabs={[
-          { id: "create", label: "Create", current: true, onSelect: () => go("create") },
-          { id: "edit", label: "Edit", current: false, onSelect: () => go("edit") },
-          { id: "lib", label: "Your images", current: false, href: "/image/library" },
-        ]}
-      />,
-    );
+  it("shows the title", () => {
+    render(<AppBar title="Images" theme={false} />);
     expect(screen.getByRole("heading", { name: "Images" })).toBeInTheDocument();
-    const modes = screen.getByRole("navigation", { name: "Modes" });
-    expect(screen.getByRole("button", { name: "Create" })).toHaveAttribute("aria-current", "page");
-    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
-    expect(go).toHaveBeenCalledWith("edit");
-    expect(screen.getByRole("link", { name: "Your images" })).toHaveAttribute(
-      "href",
-      "/image/library",
-    );
-    expect(modes).toBeInTheDocument();
   });
 
   it("keeps its title while a screen only adds its tools, and yields it to a screen's own title", () => {

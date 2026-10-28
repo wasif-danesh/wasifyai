@@ -8,9 +8,10 @@ owner picks the first stage.
 
 ## Principles (the whole app)
 
-1. **One shell, on the window and on the web.** One side menu where every tool is one click away; one top bar of
-   one height on every screen (back and forward on the window, the title, the model button, the screen's tabs,
-   the job tray, search, the theme); no breadcrumb, no "Group: Item" title, no second bar.
+1. **One shell, on the window and on the web.** One side menu (its groups open one at a time, as before: the
+   owner kept them over a flat menu with tabs in the bar, 2026-10-28); one top bar of one height on every screen
+   (back and forward on the window, the title, the model button, the job tray, search, the theme); no breadcrumb,
+   no "Group: Item" title, no second bar.
 2. **One make screen.** Every tool that makes something uses the same three-part layout: **ask** (the prompt and
    the few controls that matter, "For experts" collapsed, the main button always visible), **stage** (where the
    result appears, with progress and the last result's actions), **recent** (a strip of the last things this tool
@@ -51,38 +52,25 @@ menu, and Servers is not shown at all until a server is connected. The web's Exp
 
 ### The side menu
 
-| Today (25 entries, 5 groups) | Proposed (11 entries, no groups to open) |
-|---|---|
-| New chat | **Chat** (new chat; recents under it) |
-| Notebook › Create, View notebooks | **Notebooks** |
-| Images › Create, Edit, Inpaint, Reference, Your images | **Pictures** (one screen; Create, Edit, Inpaint, Reference are tabs on its stage) |
-| Video › Create, Animate, Extend, Your videos | **Video** (one screen; Create, Animate, Extend as tabs) |
-| Motion graphics | **Motion graphics** |
-| Voice › Text to speech, Speech to text, Lip sync, Voices, Change a voice, Edit speech, Dub, Audiobook | **Speech** (Text to speech with the voices panel, Transcribe, Change a voice, Edit speech as tabs) and **Studio** (Dub, Audiobook, Lip sync: the multi-step tools, as tabs) |
-| Music › Create, Your music, Lyrics, Split into parts | **Music** (Make a song with Lyrics inside it; Split as a tab) |
-| 3D model | **3D model** |
-| Library | **Library** (My creations, with kind filters and the detail view) |
-| Train models | **Teach** |
-| Model hub | **Models** |
-| (Settings in the footer) | **Settings** (footer, with the person) |
-
-Groups that open one at a time go; a tool is one click. The magnifier in the menu goes: search is ⌘K and the box
-in the bar, and it opens the Library. Voices live inside Speech as a panel (pick a voice by hearing it), not as a
-page. "Your images", "Your videos" and "Your music" go; the Library's kind filter and each screen's recent strip
-replace them. The names "Speech" and "Studio" and the "Pictures" rename are owner decisions (decision 1 below).
+The groups stay as they are (the owner's decision of 2026-10-28, which closes decision 3): Notebook, Images,
+Video, Voice and Music open one at a time with their tools under them, and Motion graphics, 3D model, Library,
+Train models and Model hub follow. The magnifier in the menu goes: search is ⌘K and the box in the bar, and it opens
+the Library. "Your images", "Your videos" and "Your music" stay as items of their groups until stage U8 replaces
+them with the one Library and each screen's recent strip. Voices stays a page until U5 makes it a panel in Text to
+speech. The names (decision 1) are untouched.
 
 ### The top bar
 
 One row, 48 px, on the window and on the web: back and forward (window only; the web has the browser's); the
-menu toggle; the screen's title; the model button (a real name, a readiness dot, a chevron) where the screen uses
-a model; the screen's tabs where it has modes; at the right the job tray (a count and a bar, opening the Running
-now list), search (⌘K, which also opens any tool by name), the theme. No second bar: a screen's own sub-title (a
-notebook's name) is the title. The window keeps its 36 px traffic-light inset inside the same row.
+menu toggle; the screen's title (its group's name); the model button (a real name, a readiness dot, a chevron)
+where the screen uses a model; at the right the job tray (a count and a bar, opening the Running now list),
+search (⌘K, which also opens any tool by name), the theme. No second bar: a screen's own sub-title (a notebook's
+name) is the title. The window keeps its traffic-light inset inside the same row.
 
 ### The make screen
 
 ```
-┌ top bar: ‹ › ☰  Title · [● model ▾] ·        [tab][tab][tab] · tray · ⌘K · theme ┐
+┌ top bar: ‹ › ☰  Title · [● model ▾] ·                        tray · ⌘K · theme ┐
 ├──────────────────┬──────────────────────────────────────────────────────────────┤
 │ ASK              │ STAGE                                                        │
 │ prompt           │ the result (picture, player with waveform, video)            │
@@ -221,17 +209,16 @@ the web's `/design` page (`apps/web/components/design/DesignPage.tsx`) with ever
 (`design.png`, `design-dark.png`, `design-phone.png`). No screen changed. The unit tests are
 `components/foundation.test.tsx`.
 
-**Built:** U2 on 2026-10-27: `AppBar` (`packages/ui/src/app-bar.tsx`: nav, title, the screen's header slot,
-tabs, the tray, search, the theme; 48 px on both apps), `MENU_ENTRIES` with `placeOf` in `shell/menu.ts` (eleven
-entries; `MENU_GROUPS` stays as the list of item ids the actions and the parity rows name), the `SideMenu` without
-groups, `SearchPalette` (⌘K: any tool by name, a creation by what it is about), `JobTray` with Stop (`jobLabel`
+**Built:** U2 on 2026-10-27, changed 2026-10-28: `AppBar` (`packages/ui/src/app-bar.tsx`: nav, title, the
+screen's header slot, the tray, search, the theme; 48 px on both apps), `titleOf` and `placesOf` in
+`shell/menu.ts` (the bar's title and the search's places from `MENU_GROUPS`), the `SideMenu` with its groups (a
+flat menu with the modes as tabs in the bar was built first and taken out again the next day: the owner wanted the
+groups back), `SearchPalette` (⌘K: any tool by name, a creation by what it is about), `JobTray` with Stop (`jobLabel`
 for the action ids), `useTheme` and `ThemeButton` shared by both apps; the desktop's `Shell.tsx` and the web's
 `WebShell.tsx` use them, the web's `TopBar`, breadcrumb and `CommandMenu` are gone, the desktop's `TitleBar` is
-gone; `PageHeader` claims the bar's title only when it carries one (`title`), so the Images, Video, Speech, 3D and
-chat screens keep the entry's name as the title and put only the model button in the bar. The eight voice tools
-are split between **Speech** (Text to speech, Speech to text, Voices, Change a voice, Edit speech) and **Studio**
-(Dub, Audiobook, Lip sync); "Images", "Train models" and "Model hub" keep their names until decision 1 is taken
-(a one-line change each in `MENU_ENTRIES`). The tray lists the engine's running actions on the desktop and the
+gone; `PageHeader` claims the bar's title only when it carries one (`title`), so the Images, Video, voice, 3D and
+chat screens keep the group's name as the title and put only the model button in the bar. The menu's names are
+untouched (decision 1). The tray lists the engine's running actions on the desktop and the
 clips being made on the web (the web has no `/actions/jobs` yet). Checked with the menu walk, the shared-screens
 layout checks (one bar height on every screen), the unit tests of both shells and the pictures taken again.
 
@@ -257,8 +244,7 @@ recent strips have one source.
    "Models" for Model hub. The design guide already says picture and Teach; the menu does not.
 2. **Removing the per-product libraries** ("Your images", "Your videos", "Your music") in favour of the one
    Library with a recent strip on each make screen.
-3. **The menu without groups** (11 entries, tools as tabs) against today's five groups: it changes every route
-   (old addresses redirect).
+3. ~~The menu without groups~~ Decided 2026-10-28: the groups stay, and a product's modes stay under them.
 4. **An accessibility checker as a dependency** (`@axe-core/playwright`, MPL-2.0) for U12; the backlog (B2) has
    waited on this since the design system.
 5. **The web's Explore page**: folded into the home (this plan), or kept as a marketing page outside the app.

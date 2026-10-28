@@ -19,10 +19,11 @@ The owner is not happy with the look and feel or the flows, and wants the app ad
 
 ## Decision
 
-1. **One shell, on the window and on the web.** A side menu with eleven entries and no groups (a tool is one
-   click; a product's modes are tabs on its screen), and one `AppBar` of one height on every screen of both apps
-   holding back and forward (window), the title, the model button, the screen's tabs, the job tray, search (⌘K)
-   and the theme. No breadcrumb; no "Group: Item" title; no second bar; no magnifier in the menu.
+1. **One shell, on the window and on the web.** The side menu as it was (its groups open one at a time; the
+   owner tried a flat menu with the modes as tabs in the bar on 2026-10-27 and asked for the groups back on
+   2026-10-28), and one `AppBar` of one height on every screen of both apps holding back and forward (window),
+   the title, the model button, the job tray, search (⌘K) and the theme. No breadcrumb; no "Group: Item" title;
+   no second bar; no magnifier in the menu.
 2. **One make screen** (`MakeScreen` in `packages/ui`): **ask** (the prompt, the few controls that matter,
    the experts' fields collapsed under "For experts", the main button always visible), **stage** (the result with its empty, progress, error and
    result states and the result's actions), **recent** (the last creations of the kind from the one library).
@@ -65,5 +66,6 @@ The owner is not happy with the look and feel or the flows, and wants the app ad
 
 ## Open questions
 
-The seven owner decisions in the plan: names, the per-product libraries, the menu without groups, the
-accessibility checker dependency, the Explore page, mockup review per stage, and the chat box's pills.
+The owner decisions in the plan: names, the per-product libraries, the accessibility checker dependency, the
+Explore page, mockup review per stage, and the chat box's pills. The menu without groups was tried and decided
+against (2026-10-28).

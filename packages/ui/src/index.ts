@@ -43,7 +43,7 @@ export { Skeleton } from "./components/skeleton";
 export { Input } from "./components/input";
 export { AVOID, NOUNS, type Noun, appearsHere, makeLabel, makingLabel, plural } from "./words";
 // the one shell (ADR-0093, stage U2)
-export { APP_BAR_PX, AppBar, type BarTab, ThemeButton } from "./app-bar";
+export { APP_BAR_PX, AppBar, ThemeButton } from "./app-bar";
 export { type Theme, useTheme } from "./shell/theme";
 export { type Place, SearchPalette } from "./shell/search-palette";
 export { JobTray, TRAY_POLL_MS, type TrayJob, jobLabel } from "./shell/job-tray";
@@ -192,18 +192,16 @@ export {
   type VoiceTarget,
 } from "./voice/pages";
 export {
-  type BarPlace,
   CHAT_ITEM,
   EXTRA_ITEMS,
-  MENU_ENTRIES,
   MENU_GROUPS,
   type ItemResolver,
   type ItemView,
-  type MenuEntryDef,
   type MenuGroupDef,
   type MenuItemDef,
-  entryOf,
-  placeOf,
+  groupOf,
+  placesOf,
+  titleOf,
 } from "./shell/menu";
 export { type MenuLink, SideMenu, type SideMenuProps } from "./shell/SideMenu";
 export type { RecentChat, Recents } from "./shell/RecentChats";

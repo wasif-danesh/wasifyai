@@ -87,10 +87,10 @@ files we ship with their licences recorded; the desktop never fetches fonts from
 
 ## The shell (ADR-0093, stage U2)
 
-One side menu of eleven entries, each one click to a tool; a product's modes are tabs in the top bar, never a second
-level of the menu. One top bar (`AppBar`, 48 px) on the desktop window and on the web: the app's navigation buttons, the
-entry's name as the title, the screen's model button (put there with `PageHeader`), the tabs, then the job tray, search
-(⌘K, `SearchPalette`) and the theme. No breadcrumb, no second bar, no "Group: Item" title. A screen that has a title of
+One side menu with its groups (Notebook, Images, Video, Voice, Music open one at a time with their tools under them;
+the owner kept this over tabs in the bar, 2026-10-28). One top bar (`AppBar`, 48 px) on the desktop window and on the
+web: the app's navigation buttons, the group's name as the title, the screen's model button (put there with
+`PageHeader`), then the job tray, search (⌘K, `SearchPalette`) and the theme. No breadcrumb, no second bar, no "Group: Item" title. A screen that has a title of
 its own (a chat, a notebook) passes `title` to `PageHeader` and the bar shows that instead.
 
 ## Screen patterns (written before the screens are built)

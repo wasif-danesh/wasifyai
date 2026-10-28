@@ -238,6 +238,8 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader className="flex h-14 shrink-0 items-center gap-3 border-b px-5 pt-1" title>
+        {/* the page's heading is the notebook's name; the box beside it is where it is changed */}
+        <h1 className="sr-only">{title}</h1>
         <input
           aria-label="Notebook name"
           value={draftTitle}

@@ -207,6 +207,16 @@ for (const scheme of ["light", "dark"]) {
       await shot(page, "menu-hidden");
       await page.getByRole("button", { name: "Show the side menu" }).click();
     });
+    await attempt("menu-open", async () => {
+      await open(page, "/images/create");
+      const nav = page.locator("nav").first();
+      for (const group of ["Notebook", "Images", "Video", "Voice", "Music"]) {
+        const button = nav.getByRole("button", { name: group, exact: true });
+        if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+        await page.waitForTimeout(150);
+      }
+      await shot(page, "menu-open", 1500);
+    });
     await attempt("search", async () => {
       await open(page, "/images/create");
       await page.keyboard.press("Meta+K");

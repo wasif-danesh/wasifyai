@@ -31,7 +31,11 @@ class FixedPort:
         return int(value) if isinstance(value, int) and MIN_PORT <= value <= MAX_PORT else None
 
     async def start_if_saved(self) -> None:
-        port = await self.saved()
+        try:
+            port = await self.saved()
+        except Exception as e:  # noqa: BLE001 - a database not migrated yet must not stop the engine
+            log.warning("the fixed MCP port's setting could not be read: %s", e)
+            return
         if port is not None:
             try:
                 await self.start(port, remember=False)

@@ -1,15 +1,10 @@
 "use client";
 
-import type { ComponentType, ReactNode } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { type ComponentType, type ReactNode, useState } from "react";
 import { cn } from "../cn";
 import { RecentChats, type Recents } from "./RecentChats";
-import {
-  type ItemResolver,
-  type ItemView,
-  MENU_ENTRIES,
-  type MenuEntryDef,
-  type MenuItemDef,
-} from "./menu";
+import { CHAT_ITEM, EXTRA_ITEMS, type ItemResolver, MENU_GROUPS, type MenuItemDef } from "./menu";
 
 /** How an app draws a link to one of its addresses (the web app passes its router's link). */
 export type MenuLink = ComponentType<{
@@ -32,7 +27,7 @@ export type SideMenuProps = {
   brandHref?: string;
   /** Recent chats; left out, the section is not shown. */
   recents?: Recents;
-  /** Items after the entries: Explore and Admin on the web. */
+  /** Items after the library, models and train: Admin on the web. */
   extra?: {
     id: string;
     label: string;
@@ -57,21 +52,9 @@ function Soon() {
   );
 }
 
-type Served = { item: MenuItemDef; view: Exclude<ItemView, { hidden: true }> };
-
-/** The items of an entry this app serves, in order; empty means the entry shows as Soon. */
-function served(entry: MenuEntryDef, resolve: ItemResolver): Served[] {
-  return entry.items.flatMap((item) => {
-    const view = resolve(item.id);
-    return view && !("hidden" in view) ? [{ item, view }] : [];
-  });
-}
-
-/**
- * The side menu both apps show (ADR-0093, stage U2): the brand, eleven entries that each open a tool with one
- * click (a product's modes are tabs in the top bar), the extra items an app adds, the recent chats and the person
- * at the bottom. The frame around it (width, border, collapsing) belongs to the app.
- */
+/** The side menu both apps show: the brand, a chat entry, the groups (one open at a time, the one holding the
+ * current page stays open; the owner kept this over tabs in the bar, 2026-10-28), the library, and the person at
+ * the bottom. The frame around it (width, border, collapsing) belongs to the app. Search is the bar's. */
 export function SideMenu({
   resolve,
   link: Link = DefaultLink,
@@ -82,42 +65,48 @@ export function SideMenu({
   footer,
   label = "Main",
 }: SideMenuProps) {
-  function entry(def: MenuEntryDef) {
-    const views = served(def, resolve);
-    // hidden on purpose (Models for a person who is not an admin on the web): not shown at all
-    if (
-      views.length === 0 &&
-      def.items.every((i) => resolve(i.id) && "hidden" in (resolve(i.id) as object))
-    )
-      return null;
-    const Icon = def.icon;
-    const soon = views.length === 0;
-    const current = views.some((v) => v.view.current);
-    // the entry opens its first tool, or stays on the tool that is open
-    const target = views.find((v) => v.view.current) ?? views[0];
+  // what the person opened or closed by hand, and the group of the page they were on when they did
+  const [chosen, setChosen] = useState<{ id: string | null; page: string | null } | null>(null);
+  const hereGroup =
+    MENU_GROUPS.find((g) =>
+      g.items.some((i) => {
+        const v = resolve(i.id);
+        return v !== undefined && !("hidden" in v) && v.current;
+      }),
+    )?.id ?? null;
+  // moving to a page of another group opens that group again; within a group the person's choice stays
+  const openGroup = chosen && chosen.page === hereGroup ? chosen.id : hereGroup;
+
+  function entry(item: MenuItemDef, small: boolean) {
+    const view = resolve(item.id);
+    if (view && "hidden" in view) return null;
+    const Icon = item.icon;
+    const soon = view === undefined;
+    const current = !soon && view.current === true;
     const className = cn(
       ITEM,
-      current && "bg-accent font-medium",
+      small && "py-1.5 text-ui",
+      current && "bg-accent",
       soon && "cursor-default opacity-60 hover:bg-transparent",
     );
     const body = (
       <>
-        <Icon className="size-4" aria-hidden="true" /> {def.label}
+        <Icon className="size-4" aria-hidden="true" /> {item.label}
         {soon ? <Soon /> : null}
       </>
     );
-    if (soon || !target) {
+    if (soon) {
       return (
-        <button key={def.id} type="button" disabled className={className}>
+        <button key={item.id} type="button" disabled className={className}>
           {body}
         </button>
       );
     }
-    if (target.view.href && !target.view.onSelect) {
+    if (view.href && !view.onSelect) {
       return (
         <Link
-          key={def.id}
-          href={target.view.href}
+          key={item.id}
+          href={view.href}
           className={className}
           aria-current={current ? "page" : undefined}
         >
@@ -127,11 +116,11 @@ export function SideMenu({
     }
     return (
       <button
-        key={def.id}
+        key={item.id}
         type="button"
         aria-current={current ? "page" : undefined}
         className={className}
-        onClick={target.view.onSelect}
+        onClick={view.onSelect}
       >
         {body}
       </button>
@@ -170,7 +159,34 @@ export function SideMenu({
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="mt-2 grid gap-0.5">
-          {MENU_ENTRIES.map(entry)}
+          {entry(CHAT_ITEM, false)}
+
+          {MENU_GROUPS.map((g) => {
+            const GroupIcon = g.icon;
+            const open = openGroup === g.id;
+            return (
+              <div key={g.id} className="grid gap-0.5">
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  className={cn(ITEM, hereGroup === g.id && "font-medium")}
+                  onClick={() => setChosen({ id: open ? null : g.id, page: hereGroup })}
+                >
+                  <GroupIcon className="size-4" aria-hidden="true" /> {g.label}
+                  {open ? (
+                    <ChevronDown className="ms-auto size-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="ms-auto size-4 text-muted-foreground" />
+                  )}
+                </button>
+                {open ? (
+                  <div className="grid gap-0.5 ps-3">{g.items.map((i) => entry(i, true))}</div>
+                ) : null}
+              </div>
+            );
+          })}
+
+          {EXTRA_ITEMS.map((i) => entry(i, false))}
           {(extra ?? []).map((x) => {
             const Icon = x.icon;
             const className = cn(ITEM, x.current && "bg-accent");

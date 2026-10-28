@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // What each item of the shared side menu opens in this window (packages/ui, `MENU_GROUPS`). An item that is
 // not listed here is not built on the desktop yet and shows as "Soon".
-import { type BarTab, type ItemResolver, type ItemView, placeOf } from "@wasifyai/ui";
+import { type ItemResolver, type ItemView, titleOf } from "@wasifyai/ui";
 import { type Route, newNotebook, openChat } from "./router";
 
 /** The screen each item opens. */
@@ -83,25 +83,15 @@ const OTHER_TITLES: Partial<Record<Route, string>> = {
   settings: "Settings",
 };
 
-/** What the top bar shows for a screen: the entry's name as the title, and the entry's tools as tabs. */
-export function barFor(resolve: ItemResolver, route: Route): { title: string; tabs: BarTab[] } {
-  const place = placeOf(resolve);
-  if (!place) return { title: OTHER_TITLES[route] ?? "Wasify AI", tabs: [] };
-  return {
-    title: place.entry.label,
-    tabs: place.tabs.map(({ item, view }) => ({
-      id: item.id,
-      label: item.label,
-      current: view.current === true,
-      onSelect: view.onSelect,
-    })),
-  };
-}
-
-/** What the top bar of the window says for a screen (the entry's name; "Settings" and the like outside the menu). */
+/** What the top bar of the window says for a screen (its group's name; "Settings" and the like outside the menu). */
 export function routeTitle(route: Route): string {
-  return barFor(
+  return titleFor(
     resolveItem(route, () => {}, { conversationId: null, notebook: null }),
     route,
-  ).title;
+  );
+}
+
+/** The bar's title for a screen: its menu group's name, or the screen's own outside the menu. */
+export function titleFor(resolve: ItemResolver, route: Route): string {
+  return titleOf(resolve) ?? OTHER_TITLES[route] ?? "Wasify AI";
 }

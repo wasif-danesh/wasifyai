@@ -8,7 +8,11 @@ import { Menu, type MenuItem } from "./menu";
 
 export type Action = {
   label: string;
-  onSelect: () => void;
+  onSelect?: () => void;
+  /** an address instead of a handler: the action is a real link (a download, a page) */
+  href?: string;
+  /** with `href`: the browser saves the file instead of opening it */
+  download?: boolean;
   icon?: ReactNode;
   destructive?: boolean;
   disabled?: boolean;
@@ -31,23 +35,39 @@ export function ActionsRow({
   className?: string;
 }) {
   const buttons = actions.slice(0, shown);
-  const more: MenuItem[] = actions.slice(shown);
+  const more: MenuItem[] = actions
+    .slice(shown)
+    .map((a) => ({ ...a, onSelect: a.onSelect ?? (() => {}) }));
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)} data-slot="actions-row">
-      {buttons.map((a, i) => (
-        <Button
-          key={a.label}
-          type="button"
-          size={size}
-          variant={i === 0 ? "default" : a.destructive ? "ghost" : "outline"}
-          disabled={a.disabled}
-          onClick={a.onSelect}
-          className={cn(a.destructive && i > 0 && "text-destructive")}
-        >
-          {a.icon}
-          {a.label}
-        </Button>
-      ))}
+      {buttons.map((a, i) => {
+        const variant = i === 0 ? "default" : a.destructive ? "ghost" : "outline";
+        const className = cn(a.destructive && i > 0 && "text-destructive");
+        if (a.href) {
+          return (
+            <Button key={a.label} asChild size={size} variant={variant} className={className}>
+              <a href={a.href} download={a.download || undefined}>
+                {a.icon}
+                {a.label}
+              </a>
+            </Button>
+          );
+        }
+        return (
+          <Button
+            key={a.label}
+            type="button"
+            size={size}
+            variant={variant}
+            disabled={a.disabled}
+            onClick={a.onSelect}
+            className={className}
+          >
+            {a.icon}
+            {a.label}
+          </Button>
+        );
+      })}
       {more.length > 0 ? (
         <Menu
           items={more}

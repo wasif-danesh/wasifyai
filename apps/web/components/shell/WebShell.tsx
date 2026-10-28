@@ -11,17 +11,15 @@ import { crumbs } from "@/lib/nav";
 import { page } from "@/lib/styles";
 import {
   AppBar,
-  type BarTab,
   JobTray,
-  MENU_ENTRIES,
   type Place,
   SearchPalette,
   type TrayJob,
   type WindowBar,
   WindowBarProvider,
-  placeOf,
+  placesOf,
+  titleOf,
 } from "@wasifyai/ui";
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 
@@ -39,14 +37,7 @@ export function WebShell({ isAdmin, children }: { isAdmin: boolean; children: Re
     () => resolveWebItem(pathname, show, { voiceScreens, isAdmin }),
     [pathname, show, voiceScreens, isAdmin],
   );
-  const place = useMemo(() => placeOf(resolve), [resolve]);
-  const title = place?.entry.label ?? crumbs(pathname).at(-1)?.label ?? titleOf(pathname);
-  const tabs: BarTab[] = (place?.tabs ?? []).map(({ item, view }) => ({
-    id: item.id,
-    label: item.label,
-    current: view.current === true,
-    href: view.href,
-  }));
+  const title = titleOf(resolve) ?? crumbs(pathname).at(-1)?.label ?? pageTitle(pathname);
 
   // the bar's slot, where a screen's header goes, and whether one has taken the title
   const [slot, setSlot] = useState<HTMLElement | null>(null);
@@ -76,18 +67,14 @@ export function WebShell({ isAdmin, children }: { isAdmin: boolean; children: Re
 
   const [searching, setSearching] = useState(false);
   const openSearch = useCallback(() => setSearching(true), []);
-  const places = useMemo<Place[]>(() => {
-    const out = MENU_ENTRIES.flatMap((entry) =>
-      entry.items.flatMap((item) => {
-        const view = resolve(item.id);
-        if (!view || "hidden" in view || !view.href) return [];
-        const href = view.href;
-        const label = entry.items.length > 1 ? `${entry.label}: ${item.label}` : entry.label;
-        return [{ id: item.id, label, onSelect: () => router.push(href) }];
+  const places = useMemo<Place[]>(
+    () =>
+      placesOf(resolve).flatMap((p) => {
+        const href = p.view.href;
+        return href ? [{ id: p.id, label: p.label, onSelect: () => router.push(href) }] : [];
       }),
-    );
-    return out;
-  }, [resolve, router]);
+    [resolve, router],
+  );
 
   return (
     <WindowBarProvider bar={bar}>
@@ -95,8 +82,6 @@ export function WebShell({ isAdmin, children }: { isAdmin: boolean; children: Re
         nav={<SidebarTrigger aria-label="Show or hide the side panel" className="ms-2 shrink-0" />}
         title={title}
         showTitle={claims === 0}
-        tabs={tabs}
-        link={Link}
         slot={setSlot}
         tray={<JobTray load={load} />}
         onSearch={openSearch}
@@ -118,7 +103,7 @@ export function WebShell({ isAdmin, children }: { isAdmin: boolean; children: Re
 }
 
 /** A title for a page the menu does not name. */
-function titleOf(pathname: string): string {
+function pageTitle(pathname: string): string {
   if (pathname === "/design") return "Design";
   if (pathname.startsWith("/admin")) return "Admin";
   return "Wasify AI";

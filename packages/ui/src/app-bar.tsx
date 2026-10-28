@@ -3,22 +3,10 @@
 import { Moon, Search, Sun } from "lucide-react";
 import { type ReactNode, useEffect } from "react";
 import { cn } from "./cn";
-import type { MenuLink } from "./shell/SideMenu";
 import { useTheme } from "./shell/theme";
-
-/** One mode of the screen a person is in, shown as a tab in the bar. */
-export type BarTab = {
-  id: string;
-  label: string;
-  current: boolean;
-  href?: string;
-  onSelect?: () => void;
-};
 
 /** The height of the bar, in px; on macOS the window's traffic lights are centred on it. */
 export const APP_BAR_PX = 48;
-
-const DefaultLink: MenuLink = ({ children, ...props }) => <a {...props}>{children}</a>;
 
 /** The light-or-dark switch, in the bar on both apps. */
 export function ThemeButton() {
@@ -44,15 +32,14 @@ export function ThemeButton() {
 /**
  * The one top bar of the app (ADR-0093 decision 1), on the desktop window and on the web: the app's navigation
  * buttons, the title of where the person is, the screen's own tools (the model button, put here by `PageHeader`),
- * the screen's tabs, then the job tray, search (⌘K) and the theme. One height everywhere; no second bar.
+ * then the job tray, search (⌘K) and the theme. One height everywhere; no second bar. The screens' modes stay in
+ * the side menu's groups.
  */
 export function AppBar({
   nav,
   navClassName,
   title,
   showTitle = true,
-  tabs,
-  link: Link = DefaultLink,
   slot,
   tray,
   onSearch,
@@ -68,8 +55,6 @@ export function AppBar({
   title: string;
   /** false while a screen has put its own title in the slot (a chat's, a notebook's) */
   showTitle?: boolean;
-  tabs?: BarTab[];
-  link?: MenuLink;
   /** the place a screen's header goes: set to the element the bar gives it */
   slot?: (el: HTMLElement | null) => void;
   tray?: ReactNode;
@@ -104,8 +89,10 @@ export function AppBar({
         </div>
       ) : null}
       {showTitle ? (
+        // the page's heading: where the person is, on every screen (a screen's own h1 is its tool's)
         <h1
           {...dragRegion}
+          data-slot="app-bar-title"
           className="pointer-events-none m-0 max-w-[14rem] shrink-0 truncate ps-2 font-semibold text-sm max-sm:max-w-[8rem]"
         >
           {title}
@@ -116,43 +103,6 @@ export function AppBar({
         ref={slot}
         className="flex min-w-0 items-center gap-2 [&_[data-slot=button]]:h-8 [&_h1]:max-w-[24rem] [&_h1]:truncate [&_h1]:font-semibold [&_h1]:text-sm"
       />
-      {tabs && tabs.length > 0 ? (
-        <nav aria-label="Modes" className="ms-2 min-w-0 overflow-x-auto">
-          <ul className="m-0 flex list-none items-center gap-0.5 rounded-md bg-muted/60 p-0.5">
-            {tabs.map((t) => {
-              const look = cn(
-                "inline-flex h-7 shrink-0 items-center whitespace-nowrap rounded-sm px-2.5 font-medium text-sm no-underline outline-none transition-colors",
-                t.current
-                  ? "bg-surface text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground",
-                "focus-visible:ring-[3px] focus-visible:ring-ring/50",
-              );
-              return (
-                <li key={t.id} className="shrink-0">
-                  {t.href && !t.onSelect ? (
-                    <Link
-                      href={t.href}
-                      className={look}
-                      aria-current={t.current ? "page" : undefined}
-                    >
-                      {t.label}
-                    </Link>
-                  ) : (
-                    <button
-                      type="button"
-                      className={look}
-                      aria-current={t.current ? "page" : undefined}
-                      onClick={t.onSelect}
-                    >
-                      {t.label}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-      ) : null}
       <div {...dragRegion} className="ms-auto flex shrink-0 items-center gap-1">
         {tray}
         {onSearch ? (

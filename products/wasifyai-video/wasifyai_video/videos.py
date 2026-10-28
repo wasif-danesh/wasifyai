@@ -18,10 +18,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import RunContext, start_of_day_utc, sum_usage
 from wasifyai_platform_sdk.sqlite import (
-    ensure_columns,
-    ensure_tables,
+    Migration,
     from_iso,
     is_sqlite,
+    migrate,
     now_iso,
     to_iso,
 )
@@ -291,6 +291,9 @@ _SQLITE_DDL = (
     "ON videos (tenant_id, product_id, user_id, created_at)",
 )
 
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+SQLITE_MIGRATIONS = (Migration(1, _SQLITE_DDL, columns={"videos": {"source_id": "TEXT"}}),)
+
 
 class SqliteVideoStore:
     """The same records on the SQLite file of the desktop profile (ADR-0056)."""
@@ -299,9 +302,7 @@ class SqliteVideoStore:
         self._engine = engine
 
     async def _ready(self) -> None:
-        await ensure_tables(self._engine, "videos", _SQLITE_DDL)
-        # files made before clips remembered what they came from
-        await ensure_columns(self._engine, "videos", "videos", {"source_id": "TEXT"})
+        await migrate(self._engine, "videos", SQLITE_MIGRATIONS)
 
     @staticmethod
     def _record(r) -> VideoRecord:

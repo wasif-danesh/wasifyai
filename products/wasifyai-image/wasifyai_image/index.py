@@ -4,7 +4,7 @@ pages through to backfill the index and to clean it up."""
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import IndexItem, IndexSource, search_text
-from wasifyai_platform_sdk.sqlite import ensure_tables, is_sqlite
+from wasifyai_platform_sdk.sqlite import is_sqlite, migrate
 
 PRODUCT_ID = "wasifyai-image"
 
@@ -57,9 +57,9 @@ class SqliteImageIndexSource:
         self._engine = engine
 
     async def _ready(self) -> None:
-        from wasifyai_image.images import _SQLITE_DDL
+        from wasifyai_image.images import SQLITE_MIGRATIONS
 
-        await ensure_tables(self._engine, "images", _SQLITE_DDL)
+        await migrate(self._engine, "images", SQLITE_MIGRATIONS)
 
     async def page(self, after: str | None, limit: int) -> list[IndexItem]:
         await self._ready()

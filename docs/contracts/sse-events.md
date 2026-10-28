@@ -19,7 +19,8 @@ this doc describes them. TypeScript types are generated into `packages/contracts
 - `POST /runs/{run_id}/cancel` stops a run (the chat's Stop button) and answers `{"run_id", "status"}`: `cancelled`, or the
   state the run had if it was over already (`done`, `error`), so a Stop that arrives late is not an error. A stopped run
   ends with an `error` event with the code `cancelled` (`retryable: false`). The graph stops where it is, and the assistant
-  keeps the text it had written; a media job it started is not recalled. A stop that reaches another replica is noticed by
+  keeps the text it had written; a media job it is waiting for is stopped (the media worker never starts it, or interrupts
+  it) and its place in the line is given back (ADR-0088). A stop that reaches another replica is noticed by
   the replica running the graph within a second. Not the owner's run, or no such run: 404.
 - The Next.js BFF passes the upstream stream through unchanged: return the upstream
   `ReadableStream`, disable compression and buffering.
@@ -55,7 +56,7 @@ Every `data` object includes:
 | `tool_call` | The assistant calls a tool (ADR-0057) | `id`, `name`, `arguments` (object) |
 | `tool_result` | A tool call finished | `id` (same as its `tool_call`), `name`, `status` (`ok` \| `refused` \| `error`), `output` (a small reference: an image id, search hits; never a file) |
 | `job_progress` | Media job state changes | `job_id`, `capability`, `status` (`queued` \| `running` \| `completed` \| `failed`), `queue_position?`, `progress?` (0–1), `preview_url?`, `tool_call_id?` (the assistant's `tool_call` this job belongs to; without it a client gives the progress to the last tool still running) |
-| `error` | Recoverable or fatal error | `code`, `message` (user-safe), `retryable` (bool), `job_id?` |
+| `error` | Recoverable or fatal error | `code`, `message` (user-safe), `retryable` (bool), `job_id?`. `busy` (retryable): the person already has as many jobs in the line as they may (ADR-0088), and the message names the job in the way |
 | `done` | Run finished | `outputs` (product-specific, e.g. `{title, lyrics, audio_url, cover_url}`) |
 
 Rules:

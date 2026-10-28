@@ -19,6 +19,8 @@ JOBS_STREAM = "wasifyai:jobs"
 JOBS_GROUP = "workers"
 DONE_STREAM = "wasifyai:jobs:done"
 DONE_GROUP = "api"
+CANCEL_PREFIX = "wasifyai:jobs:cancel:"  # a stopped job (stage J3): the worker does not run it on
+CANCEL_TTL_S = 6 * 3600
 
 
 async def ensure_groups(redis: Redis) -> None:
@@ -70,3 +72,18 @@ class RedisJobSink:
         stream_id = str(await self._r.xadd(JOBS_STREAM, {"d": request.model_dump_json()}))
         if event := progress_event(request, "queued", await queue_position(self._r, stream_id)):
             await self._log.append(request.tenant_id, request.run_id or "", event)
+
+    async def cancel(self, job_id: str) -> None:
+        """Stop a job (stage J3): a worker that has not started it never does, and one that is
+        running it stops it (`JobProcessor` looks every second and interrupts ComfyUI)."""
+        await self._r.set(CANCEL_PREFIX + job_id, "1", ex=CANCEL_TTL_S)
+
+
+class RedisCancels:
+    """The worker's side of a stop: whether a job was stopped (`RedisJobSink.cancel` wrote it)."""
+
+    def __init__(self, redis: Redis):
+        self._r = redis
+
+    async def is_cancelled(self, job_id: str) -> bool:
+        return bool(await self._r.exists(CANCEL_PREFIX + job_id))

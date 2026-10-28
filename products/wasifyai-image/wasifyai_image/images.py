@@ -13,10 +13,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import RunContext, start_of_day_utc, sum_usage
 from wasifyai_platform_sdk.sqlite import (
-    ensure_columns,
-    ensure_tables,
+    Migration,
     from_iso,
     is_sqlite,
+    migrate,
     now_iso,
     to_iso,
 )
@@ -245,6 +245,9 @@ _SQLITE_NEW_COLUMNS = {
     "source_id": "TEXT",
 }
 
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+SQLITE_MIGRATIONS = (Migration(1, _SQLITE_DDL, columns={"images": _SQLITE_NEW_COLUMNS}),)
+
 
 class SqliteImageStore:
     """The same records on the SQLite file of the desktop profile (ADR-0056)."""
@@ -253,9 +256,7 @@ class SqliteImageStore:
         self._engine = engine
 
     async def _ready(self) -> None:
-        await ensure_tables(self._engine, "images", _SQLITE_DDL)
-        # files made before recipes existed
-        await ensure_columns(self._engine, "images", "images", _SQLITE_NEW_COLUMNS)
+        await migrate(self._engine, "images", SQLITE_MIGRATIONS)
 
     @staticmethod
     def _record(r) -> ImageRecord:

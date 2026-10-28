@@ -123,3 +123,110 @@ async def test_a_worker_takes_a_job_runs_it_and_answers(queue):
     assert out.ok and await storage.get(out.outputs["audio"]) == b"RIFF"
     assert await worker.run_once(block_ms=100) is False  # nothing left
     assert [m["id"] for m in worker.info().models] == ["kokoro-82m"]
+
+
+# ---- one job per person (ADR-0088, stage J4) and the rest of stage J3 ---------------------
+
+
+@pytest.fixture
+async def leases(redis_conn):
+    from wasifyai_platform_sdk.jobpolicy import RedisLeases
+
+    ns = f"wasifyai:test:leases:{uuid4().hex}"
+    yield RedisLeases(redis_conn, namespace=ns)
+    async for key in redis_conn.scan_iter(match=f"{ns}:*"):
+        await redis_conn.delete(key)
+
+
+async def test_redis_leases_let_one_in_name_it_to_the_next_and_free_it(leases):
+    import time
+
+    from wasifyai_platform_sdk.jobpolicy import Lease
+
+    soon = time.time() + 600
+    assert await leases.take("t1", "u1", Lease("j1", "video.generate", "heavy", soon), 1) is None
+    assert await leases.take("t1", "u1", Lease("j1", "video.generate", "heavy", soon), 1) is None
+    blocking = await leases.take("t1", "u1", Lease("j2", "image.generate", "normal", soon), 1)
+    assert blocking == Lease("j1", "video.generate", "heavy", soon)
+    assert await leases.take("t1", "u2", Lease("j3", "image.generate", "normal", soon), 1) is None
+    await leases.give_back("t1", "u1", "j1")
+    assert await leases.take("t1", "u1", Lease("j2", "image.generate", "normal", soon), 1) is None
+    assert [x.job_id for x in await leases.held("t1", "u1")] == ["j2"]
+
+
+async def test_an_expired_redis_lease_is_no_longer_in_the_way(leases):
+    import time
+
+    from wasifyai_platform_sdk.jobpolicy import Lease
+
+    past = time.time() - 1
+    assert await leases.take("t1", "u1", Lease("j1", "image.generate", "normal", past), 1) is None
+    later = time.time() + 600
+    assert await leases.take("t1", "u1", Lease("j2", "image.generate", "normal", later), 1) is None
+
+
+async def test_two_replicas_asking_at_once_never_both_get_the_last_place(leases):
+    import time
+
+    from wasifyai_platform_sdk.jobpolicy import Lease
+
+    soon = time.time() + 600
+    got = await asyncio.gather(
+        *(leases.take("t1", "u1", Lease(f"j{i}", "image.generate", "normal", soon), 1)
+          for i in range(20))
+    )  # fmt: skip
+    assert sum(g is None for g in got) == 1
+
+
+async def test_the_engine_queue_asks_the_policy_and_gives_the_place_back_when_the_job_ends(
+    redis_conn, leases
+):
+    from wasifyai_platform_sdk.jobpolicy import JobLimitReached, JobPolicy
+
+    ns = f"wasifyai:test:{uuid4().hex}"
+    q = EngineQueue(redis_conn, namespace=ns, policy=JobPolicy(leases, lambda: 1))
+    try:
+        first, second = job(), job()
+        await q.submit(first)
+        with pytest.raises(JobLimitReached) as e:
+            await q.submit(second)
+        assert "a speech" in e.value.message
+        claimed = await q.claim("w1", block_ms=500)
+        assert claimed is not None
+        await q.finish(claimed[0], EngineOutcome(id=first.id, ok=True, worker="w1"))
+        await q.wait(first.id, 5, poll_s=1)
+        await q.submit(second)  # the first one's place was given back when its outcome came
+        await q.cancel(second.id)  # and a stopped job gives its place back at once
+        assert await leases.held("t1", "u1") == []
+    finally:
+        async for key in redis_conn.scan_iter(match=f"{ns}:*"):
+            await redis_conn.delete(key)
+
+
+async def test_a_waiting_job_knows_its_place_until_a_worker_takes_it(queue):
+    q, _ = queue
+    a, b, c = job(), job(), job()
+    for j in (a, b, c):
+        await q.submit(j)
+    assert [await q.place(j.id) for j in (a, b, c)] == [1, 2, 3]
+    claimed = await q.claim("w1", block_ms=500)
+    assert claimed is not None and claimed[1].id == a.id
+    assert [await q.place(j.id) for j in (a, b, c)] == [None, 1, 2]
+    assert await q.place("never-sent") is None
+
+
+async def test_only_one_replica_follows_a_resumed_job(queue, monkeypatch):
+    import wasifyai_platform_sdk.engine_jobs as engine_jobs
+
+    q, ns = queue
+    j = job()
+    await q.submit(j)
+    assert await q.take_resume(j.id)
+    assert await q.take_resume(j.id)  # the replica that holds it may ask again
+    monkeypatch.setattr(engine_jobs, "REPLICA", "another-replica")
+    assert not await q.take_resume(j.id)  # another replica waits its turn
+    turn = asyncio.create_task(q.resume_turn(j.id, poll_s=0.05))
+    await asyncio.sleep(0.2)
+    assert not turn.done()
+    await q._r.delete(f"{ns}:resumer:{j.id}")  # the first replica's hold ran out (it died)
+    await asyncio.wait_for(turn, 2)

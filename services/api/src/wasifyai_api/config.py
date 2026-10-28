@@ -63,6 +63,10 @@ class Settings(BaseSettings):
 
     # ADR-0047: true in production: the safeguards are always on and the admin cannot turn them off.
     safeguards_force_on: bool = False
+    # ADR-0088: how many jobs one person may have in the line at once, across everything (pictures,
+    # clips, speech, music, 3D, Motion graphics, training). 0 means no limit; the desktop is never
+    # limited. The Helm values set 1 (`jobs.maxPerUser`).
+    max_jobs_per_user: int = 0
 
     products_dir: str = "products"
     product_env: str = ""  # selects products/<id>/product.<env>.yaml overlays

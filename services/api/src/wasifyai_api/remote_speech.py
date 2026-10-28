@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from langgraph.config import get_stream_writer
 from wasifyai_platform_sdk import (
     ConvertRequest,
     EngineJob,
@@ -28,6 +29,7 @@ from wasifyai_platform_sdk import (
     require_context,
     speech_wire,
 )
+from wasifyai_platform_sdk.engine_jobs import PLACE_LIMIT
 from wasifyai_platform_sdk.storage import object_key
 
 from wasifyai_api.engine_workers import WorkerDirectory, record_engine_seconds
@@ -36,6 +38,17 @@ log = logging.getLogger("wasifyai_api.remote_speech")
 
 # how good a state is, when two workers list the same model
 _RANK = {"ready": 0, "needs_runtime": 1, "can_install": 2, "not_available": 3}
+
+
+PLACE_POLL_S = 2.0  # how often a waiting job's place in the queue is read
+
+
+def waiting_words(place: int) -> str:
+    """The step a screen shows while a speech waits for a worker."""
+    if place <= 1:
+        return "Next in line"
+    ahead = place - 1
+    return f"Waiting: {ahead} ahead of you" if ahead < PLACE_LIMIT else "Waiting in a long line"
 
 
 def _rank(model: dict[str, Any]) -> int:
@@ -144,6 +157,31 @@ class RemoteSpeechEngine:
 
     # ---- the work ---------------------------------------------------------------------------
 
+    async def _tell_place(self, job_id: str, kind: str) -> None:
+        """While no worker has taken the job, tell the run how many are ahead (stage J3): the
+        screens show it as the step, the assistant and agents read the `job_progress` event."""
+        try:
+            write = get_stream_writer()
+        except Exception:
+            return  # not inside a run: nobody to tell
+        told: int | None = None
+        while True:
+            try:
+                place = await self._queue.place(job_id)
+            except Exception:
+                return  # the place is a courtesy: the wait goes on without it
+            if place is None:
+                return
+            if place != told:
+                told = place
+                write({"type": "node", "node": "queue", "status": "started",
+                       "label": waiting_words(place)})  # fmt: skip
+                write({"type": "job_progress", "data": {
+                    "job_id": job_id, "capability": f"speech.{kind}", "status": "queued",
+                    "queue_position": place,
+                }})  # fmt: skip
+            await asyncio.sleep(PLACE_POLL_S)
+
     async def _run(
         self,
         kind: str,
@@ -173,7 +211,8 @@ class RemoteSpeechEngine:
                 user_id=ctx.user_id, prefix=prefix, params={**params, "model_id": model.id},
                 files=keys,
             )  # fmt: skip
-            await self._queue.submit(job)
+            await self._queue.submit(job, timeout_s=self._timeout)
+            watch = asyncio.create_task(self._tell_place(job_id, kind))
             try:
                 outcome = await self._queue.wait(job_id, self._timeout)
             except asyncio.CancelledError:
@@ -185,6 +224,8 @@ class RemoteSpeechEngine:
                 raise VoiceEngineError(
                     "engine_unavailable", "The speech worker took too long. Try again."
                 ) from None
+            finally:
+                watch.cancel()
             await record_engine_seconds(self._usage, ctx, kind, outcome)
             if not outcome.ok:
                 err = outcome.error

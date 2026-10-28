@@ -14,6 +14,8 @@ give at-least-once delivery and crash recovery:
 
 import asyncio
 import json
+import os
+import socket
 import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -78,6 +80,19 @@ class EngineWorkerInfo(BaseModel):
     seen: float = 0.0
 
 
+PLACE_LIMIT = 1000  # a place further back than this is said as this
+
+
+def _entry(stream_id: str) -> tuple[int, int]:
+    ms, _, seq = stream_id.partition("-")
+    return int(ms), int(seq or 0)
+
+
+# one id per running API process: the replica that follows a job after a restart (stage J3)
+REPLICA = f"{socket.gethostname()}-{os.getpid()}-{uuid4().hex[:6]}"
+RESUME_HOLD_S = 60  # a replica that stops renewing its hold lets another follow the job
+
+
 class EngineUnavailable(Exception):
     """No worker answered in time (none running, or the job waited too long)."""
 
@@ -86,8 +101,12 @@ ProgressFn = Callable[[float, str], Awaitable[None]]
 
 
 class EngineQueue:
-    def __init__(self, redis: Redis, namespace: str = NAMESPACE):
+    def __init__(self, redis: Redis, namespace: str = NAMESPACE, policy: Any = None):
         self._r = redis
+        # ADR-0088: the one policy point; a job enters only when its person may have one more
+        self.policy = policy
+        self._owner = f"{namespace}:owner:"  # job id -> "tenant user", to give its lease back
+        self._resumer = f"{namespace}:resumer:"  # job id -> the API replica following it now
         self._ready = False
         self._jobs = f"{namespace}:jobs"
         self._done = f"{namespace}:done:"
@@ -95,6 +114,7 @@ class EngineQueue:
         self._worker = f"{namespace}:worker:"
         self._cancel = f"{namespace}:cancel:"
         self._seen = f"{namespace}:seen:"
+        self._sid = f"{namespace}:sid:"  # job id -> its stream entry, for its place in the queue
 
     async def _ensure(self) -> None:
         if self._ready:
@@ -108,10 +128,63 @@ class EngineQueue:
 
     # ---- the API's side ------------------------------------------------------------------
 
-    async def submit(self, job: EngineJob) -> None:
+    async def submit(self, job: EngineJob, timeout_s: float = 3600) -> None:
+        """Queue a job. With a policy, the job enters only when its person may have one more in
+        the line (raises `JobLimitReached` naming the job in the way) and holds a lease until it
+        ends."""
         await self._ensure()
-        await self._r.xadd(self._jobs, {"d": job.model_dump_json()})
+        if self.policy is not None:
+            await self.policy.admit(job.tenant_id, job.user_id, job.id, job.kind, timeout_s)
+            await self._r.set(self._owner + job.id, f"{job.tenant_id} {job.user_id}", ex=SEEN_TTL_S)
+        sid = await self._r.xadd(self._jobs, {"d": job.model_dump_json()})
+        await self._r.set(self._sid + job.id, sid, ex=SEEN_TTL_S)
         await self._r.set(self._seen + job.id, "1", ex=SEEN_TTL_S)  # `status` knows it was sent
+
+    async def _release(self, job_id: str) -> None:
+        """The job ended or was stopped: its person's place in the line is free (ADR-0088)."""
+        if self.policy is None:
+            return
+        owner = await self._r.getdel(self._owner + job_id)
+        if owner:
+            tenant_id, user_id = str(owner).split(" ", 1)
+            await self.policy.release(tenant_id, user_id, job_id)
+
+    async def place(self, job_id: str) -> int | None:
+        """The job's place among the jobs no worker has taken yet (1 = next), or None once a
+        worker has it or it is not known (stage J3: the speech screens say how many are ahead)."""
+        sid = await self._r.get(self._sid + job_id)
+        if not sid:
+            return None
+        try:
+            groups: Any = await self._r.xinfo_groups(self._jobs)
+        except ResponseError:
+            return None
+        last = next(
+            (str(g["last-delivered-id"]) for g in groups if str(g["name"]) == JOBS_GROUP), "0-0"
+        )
+        if _entry(str(sid)) <= _entry(last):
+            return None
+        ahead: Any = await self._r.xrange(
+            self._jobs, min=f"({last}", max=f"({sid}", count=PLACE_LIMIT
+        )
+        return len(ahead) + 1
+
+    async def take_resume(self, job_id: str) -> bool:
+        """After a restart, only one API replica follows a job that was already sent (stage J3):
+        True when this replica took it. The hold runs out unless `wait` keeps it, so a replica
+        that dies while following lets another take over."""
+        return (
+            bool(await self._r.set(self._resumer + job_id, REPLICA, nx=True, ex=RESUME_HOLD_S))
+            or (await self._r.get(self._resumer + job_id)) == REPLICA
+        )
+
+    async def resume_turn(self, job_id: str, poll_s: float = 10) -> None:
+        """Wait until this replica may follow the job: at once when nobody does, else when the
+        replica that does has finished with it or stopped holding it."""
+        while True:
+            if await self.take_resume(job_id):
+                return
+            await asyncio.sleep(poll_s)
 
     async def wait(
         self,
@@ -125,12 +198,17 @@ class EngineQueue:
         key = self._done + job_id
         last = ""
         while True:
+            # this replica follows the job: keep holding it so no other one waits for it too
+            if await self._r.get(self._resumer + job_id) == REPLICA:
+                await self._r.expire(self._resumer + job_id, RESUME_HOLD_S)
             left = deadline - time.monotonic()
             if left <= 0:
                 raise EngineUnavailable("The speech worker did not answer in time.")
             popped = await self._r.brpop([key], timeout=max(1, min(poll_s, int(left))))
             if popped:
-                await self._r.delete(self._seen + job_id)
+                await self._r.delete(self._seen + job_id, self._sid + job_id)
+                await self._r.delete(self._resumer + job_id)
+                await self._release(job_id)
                 return EngineOutcome.model_validate_json(popped[1])
             if on_progress is not None:
                 raw = await self._r.get(self._progress + job_id)
@@ -160,8 +238,10 @@ class EngineQueue:
         return float(p.get("fraction", 0.0)), str(p.get("label", ""))
 
     async def cancel(self, job_id: str) -> None:
-        """Ask the worker that has this job to stop it (a 3D run takes minutes)."""
+        """Ask the worker that has this job to stop it (a 3D run takes minutes). Its place in the
+        line is free at once (ADR-0088 decision 5)."""
         await self._r.set(self._cancel + job_id, "1", ex=DONE_TTL_S)
+        await self._release(job_id)
 
     async def cancelled(self, job_id: str) -> bool:
         return bool(await self._r.exists(self._cancel + job_id))

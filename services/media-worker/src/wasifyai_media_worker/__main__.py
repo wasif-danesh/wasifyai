@@ -17,6 +17,7 @@ from wasifyai_platform_sdk import (
     memory_storage,
     s3_storage,
 )
+from wasifyai_platform_sdk.jobqueue import RedisCancels
 
 from wasifyai_media_worker.backends import BackendRouter
 from wasifyai_media_worker.comfy import ComfyClient
@@ -106,6 +107,7 @@ async def main() -> None:
         RedisGpuLock(redis, s.gpu_id),
         RedisJobState(redis),
         http,
+        cancels=RedisCancels(redis),  # a job the person stopped is not run, or stops (stage J3)
     )
     worker = Worker(redis, processor)
 

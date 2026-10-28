@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import IndexItem
 from wasifyai_platform_sdk.search import MAX_TEXT_CHARS
-from wasifyai_platform_sdk.sqlite import ensure_tables, now_iso
+from wasifyai_platform_sdk.sqlite import Migration, migrate, now_iso
 
 from wasifyai_api.auth import Claims
 from wasifyai_api.creation_index import Hit, like_patterns
@@ -43,6 +43,9 @@ _USERS_DDL = (
     """,
 )
 
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+_USERS_MIGRATIONS = (Migration(1, _USERS_DDL),)
+
 
 def _email(claims: Claims) -> str | None:
     return claims.email.lower() if claims.email else None
@@ -59,7 +62,7 @@ class SqliteUserStore:
     async def resolve(
         self, tenant_id: str, claims: Claims, admin_emails: frozenset[str]
     ) -> UserRecord:
-        await ensure_tables(self._engine, "users", _USERS_DDL)
+        await migrate(self._engine, "users", _USERS_MIGRATIONS)
         email = _email(claims)
         verified = claims.email_verified and email is not None
         admin = verified and (email or "") in admin_emails
@@ -136,13 +139,16 @@ _SETTINGS_DDL = (
     """,
 )
 
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+_SETTINGS_MIGRATIONS = (Migration(1, _SETTINGS_DDL),)
+
 
 class SqliteSettingsStore:
     def __init__(self, engine: AsyncEngine):
         self._engine = engine
 
     async def get(self, key: str) -> object | None:
-        await ensure_tables(self._engine, "system_settings", _SETTINGS_DDL)
+        await migrate(self._engine, "system_settings", _SETTINGS_MIGRATIONS)
         async with self._engine.connect() as conn:
             row = (
                 await conn.execute(
@@ -152,7 +158,7 @@ class SqliteSettingsStore:
         return None if row is None else json.loads(row[0])
 
     async def put(self, key: str, value: object, by: str) -> None:
-        await ensure_tables(self._engine, "system_settings", _SETTINGS_DDL)
+        await migrate(self._engine, "system_settings", _SETTINGS_MIGRATIONS)
         async with self._engine.begin() as conn:
             await conn.execute(
                 text(
@@ -187,6 +193,9 @@ _INDEX_DDL = (
     "ON creation_index (tenant_id, user_id, kind)",
 )
 
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+_INDEX_MIGRATIONS = (Migration(1, _INDEX_DDL),)
+
 
 def _cosine(a: list[float], b: list[float]) -> float:
     if len(a) != len(b):
@@ -204,7 +213,7 @@ class SqliteIndexStore:
         self._engine = engine
 
     async def _ready(self) -> None:
-        await ensure_tables(self._engine, "creation_index", _INDEX_DDL)
+        await migrate(self._engine, "creation_index", _INDEX_MIGRATIONS)
 
     async def upsert(self, item: IndexItem, model: str, vector: list[float]) -> None:
         await self._ready()

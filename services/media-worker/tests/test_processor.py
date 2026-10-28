@@ -383,3 +383,47 @@ async def test_a_worker_with_nowhere_to_put_a_look_says_so(tmp_path):
     result = await rig.p.process(look_job("x"))
     assert result.status == "failed" and result.error is not None
     assert "cannot use a look" in result.error.message
+
+
+# ---- a stopped job (stage J3) ------------------------------------------------------------
+
+
+class Stops:
+    def __init__(self, *ids: str) -> None:
+        self.ids = set(ids)
+
+    async def is_cancelled(self, job_id: str) -> bool:
+        return job_id in self.ids
+
+
+async def test_a_job_stopped_while_it_waited_in_the_line_is_never_run(comfy):
+    base, fake = comfy
+    rig = Rig(ComfyRunner(ComfyClient(base), 10))
+    j = job()
+    rig.p.cancels = Stops(j.job_id)
+    result = await rig.p.process(j)
+    err = result.error
+    assert result.status == "failed" and err is not None
+    assert (err.code, err.retryable) == ("cancelled", False)
+    assert fake.submitted == []  # ComfyUI never saw it
+    assert "job.completed" not in {e.kind for e in rig.usage.events}
+
+
+async def test_a_job_stopped_while_running_interrupts_comfyui_and_frees_the_gpu(comfy, monkeypatch):
+    import wasifyai_media_worker.processor as processor
+
+    monkeypatch.setattr(processor, "CANCEL_POLL_S", 0.05)
+    base, fake = comfy
+    rig = Rig(ComfyRunner(ComfyClient(base), 30))
+    stops = Stops()
+    rig.p.cancels = stops
+    j = job({"1": {"class_type": "Slow", "inputs": {}}})  # never finishes on its own
+    work = asyncio.create_task(rig.p.process(j))
+    await asyncio.sleep(0.3)
+    stops.ids.add(j.job_id)
+    result = await asyncio.wait_for(work, 5)
+    assert (result.status, result.error.code) == ("failed", "cancelled")  # type: ignore[union-attr]
+    assert result.error.message == "Stopped."  # type: ignore[union-attr]
+    assert fake.interrupted == 1
+    # the GPU lock was given back: the next job runs
+    assert (await asyncio.wait_for(rig.p.process(job()), 5)).status == "completed"

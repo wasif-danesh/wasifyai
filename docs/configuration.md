@@ -21,6 +21,7 @@ came from.
 | `API_AUTH_SECRET` | api, web | Shared secret (at least 32 bytes) for the BFF-to-API token; the API refuses to start in `jwt` mode without it |
 | `AUTH_<PROVIDER>_ID` / `_SECRET` | web | One OAuth app per provider and environment (see `apps/web/README.md`) |
 | `SAFEGUARDS_FORCE_ON` | api | `true` in production (Helm `safeguards.forceOn`): moderation and quotas always apply and Admin > Safeguards is read-only. Unset elsewhere: off by default, an admin switches it (ADR-0047) |
+| `MAX_JOBS_PER_USER` | api | How many jobs a person may have in the line at once, across everything (pictures, clips, speech, music, 3D, Motion graphics, training); Helm `jobs.maxPerUser`, 1 on the web. 0 or unset: no limit. Admins are never limited, nor is the desktop (ADR-0088) |
 | `ADMIN_EMAILS` | api | Comma-separated; only a verified email becomes admin |
 | `WASIFYAI_MCP_LAUNCHER` | api | The path of the `wasify-mcp` launcher (the shell sets it); Settings > Other apps shows it in the commands to paste (ADR-0069) |
 | `WASIFYAI_SECRET_<NAME>` | api | A read-only secret for the secret store (ADR-0092): `WASIFYAI_SECRET_WEB_SEARCH_EXA` answers `web.search.exa`. On the web what an admin saves goes to the `secrets` table (Fernet under `MEDIA_SECRETS_KEY`); the environment answers behind it. `HF_TOKEN` is read as `hf.token` |

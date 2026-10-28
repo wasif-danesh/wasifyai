@@ -22,6 +22,7 @@ from wasifyai_platform_sdk import (
     require_context,
     train_wire,
 )
+from wasifyai_platform_sdk.jobpolicy import JobLimitReached
 from wasifyai_platform_sdk.storage import object_key
 
 from wasifyai_api.engine_workers import WorkerDirectory, record_engine_seconds
@@ -106,6 +107,14 @@ class RemoteTrainer:
 
     # ---- the work ---------------------------------------------------------------------------
 
+    async def _submit(self, job: EngineJob, **kw: Any) -> None:
+        """Queue a job; a person who already has one in the line is told so, in the policy's
+        words, as this job's own failure (ADR-0088)."""
+        try:
+            await self._queue.submit(job, **kw)
+        except JobLimitReached as e:
+            raise Failed("busy", e.message) from None
+
     async def _run(
         self,
         kind: str,
@@ -130,11 +139,12 @@ class RemoteTrainer:
                 )
                 staged.append(key)
                 keys[name] = key
-            await self._queue.submit(
+            await self._submit(
                 EngineJob(
                     id=job_id, kind=kind, tenant_id=ctx.tenant_id, product_id=ctx.product_id,
                     user_id=ctx.user_id, prefix=prefix, params=params, files=keys,
-                )
+                ),
+                timeout_s=TRAIN_TIMEOUT_S,  # its lease lasts as long as teaching may (ADR-0088)
             )  # fmt: skip
             self._job = job_id
 
@@ -331,7 +341,7 @@ class RemoteImageTrainer(RemoteTrainer):
         if todo and self.ready():
             job_id = str(uuid4())
             try:
-                await self._queue.submit(
+                await self._submit(
                     EngineJob(
                         id=job_id, kind=train_wire.IMAGE_TOKENIZE, tenant_id="system",
                         product_id="wasifyai-training", user_id="system",
@@ -451,7 +461,7 @@ class RemoteDecisionTrainer(RemoteTrainer):
         prefix = object_key(
             identity.tenant_id, "wasifyai-training", identity.user_id, "engine", job_id
         )
-        await self._queue.submit(
+        await self._submit(
             EngineJob(
                 id=job_id, kind=train_wire.DECISION_ANSWER, tenant_id=identity.tenant_id,
                 product_id="wasifyai-training", user_id=identity.user_id, prefix=prefix,

@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from wasifyai_platform_sdk.sqlite.engine import ensure_tables, from_iso, now_iso, to_iso
+from wasifyai_platform_sdk.sqlite.engine import Migration, from_iso, migrate, now_iso, to_iso
 from wasifyai_platform_sdk.uploads import UNUSED_LIFETIME, UploadRecord
 
 _DDL = (
@@ -27,6 +27,10 @@ _DDL = (
     "ON uploads (tenant_id, product_id, user_id, key)",
     "CREATE INDEX IF NOT EXISTS ix_uploads_created ON uploads (created_at)",
 )
+
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+_MIGRATIONS = (Migration(1, _DDL),)
+
 _COLUMNS = "id, tenant_id, product_id, user_id, key, bytes, created_at, consumed_at, kind, seconds"
 
 
@@ -42,7 +46,7 @@ class SqliteUploadStore:
         self._engine = engine
 
     async def _ready(self) -> None:
-        await ensure_tables(self._engine, "uploads", _DDL)
+        await migrate(self._engine, "uploads", _MIGRATIONS)
 
     async def add(self, upload: UploadRecord) -> None:
         await self._ready()

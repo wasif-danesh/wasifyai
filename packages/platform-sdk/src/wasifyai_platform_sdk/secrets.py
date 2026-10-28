@@ -32,7 +32,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from wasifyai_platform_sdk.secretbox import SecretBox, SecretsUnavailable
-from wasifyai_platform_sdk.sqlite.engine import ensure_tables, is_sqlite
+from wasifyai_platform_sdk.sqlite.engine import Migration, is_sqlite, migrate
 
 __all__ = [
     "EnvSecretStore",
@@ -243,6 +243,9 @@ _SECRETS_DDL = (
     """,
 )
 
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+_SECRETS_MIGRATIONS = (Migration(1, _SECRETS_DDL),)
+
 
 class SqlSecretStore:
     """A `secrets` table (Alembic revision 0022 on Postgres; created on first use on SQLite)."""
@@ -257,7 +260,7 @@ class SqlSecretStore:
 
     async def _ready(self) -> None:
         if is_sqlite(self._engine):
-            await ensure_tables(self._engine, "secrets", _SECRETS_DDL)
+            await migrate(self._engine, "secrets", _SECRETS_MIGRATIONS)
 
     async def put(self, name: str, value: str) -> None:
         from datetime import UTC, datetime

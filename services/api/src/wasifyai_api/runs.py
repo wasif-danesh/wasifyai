@@ -34,6 +34,7 @@ from wasifyai_platform_sdk import (
     RunStore,
     set_context,
 )
+from wasifyai_platform_sdk.context import current_context
 
 from wasifyai_api.metrics import record_run
 
@@ -55,6 +56,13 @@ class RunManager:
         self.graphs = graphs
         self._tasks: set[asyncio.Task] = set()
         self._by_run: dict[str, asyncio.Task] = {}  # the runs executing in this process, by run id
+        # the role of the person who started each run here (ADR-0088: an admin's jobs are not
+        # limited); a run resumed on another replica runs as a user
+        self._roles: dict[str, str] = {}
+        # ADR-0088: the policy whose leases a media job holds; a stopped run gives its job's back
+        self.job_policy: Any = None
+        # stage J3: stop a media job a stopped run was waiting for (the sink's `cancel`)
+        self.media_cancel: Any = None
 
     def _spawn(self, coro: Coroutine[Any, Any, None], run_id: str | None = None) -> None:
         task = asyncio.create_task(coro)
@@ -79,6 +87,7 @@ class RunManager:
         thread_id: UUID | None,
         graph_input: dict[str, Any],
         run_id: UUID | None = None,
+        role: str = "user",
     ) -> RunRecord:
         """Start a run. With `run_id` (chosen by the client) a second start under the same id by
         the same person is not a second run: it returns the first, whose events the caller
@@ -95,6 +104,8 @@ class RunManager:
             if existing is None or existing.user_id != user_id or existing.product_id != product_id:
                 raise RunIdTaken(rec.run_id)
             return existing
+        if role != "user":
+            self._roles[rec.run_id] = role
         self._spawn(self._execute(rec, graph_input), rec.run_id)
         return rec
 
@@ -112,6 +123,16 @@ class RunManager:
             task.cancel()  # the run is here; on another replica its own loop notices the state
             await asyncio.gather(task, return_exceptions=True)  # let it save what it had
         if current.status == "waiting_job":
+            if self.media_cancel is not None and current.waiting_job:
+                try:
+                    await self.media_cancel(current.waiting_job)
+                except Exception:
+                    log.warning("could not stop media job %s", current.waiting_job)
+            if self.job_policy is not None and current.waiting_job:
+                try:  # the place is free at once (ADR-0088); a lost one runs out on its own
+                    await self.job_policy.release(rec.tenant_id, rec.user_id, current.waiting_job)
+                except Exception:
+                    log.warning("could not give back the place of job %s", current.waiting_job)
             await self._clean_up(rec)
         record_run(rec.product_id, "cancelled")
         await self._emit(rec, ErrorEvent, code="cancelled", message="Stopped.", retryable=False)
@@ -178,7 +199,11 @@ class RunManager:
         """Run another product's graph for this user as its own run, and yield its events until it
         ends. It runs in its own task, so the caller's run context is untouched. If it takes longer
         than `timeout_s` an `error` event ends the stream (the child run is left to finish)."""
-        rec = await self.start(product_id, tenant_id, user_id, None, graph_input)
+        here = current_context()  # a child run is its parent's person, with the same role
+        rec = await self.start(
+            product_id, tenant_id, user_id, None, graph_input,
+            role=here.role if here is not None else "user",
+        )  # fmt: skip
         after = 0
         deadline = asyncio.get_running_loop().time() + timeout_s
         while True:
@@ -225,6 +250,7 @@ class RunManager:
                 user_id=rec.user_id,
                 run_id=rec.run_id,
                 thread_id=rec.thread_id,
+                role=self._roles.get(rec.run_id, "user"),
             )
         )
         checked = time.monotonic()

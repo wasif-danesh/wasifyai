@@ -4,9 +4,9 @@ platform pages through to backfill the index and to clean it up."""
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import IndexItem, search_text
-from wasifyai_platform_sdk.sqlite import ensure_tables, is_sqlite
+from wasifyai_platform_sdk.sqlite import is_sqlite, migrate
 
-from wasifyai_assistant.store import _DDL, PRODUCT_ID
+from wasifyai_assistant.store import PRODUCT_ID, SQLITE_MIGRATIONS
 
 
 class ConversationIndexSource:
@@ -18,7 +18,7 @@ class ConversationIndexSource:
 
     async def _ready(self) -> None:
         if is_sqlite(self._engine):
-            await ensure_tables(self._engine, "assistant", _DDL)
+            await migrate(self._engine, "assistant", SQLITE_MIGRATIONS)
 
     async def page(self, after: str | None, limit: int) -> list[IndexItem]:
         await self._ready()

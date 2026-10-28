@@ -13,7 +13,7 @@ without one the graph draws it, so the recipe always holds the seed that made th
 | `PATCH /products/wasifyai-image/images/{id}` `{favourite}`, `GET .../images?favourites=true` | `products/wasifyai-image/wasifyai_image/routes.py` |
 | `POST .../images/{id}/export`: body `{path}` writes the file at the path the person chose in the system's Save As box (the window opens it with Tauri's dialog plugin and cannot write a file itself; the engine refuses a folder, a missing folder and anything inside its own data folder); without a `path` it copies into the export folder (`WASIFYAI_EXPORT_DIR`, which the shell sets to the operating system's own Downloads folder, for the assistant's export action) and never overwrites. The video, 3D and notebook-output export routes take the same `{path}`; screens that hold the bytes themselves (speech, music, transcripts, lip sync, a source's original) send them to `POST /desktop/save` with the path. Answers `{name, path}`; 404 where no folder is set (web profile) | same; `app.state.export_dir` is set by the desktop profile in `main.py` |
 | Postgres columns | migration `0017_image_recipes` |
-| SQLite columns on an older file | `ensure_columns` (SDK), run by the image store |
+| SQLite columns on an older file | migration 1 of the image store (`SQLITE_MIGRATIONS`, `columns=`), run by the SDK's `migrate` (stage J1) |
 | "Make it again" | text images with a recipe only: an edit's source picture is deleted once the image is saved |
 
 The recipe does not name the model: the graph asks for a capability. The same seed gives the same picture on the

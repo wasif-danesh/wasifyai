@@ -14,7 +14,7 @@ from uuid import uuid4
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
-from wasifyai_platform_sdk.sqlite.engine import ensure_tables, from_iso, is_sqlite, to_iso
+from wasifyai_platform_sdk.sqlite.engine import Migration, from_iso, is_sqlite, migrate, to_iso
 
 Transport = Literal["http", "stdio"]
 Trust = Literal["ask", "trusted_read_only", "blocked"]
@@ -311,6 +311,10 @@ _DDL = (
     "CREATE INDEX IF NOT EXISTS ix_mcp_client_activity_server "
     "ON mcp_client_activity (server_id, created_at)",
 )
+
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+_MIGRATIONS = (Migration(1, _DDL),)
+
 COLUMNS = (
     "id, tenant_id, user_id, name, transport, url, command, args, env_names, has_token, trust, "
     "allowed_tools, timeout_s, keep_content, created_at, last_used_at, calls, bytes_sent, "
@@ -330,7 +334,7 @@ class SqlServerStore:
 
     async def _ready(self) -> None:
         if is_sqlite(self._engine):
-            await ensure_tables(self._engine, "mcp_servers", _DDL)
+            await migrate(self._engine, "mcp_servers", _MIGRATIONS)
 
     def _stamp(self, when: datetime | None) -> Any:
         if when is None:

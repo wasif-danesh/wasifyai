@@ -78,7 +78,7 @@ class InlineQueue:
         self.jobs: list[EngineJob] = []
         self.done: dict[str, object] = {}
 
-    async def submit(self, job):
+    async def submit(self, job, timeout_s=3600):
         self.jobs.append(job)
         self.done[job.id] = await run_job(self.engine, self.storage, job, "w1")
 
@@ -206,7 +206,7 @@ async def test_stop_tells_the_worker_to_stop_the_job_too(ctx):
             self.cancelled: list[str] = []
             self.waiting = asyncio.Event()
 
-        async def submit(self, job):
+        async def submit(self, job, timeout_s=3600):
             self.jobs.append(job)  # the worker takes its time
 
         async def wait(self, job_id, timeout_s, on_progress=None):

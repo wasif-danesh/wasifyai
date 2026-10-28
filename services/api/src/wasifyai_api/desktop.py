@@ -442,6 +442,7 @@ def _build_worker(d: DesktopBackends):
         slot.lock_for("image"),
         InMemoryJobState(),
         http,
+        cancels=d.queue,  # a picture or clip the person stopped stops here too (stage J3)
     )
 
     async def cleanup() -> None:

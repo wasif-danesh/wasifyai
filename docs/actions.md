@@ -104,10 +104,14 @@ SQLite) with the product run it started, its parameters and, once it has ended, 
 media worker is making) is followed until the run ends, and its result is read from the run's last event; work that
 ran in the engine's own process, or a run that ended with the engine, says it stopped when the app closed. Any job
 can be stopped: `job.cancel` stops the job and its product run, and with it the work (the speech runtime restarts on
-the desktop, an engine worker is told to stop its job). A picture or clip the media worker has started may still
-finish there, but it is not kept; a graph that holds something for a run (a clip's "being made" row) declares an
+the desktop, an engine worker is told to stop its job, and the media worker stops a picture or clip where it is and
+interrupts ComfyUI). After a restart only one API replica follows each 3D or Motion graphics job it resumes. A graph
+that holds something for a run (a clip's "being made" row) declares an
 `on_cancel` the run manager calls with the run's last state. Jobs that started before the table existed are
 answered from the audit log as before.
+
+On the web a person has at most `MAX_JOBS_PER_USER` jobs in the line (ADR-0088): an action that would start another
+answers an error with the code `busy` and the words that name the job in the way. Admins and the desktop are not limited.
 
 ## Results are references
 

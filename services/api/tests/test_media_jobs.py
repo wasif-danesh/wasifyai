@@ -180,3 +180,83 @@ async def test_completion_for_unknown_or_finished_runs_is_dropped(rig):
         ghost = {"tenant_id": "t", "run_id": "no-such-run", "job_id": "j", "result": {}}
         assert await handle_completion(app.state.runs, store, ghost) is True
         assert await handle_completion(app.state.runs, store, {**ghost, "run_id": None}) is True
+
+
+# ---- one job per person (ADR-0088, stage J4) and Stop reaching the job (stage J3) ----------
+
+
+def as_a_person(app) -> None:
+    """The stub's dev user is an admin, never limited: these runs are an ordinary person's."""
+    from wasifyai_api.identity import get_identity
+    from wasifyai_platform_sdk.identity import Identity
+
+    app.dependency_overrides[get_identity] = lambda: Identity("t1", "u1")
+
+
+async def _queued(sink, n: int) -> None:
+    for _ in range(300):
+        if len(sink.submitted) >= n:
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("the graph never enqueued its job")
+
+
+async def test_a_second_picture_is_refused_while_the_first_waits_and_allowed_once_it_is_done(rig):
+    app, raw, sink, store = rig
+    async with app.router.lifespan_context(app):
+        app.state.job_policy._limit = lambda: 1  # MAX_JOBS_PER_USER=1, as the web's values set it
+        as_a_person(app)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://t"
+        ) as c:
+
+            async def start():
+                r = await c.post("/products/media-demo/runs", json={"input": {"prompt": "a cat"}})
+                return parse(r.text)
+
+            first = asyncio.create_task(start())
+            await _queued(sink, 1)
+            second = await asyncio.wait_for(start(), 10)
+            assert second[-1][0] == "error" and second[-1][1]["code"] == "busy"
+            assert second[-1][1]["message"].startswith("You already have something being made")
+            assert len(sink.submitted) == 1  # the refused picture never entered the line
+
+            job = sink.submitted[0]
+            await deliver(app, store, completion(job, JobResult(job_id=job.job_id, status="failed",
+                          error=JobError(code="x", message="no"))))  # fmt: skip
+            await asyncio.wait_for(first, 10)
+            assert await app.state.job_policy.leases.held("t1", "u1") == []
+            third = asyncio.create_task(start())
+            await _queued(sink, 2)  # its place was given back: the next one goes in
+            third.cancel()
+
+
+async def test_stopping_a_run_that_waits_for_its_picture_stops_the_job_and_frees_the_place(rig):
+    app, _, sink, store = rig
+    stopped: list[str] = []
+    async with app.router.lifespan_context(app):
+        app.state.job_policy._limit = lambda: 1
+        as_a_person(app)
+
+        async def media_cancel(job_id):
+            stopped.append(job_id)
+
+        app.state.runs.media_cancel = media_cancel
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://t"
+        ) as c:
+            run = asyncio.create_task(
+                c.post("/products/media-demo/runs", json={"input": {"prompt": "a cat"}})
+            )
+            await _queued(sink, 1)
+            job = sink.submitted[0]
+            for _ in range(300):
+                rec = await store.get(job.tenant_id, job.run_id)
+                if rec is not None and rec.status == "waiting_job":
+                    break
+                await asyncio.sleep(0.01)
+            r = await c.post(f"/runs/{job.run_id}/cancel")
+            assert r.json()["status"] == "cancelled"
+            await asyncio.wait_for(run, 10)
+            assert stopped == [job.job_id]
+            assert await app.state.job_policy.leases.held(job.tenant_id, job.user_id) == []

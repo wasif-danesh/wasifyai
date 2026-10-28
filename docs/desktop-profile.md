@@ -209,14 +209,33 @@ engine's signed link, and the shell prints `SMOKE PASS ...` and exits 0 (`SMOKE 
 It drives the real DOM in the real webview, so CORS, the content security policy and the file link are all
 exercised. It needs the engine environment (`.venv`).
 
+## Schema changes (stage J1, 2026-10-28)
+
+The stores in `wasifyai.db` change their tables with numbered migrations, the desktop's Alembic:
+`migrate(engine, store, MIGRATIONS)` from `wasifyai_platform_sdk.sqlite`, called by each store before it
+reads or writes. Each file keeps one version per store in `schema_versions` (the stores share the file, so
+`PRAGMA user_version` cannot hold it).
+
+- **Migration 1 of every store** is its shape from before the runner: the `CREATE TABLE IF NOT EXISTS`
+  statements and the columns older files lacked (`columns=`), added only when missing, so a data folder
+  from any earlier build comes up to version 1 without losing a row.
+- **A change is a new `Migration(n, statements, columns=..., run=...)`** at the end of that store's one list
+  (`SQLITE_MIGRATIONS` or `_MIGRATIONS` beside its DDL). Every reader of a store uses the same list. Renames,
+  dropped columns and rebuilt tables are allowed; data is moved in `run`, which gets the connection.
+- **One transaction.** A store's pending migrations run inside `BEGIN IMMEDIATE ... COMMIT`, so a failed
+  step leaves the file as it was, and a second process opening the file waits and then finds the work done.
+- **A copy first.** Before a store that already has a version changes, `VACUUM INTO` copies the whole file to
+  `backups/wasifyai-<time>-<store>-v<from>.db` beside it; the newest five copies are kept.
+- **A newer file is refused** (`SchemaTooNew`, "made by a newer version of Wasify AI") rather than read wrongly.
+- The product stores with their own files (`voice.db`, `builder.db`) keep the version table they already had;
+  notebooks, 3D and training keep their guarded `ALTER TABLE` until they need a change that is not additive.
+
 ## What is not done
 
 - **Gallery extras.** Collections, tags and bulk actions are not built; the model id is not in the recipe yet.
 - **Menu entries marked "Soon"**: Train; Projects and
   Recents (they need the assistant and projects, ADR-0057). The home "Ask anything" box does not answer.
 - **Other screens** (music, speech, ...) still live in `apps/web`; the image and video screens are shared (`packages/ui`).
-- **Schema changes.** Each adapter creates its tables on first use (`CREATE TABLE IF NOT EXISTS`). There is no
-  migration runner, so changes must be additive until one is written.
 - **Admin routes** are mounted but the admin store is Postgres-only; on desktop they answer 403 (the desktop
   user is not an admin).
 - **Text capabilities** (enhance, moderation) need a gateway; with none configured they fail with a typed error.

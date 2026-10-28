@@ -1,7 +1,8 @@
 # ADR-0088: One job per person across everything before go live, built so the rule can loosen
 
 - **Status:** Accepted (owner, 2026-10-22: "a per-person limit on waiting jobs which should be 1 … before go live", and the design
-  must stay flexible for a multi-user concurrent service later). **Not built yet.** No code has changed.
+  must stay flexible for a multi-user concurrent service later). **Built 2026-10-28** (stage J4 of
+  `docs/improvement-plan-2026-10-27.md`; see "Built" below). The load test with several people is not done.
 - **Date:** 2026-10-22
 - **Depends on:** ADR-0021 (event log and queue), ADR-0047 (safeguards, quotas), ADR-0087 (engine workers: P6 usage and quotas,
   P7 the GPU host), ADR-0080 (3D) and ADR-0077 (Video Builder, which already allow one job per person)
@@ -77,6 +78,38 @@ None of these is built or promised. They are why the rule is one function, one s
 - **A fixed limit in each product.** Simple, but five places to change and drift. Rejected for decision 2.
 - **Full multi-user concurrency now** (priority, credits, autoscaling). The right end state if the business grows; too much to
   build and to run before there are users. The table shows the path.
+
+## Built (2026-10-28, stage J4)
+
+| Piece | Where |
+|---|---|
+| The policy point, the leases and the refusal | `JobPolicy`, `InMemoryLeases`, `RedisLeases`, `JobLimitReached` in `packages/platform-sdk/src/wasifyai_platform_sdk/jobpolicy.py` |
+| The media line (pictures, clips) | `AdmittedSink` in front of the media sink, made in `services/api/src/wasifyai_api/main.py` |
+| The engine line (speech, music, lip sync, 3D, Motion graphics and training on the web) | `EngineQueue(policy=...)`: `submit` asks the policy, the outcome and `cancel` give the place back |
+| Giving the place back | a picture's or clip's result (`jobs_consumer.handle_completion`), Stop on a run waiting for one (`RunManager.cancel`, which also stops the media job), an engine job's outcome or cancel; otherwise the lease runs out |
+| The setting | `MAX_JOBS_PER_USER` (`config.py`), Helm `jobs.maxPerUser: 1`; 0 on the desktop whatever is set |
+
+How it works:
+
+- A lease is one Redis sorted set per person (member: job id, score: expiry) and a hash of what each lease is (kind, cost
+  class, expiry). One Lua script drops the expired, then takes a place only below the limit, so two API replicas cannot both
+  take the last one; the same job asking again (a retry) is not refused by itself. Without Redis the leases are in memory.
+- A lease lasts the job's own time-out plus five minutes: 20 minutes for a picture or clip (the media worker's time-out),
+  the engine's wait for speech, 3D and Motion graphics, the training time-out for training.
+- Exempt: the limit 0, a person whose role is admin (read from the run, `RunContext.role`, which child runs inherit), the
+  service's own jobs (user `system`) and kinds that start with `admin.`.
+- The refusal is a run error with the code `busy`, retryable, that names the job in the way ("You already have something being
+  made (a video). Wait for it to finish, or stop it, then try again."). 3D, Motion graphics and training turn it into their own
+  failure with the same words.
+- The desktop's product managers (3D, Motion graphics) keep their one-at-a-time rule, as decision 6 says; on the web they
+  submit through the engine line, so the policy is in front of them.
+- Leases are not kept in SQLite: the desktop is never limited, so it uses the in-memory store.
+
+Answers to the open questions below, as built: every kind's time-out is its existing one (above); the person sees the job's
+own time-out error when one expires. A job that waits for a worker counts for as long as its lease. The refusal names the kind
+of job in the way; the screens do not yet show that job's place in the line.
+
+Not built: the load test with several people (the acceptance test of stage J4), a per-kind or per-plan limit (the table above).
 
 ## Open questions
 

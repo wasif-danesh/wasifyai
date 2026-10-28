@@ -20,14 +20,13 @@ parent is the row before it) and have no head: their head is their last row.
 """
 
 import json
-import weakref
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 from uuid import uuid4
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine
-from wasifyai_platform_sdk.sqlite import ensure_tables, is_sqlite, now_iso
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
+from wasifyai_platform_sdk.sqlite import Migration, is_sqlite, migrate, now_iso
 
 PRODUCT_ID = "wasifyai-assistant"
 MAX_MESSAGES = 500  # per conversation: a bound, not a feature
@@ -204,34 +203,29 @@ _DDL = (
 )
 
 
-async def _add_tree(engine: AsyncEngine) -> None:
+async def _add_tree(conn: AsyncConnection) -> None:
     """A desktop database file made before the tree gets its two columns, and every old message
-    its parent (the message before it), once. Done in one step so a half-way file cannot lose
-    its order; migration 0021 does the same for the web profile."""
-    done = _TREE_DONE.setdefault(engine, False)
-    if done:
-        return
-    async with engine.begin() as conn:
-        have = {
-            str(r._mapping["name"])
-            for r in await conn.exec_driver_sql("PRAGMA table_info(messages)")
-        }
-        if "parent_id" not in have:
-            await conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN parent_id TEXT")
-            await conn.exec_driver_sql(
-                "UPDATE messages SET parent_id = (SELECT p.id FROM messages p "
-                "WHERE p.conversation_id = messages.conversation_id AND p.seq = messages.seq - 1)"
-            )
-        have = {
-            str(r._mapping["name"])
-            for r in await conn.exec_driver_sql("PRAGMA table_info(conversations)")
-        }
-        if "head_id" not in have:
-            await conn.exec_driver_sql("ALTER TABLE conversations ADD COLUMN head_id TEXT")
-    _TREE_DONE[engine] = True
+    its parent (the message before it). Part of migration 1, so a half-way file cannot lose its
+    order; migration 0021 does the same for the web profile."""
+    have = {
+        str(r._mapping["name"]) for r in await conn.exec_driver_sql("PRAGMA table_info(messages)")
+    }
+    if "parent_id" not in have:
+        await conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN parent_id TEXT")
+        await conn.exec_driver_sql(
+            "UPDATE messages SET parent_id = (SELECT p.id FROM messages p "
+            "WHERE p.conversation_id = messages.conversation_id AND p.seq = messages.seq - 1)"
+        )
+    have = {
+        str(r._mapping["name"])
+        for r in await conn.exec_driver_sql("PRAGMA table_info(conversations)")
+    }
+    if "head_id" not in have:
+        await conn.exec_driver_sql("ALTER TABLE conversations ADD COLUMN head_id TEXT")
 
 
-_TREE_DONE: "weakref.WeakKeyDictionary[AsyncEngine, bool]" = weakref.WeakKeyDictionary()
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+SQLITE_MIGRATIONS = (Migration(1, _DDL, run=_add_tree),)
 
 
 class SqlConversationStore:
@@ -240,8 +234,7 @@ class SqlConversationStore:
 
     async def _ready(self) -> None:
         if is_sqlite(self._engine):  # the web profile's tables come from migrations 0018 and 0021
-            await ensure_tables(self._engine, "assistant", _DDL)
-            await _add_tree(self._engine)
+            await migrate(self._engine, "assistant", SQLITE_MIGRATIONS)
 
     async def create(self, tenant_id: str, user_id: str, title: str = "") -> Conversation:
         await self._ready()

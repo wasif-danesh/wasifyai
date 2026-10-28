@@ -26,6 +26,7 @@ from wasifyai_platform_sdk import (
     builder_wire,
     require_context,
 )
+from wasifyai_platform_sdk.jobpolicy import JobLimitReached
 from wasifyai_platform_sdk.storage import object_key
 from wasifyai_platform_sdk.usage import (
     LLM_INPUT_TOKENS,
@@ -138,6 +139,15 @@ class RemoteBuilderEngine:
         template = raw.pop("template")
         return template, raw
 
+    async def _submit(self, job: EngineJob, **kw: Any) -> None:
+        """Queue a job; a person who already has one in the line is told so, in the policy's
+        words, as this job's own failure (ADR-0088)."""
+        kw.setdefault("timeout_s", self._timeout)  # its place is held as long as it is waited for
+        try:
+            await self._queue.submit(job, **kw)
+        except JobLimitReached as e:
+            raise _Failed("busy", e.message) from None
+
     async def _run(
         self, kind: str, params: dict[str, Any],
         on_progress: Callable[[float, str], None] | None = None,
@@ -149,10 +159,12 @@ class RemoteBuilderEngine:
         outputs: list[str] = []
         try:
             if resume:  # sent before a restart: only its outcome is awaited
+                # one replica follows a job after a restart (stage J3); another waits its turn
+                await self._queue.resume_turn(job_id)
                 if await self._queue.status(job_id) == "lost":
                     raise _Failed("lost", "It was stopped before it finished. Make it again.")
             else:
-                await self._queue.submit(
+                await self._submit(
                     EngineJob(
                         id=job_id,
                         kind=kind,

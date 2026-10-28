@@ -58,8 +58,16 @@ class InlineQueue:
         self.cancelled_ids: list[str] = []
         self.sent: dict[str, str] = {}  # job id -> "waiting": sent, no outcome yet
         self.reported: list[tuple[float, str]] = []
+        self.turns: list[str] = []
+        self.refuse: Exception | None = None  # what the job policy says, when it says no
 
-    async def submit(self, job):
+    async def resume_turn(self, job_id):
+        self.turns.append(job_id)
+
+    async def submit(self, job, timeout_s=3600):
+        if self.refuse is not None:
+            raise self.refuse
+
         async def report(fraction, label):
             self.reported.append((fraction, label))
 
@@ -195,6 +203,7 @@ async def test_a_model_the_worker_finished_while_the_api_was_down_is_picked_up_w
     res = await engine.generate(tmp_path / "unused.png", out, job_key="row-1", resume=True)
     assert res.ok and out.read_bytes() == b"glTFCUT"
     assert service.seen == ["generate:7:light"]  # run once, not sent again
+    assert queue.turns == ["row-1"]  # it waited for its turn to follow the job (one replica does)
     assert await storage.list("t1/wasifyai-model3d/u1") == []  # and nothing is left behind
 
 
@@ -244,3 +253,18 @@ async def test_the_time_a_worker_spends_is_a_usage_event_of_the_person_even_when
     assert [e.kind for e in events] == ["engine.seconds", "engine.seconds"]
     assert all(e.user_id == "u1" and e.product_id == "wasifyai-model3d" for e in events)
     assert events[0].unit == "seconds" and events[0].meta["job"] == model3d_wire.MATTE
+
+
+@pytest.mark.asyncio
+async def test_a_person_with_a_job_in_the_line_is_told_so_in_words(ctx, tmp_path):
+    """ADR-0088: the policy's refusal is the job's own failure, naming the job in the way."""
+    from wasifyai_platform_sdk.jobpolicy import JobLimitReached, Lease
+
+    engine, queue, _, service = make([worker()])
+    queue.refuse = JobLimitReached(Lease("other", "speech.speak", "normal", 0.0))
+    cutout = tmp_path / "c.png"
+    cutout.write_bytes(b"CUT")
+    res = await engine.generate(cutout, tmp_path / "m.glb")
+    assert not res.ok and res.reason == "busy"
+    assert res.message.startswith("You already have something being made (a speech)")
+    assert service.seen == []

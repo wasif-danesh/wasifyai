@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from wasifyai_platform_sdk.sqlite.engine import ensure_tables, from_iso, is_sqlite, to_iso
+from wasifyai_platform_sdk.sqlite.engine import Migration, from_iso, is_sqlite, migrate, to_iso
 
 AuditStatus = Literal["ok", "refused", "needs_setup", "needs_approval", "running", "error"]
 Approver = Literal["none", "auto", "person"]  # how the go-ahead came: not needed, setting, a person
@@ -180,6 +180,9 @@ _AUDIT_DDL = (
     "CREATE INDEX IF NOT EXISTS ix_action_audit_job ON action_audit (tenant_id, user_id, job_id)",
 )
 
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+_AUDIT_MIGRATIONS = (Migration(1, _AUDIT_DDL),)
+
 _APPROVAL_DDL = (
     """
     CREATE TABLE IF NOT EXISTS action_approvals (
@@ -202,6 +205,9 @@ _APPROVAL_DDL = (
     "ON action_approvals (tenant_id, user_id, status)",
 )
 
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+_APPROVAL_MIGRATIONS = (Migration(1, _APPROVAL_DDL),)
+
 
 def _stamp(engine: AsyncEngine, value: datetime | None) -> Any:
     """SQLite keeps time as UTC text; Postgres takes the datetime (its columns are timestamptz)."""
@@ -222,7 +228,7 @@ class SqlAuditStore:
 
     async def _ready(self) -> None:
         if is_sqlite(self._engine):
-            await ensure_tables(self._engine, "action_audit", _AUDIT_DDL)
+            await migrate(self._engine, "action_audit", _AUDIT_MIGRATIONS)
 
     async def record(self, entry: AuditEntry) -> None:
         await self._ready()
@@ -277,7 +283,7 @@ class SqlApprovalStore:
 
     async def _ready(self) -> None:
         if is_sqlite(self._engine):
-            await ensure_tables(self._engine, "action_approvals", _APPROVAL_DDL)
+            await migrate(self._engine, "action_approvals", _APPROVAL_MIGRATIONS)
 
     def _record(self, r: Any) -> ApprovalRecord:
         m = dict(r._mapping)

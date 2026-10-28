@@ -20,6 +20,7 @@ from wasifyai_platform_sdk import (
     model3d_wire,
     require_context,
 )
+from wasifyai_platform_sdk.jobpolicy import JobLimitReached
 from wasifyai_platform_sdk.storage import object_key
 
 from wasifyai_api.engine_workers import WorkerDirectory, record_engine_seconds
@@ -89,6 +90,15 @@ class RemoteModel3dEngine:
 
     # ---- the work ---------------------------------------------------------------------------
 
+    async def _submit(self, job: EngineJob, **kw: Any) -> None:
+        """Queue a job; a person who already has one in the line is told so, in the policy's
+        words, as this job's own failure (ADR-0088)."""
+        kw.setdefault("timeout_s", self._timeout)  # its place is held as long as it is waited for
+        try:
+            await self._queue.submit(job, **kw)
+        except JobLimitReached as e:
+            raise _Failed("busy", e.message) from None
+
     async def _run(
         self,
         kind: str,
@@ -107,6 +117,8 @@ class RemoteModel3dEngine:
         staged: list[str] = []
         try:
             if resume:
+                # one replica follows a job after a restart (stage J3); another waits its turn
+                await self._queue.resume_turn(job_id)
                 if await self._queue.status(job_id) == "lost":
                     raise _Failed("lost", "It was stopped before it finished. Make it again.")
                 staged = [f"{prefix}/in/{name}" for name in files]  # sent before the restart
@@ -118,7 +130,7 @@ class RemoteModel3dEngine:
                     )
                     staged.append(key)
                     keys[name] = key
-                await self._queue.submit(
+                await self._submit(
                     EngineJob(
                         id=job_id,
                         kind=kind,

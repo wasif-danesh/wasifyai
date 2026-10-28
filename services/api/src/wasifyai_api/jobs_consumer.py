@@ -30,6 +30,9 @@ async def handle_completion(runs: RunManager, store: RunStore, message: dict[str
     if not run_id:
         return True  # a job started outside a run
     rec = await store.get(tenant_id, run_id)
+    policy = getattr(runs, "job_policy", None)
+    if rec is not None and policy is not None:  # the job is over: its person's place is free
+        await policy.release(rec.tenant_id, rec.user_id, job_id)
     if rec is None or rec.status in ("done", "error", "cancelled"):
         return True
     if await store.take_waiting_job(tenant_id, run_id, job_id):

@@ -21,10 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import USER_SCOPES, AllowedFolders, Principal
 from wasifyai_platform_sdk.actions import ApprovalPolicy, PolicyError
 from wasifyai_platform_sdk.sqlite.engine import (
-    ensure_columns,
-    ensure_tables,
+    Migration,
     from_iso,
     is_sqlite,
+    migrate,
     to_iso,
 )
 
@@ -288,6 +288,9 @@ COLUMNS = (
 # columns added after the table first shipped (SQLite files from before get them on first use)
 LATER_COLUMNS = {"calls_per_day": "INTEGER NOT NULL DEFAULT 1000"}
 
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+_MIGRATIONS = (Migration(1, _DDL, columns={"mcp_connections": LATER_COLUMNS}),)
+
 
 def _split(value: Any) -> tuple[str, ...]:
     return tuple(s for s in str(value or "").split("\n") if s)
@@ -302,8 +305,7 @@ class SqlConnectionStore:
 
     async def _ready(self) -> None:
         if is_sqlite(self._engine):
-            await ensure_tables(self._engine, "mcp_connections", _DDL)
-            await ensure_columns(self._engine, "mcp_connections", "mcp_connections", LATER_COLUMNS)
+            await migrate(self._engine, "mcp_connections", _MIGRATIONS)
 
     def _stamp(self, when: datetime | None) -> Any:
         if when is None:

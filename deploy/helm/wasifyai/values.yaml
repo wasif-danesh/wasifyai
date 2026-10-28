@@ -19,6 +19,9 @@ env:
   COMFYUI_BASE_URL: ""                   # Phase 4
   COMFYUI_VIDEO_BASE_URL: ""             # a separate ComfyUI for video (ADR-0037); empty = the one above
 
+jobs:
+  maxPerUser: 1         # ADR-0088: one job in the line per person across everything; admins are never limited; 0 = no limit
+
 safeguards:
   forceOn: false        # true in production (ADR-0047): moderation and quotas always apply, the admin cannot turn them off
 

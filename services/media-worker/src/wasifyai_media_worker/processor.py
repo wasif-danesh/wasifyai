@@ -45,6 +45,20 @@ REMOTE_SECONDS = "media.remote_seconds"
 LOOK_DIR = "wasify-user"  # inside a `loras` folder: a person's own looks, for the length of one job
 LOOK_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.safetensors$")
 TRAINING_PRODUCT = "wasifyai-training"
+CANCEL_POLL_S = 1.0  # how often a running job looks whether it was stopped (stage J3)
+STOPPED = "Stopped."
+
+
+class Cancels(Protocol):
+    """Where a stop for a job is written (the API) and read (the worker): a Redis key on the web,
+    a flag of the desktop's queue."""
+
+    async def is_cancelled(self, job_id: str) -> bool: ...
+
+
+class _Stopped(Exception):
+    """The person stopped the job while it ran."""
+
 
 # What a runner returns: output name -> (bytes, content type, file extension)
 Files = dict[str, tuple[bytes, str, str]]
@@ -104,7 +118,12 @@ class ComfyRunner:
             if files and slot in files:
                 name = input_image_name(job.job_id, slot)
                 graph = use_picture(graph, name, await self._client.upload_image(name, files[slot]))
-        outputs = await self._client.run(graph, job.job_id, on_progress, self._timeout)
+        try:
+            outputs = await self._client.run(graph, job.job_id, on_progress, self._timeout)
+        except asyncio.CancelledError:
+            # stopped (stage J3): ComfyUI goes on with a prompt nobody waits for; tell it to stop
+            await asyncio.shield(self._client.interrupt())
+            raise
         produced: Files = {}
         for name, spec in job.outputs.items():
             f = self._client.pick(outputs, str(spec["node"]), spec.get("type", "image"))
@@ -158,6 +177,7 @@ class JobProcessor:
         gpu: GpuLock,
         state: JobState,
         http: httpx.AsyncClient | None = None,
+        cancels: Cancels | None = None,
     ):
         self.s = settings
         self.log = log_
@@ -167,6 +187,7 @@ class JobProcessor:
         self.gpu = gpu
         self.state = state
         self._http = http or httpx.AsyncClient(timeout=30)
+        self.cancels = cancels  # stage J3: a stopped job is not run, or stops where it is
 
     async def emit(self, job: JobRequest, status: str, **kw: Any) -> None:
         if event := progress_event(job, status, **kw):
@@ -176,6 +197,11 @@ class JobProcessor:
         """Returns the job's final result. Raises RetryJob for transient infrastructure failures."""
         if prior := await self.state.finished(job.tenant_id, job.job_id):
             return prior  # redelivered after a crash: report the same result again
+        if await self._stopped(job):  # stopped while it waited in the line: never started
+            result = self._failed(job, "cancelled", STOPPED, 0.0, retryable=False)
+            await self.state.finish(job.tenant_id, job.job_id, result)
+            await self.emit(job, result.status)
+            return result
         attempt = await self.state.begin(job.tenant_id, job.job_id)
         await self.emit(job, "running", progress=0.0)
 
@@ -202,10 +228,11 @@ class JobProcessor:
                 started = time.monotonic()
                 try:
                     # a runner that takes no input files is called as it always was
-                    files = await (
+                    files = await self._watched(
+                        job,
                         runner.run(job_run, on_progress, files=given)
                         if given
-                        else runner.run(job_run, on_progress)
+                        else runner.run(job_run, on_progress),
                     )
                 finally:
                     elapsed = time.monotonic() - started
@@ -217,6 +244,8 @@ class JobProcessor:
                 outputs=outputs,
                 gpu_seconds=round(elapsed, 2) if _local(runner) else 0.0,
             )
+        except _Stopped:
+            result = self._failed(job, "cancelled", STOPPED, _gpu(runner, elapsed), retryable=False)
         except ComfyError as e:
             result = self._failed(
                 job, e.code, e.message, _gpu(runner, elapsed), retryable=e.code == "connection_lost"
@@ -251,6 +280,35 @@ class JobProcessor:
         await self.state.finish(job.tenant_id, job.job_id, result)
         await self.emit(job, result.status, progress=1.0 if result.status == "completed" else None)
         return result
+
+    async def _stopped(self, job: JobRequest) -> bool:
+        if self.cancels is None:
+            return False
+        try:
+            return await self.cancels.is_cancelled(job.job_id)
+        except Exception:
+            log.warning("could not read whether job %s was stopped", job.job_id)
+            return False
+
+    async def _watched(self, job: JobRequest, work: Any) -> Files:
+        """Run the job, looking now and then whether it was stopped; a stop cancels the run, which
+        tells ComfyUI to interrupt it (`ComfyRunner`), so the GPU is free for the next job."""
+        task = asyncio.ensure_future(work)
+        if self.cancels is None:
+            return await task
+        try:
+            while True:
+                done, _ = await asyncio.wait({task}, timeout=CANCEL_POLL_S)
+                if done:
+                    return task.result()
+                if await self._stopped(job):
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+                    raise _Stopped
+        except asyncio.CancelledError:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            raise
 
     async def _input_files(self, job: JobRequest) -> InputFiles:
         """The user's uploaded picture for this job, read from their own prefix (ADR-0035). The key

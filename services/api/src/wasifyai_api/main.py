@@ -54,6 +54,7 @@ from wasifyai_platform_sdk import (
     load_product_config,
     s3_storage,
 )
+from wasifyai_platform_sdk.jobpolicy import AdmittedSink, InMemoryLeases, JobPolicy, RedisLeases
 from wasifyai_platform_sdk.providers.litellm import LiteLLMTextProvider
 
 from wasifyai_api.actions_engine import build_executor
@@ -226,8 +227,21 @@ def create_app(
         )
         log_ = event_log or (desktop.event_log if desktop else RedisEventLog(conn))  # type: ignore[arg-type]
         store_ = run_store or (desktop.run_store if desktop else RedisRunStore(conn))  # type: ignore[arg-type]
-        sink = job_sink or (
-            desktop.queue if desktop else (RedisJobSink(conn, log_) if conn else InMemoryJobSink())
+        # ADR-0088 (stage J4): one policy decides whether a job may enter a line, counted with a
+        # lease per job in Redis (in memory without one); the desktop is never limited
+        policy = JobPolicy(
+            RedisLeases(conn) if conn is not None else InMemoryLeases(),
+            (lambda: 0) if desktop else (lambda: get_settings().max_jobs_per_user),
+        )
+        app.state.job_policy = policy
+        sink = AdmittedSink(
+            job_sink
+            or (
+                desktop.queue
+                if desktop
+                else (RedisJobSink(conn, log_) if conn else InMemoryJobSink())
+            ),
+            policy,
         )
         store = storage or (desktop.storage if desktop else None)
         if store is None and settings.storage_access_key:
@@ -551,7 +565,7 @@ def create_app(
         # the engine workers that run the desktop's heavy capabilities for the web (ADR-0087):
         # speech and 3D read what they have from one list
         if not desktop and store is not None and conn is not None:
-            app.state.engine_workers = WorkerDirectory(EngineQueue(conn))
+            app.state.engine_workers = WorkerDirectory(EngineQueue(conn, policy=policy))
             app.state.engine_workers.start()
         # a product is served when it is part of this deployment: its folder is in the products
         # directory
@@ -600,7 +614,7 @@ def create_app(
                         if e.voice is not None
                     }
                     remote = RemoteSpeechEngine(
-                        EngineQueue(conn), store.backing, voice_models,
+                        EngineQueue(conn, policy=policy), store.backing, voice_models,
                         directory=app.state.engine_workers, usage=recorder,
                     )  # fmt: skip
                     app.state.audio = CombinedSpeechEngine(remote, hosted)
@@ -663,7 +677,10 @@ def create_app(
                 )
                 app.state.model3d_blobs = StorageBlobs(store)
                 app.state.model3d = RemoteModel3dEngine(
-                    EngineQueue(conn), store.backing, app.state.engine_workers, usage=recorder
+                    EngineQueue(conn, policy=policy),
+                    store.backing,
+                    app.state.engine_workers,
+                    usage=recorder,
                 )
                 await sweep_model3d(app.state)
                 await resume_model3d(route_deps)
@@ -690,7 +707,7 @@ def create_app(
                 )
                 app.state.builder_scratch = Path(tempfile.mkdtemp(prefix="wasifyai-builder-"))
                 app.state.video_builder = RemoteBuilderEngine(
-                    EngineQueue(conn),
+                    EngineQueue(conn, policy=policy),
                     store.backing,
                     app.state.engine_workers,
                     gateway_url=settings.litellm_base_url,
@@ -736,7 +753,7 @@ def create_app(
                 )
                 app.state.training_store = tstore
                 app.state.training_files = StorageFiles(store.backing)
-                tq, tdir = EngineQueue(conn), app.state.engine_workers
+                tq, tdir = EngineQueue(conn, policy=policy), app.state.engine_workers
                 trainers = {"usage": recorder}
                 app.state.video_training = RemoteVideoTrainer(tq, store.backing, tdir, **trainers)
                 app.state.training = RemoteImageTrainer(tq, store.backing, tdir, **trainers)
@@ -802,6 +819,8 @@ def create_app(
                     await saver.setup()
                 graphs = build_graphs(saver)
                 app.state.runs = RunManager(log_, store_, graphs)
+                app.state.runs.job_policy = policy  # a stopped run frees its job's place
+                app.state.runs.media_cancel = getattr(sink, "cancel", None)  # and stops its job
                 if conn is not None:  # resume graphs when workers report results
                     consumer = JobCompletionConsumer(conn, app.state.runs, store_)
                     await consumer.start()

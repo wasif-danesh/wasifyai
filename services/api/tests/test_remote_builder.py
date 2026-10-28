@@ -106,8 +106,12 @@ class InlineQueue:
         self.reported: list[tuple[float, str]] = []
         self.kinds: list[str] = []
         self.cancelled: list[str] = []
+        self.turns: list[str] = []
 
-    async def submit(self, job):
+    async def resume_turn(self, job_id):
+        self.turns.append(job_id)
+
+    async def submit(self, job, timeout_s=3600):
         self.kinds.append(job.kind)
 
         async def report(fraction, label):

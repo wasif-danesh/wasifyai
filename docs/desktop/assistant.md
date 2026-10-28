@@ -35,8 +35,8 @@ The default is the card (`ApprovalPolicy()`): a `make` waits for the person's Ru
 origin. The card (`ConfirmActionCard`) is drawn from the action's input schema and can be edited before Run; the
 result is drawn by the action (a picture, a player, or a result card with Open). The engine builds the catalogue
 for the products it serves (`app.state.actions`, `wasifyai_api.actions_engine`), with the audit log and the
-pending approvals in the same SQLite file (`action_audit`, `action_approvals`, created on first use, additive
-only). Every call writes one audit entry (no content) and one `action.run` usage event. `docs/contracts/actions.json`
+pending approvals in the same SQLite file (`action_audit`, `action_approvals`, brought up to date on first use by their
+migrations, `docs/desktop-profile.md` "Schema changes"). Every call writes one audit entry (no content) and one `action.run` usage event. `docs/contracts/actions.json`
 is the catalogue as a file; `docs/help/` holds the help for every action.
 
 ### Evaluating a model for the assistant

@@ -79,6 +79,7 @@ async def start_run(
             body.thread_id,
             body.input,
             body.run_id,
+            role=identity.role,
         )
     except RunIdTaken:
         raise HTTPException(409, "that run id is already in use") from None

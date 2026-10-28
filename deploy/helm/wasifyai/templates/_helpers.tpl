@@ -89,6 +89,8 @@ imagePullSecrets:
   value: {{ .Values.env.PRODUCT_ENV | quote }}
 - name: SAFEGUARDS_FORCE_ON
   value: {{ .Values.safeguards.forceOn | quote }}
+- name: MAX_JOBS_PER_USER
+  value: {{ .Values.jobs.maxPerUser | quote }}
 {{ include "wasifyai.mediaSecretsEnv" . }}
 - name: AUTH_MODE
   value: {{ .Values.auth.mode | quote }}

@@ -18,7 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from wasifyai_platform_sdk.actions.result import ActionResult
-from wasifyai_platform_sdk.sqlite.engine import ensure_tables, is_sqlite
+from wasifyai_platform_sdk.sqlite.engine import Migration, is_sqlite, migrate
 
 JobStatus = Literal["running", "ok", "refused", "error", "cancelled"]
 MAX_JOBS = (
@@ -135,6 +135,9 @@ _JOBS_DDL = (
     "CREATE INDEX IF NOT EXISTS ix_action_jobs_user ON action_jobs (tenant_id, user_id, status)",
 )
 
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+_JOBS_MIGRATIONS = (Migration(1, _JOBS_DDL),)
+
 
 class SqlJobStore:
     """The `action_jobs` table: Alembic 0027 on Postgres, created on first use on SQLite."""
@@ -144,7 +147,7 @@ class SqlJobStore:
 
     async def _ready(self) -> None:
         if is_sqlite(self._engine):
-            await ensure_tables(self._engine, "action_jobs", _JOBS_DDL)
+            await migrate(self._engine, "action_jobs", _JOBS_MIGRATIONS)
 
     async def save(self, job: Job) -> None:
         await self._ready()

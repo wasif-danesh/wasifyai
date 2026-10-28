@@ -5,6 +5,7 @@ export function Bar({ value, className }: { value?: number; className?: string }
   return (
     <div
       aria-hidden="true"
+      data-slot="bar"
       className={cn("h-[0.6rem] overflow-hidden rounded-full bg-muted", className)}
       data-indeterminate={value === undefined || undefined}
     >

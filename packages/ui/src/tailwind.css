@@ -124,6 +124,39 @@
   }
 }
 
+/*
+ * High contrast (forced colours, ADR-0093 U12): the system paints every colour and drops shadows and backgrounds, so
+ * what the app shows with them is shown with the system's own colours instead: the focus ring (a shadow here), the
+ * chosen chip, option, tab or menu item (a filled background), the progress of a bar and the readiness dots.
+ */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid CanvasText !important;
+    outline-offset: 2px;
+  }
+  [aria-pressed="true"],
+  [aria-selected="true"],
+  [aria-current="page"],
+  [aria-current="true"],
+  [aria-current="step"],
+  [data-state="on"],
+  [data-state="active"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  [data-slot="bar"] {
+    border: 1px solid CanvasText;
+  }
+  [data-slot="bar"] > i {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+  [data-slot="ready-dot"] {
+    forced-color-adjust: none;
+    border: 1px solid CanvasText;
+  }
+}
+
 /* Everything that moves is switched off for people who ask for less motion. */
 @media (prefers-reduced-motion: reduce) {
   *,

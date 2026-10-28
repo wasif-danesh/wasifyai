@@ -84,5 +84,16 @@ export function useStudioWidth() {
     onDoubleClick: toggleWide,
   };
 
-  return { width, wide, toggleWide, handle, grid, column, min: STUDIO_MIN, max: limit };
+  // the width on the screen, for the handle's value when the default width is in use
+  return {
+    width,
+    wide,
+    toggleWide,
+    handle,
+    grid,
+    column,
+    min: STUDIO_MIN,
+    max: limit,
+    shown: current,
+  };
 }

@@ -55,7 +55,7 @@ export function ModelPicker({
     // at the top of the screen, in the window's bar, like the chat and image screens
     return (
       <PageHeader className="flex h-14 shrink-0 items-center gap-4 border-b px-6 pt-1">
-        <div className="flex items-center gap-2 ps-2 text-sm">
+        <div className="flex min-w-0 items-center gap-2 ps-2 text-sm">
           <ModelSelect
             group={groupOfTask(task)}
             api={choices}

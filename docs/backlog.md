@@ -27,7 +27,7 @@ and deployment side and wait for it unless marked **blocks release**.
 | # | Item | Notes |
 |---|---|---|
 | B1 | Usage events and quotas for hosted speech seconds | The gateway's spend log has the cost; the platform writes no usage event for speech seconds. Needed before the web is public |
-| B2 | Accessibility pass on the web (focus order, labels, contrast in both themes) | No axe or similar tool is installed (a new dependency, ask first). Folded into the design system, ADR-0081 decision 9 and stage DS3 |
+| B2 | ~~Accessibility pass on the web (focus order, labels, contrast in both themes)~~ Done 2026-10-28 (UI stage U12) | `@axe-core/playwright` checks every web screen in three views (`apps/web/e2e/a11y.spec.ts`) and the window (`ui-audit.sh light a11y`); a keyboard walk, high contrast and less motion are checked too |
 | B3 | Load and quota tests (many people, long dubs and audiobooks) | None exist |
 | B4 | **Blocks release:** the terms of service the OpenRAIL and consent rules require before the public sees video and voice cloning | Needs the owner and a lawyer; the consent text exists in the app |
 | B5 | The cloud GPU host | ComfyUI music on a GPU host is gone from the web (ADR-0067). To run ACE-Step on a host, run the voice product's local engine there (`VOICE_ENGINE=local`); needs a CUDA build of audio.cpp with its own pinned lock (open since V1) |

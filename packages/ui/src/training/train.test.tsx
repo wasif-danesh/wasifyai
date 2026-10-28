@@ -679,7 +679,7 @@ describe("Train", () => {
     expect(await screen.findByText("Stopped")).toBeTruthy();
     expect(screen.getByText("Stopped.")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Back to the pictures" }));
-    expect(await screen.findByRole("navigation", { name: "Steps" })).toBeTruthy();
+    expect(await screen.findByRole("list", { name: "Steps" })).toBeTruthy();
   });
 
   it("lists the models taught, renames one, and removes one after asking", async () => {

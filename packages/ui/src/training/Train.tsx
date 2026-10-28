@@ -18,6 +18,7 @@ import { Button } from "../components/button";
 import { Chip } from "../components/chip";
 import { JobMeter, WorkingCard } from "../components/create";
 import { Notice } from "../components/notice";
+import { Stepper } from "../components/stepper";
 import type { ImageFlowApi } from "../hooks/use-image-flow";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
 import { BackInBar } from "../window-bar";
@@ -689,19 +690,11 @@ function MakeView({
   const min = isVideo ? (video.status?.min_items ?? 8) : (status?.min_pictures ?? 8);
   return (
     <>
-      <nav aria-label="Steps" className="flex flex-wrap gap-2 text-sm">
-        <span
-          className={cn("rounded-full border px-3 py-1", step === 1 && "bg-accent font-medium")}
-        >
-          {isVideo ? "1 Add pictures and clips" : "1 Add pictures"}
-        </span>
-        <span
-          className={cn("rounded-full border px-3 py-1", step === 2 && "bg-accent font-medium")}
-        >
-          2 Check
-        </span>
-        <span className="rounded-full border px-3 py-1 text-muted-foreground">3 Teach</span>
-      </nav>
+      <Stepper
+        steps={[isVideo ? "Add pictures and clips" : "Add pictures", "Check", "Teach"]}
+        current={step - 1}
+        onStep={(n) => n === 0 && setStep(1)}
+      />
       {step === 1 ? (
         <PicturesStep t={t} d={d} min={min} onNext={() => setStep(2)} video={isVideo} />
       ) : (

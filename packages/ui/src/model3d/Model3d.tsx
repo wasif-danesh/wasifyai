@@ -102,7 +102,7 @@ export function Model3d({
       {choices ? (
         // the model button is at the top of the screen, as on the chat and image screens (ADR-0086)
         <PageHeader className="flex h-14 shrink-0 items-center gap-4 border-b px-6 pt-1">
-          <div className="flex items-center gap-2 ps-2 text-sm">
+          <div className="flex min-w-0 items-center gap-2 ps-2 text-sm">
             <ModelSelect group="three_d" api={choices} />
           </div>
         </PageHeader>

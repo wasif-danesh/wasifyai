@@ -20,6 +20,8 @@
 //                                                                then Split into parts with it chosen
 //   apps/desktop/scripts/ui-audit.sh light library-make         the Library: a picture opened, Edit this, a real
 //                                                                edit made, then "Made from" and "Made from this"
+//   apps/desktop/scripts/ui-audit.sh light a11y                 every screen of the window against the accessibility
+//                                                                rules (axe, WCAG 2.2 A and AA); prints what fails
 //   apps/desktop/scripts/ui-audit.sh light u11-make             Settings (what this computer can do, the groups, a
 //                                                                search, the theme, a setting saved as it changes),
 //                                                                the Models page and the picker with their dots
@@ -457,6 +459,28 @@ for (const scheme of ["light", "dark"]) {
       await shot(page, "library-made-from-this");
     });
   }
+  if (names.has("a11y")) {
+    // the window's screens against the same rules as the web's e2e/a11y.spec.ts (ADR-0093 U12, decision 4)
+    const AxeBuilder = require("@axe-core/playwright").default;
+    let failing = 0;
+    for (const [name, path] of SCREENS) {
+      await attempt(`a11y-${name}`, async () => {
+        await open(page, path);
+        const result = await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+          .analyze();
+        for (const v of result.violations) {
+          failing += 1;
+          console.log(`A11Y ${scheme} ${name}: ${v.id} (${v.impact}) ${v.help}`);
+          for (const n of v.nodes.slice(0, 4))
+            console.log(
+              `    ${n.target.join(" ")}  ${n.failureSummary?.split("\n")[1]?.trim() ?? ""}`,
+            );
+        }
+      });
+    }
+    console.log(`A11Y ${scheme}: ${SCREENS.length} screens, ${failing} rules failing`);
+  }
   if (scheme === "light" && names.has("u11-make")) {
     await attempt("u11-settings", async () => {
       await open(page, "/settings");
@@ -654,6 +678,12 @@ for (const scheme of ["light", "dark"]) {
     ]) {
       await attempt(name, async () => {
         await open(page, "/train");
+        // Train reopens the set the last step started: go back to the front door first
+        const back = page.getByRole("button", { name: "Back to Train models" });
+        if (await back.count()) {
+          await back.first().click();
+          await page.getByRole("region", { name: "What to teach" }).waitFor();
+        }
         await page
           .locator('section[aria-label="What to teach"] > *')
           .nth(i)

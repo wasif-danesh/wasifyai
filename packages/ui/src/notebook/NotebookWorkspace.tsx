@@ -258,11 +258,12 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
         <span className="hidden text-muted-foreground text-sm sm:inline">{label}</span>
       </PageHeader>
 
-      <div className="flex shrink-0 gap-1 border-b p-2 lg:hidden" role="tablist" aria-label="Panes">
+      <fieldset className="m-0 flex min-w-0 shrink-0 gap-1 border-0 border-b p-2 lg:hidden">
+        <legend className="sr-only">Panes</legend>
         {tab("sources", "Sources")}
         {tab("chat", "Chat")}
         {tab("studio", "Studio")}
-      </div>
+      </fieldset>
 
       <div
         ref={studio.grid}
@@ -405,10 +406,10 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
             aria-label="Resize the Studio"
             aria-valuemin={studio.min}
             aria-valuemax={studio.max()}
-            aria-valuenow={studio.width ?? undefined}
+            aria-valuenow={Math.round(studio.width ?? studio.shown())}
             tabIndex={0}
             title="Drag to resize; double-click to widen"
-            className="absolute inset-y-0 -start-1 z-20 hidden w-2 cursor-col-resize touch-none outline-none hover:bg-primary/30 focus-visible:bg-primary/40 lg:block"
+            className="absolute inset-y-0 -start-1 z-20 hidden w-2 cursor-col-resize touch-none outline-none hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:ring-2 focus-visible:ring-ring lg:block"
             {...studio.handle}
           />
           <StudioPane

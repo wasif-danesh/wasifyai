@@ -412,7 +412,28 @@ models switched off and on with "Saved.", the dark theme, the Models table and t
 in this stage: the person's name (the engine keeps none to change); the web has no Settings page of this kind (its
 admin sets the service up).
 
-About 44 days of work in thirteen stages; U0 to U11 are done, U12 next, then the products in the order a
+**Built:** U12 on 2026-10-28 (decision 4: yes). **The checker:** `@axe-core/playwright` 4.13.0 (MPL-2.0, test only,
+pinned to a release of August) runs in `apps/web/e2e/a11y.spec.ts` on 29 screens of the web in light, dark and phone
+against WCAG 2.2 A and AA, and in the window with `ui-audit.sh light a11y` and `dark a11y` on its 32 screens. It
+found, and these were fixed: the faint second line of a chosen chip ("1:1" in "Square 1:1") and the Library's counts
+(contrast, now 85% and full strength); the notebook Studio's resize handle (no value; now the width on the screen,
+and a ring when focused); the notebook's pane switch on a phone (a tab list of plain buttons; now a group with a
+legend); and, on a phone, the bar's "running" button covered by a long model name (the model button's wrapper
+could not shrink). **The keyboard walk:** the same spec Tabs through each screen from the top: every stop must show
+a focus ring and have a name, and the walk must reach the screen's own content. **High contrast:** the system's
+colours replace ours in forced-colours mode, which drops shadows and backgrounds, so the focus ring, the chosen chip,
+option, tab or page, a bar's progress and the readiness dots are drawn with the system's own colours
+(`tailwind.css`); a spec checks the ring and the chosen chip there. **Less motion:** the rule that switches
+animation and transitions off was already in place; a spec checks it. **The final picture pass:** every screen of
+the window in light and dark, the web's audit pictures in three views and the README pictures were taken again and
+looked at; the 12 web snapshots that had failed since before U9 (the design page, chat attach, the new chat,
+dictation) show the screens as they are now and were refreshed; all 81 picture specs pass. Teach's picture flow
+uses the shared `Stepper`, and the writing and decision flows no longer repeat their title under an upper-case
+label. Checked: lint, types, the design check, every unit test, all 506 web e2e specs (no failures), axe clean in the
+window on 32 screens in both themes. Not in this stage: a screen reader read through by a person; the window's own
+keyboard walk (the web's covers the same shared screens).
+
+About 44 days of work in thirteen stages; U0 to U12 are done (the plan is complete), then the products in the order a
 new person meets them (Pictures, Video, Speech), with the Library before the home so the quick starts and the
 recent strips have one source.
 
@@ -425,8 +446,8 @@ recent strips have one source.
    Library filtered to its kind, the old addresses redirect, and Your music's own jobs (add a recording, send a
    track to a tool) move to the Library's detail view. Stage U8.
 3. ~~The menu without groups~~ Decided 2026-10-28: the groups stay, and a product's modes stay under them.
-4. **An accessibility checker as a dependency** (`@axe-core/playwright`, MPL-2.0) for U12; the backlog (B2) has
-   waited on this since the design system.
+4. ~~An accessibility checker as a dependency~~ Decided 2026-10-28 (owner): yes. `@axe-core/playwright` 4.13.0
+   (MPL-2.0), a test-only dependency of the web app, pinned; it never ships. Stage U12.
 5. ~~The web's Explore page~~ Decided 2026-10-28 (owner): kept, as a marketing page outside the app (the site's
    layout, no side menu item); the app's home still gets the quick starts. Stage U9.
 6. **Mockup review before each stage**: the owner looks at the HTML mockup and says go; or the stages run on their

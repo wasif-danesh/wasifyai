@@ -654,7 +654,7 @@ export function VideoWorkspace({
                     aria-pressed={seconds === l.seconds}
                     onClick={() => setSeconds(l.seconds)}
                   >
-                    {l.label} <span className="opacity-70">{l.note}</span>
+                    {l.label} <span className="opacity-85">{l.note}</span>
                   </Chip>
                 ))}
               </div>
@@ -672,7 +672,7 @@ export function VideoWorkspace({
                 <div className="flex flex-wrap gap-2">
                   {VIDEO_SHAPES.map((s) => (
                     <Chip key={s.id} aria-pressed={shape === s.id} onClick={() => setShape(s.id)}>
-                      {s.label} <span className="opacity-70">{s.hint}</span>
+                      {s.label} <span className="opacity-85">{s.hint}</span>
                     </Chip>
                   ))}
                 </div>

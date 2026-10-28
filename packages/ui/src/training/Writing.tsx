@@ -17,7 +17,7 @@ import { JobMeter, WorkingCard } from "../components/create";
 import { Input } from "../components/input";
 import { Notice } from "../components/notice";
 import { Textarea } from "../components/textarea";
-import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
+import { actions, chips, field, fieldLabel, hint, panel } from "../styles";
 import { EvaluationLine } from "./CheckIt";
 import { SetupCard } from "./SetupCard";
 import { useLanguageBases } from "./use-language-bases";
@@ -121,8 +121,6 @@ function Sets({ w }: { w: WritingHook }) {
   const { state } = w;
   return (
     <section className={panel} aria-label="Sets of examples">
-      <span className={eyebrow}>Language model training</span>
-      <h2 className="m-0 font-semibold text-lg">Teach it from examples</h2>
       <p className="m-0 max-w-3xl text-muted-foreground">
         Add questions and the answers you want. The app teaches a small model to answer that way, on
         this computer: your examples are not sent anywhere. It learns how to answer, not new facts.
@@ -310,7 +308,6 @@ function Editor({ w, api, pollMs }: { w: WritingHook; api: TrainingApi; pollMs?:
     plan.missing !== null;
   return (
     <section className={panel} aria-label="Examples">
-      <span className={eyebrow}>Language model training</span>
       <div className={field}>
         <label htmlFor={nameId} className={fieldLabel}>
           Name this set

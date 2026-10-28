@@ -415,7 +415,7 @@ function FormField({ info, value, catalogue, onChange }: FieldProps) {
               ) : null}
               {c.label}
               {info.id === "shape" && SHAPE_HINTS[c.id] ? (
-                <span className="opacity-70"> {SHAPE_HINTS[c.id]}</span>
+                <span className="opacity-85"> {SHAPE_HINTS[c.id]}</span>
               ) : null}
             </Chip>
           );

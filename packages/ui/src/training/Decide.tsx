@@ -20,7 +20,7 @@ import { JobMeter, WorkingCard } from "../components/create";
 import { Input } from "../components/input";
 import { Notice } from "../components/notice";
 import { Textarea } from "../components/textarea";
-import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
+import { actions, chips, field, fieldLabel, hint, panel } from "../styles";
 import { EvaluationLine } from "./CheckIt";
 import { SetupCard } from "./SetupCard";
 import { type DecideHook, useDecide } from "./use-decide";
@@ -212,8 +212,6 @@ function Sets({ w }: { w: DecideHook }) {
   const { state } = w;
   return (
     <section className={panel} aria-label="Sets of examples">
-      <span className={eyebrow}>Decision model training</span>
-      <h2 className="m-0 font-semibold text-lg">Teach it to decide</h2>
       <p className="m-0 max-w-3xl text-muted-foreground">
         Give it texts and the right answer to one question: yes or no, a category or a score. It
         learns to answer new texts the same way, and says how sure it is. It is taught on this
@@ -701,7 +699,6 @@ function Editor({ w, api, pollMs }: { w: DecideHook; api: TrainingApi; pollMs?: 
     plan.missing !== null;
   return (
     <section className={panel} aria-label="Examples">
-      <span className={eyebrow}>Decision model training</span>
       <div className={field}>
         <label htmlFor={nameId} className={fieldLabel}>
           Name this set

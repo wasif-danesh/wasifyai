@@ -17,7 +17,7 @@ Read a long text aloud, one track per chapter, optionally one track of the whole
 2. **Text**: give the book a title, paste or open the text, and choose **Find the chapters**.
 3. **Chapters**: read them on the right; rename, join or remove them, then choose **Next: the voice**.
 4. **Voice**: choose a voice in the list (Hear it plays a short line), then **Make the audiobook**. It can take
-   a long time; the screen says which chapter it is on, and each chapter is kept in Your music as it is done.
+   a long time; the screen says which chapter it is on, and each chapter is kept in the Library as it is done.
 
 ## Fields
 

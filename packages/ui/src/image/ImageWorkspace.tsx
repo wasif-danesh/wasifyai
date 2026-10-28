@@ -146,7 +146,7 @@ export type ImageWorkspaceProps = {
   /** Take a result into Video's Animate as its picture (the app opens the Animate screen). */
   onAnimateThis?: (image: ImageSummary) => void;
   /** A picture to start Edit from: fetched and handed over like one the person chose. */
-  sourceImage?: { url: string; name: string } | null;
+  sourceImage?: { url: string; name: string; id?: string } | null;
 };
 
 function useRecent(refreshOn: string | undefined, api: ImagesApi) {
@@ -205,6 +205,8 @@ export function ImageWorkspace({
   const flow = useImageFlow(runs);
   const pic = usePicture(IMAGE_PRODUCT, runs);
   const pic2 = usePicture(IMAGE_PRODUCT, runs); // the second reference (Reference only)
+  // the picture of the library the first picture is, when it was handed over from there ("Edit this")
+  const fromLibrary = useRef<string | null>(null);
   const painter = useRef<MaskPainterHandle>(null);
   const [painted, setPainted] = useState(0); // the share of the picture that is painted (Inpaint)
   const [sending, setSending] = useState(false); // the painted area is being uploaded
@@ -224,7 +226,10 @@ export function ImageWorkspace({
     // a dropped or pasted picture goes to the first free place
     if (mode === "reference" && pic.picture !== null && pic2.picture === null)
       void pic2.choose(file);
-    else void pic.choose(file);
+    else {
+      fromLibrary.current = null; // a file of their own: not the library's picture any more
+      void pic.choose(file);
+    }
   }, mode !== "text");
 
   const { state } = flow;
@@ -282,6 +287,8 @@ export function ImageWorkspace({
       .then((r) => r.blob())
       .then((blob) => {
         if (gone) return;
+        // the picture of the library it came from, kept with what is made from it (ADR-0093, U8)
+        fromLibrary.current = sourceImage.id ?? null;
         void pic.choose(new File([blob], sourceImage.name, { type: blob.type || "image/png" }));
       })
       .catch(() => !gone && setProblem("That picture could not be opened for editing."));
@@ -330,6 +337,7 @@ export function ImageWorkspace({
         maskKey,
         seed: mode === "text" && withSeed !== null ? withSeed : undefined,
         loras: withStyles.length > 0 ? withStyles : undefined,
+        sourceId: mode !== "text" ? (fromLibrary.current ?? undefined) : undefined,
       });
     },
     [mode, pic, pic2, flow, runs],
@@ -577,8 +585,14 @@ export function ImageWorkspace({
                 status={pic.status}
                 error={pic.error}
                 dragging={dragging}
-                onChoose={(f) => void pic.choose(f)}
-                onRemove={pic.clear}
+                onChoose={(f) => {
+                  fromLibrary.current = null;
+                  void pic.choose(f);
+                }}
+                onRemove={() => {
+                  fromLibrary.current = null;
+                  pic.clear();
+                }}
                 onCancel={pic.cancel}
               />
             ) : null}

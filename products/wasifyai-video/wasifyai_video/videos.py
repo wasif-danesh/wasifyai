@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import RunContext, start_of_day_utc, sum_usage
 from wasifyai_platform_sdk.sqlite import (
+    ensure_columns,
     ensure_tables,
     from_iso,
     is_sqlite,
@@ -58,6 +59,9 @@ class VideoRecord:
     video_key: str | None = None  # relative to the user's storage prefix
     poster_key: str | None = None
     error: str | None = None
+    # what this clip was made from (ADR-0093, U8): the clip it carries on (extend) or the picture of
+    # the library it animates (image); None for a clip from words, a file, or before this existed
+    source_id: str | None = None
     created_at: datetime | None = field(default=None, compare=False)  # set by the database
 
 
@@ -83,8 +87,10 @@ class VideoStore(Protocol):
         limit: int,
         before: datetime | None,
         status: str | None = None,
+        source_id: str | None = None,
     ) -> list[VideoRecord]:
-        """The user's clips, newest first, strictly older than `before`."""
+        """The user's clips, newest first, strictly older than `before`; with `source_id`, only the
+        ones made from that clip or picture."""
         ...
 
     async def get(self, tenant_id: str, user_id: str, video_id: str) -> VideoRecord | None: ...
@@ -96,8 +102,18 @@ class VideoStore(Protocol):
 
 _COLUMNS = (
     "id, tenant_id, product_id, user_id, thread_id, run_id, mode, status, prompt, seconds, frames, "
-    "fps, width, height, video_key, poster_key, error, created_at"
+    "fps, width, height, video_key, poster_key, error, created_at, source_id"
 )
+
+
+def _uuid_or_none(value: str | None) -> UUID | None:
+    """An id as Postgres keeps it, or None when there is none or it is not an id."""
+    if not value:
+        return None
+    try:
+        return UUID(value)
+    except ValueError:
+        return None
 
 
 def _record(r) -> VideoRecord:
@@ -105,6 +121,7 @@ def _record(r) -> VideoRecord:
         id=str(r[0]), tenant_id=r[1], product_id=r[2], user_id=r[3], thread_id=r[4], run_id=r[5],
         mode=r[6], status=r[7], prompt=r[8], seconds=r[9], frames=r[10], fps=r[11], width=r[12],
         height=r[13], video_key=r[14], poster_key=r[15], error=r[16], created_at=r[17],
+        source_id=str(r[18]) if r[18] else None,
     )  # fmt: skip
 
 
@@ -127,9 +144,9 @@ class PostgresVideoStore:
                 text(
                     """
                     INSERT INTO videos (id, tenant_id, product_id, user_id, thread_id, run_id, mode,
-                                        status, prompt, seconds, frames, fps)
+                                        status, prompt, seconds, frames, fps, source_id)
                     VALUES (:id, :tenant_id, :product_id, :user_id, :thread_id, :run_id, :mode,
-                            :status, :prompt, :seconds, :frames, :fps)
+                            :status, :prompt, :seconds, :frames, :fps, :source_id)
                     """
                 ),
                 {
@@ -138,6 +155,7 @@ class PostgresVideoStore:
                     "thread_id": video.thread_id, "run_id": video.run_id, "mode": video.mode,
                     "status": video.status, "prompt": video.prompt, "seconds": video.seconds,
                     "frames": video.frames, "fps": video.fps,
+                    "source_id": _uuid_or_none(video.source_id),
                 },
             )  # fmt: skip
 
@@ -177,7 +195,10 @@ class PostgresVideoStore:
         limit: int,
         before: datetime | None,
         status: str | None = None,
+        source_id: str | None = None,
     ) -> list[VideoRecord]:
+        if source_id is not None and _uuid_or_none(source_id) is None:
+            return []  # not an id: nothing was made from it
         async with self._engine.begin() as conn:
             await self._expire(conn)
             rows = await conn.execute(
@@ -187,11 +208,15 @@ class PostgresVideoStore:
                     WHERE tenant_id = :t AND product_id = 'wasifyai-video' AND user_id = :u
                       AND (CAST(:before AS timestamptz) IS NULL OR created_at < :before)
                       AND (CAST(:status AS text) IS NULL OR status = :status)
+                      AND (CAST(:src AS uuid) IS NULL OR source_id = CAST(:src AS uuid))
                     ORDER BY created_at DESC, id DESC LIMIT :limit
                     """
                 ),
-                {"t": tenant_id, "u": user_id, "before": before, "status": status, "limit": limit},
-            )
+                {
+                    "t": tenant_id, "u": user_id, "before": before, "status": status,
+                    "limit": limit, "src": _uuid_or_none(source_id),
+                },
+            )  # fmt: skip
             return [_record(r) for r in rows]
 
     async def get(self, tenant_id: str, user_id: str, video_id: str) -> VideoRecord | None:
@@ -258,7 +283,8 @@ _SQLITE_DDL = (
         video_key TEXT,
         poster_key TEXT,
         error TEXT,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        source_id TEXT
     )
     """,
     "CREATE INDEX IF NOT EXISTS ix_videos_user_created "
@@ -274,6 +300,8 @@ class SqliteVideoStore:
 
     async def _ready(self) -> None:
         await ensure_tables(self._engine, "videos", _SQLITE_DDL)
+        # files made before clips remembered what they came from
+        await ensure_columns(self._engine, "videos", "videos", {"source_id": "TEXT"})
 
     @staticmethod
     def _record(r) -> VideoRecord:
@@ -281,7 +309,7 @@ class SqliteVideoStore:
             id=r[0], tenant_id=r[1], product_id=r[2], user_id=r[3], thread_id=r[4], run_id=r[5],
             mode=r[6], status=r[7], prompt=r[8], seconds=r[9], frames=r[10], fps=r[11],
             width=r[12], height=r[13], video_key=r[14], poster_key=r[15], error=r[16],
-            created_at=from_iso(r[17]),
+            created_at=from_iso(r[17]), source_id=r[18] or None,
         )  # fmt: skip
 
     async def _expire(self, conn) -> None:
@@ -300,9 +328,10 @@ class SqliteVideoStore:
                 text(
                     """
                     INSERT INTO videos (id, tenant_id, product_id, user_id, thread_id, run_id, mode,
-                                        status, prompt, seconds, frames, fps, created_at)
+                                        status, prompt, seconds, frames, fps, created_at,
+                                        source_id)
                     VALUES (:id, :tenant_id, :product_id, :user_id, :thread_id, :run_id, :mode,
-                            :status, :prompt, :seconds, :frames, :fps, :created_at)
+                            :status, :prompt, :seconds, :frames, :fps, :created_at, :source_id)
                     """
                 ),
                 {
@@ -312,6 +341,7 @@ class SqliteVideoStore:
                     "prompt": video.prompt, "seconds": video.seconds, "frames": video.frames,
                     "fps": video.fps,
                     "created_at": to_iso(video.created_at) if video.created_at else now_iso(),
+                    "source_id": video.source_id,
                 },
             )  # fmt: skip
 
@@ -353,6 +383,7 @@ class SqliteVideoStore:
         limit: int,
         before: datetime | None,
         status: str | None = None,
+        source_id: str | None = None,
     ) -> list[VideoRecord]:
         await self._ready()
         async with self._engine.begin() as conn:
@@ -364,12 +395,13 @@ class SqliteVideoStore:
                     WHERE tenant_id = :t AND product_id = 'wasifyai-video' AND user_id = :u
                       AND (:before IS NULL OR created_at < :before)
                       AND (:status IS NULL OR status = :status)
+                      AND (:src IS NULL OR source_id = :src)
                     ORDER BY created_at DESC, id DESC LIMIT :limit
                     """
                 ),
                 {
                     "t": tenant_id, "u": user_id, "limit": limit, "status": status,
-                    "before": to_iso(before) if before else None,
+                    "before": to_iso(before) if before else None, "src": source_id,
                 },
             )  # fmt: skip
             return [self._record(r) for r in rows]
@@ -470,9 +502,11 @@ class InMemoryVideoStore:
         limit: int,
         before: datetime | None,
         status: str | None = None,
+        source_id: str | None = None,
     ) -> list[VideoRecord]:
         self._expire()
         mine = [v for v in self.videos if (v.tenant_id, v.user_id) == (tenant_id, user_id)]
+        mine = [v for v in mine if source_id is None or v.source_id == source_id]
         mine = [v for v in mine if before is None or (v.created_at and v.created_at < before)]
         mine = [v for v in mine if status is None or v.status == status]
         return sorted(mine, key=lambda v: (v.created_at, v.id), reverse=True)[:limit]

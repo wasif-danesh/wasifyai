@@ -24,7 +24,7 @@ import logging
 import re
 import secrets
 from typing import Any, Literal, TypedDict, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
@@ -78,6 +78,14 @@ FAILED = "Your video couldn't be made. Please try again."
 NOT_EXTENDABLE = "Please choose one of your finished videos to carry on."
 
 
+def _is_uuid(value: str) -> bool:
+    try:
+        UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
 class VideoState(TypedDict, total=False):
     # request
     mode: str
@@ -86,6 +94,7 @@ class VideoState(TypedDict, total=False):
     seconds: int
     image_key: str
     source_id: str  # extend: the clip to carry on
+    source_image_id: str  # image: the picture of the library it animates, when it came from there
     loras: list[dict[str, Any]]  # looks the person taught: [{name, weight}], checked
     lora_files: dict[
         str, str
@@ -242,7 +251,17 @@ def build_video_graph(
             "loras": loras,
             "lora_files": lora_files,
             "status": "working",
+            # the run keeps what it was given: only a source that is checked below is kept
+            "source_id": "",
+            "source_image_id": "",
         }
+        if mode == "image":
+            # a picture of the library (Animate this): kept as where the clip came from. The
+            # pictures are another product's, so only its shape is checked here; the picture list,
+            # which only gives a person their own, is what opens it later.
+            picture = str(state.get("source_image_id") or "")
+            if _is_uuid(picture):
+                out["source_image_id"] = picture
         if mode == "extend":
             ctx = require_context()
             source = await videos.get(ctx.tenant_id, ctx.user_id, str(state.get("source_id") or ""))
@@ -334,6 +353,8 @@ def build_video_graph(
                 seconds=seconds,
                 frames=frames,
                 fps=FPS,
+                source_id=(state.get("source_id") if extend else state.get("source_image_id"))
+                or None,
             )
         )
         write = get_stream_writer()

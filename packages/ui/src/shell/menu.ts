@@ -55,7 +55,6 @@ export const MENU_GROUPS: MenuGroupDef[] = [
       { id: "images.edit", label: "Edit", icon: Pencil },
       { id: "images.inpaint", label: "Inpaint", icon: Paintbrush },
       { id: "images.reference", label: "Reference", icon: SquareStack },
-      { id: "images.library", label: "Your images", icon: Library },
     ],
   },
   {
@@ -66,7 +65,6 @@ export const MENU_GROUPS: MenuGroupDef[] = [
       { id: "video.create", label: "Create", icon: Sparkles },
       { id: "video.animate", label: "Animate an image", icon: Film },
       { id: "video.extend", label: "Extend video", icon: Maximize2 },
-      { id: "video.library", label: "Your videos", icon: Library },
     ],
   },
   {
@@ -90,7 +88,6 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     icon: Music,
     items: [
       { id: "music.create", label: "Create", icon: Sparkles },
-      { id: "music.library", label: "Your music", icon: Library },
       { id: "music.lyrics", label: "Lyrics", icon: FileText },
       { id: "music.separate", label: "Split into parts", icon: Scissors },
     ],

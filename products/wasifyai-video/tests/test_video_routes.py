@@ -279,3 +279,16 @@ def test_a_video_longer_than_thirty_seconds_is_refused(client):
 def test_a_video_of_a_moment_is_refused(client):
     r = client.post(f"{BASE}/import", files={"file": ("blink.mp4", mp4((64, 64), 4), "video/mp4")})
     assert r.status_code == 422 and "too short" in r.json()["detail"]
+
+
+def test_a_clip_says_what_it_was_made_from_and_the_list_finds_what_was_made_from_one(client):
+    client.store.videos.append(video(8, mode="extend", source_id=uid(1)))
+    put(client, "u1", f"{uid(8)}/video.mp4", b"mp4")
+    put(client, "u1", f"{uid(8)}/poster.jpg", b"jpg")
+    assert client.get(f"{BASE}/{uid(8)}").json()["source_id"] == uid(1)
+    assert client.get(f"{BASE}/{uid(1)}").json()["source_id"] is None
+    made_from = client.get(BASE, params={"source": uid(1)}).json()["videos"]
+    assert [v["id"] for v in made_from] == [uid(8)]
+    assert client.get(BASE, params={"source": "not-an-id"}).json()["videos"] == []
+    other = client.get(BASE, params={"source": uid(1)}, headers={"x-user": "u2"}).json()
+    assert other["videos"] == []

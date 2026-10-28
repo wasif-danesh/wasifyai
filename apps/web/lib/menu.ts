@@ -45,16 +45,12 @@ export function resolveWebItem(
         return live("image") ? page("/image/inpaint") : undefined;
       case "images.reference":
         return live("image") ? page("/image/reference") : undefined;
-      case "images.library":
-        return live("image") ? page("/image/library", "/image/creations") : undefined;
       case "video.create":
         return live("video") ? page("/video") : undefined;
       case "video.animate":
         return live("video") ? page("/video/animate") : undefined;
       case "video.extend":
         return live("video") ? page("/video/extend") : undefined;
-      case "video.library":
-        return live("video") ? page("/video/library", "/video/creations") : undefined;
       case "voice.speak":
         // with the voice product on, one screen serves both apps and the older page redirects to it
         return page("/voice/speak");
@@ -78,7 +74,14 @@ export function resolveWebItem(
       case "train":
         return page("/train");
       case "library":
-        return { href: "/creations", current: pathname === "/creations" && !show };
+        // the one Library, whichever kind it shows, and the page of one picture or clip in it (ADR-0093, U8)
+        return {
+          href: "/creations",
+          current:
+            pathname === "/creations" ||
+            pathname.startsWith("/image/creations/") ||
+            pathname.startsWith("/video/creations/"),
+        };
       case "models": // the models of the workers are an admin's to manage; everyone else uses the pickers
         return served.isAdmin ? page("/admin/workers", "/admin/workers") : { hidden: true };
       default:

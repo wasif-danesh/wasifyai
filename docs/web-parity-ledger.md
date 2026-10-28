@@ -66,11 +66,9 @@ web job's test step fail without one. The desktop's actions are held to the same
 | `images.edit` | live | shared ImageWorkspace |  |
 | `images.inpaint` | live | shared ImageWorkspace, mode inpaint |  |
 | `images.reference` | live | shared ImageWorkspace, mode reference |  |
-| `images.library` | live | shared ImageLibrary |  |
 | `video.create` | live | shared VideoWorkspace |  |
 | `video.animate` | live | shared VideoWorkspace |  |
 | `video.extend` | live | shared VideoWorkspace, mode extend; needs ffmpeg in the API image |  |
-| `video.library` | live | shared VideoLibrary |  |
 | `voice.speak` | live | shared voice page, hosted models |  |
 | `voice.transcribe` | live | shared voice page, hosted models |  |
 | `voice.lipsync` | live | shown when a ready model can do it (a GPU host) |  |
@@ -80,7 +78,6 @@ web job's test step fail without one. The desktop's actions are held to the same
 | `voice.dub` | live | shown when a ready model can do it |  |
 | `voice.audiobook` | live | shown when a ready model can do it |  |
 | `music.create` | live | shown when a ready model can do it |  |
-| `music.library` | live | shown when a ready model can do it |  |
 | `music.lyrics` | live | shown when a ready model can do it |  |
 | `music.separate` | live | shown when a ready model can do it |  |
 <!-- parity:end -->

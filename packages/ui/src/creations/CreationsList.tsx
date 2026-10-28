@@ -4,40 +4,67 @@ import type {
   CreationsApi,
   ImagePage,
   LipSyncCard,
+  Others,
   SongCard,
   SpeechCard,
   TranscriptCard,
   VideoPage,
 } from "@wasifyai/client";
-import { AudioLines, LayoutGrid, Table2 } from "lucide-react";
-import { useEffect, useId, useMemo, useState } from "react";
+import { AudioLines, CheckSquare, LayoutGrid, Save, Table2, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
+import { Checkbox } from "../components/checkbox";
+import { ConfirmDialog } from "../components/dialog";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
 import { Notice } from "../components/notice";
+import { Select } from "../components/select";
 import { Skeleton } from "../components/skeleton";
 import { Spinner } from "../components/spinner";
 import { ToggleGroup, ToggleGroupItem } from "../components/toggle-group";
+import { fileNameFor, savedText, useSaveCopy } from "../save";
 import { actions, empty, hint, panel } from "../styles";
 import { CreationCard } from "./CreationCard";
+import { CreationDetail, apiKindOf, fileOf } from "./CreationDetail";
 import { CreationsTable } from "./CreationsTable";
 import { NavLink } from "./NavLink";
-import type { CreationsNav, Entry, Filter } from "./model";
+import {
+  type CreationsNav,
+  type Entry,
+  FILTER_KIND,
+  type Filter,
+  KIND_LABEL,
+  toRow,
+} from "./model";
 import { useCreationSearch } from "./use-creation-search";
 
 const PAGE = 12;
 const tiles =
   "m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,13rem),1fr))] items-stretch gap-4 p-0";
-const FILTERS: { value: Filter; label: string }[] = [
+const FILTERS: { value: Filter; label: string; whenAny?: boolean }[] = [
   { value: "all", label: "All" },
-  { value: "songs", label: "Music" },
-  { value: "images", label: "Images" },
+  { value: "images", label: "Pictures" },
   { value: "videos", label: "Videos" },
+  { value: "songs", label: "Music" },
   { value: "speeches", label: "Speech" },
   { value: "transcripts", label: "Transcripts" },
   { value: "lipsyncs", label: "Lip syncs" },
+  // the tools' own kinds show up once there is one
+  { value: "models3d", label: "3D models", whenAny: true },
+  { value: "compositions", label: "Motion graphics", whenAny: true },
+  { value: "notebooks", label: "Notebooks", whenAny: true },
+  { value: "taught", label: "Taught models", whenAny: true },
 ];
+
+type Sort = "newest" | "oldest" | "name";
+const SORTS = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "name", label: "A to Z" },
+];
+
+const keyOf = (e: Entry) => `${e.kind}:${e.id}`;
 
 export function CreationsList({
   api,
@@ -48,6 +75,7 @@ export function CreationsList({
   speeches = [],
   transcripts = [],
   lipsyncs = [],
+  others,
   initialFilter = "all",
 }: {
   api: CreationsApi;
@@ -59,6 +87,8 @@ export function CreationsList({
   speeches?: SpeechCard[];
   transcripts?: TranscriptCard[];
   lipsyncs?: LipSyncCard[];
+  /** 3D models, motion graphics, notebooks and taught models */
+  others?: Others;
   initialFilter?: Filter;
 }) {
   const [images, setImages] = useState(imagePage?.images ?? []);
@@ -68,8 +98,18 @@ export function CreationsList({
   const [filter, setFilter] = useState<Filter>(initialFilter);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [sort, setSort] = useState<Sort>("newest");
+  // what was deleted here: taken off the lists without reading them again
+  const [gone, setGone] = useState<Set<string>>(new Set());
+  const [opened, setOpened] = useState<Entry | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [askDelete, setAskDelete] = useState(false);
+  const [bulkNote, setBulkNote] = useState<string | null>(null);
+  const [bulkProblem, setBulkProblem] = useState<string | null>(null);
+  const saveCopy = useSaveCopy();
 
-  const entries = useMemo<Entry[]>(() => {
+  const everything = useMemo<Entry[]>(() => {
     const all: Entry[] = [
       ...songs.map((song) => ({
         kind: "song" as const,
@@ -107,20 +147,44 @@ export function CreationsList({
         createdAt: lipsync.created_at,
         lipsync,
       })),
+      ...(others?.models3d ?? []).map((model3d) => ({
+        kind: "model3d" as const,
+        id: model3d.id,
+        createdAt: model3d.created_at,
+        model3d,
+      })),
+      ...(others?.compositions ?? []).map((composition) => ({
+        kind: "composition" as const,
+        id: composition.id,
+        createdAt: composition.updated_at || composition.created_at,
+        composition,
+      })),
+      ...(others?.notebooks ?? []).map((notebook) => ({
+        kind: "notebook" as const,
+        id: notebook.id,
+        createdAt: notebook.updated_at || notebook.created_at,
+        notebook,
+      })),
+      ...(others?.taught ?? []).map((taught) => ({
+        kind: "taught" as const,
+        id: taught.id,
+        createdAt: taught.created_at,
+        taught,
+      })),
     ];
-    const wanted = {
-      all: null,
-      songs: "song",
-      images: "image",
-      videos: "video",
-      speeches: "speech",
-      transcripts: "transcript",
-      lipsyncs: "lipsync",
-    }[filter];
-    return all
-      .filter((entry) => wanted === null || entry.kind === wanted)
-      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  }, [filter, images, lipsyncs, songs, speeches, transcripts, videos]);
+    return all.filter((entry) => !gone.has(keyOf(entry)));
+  }, [images, lipsyncs, songs, speeches, transcripts, videos, others, gone]);
+
+  const entries = useMemo<Entry[]>(() => {
+    const wanted = FILTER_KIND[filter];
+    const shown = everything.filter((entry) => wanted === null || entry.kind === wanted);
+    if (sort === "name") {
+      const title = (e: Entry) => toRow(e).title;
+      return shown.sort((a, b) => title(a).localeCompare(title(b)));
+    }
+    const sign = sort === "oldest" ? 1 : -1;
+    return shown.sort((a, b) => sign * (Date.parse(a.createdAt) - Date.parse(b.createdAt)));
+  }, [everything, filter, sort]);
 
   /** Load the next page of one kind. Returns true when it failed. */
   async function page<T>(load: () => Promise<T>, apply: (p: T) => void): Promise<boolean> {
@@ -164,21 +228,17 @@ export function CreationsList({
     setLoading(false);
   }
 
-  const counts = {
-    all:
-      songs.length +
-      images.length +
-      videos.length +
-      speeches.length +
-      transcripts.length +
-      lipsyncs.length,
-    songs: songs.length,
-    images: images.length,
-    videos: videos.length,
-    speeches: speeches.length,
-    transcripts: transcripts.length,
-    lipsyncs: lipsyncs.length,
-  };
+  const counts = Object.fromEntries(
+    FILTERS.map(({ value }) => {
+      const kind = FILTER_KIND[value];
+      return [value, everything.filter((e) => kind === null || e.kind === kind).length];
+    }),
+  ) as Record<Filter, number>;
+  // a kind with more pages says so: the count is what is loaded so far
+  const more_ = { images: Boolean(imageNext), videos: Boolean(videoNext) };
+  const countText = (f: Filter) =>
+    `${counts[f]}${(f === "images" && more_.images) || (f === "videos" && more_.videos) || (f === "all" && (more_.images || more_.videos)) ? "+" : ""}`;
+
   const hasMore =
     filter === "all"
       ? Boolean(imageNext || videoNext)
@@ -204,6 +264,61 @@ export function CreationsList({
     } catch {
       // not remembered, still works
     }
+  }
+
+  const open = useCallback((entry: Entry) => setOpened(entry), []);
+  const toggle = (entry: Entry) =>
+    setSelected((cur) => {
+      const next = new Set(cur);
+      const k = keyOf(entry);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  const chosen = everything.filter((e) => selected.has(keyOf(e)));
+  function stopSelecting() {
+    setSelecting(false);
+    setSelected(new Set());
+  }
+
+  async function saveChosen() {
+    setBulkNote(null);
+    setBulkProblem(null);
+    let n = 0;
+    for (const entry of chosen) {
+      const file = fileOf(entry);
+      if (!file) continue;
+      try {
+        const out = await saveCopy({
+          name: fileNameFor(file.name, file.ext, KIND_LABEL[entry.kind].toLowerCase()),
+          blob: async () => (await fetch(file.url)).blob(),
+        });
+        if (out) {
+          n += 1;
+          if (chosen.length === 1) setBulkNote(savedText(out));
+        }
+      } catch (e) {
+        setBulkProblem(e instanceof Error ? e.message : "One of them could not be saved.");
+      }
+    }
+    if (chosen.length > 1) setBulkNote(`${n} saved.`);
+  }
+
+  async function deleteChosen() {
+    setAskDelete(false);
+    setBulkProblem(null);
+    const done = new Set<string>();
+    for (const entry of chosen) {
+      try {
+        await api.remove(apiKindOf(entry), entry.id);
+        done.add(keyOf(entry));
+      } catch {
+        setBulkProblem("Some of them could not be deleted. They are still chosen.");
+      }
+    }
+    setGone((cur) => new Set([...cur, ...done]));
+    setSelected((cur) => new Set([...cur].filter((k) => !done.has(k))));
+    setBulkNote(`${done.size} deleted.`);
   }
 
   const [query, setQuery] = useState("");
@@ -241,10 +356,12 @@ export function CreationsList({
         </span>
       </search>
 
-      <div className="flex flex-col items-start justify-between gap-4 pt-1 pb-2 min-[521px]:flex-row min-[521px]:items-center">
-        <fieldset className="m-0 inline-flex min-w-0 gap-1 rounded-full border bg-surface p-[0.3rem] max-[520px]:w-full max-[520px]:justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1 pb-2">
+        <fieldset className="m-0 flex min-w-0 max-w-full flex-wrap gap-1 rounded-3xl border bg-surface p-[0.3rem]">
           <legend className="sr-only">Filter creations</legend>
-          {FILTERS.map(({ value, label }) => (
+          {FILTERS.filter(
+            ({ value, whenAny }) => !whenAny || counts[value] > 0 || filter === value,
+          ).map(({ value, label }) => (
             <button
               key={value}
               type="button"
@@ -252,25 +369,43 @@ export function CreationsList({
               onClick={() => setFilter(value)}
               className="inline-flex items-center gap-[0.45rem] rounded-full border-0 bg-transparent px-[0.85rem] py-[0.55rem] text-ui font-semibold text-muted-foreground transition-colors hover:text-foreground aria-pressed:bg-accent aria-pressed:text-foreground max-[520px]:px-[0.7rem]"
             >
-              {label} <span className="text-ui-sm opacity-70">{counts[value]}</span>
+              {label} <span className="text-ui-sm opacity-70">{countText(value)}</span>
             </button>
           ))}
         </fieldset>
-        <ToggleGroup
-          type="single"
-          value={view}
-          onValueChange={chooseView}
-          variant="outline"
-          size="sm"
-          aria-label="How to show your creations"
-        >
-          <ToggleGroupItem value="cards" aria-label="Cards">
-            <LayoutGrid aria-hidden="true" />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="table" aria-label="Table">
-            <Table2 aria-hidden="true" />
-          </ToggleGroupItem>
-        </ToggleGroup>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            aria-label="Sort"
+            className="h-9 w-40"
+            value={sort}
+            onValueChange={(v) => setSort(v as Sort)}
+            options={SORTS}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant={selecting ? "secondary" : "outline"}
+            aria-pressed={selecting}
+            onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+          >
+            <CheckSquare aria-hidden="true" /> {selecting ? "Done" : "Select"}
+          </Button>
+          <ToggleGroup
+            type="single"
+            value={view}
+            onValueChange={chooseView}
+            variant="outline"
+            size="sm"
+            aria-label="How to show your creations"
+          >
+            <ToggleGroupItem value="cards" aria-label="Cards">
+              <LayoutGrid aria-hidden="true" />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="table" aria-label="Table">
+              <Table2 aria-hidden="true" />
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
         <span className="text-step--1 text-muted-foreground" aria-live="polite">
           {search.status === "searching" ? (
             "Searching…"
@@ -286,6 +421,43 @@ export function CreationsList({
           )}
         </span>
       </div>
+
+      {selecting ? (
+        <div
+          role="toolbar"
+          aria-label="What to do with the chosen ones"
+          className="flex flex-wrap items-center gap-2 rounded-md border bg-surface px-3 py-2"
+        >
+          <span className="me-auto text-sm">
+            {chosen.length === 0 ? "Choose the ones to save or delete." : `${chosen.length} chosen`}
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={!chosen.some((e) => fileOf(e))}
+            onClick={() => void saveChosen()}
+          >
+            <Save aria-hidden="true" /> Save
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="text-destructive"
+            disabled={chosen.length === 0}
+            onClick={() => setAskDelete(true)}
+          >
+            <Trash2 aria-hidden="true" /> Delete
+          </Button>
+        </div>
+      ) : null}
+      {bulkNote ? <output className="text-sm">{bulkNote}</output> : null}
+      {bulkProblem ? (
+        <p role="alert" className="m-0 text-destructive text-sm">
+          {bulkProblem}
+        </p>
+      ) : null}
 
       {search.status === "error" ? (
         <Notice tone="error" title="Search didn't work">
@@ -359,18 +531,27 @@ export function CreationsList({
           ))}
         </ul>
       ) : view === "table" ? (
-        <CreationsTable entries={shown} nav={nav} />
+        <CreationsTable entries={shown} nav={nav} onOpen={selecting ? toggle : open} />
       ) : (
         <ul className={tiles}>
           {shown.map((entry) => (
-            <li key={`${entry.kind}-${entry.id}`} className="grid min-w-0">
+            <li key={`${entry.kind}-${entry.id}`} className="relative grid min-w-0">
               <CreationCard
                 entry={entry}
                 nav={nav}
+                onOpen={selecting ? toggle : open}
                 note={
                   search.status === "done" && search.words.has(entry.id) ? "Exact words" : undefined
                 }
               />
+              {selecting ? (
+                <Checkbox
+                  className="absolute end-3 top-3 rounded-md bg-surface/90 px-1.5 py-1"
+                  label={`Choose ${toRow(entry).title.slice(0, 60)}`}
+                  checked={selected.has(keyOf(entry))}
+                  onCheckedChange={() => toggle(entry)}
+                />
+              ) : null}
             </li>
           ))}
         </ul>
@@ -387,6 +568,28 @@ export function CreationsList({
             {loading ? <Spinner /> : null}Load more
           </Button>
         </div>
+      ) : null}
+      {opened ? (
+        <CreationDetail
+          key={keyOf(opened)}
+          entry={opened}
+          api={api}
+          nav={nav}
+          onOpen={open}
+          onClose={() => setOpened(null)}
+          onRemoved={(entry) => {
+            setGone((cur) => new Set([...cur, keyOf(entry)]));
+            setOpened(null);
+          }}
+        />
+      ) : null}
+      {askDelete ? (
+        <ConfirmDialog
+          title={chosen.length === 1 ? "Delete this one?" : `Delete these ${chosen.length}?`}
+          message="They are deleted for good."
+          onConfirm={() => void deleteChosen()}
+          onCancel={() => setAskDelete(false)}
+        />
       ) : null}
     </section>
   );

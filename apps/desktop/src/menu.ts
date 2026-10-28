@@ -11,13 +11,11 @@ export const ROUTES: Record<string, Route> = {
   "images.edit": "edit",
   "images.reference": "reference",
   "images.inpaint": "inpaint",
-  "images.library": "library",
   "video.create": "video",
   "video.animate": "animate",
   "video.extend": "extend",
   motion: "videobuilder",
   model3d: "model3d",
-  "video.library": "videos",
   "voice.speak": "speak",
   "voice.transcribe": "transcribe",
   "voice.lipsync": "lipsync",
@@ -27,10 +25,9 @@ export const ROUTES: Record<string, Route> = {
   "voice.dub": "dub",
   "voice.audiobook": "audiobook",
   "music.create": "music",
-  "music.library": "tracks",
   "music.lyrics": "lyrics",
   "music.separate": "separate",
-  // the Library item is My creations, as on the web; "Your images" has its own item
+  // the Library item is the one Library (ADR-0093, U8), as on the web
   library: "creations",
   models: "models",
   train: "train",
@@ -67,9 +64,14 @@ export function resolveItem(
     }
     const target = ROUTES[id];
     if (!target) return undefined;
-    return { current: route === target, onSelect: () => go(target) };
+    // the old "Your …" screens open the Library, filtered: the Library is the item marked there
+    const library = id === "library" && LIBRARY_ROUTES.has(route);
+    return { current: route === target || library, onSelect: () => go(target) };
   };
 }
+
+/** The routes that were "Your images", "Your videos" and "Your music": each opens the Library, filtered. */
+export const LIBRARY_ROUTES: ReadonlySet<Route> = new Set<Route>(["library", "videos", "tracks"]);
 
 const OTHER_TITLES: Partial<Record<Route, string>> = {
   home: "Chat",
@@ -78,6 +80,9 @@ const OTHER_TITLES: Partial<Record<Route, string>> = {
   videobuilder: "Motion graphics",
   model3d: "3D model",
   creations: "Library",
+  library: "Library",
+  videos: "Library",
+  tracks: "Library",
   models: "Model hub",
   train: "Train models",
   settings: "Settings",

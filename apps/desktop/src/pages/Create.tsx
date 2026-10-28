@@ -47,7 +47,7 @@ export function CreatePage({
   preset?: WorkspacePreset | null;
   onEditThis?: (image: ImageSummary) => void;
   onAnimateThis?: (image: ImageSummary) => void;
-  source?: { url: string; name: string } | null;
+  source?: { url: string; name: string; id?: string } | null;
 }) {
   const model = useModelOf("wasifyai-image");
   const engine = useImageEngine();

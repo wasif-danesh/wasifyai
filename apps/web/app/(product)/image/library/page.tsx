@@ -1,8 +1,6 @@
-import { ImageLibraryScreen } from "@/components/image/ImageScreens";
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Your images" };
-
+/** "Your images" is the Library now, showing pictures (ADR-0093, U8). */
 export default function ImageLibraryPage() {
-  return <ImageLibraryScreen />;
+  redirect("/creations?show=images");
 }

@@ -184,6 +184,7 @@ export {
   TracksPage,
   TranscribePage,
   VoicesPage,
+  openInMusic,
   sendToTool,
   type AudioToolName,
   type Remembered,
@@ -227,5 +228,7 @@ export { useCreationSearch } from "./creations/use-creation-search";
 export type {
   CreationsNav,
   Entry as CreationEntry,
+  Filter as CreationFilter,
   MakeScreen as MakeTarget,
+  UseAction as CreationUse,
 } from "./creations/model";

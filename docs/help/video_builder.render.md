@@ -12,7 +12,7 @@ Action: `video_builder.render`
 Make the video of a Motion graphics project. First every word on the screen is checked against what
 you typed; if one is wrong the video is not made and the message says which. Then it is drawn frame
 by frame in a locked box, saved as an MP4 (or WebM or MOV, which keep a clear background) and kept
-in Your videos. It takes seconds to a minute for a short video and only one is made at a time.
+in the Library. It takes seconds to a minute for a short video and only one is made at a time.
 
 ## Steps in the app
 
@@ -20,7 +20,7 @@ in Your videos. It takes seconds to a minute for a short video and only one is m
 2. Open a project.
 3. Choose a file kind if the template offers more than one, then Make the video; watch the
    progress (checking the words, then drawing), or leave the screen.
-4. Choose Save a copy to keep the file, or find it in Your videos.
+4. Choose Save a copy to keep the file, or find it in the Library.
 
 ## Fields
 

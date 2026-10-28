@@ -13,8 +13,8 @@ Show the newest creations of one kind (pictures, videos, speech, songs, transcri
 
 ## Steps in the app
 
-1. Open **Library**.
-2. Choose the kind you want to see.
+1. Open **Library**. The screens' **See all** opens it showing their kind.
+2. Choose the kind you want to see (each shows how many there are), and sort by newest, oldest or name.
 
 ## Fields
 

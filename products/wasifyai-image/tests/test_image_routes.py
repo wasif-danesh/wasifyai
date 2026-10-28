@@ -204,3 +204,22 @@ def test_export_is_only_for_the_owner_and_only_where_a_folder_is_set(client):
     assert other.status_code == 404
     del client.app.state.export_dir  # the web profile never sets one
     assert client.post(f"{BASE}/{uid(2)}/export").status_code == 404
+
+
+def test_a_picture_says_what_it_was_made_from_and_the_list_finds_what_was_made_from_one(client):
+    from dataclasses import replace
+
+    client.store.images.append(replace(image(7), mode="image", source_id=uid(1)))
+    put(client, "u1", f"{uid(7)}/image.png", png((64, 48)))
+    put(client, "u1", f"{uid(7)}/thumb.jpg", b"jpegbytes")
+    got = client.get(f"{BASE}/{uid(7)}").json()
+    assert got["source_id"] == uid(1)
+    assert client.get(f"{BASE}/{uid(1)}").json()["source_id"] is None
+    made_from = client.get(BASE, params={"source": uid(1)}).json()["images"]
+    assert [i["id"] for i in made_from] == [uid(7)]
+    assert client.get(BASE, params={"source": uid(2)}).json()["images"] == []
+    # another person's list never shows it
+    assert client.get(BASE, params={"source": uid(1)}, headers={"x-user": "u2"}).json() == {
+        "images": [],
+        "next_before": None,
+    }

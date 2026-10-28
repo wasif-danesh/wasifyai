@@ -14,7 +14,8 @@ Put a copy of a creation in the export folder so other programs can use it. The 
 ## Steps in the app
 
 1. Open **Library** and choose the creation.
-2. Choose Save, then pick the file type if asked.
+2. Choose **Save a copy**, then where to keep it if asked.
+3. To save several, choose **Select**, tick them, then **Save**.
 
 ## Fields
 

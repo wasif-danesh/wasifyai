@@ -187,7 +187,7 @@ export type VideoWorkspaceProps = {
   /** Take a clip into Extend (the app opens the Extend screen with it chosen). */
   onExtendThis?: (video: VideoSummary) => void;
   /** Animate: a picture to start from ("Animate this" on a picture), fetched and handed over like one chosen. */
-  sourceImage?: { url: string; name: string } | null;
+  sourceImage?: { url: string; name: string; id?: string } | null;
   /** Extend: the clip to start from. */
   sourceVideo?: VideoSummary | null;
   /** The looks the person taught the video model: "My looks" is shown when there are any. */
@@ -221,6 +221,8 @@ export function VideoWorkspace({
   const flow = useVideoFlow(runs);
   const { state } = flow;
   const pic = usePicture(VIDEO_PRODUCT, runs);
+  // the picture of the library it animates, when it was handed over from there ("Animate this")
+  const fromLibrary = useRef<string | null>(null);
   const [prompt, setPrompt] = useState(
     sourceVideo && sourceVideo.mode !== "import"
       ? sourceVideo.prompt.slice(0, MAX_VIDEO_PROMPT)
@@ -288,6 +290,8 @@ export function VideoWorkspace({
       .then((r) => r.blob())
       .then((blob) => {
         if (gone) return;
+        // the picture of the library it came from, kept with the clip (ADR-0093, U8)
+        fromLibrary.current = sourceImage.id ?? null;
         void pic.choose(new File([blob], sourceImage.name, { type: blob.type || "image/png" }));
       })
       .catch(() => !gone && setProblem("That picture could not be opened here."));
@@ -322,8 +326,10 @@ export function VideoWorkspace({
   }
 
   const { dragging } = usePictureEvents((file) => {
-    if (mode === "image") void pic.choose(file);
-    else if (mode === "extend") void add(file);
+    if (mode === "image") {
+      fromLibrary.current = null; // a file of their own: not the library's picture any more
+      void pic.choose(file);
+    } else if (mode === "extend") void add(file);
   }, mode !== "text");
 
   const trimmed = prompt.trim();
@@ -349,6 +355,7 @@ export function VideoWorkspace({
         seconds: value.seconds,
         imageKey: value.imageKey,
         sourceId: value.source?.id,
+        sourceImageId: value.mode === "image" ? (fromLibrary.current ?? undefined) : undefined,
       });
     },
     [flow, looks, usable],
@@ -564,8 +571,14 @@ export function VideoWorkspace({
                 status={pic.status}
                 error={pic.error}
                 dragging={dragging}
-                onChoose={(f) => void pic.choose(f)}
-                onRemove={pic.clear}
+                onChoose={(f) => {
+                  fromLibrary.current = null;
+                  void pic.choose(f);
+                }}
+                onRemove={() => {
+                  fromLibrary.current = null;
+                  pic.clear();
+                }}
                 onCancel={pic.cancel}
               />
             ) : null}

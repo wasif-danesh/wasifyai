@@ -303,8 +303,11 @@ export {
   type CreationKind,
   type CreationsApi,
   type Found,
+  type MadeFrom,
+  type Others,
   type Recent,
   SearchError,
+  TAUGHT_KINDS,
   createCreationsApi,
 } from "./creations";
 export {

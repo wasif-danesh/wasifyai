@@ -57,6 +57,9 @@ class VideoSummary(BaseModel):
     error: str | None = None  # plain text for the user, only when status is "failed"
     video_url: str | None = None  # only when status is "done"
     poster_url: str | None = None
+    # what it was made from: the clip it carries on (mode "extend") or the picture it animates
+    # (mode "image"), or null
+    source_id: str | None = None
 
 
 class Exported(BaseModel):
@@ -119,6 +122,7 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
             poster_url=(
                 await deps.storage.url(video.poster_key) if done and video.poster_key else None
             ),
+            source_id=video.source_id,
         )  # fmt: skip
 
     @router.get("/videos", response_model=VideoPage)
@@ -127,6 +131,7 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
         before: datetime | None = None,
         status: Literal["working", "done", "failed"] | None = None,
         ids: str | None = Query(None, max_length=2000),
+        source: str | None = Query(None, max_length=64),  # the clips made from this clip or picture
         identity: Identity = Depends(deps.identity),
     ) -> VideoPage:
         wanted = parse_ids(ids)  # "these clips, in this order": the cards for search results
@@ -135,7 +140,9 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
             with deps.acting_as(identity, PRODUCT_ID):
                 got = [await summary(v) for v in found if v is not None]
             return VideoPage(videos=got, next_before=None)
-        rows = await videos().list(identity.tenant_id, identity.user_id, limit + 1, before, status)
+        rows = await videos().list(
+            identity.tenant_id, identity.user_id, limit + 1, before, status, source_id=source
+        )
         page, more = rows[:limit], len(rows) > limit
         with deps.acting_as(identity, PRODUCT_ID):
             items = [await summary(v) for v in page]

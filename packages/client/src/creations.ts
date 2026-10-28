@@ -1,9 +1,13 @@
 // My creations (ADR-0040, ADR-0041): every kind a person made, listed and searched in one place. The product list routes and
 // `/creations/search` are the same on the web and the desktop; only the transport differs.
 import type { SearchResponse } from "@wasifyai/contracts";
-import type { ImagePage } from "./images";
+import type { ImagePage, ImageSummary } from "./images";
+import type { Model3d } from "./model3d";
+import type { NotebookSummary } from "./notebooks";
+import type { TrainedModel } from "./training";
 import { HttpError, type Transport, errorMessage } from "./transport";
-import type { VideoPage } from "./videos";
+import type { BuilderProject } from "./videobuilder";
+import type { VideoPage, VideoSummary } from "./videos";
 import {
   type LipSyncCard,
   type SongCard,
@@ -22,7 +26,29 @@ import {
 /** Why a search could not be answered, in words for a person. */
 export class SearchError extends Error {}
 
-export type CreationKind = "track" | "image" | "video" | "speech" | "transcript" | "lipsync";
+export type CreationKind =
+  | "track"
+  | "image"
+  | "video"
+  | "speech"
+  | "transcript"
+  | "lipsync"
+  | "model3d"
+  | "composition"
+  | "notebook"
+  | "taught";
+
+/** The search index's names for the models a person taught (Train models): one kind in the Library. */
+export const TAUGHT_KINDS = ["lora", "writing", "decision"] as const;
+
+/** What the Library lists of the kinds that live in their own tools: 3D models, motion graphics, notebooks
+ * and taught models (ADR-0093, U8). Each is empty where the service does not offer it. */
+export type Others = {
+  models3d: Model3d[];
+  compositions: BuilderProject[];
+  notebooks: NotebookSummary[];
+  taught: TrainedModel[];
+};
 
 /** What the first screen shows: the latest of each kind. A kind that could not be read is listed in `failed`. */
 export type Recent = {
@@ -32,6 +58,7 @@ export type Recent = {
   speeches: SpeechCard[];
   transcripts: TranscriptCard[];
   lipsyncs: LipSyncCard[];
+  others: Others;
   failed: ("images" | "videos" | "voice")[];
 };
 
@@ -43,7 +70,12 @@ export type Found = {
   speeches: SpeechCard[];
   transcripts: TranscriptCard[];
   lipsyncs: LipSyncCard[];
+  others: Others;
 };
+
+/** What was made from a picture, a clip or a track (ADR-0093, U8): changes of a picture and the clips that animate
+ * it, the clips that carry a clip on, the changes, parts and dubs of a track. */
+export type MadeFrom = { images: ImageSummary[]; videos: VideoSummary[]; songs: SongCard[] };
 
 export type CreationsApi = {
   recent(): Promise<Recent>;
@@ -57,7 +89,15 @@ export type CreationsApi = {
   ): Promise<SearchResponse>;
   /** the cards for these ids of each kind, as the products' own list routes sign their files' links */
   cards(ids: Partial<Record<CreationKind, string[]>>, signal?: AbortSignal): Promise<Found>;
+  /** what was made from this picture, clip or track */
+  madeFrom(kind: "image" | "video" | "track", id: string): Promise<MadeFrom>;
+  /** delete one thing for good (its product's own delete route) */
+  remove(kind: CreationKind, id: string): Promise<void>;
+  /** add a recording of the person's own to their music (it can then be split, dubbed, changed) */
+  addRecording(file: File): Promise<SongCard>;
 };
+
+const NONE: Others = { models3d: [], compositions: [], notebooks: [], taught: [] };
 
 const VOICE = "/products/wasifyai-voice";
 
@@ -78,6 +118,30 @@ export function createCreationsApi(transport: Transport): CreationsApi {
   }
   const voice = <T>(route: string, query: string, signal?: AbortSignal) =>
     optional(json<{ items: T[] }>(`${VOICE}/${route}?${query}`, signal));
+  /** the kinds that live in their own tools: every one optional (a service may not offer it) */
+  async function others(signal?: AbortSignal): Promise<Others> {
+    const [models3d, compositions, notebooks, taught] = await Promise.all([
+      optional(json<{ items: Model3d[] }>("/products/wasifyai-model3d/m3d/models", signal)),
+      optional(
+        json<{ items: BuilderProject[] }>("/products/wasifyai-video/builder/projects", signal),
+      ),
+      optional(json<NotebookSummary[]>("/products/wasifyai-notebooks/notebooks", signal)),
+      optional(
+        json<{ models: TrainedModel[] }>("/products/wasifyai-training/train/models", signal),
+      ),
+    ]);
+    return {
+      models3d: models3d?.items ?? [],
+      compositions: compositions?.items ?? [],
+      notebooks: Array.isArray(notebooks) ? notebooks : [],
+      taught: taught?.models ?? [],
+    };
+  }
+  async function none(path: string, init: RequestInit): Promise<void> {
+    const res = await transport.fetch(path, init);
+    if (res.status === 401) transport.onUnauthorized?.();
+    if (!res.ok && res.status !== 404) throw new HttpError(res.status, await errorMessage(res));
+  }
 
   return {
     async recent() {
@@ -91,6 +155,7 @@ export function createCreationsApi(transport: Transport): CreationsApi {
       ]);
       const ok = <T>(r: PromiseSettledResult<T>) => (r.status === "fulfilled" ? r.value : null);
       const [images, videos, tracks, speeches, transcripts, clips] = settled;
+      const more = await others();
       const failed: Recent["failed"] = [];
       if (images.status === "rejected") failed.push("images");
       if (videos.status === "rejected") failed.push("videos");
@@ -102,6 +167,7 @@ export function createCreationsApi(transport: Transport): CreationsApi {
         speeches: ok(speeches)?.items.map(speechFromVoice) ?? [],
         transcripts: ok(transcripts)?.items.map(transcriptFromVoice) ?? [],
         lipsyncs: ok(clips)?.items.map(clipFromVoice) ?? [],
+        others: more,
         failed,
       };
     },
@@ -144,6 +210,13 @@ export function createCreationsApi(transport: Transport): CreationsApi {
         has("track") ? voice<VoiceTrack>("tracks", q("track"), signal) : null,
         has("lipsync") ? voice<VoiceClip>("clips", q("lipsync"), signal) : null,
       ]);
+      // the tools' own kinds are few: their lists are read whole and the hits picked out
+      const wantedOthers = has("model3d") || has("composition") || has("notebook") || has("taught");
+      const all = wantedOthers ? await others(signal) : NONE;
+      const pick = <T extends { id: string }>(items: T[], kind: CreationKind) => {
+        const set = new Set(ids[kind] ?? []);
+        return items.filter((x) => set.has(x.id));
+      };
       return {
         images,
         videos,
@@ -151,7 +224,58 @@ export function createCreationsApi(transport: Transport): CreationsApi {
         speeches: speeches?.items.map(speechFromVoice) ?? [],
         transcripts: transcripts?.items.map(transcriptFromVoice) ?? [],
         lipsyncs: clips?.items.map(clipFromVoice) ?? [],
+        others: {
+          models3d: pick(all.models3d, "model3d"),
+          compositions: pick(all.compositions, "composition"),
+          notebooks: pick(all.notebooks, "notebook"),
+          taught: pick(all.taught, "taught"),
+        },
       };
+    },
+
+    async madeFrom(kind, id) {
+      const at = encodeURIComponent(id);
+      if (kind === "track") {
+        const tracks = await voice<VoiceTrack>("tracks", "limit=200");
+        return {
+          images: [],
+          videos: [],
+          songs: (tracks?.items ?? []).filter((t) => t.parent_id === id).map(trackFromVoice),
+        };
+      }
+      const [images, videos] = await Promise.all([
+        kind === "image"
+          ? optional(json<ImagePage>(`/products/wasifyai-image/images?limit=24&source=${at}`))
+          : null,
+        optional(json<VideoPage>(`/products/wasifyai-video/videos?limit=24&source=${at}`)),
+      ]);
+      return { images: images?.images ?? [], videos: videos?.videos ?? [], songs: [] };
+    },
+
+    remove(kind, id) {
+      const at = encodeURIComponent(id);
+      const path = {
+        image: `/products/wasifyai-image/images/${at}`,
+        video: `/products/wasifyai-video/videos/${at}`,
+        track: `${VOICE}/tracks/${at}`,
+        speech: `${VOICE}/speeches/${at}`,
+        transcript: `${VOICE}/transcripts/${at}`,
+        lipsync: `${VOICE}/clips/${at}`,
+        model3d: `/products/wasifyai-model3d/m3d/models/${at}`,
+        composition: `/products/wasifyai-video/builder/projects/${at}`,
+        notebook: `/products/wasifyai-notebooks/notebooks/${at}`,
+        taught: `/products/wasifyai-training/train/models/${at}`,
+      }[kind];
+      return none(path, { method: "DELETE" });
+    },
+
+    async addRecording(file) {
+      const form = new FormData();
+      form.append("file", file, file.name);
+      const res = await transport.fetch(`${VOICE}/tracks/import`, { method: "POST", body: form });
+      if (res.status === 401) transport.onUnauthorized?.();
+      if (!res.ok) throw new HttpError(res.status, await errorMessage(res));
+      return trackFromVoice((await res.json()) as VoiceTrack);
     },
   };
 }

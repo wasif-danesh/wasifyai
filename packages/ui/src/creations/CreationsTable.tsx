@@ -35,7 +35,7 @@ function SortHeader({
   );
 }
 
-function columnsFor(nav: CreationsNav): ColumnDef<Row>[] {
+function columnsFor(nav: CreationsNav, onOpen?: (entry: Entry) => void): ColumnDef<Row>[] {
   return [
     {
       accessorKey: "kindLabel",
@@ -57,6 +57,15 @@ function columnsFor(nav: CreationsNav): ColumnDef<Row>[] {
           <NavLink
             nav={nav}
             to={row.original.entry}
+            onClick={
+              onOpen
+                ? (e) => {
+                    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+                    e.preventDefault();
+                    onOpen(row.original.entry);
+                  }
+                : undefined
+            }
             className="truncate font-medium hover:underline"
           >
             {row.original.title}
@@ -100,9 +109,18 @@ function columnsFor(nav: CreationsNav): ColumnDef<Row>[] {
 }
 
 /** My creations as a sortable table (ADR-0045): the same entries as the cards, in rows. */
-export function CreationsTable({ entries, nav }: { entries: Entry[]; nav: CreationsNav }) {
+export function CreationsTable({
+  entries,
+  nav,
+  onOpen,
+}: {
+  entries: Entry[];
+  nav: CreationsNav;
+  /** open an entry in the Library's detail view; without it a row goes to the entry's tool */
+  onOpen?: (entry: Entry) => void;
+}) {
   const data = useMemo(() => entries.map(toRow), [entries]);
-  const columns = useMemo(() => columnsFor(nav), [nav]);
+  const columns = useMemo(() => columnsFor(nav, onOpen), [nav, onOpen]);
   const [sorting, setSorting] = useState<SortingState>([]);
   const table = useReactTable({
     data,

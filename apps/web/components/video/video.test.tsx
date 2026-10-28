@@ -7,7 +7,7 @@ import userEvent from "@testing-library/user-event";
 import type { VideoSummary } from "@wasifyai/client";
 import { CreationsList } from "@wasifyai/ui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { VideoLibraryScreen, VideoScreen } from "./VideoScreens";
+import { VideoScreen } from "./VideoScreens";
 import { VideoView } from "./VideoView";
 
 const push = vi.fn();
@@ -95,7 +95,7 @@ describe("VideoScreen (the web app's mount of the shared screen)", () => {
     expect(paths).toContain("/api/products/wasifyai-video/videos"); // the recent strip
     expect(paths).toContain("/api/products/wasifyai-video/runs");
     await user.click(screen.getByRole("button", { name: "See all" }));
-    expect(push).toHaveBeenCalledWith("/video/library");
+    expect(push).toHaveBeenCalledWith("/creations?show=videos");
   });
 
   it("tells the header at once when a clip starts being made", async () => {
@@ -151,19 +151,6 @@ describe("VideoScreen (the web app's mount of the shared screen)", () => {
       ),
     );
     expect(sessionStorage.getItem("wasifyai:handoff:video-animate")).toBeNull(); // used once
-  });
-});
-
-describe("VideoLibraryScreen", () => {
-  it("lists clips with a download link", async () => {
-    const user = userEvent.setup();
-    fetchMock.mockResolvedValue(Response.json({ videos: [clip()], next_before: null }));
-    render(<VideoLibraryScreen />);
-    await user.click(await screen.findByRole("button", { name: /open: a red fox/i }));
-    expect(screen.getByRole("link", { name: /download/i })).toHaveAttribute(
-      "href",
-      "/api/products/wasifyai-video/videos/00000000-0000-0000-0000-000000000001/download",
-    );
   });
 });
 
@@ -353,7 +340,7 @@ describe("searching My creations", () => {
         videos={null}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /images/i }));
+    await user.click(screen.getByRole("button", { name: /pictures/i }));
     await user.type(screen.getByRole("searchbox", { name: /search your creations/i }), "fox");
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(fetchMock.mock.calls[0][0]).toContain("kind=image");

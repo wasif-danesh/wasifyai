@@ -111,7 +111,10 @@ async def _animate_check(p: AnimateIn, ctx: ActionContext) -> None:
 
 async def _animate_input(p: AnimateIn, ctx: ActionContext) -> dict:
     key = await stage_picture(ctx, PRODUCT_ID, await _picture_data(ctx, p.image_id))
-    return {"mode": "image", "prompt": p.prompt, "image_key": key, "seconds": p.seconds}
+    return {
+        "mode": "image", "prompt": p.prompt, "image_key": key, "seconds": p.seconds,
+        "source_image_id": p.image_id,
+    }  # fmt: skip
 
 
 def _animate_result(outputs: dict, p: AnimateIn) -> Outcome | None:

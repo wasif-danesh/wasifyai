@@ -17,10 +17,13 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-const AGAIN = "image-again";
-const EDIT = "image-edit";
+export const AGAIN = "image-again";
+export const EDIT = "image-edit";
 
-type Start = { preset: WorkspacePreset | null; source: { url: string; name: string } | null };
+type Start = {
+  preset: WorkspacePreset | null;
+  source: { url: string; name: string; id?: string } | null;
+};
 
 /** Create, Edit, Inpaint and Reference: the shared two-panel screen (also the desktop's), talking to the BFF. A recipe sent from
  * the library ("Make it again") or a result sent to Edit arrives through the tab's session storage. */
@@ -32,7 +35,8 @@ export function ImageScreen({ mode }: { mode: ImageMode }) {
   useEffect(() => {
     setStart({
       preset: mode === "text" ? takeHandoff<WorkspacePreset>(AGAIN) : null,
-      source: mode === "image" ? takeHandoff<{ url: string; name: string }>(EDIT) : null,
+      source:
+        mode === "image" ? takeHandoff<{ url: string; name: string; id?: string }>(EDIT) : null,
     });
   }, [mode]);
 
@@ -55,37 +59,17 @@ export function ImageScreen({ mode }: { mode: ImageMode }) {
             )
           }
           downloadHref={imageDownload}
-          onOpenLibrary={() => router.push("/image/library")}
+          onOpenLibrary={() => router.push("/creations?show=images")}
           onEditThis={(image) => {
-            putHandoff(EDIT, { url: image.image_url, name: `${image.id}.png` });
+            putHandoff(EDIT, { url: image.image_url, name: `${image.id}.png`, id: image.id });
             router.push("/image/edit");
           }}
           onAnimateThis={(image) => {
-            putHandoff(ANIMATE, { url: image.image_url, name: `${image.id}.png` });
+            putHandoff(ANIMATE, { url: image.image_url, name: `${image.id}.png`, id: image.id });
             router.push("/video/animate");
           }}
         />
       ) : null}
     </div>
-  );
-}
-
-/** Your images: everything made, with search, favourites, download, delete and "Make it again". */
-export function ImageLibraryScreen() {
-  const router = useRouter();
-  return (
-    <ImageLibrary
-      images={webImages}
-      className="max-w-none px-0 pt-0 pb-0"
-      subtitle="Everything you made."
-      downloadHref={imageDownload}
-      onCreate={() => router.push("/image")}
-      onRunAgain={(image) => {
-        const preset = presetOf(image);
-        if (!preset) return;
-        putHandoff(AGAIN, preset);
-        router.push("/image");
-      }}
-    />
   );
 }

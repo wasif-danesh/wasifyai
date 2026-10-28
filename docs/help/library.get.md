@@ -13,7 +13,9 @@ Show what is known about one creation: its name, when it was made and its size o
 
 ## Steps in the app
 
-1. Open **Library** and choose the creation.
+1. Open **Library** and choose the creation. It opens large with its recipe, **Made from** (the picture or clip
+   it was made from) and **Made from this** (what was made from it), each of which opens the same way, and the
+   tools to use it in: Edit this, Animate this, Extend this, Split into parts and so on.
 
 ## Fields
 

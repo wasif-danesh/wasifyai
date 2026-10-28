@@ -43,7 +43,7 @@ describe("the menu with voice screens", () => {
   it("links an offered screen, and a screen that is not offered is not linked", () => {
     const on = { voiceScreens: ["music", "tracks", "separate"] as const };
     expect(item("music.create", on)?.href).toBe("/voice/music");
-    expect(item("music.library", on)?.href).toBe("/voice/tracks");
+    expect(item("music.library", on)).toBeUndefined(); // "Your music" is the Library now
     expect(item("music.separate", on)?.href).toBe("/voice/separate");
     expect(item("music.lyrics", on)).toBeUndefined();
     expect(item("music.create", {})).toBeUndefined();

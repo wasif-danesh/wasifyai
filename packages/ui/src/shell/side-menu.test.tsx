@@ -19,8 +19,10 @@ describe("the menu definition", () => {
     ]);
     const items = (id: string) => MENU_GROUPS.find((g) => g.id === id)?.items.map((i) => i.label);
     expect(items("notebook")).toEqual(["Create", "View notebooks"]);
-    expect(items("video")).toEqual(["Create", "Animate an image", "Extend video", "Your videos"]);
-    expect(items("music")).toEqual(["Create", "Your music", "Lyrics", "Split into parts"]);
+    // the "Your …" pages are the one Library now (ADR-0093, U8)
+    expect(items("video")).toEqual(["Create", "Animate an image", "Extend video"]);
+    expect(items("music")).toEqual(["Create", "Lyrics", "Split into parts"]);
+    expect(items("images")).toEqual(["Create", "Edit", "Inpaint", "Reference"]);
     expect(items("voice")).toHaveLength(8);
     const ids = MENU_GROUPS.flatMap((g) => g.items.map((i) => i.id));
     expect(new Set(ids).size).toBe(ids.length); // every id is unique
@@ -42,42 +44,42 @@ describe("SideMenu", () => {
     const user = userEvent.setup();
     render(<SideMenu resolve={none} />);
     await user.click(screen.getByRole("button", { name: /^Images/ }));
-    expect(screen.getByRole("button", { name: /Your images/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Inpaint/ })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^Music/ }));
-    expect(screen.queryByRole("button", { name: /Your images/ })).toBeNull();
-    expect(screen.getByRole("button", { name: /Your music/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Inpaint/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Lyrics/ })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^Music/ }));
-    expect(screen.queryByRole("button", { name: /Your music/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Lyrics/ })).toBeNull();
   });
 
   it("keeps the group of the current page open and marks the page", () => {
     const resolve: ItemResolver = (id) =>
-      id === "video.library" ? { href: "/video/library", current: true } : undefined;
+      id === "video.extend" ? { href: "/video/extend", current: true } : undefined;
     render(<SideMenu resolve={resolve} />);
-    const here = screen.getByRole("link", { name: /Your videos/ });
-    expect(here).toHaveAttribute("href", "/video/library");
+    const here = screen.getByRole("link", { name: /Extend video/ });
+    expect(here).toHaveAttribute("href", "/video/extend");
     expect(here).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: "Video" })).toHaveAttribute("aria-expanded", "true");
   });
 
   it("lets a person open another group while on a page, and follows them to the next page", async () => {
     const user = userEvent.setup();
-    let page = "video.library";
+    let page = "video.extend";
     const resolve: ItemResolver = (id) =>
       id === page ? { href: `/${id}`, current: true } : id.startsWith("music.") ? {} : undefined;
     const { rerender } = render(<SideMenu resolve={resolve} />);
-    expect(screen.getByRole("link", { name: /Your videos/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Extend video/ })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^Music/ }));
-    expect(screen.getByRole("button", { name: /Your music/ })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Your videos/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Lyrics/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Extend video/ })).toBeNull();
     // opening a page of another group opens that group again
-    page = "images.library";
+    page = "images.inpaint";
     rerender(<SideMenu resolve={resolve} />);
-    expect(screen.getByRole("link", { name: /Your images/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Your music/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /Inpaint/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Lyrics/ })).toBeNull();
     // and the group of the current page can be closed
     await user.click(screen.getByRole("button", { name: /^Images/ }));
-    expect(screen.queryByRole("link", { name: /Your images/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Inpaint/ })).toBeNull();
   });
 
   it("runs what an item does and leaves hidden items out", async () => {

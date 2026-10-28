@@ -16,7 +16,7 @@ Split a recording into its parts (voice, drums, bass, other); each part is saved
 1. Open **Music › Split into parts**.
 2. Choose a recording.
 3. Choose the parts to keep.
-4. Choose **Split the song**. Each part plays where it appears and is kept in Your music.
+4. Choose **Split the song**. Each part plays where it appears and is kept in the Library.
 
 ## Fields
 

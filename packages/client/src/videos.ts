@@ -22,11 +22,20 @@ export type VideoSummary = {
   /** only when the clip is done */
   video_url: string | null;
   poster_url: string | null;
+  /** what it was made from: the clip it carries on (mode "extend") or the picture it animates (mode "image"),
+   * or null (ADR-0093, U8) */
+  source_id?: string | null;
 };
 
 export type VideoPage = { videos: VideoSummary[]; next_before: string | null };
 
-export type VideoListOptions = { limit?: number; before?: string | null; status?: VideoStatus };
+export type VideoListOptions = {
+  limit?: number;
+  before?: string | null;
+  status?: VideoStatus;
+  /** only the clips made from this clip or picture */
+  source?: string;
+};
 
 export type VideosApi = {
   list(options?: VideoListOptions): Promise<VideoPage>;
@@ -54,10 +63,11 @@ export function createVideosApi(transport: Transport, product = VIDEO_PRODUCT_ID
   }
 
   return {
-    list({ limit = 24, before, status } = {}) {
+    list({ limit = 24, before, status, source } = {}) {
       const q = new URLSearchParams({ limit: String(limit) });
       if (before) q.set("before", before);
       if (status) q.set("status", status);
+      if (source) q.set("source", source);
       return json<VideoPage>(`${base}?${q}`);
     },
 

@@ -426,3 +426,79 @@ describe("styles, Vary and the edit source", () => {
     expect(onAnimate).toHaveBeenCalledWith(expect.objectContaining({ id: "i1" }));
   });
 });
+
+describe("where an edit came from", () => {
+  it("sends the library picture Edit this handed over, and nothing for a file of the person's own", async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => ({
+      blob: async () => new Blob(["x"], { type: "image/png" }),
+    })) as unknown as typeof fetch;
+    URL.createObjectURL = vi.fn(() => "blob:preview");
+    URL.revokeObjectURL = vi.fn();
+    try {
+      for (const replace of [false, true]) {
+        fetchMock.mockReset();
+        let n = 0;
+        fetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+          if (path === "/products/wasifyai-image/runs") {
+            return sse([
+              done({
+                status: "done",
+                image_id: "new",
+                image_url: "http://x/new.png",
+                thumb_url: "http://x/new.jpg",
+                width: 64,
+                height: 64,
+                prompt: "x",
+                mode: "image",
+              }),
+            ]); // fmt: skip
+          }
+          if (init?.method === "DELETE") return new Response(null, { status: 204 });
+          n += 1;
+          return new Response(
+            JSON.stringify({
+              upload_id: `u${n}`,
+              key: `uploads/u${n}.png`,
+              width: 8,
+              height: 8,
+              bytes: 1,
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        });
+        const user = userEvent.setup({ applyAccept: false });
+        const { unmount } = render(
+          <ImageWorkspace
+            mode="image"
+            runs={runs}
+            images={fakeApi([summary()])}
+            sourceImage={{ url: "http://x/i1.png", name: "i1.png", id: "i1" }}
+          />,
+        );
+        await screen.findByRole("button", { name: /Replace/ });
+        if (replace) {
+          await user.upload(
+            screen.getByLabelText("Your picture"),
+            new File(["y"], "mine.png", { type: "image/png" }),
+          );
+          await waitFor(() => expect(n).toBe(2));
+        }
+        await user.type(screen.getByRole("textbox"), "make it blue");
+        await user.click(screen.getByRole("button", { name: "Make the picture" }));
+        await waitFor(() =>
+          expect(fetchMock.mock.calls.some((c) => c[0] === "/products/wasifyai-image/runs")).toBe(
+            true,
+          ),
+        );
+        const run = fetchMock.mock.calls.find((c) => c[0] === "/products/wasifyai-image/runs");
+        const input = JSON.parse(String(run?.[1]?.body)).input;
+        if (replace) expect(input).not.toHaveProperty("source_id");
+        else expect(input.source_id).toBe("i1");
+        unmount();
+      }
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+});

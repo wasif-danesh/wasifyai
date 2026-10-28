@@ -32,6 +32,8 @@ export type VideoRequest = {
   seconds: number;
   imageKey?: string;
   sourceId?: string;
+  /** image: the picture of the library it animates ("Animate this"), kept as where the clip came from */
+  sourceImageId?: string;
   /** looks the person taught (LoRAs on the video model), each with its strength */
   loras?: { name: string; weight: number }[];
 };
@@ -157,6 +159,9 @@ export function useVideoFlow(api: VideoFlowApi) {
               ...(request.mode === "text"
                 ? { shape: request.shape }
                 : { image_key: request.imageKey }),
+              ...(request.mode === "image" && request.sourceImageId
+                ? { source_image_id: request.sourceImageId }
+                : {}),
             };
       const body =
         request.loras && request.loras.length > 0 ? { ...input, loras: request.loras } : input;

@@ -71,6 +71,9 @@ class ImageState(TypedDict, total=False):
     lora_files: dict[
         str, str
     ]  # on the web: the storage key of each style, which is the person's own
+    # the picture of the library the change starts from, when the person chose one there
+    # (not a file they added)
+    source_id: str
     # job and result
     job_id: str
     result_key: str
@@ -227,6 +230,16 @@ def build_image_graph(
 
     # ---- guardrail ----------------------------------------------------------------------
 
+    async def source_of(state: ImageState, mode: str) -> str:
+        """The picture of the person's library this one starts from: kept only when it is theirs
+        and the mode changes a picture (a file they added has none)."""
+        wanted = str(state.get("source_id") or "")
+        if mode == "text" or not wanted:
+            return ""
+        ctx = require_context()
+        found = await images.get(ctx.tenant_id, ctx.user_id, wanted)
+        return found.id if found is not None else ""
+
     async def check_request(state: ImageState) -> ImageState:
         write = get_stream_writer()
         write(
@@ -300,6 +313,7 @@ def build_image_graph(
             "seed": seed,
             "loras": loras,
             "lora_files": lora_files,
+            "source_id": await source_of(state, mode),
             "status": "working",
         }
 
@@ -413,6 +427,7 @@ def build_image_graph(
                 image_key=image_key,
                 thumb_key=thumb_key,
                 recipe=recipe_of(state, width, height),
+                source_id=state.get("source_id") or None,
             )
         )
         await discard_all(state)  # the user's originals are not kept

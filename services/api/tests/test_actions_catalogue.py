@@ -30,9 +30,6 @@ DESKTOP_MENU_TS = ROOT / "apps" / "desktop" / "src" / "menu.ts"
 # exemption"). Anything else with a screen must be the `ui` of an action.
 EXEMPT_SCREENS = {
     "chat": "The assistant itself: it is what runs actions, not one of them.",
-    "images.library": "A view of the library filtered to pictures: library.list with kind image.",
-    "video.library": "A view of the library filtered to videos: library.list with kind video.",
-    "music.library": "A view of the library filtered to songs: library.list with kind track.",
 }
 
 

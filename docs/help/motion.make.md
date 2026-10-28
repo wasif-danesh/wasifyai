@@ -13,7 +13,7 @@ Make a finished animated graphic in one step: an animated title, a quote that ap
 a bar chart from your own numbers, a lower third (a name strap) or captions. The words and numbers
 go in exactly as you typed them. Before anything is drawn the page is opened and every word on the
 screen is checked against what you typed; a misspelt name, a cut-off line or a word too close to
-the edge stops the video and says which. The video is saved to Your videos, and the project stays
+the edge stops the video and says which. The video is saved to the Library, and the project stays
 in your library so you can change it. Motion graphics is experimental.
 
 ## Steps in the app

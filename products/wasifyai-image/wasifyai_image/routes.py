@@ -44,6 +44,8 @@ class ImageSummary(BaseModel):
     thumb_url: str
     recipe: dict | None = None  # null on images made before recipes existed
     favourite: bool = False
+    # the picture of the library this one was made from (Edit, Inpaint, Reference), or null
+    source_id: str | None = None
 
 
 class ImageUpdate(BaseModel):
@@ -97,7 +99,7 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
             height=image.height, created_at=image.created_at,
             image_url=await deps.storage.url(image.image_key),
             thumb_url=await deps.storage.url(image.thumb_key),
-            recipe=image.recipe, favourite=image.favourite,
+            recipe=image.recipe, favourite=image.favourite, source_id=image.source_id,
         )  # fmt: skip
 
     @router.get("/images", response_model=ImagePage)
@@ -106,6 +108,7 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
         before: datetime | None = None,
         ids: str | None = Query(None, max_length=2000),
         favourites: bool = False,
+        source: str | None = Query(None, max_length=64),  # the pictures made from this one
         identity: Identity = Depends(deps.identity),
     ) -> ImagePage:
         wanted = parse_ids(ids)  # "these images, in this order": the cards for search results
@@ -115,7 +118,12 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
                 got = [await summary(i) for i in found if i is not None]
             return ImagePage(images=got, next_before=None)
         rows = await images().list(
-            identity.tenant_id, identity.user_id, limit + 1, before, favourites_only=favourites
+            identity.tenant_id,
+            identity.user_id,
+            limit + 1,
+            before,
+            favourites_only=favourites,
+            source_id=source,
         )
         page, more = rows[:limit], len(rows) > limit
         with deps.acting_as(identity, PRODUCT_ID):

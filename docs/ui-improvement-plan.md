@@ -316,7 +316,32 @@ Split into parts with it chosen and HTDemucs ready; pictures `music-ask`, `music
 `music-made-more`, `music-split-handed`). Not in this stage: the Lyrics screen stays a page of its own (it is also
 the panel), and the strip reads Your music, not the one Library (U8).
 
-About 44 days of work in thirteen stages; U0 to U7 are done, U8 next, then the products in the order a
+**Built:** U8 on 2026-10-28 (decision 2: yes). My creations is the one Library: the "Your images", "Your videos"
+and "Your music" items are gone from the menu, their addresses open the Library filtered (`/creations?show=…` on
+the web; the window's `library`, `videos` and `tracks` routes), and every "See all" lands there. The Library
+(`creations/MyCreations.tsx`, `CreationsList.tsx`) has a filter and a count for each kind (a count says "+" while
+there are more pages), the tools' own kinds (3D models, motion graphics, notebooks, taught models) as filters once
+there is one, sort (newest, oldest, A to Z), Select with Save and Delete (asks first), "Add a recording" (Your
+music's job), and the detail view (`creations/CreationDetail.tsx`): the thing large, its facts and recipe, **Made
+from** and **Made from this** (each opening in place), and its tools as three actions and a menu (Edit this,
+Animate this, Extend this, Make it again, Split into parts, Change the voice, Edit the words, Save a copy, Open in
+its tool, Delete). Each app hands an entry to a tool with the hand-offs its make screens use (`navFor` with
+`toolFor` in the window, `webCreationsNav` on the web). The engine keeps what a picture or a clip was made from:
+`source_id` on `images` and `videos` (migration 0026 on Postgres; the SQLite file gets the column on first use),
+in the summaries, and `?source=` on both lists; Edit, Inpaint and Reference keep the library picture they started
+from (checked to be the person's own), Extend keeps its clip, Animate keeps the picture (`source_image_id`, kept
+only when it is an id: the pictures are another product's), the assistant's actions pass the same, and a
+replaced picture is not kept. Music uses the tracks' own `parent_id`. The creations client has `madeFrom`,
+`remove` and `addRecording`. Checked with the engine tests (sources on memory, SQLite and real Postgres; the
+migration up, down and up), the client, UI, desktop and web tests, the web specs (the Library's pictures taken
+again, the three old pictures removed) and in the window (`ui-audit.sh light library-make`: a picture opened in
+the Library, Edit this, a real edit with FLUX.2 klein 4B, then Made from and Made from this between the two;
+pictures `library`, `library-detail`, `library-edit-made`, `library-made-from`, `library-made-from-this`). Not
+checked for real: Animate and Extend keeping their source (unit and route tested; a clip takes minutes). Not in
+this stage: things made before 0026 have no source; the shared `ImageLibrary`, `VideoLibrary` and `TracksPage`
+components stay in `packages/ui` though no app opens them now.
+
+About 44 days of work in thirteen stages; U0 to U8 are done, U9 next, then the products in the order a
 new person meets them (Pictures, Video, Speech), with the Library before the home so the quick starts and the
 recent strips have one source.
 
@@ -324,8 +349,10 @@ recent strips have one source.
 
 1. **Names.** "Pictures" for Images, "Speech" and "Studio" for the eight voice tools, "Teach" for Train models,
    "Models" for Model hub. The design guide already says picture and Teach; the menu does not.
-2. **Removing the per-product libraries** ("Your images", "Your videos", "Your music") in favour of the one
-   Library with a recent strip on each make screen.
+2. ~~Removing the per-product libraries~~ Decided 2026-10-28 (owner): yes. "Your images", "Your videos" and
+   "Your music" go; My creations is the one Library, each make screen keeps its recent strip with See all to the
+   Library filtered to its kind, the old addresses redirect, and Your music's own jobs (add a recording, send a
+   track to a tool) move to the Library's detail view. Stage U8.
 3. ~~The menu without groups~~ Decided 2026-10-28: the groups stay, and a product's modes stay under them.
 4. **An accessibility checker as a dependency** (`@axe-core/playwright`, MPL-2.0) for U12; the backlog (B2) has
    waited on this since the design system.

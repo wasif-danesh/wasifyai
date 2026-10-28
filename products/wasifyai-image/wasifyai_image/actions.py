@@ -118,7 +118,7 @@ async def _edit_input(p: EditIn, ctx: ActionContext) -> dict:
     if data is None:
         raise ActionRefused("not_found", "That picture is not in the library.")
     key = await stage_picture(ctx, PRODUCT_ID, data)
-    return {"mode": "image", "prompt": p.prompt, "image_key": key}
+    return {"mode": "image", "prompt": p.prompt, "image_key": key, "source_id": p.image_id}
 
 
 def _edit_result(outputs: dict, p: EditIn) -> Outcome | None:
@@ -134,7 +134,7 @@ async def _reference_input(p: ReferenceIn, ctx: ActionContext) -> dict:
         keys.append(await stage_picture(ctx, PRODUCT_ID, data))
     return {
         "mode": "reference", "prompt": p.prompt, "size": p.size,
-        "image_key": keys[0], "image2_key": keys[1],
+        "image_key": keys[0], "image2_key": keys[1], "source_id": p.image_ids[0],
     }  # fmt: skip
 
 
@@ -179,6 +179,7 @@ async def _inpaint_input(p: InpaintIn, ctx: ActionContext) -> dict:
         "mode": "inpaint", "prompt": p.prompt,
         "image_key": await stage_picture(ctx, PRODUCT_ID, data),
         "mask_key": await stage_picture(ctx, PRODUCT_ID, mask),
+        "source_id": p.image_id,
     }  # fmt: skip
 
 

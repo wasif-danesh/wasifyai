@@ -4,6 +4,8 @@ import {
   AppBar,
   ApprovalCards,
   AudiobookPage,
+  type CreationEntry,
+  type CreationUse,
   DubPage,
   ElicitationCards,
   JobTray,
@@ -13,15 +15,16 @@ import {
   SearchPalette,
   SpeakPage,
   ToolPage,
-  TracksPage,
   TranscribePage,
   type TrayJob,
   VoicesPage,
   WindowBarProvider,
   cn,
   jobLabel,
+  openInMusic,
   placesOf,
   presetOf,
+  sendToTool,
 } from "@wasifyai/ui";
 import { ArrowLeft, ArrowRight, PanelLeft } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -29,9 +32,8 @@ import { Sidebar } from "./Sidebar";
 import { client, connectionsApi, creationsApi, externalApi, voiceApi } from "./api";
 import { resolveItem, titleFor } from "./menu";
 import { CreatePage } from "./pages/Create";
-import { CreationsPage, navFor } from "./pages/Creations";
+import { CreationsPage, navFor, toolFor } from "./pages/Creations";
 import { HomePage } from "./pages/Home";
-import { LibraryPage } from "./pages/Library";
 import { Model3dPage } from "./pages/Model3d";
 import { ModelsPage } from "./pages/Models";
 import { NotebookPage } from "./pages/Notebook";
@@ -40,7 +42,6 @@ import { SettingsPage } from "./pages/Settings";
 import { TrainPage } from "./pages/Train";
 import { VideoPage } from "./pages/Video";
 import { VideoBuilderPage } from "./pages/VideoBuilder";
-import { VideosPage } from "./pages/Videos";
 import { remembered } from "./remember";
 import { useHistoryButtons, useRoute } from "./router";
 import { videos } from "./videos";
@@ -150,9 +151,15 @@ export function Shell() {
   // an image whose recipe was sent to Create ("make it again"); used once, then forgotten
   const [again, setAgain] = useState<ImageSummary | null>(null);
   // a result sent to Edit as its source picture ("Edit this result")
-  const [editSource, setEditSource] = useState<{ url: string; name: string } | null>(null);
+  const [editSource, setEditSource] = useState<{ url: string; name: string; id?: string } | null>(
+    null,
+  );
   // a picture sent to Video's Animate ("Animate this"), and a clip sent to Extend ("Extend this")
-  const [animateSource, setAnimateSource] = useState<{ url: string; name: string } | null>(null);
+  const [animateSource, setAnimateSource] = useState<{
+    url: string;
+    name: string;
+    id?: string;
+  } | null>(null);
   const [extendSource, setExtendSource] = useState<VideoSummary | null>(null);
   useEffect(() => {
     if (route !== "create") setAgain(null);
@@ -160,9 +167,32 @@ export function Shell() {
     if (route !== "animate") setAnimateSource(null);
     if (route !== "extend") setExtendSource(null);
   }, [route]);
+  // the Library's detail view hands an entry to a tool: the same hand-offs the make screens use (ADR-0093, U8)
+  const handOff = useCallback(
+    (entry: CreationEntry, action: CreationUse) => {
+      const to = toolFor(entry, action);
+      if (!to) return;
+      if (entry.kind === "image") {
+        const picture = { url: entry.image.image_url, name: `${entry.id}.png`, id: entry.id };
+        if (action === "edit") setEditSource(picture);
+        if (action === "animate") setAnimateSource(picture);
+        if (action === "again") setAgain(entry.image);
+      }
+      if (entry.kind === "video" && action === "extend") setExtendSource(entry.video);
+      if (entry.kind === "song" && action === "again") openInMusic(remembered, "again", entry.id);
+      if (action === "split" || action === "convert" || action === "speechedit") {
+        sendToTool(remembered, {
+          kind: entry.kind === "speech" ? "speech" : "track",
+          id: entry.id,
+        });
+      }
+      go(to);
+    },
+    [go],
+  );
   const animateThis = useCallback(
     (image: ImageSummary) => {
-      setAnimateSource({ url: image.image_url, name: `${image.id}.png` });
+      setAnimateSource({ url: image.image_url, name: `${image.id}.png`, id: image.id });
       go("animate");
     },
     [go],
@@ -278,7 +308,7 @@ export function Shell() {
                   go={go}
                   preset={again ? presetOf(again) : null}
                   onEditThis={(image) => {
-                    setEditSource({ url: image.image_url, name: `${image.id}.png` });
+                    setEditSource({ url: image.image_url, name: `${image.id}.png`, id: image.id });
                     go("edit");
                   }}
                   onAnimateThis={animateThis}
@@ -299,15 +329,16 @@ export function Shell() {
               {route === "inpaint" ? (
                 <CreatePage mode="inpaint" go={go} onAnimateThis={animateThis} />
               ) : null}
-              {route === "creations" ? <CreationsPage go={go} /> : null}
+              {route === "creations" ? <CreationsPage go={go} handOff={handOff} /> : null}
+              {/* the routes that were "Your images", "Your videos" and "Your music" (ADR-0093, U8) */}
               {route === "library" ? (
-                <LibraryPage
-                  go={go}
-                  onRunAgain={(image) => {
-                    setAgain(image);
-                    go("create");
-                  }}
-                />
+                <CreationsPage go={go} handOff={handOff} filter="images" />
+              ) : null}
+              {route === "videos" ? (
+                <CreationsPage go={go} handOff={handOff} filter="videos" />
+              ) : null}
+              {route === "tracks" ? (
+                <CreationsPage go={go} handOff={handOff} filter="songs" />
               ) : null}
               {route === "notebooks" ? <NotebooksPage /> : null}
               {route === "notebook" && notebook ? (
@@ -321,7 +352,6 @@ export function Shell() {
               {route === "transcribe" ? <TranscribePage {...voice} /> : null}
               {route === "voices" ? <VoicesPage {...voice} /> : null}
               {route === "music" ? <MusicPage {...voice} /> : null}
-              {route === "tracks" ? <TracksPage {...voice} /> : null}
               {route === "lyrics" ? <LyricsPage {...voice} /> : null}
               {route === "lipsync" ? <LipSyncPage {...voice} /> : null}
               {route === "audiobook" ? <AudiobookPage {...voice} /> : null}
@@ -352,7 +382,6 @@ export function Shell() {
               {route === "videobuilder" ? <VideoBuilderPage go={go} /> : null}
               {route === "model3d" ? <Model3dPage go={go} /> : null}
               {route === "train" ? <TrainPage go={go} /> : null}
-              {route === "videos" ? <VideosPage go={go} onExtend={extendThis} /> : null}
               {route === "models" ? <ModelsPage /> : null}
               {route === "settings" ? <SettingsPage /> : null}
             </main>

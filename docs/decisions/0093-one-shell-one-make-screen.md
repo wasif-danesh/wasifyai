@@ -66,6 +66,6 @@ The owner is not happy with the look and feel or the flows, and wants the app ad
 
 ## Open questions
 
-The owner decisions in the plan: names, the per-product libraries, the accessibility checker dependency, the
-Explore page, mockup review per stage, and the chat box's pills. The menu without groups was tried and decided
-against (2026-10-28).
+The owner decisions in the plan: names, the accessibility checker dependency, the Explore page, mockup review per
+stage, and the chat box's pills. The menu without groups was tried and decided against (2026-10-28). The
+per-product libraries go (owner, 2026-10-28): decision 5 above stands as written.

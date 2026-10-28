@@ -48,8 +48,11 @@ describe("the window's side menu", () => {
     };
     expect(current("video", "video.create")).toBe(true);
     expect(current("animate", "video.create")).toBe(false);
-    expect(current("videos", "video.library")).toBe(true);
-    expect(current("tracks", "music.library")).toBe(true);
+    // the routes that were "Your videos" and "Your music" show the Library: its item is the one marked
+    expect(current("videos", "library")).toBe(true);
+    expect(current("tracks", "library")).toBe(true);
+    expect(current("library", "library")).toBe(true);
+    expect(current("creations", "library")).toBe(true);
     expect(current("speechedit", "voice.edit")).toBe(true);
     expect(current("models", "models")).toBe(true);
     expect(current("train", "train")).toBe(true);

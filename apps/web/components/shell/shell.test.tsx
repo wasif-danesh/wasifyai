@@ -49,16 +49,12 @@ describe("the side panel", () => {
     query = "";
     panel();
     expect(screen.getByRole("link", { name: /Create/ })).toHaveAttribute("href", "/image");
-    expect(screen.getByRole("link", { name: /Your images/ })).toHaveAttribute(
-      "href",
-      "/image/library",
-    );
+    // the "Your …" pages are the one Library now (ADR-0093, U8)
+    expect(screen.queryByRole("link", { name: /Your images/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /^Library/ })).toHaveAttribute("href", "/creations");
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /^Video/ }));
-    expect(screen.getByRole("link", { name: /Your videos/ })).toHaveAttribute(
-      "href",
-      "/video/library",
-    );
+    expect(screen.queryByRole("link", { name: /Your videos/ })).toBeNull();
   });
 
   it("links every item the web serves, Train models included", async () => {
@@ -103,8 +99,8 @@ describe("the side panel", () => {
   });
 
   it("marks the page being shown, a saved result as its library, and the filter of My creations", () => {
-    path = "/video/library";
-    query = "";
+    path = "/creations";
+    query = "show=videos";
     const first = render(
       <TooltipProvider>
         <SidebarProvider>
@@ -112,10 +108,7 @@ describe("the side panel", () => {
         </SidebarProvider>
       </TooltipProvider>,
     );
-    expect(screen.getByRole("link", { name: /Your videos/ })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(screen.getByRole("link", { name: /^Library/ })).toHaveAttribute("aria-current", "page");
     first.unmount();
 
     path = "/image/creations/abc";
@@ -126,11 +119,9 @@ describe("the side panel", () => {
         </SidebarProvider>
       </TooltipProvider>,
     );
-    expect(screen.getByRole("link", { name: /Your images/ })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    expect(screen.getByRole("link", { name: /Create/ })).not.toHaveAttribute("aria-current");
+    // the page of one picture is the Library's: Images' own items are not the page being shown
+    expect(screen.getByRole("link", { name: /^Library/ })).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByRole("link", { name: /Create/, current: "page" })).toBeNull();
     second.unmount();
   });
 

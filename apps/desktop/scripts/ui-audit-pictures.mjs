@@ -18,6 +18,8 @@
 //                                                                made on Images and turned into a lip sync video
 //   apps/desktop/scripts/ui-audit.sh light music-make           a real instrumental on Create music, its More menu,
 //                                                                then Split into parts with it chosen
+//   apps/desktop/scripts/ui-audit.sh light library-make         the Library: a picture opened, Edit this, a real
+//                                                                edit made, then "Made from" and "Made from this"
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -388,6 +390,39 @@ for (const scheme of ["light", "dark"]) {
       await page.getByText("Split into parts").first().waitFor();
       await page.waitForTimeout(2500);
       await shot(page, "music-split-handed");
+    });
+  }
+  if (scheme === "light" && names.has("library-make")) {
+    // the check of stage U8: a real edit started from the Library keeps where it came from
+    await attempt("library-make", async () => {
+      await open(page, "/creations");
+      await page.getByRole("button", { name: /^Pictures/ }).click();
+      await page.waitForTimeout(800);
+      await shot(page, "library");
+      const card = page.getByRole("main").getByRole("link", { name: /teapot/i }).first();
+      await card.click();
+      const detail = page.getByRole("dialog");
+      await detail.getByRole("button", { name: /Edit this/ }).waitFor();
+      await page.waitForTimeout(800);
+      await shot(page, "library-detail");
+      await detail.getByRole("button", { name: /Edit this/ }).click();
+      await page.getByRole("button", { name: /Replace/ }).waitFor({ timeout: 30_000 });
+      await page.getByRole("textbox", { name: /what should change/i }).fill("Make the teapot deep blue");
+      await page.getByRole("button", { name: "Make the picture" }).click();
+      await untilDone(page, page.locator('[data-slot="stage"][data-state="result"] img'), 600_000);
+      await page.waitForTimeout(800);
+      await shot(page, "library-edit-made");
+      await open(page, "/creations");
+      await page.getByRole("button", { name: /^Pictures/ }).click();
+      await page.getByRole("main").getByRole("link", { name: /deep blue/i }).first().click();
+      const made = page.getByRole("dialog");
+      await made.getByRole("region", { name: "Made from" }).getByRole("button").first().waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "library-made-from");
+      await made.getByRole("region", { name: "Made from" }).getByRole("button").first().click();
+      await page.getByRole("dialog").getByRole("region", { name: "Made from this" }).waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "library-made-from-this");
     });
   }
   if (scheme === "light" && names.size === 0) {

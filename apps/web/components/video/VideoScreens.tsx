@@ -19,7 +19,10 @@ import { useCallback, useEffect, useState } from "react";
 export const ANIMATE = "video-animate";
 export const EXTEND = "video-extend";
 
-type Start = { image: { url: string; name: string } | null; video: VideoSummary | null };
+type Start = {
+  image: { url: string; name: string; id?: string } | null;
+  video: VideoSummary | null;
+};
 
 /** Make a video from words, animate a picture, or carry a video on (Extend): the shared make screen (also the
  * desktop's), talking to the BFF. A picture or a clip sent from another screen arrives through the tab's session
@@ -33,7 +36,8 @@ export function VideoScreen({ mode }: { mode: Exclude<VideoMode, "import"> }) {
   const [start, setStart] = useState<Start | null>(null);
   useEffect(() => {
     setStart({
-      image: mode === "image" ? takeHandoff<{ url: string; name: string }>(ANIMATE) : null,
+      image:
+        mode === "image" ? takeHandoff<{ url: string; name: string; id?: string }>(ANIMATE) : null,
       video: mode === "extend" ? takeHandoff<VideoSummary>(EXTEND) : null,
     });
   }, [mode]);
@@ -64,30 +68,12 @@ export function VideoScreen({ mode }: { mode: Exclude<VideoMode, "import"> }) {
           hint="Takes a few minutes for 5 seconds and about twice as long for 8. You can explore the site while it's made."
           onMaking={making}
           looks={looks}
-          onOpenLibrary={() => router.push("/video/library")}
+          onOpenLibrary={() => router.push("/creations?show=videos")}
           onExtendThis={extendThis}
           sourceImage={start.image}
           sourceVideo={start.video}
         />
       ) : null}
     </div>
-  );
-}
-
-/** Your videos: every clip, including the ones being made, with search, download, delete and Extend this. */
-export function VideoLibraryScreen() {
-  const router = useRouter();
-  return (
-    <VideoLibrary
-      videos={webVideos}
-      className="max-w-none px-0 pt-0 pb-0"
-      subtitle="Every clip you made."
-      downloadHref={(v) => videoDownload({ id: v.id })}
-      onCreate={() => router.push("/video")}
-      onExtend={(video) => {
-        putHandoff(EXTEND, video);
-        router.push("/video/extend");
-      }}
-    />
   );
 }

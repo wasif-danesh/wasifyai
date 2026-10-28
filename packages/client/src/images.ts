@@ -34,11 +34,19 @@ export type ImageSummary = {
   /** null on images made before recipes existed */
   recipe: ImageRecipe | null;
   favourite: boolean;
+  /** the picture of the library this one was made from (Edit, Inpaint, Reference), or null (ADR-0093, U8) */
+  source_id?: string | null;
 };
 
 export type ImagePage = { images: ImageSummary[]; next_before: string | null };
 
-export type ListOptions = { limit?: number; before?: string | null; favourites?: boolean };
+export type ListOptions = {
+  limit?: number;
+  before?: string | null;
+  favourites?: boolean;
+  /** only the pictures made from this one */
+  source?: string;
+};
 
 export type ImagesApi = {
   list(options?: ListOptions): Promise<ImagePage>;
@@ -65,10 +73,11 @@ export function createImagesApi(transport: Transport, product = IMAGE_PRODUCT_ID
   const JSON_HEADERS = { "content-type": "application/json" };
 
   return {
-    list({ limit = 24, before, favourites } = {}) {
+    list({ limit = 24, before, favourites, source } = {}) {
       const q = new URLSearchParams({ limit: String(limit) });
       if (before) q.set("before", before);
       if (favourites) q.set("favourites", "true");
+      if (source) q.set("source", source);
       return json<ImagePage>(`${base}?${q}`);
     },
 

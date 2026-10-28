@@ -158,6 +158,71 @@ describe("VideoWorkspace", () => {
     }
   });
 
+  it("keeps the picture of the library a clip animates, and forgets it when another is chosen", async () => {
+    const uploaded = (n: number) =>
+      new Response(
+        JSON.stringify({
+          upload_id: `u${n}`,
+          key: `uploads/u${n}.png`,
+          width: 8,
+          height: 8,
+          bytes: 1,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => ({
+      blob: async () => new Blob(["x"], { type: "image/png" }),
+    })) as unknown as typeof fetch;
+    URL.createObjectURL = vi.fn(() => "blob:preview");
+    URL.revokeObjectURL = vi.fn();
+    try {
+      for (const replace of [false, true]) {
+        fetchMock.mockReset();
+        let n = 0;
+        fetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+          if (path === "/products/wasifyai-video/runs") return sse([ready]);
+          if (init?.method === "DELETE") return new Response(null, { status: 204 });
+          n += 1;
+          return uploaded(n);
+        });
+        const user = userEvent.setup({ applyAccept: false });
+        const { unmount } = render(
+          <VideoWorkspace
+            mode="image"
+            runs={client}
+            sourceImage={{ url: "http://x/i1.png", name: "i1.png", id: "i-1" }}
+          />,
+        );
+        await screen.findByRole("button", { name: /Replace/ });
+        if (replace) {
+          await user.upload(
+            screen.getByLabelText("Your picture"),
+            new File(["y"], "mine.png", { type: "image/png" }),
+          );
+          await waitFor(() => expect(n).toBe(2));
+        }
+        await user.type(screen.getByRole("textbox"), "snow falls");
+        await waitFor(() =>
+          expect(screen.getByRole("button", { name: "Make the video" })).toBeEnabled(),
+        );
+        await user.click(screen.getByRole("button", { name: "Make the video" }));
+        await waitFor(() =>
+          expect(fetchMock.mock.calls.some((c) => c[0] === "/products/wasifyai-video/runs")).toBe(
+            true,
+          ),
+        );
+        const run = fetchMock.mock.calls.find((c) => c[0] === "/products/wasifyai-video/runs");
+        const body = JSON.parse(String(run?.[1]?.body));
+        if (replace) expect(body.input).not.toHaveProperty("source_image_id");
+        else expect(body.input.source_image_id).toBe("i-1");
+        unmount();
+      }
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
   it("shows My looks only when there are any, and sends the chosen look with its strength and magic word", async () => {
     fetchMock.mockResolvedValueOnce(sse([node("check_request"), node("generate_video"), ready]));
     const user = userEvent.setup();

@@ -45,7 +45,6 @@ export const PARITY: Record<string, Parity> = {
   "images.edit": { status: "live", note: "shared ImageWorkspace" },
   "images.inpaint": { status: "live", note: "shared ImageWorkspace, mode inpaint" },
   "images.reference": { status: "live", note: "shared ImageWorkspace, mode reference" },
-  "images.library": { status: "live", note: "shared ImageLibrary" },
 
   "video.create": { status: "live", note: "shared VideoWorkspace" },
   "video.animate": { status: "live", note: "shared VideoWorkspace" },
@@ -53,7 +52,6 @@ export const PARITY: Record<string, Parity> = {
     status: "live",
     note: "shared VideoWorkspace, mode extend; needs ffmpeg in the API image",
   },
-  "video.library": { status: "live", note: "shared VideoLibrary" },
 
   "voice.speak": { status: "live", note: "shared voice page, hosted models" },
   "voice.transcribe": { status: "live", note: "shared voice page, hosted models" },
@@ -65,7 +63,6 @@ export const PARITY: Record<string, Parity> = {
   "voice.audiobook": { status: "live", note: "shown when a ready model can do it" },
 
   "music.create": { status: "live", note: "shown when a ready model can do it" },
-  "music.library": { status: "live", note: "shown when a ready model can do it" },
   "music.lyrics": { status: "live", note: "shown when a ready model can do it" },
   "music.separate": { status: "live", note: "shown when a ready model can do it" },
 };

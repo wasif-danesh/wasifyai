@@ -29,7 +29,7 @@ export function VideoPage({
   mode: PageMode;
   go: (r: Route) => void;
   onExtendThis?: (video: VideoSummary) => void;
-  sourceImage?: { url: string; name: string } | null;
+  sourceImage?: { url: string; name: string; id?: string } | null;
   sourceVideo?: VideoSummary | null;
 }) {
   const model = useModelOf("wasifyai-video");

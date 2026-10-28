@@ -1,6 +1,6 @@
 "use client";
 
-import { type CreationsApi, SearchError } from "@wasifyai/client";
+import { type CreationsApi, SearchError, TAUGHT_KINDS } from "@wasifyai/client";
 import { useEffect, useState } from "react";
 import { type Entry, type Filter, kindOf, longEnough } from "./model";
 
@@ -20,6 +20,9 @@ async function cards(
   signal: AbortSignal,
 ): Promise<Entry[]> {
   const ids = (kind: string) => response.results.filter((r) => r.kind === kind).map((r) => r.id);
+  const taught = new Set<string>(TAUGHT_KINDS);
+  // the index's kind for a hit, as the Library names it: a taught model is one kind here
+  const kindOfHit = (k: string) => (taught.has(k) ? "taught" : k);
   const found = await api.cards(
     {
       image: ids("image"),
@@ -28,6 +31,10 @@ async function cards(
       transcript: ids("transcript"),
       track: ids("track"),
       lipsync: ids("lipsync"),
+      model3d: ids("model3d"),
+      composition: ids("composition"),
+      notebook: ids("notebook"),
+      taught: response.results.filter((r) => taught.has(r.kind)).map((r) => r.id),
     },
     signal,
   );
@@ -69,7 +76,36 @@ async function cards(
       createdAt: lipsync.created_at,
       lipsync,
     });
-  return response.results.flatMap((r) => byKey.get(`${r.kind}:${r.id}`) ?? []);
+  const { models3d, compositions, notebooks, taught: models } = found.others;
+  for (const model3d of models3d)
+    byKey.set(`model3d:${model3d.id}`, {
+      kind: "model3d",
+      id: model3d.id,
+      createdAt: model3d.created_at,
+      model3d,
+    });
+  for (const composition of compositions)
+    byKey.set(`composition:${composition.id}`, {
+      kind: "composition",
+      id: composition.id,
+      createdAt: composition.updated_at || composition.created_at,
+      composition,
+    });
+  for (const notebook of notebooks)
+    byKey.set(`notebook:${notebook.id}`, {
+      kind: "notebook",
+      id: notebook.id,
+      createdAt: notebook.updated_at || notebook.created_at,
+      notebook,
+    });
+  for (const model of models)
+    byKey.set(`taught:${model.id}`, {
+      kind: "taught",
+      id: model.id,
+      createdAt: model.created_at,
+      taught: model,
+    });
+  return response.results.flatMap((r) => byKey.get(`${kindOfHit(r.kind)}:${r.id}`) ?? []);
 }
 
 /**
@@ -89,8 +125,21 @@ export function useCreationSearch(api: CreationsApi, query: string, filter: Filt
     setState({ status: "searching", query: text });
     const timer = setTimeout(async () => {
       try {
-        const kind = kindOf(filter) as Parameters<CreationsApi["search"]>[2];
-        const response = await api.search(text, LIMIT, kind, ctrl.signal);
+        const wanted = kindOf(filter);
+        // taught models are three kinds in the index: search them all and keep those
+        const kind = (wanted === "taught" ? undefined : wanted) as Parameters<
+          CreationsApi["search"]
+        >[2];
+        const raw = await api.search(text, LIMIT, kind, ctrl.signal);
+        const response =
+          wanted === "taught"
+            ? {
+                ...raw,
+                results: raw.results.filter((r) =>
+                  (TAUGHT_KINDS as readonly string[]).includes(r.kind),
+                ),
+              }
+            : raw;
         const entries = await cards(api, response, ctrl.signal);
         if (ctrl.signal.aborted) return;
         setState({

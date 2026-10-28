@@ -42,7 +42,6 @@ const SCREENS = [
   { name: "voice-audiobook", path: "/voice/audiobook", ready: /audiobook/i },
   { name: "voice-lipsync", path: "/voice/lipsync", ready: /lip sync/i },
   { name: "music-create", path: "/voice/music", ready: /create music/i },
-  { name: "music-tracks", path: "/voice/tracks", ready: /your music/i },
   { name: "music-lyrics", path: "/voice/lyrics", ready: /lyrics/i },
   { name: "music-separate", path: "/voice/separate", ready: /split into parts/i },
   { name: "home", path: "/", ready: /good|hello/i },
@@ -53,10 +52,9 @@ const SCREENS = [
   },
   { name: "image-create", path: "/image", ready: /make a picture/i },
   { name: "image-edit", path: "/image/edit", ready: /edit a picture/i },
-  { name: "image-library", path: "/image/library", ready: /your images|library/i },
+  { name: "library", path: "/creations", ready: /^library$/i },
   { name: "video-create", path: "/video", ready: /make a video/i },
   { name: "video-animate", path: "/video/animate", ready: /animate a picture/i },
-  { name: "video-library", path: "/video/library", ready: /your videos/i },
 ] as const;
 
 for (const screen of SCREENS) {
@@ -81,8 +79,9 @@ for (const screen of SCREENS) {
     await expect(page.getByRole("heading", { name: screen.ready }).first()).toBeVisible();
     if (screen.name === "chat")
       await expect(page.getByText(/footprints into the night/)).toBeVisible();
-    if (screen.name.endsWith("library")) {
-      await expect(page.getByRole("list", { name: /images|videos/i })).toBeVisible();
+    if (screen.name === "library") {
+      // the cards are there, and their pictures drawn
+      await expect(page.getByRole("main").getByRole("link", { name: /a lighthouse/i }).first()).toBeVisible();
     }
     await settle(page);
     await expect(page).toHaveScreenshot(`${screen.name}.png`, {
@@ -124,9 +123,9 @@ test("the menu offers the voice screens the service can run @layout", async ({ p
 });
 
 test("the menu marks the page and opens the group that holds it @layout", async ({ page }) => {
-  await page.goto("/video/library");
+  await page.goto("/video/extend");
   const nav = await menu(page);
-  await expect(nav.getByRole("link", { name: /Your videos/ })).toHaveAttribute(
+  await expect(nav.getByRole("link", { name: /Extend video/ })).toHaveAttribute(
     "aria-current",
     "page",
   );
@@ -137,9 +136,9 @@ test("the menu marks the page and opens the group that holds it @layout", async 
   // another group can be opened by hand while on a page (retried: the click can land before the page is interactive)
   await expect(async () => {
     await nav.getByRole("button", { name: "Images", exact: true }).click();
-    await expect(nav.getByRole("link", { name: /Your images/ })).toHaveAttribute(
+    await expect(nav.getByRole("link", { name: /Inpaint/ })).toHaveAttribute(
       "href",
-      "/image/library",
+      "/image/inpaint",
       { timeout: 1000 },
     );
   }).toPass({ timeout: 10_000 });
@@ -168,20 +167,34 @@ test("a video is made, and can be downloaded @layout", async ({ page }) => {
   await noSideScroll(page);
 });
 
-test("the image library opens a picture with its recipe and download @layout", async ({ page }) => {
+test("Your images is the Library showing pictures, and a picture opens with its tools @layout", async ({
+  page,
+}) => {
   await page.goto("/image/library");
-  await page.getByRole("button", { name: /open: a lighthouse/i }).click();
+  await expect(page).toHaveURL(/\/creations\?show=images$/);
+  const nav = await menu(page);
+  await expect(nav.getByRole("link", { name: /^Library/ })).toHaveAttribute("aria-current", "page");
+  if ((page.viewportSize()?.width ?? 1280) < 768) await page.keyboard.press("Escape"); // the drawer
+  await page.getByRole("main").getByRole("link", { name: /a lighthouse/i }).first().click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("link", { name: /download/i })).toBeVisible();
-  await expect(dialog.getByRole("button", { name: /make it again/i })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: /Edit this/ })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: /Animate this/ })).toBeVisible();
+  await expect(dialog.locator("dt", { hasText: /^Made$/ })).toBeVisible();
+  await settle(page);
   await noSideScroll(page);
+  // Edit this opens Edit with the picture chosen
+  await dialog.getByRole("button", { name: /Edit this/ }).click();
+  await expect(page).toHaveURL(/\/image\/edit$/);
 });
 
-test("the video library shows done, being made and failed clips @layout", async ({ page }) => {
+test("Your videos is the Library showing videos, being made and failed ones too @layout", async ({
+  page,
+}) => {
   await page.goto("/video/library");
-  await expect(page.getByText("Being made")).toBeVisible();
-  await page.getByRole("button", { name: /open: a paper boat/i }).click();
-  await expect(page.getByText(/took too long/i)).toBeVisible();
+  await expect(page).toHaveURL(/\/creations\?show=videos$/);
+  await expect(page.getByText(/Making your video/).first()).toBeVisible();
+  await page.getByRole("link", { name: /a paper boat/i }).first().click();
+  await expect(page.getByRole("dialog").getByText(/took too long/i)).toBeVisible();
 });
 
 test("the home page is the assistant; a first answer gives the chat its address @layout", async ({

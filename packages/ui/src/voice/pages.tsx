@@ -98,6 +98,11 @@ export function sendToTool(r: Remembered, source: AudioSource) {
   r.set(SOURCE, `${source.kind}:${source.id}`);
 }
 
+/** Open Create music with a track: change it (`edit`), make it again with its seed (`again`) or a new one (`take`). */
+export function openInMusic(r: Remembered, kind: "edit" | "again" | "take", trackId: string) {
+  r.set(OPEN, `${kind}:${trackId}`);
+}
+
 function takeSource(r: Remembered): AudioSource | null {
   const m = /^(track|speech):([A-Za-z0-9-]{1,64})$/.exec(take(r, SOURCE) ?? "");
   return m ? { kind: m[1] as "track" | "speech", id: m[2] as string } : null;
@@ -221,7 +226,7 @@ export function TracksPage(p: VoicePageProps) {
     }
   };
   const open = (kind: "edit" | "again" | "take", id: string) => {
-    p.remembered.set(OPEN, `${kind}:${id}`);
+    openInMusic(p.remembered, kind, id);
     p.go("music");
   };
   return (

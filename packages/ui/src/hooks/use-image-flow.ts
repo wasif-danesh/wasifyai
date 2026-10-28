@@ -35,6 +35,8 @@ export type ImageRequest = {
   seed?: number;
   /** Styles (LoRAs) to apply, by name and strength. */
   loras?: { name: string; weight: number }[];
+  /** The picture of the library a change starts from ("Edit this"), kept as where it came from. */
+  sourceId?: string;
 };
 
 const sleep = (ms: number, signal: AbortSignal) =>
@@ -157,6 +159,7 @@ export function useImageFlow(api: ImageFlowApi) {
         ...(mode === "reference" ? { image2_key: request.image2Key } : {}),
         ...(mode === "inpaint" ? { mask_key: request.maskKey } : {}),
         ...(request.loras && request.loras.length > 0 ? { loras: request.loras } : {}),
+        ...(mode !== "text" && request.sourceId ? { source_id: request.sourceId } : {}),
       };
       void follow((signal) => startRun(IMAGE_PRODUCT, input, signal, onEvent), ctrl.signal);
     },

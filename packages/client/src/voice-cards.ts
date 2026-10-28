@@ -8,6 +8,11 @@ export type SongCard = {
   style: string;
   created_at: string;
   audio_url: string;
+  /** the track this was made from (a change, a part, a dub), when there is one */
+  parent_id?: string | null;
+  seconds?: number;
+  /** what kind of track: song, sfx, edit, stem, converted, dubbed, chapter… */
+  mode?: string;
 };
 export type SpeechCard = {
   id: string;
@@ -59,6 +64,9 @@ export type VoiceTrack = {
   description?: string;
   created_at: string;
   audio_url: string;
+  parent_id?: string | null;
+  seconds?: number;
+  mode?: string;
 };
 
 export type VoiceClip = {
@@ -103,6 +111,9 @@ export function trackFromVoice(t: VoiceTrack): SongCard {
     style: t.description ?? "",
     created_at: t.created_at,
     audio_url: t.audio_url,
+    parent_id: t.parent_id ?? null,
+    seconds: t.seconds,
+    mode: t.mode,
   };
 }
 

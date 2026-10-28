@@ -386,6 +386,7 @@ export {
   type TrainingApi,
 } from "./training";
 export {
+  type ComponentActions,
   type InstallStepProgress,
   type ComponentState,
   type ComponentView,

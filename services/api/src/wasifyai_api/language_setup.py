@@ -3,7 +3,7 @@ model it teaches, under `<app data>/components/language-trainer/`. The same shap
 trainer's setup (`training_setup`): nothing is fetched before the person has seen what it is and
 how large, and has agreed; the packages come from a committed hashed lock
 (`scripts/lock-language-trainer.sh`) and the model's files each have a pinned size and SHA-256
-(`language_pins.json`).
+(its part of `components/manifests/<platform>.yaml`).
 
 Where mlx-lm and the model are already on the computer (a copy named by `WASIFYAI_MLXLM_DIR`, a
 models folder named by `WASIFYAI_LANGUAGE_BASE_DIR`) they are used where they are and nothing is
@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from wasifyai_platform_sdk import Identity
 
+from wasifyai_api.components.manifest import part_pins
 from wasifyai_api.desktop_models import DownloadError, ModelEntry, ModelFile, free_disk_bytes
 from wasifyai_api.identity import get_identity
 from wasifyai_api.services import services_of
@@ -35,8 +36,7 @@ from wasifyai_api.training_setup import (
     load_pins,
 )
 
-PINS_FILE = Path(__file__).with_name("language_pins.json")
-CHAT_PINS_FILE = Path(__file__).with_name("language_chat_pins.json")
+PART = "trainer-writing"  # its pins in the component manifests
 LOCK_NAME = "language-requirements-aarch64-apple-darwin.lock"
 COMPONENT = "language-trainer"
 
@@ -50,7 +50,7 @@ STEP_TEXT = {
 
 
 def load_language_pins() -> Pins:
-    return load_pins(PINS_FILE)
+    return load_pins(part=PART)
 
 
 @dataclass(frozen=True)
@@ -71,8 +71,8 @@ class ChatPins:
     folder: str
 
 
-def load_chat_pins(path: Path = CHAT_PINS_FILE) -> ChatPins:
-    raw = json.loads(path.read_text())
+def load_chat_pins(path: Path | None = None) -> ChatPins:
+    raw = json.loads(path.read_text()) if path is not None else part_pins(PART, "chat")
     if len(str(raw["sha256"])) != 64 or "/" in raw["file"] or ".." in raw["file"]:
         raise ValueError("the pin of the chat copy needs a plain file name and a SHA-256")
     return ChatPins(
@@ -80,9 +80,6 @@ def load_chat_pins(path: Path = CHAT_PINS_FILE) -> ChatPins:
         file=raw["file"], size=int(raw["size"]), sha256=str(raw["sha256"]).lower(),
         licence=raw["licence"], source=raw["source"], folder=raw["folder"],
     )  # fmt: skip
-
-
-MORE_BASES_FILE = Path(__file__).with_name("language_more_bases.json")
 
 
 @dataclass(frozen=True)
@@ -116,9 +113,10 @@ def _chat_pins(raw: dict[str, Any]) -> ChatPins:
     )  # fmt: skip
 
 
-def load_more_bases(path: Path = MORE_BASES_FILE) -> list[BaseSpec]:
+def load_more_bases(path: Path | None = None) -> list[BaseSpec]:
+    raw = json.loads(path.read_text()) if path is not None else part_pins(PART, "more_bases")
     out = []
-    for b in json.loads(path.read_text())["bases"]:
+    for b in raw["bases"]:
         files = []
         for f in b["files"]:
             parts = Path(f["path"]).parts
@@ -203,7 +201,7 @@ def managed_python(data_dir: Path, pins: Pins) -> Path | None:
     except (OSError, ValueError):
         return None
     python = _python_in(root / "venv")
-    if state.get("schema") == 1 and state.get("pins") == pins.digest and python.is_file():
+    if state.get("schema") == 1 and pins.made_from(state.get("pins")) and python.is_file():
         return python
     return None
 

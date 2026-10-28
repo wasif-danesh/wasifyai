@@ -15,7 +15,6 @@ a request that repeats the size the person was shown.
 """
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -29,8 +28,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-import httpx
 import yaml
+from wasifyai_platform_sdk import installer
 
 log = logging.getLogger(__name__)
 
@@ -123,26 +122,22 @@ async def run_command(args: list[str], env: dict[str, str]) -> tuple[int, str]:
 
 
 async def fetch_file(item: WeightFile, target: Path, tick: Callable[[int], None]) -> None:
-    """Stream one file to `target`, checking its SHA-256 and size before it is kept."""
-    digest = hashlib.sha256()
-    size = 0
-    target.parent.mkdir(parents=True, exist_ok=True)
-    part = target.with_suffix(target.suffix + ".part")
-    async with httpx.AsyncClient(
-        follow_redirects=True, timeout=httpx.Timeout(60, read=120)
-    ) as http:
-        async with http.stream("GET", item.url) as r:
-            r.raise_for_status()
-            with part.open("wb") as f:
-                async for block in r.aiter_bytes(1 << 20):
-                    f.write(block)
-                    digest.update(block)
-                    size += len(block)
-                    tick(len(block))
-    if size != item.size or digest.hexdigest() != item.sha256:
-        part.unlink(missing_ok=True)
-        raise InstallError("weights", f"{target.name} did not download correctly (checksum).")
-    os.replace(part, target)
+    """One file to `target` through the engine's one installer (stage F2): continued where it
+    stopped, its size and SHA-256 checked before it is kept."""
+    seen = [0]
+
+    def moved(done: int, _total: int) -> None:
+        tick(done - seen[0])
+        seen[0] = done
+
+    try:
+        await installer.download(
+            installer.Archive(item.url, item.size, item.sha256, "file"), target, "weights", moved
+        )
+    except installer.InstallError:
+        raise InstallError(
+            "weights", f"{target.name} did not download correctly (checksum)."
+        ) from None
 
 
 @dataclass
@@ -239,30 +234,25 @@ class ReaderInstaller:
         venv = self.reader_dir / "venv"
         env = self._env()
 
-        self._step("environment")
-        code, out = await self.run([self.uv, "venv", "--python", self.python, str(venv)], env)
-        if code != 0:
-            log.error("uv venv failed: %s", out[-500:])
-            raise InstallError("environment", "The reader's environment could not be made.")
-        py = venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-
-        self._step("packages")
-        command = [
-            self.uv, "pip", "install", "--python", str(py), "--require-hashes", "--no-deps",
-            "-r", str(self.lock),
-        ]  # fmt: skip
+        extra: list[str] = []
         if "linux" in uv_target():
             # the lock names the CPU build of torch, which only PyTorch's own index serves
-            command += [
+            extra = [
                 "--extra-index-url", "https://download.pytorch.org/whl/cpu",
                 "--index-strategy", "unsafe-best-match",
             ]  # fmt: skip
-        code, out = await self.run(command, env)
-        if code != 0:
-            log.error("uv pip install failed: %s", out[-800:])
-            raise InstallError(
-                "packages", "The reader's packages could not be installed. Are you online?"
-            )
+
+        async def run(args: list[str], env_: dict[str, str], _cwd: Path | None) -> tuple[int, str]:
+            return await self.run(args, env_)
+
+        try:  # the engine's one installer (stage F2)
+            py = await installer.make_environment(
+                self.uv, self.python, venv, self.lock, None, "environment", "packages", run, env,
+                on_step=self._step, on_line=lambda text: log.info("%s", text[-300:]),
+                owner="The reader", extra_args=extra,
+            )  # fmt: skip
+        except installer.InstallError as e:
+            raise InstallError(e.step or "packages", str(e)) from None
 
         self._step("weights")
         models = self.reader_dir / "models"

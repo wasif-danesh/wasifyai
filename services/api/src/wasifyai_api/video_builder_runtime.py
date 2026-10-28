@@ -26,20 +26,19 @@ import logging
 import os
 import shutil
 import stat
-import tarfile
 import tempfile
-import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import httpx
+from wasifyai_platform_sdk import installer
 
 from wasifyai_api.audio_runtime import InstallError, InstallProgress, platform_key
+from wasifyai_api.components.manifest import PACKAGE_DIR, part_pins
 
 log = logging.getLogger(__name__)
 
-PINS_FILE = Path(__file__).with_name("video_builder_pins.json")
 STATE_FILE = "state.json"
 MIN_FREE_BYTES = 2_000_000_000
 INSTALL_LIMIT_S = 900.0
@@ -86,8 +85,10 @@ def _download(raw: dict[str, Any], what: str) -> Download:
     return Download(str(raw["version"]), url, int(raw["size"]), digest, str(raw["licence"]))
 
 
-def load_pins(path: Path = PINS_FILE) -> Pins:
-    raw = json.loads(path.read_text())
+def load_pins(path: Path | None = None) -> Pins:
+    """Motion graphics' pins: its part in this platform's component manifest (stage F2)."""
+    raw = json.loads(path.read_text()) if path is not None else part_pins("video-builder")
+    base = path.parent if path is not None else PACKAGE_DIR
     pk = raw["packages"]
     for key in ("lock_sha256", "package_sha256"):
         if len(str(pk[key])) != 64:
@@ -95,9 +96,9 @@ def load_pins(path: Path = PINS_FILE) -> Pins:
     return Pins(
         _download(raw["node"], "Node.js"),
         _download(raw["shell"], "browser"),
-        path.parent / str(pk["lock"]),
+        base / str(pk["lock"]),
         str(pk["lock_sha256"]).lower(),
-        path.parent / str(pk["package"]),
+        base / str(pk["package"]),
         str(pk["package_sha256"]).lower(),
         int(pk["bytes"]),
         tuple(raw["platforms"]),
@@ -263,28 +264,6 @@ async def _run(
     return proc.returncode == 0, out.decode(errors="replace")
 
 
-def _unpack_tar(archive: Path, target: Path) -> None:
-    target.mkdir(parents=True)
-    with tarfile.open(archive) as t:
-        t.extractall(target, filter="data")  # refuses absolute paths, '..' and links outside
-
-
-def _unpack_zip(archive: Path, target: Path) -> None:
-    """Unzip, keeping the executable bit (zipfile drops it) and refusing paths outside the
-    target."""
-    target.mkdir(parents=True)
-    root = target.resolve()
-    with zipfile.ZipFile(archive) as z:
-        for info in z.infolist():
-            dest = (target / info.filename).resolve()
-            if root != dest and root not in dest.parents:
-                raise InstallError("The browser download holds a path outside its folder.")
-            z.extract(info, target)
-            mode = (info.external_attr >> 16) & 0o777
-            if mode and not info.is_dir():
-                dest.chmod(mode | stat.S_IRUSR)
-
-
 class VideoBuilderInstaller:
     """Sets up the component. Nothing is fetched before the person has seen the size and confirmed
     it."""
@@ -375,18 +354,12 @@ class VideoBuilderInstaller:
             shutil.rmtree(stage, ignore_errors=True)
 
     async def _fetch(self, item: Download, to: Path, step: str, label: str, base: int) -> None:
-        digest, size = hashlib.sha256(), 0
+        """Through the one installer (stage F2): size and SHA-256 checked, else nothing kept."""
         self._say(step, label, base)
-        async with self._client_factory() as http, http.stream("GET", item.url) as r:
-            r.raise_for_status()
-            with to.open("wb") as f:
-                async for block in r.aiter_bytes(1 << 20):
-                    f.write(block)
-                    digest.update(block)
-                    size += len(block)
-                    self._say(step, label, base + size)
-        if size != item.size or digest.hexdigest() != item.sha256:
-            raise InstallError("A download did not match what was expected. Nothing was kept.")
+        await installer.download(
+            installer.Archive(item.url, item.size, item.sha256, "file"), to, step,
+            lambda done, _: self._say(step, label, base + done), client=self._client_factory,
+        )  # fmt: skip
 
     async def _install(self, stage: Path) -> None:
         pins = self.pins
@@ -405,8 +378,8 @@ class VideoBuilderInstaller:
 
         self._say("unpack", "Unpacking", pins.node.size + pins.shell.size)
         node_dir, shell_dir = stage / "node-unpacked", stage / "shell"
-        await asyncio.to_thread(_unpack_tar, node_tar, node_dir)
-        await asyncio.to_thread(_unpack_zip, shell_zip, shell_dir)
+        await asyncio.to_thread(installer.unpack, node_tar, "tar.gz", 0, node_dir, "unpack")
+        await asyncio.to_thread(installer.unpack, shell_zip, "zip", 0, shell_dir, "unpack")
         tops = [p for p in node_dir.iterdir() if p.is_dir()]
         if len(tops) != 1 or not (tops[0] / "bin" / "node").is_file():
             raise InstallError("The Node.js download did not contain Node.js.")

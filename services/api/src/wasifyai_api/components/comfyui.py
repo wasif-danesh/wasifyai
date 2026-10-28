@@ -19,7 +19,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from wasifyai_api.components.core import (
+from wasifyai_platform_sdk.installer import (
     ClientFactory,
     Installer,
     InstallError,
@@ -40,6 +40,7 @@ from wasifyai_api.components.core import (
     venv_python,
     write_state,
 )
+
 from wasifyai_api.components.manifest import Manifest, Pins
 
 ID = "comfyui"
@@ -225,8 +226,8 @@ class ComfyUiComponent:
             inst.at("source")
 
         py = await make_environment(
-            inst, uv, self.python, venv, lock[0], lock[1], "environment", "packages",
-            self._run, env,
+            uv, self.python, venv, lock[0], lock[1], "environment", "packages", self._run, env,
+            on_step=inst.at, on_line=inst.line, owner="ComfyUI",
         )  # fmt: skip
 
         inst.at("verify")

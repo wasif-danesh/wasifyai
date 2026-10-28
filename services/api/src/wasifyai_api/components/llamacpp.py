@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from wasifyai_api.components.core import (
+from wasifyai_platform_sdk.installer import (
     ClientFactory,
     Installer,
     InstallError,
@@ -34,6 +34,7 @@ from wasifyai_api.components.core import (
     status_unsupported,
     write_state,
 )
+
 from wasifyai_api.components.manifest import Manifest, Pins
 
 ID = "llamacpp"

@@ -5,6 +5,9 @@ place a reviewer can read. The files are data, shipped inside the engine, which 
 against the bundle's hashes before it runs it.
 """
 
+import functools
+import hashlib
+import json
 import platform as _platform
 import sys
 from dataclasses import dataclass
@@ -12,8 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-
-from wasifyai_api.components.core import Archive
+from wasifyai_platform_sdk.installer import Archive
 
 MANIFESTS = Path(__file__).with_name("manifests")
 
@@ -86,3 +88,40 @@ def load_manifest(platform: str | None = None, folder: Path = MANIFESTS) -> Mani
         for cid, c in (raw.get("components") or {}).items()
     }
     return Manifest(key, str(raw.get("python", "")), components)
+
+
+# ---- the parts the services set up (stage F2: these were the *_pins.json files) ------------------
+
+PACKAGE_DIR = Path(__file__).resolve().parents[1]  # paths in the pins are relative to wasifyai_api
+LEGACY_KEYS = ("legacy_digest", "legacy_for")
+
+
+@functools.cache
+def _parts(platform: str) -> dict[str, Any]:
+    path = MANIFESTS / f"{platform}.yaml"
+    raw = yaml.safe_load(path.read_text()) if path.is_file() else {}
+    return (raw or {}).get("parts") or {}
+
+
+def part_pins(part: str, key: str = "pins", platform: str | None = None) -> dict[str, Any]:
+    """A part's pins on this platform (a copy: callers may change it)."""
+    block = _parts(platform or platform_key()).get(part, {}).get(key)
+    if block is None:
+        raise KeyError(f"the component manifests pin no {key} for {part}")
+    return json.loads(json.dumps(block))
+
+
+def pins_digest(block: dict[str, Any]) -> str:
+    """What an install records of the pins it was made from: a changed pin asks for a new one."""
+    body = {k: v for k, v in block.items() if k not in LEGACY_KEYS}
+    return hashlib.sha256(
+        json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def legacy_digest(block: dict[str, Any]) -> str | None:
+    """The digest an install made before the pins moved here recorded (of the old pins file), as
+    long as the pins are still the ones that file held; None once they change."""
+    if block.get("legacy_for") == pins_digest(block):
+        return str(block.get("legacy_digest") or "") or None
+    return None

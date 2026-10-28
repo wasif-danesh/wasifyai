@@ -4,7 +4,7 @@ model it teaches, under `<app data>/components/decision-trainer/`. The same shap
 trainer's setup (`language_setup`): nothing is fetched before the person has seen what it is and how
 large, and has agreed; the packages come from a committed hashed lock
 (`scripts/lock-decision-trainer.sh`) and each model file has a pinned size and SHA-256
-(`decision_pins.json`). The English model comes with the trainer; the model for many languages is
+(its part of `components/manifests/<platform>.yaml`). The English model comes with the trainer; the model for many languages is
 fetched when it is chosen.
 
 Where Laya and the model are already on the computer (a copy named by `WASIFYAI_LAYA_DIR`, a models
@@ -23,6 +23,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from wasifyai_platform_sdk import Identity
 
+from wasifyai_api.components.manifest import part_pins
 from wasifyai_api.desktop_models import DownloadError, ModelEntry, ModelFile, free_disk_bytes
 from wasifyai_api.identity import get_identity
 from wasifyai_api.language_setup import ConfirmInstall
@@ -37,7 +38,7 @@ from wasifyai_api.training_setup import (
     load_pins,
 )
 
-PINS_FILE = Path(__file__).with_name("decision_pins.json")
+PART = "trainer-deciding"  # its pins in the component manifests
 LOCK_NAME = "decision-requirements-aarch64-apple-darwin.lock"
 COMPONENT = "decision-trainer"
 
@@ -51,7 +52,7 @@ STEP_TEXT = {
 
 
 def load_decision_pins() -> Pins:
-    return load_pins(PINS_FILE)
+    return load_pins(part=PART)
 
 
 @dataclass(frozen=True)
@@ -84,10 +85,10 @@ def _files(raw: list[dict[str, Any]]) -> tuple[BaseFile, ...]:
     return tuple(out)
 
 
-def catalogue(pins: Pins | None = None, path: Path = PINS_FILE) -> list[BaseSpec]:
+def catalogue(pins: Pins | None = None, path: Path | None = None) -> list[BaseSpec]:
     """Every model a decision model can be taught on, the main one first."""
-    p = pins or load_pins(path)
-    raw = json.loads(path.read_text())
+    p = pins or (load_pins(path) if path is not None else load_decision_pins())
+    raw = json.loads(path.read_text()) if path is not None else part_pins(PART)
     main = BaseSpec(
         p.base_id, p.base_title, p.base_repo, p.base_revision, p.base_licence, p.base_folder,
         p.base_files, main=True,
@@ -124,7 +125,7 @@ def find_python(data_dir: Path | None, pins: Pins | None = None) -> Path | None:
     except (OSError, ValueError):
         return None
     python = _python_in(root / "venv")
-    if state.get("schema") == 1 and state.get("pins") == pins.digest and python.is_file():
+    if state.get("schema") == 1 and pins.made_from(state.get("pins")) and python.is_file():
         return python
     return None
 
@@ -158,7 +159,7 @@ class DecisionSetup(TrainingSetup):
     its own pins, folder, tool and words."""
 
     pins: Pins = field(default_factory=load_decision_pins)
-    pins_file: Path = PINS_FILE
+    pins_file: Path | None = None  # a file in place of the manifest's pins (tests)
     # the other models, on request: what is being fetched, by base id
     parts: dict[str, Progress] = field(default_factory=dict)
     _fetches: dict[str, asyncio.Task[None]] = field(default_factory=dict)

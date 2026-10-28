@@ -4,7 +4,7 @@ environment of its own, and the small files of the video model's repository that
 `<app data>/components/video-trainer/`. The same shape as the decision trainer's setup
 (`decision_setup`): nothing is fetched before the person has seen what it is and how large, and has
 agreed; the packages come from a committed hashed lock (`scripts/lock-video-trainer.sh`) and each
-small file has a pinned size and SHA-256 (`video_pins.json`).
+small file has a pinned size and SHA-256 (its part of `components/manifests/<platform>.yaml`).
 
 The big files, the video model and its text encoder (16 GB), are **not** fetched here: they are the
 ones the Video screens already use, found where the Models screen keeps them (any models folder the
@@ -39,7 +39,7 @@ from wasifyai_api.training_setup import (
     load_pins,
 )
 
-PINS_FILE = Path(__file__).with_name("video_pins.json")
+PART = "trainer-video"  # its pins in the component manifests
 LOCK_NAME = "video-requirements-aarch64-apple-darwin.lock"
 COMPONENT = "video-trainer"
 
@@ -53,7 +53,7 @@ STEP_TEXT = {
 
 
 def load_video_pins() -> Pins:
-    return load_pins(PINS_FILE)
+    return load_pins(part=PART)
 
 
 def component_root(data_dir: Path) -> Path:
@@ -78,7 +78,7 @@ def find_python(data_dir: Path | None, pins: Pins | None = None) -> Path | None:
     except (OSError, ValueError):
         return None
     python = _python_in(root / "venv")
-    if state.get("schema") == 1 and state.get("pins") == pins.digest and python.is_file():
+    if state.get("schema") == 1 and pins.made_from(state.get("pins")) and python.is_file():
         return python
     return None
 

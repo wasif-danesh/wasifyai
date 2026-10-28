@@ -9,7 +9,8 @@ Steps, the same shape as the other components, checked at the end:
     3 packages     `uv pip install --require-hashes -r <the lock>` (the lock is committed:
                    `scripts/lock-trainer.sh`); the exact versions the real runs were made with
     4 model        the base model's files, each with a pinned size and SHA-256, through the same
-                   resumable downloader the Models screen uses (`training_pins.json`)
+                   resumable downloader the Models screen uses (its part of the component
+                   manifests, `components/manifests/<platform>.yaml`)
     5 check        the tool starts and every model file is there; only then `installed.json`
 
 A failed install removes the environment it made, but keeps the model files that arrived: a new
@@ -22,7 +23,6 @@ mflux runs on MLX: Apple silicon only. Elsewhere the setup says so and offers no
 
 import asyncio
 import contextlib
-import hashlib
 import json
 import logging
 import os
@@ -36,8 +36,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from wasifyai_platform_sdk import Identity
+from wasifyai_platform_sdk import Identity, installer
 
+from wasifyai_api.components.manifest import legacy_digest, part_pins, pins_digest
 from wasifyai_api.desktop_models import (
     DownloadError,
     DownloadManager,
@@ -50,7 +51,7 @@ from wasifyai_api.services import services_of
 
 log = logging.getLogger(__name__)
 
-PINS_FILE = Path(__file__).with_name("training_pins.json")
+PART = "trainer-pictures"  # its pins in the component manifests
 LOCK_NAME = "requirements-aarch64-apple-darwin.lock"
 STATE_FILE = "installed.json"
 EXECUTABLE = "mflux-train"
@@ -67,12 +68,8 @@ STEP_TEXT = {
 }
 
 
-class InstallError(Exception):
-    """`str(e)` is a sentence safe to show; `step` is where it stopped."""
-
-    def __init__(self, message: str, step: str | None = None):
-        super().__init__(message)
-        self.step = step
+# the one installer's error (stage F2): `str(e)` is a sentence safe to show, `step` where it stopped
+InstallError = installer.InstallError
 
 
 def apple_silicon() -> bool:
@@ -101,16 +98,22 @@ class Pins:
     base_licence: str
     base_folder: str
     base_files: tuple[BaseFile, ...]
-    digest: str  # of the pins file: what an install records, so a changed pin asks for a new one
+    digest: str  # of the pins: what an install records, so a changed pin asks for a new one
+
+    legacy: str | None = None  # what installs made before the pins moved to the manifests recorded
+
+    def made_from(self, recorded: object) -> bool:
+        """Whether an install's record was made from these pins."""
+        return recorded is not None and recorded in (self.digest, self.legacy)
 
     @property
     def base_bytes(self) -> int:
         return sum(f.size for f in self.base_files)
 
 
-def load_pins(path: Path = PINS_FILE) -> Pins:
-    text = path.read_text()
-    raw = json.loads(text)
+def load_pins(path: Path | None = None, part: str = PART) -> Pins:
+    """A trainer's pins: its part in this platform's component manifest (stage F2), or a file."""
+    raw = json.loads(path.read_text()) if path is not None else part_pins(part)
     tool, base = raw["tool"], raw["base"]
     files = []
     for f in base["files"]:
@@ -129,7 +132,8 @@ def load_pins(path: Path = PINS_FILE) -> Pins:
         base_licence=str(base["licence"]),
         base_folder=str(base["folder"]),
         base_files=tuple(files),
-        digest=hashlib.sha256(text.encode()).hexdigest(),
+        digest=pins_digest(raw),
+        legacy=legacy_digest(raw),
     )
 
 
@@ -152,7 +156,7 @@ def managed_tool(data_dir: Path, pins: Pins) -> Path | None:
     except (OSError, ValueError):
         return None
     home = root / "venv"
-    if state.get("schema") == 1 and state.get("pins") == pins.digest and _tool_in(home):
+    if state.get("schema") == 1 and pins.made_from(state.get("pins")) and _tool_in(home):
         return home
     return None
 
@@ -418,30 +422,18 @@ class TrainingSetup:
         tmp.replace(self.root / STATE_FILE)  # last: this is what makes it installed
 
     async def _install_tool(self) -> None:
+        """The trainer's own environment from its hashed lock, through the one installer (F2)."""
         assert self.lock is not None and self.uv is not None
-        venv = self.root / "venv"
         (self.root / STATE_FILE).unlink(missing_ok=True)  # an old install never looks whole
-        shutil.rmtree(venv, ignore_errors=True)
-        env = self._env()
-        self._say("environment")
-        code, out = await self.run([self.uv, "venv", "--python", self.python, str(venv)], env)
-        if code != 0:
-            log.error("uv venv failed: %s", out[-500:])
-            shutil.rmtree(venv, ignore_errors=True)
-            raise InstallError("The trainer's environment could not be made.", "environment")
-        py = venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-        self._say("packages")
-        code, out = await self.run(
-            [self.uv, "pip", "install", "--python", str(py), "--require-hashes", "--no-deps",
-             "-r", str(self.lock)],
-            env,
+
+        async def run(args: list[str], env: dict[str, str], _cwd: Path | None) -> tuple[int, str]:
+            return await self.run(args, env)
+
+        await installer.make_environment(
+            self.uv, self.python, self.root / "venv", self.lock, None, "environment", "packages",
+            run, self._env(), on_step=self._say, on_line=lambda text: log.info("%s", text[-300:]),
+            owner="The trainer",
         )  # fmt: skip
-        if code != 0:
-            log.error("uv pip install failed: %s", out[-800:])
-            shutil.rmtree(venv, ignore_errors=True)
-            raise InstallError(
-                "The trainer's packages could not be installed. Are you online?", "packages"
-            )
 
     async def _get_base(self, before: int) -> None:
         """The model's files, through the resumable, hash-checked downloader."""

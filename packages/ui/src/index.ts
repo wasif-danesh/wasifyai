@@ -7,6 +7,7 @@ export { ACCEPTED_TYPES, MAX_UPLOAD_BYTES, fileProblem, firstFile, hasFiles } fr
 
 export { Button, buttonVariants } from "./components/button";
 export { Chip } from "./components/chip";
+export { ConfirmDialog, NameDialog } from "./components/dialog";
 export { Label } from "./components/label";
 export { Notice } from "./components/notice";
 export { Accent, PageHero } from "./components/page-hero";

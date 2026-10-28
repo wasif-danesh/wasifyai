@@ -1,14 +1,25 @@
 """What an admin can ask a worker to do to itself (ADR-0087, P5): fetch a model's files and set up
-the lip sync engine. The same code serves `models_cli` (the command line) and the `admin.*` jobs
-the web's Workers page starts. A fetch reports how far it is and continues a partial file."""
+a component (the lip sync engine, a trainer) through the one installer (stage F2). The same code
+serves `models_cli` (the command line) and the `admin.*` jobs the web's Workers page starts. A fetch
+reports how far it is and continues a partial file."""
 
 import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from wasifyai_api.components.desktop import lipsync_part, trainer_part
+from wasifyai_platform_sdk.installer import InstallError, install_and_wait
+
 from wasifyai_engine_worker.handlers import Failed
 
 Report = Callable[[float, str], Awaitable[None]]
+# the names `admin.fetch_engine` takes (admin_wire.ENGINES) for the trainers, and their components
+TRAINERS = {
+    "image-trainer": "trainer-pictures",
+    "writing-trainer": "trainer-writing",
+    "decision-trainer": "trainer-deciding",
+    "video-trainer": "trainer-video",
+}
 POLL_S = 1.0
 
 
@@ -47,50 +58,26 @@ class AdminComponent:
             raise Failed("download_failed", d.error or "The download did not finish.")
         return {"model_id": model_id, "already": False, "bytes": total, "source": entry.source}
 
-    async def _setup(self, name: str, setup: Any, report: Report) -> dict[str, Any]:
-        """A trainer's component: the same plan, consent size and progress as the desktop's card."""
-        if setup.problem() and not setup.supported:
-            raise Failed("not_supported", setup.problem())
-        if setup.state()["installed"]:
-            return {"name": name, "already": True}
-        try:
-            setup.start(setup.missing_bytes())
-        except Exception as e:
-            raise Failed("install_not_started", str(e)) from None
-        while setup.running:
-            p = setup.progress
-            total = getattr(p, "total_bytes", 0) or 1
-            await report(min(1.0, getattr(p, "done_bytes", 0) / total), p.message or "")
-            await asyncio.sleep(self._poll)
-        if setup.progress.state != "ready":
-            raise Failed("install_failed", setup.progress.message or "The setup did not finish.")
-        return {"name": name, "already": False}
-
-    async def fetch_engine(self, name: str, report: Report) -> dict[str, Any]:
+    def _component(self, name: str) -> Any:
+        """The component an `admin.fetch_engine` names, as the desktop engine lists it."""
         if name in self._setups:
-            return await self._setup(name, self._setups[name], report)
+            return trainer_part(TRAINERS[name], self._setups[name])
         if name != "lipsync-engine":
             raise Failed("unknown_engine", "That is not something this worker can set up.")
         sidecar = self._speech.lipsync_sidecar
         if sidecar is None:
             raise Failed("not_here", "This worker has no lip sync component.")
-        if sidecar.installed:
-            return {"name": name, "already": True}
-        installer = sidecar.installer
-        plan = installer.plan()
-        if not plan["supported"]:
-            raise Failed("not_supported", "There is no lip sync engine for this kind of computer.")
+        return lipsync_part(sidecar)
+
+    async def fetch_engine(self, name: str, report: Report) -> dict[str, Any]:
+        """Set a component up through the one installer's components (stage F2), the same ones
+        the desktop's Settings lists, following its progress to the end."""
+        component = self._component(name)
+        status = component.status()
+        if status["state"] == "unsupported":
+            raise Failed("not_supported", str(status["reason"]))
         try:
-            installer.start(plan["bytes"])
-        except Exception as e:
-            raise Failed("install_not_started", str(e)) from None
-        while installer.running:
-            p = installer.progress
-            total = getattr(p, "total_bytes", 0) or plan["bytes"]
-            await report(min(1.0, getattr(p, "done_bytes", 0) / max(1, total)), p.message or "")
-            await asyncio.sleep(self._poll)
-        if installer.progress.state != "ready":
-            raise Failed(
-                "install_failed", installer.progress.message or "The setup did not finish."
-            )
-        return {"name": name, "already": False}
+            done = await install_and_wait(component, report, self._poll)
+        except InstallError as e:
+            raise Failed("install_failed", str(e) or "The setup did not finish.") from None
+        return {"name": name, "already": done["already"]}

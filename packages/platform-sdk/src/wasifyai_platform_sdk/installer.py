@@ -10,8 +10,10 @@ record that makes it installed (`state.json`) is written last. Each step's lines
 
 A component is a `Component`: what it is, its status in the shape the window reads
 (`ComponentStatus` in apps/desktop/src/engine.ts), and install, cancel and uninstall. The steps of
-an install are `Step`s run in order by `Installer`; `fetch_archive`, `make_environment` and
-`run_check` are the steps every component is made of.
+an install are `Step`s run in order by `Installer`; `download`, `unpack`, `fetch_archive` and
+`make_environment` are what every component fetches through. It is in the SDK so the engine, an
+engine worker and a product (the notebooks reader) share it; the components themselves are in
+`wasifyai_api/components/`.
 """
 
 import asyncio
@@ -31,10 +33,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 import httpx
 
-log = logging.getLogger("wasifyai_api.components")
+log = logging.getLogger("wasifyai_platform_sdk.installer")
 
 CHUNK = 1 << 20
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")  # a tool's terminal colours, not for the log
@@ -285,17 +288,23 @@ def default_client() -> httpx.AsyncClient:
     return httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(60, read=120))
 
 
+BytesFn = Callable[[int, int], None]
+LineFn = Callable[[str], None]
+
+
 async def download(
     pin: Archive,
     dest: Path,
-    inst: Installer,
     step: str,
+    on_bytes: BytesFn | None = None,
+    on_line: LineFn | None = None,
     client: ClientFactory = default_client,
     allow_http: bool = False,
 ) -> None:
     """Fetch `pin` to `dest`, continuing a partial file, and check its size and SHA-256. A file
-    that does not match is removed, so the next try starts clean."""
-    if not pin.url.startswith("https://") and not allow_http:
+    that does not match is removed, so the next try starts clean. `on_bytes(done, total)` follows
+    it; `on_line` gets a line for the log."""
+    if not pin.url.startswith("https://") and not allow_http and not _loopback(pin.url):
         raise InstallError("Only secure downloads are allowed.", step)
     if await asyncio.to_thread(_matches, dest, pin):
         return  # already here from a stopped install
@@ -305,7 +314,8 @@ async def download(
     if have > pin.size:
         part.unlink()
         have = 0
-    inst.line(f"downloading {pin.url}")
+    if on_line is not None:
+        on_line(f"downloading {pin.url}")
     headers = {"Range": f"bytes={have}-"} if have else {}
     async with client() as http, http.stream("GET", pin.url, headers=headers) as r:
         if r.status_code == 200 and have:  # the server would not continue: start again
@@ -319,11 +329,17 @@ async def download(
                 have += len(chunk)
                 if have > pin.size:
                     break
-                inst.bytes(have, pin.size)
+                if on_bytes is not None:
+                    on_bytes(have, pin.size)
     if have != pin.size or sha256_of(part) != pin.sha256:
         part.unlink(missing_ok=True)
         raise InstallError("The download did not match its checksum. Try again.", step)
     part.replace(dest)
+
+
+def _loopback(url: str) -> bool:
+    """A server on this computer (a test's, a developer's mirror): plain HTTP never leaves it."""
+    return urlsplit(url).hostname in ("127.0.0.1", "localhost", "::1")
 
 
 def _matches(path: Path, pin: Archive) -> bool:
@@ -409,7 +425,7 @@ async def fetch_archive(
     inst.at(step_download)
     name = pin.url.rsplit("/", 1)[-1].split("?")[0] or "download"
     archive = downloads / f"{into.name}-{name}"
-    await download(pin, archive, inst, step_download, client, allow_http)
+    await download(pin, archive, step_download, inst.bytes, inst.line, client, allow_http)
     step = step_unpack or step_download
     if step_unpack:
         inst.at(step_unpack)
@@ -464,7 +480,6 @@ def venv_python(venv: Path) -> Path:
 
 
 async def make_environment(
-    inst: Installer,
     uv: str,
     python: str,
     venv: Path,
@@ -474,29 +489,41 @@ async def make_environment(
     step_packages: str,
     run: Runner = run_command,
     env: dict[str, str] | None = None,
+    no_deps: bool = True,
+    on_step: Callable[[str], None] | None = None,
+    on_line: LineFn | None = None,
+    owner: str = "",
+    extra_args: Sequence[str] = (),
 ) -> Path:
-    """A Python environment of the component's own, from its hashed lock. Returns its python."""
+    """A Python environment of the component's own, from its hashed lock. Returns its python.
+    `on_step` is told each step as it starts; `on_line` gets the tools' output for the log;
+    `owner` names the component in the sentences ("The trainer's packages ...")."""
+    whose = f"{owner}'s" if owner else "Its"
     if (problem := await asyncio.to_thread(_lock_problem, lock, lock_sha256)) is not None:
         raise InstallError(problem, step_packages)
     env = env or clean_env()
-    inst.at(step_env)
+    step = on_step or (lambda _: None)
+    line = on_line or (lambda _: None)
+    step(step_env)
     shutil.rmtree(venv, ignore_errors=True)
     code, out = await run([uv, "venv", "--python", python, str(venv)], env, None)
-    inst.line(out.strip()[-400:])
+    line(out.strip()[-400:])
     if code != 0:
         shutil.rmtree(venv, ignore_errors=True)
-        raise InstallError("Its environment could not be made.", step_env)
+        raise InstallError(f"{whose} environment could not be made.", step_env)
     py = venv_python(venv)
-    inst.at(step_packages)
+    step(step_packages)
     code, out = await run(
-        [uv, "pip", "install", "--python", str(py), "--require-hashes", "--no-deps",
-         "-r", str(lock)],
+        [uv, "pip", "install", "--python", str(py), "--require-hashes",
+         *(["--no-deps"] if no_deps else []), "-r", str(lock), *extra_args],
         env, None,
     )  # fmt: skip
-    inst.line(out.strip()[-800:])
+    line(out.strip()[-800:])
     if code != 0:
         shutil.rmtree(venv, ignore_errors=True)
-        raise InstallError("Its packages could not be installed. Are you online?", step_packages)
+        raise InstallError(
+            f"{whose} packages could not be installed. Are you online?", step_packages
+        )
     return py
 
 
@@ -513,6 +540,33 @@ def read_state(path: Path) -> dict[str, Any] | None:
     except (OSError, ValueError):
         return None
     return found if isinstance(found, dict) else None
+
+
+Report = Callable[[float, str], Awaitable[None]]
+
+
+async def install_and_wait(c: Component, report: Report, poll_s: float = 1.0) -> dict[str, Any]:
+    """Set a component up and follow it to the end (an engine worker's `admin.fetch_engine`, a
+    command line): what it was when asked, then its progress as a fraction and a label. Raises
+    `InstallError` when it cannot be set up here or the setup fails."""
+    first = c.status()
+    if first["state"] == "unsupported":
+        raise InstallError(str(first["reason"]))
+    if first["state"] == "installed":
+        return {"id": c.id, "already": True}
+    if first["state"] != "installing":
+        size = first.get("needs_bytes") if first["state"] == "not_installed" else None
+        c.install(size, repair=size is None)
+    while (now := c.status())["state"] == "installing":
+        p = now["progress"]
+        total = p.get("bytes_total") or 0
+        within = (p.get("bytes_done") or 0) / total if total else 0.0
+        await report(min(1.0, (p["index"] - 1 + within) / max(1, p["count"])), str(p["label"]))
+        await asyncio.sleep(poll_s)
+    await c.wait()
+    if (end := c.status())["state"] != "installed":
+        raise InstallError(str(end.get("message") or "The setup did not finish."), end.get("step"))
+    return {"id": c.id, "already": False}
 
 
 @dataclass

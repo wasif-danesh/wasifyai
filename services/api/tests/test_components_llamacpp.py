@@ -13,13 +13,13 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from wasifyai_api.components.core import Archive, InstallError, Registry
 from wasifyai_api.components.llamacpp import LlamaCppComponent
 from wasifyai_api.components.manifest import Manifest, Pins, load_manifest
 from wasifyai_api.components.routes import router
 from wasifyai_api.identity import Identity, get_identity
 from wasifyai_api.llama_server import find_install
 from wasifyai_api.services import ApiServices
+from wasifyai_platform_sdk.installer import Archive, InstallError, Registry
 
 URL = "https://example.test/llama-b1-bin-macos-arm64.tar.gz"
 SERVER_OK = "#!/bin/sh\necho 'version: 1 (abc123)'\necho 'built with clang'\n"
@@ -183,7 +183,12 @@ def test_the_routes_list_and_refuse_an_install_without_the_size(tmp_path):
         listed = client.get("/components").json()["components"]
         missing = {"state": "not_installed", "needs_bytes": len(body)}
         assert listed == [
-            {"id": "llamacpp", "title": "Language engine (llama.cpp)", "status": missing}
+            {
+                "id": "llamacpp",
+                "title": "Language engine (llama.cpp)",
+                "status": missing,
+                "can": {"stop": True, "repair": True, "remove": True},
+            }  # fmt: skip
         ]
         assert client.post("/components/llamacpp/install", json={}).status_code == 422
         wrong = client.post("/components/llamacpp/install", json={"confirm_bytes": 1})

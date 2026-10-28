@@ -22,7 +22,6 @@ import os
 import shutil
 import socket
 import sys
-import tarfile
 import tempfile
 import time
 from dataclasses import dataclass
@@ -30,13 +29,23 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from wasifyai_platform_sdk import LipSyncRequest, LipSyncResult, VoiceEngineError, VoiceModel
+from wasifyai_platform_sdk import (
+    LipSyncRequest,
+    LipSyncResult,
+    VoiceEngineError,
+    VoiceModel,
+    installer,
+)
 
 from wasifyai_api.audio_runtime import InstallError, InstallProgress, platform_key
+from wasifyai_api.components.manifest import PACKAGE_DIR, part_pins
 
 log = logging.getLogger(__name__)
 
-PINS_FILE = Path(__file__).with_name("musetalk_pins.json")
+STEP_WORDS = {
+    "environment": "Creating the environment",
+    "packages": "Installing the packages (a few minutes)",
+}
 SERVER_DIR = Path(__file__).with_name("lipsync_server")
 STATE_FILE = "state.json"
 START_TIMEOUT_S = 120.0
@@ -75,8 +84,10 @@ class Pins:
     platforms: tuple[str, ...]
 
 
-def load_pins(path: Path = PINS_FILE) -> Pins:
-    raw = json.loads(path.read_text())
+def load_pins(path: Path | None = None) -> Pins:
+    """Lip sync's pins: its part in this platform's component manifest (stage F2), or a file."""
+    raw = json.loads(path.read_text()) if path is not None else part_pins("musetalk")
+    base = path.parent if path is not None else PACKAGE_DIR
     src = raw["source"]
     if not str(src["url"]).startswith("https://") or len(str(src["sha256"])) != 64:
         raise ValueError("the lip sync source pin needs an https URL and a SHA-256")
@@ -84,7 +95,7 @@ def load_pins(path: Path = PINS_FILE) -> Pins:
         raise ValueError("the lip sync lock pin needs a SHA-256")
     return Pins(
         str(raw["commit"]), str(src["url"]), int(src["size"]), str(src["sha256"]).lower(),
-        str(raw["python"]), path.parent / str(raw["lock"]), str(raw["lock_sha256"]).lower(),
+        str(raw["python"]), base / str(raw["lock"]), str(raw["lock_sha256"]).lower(),
         int(raw["packages_bytes"]), tuple(raw["platforms"]),
     )  # fmt: skip
 
@@ -261,21 +272,16 @@ class MuseTalkInstaller:
 
         archive = stage / "musetalk.tar.gz"
         self._say("source", "Getting MuseTalk", 0)
-        digest, size = hashlib.sha256(), 0
-        async with self._client_factory() as http, http.stream("GET", pins.url) as r:
-            r.raise_for_status()
-            with archive.open("wb") as f:
-                async for block in r.aiter_bytes(1 << 20):
-                    f.write(block)
-                    digest.update(block)
-                    size += len(block)
-                    self._say("source", "Getting MuseTalk", size)
-        if size != pins.size or digest.hexdigest() != pins.sha256:
-            raise InstallError("The download did not match what was expected. Nothing was kept.")
+        # through the one installer (stage F2): size and SHA-256 checked, nothing kept otherwise
+        await installer.download(
+            installer.Archive(pins.url, pins.size, pins.sha256, "tar.gz"), archive, "source",
+            lambda done, _: self._say("source", "Getting MuseTalk", done),
+            client=self._client_factory,
+        )  # fmt: skip
 
         self._say("unpack", "Unpacking", pins.size)
         unpacked = stage / "unpacked"
-        await asyncio.to_thread(_unpack, archive, unpacked)
+        await asyncio.to_thread(installer.unpack, archive, "tar.gz", 0, unpacked, "unpack")
         tops = [p for p in unpacked.iterdir() if p.is_dir()]
         if len(tops) != 1 or not (tops[0] / "musetalk").is_dir():
             raise InstallError("The download did not contain MuseTalk.")
@@ -291,20 +297,18 @@ class MuseTalkInstaller:
                 target.unlink()
         shutil.move(str(tops[0]), str(final / "src"))
         venv = final / "venv"  # made where it will stay: a virtual environment is not relocatable
-        self._say("environment", "Creating the environment", pins.size)
-        ok, text = await self.run([uv, "venv", "--python", pins.python, str(venv)], final, env)
-        if not ok:
-            log.error("uv venv failed: %s", text[-600:])
-            raise InstallError("The environment for lip sync could not be created.")
-        self._say("packages", "Installing the packages (a few minutes)", pins.size)
-        py = _venv_python(venv)
-        ok, text = await self.run(
-            [uv, "pip", "install", "--python", str(py), "--require-hashes", "-r", str(pins.lock)],
-            final, env,
+
+        async def run(args: list[str], env_: dict[str, str], cwd: Path | None) -> tuple[int, str]:
+            ok, text = await self.run(args, cwd or final, env_)
+            return (0 if ok else 1), text
+
+        # the one installer's environment step (stage F2)
+        py = await installer.make_environment(
+            uv, pins.python, venv, pins.lock, pins.lock_sha256, "environment", "packages", run,
+            env, no_deps=False,
+            on_step=lambda step: self._say(step, STEP_WORDS.get(step, step), pins.size),
+            owner="The lip sync engine",
         )  # fmt: skip
-        if not ok:
-            log.error("uv pip install failed: %s", text[-800:])
-            raise InstallError("The packages for lip sync could not be installed.")
 
         self._say("verify", "Checking that it starts", pins.size + pins.packages_bytes - 1)
         ok, text = await self.run(
@@ -325,12 +329,6 @@ class MuseTalkInstaller:
         tmp = final / (STATE_FILE + ".part")
         tmp.write_text(json.dumps(record))
         tmp.replace(final / STATE_FILE)  # last: this is what makes it installed
-
-
-def _unpack(archive: Path, target: Path) -> None:
-    target.mkdir(parents=True)
-    with tarfile.open(archive) as t:
-        t.extractall(target, filter="data")  # refuses absolute paths, '..' and links outside
 
 
 # ---- the process ---------------------------------------------------------------------------------

@@ -8,8 +8,9 @@ from fastapi import Request
 from wasifyai_platform_sdk import EngineServices, RouteDeps
 
 if TYPE_CHECKING:
+    from wasifyai_platform_sdk.installer import Registry
+
     from wasifyai_api.admin import AdminStore
-    from wasifyai_api.components.core import Registry
     from wasifyai_api.desktop_events import EventBus
     from wasifyai_api.mcp_client.client import ExternalClient
     from wasifyai_api.mcp_server.approvals import ApprovalDesk

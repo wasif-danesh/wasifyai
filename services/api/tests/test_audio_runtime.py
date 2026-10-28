@@ -13,6 +13,7 @@ from pathlib import Path
 import httpx
 import pytest
 from wasifyai_api import audio_runtime as ar
+from wasifyai_api.components.manifest import part_pins
 from wasifyai_api.desktop_models import load_catalogue
 from wasifyai_platform_sdk import VoiceEngineError, check_music
 
@@ -78,7 +79,7 @@ def test_the_shipped_pins_are_complete_and_https():
 
 
 def test_a_pin_without_a_sha_is_refused(tmp_path):
-    raw = json.loads(ar.PINS_FILE.read_text())
+    raw = part_pins("audiocpp")
     raw["assets"]["darwin-arm64"]["sha256"] = "abc"
     bad = tmp_path / "pins.json"
     bad.write_text(json.dumps(raw))

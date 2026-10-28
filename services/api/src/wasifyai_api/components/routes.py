@@ -6,8 +6,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from wasifyai_platform_sdk.installer import Component, InstallError, Registry
 
-from wasifyai_api.components.core import Component, InstallError, Registry
 from wasifyai_api.identity import Identity, get_identity
 from wasifyai_api.services import services_of
 
@@ -29,7 +29,10 @@ def _component(request: Request, component_id: str) -> Component:
 
 
 def _view(c: Component) -> dict[str, Any]:
-    return {"id": c.id, "title": c.title, "status": c.status()}
+    # what the person may ask of it besides setting it up: a part whose service cannot yet stop,
+    # repair or remove it says so, and the window offers only what works
+    can = {k: bool(getattr(c, f"can_{k}", True)) for k in ("stop", "repair", "remove")}
+    return {"id": c.id, "title": c.title, "status": c.status(), "can": can}
 
 
 @router.get("")

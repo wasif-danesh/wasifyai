@@ -15,6 +15,8 @@ import httpx
 import pytest
 from wasifyai_api import video_builder_runtime as vb
 from wasifyai_api.audio_runtime import InstallError, platform_key
+from wasifyai_api.components.manifest import part_pins
+from wasifyai_platform_sdk import installer
 
 # ---- pins ----------------------------------------------------------------------------------------
 
@@ -46,7 +48,7 @@ def test_the_pins_are_exact_and_the_shipped_lock_is_the_one_pinned():
 
 
 def test_a_pin_without_a_hash_is_refused(tmp_path):
-    raw = json.loads(vb.PINS_FILE.read_text())
+    raw = part_pins("video-builder")
     raw["shell"]["sha256"] = "abc"
     bad = tmp_path / "pins.json"
     bad.write_text(json.dumps(raw))
@@ -307,8 +309,8 @@ async def test_a_zip_with_a_path_outside_its_folder_is_refused(tmp_path):
         z.writestr("../escape.txt", "x")
     archive = tmp_path / "bad.zip"
     archive.write_bytes(buf.getvalue())
-    with pytest.raises(InstallError, match="outside its folder"):
-        vb._unpack_zip(archive, tmp_path / "out")  # noqa: SLF001
+    with pytest.raises(InstallError, match="unsafe file path"):
+        installer.unpack(archive, "zip", 0, tmp_path / "out", "unpack")  # the one installer
     assert not (tmp_path / "escape.txt").exists()
 
 

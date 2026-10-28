@@ -24,7 +24,15 @@ export type ComponentState =
   | { state: "installed"; version: string; accelerator: string }
   | { state: "failed"; message: string; step: string | null };
 
-export type ComponentView = { id: string; title: string; status: ComponentState };
+/** What may be asked of a part besides setting it up (a part whose service cannot yet says so). */
+export type ComponentActions = { stop: boolean; repair: boolean; remove: boolean };
+
+export type ComponentView = {
+  id: string;
+  title: string;
+  status: ComponentState;
+  can: ComponentActions;
+};
 
 async function json<T>(transport: Transport, path: string, init?: RequestInit): Promise<T> {
   const res = await transport.fetch(path, init);

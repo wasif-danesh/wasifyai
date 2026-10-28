@@ -11,8 +11,8 @@ from pathlib import Path
 import httpx
 import pytest
 from wasifyai_api.components.comfyui import STEPS, ComfyUiComponent
-from wasifyai_api.components.core import Archive, InstallError
 from wasifyai_api.components.manifest import Manifest, Pins, load_manifest
+from wasifyai_platform_sdk.installer import Archive, InstallError
 
 URL = "https://example.test/ComfyUI-0.40.0.tar.gz"
 TRIPLE = "aarch64-apple-darwin"
@@ -107,7 +107,7 @@ async def test_it_installs_in_seven_steps_and_records_what_torch_runs_on(tmp_pat
     # the sidecar reads the same place it always did
     from wasifyai_media_worker.sidecar import ComfySidecar, SidecarConfig
 
-    sidecar = ComfySidecar(SidecarConfig(tmp_path / "data", tmp_path / "models", []))
+    sidecar = ComfySidecar(SidecarConfig(tmp_path / "data", tmp_path / "models", ()))
     assert sidecar.installed
 
 

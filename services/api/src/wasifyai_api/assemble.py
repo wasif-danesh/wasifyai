@@ -59,6 +59,7 @@ from wasifyai_platform_sdk import (
     load_product_config,
     s3_storage,
 )
+from wasifyai_platform_sdk.installer import Registry
 from wasifyai_platform_sdk.jobpolicy import AdmittedSink, InMemoryLeases, JobPolicy, RedisLeases
 from wasifyai_platform_sdk.providers.litellm import LiteLLMTextProvider
 
@@ -66,7 +67,7 @@ from wasifyai_api.actions_engine import build_executor
 from wasifyai_api.admin import AdminStore, PostgresAdminStore
 from wasifyai_api.auth import Claims
 from wasifyai_api.components.comfyui import ComfyUiComponent
-from wasifyai_api.components.core import Registry
+from wasifyai_api.components.desktop import service_components
 from wasifyai_api.components.llamacpp import LlamaCppComponent
 from wasifyai_api.components.manifest import load_manifest
 from wasifyai_api.config import Settings, get_settings
@@ -876,6 +877,8 @@ def _desktop_components(s: ApiServices, desktop: Desktop) -> Registry:
     uv = os.environ.get("WASIFYAI_UV") or shutil.which("uv")
     comfy = ComfyUiComponent(data_dir, manifest, engine_bundle(s.products_dir), uv)
     registry.add(comfy, comfy.installer)
+    for part in service_components(s, desktop):
+        registry.add(part)
     events = s.events
     if events is not None:
         registry.listeners.append(

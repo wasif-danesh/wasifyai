@@ -13,6 +13,7 @@ import {
 } from "@wasifyai/ui";
 import { Search } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { ComponentsPanel } from "../ComponentsPanel";
 import { assistantApi, connectionsApi, discoveryApi, externalApi, hubApi } from "../api";
 import { engineRepair, engineRestart } from "../engine";
 import { ImageEngineCard, LanguageEngineCard, UpdateBanner } from "../parts";
@@ -321,6 +322,13 @@ const GROUPS: Group[] = [
         title: "Language models",
         words: "engine llama chat",
         body: <LanguageEngineCard />,
+      },
+      {
+        id: "parts",
+        title: "Optional parts",
+        words:
+          "components install set up repair remove speech lip sync 3d motion graphics trainer reader",
+        body: <ComponentsPanel />,
       },
       {
         id: "finding",

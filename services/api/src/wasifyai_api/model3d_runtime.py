@@ -3,10 +3,10 @@ Metal build), the Pixal3D single-view weights with their image encoder, and the 
 model, set up on request under `<app data>/components/model3d/`.
 
 Nothing is fetched before the person has seen the total size and confirmed it. The binary and every
-weight file have a pinned size and SHA-256 (`model3d_pins.json`); the weights download with the
-same resumable, hash-checked downloader the Models screen uses. The licence texts the component
-must carry (pixal3d.cpp's MIT licence and notice, Meta's DINOv3 agreement) are written next to the
-files.
+weight file have a pinned size and SHA-256 (its part of `components/manifests/<platform>.yaml`);
+the weights download with the same resumable, hash-checked downloader the Models screen uses. The
+licence texts the component must carry (pixal3d.cpp's MIT licence and notice, Meta's DINOv3
+agreement) are written next to the files.
 
 Layout, and what a person's own copy (`WASIFYAI_MODEL3D_HOME`, for development and CI) looks like:
 
@@ -14,7 +14,6 @@ Layout, and what a person's own copy (`WASIFYAI_MODEL3D_HOME`, for development a
 """
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -26,8 +25,10 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from wasifyai_platform_sdk import installer
 
 from wasifyai_api.audio_runtime import InstallError, InstallProgress, platform_key
+from wasifyai_api.components.manifest import legacy_digest, part_pins, pins_digest
 from wasifyai_api.desktop_models import (
     DownloadError,
     DownloadManager,
@@ -35,11 +36,10 @@ from wasifyai_api.desktop_models import (
     ModelFile,
     free_disk_bytes,
 )
-from wasifyai_api.video_builder_runtime import _unpack_tar
 
 log = logging.getLogger(__name__)
 
-PINS_FILE = Path(__file__).with_name("model3d_pins.json")
+PART = "model3d"  # its pins in the component manifests
 NOTICES_DIR = Path(__file__).with_name("model3d_notices")
 STATE_FILE = "state.json"
 MIN_FREE_BYTES = 3_000_000_000
@@ -67,7 +67,13 @@ class Pins:
     matte_files: tuple[WeightFile, ...]
     platforms: tuple[str, ...]
     need_gb: float
-    digest: str  # of the pins file: what an install records, so a changed pin asks for a new one
+    digest: str  # of the pins: what an install records, so a changed pin asks for a new one
+
+    legacy: str | None = None  # what installs made before the pins moved to the manifests recorded
+
+    def made_from(self, recorded: object) -> bool:
+        """Whether an install's record was made from these pins."""
+        return recorded is not None and recorded in (self.digest, self.legacy)
 
     @property
     def weight_bytes(self) -> int:
@@ -95,9 +101,9 @@ def _files(raw: list[dict[str, Any]], what: str) -> tuple[WeightFile, ...]:
     return tuple(out)
 
 
-def load_pins(path: Path = PINS_FILE) -> Pins:
-    text = path.read_text()
-    raw = json.loads(text)
+def load_pins(path: Path | None = None) -> Pins:
+    """The 3D pins: its part in this platform's component manifest (stage F2), or a file."""
+    raw = json.loads(path.read_text()) if path is not None else part_pins(PART)
     b = raw["binary"]
     if not str(b["url"]).startswith("https://") or len(str(b["sha256"])) != 64:
         raise ValueError("the 3D binary pin needs an https URL and a SHA-256")
@@ -109,7 +115,7 @@ def load_pins(path: Path = PINS_FILE) -> Pins:
         matte_folder=str(raw["matte"]["folder"]),
         matte_files=_files(raw["matte"]["files"], "cut-out"),
         platforms=tuple(raw["platforms"]), need_gb=float(raw["need_gb"]),
-        digest=hashlib.sha256(text.encode()).hexdigest(),
+        digest=pins_digest(raw), legacy=legacy_digest(raw),
     )  # fmt: skip
 
 
@@ -158,7 +164,11 @@ def find_install(data_dir: Path, pins: Pins | None = None) -> Model3dInstall | N
     try:
         state = json.loads((root / STATE_FILE).read_text())
         found = _layout(root, pins, "managed")
-        if state.get("schema") == 1 and state.get("pins") == pins.digest and _complete(found, pins):
+        if (
+            state.get("schema") == 1
+            and pins.made_from(state.get("pins"))
+            and _complete(found, pins)
+        ):
             return found
     except (OSError, ValueError):
         pass
@@ -308,20 +318,14 @@ class Model3dInstaller:
             shutil.rmtree(stage, ignore_errors=True)
 
     async def _fetch_binary(self, to: Path) -> None:
+        """Through the one installer (stage F2): size and SHA-256 checked, else nothing kept."""
         p = self.pins
-        digest, size = hashlib.sha256(), 0
         self._say("engine", "Getting the 3D engine", 0)
-        async with self._client_factory() as http, http.stream("GET", p.binary_url) as r:
-            r.raise_for_status()
-            with to.open("wb") as f:
-                async for block in r.aiter_bytes(1 << 20):
-                    f.write(block)
-                    digest.update(block)
-                    size += len(block)
-        if size != p.binary_size or digest.hexdigest() != p.binary_sha256:
-            raise InstallError(
-                "The 3D engine download did not match what was expected. Nothing was kept."
-            )
+        await installer.download(
+            installer.Archive(p.binary_url, p.binary_size, p.binary_sha256, "tar.gz"), to,
+            "engine", lambda done, _: self._say("engine", "Getting the 3D engine", done),
+            client=self._client_factory,
+        )  # fmt: skip
 
     async def _install(self, stage: Path) -> None:
         p = self.pins
@@ -334,7 +338,7 @@ class Model3dInstaller:
         archive = stage / "engine.tar.gz"
         await self._fetch_binary(archive)
         unpacked = stage / "engine"
-        await asyncio.to_thread(_unpack_tar, archive, unpacked)
+        await asyncio.to_thread(installer.unpack, archive, "tar.gz", 0, unpacked, "engine")
         found_cli = next(iter(unpacked.rglob(p.cli)), None)
         if found_cli is None:
             raise InstallError("The 3D engine download did not contain the engine.")

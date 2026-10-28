@@ -13,6 +13,7 @@ import httpx
 import pytest
 from wasifyai_api import lipsync_runtime as lr
 from wasifyai_api.audio_runtime import InstallError
+from wasifyai_api.components.manifest import part_pins
 from wasifyai_platform_sdk import VoiceEngineError, check_lipsync
 
 from tests.test_audio_runtime import ALL, Models, make_engine
@@ -41,7 +42,7 @@ def test_the_pins_are_exact_and_the_shipped_lock_is_the_one_pinned():
 
 
 def test_a_pin_without_a_hash_is_refused(tmp_path):
-    raw = json.loads(lr.PINS_FILE.read_text())
+    raw = part_pins("musetalk")
     raw["source"]["sha256"] = "abc"
     bad = tmp_path / "pins.json"
     bad.write_text(json.dumps(raw))

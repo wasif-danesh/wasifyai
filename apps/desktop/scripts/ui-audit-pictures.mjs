@@ -481,6 +481,20 @@ for (const scheme of ["light", "dark"]) {
     }
     console.log(`A11Y ${scheme}: ${SCREENS.length} screens, ${failing} rules failing`);
   }
+  if (scheme === "light" && names.has("f2-parts")) {
+    // stage F2: every optional part in one list, from the engine's /components
+    await attempt("f2-parts", async () => {
+      await open(page, "/settings");
+      await page.getByRole("searchbox", { name: "Search settings" }).fill("parts");
+      const list = page.getByRole("list", { name: "Optional parts" });
+      await list.waitFor();
+      const shown = await list.getByRole("listitem").count();
+      const listed = (await engine("/components"))?.components?.length ?? -1;
+      if (shown !== listed) throw new Error(`${shown} parts shown, ${listed} listed by the engine`);
+      await page.waitForTimeout(500);
+      await shot(page, "f2-parts", 1300);
+    });
+  }
   if (scheme === "light" && names.has("u11-make")) {
     await attempt("u11-settings", async () => {
       await open(page, "/settings");

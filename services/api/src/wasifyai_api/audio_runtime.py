@@ -25,10 +25,8 @@ import secrets
 import shutil
 import socket
 import sys
-import tarfile
 import tempfile
 import time
-import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -50,12 +48,14 @@ from wasifyai_platform_sdk import (
     TranscriptSegment,
     VoiceEngineError,
     VoiceModel,
+    installer,
 )
 from wasifyai_platform_sdk.slots import Held
 
+from wasifyai_api.components.manifest import part_pins
+
 log = logging.getLogger(__name__)
 
-PINS_FILE = Path(__file__).with_name("audio_pins.json")
 INSTALL_RECORD = "INSTALL.json"
 MIN_FREE_BYTES = 1_000_000_000
 SERVER_START_TIMEOUT_S = 120.0
@@ -87,8 +87,9 @@ class Pins:
     assets: dict[str, Pin]
 
 
-def load_pins(path: Path = PINS_FILE) -> Pins:
-    raw = json.loads(path.read_text())
+def load_pins(path: Path | None = None) -> Pins:
+    """The speech runtime's pins: its part in this platform's component manifest (stage F2)."""
+    raw = json.loads(path.read_text()) if path is not None else part_pins("audiocpp")
     assets = {
         key: Pin(key, a["name"], a["url"], int(a["size"]), a["sha256"].lower(), a["backend"],
                  a["archive"], bool(a["measured"]))
@@ -171,8 +172,8 @@ def _sha256_file(path: Path) -> str:
 # ---- installing it ------------------------------------------------------------------------------
 
 
-class InstallError(Exception):
-    """`str(e)` is a sentence safe to show."""
+# the one installer's error (stage F2): `str(e)` is a sentence safe to show
+InstallError = installer.InstallError
 
 
 @dataclass
@@ -258,21 +259,15 @@ class AudioInstaller:
             raise InstallError("There is not enough free disk space for the speech runtime.")
         archive = stage / pin.name
         self._say("download", "Downloading the speech runtime", 0)
-        digest = hashlib.sha256()
-        size = 0
-        async with self._client_factory() as http, http.stream("GET", pin.url) as r:
-            r.raise_for_status()
-            with archive.open("wb") as f:
-                async for block in r.aiter_bytes(1 << 20):
-                    f.write(block)
-                    digest.update(block)
-                    size += len(block)
-                    self._say("download", "Downloading the speech runtime", size)
-        if size != pin.size or digest.hexdigest() != pin.sha256:
-            raise InstallError("The download did not match what was expected. Nothing was kept.")
+        # through the one installer (stage F2): size and SHA-256 checked, nothing kept otherwise
+        await installer.download(
+            installer.Archive(pin.url, pin.size, pin.sha256, pin.archive), archive, "download",
+            lambda done, _: self._say("download", "Downloading the speech runtime", done),
+            client=self._client_factory,
+        )  # fmt: skip
         self._say("unpack", "Unpacking")
         target = stage / "unpacked"
-        await asyncio.to_thread(_unpack, archive, target, pin.archive)
+        await asyncio.to_thread(installer.unpack, archive, pin.archive, 0, target, "unpack")
         server = await asyncio.to_thread(_find_server, target, self.pins.server)
         if server is None:
             raise InstallError("The download did not contain the speech runtime.")
@@ -304,20 +299,6 @@ class AudioInstaller:
                   "source": "found"}  # fmt: skip
         (self._root / INSTALL_RECORD).write_text(json.dumps(record))
         return AudioInstall(found["tag"], found["backend"], server, "found")
-
-
-def _unpack(archive: Path, target: Path, kind: str) -> None:
-    target.mkdir(parents=True)
-    if kind == "zip":
-        with zipfile.ZipFile(archive) as z:
-            for name in z.namelist():
-                parts = Path(name).parts
-                if Path(name).is_absolute() or ".." in parts:
-                    raise InstallError("The download contained an unsafe file path.")
-            z.extractall(target)
-        return
-    with tarfile.open(archive) as t:
-        t.extractall(target, filter="data")  # refuses absolute paths, '..' and links outside
 
 
 def _find_server(root: Path, name: str) -> Path | None:

@@ -18,6 +18,7 @@ import pytest
 from wasifyai_api import desktop_model3d as dm
 from wasifyai_api import model3d_runtime as m3
 from wasifyai_api.audio_runtime import InstallError, platform_key
+from wasifyai_api.components.manifest import part_pins
 from wasifyai_api.desktop_models import DownloadManager
 
 FIXTURE = Path(__file__).parent / "fixtures" / "trellis-sv-run.txt"
@@ -42,13 +43,13 @@ def test_every_pinned_file_has_an_https_url_a_size_and_a_sha256_and_the_total_is
 
 
 def test_a_pin_without_a_checksum_or_with_a_path_in_a_name_is_refused(tmp_path):
-    raw = json.loads(m3.PINS_FILE.read_text())
+    raw = part_pins("model3d")
     raw["weights"]["files"][0]["sha256"] = "abc"
     bad = tmp_path / "pins.json"
     bad.write_text(json.dumps(raw))
     with pytest.raises(ValueError, match="SHA-256"):
         m3.load_pins(bad)
-    raw = json.loads(m3.PINS_FILE.read_text())
+    raw = part_pins("model3d")
     raw["weights"]["files"][0]["name"] = "../evil"
     bad.write_text(json.dumps(raw))
     with pytest.raises(ValueError, match="plain name"):

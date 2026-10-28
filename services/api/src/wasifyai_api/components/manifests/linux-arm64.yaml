@@ -17,3 +17,488 @@ components:
       sha256: 5b3b62ede4f1ea1e33a1f50018f536d45a1b11ece980b1f9d9adefe43817ffa6
       kind: tar.gz
       strip: 1
+# What the parts the engine's services set up fetch (stage F2; these were the *_pins.json files).
+# Paths in them are relative to the wasifyai_api package. Every platform carries every part, so
+# an engine anywhere can say what a part needs and that it is not available on this computer.
+parts:
+  audiocpp:
+    pins:
+      comment: Pinned audio.cpp runtime (Apache-2.0, ShugoAI LLC; this is Unsloth's build of upstream
+        v0.9.0). Sizes and SHA-256 from the release's asset digests. Only darwin-arm64 is measured (docs/spikes/voice-v0.md);
+        the others are pinned so the app can offer them, and say they are not measured.
+      repo: unslothai/audio.cpp
+      tag: v0.9.0-unsloth.1
+      server: audiocpp_server
+      assets:
+        linux-arm64:
+          name: audio-v0.9.0-unsloth.1-bin-ubuntu-arm64-cpu.tar.gz
+          url: https://github.com/unslothai/audio.cpp/releases/download/v0.9.0-unsloth.1/audio-v0.9.0-unsloth.1-bin-ubuntu-arm64-cpu.tar.gz
+          size: 46188288
+          sha256: 1ce3a1c976216bbd451a3a16f0db0de6aed94602e652fa9208e03ac447319b9f
+          backend: cpu
+          measured: false
+          archive: tar.gz
+  musetalk:
+    pins:
+      comment: 'The lip sync engine''s environment (ADR-0066, stage V5): MuseTalk''s code at an exact
+        commit (MIT), and the hashed package lock the server runs from. The weights are catalogue entries
+        (products/wasifyai-voice/models.yaml), fetched in Models after the person sees their size. Only
+        Apple-silicon Macs are supported and measured; others would need a CUDA lock.'
+      commit: 0a89dec45a0192b824e3cf4daf96c239440c5ed8
+      source:
+        url: https://github.com/TMElyralab/MuseTalk/archive/0a89dec45a0192b824e3cf4daf96c239440c5ed8.tar.gz
+        size: 15958159
+        sha256: 2e1685e4bcc58531c5118c0ba485199f22012016ed4608cab725a51d131f7ca7
+      python: '3.12'
+      lock: lipsync_server/musetalk.lock.txt
+      lock_sha256: 036bb7bcfaaa0ac8ef6cf4e97974986cabd64ef38ddc858455ab1f6a91da8a30
+      packages_bytes: 2100000000
+      platforms:
+      - darwin-arm64
+  model3d:
+    pins:
+      comment: 'The 3D component (ADR-0080, TD1): the pinned pixal3d.cpp Metal release (trellis-cli),
+        the Pixal3D single-view Q8_0 weights and the BiRefNet cut-out model. Each file has a size and
+        a SHA-256, shown before the click. Only Apple-silicon Macs are measured (docs/spikes/pixal3d-td0.md).'
+      binary:
+        release: v0.10.1-desktop-alpha
+        url: https://github.com/raven38/pixal3d.cpp/releases/download/v0.10.1-desktop-alpha/trellis-metal-macos-arm64.tar.gz
+        size: 2440967
+        sha256: 66663b1f7af49798c5ae47a6dd2744fbc92e92bfe477f9fb889b839dd33607c8
+        cli: trellis-cli
+        licence: MIT (pixal3d.cpp, trellis.cpp, ggml)
+        source: github.com/raven38/pixal3d.cpp
+      weights:
+        title: Pixal3D single view (Q8_0) and its encoder
+        folder: pixal3d-sv
+        licence: MIT, and the DINOv3 licence for the image encoder (dinov3.gguf)
+        source: huggingface.co/raven38/pixal3d-sv-q8_0-v1
+        files:
+        - name: DINOV3_LICENSE.md
+          url: https://huggingface.co/raven38/pixal3d-sv-q8_0-v1/resolve/46d399ac986f45a0d7f5b1ca5058614d8729a131/DINOV3_LICENSE.md
+          size: 7503
+          sha256: 25d122eb8f5b880fd23c736fb6ea8018ee45c12237e00b8a86d14c653904999e
+        - name: LICENSE.md
+          url: https://huggingface.co/raven38/pixal3d-sv-q8_0-v1/resolve/46d399ac986f45a0d7f5b1ca5058614d8729a131/LICENSE.md
+          size: 2129
+          sha256: 95774b0e9d74792a64ddbbd4c51388ea0df1c1a77f8fff0ebce7cb812822dbad
+        - name: MIT_LICENSE.md
+          url: https://huggingface.co/raven38/pixal3d-sv-q8_0-v1/resolve/46d399ac986f45a0d7f5b1ca5058614d8729a131/MIT_LICENSE.md
+          size: 1566
+          sha256: 8a37ac9d3587a7cec9bd64fe9043482de7ad53a461532faa3a9f4840cf3f7e59
+        - name: pixal3d-models.json
+          url: https://huggingface.co/raven38/pixal3d-sv-q8_0-v1/resolve/46d399ac986f45a0d7f5b1ca5058614d8729a131/pixal3d-models.json
+          size: 2522
+          sha256: e127c0f70e6dc43c07b4c1afc896a7e14353e5c2e7aa6ce0fd82406a6a94c61e
+        - name: dinov3.gguf
+          url: https://huggingface.co/raven38/pixal3d-sv-q8_0-v1/resolve/46d399ac986f45a0d7f5b1ca5058614d8729a131/dinov3.gguf
+          size: 323657920
+          sha256: 0dd4ffd4b46a248f5b7d49c35275d68461fbf73f57ddb4c1fa8afb4f7bb45a0d
+        - name: pixal3d_naf.gguf
+          url: https://huggingface.co/raven38/pixal3d-sv-q8_0-v1/resolve/46d399ac986f45a0d7f5b1ca5058614d8729a131/pixal3d_naf.gguf
+          size: 1334656
+          sha256: c4f6cd80e94c8d120360ba50a3633322e6ecce0163966e3b7650b24f99c18569
+        - name: ss_dec.gguf
+          url: https://huggingface.co/raven38/pixal3d-sv-q8_0-v1/resolve/46d399ac986f45a0d7f5b1ca5058614d8729a131/ss_dec.gguf
+          size: 147379392
+          sha256: 2790b5eecb261cc877d9bf175ce2bd6dd48cd65be8c042c5f5bc023dfca01cf7
+        - name: shape_dec.gguf
+          url: https://huggingface.co/raven38/pixal3d-sv-q8_0-v1/resolve/46d399ac986f45a0d7f5b1ca5058614d8729a131/shape_dec.gguf
+          size: 881361568
+          sha256: 0de7c7a675022dd8696d526a9279e5a50b2a35c8a79452f434a72dc53d40f169
+        - name: tex_dec.gguf
+          url: https://huggingface.co/raven38/pixal3d-sv-q8_0-v1/resolve/46d399ac986f45a0d7f5b1ca5058614d8729a131/tex_dec.gguf
+          size: 881344576
+          sha256: 88b4fced46455e02f316664d5c43584a311921dd9a1cdc1b7b7d981cca9214d4
+        - name: pixal3d_ss_flow_sv.gguf
+          url: https://huggingface.co/raven38/pixal3d-sv-q8_0-v1/resolve/46d399ac986f45a0d7f5b1ca5058614d8729a131/pixal3d_ss_flow_sv.gguf
+          size: 1426559744
+          sha256: 75eeb538c5485e02f091d1fc8a55c8132035076a4e01b7e9607883deff3852c4
+        - name: pixal3d_shape_flow_512_sv.gguf
+          url: https://huggingface.co/raven38/pixal3d-sv-q8_0-v1/resolve/46d399ac986f45a0d7f5b1ca5058614d8729a131/pixal3d_shape_flow_512_sv.gguf
+          size: 1476761760
+          sha256: 13f5df430ca49e6011827a3eeb208f047bdbad1fd4e52549809eaab63b83e19e
+        - name: pixal3d_shape_flow_1024_sv.gguf
+          url: https://huggingface.co/raven38/pixal3d-sv-q8_0-v1/resolve/46d399ac986f45a0d7f5b1ca5058614d8729a131/pixal3d_shape_flow_1024_sv.gguf
+          size: 1476761760
+          sha256: 7cb1ecb189719edbbb991d16271ad0f8ab8bf54154df7795830aadba27f0efae
+        - name: pixal3d_tex_flow_1024_sv.gguf
+          url: https://huggingface.co/raven38/pixal3d-sv-q8_0-v1/resolve/46d399ac986f45a0d7f5b1ca5058614d8729a131/pixal3d_tex_flow_1024_sv.gguf
+          size: 1476813984
+          sha256: 06ef23d3badafc6f8ffcecebbc2bd0297461852b6c125dc4448f80d78040ee17
+      matte:
+        title: BiRefNet cut-out
+        folder: matte
+        licence: MIT (BiRefNet; the GGUF conversion carries no label)
+        source: huggingface.co/ilintar/trellis2-gguf
+        files:
+        - name: birefnet.gguf
+          url: https://huggingface.co/ilintar/trellis2-gguf/resolve/a57397bd3d351599d9729fc144b3f87c3f87d65b/q8/birefnet.gguf
+          size: 882749024
+          sha256: 10c5dd4dcac904cf81c9a16180eb66f167dd52ab55867f54a44567b0b2babbc1
+      platforms:
+      - darwin-arm64
+      need_gb: 19.5
+      legacy_digest: b9bb42a23d07c434e9f67a17ac87bca2962ff16ba856be09cb2584565f1440e7
+      legacy_for: f0890110cad18ecad023911f6c86d9f087cac632062633be6904c21d4da08dd3
+  video-builder:
+    pins:
+      comment: 'The Video Builder component (ADR-0077, V1a): a pinned Node.js, the pinned Chrome headless
+        shell for Testing, and the packages in video_builder/package-lock.json (hyperframes 0.8.171, gsap
+        3.15.0), each fetched only after the person has seen the size and confirmed it. Only Apple-silicon
+        Macs are measured (docs/spikes/video-builder-v0.md); other systems say so in words.'
+      node:
+        version: 22.23.1
+        url: https://nodejs.org/dist/v22.23.1/node-v22.23.1-darwin-arm64.tar.gz
+        size: 50067502
+        sha256: ef28d8fab2c0e4314522d4bb1b7173270aa3937e93b92cb7de79c112ac1fa953
+        licence: MIT
+      shell:
+        version: 152.0.7977.30
+        url: https://storage.googleapis.com/chrome-for-testing-public/152.0.7977.30/mac-arm64/chrome-headless-shell-mac-arm64.zip
+        size: 97532843
+        sha256: 1db16c16e72bedfa747ed01c207a3fe8ee7370c35f2094279eb8878c996e8c79
+        licence: Chromium (BSD-3-Clause and bundled third-party licences, see LICENSE.headless_shell in
+          the download)
+      packages:
+        lock: video_builder/package-lock.json
+        lock_sha256: c437422ab7aa1f47fcb06d93dde685cac8fc11b22a671d6fa89e81a3280df8b6
+        package: video_builder/package.json
+        package_sha256: 1ef87d3e4652390bbe049af6a53aea469dad320a283a5bad6ce192614cd26dd2
+        bytes: 170000000
+        note: '130 packages (two of them carry FFmpeg 4.4 and ffprobe 4.4.1 for darwin-arm64: a GPL build,
+          run only as separate programs); Apache-2.0, MIT, ISC, BSD, CC0, 0BSD, SIL OFL-1.1 (the two font
+          packages), the gsap Standard no charge licence, and one LGPL-3.0-or-later prebuilt library (libvips
+          inside sharp) that is used as shipped and not modified'
+      platforms:
+      - darwin-arm64
+  trainer-pictures:
+    pins:
+      schema: 1
+      tool:
+        id: mflux
+        version: 0.22.0
+        licence: MIT
+        source: pypi.org
+        packages_bytes: 1100000000
+        python: '3.12'
+      base:
+        id: flux2-klein-base-4b
+        title: FLUX.2 klein base 4B
+        repo: black-forest-labs/FLUX.2-klein-base-4B
+        revision: a3b4f4849157f664bdbc776fd7453c2783562f4d
+        licence: Apache-2.0
+        source: huggingface.co
+        folder: flux2-klein-base-4b
+        files:
+        - path: LICENSE.md
+          size: 9584
+          sha256: ca02bc51900ab07789d1b70283329e7137f5af98f5161c23a1c81fc38a4af1fe
+        - path: model_index.json
+          size: 422
+          sha256: de1fef01845f0af3e1e2f2581cd5e86f2dfa4a4776f7f0b26b4c77feac4ee70f
+        - path: scheduler/scheduler_config.json
+          size: 486
+          sha256: 067afb012cef64553a763447d1efd93daeffcc0123ca7e25b09f8de20b90762e
+        - path: text_encoder/config.json
+          size: 1536
+          sha256: 214b4c29a0d975e9fddf9994a5673f22cb2c4c5750352f9227c2c3251ebeab40
+        - path: text_encoder/generation_config.json
+          size: 214
+          sha256: 4347b1aeed2b2b78bc059920a0b7f5fec71482e1344952b76d7665d638d71f13
+        - path: text_encoder/model-00001-of-00002.safetensors
+          size: 4967215360
+          sha256: 8c0506e7f4936fa7e26183a4fd8da4e2bdbc5990ba64ae441f965d51228f36ea
+        - path: text_encoder/model-00002-of-00002.safetensors
+          size: 3077766632
+          sha256: 82f2bd839378541b0557bfabaf37c7d3d637071fdcb73302dedd7cf61162ce07
+        - path: text_encoder/model.safetensors.index.json
+          size: 32855
+          sha256: 06b3d5319b6d76d1a4a2433419180016cfd54ed62d086a5e6567a809f8c82634
+        - path: tokenizer/added_tokens.json
+          size: 707
+          sha256: c0284b582e14987fbd3d5a2cb2bd139084371ed9acbae488829a1c900833c680
+        - path: tokenizer/chat_template.jinja
+          size: 4168
+          sha256: a55ee1b1660128b7098723e0abcd92caa0788061051c62d51cbe87d9cf1974d8
+        - path: tokenizer/merges.txt
+          size: 1671853
+          sha256: 8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5
+        - path: tokenizer/special_tokens_map.json
+          size: 613
+          sha256: 76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd
+        - path: tokenizer/tokenizer.json
+          size: 11422654
+          sha256: aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4
+        - path: tokenizer/tokenizer_config.json
+          size: 5404
+          sha256: 443bfa629eb16387a12edbf92a76f6a6f10b2af3b53d87ba1550adfcf45f7fa0
+        - path: tokenizer/vocab.json
+          size: 2776833
+          sha256: ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910
+        - path: transformer/config.json
+          size: 531
+          sha256: c8a88c1433f24e52c01f46766c9f519e76d91d1c00bfb43fe0db2e4ed3c84d70
+        - path: transformer/diffusion_pytorch_model.safetensors
+          size: 7751109744
+          sha256: e109674697ffa1a3983126e32512f5428a9442bd8df59f9c95566ee90a473bb6
+        - path: vae/config.json
+          size: 821
+          sha256: 0d6dfb69ae95a5e2ac9836284bbb63d8b38ce67b25ba2dff380752b2a10ab948
+        - path: vae/diffusion_pytorch_model.safetensors
+          size: 168120878
+          sha256: ca70d2202afe6415bdbcb8793ba8cd99fd159cfe6192381504d6c4d3036e0f04
+      legacy_digest: b340a70c86a475e8bd425033d15850a0e8b92e200ade88d1a325e23a02ce333f
+      legacy_for: fb06bf34d8b111fcaa707f14d2c6ef8c6bc19bea9a2e708a29ad444242f6b4b2
+  trainer-writing:
+    pins:
+      schema: 1
+      tool:
+        id: mlx-lm
+        version: 0.31.3
+        licence: MIT
+        source: pypi.org
+        packages_bytes: 64300000
+        python: '3.12'
+      base:
+        id: qwen3-0.6b-4bit
+        title: Qwen3 0.6B (4-bit)
+        repo: mlx-community/Qwen3-0.6B-4bit
+        revision: 73e3e38d981303bc594367cd910ea6eb48349da8
+        licence: Apache-2.0
+        source: huggingface.co
+        folder: qwen3-0.6b-4bit
+        files:
+        - path: added_tokens.json
+          size: 707
+          sha256: c0284b582e14987fbd3d5a2cb2bd139084371ed9acbae488829a1c900833c680
+        - path: config.json
+          size: 937
+          sha256: 15d3ac26c043ae477273ed5802ee0f0b33bb14f18c9d3dd70910c02d906e3f1f
+        - path: merges.txt
+          size: 1671853
+          sha256: 8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5
+        - path: model.safetensors
+          size: 335450584
+          sha256: 392e8d466d56100ada00eb82031fb854297fc9e389b7d303eba3af114e87bce2
+        - path: model.safetensors.index.json
+          size: 49731
+          sha256: 7b294141456f6904936db03c00bca50fb5f6198f652fe8483f9cd2a1018accfb
+        - path: special_tokens_map.json
+          size: 613
+          sha256: 76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd
+        - path: tokenizer.json
+          size: 11422654
+          sha256: aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4
+        - path: tokenizer_config.json
+          size: 9706
+          sha256: 253153d0738ceb4c668d2eff957714dd2bea0b56de772a9fdccd96cbf517e6a0
+        - path: vocab.json
+          size: 2776833
+          sha256: ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910
+      legacy_digest: 07e0478acc827517b500d682812df6bacf63b77c7aad2c56402f26eabb21b4f4
+      legacy_for: d58aaaa5f0f479f1887cd18da2f9e8115249ac52833f2b6af593ff7bdb0afd43
+    chat:
+      schema: 1
+      id: qwen3-0.6b-q8
+      title: Qwen3 0.6B for chat (8-bit)
+      repo: Qwen/Qwen3-0.6B-GGUF
+      revision: 23749fefcc72300e3a2ad315e1317431b06b590a
+      file: Qwen3-0.6B-Q8_0.gguf
+      size: 639446688
+      sha256: 9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031
+      licence: Apache-2.0
+      source: huggingface.co
+      folder: qwen3-0.6b-q8
+    more_bases:
+      schema: 1
+      bases:
+      - id: qwen3-1.7b-4bit
+        title: Qwen3 1.7B (4-bit)
+        repo: mlx-community/Qwen3-1.7B-4bit
+        revision: 3b1b1768f8f8cf8351c712464f906e86c2b8269e
+        licence: Apache-2.0
+        source: huggingface.co
+        folder: qwen3-1.7b-4bit
+        files:
+        - path: added_tokens.json
+          size: 707
+          sha256: c0284b582e14987fbd3d5a2cb2bd139084371ed9acbae488829a1c900833c680
+        - path: config.json
+          size: 937
+          sha256: 507a6701220524eb8b283425bf0856a9ae4f21f4052e563896ddd668994b1dc7
+        - path: merges.txt
+          size: 1671853
+          sha256: 8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5
+        - path: model.safetensors
+          size: 968080210
+          sha256: 0e86d9677e519323849eac1bc272caae88567a481ff188c431f70be543d9995f
+        - path: model.safetensors.index.json
+          size: 49731
+          sha256: 1e3058d4ba4b04e4de35b74467725cbef90ff022198404218e48f21adc9cfa15
+        - path: special_tokens_map.json
+          size: 613
+          sha256: 76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd
+        - path: tokenizer.json
+          size: 11422654
+          sha256: aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4
+        - path: tokenizer_config.json
+          size: 9706
+          sha256: 253153d0738ceb4c668d2eff957714dd2bea0b56de772a9fdccd96cbf517e6a0
+        - path: vocab.json
+          size: 2776833
+          sha256: ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910
+        chat:
+          id: qwen3-1.7b-q8
+          title: Qwen3 1.7B for chat (8-bit)
+          repo: Qwen/Qwen3-1.7B-GGUF
+          revision: 90862c4b9d2787eaed51d12237eafdfe7c5f6077
+          file: Qwen3-1.7B-Q8_0.gguf
+          size: 1834426016
+          sha256: 061b54daade076b5d3362dac252678d17da8c68f07560be70818cace6590cb1a
+          licence: Apache-2.0
+          source: huggingface.co
+          folder: qwen3-1.7b-q8
+      - id: qwen3-4b-4bit
+        title: Qwen3 4B (4-bit)
+        repo: mlx-community/Qwen3-4B-4bit
+        revision: 4dcb3d101c2a062e5c1d4bb173588c54ea6c4d25
+        licence: Apache-2.0
+        source: huggingface.co
+        folder: qwen3-4b-4bit
+        files:
+        - path: added_tokens.json
+          size: 707
+          sha256: c0284b582e14987fbd3d5a2cb2bd139084371ed9acbae488829a1c900833c680
+        - path: config.json
+          size: 937
+          sha256: b5efdcf3b0035a3638e7228dad4d85f5c4a23f156eb7cdb0b44c8366a5d34d9b
+        - path: merges.txt
+          size: 1671853
+          sha256: 8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5
+        - path: model.safetensors
+          size: 2263022529
+          sha256: e240c0bdc0ebb0681bf0da0f98d9719fd6ebe269a3633f81542c13e81345651d
+        - path: model.safetensors.index.json
+          size: 63924
+          sha256: f7825defe5865d179c3b593173d37056be5f202dcb7153985cf74e75ecf1628b
+        - path: special_tokens_map.json
+          size: 613
+          sha256: 76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd
+        - path: tokenizer.json
+          size: 11422654
+          sha256: aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4
+        - path: tokenizer_config.json
+          size: 9706
+          sha256: 253153d0738ceb4c668d2eff957714dd2bea0b56de772a9fdccd96cbf517e6a0
+        - path: vocab.json
+          size: 2776833
+          sha256: ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910
+        chat:
+          id: qwen3-4b-q4km
+          title: Qwen3 4B for chat (4-bit)
+          repo: Qwen/Qwen3-4B-GGUF
+          revision: bc640142c66e1fdd12af0bd68f40445458f3869b
+          file: Qwen3-4B-Q4_K_M.gguf
+          size: 2497280256
+          sha256: 7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5
+          licence: Apache-2.0
+          source: huggingface.co
+          folder: qwen3-4b-q4km
+  trainer-deciding:
+    pins:
+      schema: 1
+      tool:
+        id: laya
+        version: 0.4.15
+        licence: Apache-2.0
+        source: pypi.org
+        packages_bytes: 167600000
+        python: '3.12'
+      base:
+        id: laya-english
+        title: Laya
+        repo: convaiinnovations/laya
+        revision: 7b928d828b7b0e022f929d9bd2e44165aa270148
+        licence: Apache-2.0
+        source: huggingface.co
+        folder: laya-english
+        files:
+        - path: encoder/config.json
+          size: 2083
+          sha256: bf3ab80598fdccf414855a2ce80f22859e4492d06ca8a62ddd1cfb63972f8979
+        - path: model.safetensors
+          size: 842609210
+          sha256: 891102d372688fc2a094dac56a384bc537b87c63f21f9f3dac0be2b7cbc8d86c
+        - path: rl_agent_config.json
+          size: 745
+          sha256: ae287b56bbcf5f8c4f4541ae9dfd00c914c4c48b940b8398c3058af37ba92bbd
+        - path: tokenizer/tokenizer.json
+          size: 3583228
+          sha256: 6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30
+        - path: tokenizer/tokenizer_config.json
+          size: 308
+          sha256: 50044de60daaa73df97d262e15a40d4faf0160e7d742df64b377877a1320dd12
+      more:
+      - id: laya-multilingual
+        title: Laya (many languages)
+        repo: convaiinnovations/laya
+        revision: 7b928d828b7b0e022f929d9bd2e44165aa270148
+        licence: Apache-2.0
+        source: huggingface.co
+        folder: laya-multilingual
+        subfolder: multilingual
+        files:
+        - path: encoder/config.json
+          size: 1938
+          sha256: 83f6916d13ef0f556ac461f28308dc2bffa7ebeadee8ec9e2db5812020ea5bb4
+        - path: model.safetensors
+          size: 643835514
+          sha256: 9d628fd971b700382ac6f65920a86f149777b2e748e0c955fb3b19695aa8f204
+        - path: rl_agent_config.json
+          size: 472
+          sha256: 25061739243b617ad88d1219ba6f8a9c86c5881ca28df024fa2d9b3b2fcc30c6
+        - path: tokenizer/tokenizer.json
+          size: 34363188
+          sha256: 609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f
+        - path: tokenizer/tokenizer_config.json
+          size: 524
+          sha256: 6c6b2d8e3c84ce0e671c129cd6b374b235d6f9863042a5836358d00a89bbb5a1
+      legacy_digest: 557b94589647a7e2ef7012ff3d9b5e9129e5e0ce0571b3deacc6a6233da8ae83
+      legacy_for: 2fbfa445ba563de4a9c7b935358dbba4e149fb2a523d0af95b3f12dd93472b23
+  trainer-video:
+    pins:
+      schema: 1
+      tool:
+        id: diffusers
+        version: 0.42.0
+        licence: Apache-2.0
+        source: pypi.org
+        packages_bytes: 181700000
+        python: '3.12'
+      base:
+        id: ltx-video-2b-small
+        title: The video model's tokenizer and settings
+        repo: Lightricks/LTX-Video
+        revision: 8984fa25007f376c1a299016d0957a37a2f797bb
+        licence: OpenRAIL-M
+        source: huggingface.co
+        folder: ltx-video-2b-small
+        files:
+        - path: text_encoder/config.json
+          size: 781
+          sha256: e8425c7fb4b09361c160eba83f89f3b3186d69bb189a8d67ad6bee8a160479a0
+        - path: tokenizer/added_tokens.json
+          size: 2593
+          sha256: ea5a91a3234f66ea642c8e672d67f0f493759a9bee6910ae304ea9b9492118b5
+        - path: tokenizer/special_tokens_map.json
+          size: 2543
+          sha256: 7a1985a994c41886db38c719d2a3d2f40606663cc19d7c5d6a85d349320e06d2
+        - path: tokenizer/spiece.model
+          size: 791656
+          sha256: d60acb128cf7b7f2536e8f38a5b18a05535c9e14c7a355904270e15b0945ea86
+        - path: tokenizer/tokenizer_config.json
+          size: 20618
+          sha256: e8c727fbdfbc495f9ec68fc4b89eda5d7d0a800cc33d1a661ae208b20b50e17a
+      legacy_digest: b48a31dfce248672c94b6e2765a6b00c47c958c127a8d2e0a80557d4f4fdb119
+      legacy_for: 8efacb55bbc2f6b3b17988fe05151b15c1dcadd6e6f6d6b5232c602965d82213

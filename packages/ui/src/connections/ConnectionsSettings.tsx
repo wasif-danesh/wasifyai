@@ -504,7 +504,7 @@ export function ConnectionsSettings({ api }: { api: ConnectionsApi }) {
 
   return (
     <section className="grid gap-3" aria-label="Connections">
-      <h2 className="font-semibold text-lg">Other apps</h2>
+      <h3 className="m-0 font-semibold text-base">Connections</h3>
       <p className="text-muted-foreground text-sm">
         Coding agents such as Claude Code, Codex and OpenCode can use Wasify AI as a tool: make a
         picture or a speech file, check a job, list models. Each one acts as you, with only what you

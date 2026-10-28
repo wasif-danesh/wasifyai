@@ -364,7 +364,7 @@ export function ExternalServers({ api }: { api: ExternalApi }) {
 
   return (
     <section className="grid gap-3" aria-label="Tools from other apps">
-      <h3 className="m-0 font-medium text-base">Tools from other apps</h3>
+      <h3 className="m-0 font-semibold text-base">Tools from other apps</h3>
       <p className="m-0 text-muted-foreground text-sm">
         The assistant can use tools of other MCP servers you add here: a code host, a database, a
         chat. Each call shows you a card first, and whatever a server answers is treated as text

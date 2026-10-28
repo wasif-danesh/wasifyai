@@ -128,7 +128,7 @@ export function SearchSettings({ assistant, place = "device" }: SearchSettingsPr
   const chosen = status.providers.find((p) => p.id === status.provider);
   return (
     <section className="grid gap-3" aria-label="Searching the web">
-      <h2 className="font-semibold text-lg">Searching the web</h2>
+      <h3 className="m-0 font-semibold text-base">Searching the web</h3>
       <p className="text-muted-foreground text-sm">
         {place === "device"
           ? "The Search button in the chat box lets the assistant look things up on the internet. It is off until you allow it. What you ask is sent to the search service you choose, and the pages it reads are fetched from the internet by this computer. Nothing it finds is trusted: it cannot make or change anything because a web page said so."

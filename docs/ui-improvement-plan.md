@@ -388,7 +388,31 @@ pictures `u10-*`). Not checked for real: a whole 3D model (5 to 25 minutes) and 
 pages. Not in this stage: an output card's picture is its kind's icon (an infographic does not show its picture
 yet); taught models in the Library.
 
-About 44 days of work in thirteen stages; U0 to U10 are done, U11 next, then the products in the order a
+**Built:** U11 on 2026-10-28. **Settings** (the window's `pages/Settings.tsx`): "What this computer can do" at the top
+(`models/CanDo.tsx`, `ComputerCanDo`: the memory and free disk, and each job with its readiness dot and what it uses,
+"Ready: Qwen3.8 27B (MLX)", "Needs a download", "Not on this computer"; it reads the same lists as the model
+button, again after 3 and 10 seconds and then every 30, since a model running in another tool is found a moment
+after the app starts; the voice groups count a ready model as ready, as their tools use it by themselves); then five
+groups, General (the theme, Like the computer / Light / Dark, the same as the bar's button: `useTheme` now has
+`choose`, and both follow each other; updates), Models (the two engines, finding models, browsing models, the
+Hugging Face token), Privacy and sharing (what leaves this computer, in one list that names the setting behind
+each; searching the web), Other apps (connections, tools from other apps) and Advanced (the engine); a list of the
+groups on the left and a search that filters the settings by their names and a few words each. Settings save as
+they change ("Saved." beside them): Finding models' switch at once and its folders when the box is left; Browsing
+models' switch; a token is still saved on its button, as a secret should be. The app's controls (Checkbox,
+Segmented, Input, Textarea) replace the native ones. The shared sections (search, connections, tools) carry
+third-level headings to sit under the groups. **Models:** a name never shows a hash ("Unnamed model", the hash in
+the tooltip, `displayName`); the licence is one chip on one line ("Licence unknown", "Apache-2.0", "… · not
+commercial"); the status has a readiness dot (`models/marks.tsx`, `ReadyDot`), the same dot as the bar's model button
+and the picker's rows (ready, downloading, needs a download, cannot run here, none chosen). Also: the web specs run
+at one fixed afternoon (`mock-api.ts`), so the home's greeting no longer changes the pictures with the hour.
+Checked: the UI (a new test for the summary's words), desktop and web tests; the web e2e specs; a real run in the
+window (`ui-audit.sh light u11-make`: the summary with the real models, the groups, a search for "token", Finding
+models switched off and on with "Saved.", the dark theme, the Models table and the picker; pictures `u11-*`). Not
+in this stage: the person's name (the engine keeps none to change); the web has no Settings page of this kind (its
+admin sets the service up).
+
+About 44 days of work in thirteen stages; U0 to U11 are done, U12 next, then the products in the order a
 new person meets them (Pictures, Video, Speech), with the Library before the home so the quick starts and the
 recent strips have one source.
 

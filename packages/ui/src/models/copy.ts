@@ -94,6 +94,8 @@ export function hostOf(source: string | null | undefined): string | null {
  */
 export function displayName(name: string): string {
   const raw = name.trim();
+  // a file another tool keeps by its hash ("llamacpp:9ba9cc2b…") has no name to read: say so, never the hash
+  if (/[0-9a-f]{24,}/i.test(raw)) return "Unnamed model";
   const looksLikeTag = /[:/]|\.gguf$|\.safetensors$/i.test(raw) || /^[a-z0-9]+[-_.]/.test(raw);
   if (!looksLikeTag || /\s/.test(raw)) return raw;
   const base = raw

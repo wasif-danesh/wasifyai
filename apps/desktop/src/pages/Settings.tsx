@@ -1,19 +1,66 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { Button, ConnectionsSettings, ExternalServers, SearchSettings } from "@wasifyai/ui";
-import { useEffect, useId, useState } from "react";
+import {
+  Button,
+  Checkbox,
+  ComputerCanDo,
+  ConnectionsSettings,
+  ExternalServers,
+  Input,
+  SearchSettings,
+  Segmented,
+  Textarea,
+  useTheme,
+} from "@wasifyai/ui";
+import { Search } from "lucide-react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { assistantApi, connectionsApi, discoveryApi, externalApi, hubApi } from "../api";
 import { engineRepair, engineRestart } from "../engine";
 import { ImageEngineCard, LanguageEngineCard, UpdateBanner } from "../parts";
 
-const INPUT =
-  "min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50";
+/** "Saved." beside a setting that saves as it changes, or what went wrong. */
+function SavedLine({ state }: { state: "idle" | "saving" | "saved" | string }) {
+  return (
+    <output aria-live="polite" className="text-sm">
+      {state === "saving" ? (
+        <span className="text-muted-foreground">Saving…</span>
+      ) : state === "saved" ? (
+        <span className="text-muted-foreground">Saved.</span>
+      ) : state !== "idle" ? (
+        <span className="text-destructive">{state}</span>
+      ) : null}
+    </output>
+  );
+}
 
-/** The automatic look for models other tools left here (ADR-0063): a switch and extra folders. */
+/** The light or dark look, or the system's. */
+function ThemeSetting() {
+  const { chosen, choose } = useTheme();
+  return (
+    <div className="grid gap-2">
+      <p className="m-0 text-muted-foreground text-sm">
+        How the app looks. "Like the computer" follows the system's light or dark setting.
+      </p>
+      <Segmented
+        label="Theme"
+        value={chosen ?? "system"}
+        onValueChange={(v) => choose(v === "light" || v === "dark" ? v : null)}
+        options={[
+          { value: "system", label: "Like the computer" },
+          { value: "light", label: "Light" },
+          { value: "dark", label: "Dark" },
+        ]}
+      />
+    </div>
+  );
+}
+
+/** The automatic look for models other tools left here (ADR-0063): a switch and extra folders, saved as they change. */
 function FindingModels() {
   const [enabled, setEnabled] = useState(true);
   const [folders, setFolders] = useState("");
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<string>("idle");
+  const foldersId = useId();
+  const kept = useRef<string>(""); // the folders as last saved, so leaving the box unchanged saves nothing
 
   useEffect(() => {
     discoveryApi
@@ -21,74 +68,66 @@ function FindingModels() {
       .then((s) => {
         setEnabled(s.enabled);
         setFolders(s.folders.join("\n"));
+        kept.current = s.folders.join("\n");
       })
       .catch(() => {});
   }, []);
 
-  async function save() {
-    setError(null);
-    setSaved(false);
+  async function save(nextEnabled: boolean, nextFolders: string) {
+    setState("saving");
     try {
       await discoveryApi.settings(
-        enabled,
-        folders
+        nextEnabled,
+        nextFolders
           .split("\n")
           .map((f) => f.trim())
           .filter(Boolean),
       );
-      setSaved(true);
+      kept.current = nextFolders;
+      setState("saved");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "That could not be saved.");
+      setState(e instanceof Error ? e.message : "That could not be saved.");
     }
   }
 
   return (
-    <section className="grid gap-3" aria-label="Finding models">
-      <h2 className="font-semibold text-lg">Finding models</h2>
-      <p className="text-muted-foreground text-sm">
+    <div className="grid gap-3">
+      <p className="m-0 text-muted-foreground text-sm">
         When the app starts it looks in the folders where tools such as Ollama, LM Studio, ComfyUI
         and the Hugging Face cache keep models, and lists what it finds in the Model hub. It reads
         only the start of each file, never copies or changes anything, and the list stays on this
         computer.
       </p>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(e) => {
-            setEnabled(e.target.checked);
-            setSaved(false);
-          }}
-        />
-        Look for models when the app starts
-      </label>
-      <label className="grid gap-1 text-sm">
-        <span>More folders to look in (one per line)</span>
-        <textarea
-          className={INPUT}
+      <Checkbox
+        checked={enabled}
+        onCheckedChange={(on) => {
+          setEnabled(on);
+          void save(on, folders);
+        }}
+        label="Look for models when the app starts"
+      />
+      <div className="grid gap-1 text-sm">
+        <label htmlFor={foldersId}>More folders to look in (one per line)</label>
+        <Textarea
+          id={foldersId}
+          className="min-h-20 font-mono"
           value={folders}
-          onChange={(e) => {
-            setFolders(e.target.value);
-            setSaved(false);
+          onChange={(e) => setFolders(e.target.value)}
+          onBlur={() => {
+            if (folders !== kept.current) void save(enabled, folders);
           }}
           placeholder="/Volumes/Models"
         />
-      </label>
-      <div className="flex items-center gap-3">
-        <Button type="button" variant="outline" onClick={() => void save()}>
-          Save
-        </Button>
-        {saved ? <span className="text-sm">Saved.</span> : null}
-        {error ? <span className="text-destructive text-sm">{error}</span> : null}
       </div>
-    </section>
+      <SavedLine state={state} />
+    </div>
   );
 }
 
 /** Whether the app may contact huggingface.co to list models (ADR-0064): off until the person agrees. */
 function HubSwitch() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<string>("idle");
   useEffect(() => {
     hubApi
       .state()
@@ -97,30 +136,28 @@ function HubSwitch() {
   }, []);
   if (enabled === null) return null;
   return (
-    <section className="grid gap-3" aria-label="Browsing models">
-      <h2 className="font-semibold text-lg">Browsing models</h2>
-      <p className="text-muted-foreground text-sm">
+    <div className="grid gap-3">
+      <p className="m-0 text-muted-foreground text-sm">
         Discover (in the Model hub) asks huggingface.co for lists of open models. It sends the words
         you search for and the names of the models you open, with no account. Nothing is requested
         while this is off.
       </p>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(e) => {
-            const next = e.target.checked;
-            setError(null);
-            hubApi
-              .setEnabled(next)
-              .then((r) => setEnabled(r.enabled))
-              .catch((err) => setError(err instanceof Error ? err.message : "That did not work."));
-          }}
-        />
-        Let the app contact Hugging Face to browse models
-      </label>
-      {error ? <p className="text-destructive text-sm">{error}</p> : null}
-    </section>
+      <Checkbox
+        checked={enabled}
+        onCheckedChange={(next) => {
+          setState("saving");
+          hubApi
+            .setEnabled(next)
+            .then((r) => {
+              setEnabled(r.enabled);
+              setState("saved");
+            })
+            .catch((err) => setState(err instanceof Error ? err.message : "That did not work."));
+        }}
+        label="Let the app contact Hugging Face to browse models"
+      />
+      <SavedLine state={state} />
+    </div>
   );
 }
 
@@ -152,9 +189,8 @@ function HubToken() {
     }
   }
   return (
-    <section className="grid gap-3" aria-label="Hugging Face token">
-      <h2 className="font-semibold text-lg">Hugging Face token</h2>
-      <p className="text-muted-foreground text-sm">
+    <div className="grid gap-3">
+      <p className="m-0 text-muted-foreground text-sm">
         Some models on Hugging Face are gated: their authors ask you to accept a licence and sign in
         before a download. Paste a token from your Hugging Face account to fetch them. It is kept in
         this computer's keychain, sent only to huggingface.co, and never shown again.
@@ -162,8 +198,9 @@ function HubToken() {
       <label htmlFor={id} className="text-sm">
         Token {state.set ? "(saved)" : "(not saved yet)"}
       </label>
+      {/* a secret is saved on its button, never as it is typed */}
       <div className="flex flex-wrap items-center gap-2">
-        <input
+        <Input
           id={id}
           type="password"
           autoComplete="off"
@@ -172,7 +209,7 @@ function HubToken() {
           disabled={!state.canSave}
           placeholder={state.set ? "Type a new token to replace it" : "Paste your token (hf_...)"}
           onChange={(e) => setValue(e.target.value)}
-          className="h-9 min-w-0 flex-1 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="min-w-0 flex-1"
         />
         <Button
           type="button"
@@ -197,60 +234,250 @@ function HubToken() {
         <p className="text-muted-foreground text-xs">Tokens cannot be saved on this computer.</p>
       ) : null}
       {error ? <p className="text-destructive text-sm">{error}</p> : null}
-    </section>
+    </div>
   );
 }
 
-export function SettingsPage() {
+/** What leaves this computer, in one place: each item names the setting that sends it. */
+function WhatLeaves() {
   return (
-    <div className="mx-auto grid w-full max-w-3xl gap-8 px-8 pt-16 pb-12">
-      <h1 className="font-semibold text-2xl">Settings</h1>
+    <ul className="m-0 grid list-disc gap-1.5 ps-5 text-muted-foreground text-sm">
+      <li>
+        What you make, your files and your chats stay on this computer. Models run here, not on a
+        service.
+      </li>
+      <li>
+        Searching the web (below, when you allow it) sends your question to the search service you
+        choose.
+      </li>
+      <li>
+        Browsing models (under Models) sends the words you search for to huggingface.co, while it is
+        on. A Hugging Face token is sent only there.
+      </li>
+      <li>Getting a model downloads it from the place its row names; nothing is uploaded.</li>
+      <li>Other apps (connections and tools) are reached only once you add them.</li>
+    </ul>
+  );
+}
 
-      <section className="grid gap-3" aria-label="Image generation">
-        <h2 className="font-semibold text-lg">Image generation</h2>
-        <ImageEngineCard />
-      </section>
+type Item = {
+  id: string;
+  title: string;
+  words: string;
+  body: ReactNode;
+  /** the shared section brings its own heading */
+  own?: boolean;
+};
+type Group = { id: string; title: string; items: Item[] };
 
-      <section className="grid gap-3" aria-label="Language models">
-        <h2 className="font-semibold text-lg">Language models</h2>
-        <LanguageEngineCard />
-      </section>
+const GROUPS: Group[] = [
+  {
+    id: "general",
+    title: "General",
+    items: [
+      { id: "theme", title: "Theme", words: "light dark look colour", body: <ThemeSetting /> },
+      {
+        id: "updates",
+        title: "Updates",
+        words: "version new release",
+        body: (
+          <div className="grid gap-2">
+            <UpdateBanner />
+            <p className="m-0 text-muted-foreground text-sm">
+              The app checks for a newer version when it starts, once an update feed is set up.
+            </p>
+          </div>
+        ),
+      },
+    ],
+  },
+  {
+    id: "models",
+    title: "Models",
+    items: [
+      {
+        id: "images",
+        title: "Image generation",
+        words: "engine comfyui pictures",
+        body: <ImageEngineCard />,
+      },
+      {
+        id: "language",
+        title: "Language models",
+        words: "engine llama chat",
+        body: <LanguageEngineCard />,
+      },
+      {
+        id: "finding",
+        title: "Finding models",
+        words: "folders ollama lm studio look scan",
+        body: <FindingModels />,
+      },
+      {
+        id: "browsing",
+        title: "Browsing models",
+        words: "hugging face discover",
+        body: <HubSwitch />,
+      },
+      {
+        id: "token",
+        title: "Hugging Face token",
+        words: "gated keychain account",
+        body: <HubToken />,
+      },
+    ],
+  },
+  {
+    id: "privacy",
+    title: "Privacy and sharing",
+    items: [
+      {
+        id: "leaves",
+        title: "What leaves this computer",
+        words: "privacy data sent network",
+        body: <WhatLeaves />,
+      },
+      {
+        id: "search",
+        title: "Searching the web",
+        words: "duckduckgo tavily web search consent",
+        body: <SearchSettings assistant={assistantApi} />,
+        own: true,
+      },
+    ],
+  },
+  {
+    id: "apps",
+    title: "Other apps",
+    items: [
+      {
+        id: "connections",
+        title: "Connections",
+        words: "mcp claude cursor other apps",
+        body: <ConnectionsSettings api={connectionsApi} />,
+        own: true,
+      },
+      {
+        id: "tools",
+        title: "Tools from other apps",
+        words: "mcp servers external",
+        body: <ExternalServers api={externalApi} />,
+        own: true,
+      },
+    ],
+  },
+  {
+    id: "advanced",
+    title: "Advanced",
+    items: [
+      {
+        id: "engine",
+        title: "The engine",
+        words: "restart repair process stuck",
+        body: (
+          <div className="grid gap-3">
+            <p className="m-0 text-muted-foreground text-sm">
+              The part of the app that makes things runs as its own process on this computer.
+              Restart it if something seems stuck; repair rebuilds its environment.
+            </p>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => void engineRestart()}>
+                Restart the engine
+              </Button>
+              <Button type="button" variant="outline" onClick={() => void engineRepair()}>
+                Repair the installation
+              </Button>
+            </div>
+          </div>
+        ),
+      },
+    ],
+  },
+];
 
-      <FindingModels />
+const matches = (q: string, ...texts: string[]) =>
+  q === "" || texts.some((t) => t.toLowerCase().includes(q));
 
-      <HubSwitch />
-
-      <HubToken />
-
-      <SearchSettings assistant={assistantApi} />
-
-      <ConnectionsSettings api={connectionsApi} />
-
-      <ExternalServers api={externalApi} />
-
-      <section className="grid gap-3" aria-label="Updates">
-        <h2 className="font-semibold text-lg">Updates</h2>
-        <UpdateBanner />
-        <p className="text-muted-foreground text-sm">
-          The app checks for a newer version when it starts, once an update feed is set up.
-        </p>
-      </section>
-
-      <section className="grid gap-3" aria-label="The engine">
-        <h2 className="font-semibold text-lg">The engine</h2>
-        <p className="text-muted-foreground text-sm">
-          The part of the app that makes things runs as its own process on this computer. Restart it
-          if something seems stuck; repair rebuilds its environment.
-        </p>
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={() => void engineRestart()}>
-            Restart the engine
-          </Button>
-          <Button type="button" variant="outline" onClick={() => void engineRepair()}>
-            Repair the installation
-          </Button>
+/**
+ * Settings (ADR-0093 U11): what this computer can do at the top, then five groups (General, Models, Privacy and
+ * sharing, Other apps, Advanced) with a list of them on the left and a search; each setting saves as it changes.
+ */
+export function SettingsPage() {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const shown = GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => matches(q, g.title, i.title, i.words)),
+  })).filter((g) => g.items.length > 0);
+  return (
+    <div className="mx-auto grid w-full max-w-5xl gap-8 px-8 pt-10 pb-12 md:grid-cols-[12rem_minmax(0,1fr)]">
+      <aside className="md:sticky md:top-6 md:self-start">
+        <div className="grid gap-3">
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute start-2.5 top-2.5 size-4 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              type="search"
+              aria-label="Search settings"
+              placeholder="Search settings"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="ps-8"
+            />
+          </div>
+          <nav aria-label="Settings groups">
+            <ul className="m-0 grid list-none gap-0.5 p-0">
+              {shown.map((g) => (
+                <li key={g.id}>
+                  <button
+                    type="button"
+                    className="w-full rounded-md px-2.5 py-1.5 text-start text-sm hover:bg-accent"
+                    onClick={() =>
+                      document
+                        .getElementById(`settings-${g.id}`)
+                        ?.scrollIntoView({ block: "start" })
+                    }
+                  >
+                    {g.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
         </div>
-      </section>
+      </aside>
+
+      <div className="grid min-w-0 gap-8">
+        <h1 className="m-0 font-semibold text-2xl">Settings</h1>
+        {q === "" ? <ComputerCanDo /> : null}
+        {shown.length === 0 ? (
+          <p className="m-0 text-muted-foreground">No setting matches “{query.trim()}”.</p>
+        ) : null}
+        {shown.map((g) => (
+          <section
+            key={g.id}
+            id={`settings-${g.id}`}
+            aria-labelledby={`settings-${g.id}-title`}
+            className="grid scroll-mt-6 gap-5"
+          >
+            <h2 id={`settings-${g.id}-title`} className="m-0 border-b pb-2 font-semibold text-lg">
+              {g.title}
+            </h2>
+            {g.items.map((i) =>
+              i.own ? (
+                <div key={i.id}>{i.body}</div>
+              ) : (
+                <section key={i.id} aria-label={i.title} className="grid gap-2">
+                  <h3 className="m-0 font-semibold text-base">{i.title}</h3>
+                  {i.body}
+                </section>
+              ),
+            )}
+          </section>
+        ))}
+      </div>
     </div>
   );
 }

@@ -5,8 +5,10 @@ import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Modal } from "../components/dialog";
 import { formatBytes } from "../notebook/format";
-import { COMMERCIAL, GetModelDialog } from "./ModelSelect";
+import { GetModelDialog } from "./ModelSelect";
 import { useChoicesChanged, useChoicesFor, useChoicesVersion } from "./context";
+import { displayName } from "./copy";
+import { LicenceChip, ReadyDot, readinessOf } from "./marks";
 import { GROUPS, type GroupId, type ModelChoice } from "./types";
 import { useModelChoices } from "./use-model-choices";
 
@@ -180,8 +182,8 @@ function GroupTable({ group, place }: { group: GroupId; place: Place }) {
                   <tr key={c.id} className="border-b last:border-b-0 align-top">
                     <th scope="row" className="px-4 py-3 text-start font-normal">
                       {/* a found file can be named by a long hash: it breaks rather than push the Use button off the edge */}
-                      <div className="font-medium [overflow-wrap:anywhere]">
-                        {c.title}
+                      <div className="font-medium [overflow-wrap:anywhere]" title={c.title}>
+                        {displayName(c.title)}
                         {c.tier === "recommended" ? (
                           <span className="ms-2 font-normal text-accent-foreground text-xs">
                             Recommended
@@ -193,16 +195,17 @@ function GroupTable({ group, place }: { group: GroupId; place: Place }) {
                       </div>
                     </th>
                     <td className="whitespace-nowrap px-4 py-3">{sizeText(c)}</td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      <div>{c.licence}</div>
-                      {c.commercial !== "yes" ? (
-                        <div className="mt-0.5 text-muted-foreground text-xs">
-                          {COMMERCIAL[c.commercial]}
-                        </div>
-                      ) : null}
+                    <td className="px-4 py-3">
+                      <LicenceChip choice={c} />
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
-                      <span className={cn("rounded-md px-2 py-0.5 text-xs", TONE[s.tone])}>
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs",
+                          TONE[s.tone],
+                        )}
+                      >
+                        <ReadyDot state={m.working?.id === c.id ? "getting" : readinessOf(c)} />
                         {s.text}
                       </span>
                     </td>

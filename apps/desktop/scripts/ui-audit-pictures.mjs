@@ -20,6 +20,9 @@
 //                                                                then Split into parts with it chosen
 //   apps/desktop/scripts/ui-audit.sh light library-make         the Library: a picture opened, Edit this, a real
 //                                                                edit made, then "Made from" and "Made from this"
+//   apps/desktop/scripts/ui-audit.sh light u11-make             Settings (what this computer can do, the groups, a
+//                                                                search, the theme, a setting saved as it changes),
+//                                                                the Models page and the picker with their dots
 //   apps/desktop/scripts/ui-audit.sh light u10-make             Teach's front door, a real notebook report as a card,
 //                                                                a real Motion graphics video on the frame, and a real
 //                                                                3D picture check (its cut-out) on the stage
@@ -452,6 +455,40 @@ for (const scheme of ["light", "dark"]) {
         .waitFor({ timeout: 30_000 });
       await page.waitForTimeout(800);
       await shot(page, "library-made-from-this");
+    });
+  }
+  if (scheme === "light" && names.has("u11-make")) {
+    await attempt("u11-settings", async () => {
+      await open(page, "/settings");
+      await page.getByRole("heading", { name: "What this computer can do" }).waitFor();
+      await page.waitForTimeout(12_000); // each job reads its list, again once the running tools are found
+      await shot(page, "u11-settings");
+      await shot(page, "u11-settings-tall", 2600);
+      await page.getByRole("searchbox", { name: "Search settings" }).fill("token");
+      await page.waitForTimeout(400);
+      await shot(page, "u11-settings-search");
+      await page.getByRole("searchbox", { name: "Search settings" }).fill("");
+      // saved as it changes: the switch off and on again, so the computer's setting is as it was
+      const look = page.getByRole("checkbox", { name: "Look for models when the app starts" });
+      await look.click();
+      await page.getByText("Saved.").first().waitFor({ timeout: 15_000 });
+      await look.click();
+      await page.getByText("Saved.").first().waitFor({ timeout: 15_000 });
+      await page.getByRole("radio", { name: "Dark" }).click();
+      await page.waitForTimeout(600);
+      await shot(page, "u11-settings-dark");
+      await page.getByRole("radio", { name: "Like the computer" }).click();
+    });
+    await attempt("u11-models", async () => {
+      await open(page, "/models");
+      await page.getByRole("table").waitFor();
+      await page.waitForTimeout(1000);
+      await shot(page, "u11-models");
+      await open(page, "/images/create");
+      await page.locator('button[aria-haspopup="dialog"]').first().click();
+      await page.waitForTimeout(1200);
+      await shot(page, "u11-picker");
+      await page.keyboard.press("Escape");
     });
   }
   if (scheme === "light" && names.has("u10-make")) {

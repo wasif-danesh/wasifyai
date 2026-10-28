@@ -171,6 +171,9 @@ export async function mockApi(
   page: Page,
   opts: { unreadableSources?: boolean } = {},
 ): Promise<void> {
+  // one afternoon for every spec, so the home's greeting and words such as "today" do not change with the hour the
+  // specs run at; timers still run
+  await page.clock.setFixedTime(new Date(2026, 9, 28, 14, 0));
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^\/api/, "");

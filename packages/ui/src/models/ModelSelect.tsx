@@ -9,6 +9,7 @@ import { Bar } from "../components/progress-bar";
 import { formatBytes } from "../notebook/format";
 import { useChoicesChanged } from "./context";
 import { displayName } from "./copy";
+import { ReadyDot, readinessOf } from "./marks";
 import { type ChoicesApi, type GroupId, type ModelChoice, groupOf } from "./types";
 import { useModelChoices } from "./use-model-choices";
 
@@ -169,6 +170,7 @@ export function ModelSelect({
         aria-controls={`${id}-panel`}
         onClick={() => setOpen((o) => !o)}
       >
+        <ReadyDot state={getting ? "getting" : chosen ? "ready" : "none"} />
         <span className="min-w-0 max-w-[16rem] truncate">{label}</span>
         {getting ? (
           <span className="text-muted-foreground text-xs">
@@ -277,9 +279,7 @@ export function ModelSelect({
                         c.state === "ready" ? "text-ok" : "text-muted-foreground",
                       )}
                     >
-                      {c.state === "needs_download" ? (
-                        <Download className="size-3" aria-hidden="true" />
-                      ) : null}
+                      <ReadyDot state={readinessOf(c)} />
                       {stateLine(c)}
                       {c.fit === "tight" ? " · may be slow here" : ""}
                     </span>

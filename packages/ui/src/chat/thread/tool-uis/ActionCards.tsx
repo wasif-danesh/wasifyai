@@ -1,10 +1,11 @@
 "use client";
-// The cards of the meta-tools (ADR-0071 decision 3): what a proposed action came to, the guides how_to found, and the
-// button open_screen offers. Plain text only: everything shown came from the assistant or the app's own files.
 import type { ChatPart } from "@wasifyai/client";
 import { BookOpen, ExternalLink, Wrench } from "lucide-react";
 import { Button } from "../../../components/button";
 import { Spinner } from "../../../components/spinner";
+// The cards of the meta-tools (ADR-0071 decision 3): what a proposed action came to, the guides how_to found, and the
+// button open_screen offers. Plain text only: everything shown came from the assistant or the app's own files.
+import { JobProgress } from "./JobProgress";
 
 type Tool = Extract<ChatPart, { type: "tool" }>;
 
@@ -39,18 +40,12 @@ export function ActionResultCard({
   onOpenScreen?: (screenId: string) => void;
 }) {
   if (tool.status === "running") {
-    const pct = typeof tool.progress === "number" ? Math.round(tool.progress * 100) : null;
     return (
-      <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
-        <Spinner />
-        <span>
-          {tool.jobStatus === "queued"
-            ? "Waiting for a turn"
-            : pct !== null && pct > 0
-              ? `Working on it, ${pct}%`
-              : "Working on it"}
-        </span>
-      </output>
+      <JobProgress
+        making="Working on it"
+        progress={tool.progress}
+        queued={tool.jobStatus === "queued"}
+      />
     );
   }
   const out = tool.output ?? {};

@@ -3,6 +3,7 @@
 import {
   type AssistantApi,
   type ChatOptions,
+  type CreationsApi,
   type DictationReadiness,
   type ExternalApi,
   type ImagesApi,
@@ -15,8 +16,11 @@ import {
 import { Pencil, Trash2 } from "lucide-react";
 import { type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog, NameDialog } from "../components/dialog";
+import type { Entry as CreationEntry } from "../creations/model";
 import { useChoicesVersion } from "../models/context";
+import type { TrayJob } from "../shell/job-tray";
 import type { ChatScreenProps } from "./ChatScreen";
+import { HomeStart, type QuickStartId } from "./HomeStart";
 import type { TrackLookup } from "./ToolCard";
 import type { ComposerOptionsAvailable } from "./composer-options";
 import { startRecording } from "./dictation/recorder";
@@ -76,6 +80,16 @@ export type AssistantHomeProps = {
   getSpeechModel?: (modelId: string, onProgress: (fraction: number) => void) => Promise<void>;
   /** the outside servers the person connected (ADR-0070): the box offers their resources and prompts */
   external?: ExternalApi;
+  /** A quick start under the box (ADR-0093 U9): open that tool, with the box's words when there are some. */
+  onQuickStart?: (id: QuickStartId, text: string) => void;
+  /** which quick starts this app offers (all of them when not said) */
+  quickStarts?: QuickStartId[];
+  /** what runs now, for the line under the quick starts (the tray's own list) */
+  running?: () => Promise<TrayJob[]>;
+  /** the Library, for the last things made under the quick starts */
+  creations?: CreationsApi;
+  onOpenEntry?: (entry: CreationEntry) => void;
+  onOpenLibrary?: () => void;
 };
 
 /** The assistant is the home screen (ADR-0057): a greeting and "Ask anything", then the conversation, with
@@ -100,6 +114,12 @@ export function AssistantHome({
   voice,
   getSpeechModel,
   external,
+  onQuickStart,
+  quickStarts,
+  running,
+  creations,
+  onOpenEntry,
+  onOpenLibrary,
 }: AssistantHomeProps) {
   const [title, setTitle] = useState("");
   // what the box can offer with the model in use (a Thinking switch only for a model that can think, a Search switch
@@ -373,6 +393,17 @@ export function AssistantHome({
     },
     hero,
     examples: conversationId ? [] : EXAMPLES,
+    start:
+      conversationId || !(onQuickStart || running || creations) ? undefined : (
+        <HomeStart
+          offered={quickStarts}
+          onStart={onQuickStart}
+          running={running}
+          creations={creations}
+          onOpenEntry={onOpenEntry}
+          onOpenLibrary={onOpenLibrary}
+        />
+      ),
     notices,
     model: modelPicker,
     blockedReason,

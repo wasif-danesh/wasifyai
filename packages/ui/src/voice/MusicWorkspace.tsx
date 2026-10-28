@@ -27,6 +27,7 @@ import { Slider } from "../components/slider";
 import { Spinner } from "../components/spinner";
 import { Stage, type StageState } from "../components/stage";
 import { Textarea } from "../components/textarea";
+import { takeDraft } from "../draft";
 import { fileNameFor, savedText, useSaveCopy } from "../save";
 import { appearsHere, makingLabel } from "../words";
 import { EditTrack } from "./EditTrack";
@@ -129,7 +130,8 @@ export function MusicWorkspace({
   const { models, runtime, error, loading, reload } = useVoiceModels(api, "music");
   const [modelId, setModelId] = useState<string | null>(initialModel ?? null);
   const [modeChoice, setModeChoice] = useState<MusicMode | null>(null);
-  const [description, setDescription] = useState("");
+  // the words typed in the chat box before a quick start (ADR-0093 U9)
+  const [description, setDescription] = useState(() => takeDraft().slice(0, 500));
   const [lyrics, setLyrics] = useState(initialLyrics ?? "");
   const [instrumental, setInstrumental] = useState(false);
   const [seconds, setSeconds] = useState<number | null>(null);
@@ -484,7 +486,7 @@ export function MusicWorkspace({
     cover: (
       <span className="grid size-full place-items-center gap-0.5 bg-muted p-1 text-center">
         <Music className="size-4 text-muted-foreground" aria-hidden="true" />
-        <span className="line-clamp-2 text-[0.625rem] leading-tight">{t.title}</span>
+        <span className="line-clamp-2 text-xs leading-tight">{t.title}</span>
       </span>
     ),
     label: `Open: ${t.title}`,

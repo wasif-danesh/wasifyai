@@ -30,6 +30,7 @@ import { ArrowLeft, ArrowRight, PanelLeft } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { client, connectionsApi, creationsApi, externalApi, voiceApi } from "./api";
+import { runningJobs } from "./jobs";
 import { resolveItem, titleFor } from "./menu";
 import { CreatePage } from "./pages/Create";
 import { CreationsPage, navFor, toolFor } from "./pages/Creations";
@@ -74,39 +75,6 @@ function Tool({
       {children}
     </button>
   );
-}
-
-/**
- * The running jobs of this window's engine, for the tray: what each is doing, and Stop where it can be. A clip
- * made on the Video screen is a run, not an action, so the clips being made are listed too, by their words.
- */
-async function runningJobs(): Promise<TrayJob[]> {
-  const [{ jobs }, clips] = await Promise.all([
-    connectionsApi.jobs(),
-    videos
-      .list({ limit: 5, status: "working" })
-      .then((p) => p.videos)
-      .catch(() => []),
-  ]);
-  // a clip an agent asked for is already listed as its action
-  const asAction = jobs.some((j) => j.action_id.startsWith("video."));
-  const making: TrayJob[] = asAction
-    ? []
-    : clips.map((v) => ({ id: v.id, label: `Making your video: ${v.prompt}` }));
-  return [
-    ...making,
-    ...jobs.map((j) => ({
-      id: j.job_id,
-      label: jobLabel(j.action_id),
-      from: j.from,
-      seconds: j.seconds,
-      onStop: j.cancellable
-        ? async () => {
-            await connectionsApi.cancelJob(j.job_id);
-          }
-        : undefined,
-    })),
-  ];
 }
 
 function readCollapsed(): boolean {
@@ -161,11 +129,14 @@ export function Shell() {
     id?: string;
   } | null>(null);
   const [extendSource, setExtendSource] = useState<VideoSummary | null>(null);
+  // an entry the home's Recent opens in the Library
+  const [libraryOpen, setLibraryOpen] = useState<{ kind: string; id: string } | null>(null);
   useEffect(() => {
     if (route !== "create") setAgain(null);
     if (route !== "edit") setEditSource(null);
     if (route !== "animate") setAnimateSource(null);
     if (route !== "extend") setExtendSource(null);
+    if (route !== "creations") setLibraryOpen(null);
   }, [route]);
   // the Library's detail view hands an entry to a tool: the same hand-offs the make screens use (ADR-0093, U8)
   const handOff = useCallback(
@@ -299,7 +270,16 @@ export function Shell() {
           <div className="relative flex min-w-0 flex-1 flex-col">
             <main id="main" className="min-h-0 flex-1 overflow-auto">
               {route === "home" ? (
-                <HomePage key={chatKey} go={go} conversationId={conversationId} onAdopt={adopt} />
+                <HomePage
+                  key={chatKey}
+                  go={go}
+                  conversationId={conversationId}
+                  onAdopt={adopt}
+                  onOpenEntry={(entry) => {
+                    setLibraryOpen({ kind: entry.kind, id: entry.id });
+                    go("creations");
+                  }}
+                />
               ) : null}
               {route === "create" ? (
                 <CreatePage
@@ -329,7 +309,9 @@ export function Shell() {
               {route === "inpaint" ? (
                 <CreatePage mode="inpaint" go={go} onAnimateThis={animateThis} />
               ) : null}
-              {route === "creations" ? <CreationsPage go={go} handOff={handOff} /> : null}
+              {route === "creations" ? (
+                <CreationsPage go={go} handOff={handOff} open={libraryOpen} />
+              ) : null}
               {/* the routes that were "Your images", "Your videos" and "Your music" (ADR-0093, U8) */}
               {route === "library" ? (
                 <CreationsPage go={go} handOff={handOff} filter="images" />

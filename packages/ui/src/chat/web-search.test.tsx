@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AssistantHome } from "./AssistantHome";
 import { SearchSettings } from "./SearchSettings";
 import { ToolCard } from "./ToolCard";
+import { chooseOption, moreOptions } from "./options-testing";
 
 const images = {} as ImagesApi;
 
@@ -111,6 +112,7 @@ describe("the Search button", () => {
     await screen.findByRole("heading", { level: 1 });
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByRole("button", { name: /^Search/ })).toBeNull();
+    expect((await moreOptions()).some((t) => t.startsWith("Search"))).toBe(false);
   });
 
   it("asks first, names the service, and sends nothing about search until allowed", async () => {
@@ -118,10 +120,11 @@ describe("the Search button", () => {
     const assistant = assistantWith({ thinking: false, search: SEARCH });
     const user = userEvent.setup();
     home(assistant, inputs);
-    const button = await screen.findByRole("button", { name: /^Search/ });
-    expect(button).toHaveAttribute("aria-pressed", "false");
-
-    await user.click(button);
+    // off, Search waits in the "+" menu (ADR-0093 U9)
+    await waitFor(async () =>
+      expect((await moreOptions()).some((t) => t.startsWith("Search"))).toBe(true),
+    );
+    await chooseOption(/^Search/);
     const card = screen.getByRole("region", { name: "Allow the assistant to search the web?" });
     expect(card).toHaveTextContent("sends your question to DuckDuckGo");
     expect(assistant.updateSearch).not.toHaveBeenCalled();
@@ -141,7 +144,7 @@ describe("the Search button", () => {
     );
     const user = userEvent.setup();
     home(assistant, inputs);
-    await user.click(await screen.findByRole("button", { name: /^Search/ }));
+    await chooseOption(/^Search/);
     await user.click(screen.getByRole("button", { name: "Allow search" }));
     expect(assistant.updateSearch).toHaveBeenCalledWith({ consent: true });
     await waitFor(() =>
@@ -167,13 +170,10 @@ describe("the Search button", () => {
     );
     const user = userEvent.setup();
     home(assistant);
-    await user.click(await screen.findByRole("button", { name: /^Search/ }));
+    await chooseOption(/^Search/);
     await user.click(screen.getByRole("button", { name: "Allow search" }));
     expect(await screen.findByText("Settings could not be written.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Search/ })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
+    expect(screen.queryByRole("button", { name: /^Search/ })).toBeNull(); // still off: no pill
   });
 
   it("points to Settings when the chosen service needs a key", async () => {
@@ -193,7 +193,7 @@ describe("the Search button", () => {
       [],
       { onOpenSettings },
     );
-    await user.click(await screen.findByRole("button", { name: /^Search/ }));
+    await chooseOption(/^Search/);
     const card = screen.getByRole("region", { name: "Search needs your Tavily key" });
     await user.click(within(card).getByRole("button", { name: "Open Settings" }));
     expect(onOpenSettings).toHaveBeenCalled();

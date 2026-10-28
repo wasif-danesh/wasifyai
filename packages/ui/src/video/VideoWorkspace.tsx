@@ -21,6 +21,7 @@ import { PictureInput } from "../components/picture-input";
 import { type RecentItem, RecentStrip } from "../components/recent-strip";
 import { Spinner } from "../components/spinner";
 import { Stage, type StageState } from "../components/stage";
+import { takeDraft } from "../draft";
 import { usePicture } from "../hooks/use-picture";
 import { usePictureEvents } from "../hooks/use-picture-events";
 import { VIDEO_PRODUCT, useVideoFlow } from "../hooks/use-video-flow";
@@ -224,9 +225,10 @@ export function VideoWorkspace({
   // the picture of the library it animates, when it was handed over from there ("Animate this")
   const fromLibrary = useRef<string | null>(null);
   const [prompt, setPrompt] = useState(
-    sourceVideo && sourceVideo.mode !== "import"
-      ? sourceVideo.prompt.slice(0, MAX_VIDEO_PROMPT)
-      : "",
+    () =>
+      sourceVideo && sourceVideo.mode !== "import"
+        ? sourceVideo.prompt.slice(0, MAX_VIDEO_PROMPT)
+        : takeDraft().slice(0, MAX_VIDEO_PROMPT), // the words typed in the chat box before a quick start
   );
   const [edited, setEdited] = useState(false); // Extend: the person wrote their own words
   const [shape, setShape] = useState("landscape");

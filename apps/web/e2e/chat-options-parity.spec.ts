@@ -26,11 +26,17 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
-test("the box has Attach, Search, Thinking and Mic @layout", async ({ page }) => {
+test("the box has Attach and Mic, with Search and Thinking in its + menu @layout", async ({
+  page,
+}) => {
   await page.goto("/");
   await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
-  for (const name of [/^Attach/, /^Search\./, /^Thinking\./, /^Mic/]) {
+  for (const name of [/^Attach/, /^Mic/]) {
     await expect(page.getByRole("button", { name }).first(), String(name)).toBeVisible();
+  }
+  await page.getByRole("button", { name: /^More options/ }).click();
+  for (const name of [/^Search/, /^Thinking/]) {
+    await expect(page.getByRole("menuitem", { name }), String(name)).toBeVisible();
   }
 });
 
@@ -38,7 +44,8 @@ test("Search asks the person before anything is sent, and names the service @lay
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: /^Search\./ }).click();
+  await page.getByRole("button", { name: /^More options/ }).click();
+  await page.getByRole("menuitem", { name: /^Search/ }).click();
   await expect(
     page.getByText(/sends your question to DuckDuckGo, from this service/),
   ).toBeVisible();

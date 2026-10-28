@@ -28,6 +28,8 @@ export type ChatScreenProps = {
   hero?: ReactNode;
   /** Suggestions under the box while the chat is empty. */
   examples?: string[];
+  /** Under the box while the chat is empty, in place of the suggestions (the home's quick starts, Running now, Recent). */
+  start?: ReactNode;
   /** Setup notices (no model chosen yet, and so on). */
   notices?: ReactNode;
   /** Why sending is not possible right now. The box stays usable for typing. */
@@ -62,6 +64,7 @@ export function ChatScreen({
   onConversation,
   hero,
   examples,
+  start,
   notices,
   blockedReason,
   onOpenCreation,
@@ -131,6 +134,7 @@ export function ChatScreen({
             empty={state.chat.messages.length === 0 && state.chat.phase === "idle"}
             hero={hero}
             examples={examples}
+            start={start}
             notices={
               options.notice ? (
                 <>

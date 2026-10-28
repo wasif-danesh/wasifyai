@@ -254,7 +254,7 @@ export function ConfirmActionCard({
             }}
             disabled={!canRun}
           >
-            Run
+            {a.effect === "make" ? "Make it" : a.effect === "destroy" ? "Delete it" : "Do it"}
           </Button>
           <Button
             type="button"

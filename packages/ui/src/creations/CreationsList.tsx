@@ -11,7 +11,7 @@ import type {
   VideoPage,
 } from "@wasifyai/client";
 import { AudioLines, CheckSquare, LayoutGrid, Save, Table2, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Checkbox } from "../components/checkbox";
@@ -77,6 +77,7 @@ export function CreationsList({
   lipsyncs = [],
   others,
   initialFilter = "all",
+  initialOpen,
 }: {
   api: CreationsApi;
   nav: CreationsNav;
@@ -90,6 +91,8 @@ export function CreationsList({
   /** 3D models, motion graphics, notebooks and taught models */
   others?: Others;
   initialFilter?: Filter;
+  /** an entry to open in the detail view once, as the Library opens */
+  initialOpen?: { kind: string; id: string } | null;
 }) {
   const [images, setImages] = useState(imagePage?.images ?? []);
   const [videos, setVideos] = useState(videoPage?.videos ?? []);
@@ -267,6 +270,17 @@ export function CreationsList({
   }
 
   const open = useCallback((entry: Entry) => setOpened(entry), []);
+  // the home's Recent opens one entry here
+  const openedFirst = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once, when the entries are there
+  useEffect(() => {
+    if (openedFirst.current || !initialOpen) return;
+    const found = everything.find((e) => e.kind === initialOpen.kind && e.id === initialOpen.id);
+    if (found) {
+      openedFirst.current = true;
+      setOpened(found);
+    }
+  }, [everything]);
   const toggle = (entry: Entry) =>
     setSelected((cur) => {
       const next = new Set(cur);

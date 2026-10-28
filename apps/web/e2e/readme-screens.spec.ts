@@ -172,6 +172,7 @@ test("a card that asks first", async ({ page }) => {
           run_id: RUN,
           title: "Make a picture",
           summary: "Make a picture",
+          effect: "make",
           params: { prompt: "a red fox in snow", size: "square" },
         },
       ]),
@@ -217,7 +218,7 @@ test("files in the box", async ({ page }) => {
 });
 
 for (const [name, path, heading] of [
-  ["images", "/image", /create images/i],
+  ["images", "/image", /make a picture/i],
   ["video", "/video", /make a video/i],
   ["voice", "/voice/speak", /text to speech/i],
   ["music", "/voice/music", /create music/i],

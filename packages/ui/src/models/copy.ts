@@ -86,3 +86,35 @@ export function hostOf(source: string | null | undefined): string | null {
     return null;
   }
 }
+
+/**
+ * A model's name as a person reads it (the UI plan's principle 5: never a raw tag). A tag from a local server
+ * ("qwen3.8:27b-mlx") or a file name ("Qwen3-8B-Q4_K_M.gguf") becomes "Qwen3.8 27B (MLX)" or "Qwen3 8B (Q4_K_M)"; a
+ * name that is already a title is left as it is.
+ */
+export function displayName(name: string): string {
+  const raw = name.trim();
+  const looksLikeTag = /[:/]|\.gguf$|\.safetensors$/i.test(raw) || /^[a-z0-9]+[-_.]/.test(raw);
+  if (!looksLikeTag || /\s/.test(raw)) return raw;
+  const base = raw
+    .split("/")
+    .pop()
+    ?.replace(/\.(gguf|safetensors)$/i, "") as string;
+  const [family, variant = ""] = base.includes(":") ? base.split(":", 2) : [base, ""];
+  // a quantization (Q4_K_M) is one piece; anything else splits on - and _
+  const parts = `${family}${variant ? `-${variant}` : ""}`
+    .split("-")
+    .flatMap((p) => (/^q\d/i.test(p) ? [p] : p.split("_")))
+    .filter(Boolean);
+  const words: string[] = [];
+  const extra: string[] = [];
+  for (const p of parts) {
+    if (/^[ae]?\d+(\.\d+)?[bm]$/i.test(p))
+      words.push(p.toUpperCase()); // 8B, E4B (Gemma), A3B
+    else if (/^(q\d.*|fp\d+|bf16|int\d|mlx|gguf|it|instruct|qat|latest|awq|gptq)$/i.test(p))
+      extra.push(p.toUpperCase());
+    else words.push(p.charAt(0).toUpperCase() + p.slice(1));
+  }
+  const tail = extra.filter((e) => e !== "LATEST" && e !== "GGUF").join(" ");
+  return `${words.join(" ")}${tail ? ` (${tail})` : ""}`;
+}

@@ -71,12 +71,21 @@ export function CreationsPage({
   go,
   handOff,
   filter = "all",
+  open = null,
 }: {
   go: (r: Route) => void;
   handOff?: HandOff;
   filter?: CreationFilter;
+  /** an entry to open as the Library opens (the home's Recent) */
+  open?: { kind: string; id: string } | null;
 }) {
   return (
-    <MyCreations key={filter} api={creationsApi} nav={navFor(go, handOff)} initialFilter={filter} />
+    <MyCreations
+      key={`${filter}:${open?.id ?? ""}`}
+      api={creationsApi}
+      nav={navFor(go, handOff)}
+      initialFilter={filter}
+      initialOpen={open}
+    />
   );
 }

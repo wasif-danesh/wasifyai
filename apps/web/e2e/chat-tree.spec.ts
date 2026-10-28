@@ -131,6 +131,7 @@ const CARD = [
       run_id: RUN,
       title: "Make a picture",
       summary: "Make a picture",
+      effect: "make",
       params: { prompt: "a fox in the snow", size: "square" },
     },
   ]),
@@ -164,7 +165,7 @@ test("a parked card is shown after a reload, answers the run and the turn goes o
   await expect(card).toBeVisible();
   await expect(card).toContainText("a fox in the snow");
   await noSideScroll(page);
-  await card.getByRole("button", { name: "Run" }).click();
+  await card.getByRole("button", { name: "Make it" }).click();
   await expect(page.getByText("I could not make it.", { exact: true })).toBeVisible();
   expect(resumed).toEqual([{ value: { approved: true } }]);
   await expect(page.getByText("Let me draw it.", { exact: true })).toHaveCount(1); // the same message

@@ -408,7 +408,7 @@ export function AudiobookWorkspace({
     cover: (
       <span className="grid size-full place-items-center gap-0.5 bg-muted p-1 text-center">
         <Headphones className="size-4 text-muted-foreground" aria-hidden="true" />
-        <span className="line-clamp-2 text-[0.625rem] leading-tight">{t.title}</span>
+        <span className="line-clamp-2 text-xs leading-tight">{t.title}</span>
       </span>
     ),
     label: `Open: ${t.title}`,

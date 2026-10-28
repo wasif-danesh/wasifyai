@@ -5,6 +5,7 @@ import { BookOpen, FileText, Globe, ImageIcon, Music, Search } from "lucide-reac
 import { useEffect, useState } from "react";
 import { Button } from "../components/button";
 import { Spinner } from "../components/spinner";
+import { JobProgress } from "./thread/tool-uis/JobProgress";
 
 type Tool = Extract<ChatPart, { type: "tool" }>;
 
@@ -112,21 +113,13 @@ function MusicPlayer({
 /** A picture being made, then shown with a way to open it. */
 export function ImageToolCard({ tool, images, tracks, onOpenCreation }: ToolCardProps) {
   if (tool.status === "running") {
-    const queued = tool.jobStatus === "queued";
-    const pct = typeof tool.progress === "number" ? Math.round(tool.progress * 100) : null;
     return (
-      <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
-        <Spinner />
-        <span>
-          {queued
-            ? tool.queuePosition && tool.queuePosition > 1
-              ? `Waiting for a turn, place ${tool.queuePosition}`
-              : "Waiting for a turn"
-            : pct !== null && pct > 0
-              ? `Making your picture, ${pct}%`
-              : "Making your picture"}
-        </span>
-      </output>
+      <JobProgress
+        making="Making your picture"
+        progress={tool.progress}
+        queued={tool.jobStatus === "queued"}
+        place={tool.queuePosition}
+      />
     );
   }
   if (tool.status === "ok" && typeof tool.output?.image_id === "string") {

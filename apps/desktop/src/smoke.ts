@@ -102,16 +102,25 @@ export async function runSmoke(): Promise<void> {
         button.click();
         return;
       }
-      // the menu opens on a press (pointerdown), as Radix has it; a bare click() opens nothing
-      (await until("More", buttonNamed("More"))).dispatchEvent(
-        new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" }),
-      );
-      const item = await until(name, () =>
+      // the menu opens on a press (pointerdown), as Radix has it; a bare click() opens nothing. A press while
+      // the last menu is still closing toggles it shut, so wait for it to go and press again if none opens
+      const named = () =>
         [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
           (el) => el.textContent?.trim() === name,
-        ),
-      );
-      item.click();
+        );
+      for (let press = 0; ; press++) {
+        await until("the last menu to close", () => !document.querySelector('[role="menu"]'));
+        (await until("More", buttonNamed("More"))).dispatchEvent(
+          new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" }),
+        );
+        try {
+          await until("the More menu", () => document.querySelector('[role="menu"]'), 3000);
+          break;
+        } catch (e) {
+          if (press >= 2) throw e;
+        }
+      }
+      (await until(name, named)).click();
     };
     const readSeed = async () => {
       if (!document.querySelector("dl")) await act("Recipe");

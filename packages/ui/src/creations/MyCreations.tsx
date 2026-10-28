@@ -18,11 +18,14 @@ export function MyCreations({
   api,
   nav,
   initialFilter = "all",
+  initialOpen,
   className,
 }: {
   api: CreationsApi;
   nav: CreationsNav;
   initialFilter?: Filter;
+  /** open this entry's detail view once the Library has it (the home's Recent) */
+  initialOpen?: { kind: string; id: string } | null;
   className?: string;
 }) {
   const [recent, setRecent] = useState<Recent | null>(null);
@@ -145,6 +148,7 @@ export function MyCreations({
             lipsyncs={recent.lipsyncs}
             others={recent.others}
             initialFilter={initialFilter}
+            initialOpen={round === 0 ? initialOpen : null}
           />
         </>
       )}

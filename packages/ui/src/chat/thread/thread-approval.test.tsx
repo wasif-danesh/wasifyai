@@ -59,6 +59,7 @@ const waiting: Conversation = {
           run_id: "r9",
           title: "Make a picture",
           summary: "Make a picture",
+          effect: "make",
           params: { prompt: "a fox in <b>snow</b>" },
         },
       ],
@@ -157,7 +158,7 @@ describe("the confirm card", () => {
     const card = await screen.findByRole("region", { name: "Make a picture" });
     expect(card).toHaveTextContent("a fox in <b>snow</b>"); // shown as text, never as markup
     expect(card.querySelector("b")).toBeNull();
-    expect(screen.getByRole("button", { name: "Run" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Make it" })).toBeEnabled();
   });
 
   it("a click on Run answers the run and the turn goes on in the same message", async () => {
@@ -166,10 +167,10 @@ describe("the confirm card", () => {
     render(
       <ChatScreen runs={runs(resumed)} assistant={api()} images={images} conversationId="c1" />,
     );
-    await user.click(await screen.findByRole("button", { name: "Run" }));
+    await user.click(await screen.findByRole("button", { name: "Make it" }));
     await waitFor(() => expect(resumed).toEqual([{ approved: true }]));
     expect(await screen.findByText("Here is your fox.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Run" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Make it" })).toBeNull();
     expect(screen.getByText("Let me draw it.")).toBeInTheDocument(); // one message, not two
   });
 
@@ -186,7 +187,7 @@ describe("the confirm card", () => {
     await user.clear(prompt);
     await user.type(prompt, "a red fox");
     await user.selectOptions(screen.getByRole("combobox", { name: "Size" }), "wide");
-    await user.click(screen.getByRole("button", { name: "Run" }));
+    await user.click(screen.getByRole("button", { name: "Make it" }));
     await waitFor(() =>
       expect(resumed).toEqual([{ approved: true, params: { prompt: "a red fox", size: "wide" } }]),
     );
@@ -227,16 +228,16 @@ describe("the confirm card", () => {
     expect(card).toHaveTextContent("Takes about 12 s on this computer (your last 3 runs).");
     expect(card).toHaveTextContent("Pauses the chat model while it runs.");
     await user.click(screen.getByRole("checkbox", { name: /don't ask again in this chat/i }));
-    await user.click(screen.getByRole("button", { name: "Run" }));
+    await user.click(screen.getByRole("button", { name: "Make it" }));
     await waitFor(() => expect(resumed).toEqual([{ approved: true }]));
     await screen.findByText("Here is your fox.");
     await user.type(screen.getByRole("textbox", { name: "Message" }), "another{Enter}");
     await waitFor(() => expect(started).toHaveLength(1));
     expect(started[0]).toMatchObject({ text: "another", approval: "auto" }); // this chat no longer asks
-    expect(screen.getByRole("button", { name: /^Doesn't ask/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Just do it/ })).toBeInTheDocument();
   });
 
-  it("Run is held back until a required field is filled and the consent is ticked", async () => {
+  it("Make it is held back until a required field is filled and the consent is ticked", async () => {
     const consent: Conversation = {
       ...withFields,
       messages: withFields.messages.map((m) =>
@@ -257,7 +258,7 @@ describe("the confirm card", () => {
     const a = api();
     a.get = vi.fn(async () => consent);
     render(<ChatScreen runs={runs()} assistant={a} images={images} conversationId="c1" />);
-    const run = await screen.findByRole("button", { name: "Run" });
+    const run = await screen.findByRole("button", { name: "Make it" });
     expect(run).toBeDisabled();
     await user.click(screen.getByRole("checkbox", { name: /right to use this voice/i }));
     expect(run).toBeEnabled();
@@ -287,7 +288,7 @@ describe("the confirm card", () => {
         conversationId="c1"
       />,
     );
-    await screen.findByRole("button", { name: "Run" });
+    await screen.findByRole("button", { name: "Make it" });
     await user.type(screen.getByRole("textbox", { name: "Message" }), "never mind{Enter}");
     await waitFor(() => expect(started).toHaveLength(1));
     expect(resumed).toEqual([{ approved: false, expired: true }]);

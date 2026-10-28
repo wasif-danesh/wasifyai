@@ -48,7 +48,8 @@ small card per product (Picture, Video, Speech, Song, Notebook, 3D, Motion graph
 and the model's readiness, opening the tool with the box's text carried over when there is one. Below them,
 **Running now** (when anything runs) and **Recent** (the last six creations). The box keeps three pills (Attach,
 Mic, and the approval mode renamed "Ask me first" / "Just do it"); Thinking, Search and Servers move into a "+"
-menu, and Servers is not shown at all until a server is connected. The web's Explore page becomes this home.
+menu, and Servers is not shown at all until a server is connected. The web's Explore page stays as a marketing page
+outside the app (decision 5), and leaves the side menu.
 
 ### The side menu
 
@@ -190,7 +191,7 @@ Each stage is a few days, ships on its own, and is checked the same way: the moc
 | **U6 Studio** | 4 | Dub, Audiobook and Lip sync on the frame with the `Stepper`; progress per chapter | a real dub and a real lip sync in the window |
 | **U7 Music** | 3 | Music on the `MakeScreen` with a default model, style chips, lyrics as a panel, experts' fields folded, three actions and a menu, Split as a tab | a real song in the window |
 | **U8 Library** | 4 | My creations as the one library: filters, sort, multi-select, the `CreationDetail` view with actions; the "Your …" pages removed and their routes redirected; the kinds that were missing added | the creations tests; every "Your …" link gone; detail from every card |
-| **U9 Home and chat** | 3 | quick starts, Running now, Recent on the home; three pills and a "+" menu; the Explore page folded in; the pill and card words; display names on the model button; progress in a job card | the readme pictures regenerated; the chat specs |
+| **U9 Home and chat** | 3 | quick starts, Running now, Recent on the home; three pills and a "+" menu; the Explore page moved out of the app as a marketing page; the pill and card words; display names on the model button; progress in a job card | the readme pictures regenerated; the chat specs |
 | **U10 Notebooks, Teach, 3D, Motion** | 4 | the grouped Studio, outputs as cards, renaming in place; the honest front doors with Back in the bar; the stepper and run pages; Motion graphics on the frame | the notebook and training tests; the window |
 | **U11 Settings and Models** | 3 | grouped settings with a list and search, settings that save as they change, "What this computer can do"; display names, a licence chip and readiness dots in Models | the window |
 | **U12 Polish and access** | 3 | focus order, labels and contrast on every screen in both themes; reduced motion; forced colours; the final picture pass | an accessibility checker (decision 4), a keyboard-only walk of every screen, the pictures |
@@ -341,7 +342,26 @@ checked for real: Animate and Extend keeping their source (unit and route tested
 this stage: things made before 0026 have no source; the shared `ImageLibrary`, `VideoLibrary` and `TracksPage`
 components stay in `packages/ui` though no app opens them now.
 
-About 44 days of work in thirteen stages; U0 to U8 are done, U9 next, then the products in the order a
+**Built:** U9 on 2026-10-28 (decision 5: option B; decision 7: option A). The home of the window and the web
+shows, under the chat box, eight quick starts (`chat/HomeStart.tsx`: Picture, Video, Speech, Song, Notebook, 3D
+model, Motion graphics, Train models), each with its readiness from the model picker's groups ("Ready", "Needs a
+download", "Choose a model"); a quick start takes the words already typed in the box to its tool (`draft.ts`:
+`handDraft` and `takeDraft`, read by Images, Video, Speech and Music). Below them, Running now (the tray's jobs,
+hidden when nothing runs; the window's list moved to `apps/desktop/src/jobs.ts`) and Recent (the newest six of the
+Library, `latestEntries`; one opens its detail view in the Library, `initialOpen`, and See all opens the Library).
+The chat box shows three pills (Attach, the ask setting, Mic) and a "+" menu with Thinking, Search and Servers; an
+option that is on shows as a pill too. The ask setting reads "Ask me first", "Ask for big things" and "Just do it";
+the card's button says "Make it" for an action that makes something, "Delete it" for one that deletes and "Do
+it" otherwise; a job card shows its progress with Stop (`thread/tool-uis/JobProgress.tsx`). The model button shows
+display names ("Qwen3.8 27B (MLX)", "Gemma4 E4B": `models/copy.ts` `displayName`). Explore left the web's side
+menu; its page stays on the site as a marketing page. Checked: the UI, desktop and web tests; the web e2e specs
+(the chat specs use the "+" menu); the README pictures regenerated; a real run in the window
+(`ui-audit.sh light home-make`: the quick starts with readiness, the "+" menu, the words typed taken to Images by
+Picture, a real FLUX picture made, then opened from the home's Recent in the Library; pictures `home-start`,
+`home-plus`, `home-to-images`, `home-recent`, `home-recent-opened`). Not in this stage: the quick starts for 3D
+and Motion graphics carry no words (their screens take a picture or a template first).
+
+About 44 days of work in thirteen stages; U0 to U9 are done, U10 next, then the products in the order a
 new person meets them (Pictures, Video, Speech), with the Library before the home so the quick starts and the
 recent strips have one source.
 
@@ -356,10 +376,13 @@ recent strips have one source.
 3. ~~The menu without groups~~ Decided 2026-10-28: the groups stay, and a product's modes stay under them.
 4. **An accessibility checker as a dependency** (`@axe-core/playwright`, MPL-2.0) for U12; the backlog (B2) has
    waited on this since the design system.
-5. **The web's Explore page**: folded into the home (this plan), or kept as a marketing page outside the app.
+5. ~~The web's Explore page~~ Decided 2026-10-28 (owner): kept, as a marketing page outside the app (the site's
+   layout, no side menu item); the app's home still gets the quick starts. Stage U9.
 6. **Mockup review before each stage**: the owner looks at the HTML mockup and says go; or the stages run on their
    own and the owner reviews the built screen.
-7. **The chat box's pills**: three pills and a "+" menu (this plan), or the six pills as today.
+7. ~~The chat box's pills~~ Decided 2026-10-28 (owner): three pills (Attach, Mic, and the approval mode as "Ask me
+   first" / "Just do it") and a "+" menu (Thinking, Search, Servers; Servers only once a server is connected).
+   Stage U9.
 
 ## What this plan does not change
 

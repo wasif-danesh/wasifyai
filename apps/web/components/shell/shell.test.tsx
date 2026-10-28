@@ -69,7 +69,7 @@ describe("the side panel", () => {
     expect(screen.queryByText("Models")).not.toBeInTheDocument(); // the admin picks models here
   });
 
-  it("starts a new chat from the home page, marks a chat that is open, and lists Explore", async () => {
+  it("starts a new chat from the home page, marks a chat that is open, and leaves Explore to the site", async () => {
     path = "/chat/0f3c1a52-7a49-4d1e-9a31-8f1d5b6c7d80";
     query = "";
     const fetchMock = vi.fn(async () =>
@@ -94,7 +94,7 @@ describe("the side panel", () => {
       "page",
     );
     expect(screen.getByRole("button", { name: "Budget" })).not.toHaveAttribute("aria-current");
-    expect(screen.getByRole("link", { name: /Explore/ })).toHaveAttribute("href", "/explore");
+    expect(screen.queryByRole("link", { name: /Explore/ })).toBeNull(); // a marketing page now (ADR-0093 U9)
     vi.unstubAllGlobals();
   });
 

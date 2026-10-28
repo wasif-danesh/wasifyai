@@ -43,6 +43,13 @@ async function answers(page: Page, events: Ev[], seen: { input?: Record<string, 
 
 const box = (page: Page) => page.getByRole("textbox", { name: "Message" });
 const thinkingButton = (page: Page) => page.getByRole("button", { name: /^Thinking\./ });
+const plus = (page: Page) => page.getByRole("button", { name: /^More options/ });
+
+/** Thinking waits in the box's "+" menu while it is off (ADR-0093 U9). */
+async function turnOnThinking(page: Page) {
+  await plus(page).click();
+  await page.getByRole("menuitem", { name: /^Thinking/ }).click();
+}
 
 async function noSideScroll(page: Page) {
   const wide = await page.evaluate(
@@ -57,6 +64,10 @@ test.describe("the chat", () => {
     await page.goto("/");
     await expect(box(page)).toBeVisible();
     await expect(page.getByRole("button", { name: /^Thinking/ })).toHaveCount(0);
+    if (await plus(page).count()) {
+      await plus(page).click();
+      await expect(page.getByRole("menuitem", { name: /^Thinking/ })).toHaveCount(0);
+    }
   });
 
   test("Thinking is off until pressed, then the message asks for it and the reasoning is collapsed @layout", async ({
@@ -75,9 +86,8 @@ test.describe("the chat", () => {
       seen,
     );
     await page.goto("/");
-    await expect(thinkingButton(page)).toBeVisible();
-    await expect(thinkingButton(page)).toHaveAttribute("aria-pressed", "false");
-    await thinkingButton(page).click();
+    await expect(thinkingButton(page)).toHaveCount(0);
+    await turnOnThinking(page);
     await expect(thinkingButton(page)).toHaveAttribute("aria-pressed", "true");
     await box(page).fill("hi");
     await box(page).press("Enter");
@@ -102,9 +112,10 @@ test.describe("the chat", () => {
       await setup(page);
       await answers(page, [["token", { node: "agent", text: "ok" }], DONE]);
       await page.goto("/");
+      await turnOnThinking(page);
       await expect(thinkingButton(page)).toBeVisible();
       await noSideScroll(page);
-      const bar = await thinkingButton(page).boundingBox();
+      const bar = await plus(page).boundingBox();
       expect(bar?.height ?? 0).toBeGreaterThanOrEqual(24);
       expect((bar?.x ?? 0) + (bar?.width ?? 0)).toBeLessThanOrEqual(320);
       await box(page).fill("hi");
@@ -117,10 +128,10 @@ test.describe("the chat", () => {
   test("looks right with the options bar @visual", async ({ page }) => {
     await setup(page);
     await page.goto("/");
-    await expect(thinkingButton(page)).toBeVisible();
+    await expect(plus(page)).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(300);
-    await thinkingButton(page).click();
+    await turnOnThinking(page);
     await expect(page).toHaveScreenshot("options-next-on.png");
   });
 });
@@ -130,7 +141,7 @@ test("the choice is remembered for the conversation, and a stored thought is sho
 }) => {
   await setup(page);
   await page.goto("/");
-  await thinkingButton(page).click();
+  await turnOnThinking(page);
   await page.reload();
   // a new chat has no id yet: the choice is kept for the "new" chat
   await expect(thinkingButton(page)).toHaveAttribute("aria-pressed", "true");

@@ -6,6 +6,7 @@ import type { AssistantApi, ImagesApi, OnEvent, ParsedEvent } from "@wasifyai/cl
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatScreen } from "./ChatScreen";
 import { useComposerOptions } from "./composer-options";
+import { chooseOption, moreOptions } from "./options-testing";
 
 const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
   ({ event, data: { run_id: "r1", seq: 1, ...data } }) as unknown as ParsedEvent;
@@ -134,14 +135,14 @@ describe("useComposerOptions", () => {
       initialProps: { id: "a" as string | null },
     });
     const ask = () => result.current.bar.find((o) => o.id === "approval");
-    expect(ask()?.label).toBe("Asks first");
+    expect(ask()?.label).toBe("Ask me first");
     expect(ask()?.pressed).toBe(false);
     expect(result.current.runInput).toEqual({});
     act(() => ask()?.onPress());
-    expect(ask()?.label).toBe("Asks for big things");
+    expect(ask()?.label).toBe("Ask for big things");
     expect(result.current.runInput).toEqual({ approval: "ask_costly" });
     act(() => ask()?.onPress());
-    expect(ask()?.label).toBe("Doesn't ask");
+    expect(ask()?.label).toBe("Just do it");
     expect(ask()?.pressed).toBe(true);
     expect(result.current.runInput).toEqual({ approval: "auto" });
     act(() => ask()?.onPress());
@@ -163,9 +164,10 @@ describe("useComposerOptions", () => {
 
 describe("the chat", () => {
   const Screen = ChatScreen;
-  it("has no Thinking button for a model that cannot think", () => {
+  it("has no Thinking for a model that cannot think", async () => {
     render(<Screen runs={runsThat([])} assistant={assistant} images={images} />);
     expect(screen.queryByRole("button", { name: /^Thinking/ })).toBeNull();
+    expect((await moreOptions()).some((t) => t.startsWith("Thinking"))).toBe(false);
   });
 
   it("sends nothing about thinking while it is off, and asks for it once it is on", async () => {
@@ -180,13 +182,13 @@ describe("the chat", () => {
         composerOptions={{ thinking: true }}
       />,
     );
-    const button = screen.getByRole("button", { name: /^Thinking/ });
-    expect(button).toHaveAttribute("aria-pressed", "false");
+    // off, Thinking waits in the "+" menu (ADR-0093 U9)
+    expect(screen.queryByRole("button", { name: /^Thinking/ })).toBeNull();
     await user.type(screen.getByRole("textbox", { name: "Message" }), "one{Enter}");
     await waitFor(() => expect(inputs).toHaveLength(1));
     expect(inputs[0]).not.toHaveProperty("thinking");
 
-    await user.click(screen.getByRole("button", { name: /^Thinking/ }));
+    await chooseOption(/^Thinking/);
     expect(screen.getByRole("button", { name: /^Thinking/ })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -246,7 +248,7 @@ describe("the chat", () => {
         composerOptions={{ thinking: true }}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /^Thinking/ }));
+    await chooseOption(/^Thinking/);
     await user.type(screen.getByRole("textbox", { name: "Message" }), "hi{Enter}");
     expect(await screen.findByText(/takes longer than usual/)).toBeInTheDocument();
     release();

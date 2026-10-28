@@ -26,6 +26,7 @@ import { type RecentItem, RecentStrip } from "../components/recent-strip";
 import { Slider } from "../components/slider";
 import { Spinner } from "../components/spinner";
 import { Stage, type StageState } from "../components/stage";
+import { takeDraft } from "../draft";
 import { IMAGE_PRODUCT, useImageFlow } from "../hooks/use-image-flow";
 import { usePicture } from "../hooks/use-picture";
 import { usePictureEvents } from "../hooks/use-picture-events";
@@ -210,7 +211,8 @@ export function ImageWorkspace({
   const painter = useRef<MaskPainterHandle>(null);
   const [painted, setPainted] = useState(0); // the share of the picture that is painted (Inpaint)
   const [sending, setSending] = useState(false); // the painted area is being uploaded
-  const [prompt, setPrompt] = useState(preset?.prompt ?? "");
+  // a recipe sent here, or the words typed in the chat box before a quick start (ADR-0093 U9)
+  const [prompt, setPrompt] = useState(() => preset?.prompt ?? takeDraft());
   const [size, setSize] = useState<string>(preset?.size ?? "square");
   const [seed, setSeed] = useState<number | null>(preset?.seed ?? null);
   const [styles, setStyles] = useState<LoraChoice[]>(preset?.loras ?? []);

@@ -105,7 +105,7 @@ function Tile({ entry, onOpen }: { entry: Entry; onOpen: (entry: Entry) => void 
           {row.kindLabel}
         </span>
       )}
-      <span className="line-clamp-2 text-[0.6875rem] leading-tight">{row.title}</span>
+      <span className="line-clamp-2 text-xs leading-tight">{row.title}</span>
     </button>
   );
 }

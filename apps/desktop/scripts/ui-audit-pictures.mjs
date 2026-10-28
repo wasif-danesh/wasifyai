@@ -20,6 +20,9 @@
 //                                                                then Split into parts with it chosen
 //   apps/desktop/scripts/ui-audit.sh light library-make         the Library: a picture opened, Edit this, a real
 //                                                                edit made, then "Made from" and "Made from this"
+//   apps/desktop/scripts/ui-audit.sh light home-make            the home: quick starts with readiness, the "+" menu,
+//                                                                typed words taken to Images by Picture, a real
+//                                                                picture made, then opened from the home's Recent
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -325,7 +328,9 @@ for (const scheme of ["light", "dark"]) {
       await open(page, "/images/create");
       await page
         .getByRole("textbox", { name: /prompt/i })
-        .fill("A friendly illustrated portrait of a woman looking straight at the camera, plain light background");
+        .fill(
+          "A friendly illustrated portrait of a woman looking straight at the camera, plain light background",
+        );
       await page.getByRole("button", { name: "Make the picture" }).click();
       await page
         .locator('[data-slot="stage"][data-state="result"] img')
@@ -338,7 +343,10 @@ for (const scheme of ["light", "dark"]) {
         return btoa(bin);
       }, src);
       await open(page, "/voice/lip-sync");
-      await page.getByRole("button", { name: "Choose a picture", exact: true }).first().waitFor({ timeout: 120_000 });
+      await page
+        .getByRole("button", { name: "Choose a picture", exact: true })
+        .first()
+        .waitFor({ timeout: 120_000 });
       await page.locator('input[type="file"][aria-label="Choose a picture"]').setInputFiles({
         name: "portrait.png",
         mimeType: "image/png",
@@ -346,7 +354,9 @@ for (const scheme of ["light", "dark"]) {
       });
       await page.getByAltText("The face to bring to life").waitFor({ timeout: 60_000 });
       await page.getByRole("radio", { name: /drawing, painting/ }).click();
-      await page.getByLabel("What should it say?").fill("Hello! This video was made on this computer.");
+      await page
+        .getByLabel("What should it say?")
+        .fill("Hello! This video was made on this computer.");
       await page.waitForTimeout(800);
       await shot(page, "lipsync-face");
       await page.getByRole("button", { name: "Make the video" }).click();
@@ -399,7 +409,10 @@ for (const scheme of ["light", "dark"]) {
       await page.getByRole("button", { name: /^Pictures/ }).click();
       await page.waitForTimeout(800);
       await shot(page, "library");
-      const card = page.getByRole("main").getByRole("link", { name: /teapot/i }).first();
+      const card = page
+        .getByRole("main")
+        .getByRole("link", { name: /teapot/i })
+        .first();
       await card.click();
       const detail = page.getByRole("dialog");
       await detail.getByRole("button", { name: /Edit this/ }).waitFor();
@@ -407,22 +420,76 @@ for (const scheme of ["light", "dark"]) {
       await shot(page, "library-detail");
       await detail.getByRole("button", { name: /Edit this/ }).click();
       await page.getByRole("button", { name: /Replace/ }).waitFor({ timeout: 30_000 });
-      await page.getByRole("textbox", { name: /what should change/i }).fill("Make the teapot deep blue");
+      await page
+        .getByRole("textbox", { name: /what should change/i })
+        .fill("Make the teapot deep blue");
       await page.getByRole("button", { name: "Make the picture" }).click();
       await untilDone(page, page.locator('[data-slot="stage"][data-state="result"] img'), 600_000);
       await page.waitForTimeout(800);
       await shot(page, "library-edit-made");
       await open(page, "/creations");
       await page.getByRole("button", { name: /^Pictures/ }).click();
-      await page.getByRole("main").getByRole("link", { name: /deep blue/i }).first().click();
+      await page
+        .getByRole("main")
+        .getByRole("link", { name: /deep blue/i })
+        .first()
+        .click();
       const made = page.getByRole("dialog");
-      await made.getByRole("region", { name: "Made from" }).getByRole("button").first().waitFor({ timeout: 30_000 });
+      await made
+        .getByRole("region", { name: "Made from" })
+        .getByRole("button")
+        .first()
+        .waitFor({ timeout: 30_000 });
       await page.waitForTimeout(800);
       await shot(page, "library-made-from");
       await made.getByRole("region", { name: "Made from" }).getByRole("button").first().click();
-      await page.getByRole("dialog").getByRole("region", { name: "Made from this" }).waitFor({ timeout: 30_000 });
+      await page
+        .getByRole("dialog")
+        .getByRole("region", { name: "Made from this" })
+        .waitFor({ timeout: 30_000 });
       await page.waitForTimeout(800);
       await shot(page, "library-made-from-this");
+    });
+  }
+  if (scheme === "light" && names.has("home-make")) {
+    // the check of stage U9: the home's quick starts carry the words typed, and Recent opens in the Library
+    await attempt("home-make", async () => {
+      await open(page, "/");
+      await page.getByRole("navigation", { name: "Quick starts" }).waitFor();
+      await page.waitForTimeout(1500); // each start reads whether its model is ready
+      await shot(page, "home-start");
+      await page.getByRole("button", { name: /^More options/ }).click();
+      await page.waitForTimeout(400);
+      await shot(page, "home-plus");
+      await page.keyboard.press("Escape");
+      const words = "A lighthouse on a cliff in thick fog, one beam of light";
+      await page.getByRole("textbox", { name: "Message" }).fill(words);
+      await page
+        .getByRole("navigation", { name: "Quick starts" })
+        .getByRole("button", { name: /^Picture/ })
+        .click();
+      const prompt = page.getByRole("textbox", { name: /prompt/i });
+      await prompt.waitFor({ timeout: 30_000 });
+      if ((await prompt.inputValue()) !== words)
+        throw new Error("the words typed did not reach Images");
+      await shot(page, "home-to-images");
+      await page.getByRole("button", { name: "Make the picture" }).click();
+      await untilDone(page, page.locator('[data-slot="stage"][data-state="result"] img'), 600_000);
+      await open(page, "/");
+      const recent = page
+        .getByRole("region", { name: "Recent" })
+        .getByRole("button", { name: /lighthouse/i })
+        .first();
+      await recent.waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "home-recent");
+      await recent.click();
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: /Edit this/ })
+        .waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "home-recent-opened");
     });
   }
   if (scheme === "light" && names.size === 0) {

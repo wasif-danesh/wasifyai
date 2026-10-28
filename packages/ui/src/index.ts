@@ -232,3 +232,5 @@ export type {
   MakeScreen as MakeTarget,
   UseAction as CreationUse,
 } from "./creations/model";
+export { handDraft, takeDraft } from "./draft";
+export { HomeStart, type QuickStartId } from "./chat/HomeStart";

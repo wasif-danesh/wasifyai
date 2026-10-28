@@ -5,7 +5,7 @@ import { useVoiceOffer } from "@/hooks/use-voice-offer";
 import { webAssistant } from "@/lib/library";
 import { resolveWebItem } from "@/lib/menu";
 import { SideMenu, conversationsChanged, useConversations } from "@wasifyai/ui";
-import { Compass, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
@@ -50,7 +50,7 @@ export function AppSidebar({
             })),
           }}
           extra={[
-            { id: "explore", label: "Explore", icon: Compass, href: "/explore" },
+            // Explore is the site's page for people who are not in the app yet (ADR-0093 decision 5): not in the menu
             ...(isAdmin
               ? [
                   {

@@ -1,10 +1,11 @@
-// @vitest-environment jsdom
 import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AssistantApi, ImagesApi } from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModelChoicesProvider, useChoicesChanged } from "../models";
 import { AssistantHome, greeting } from "./AssistantHome";
+// @vitest-environment jsdom
+import { moreOptions } from "./options-testing";
 import { conversationsChanged, useConversations } from "./use-conversations";
 
 const runs = { startRun: vi.fn(async () => {}), watchRun: vi.fn(async () => {}) };
@@ -69,8 +70,9 @@ describe("AssistantHome", () => {
         />,
       );
       await screen.findByRole("heading", { level: 1 });
-      await waitFor(() =>
-        expect(screen.queryAllByRole("button", { name: /^Thinking/ })).toHaveLength(can ? 1 : 0),
+      // Thinking is in the box's "+" menu (ADR-0093 U9)
+      await waitFor(async () =>
+        expect((await moreOptions()).some((t) => t.startsWith("Thinking"))).toBe(can),
       );
     },
   );
@@ -101,11 +103,11 @@ describe("AssistantHome", () => {
       </ModelChoicesProvider>,
     );
     await screen.findByRole("heading", { level: 1 });
-    expect(screen.queryAllByRole("button", { name: /^Thinking/ })).toHaveLength(0);
+    expect((await moreOptions()).some((t) => t.startsWith("Thinking"))).toBe(false);
     can = true; // the model the person chose can think
     await user.click(screen.getByRole("button", { name: "model chosen" }));
-    await waitFor(() =>
-      expect(screen.queryAllByRole("button", { name: /^Thinking/ })).toHaveLength(1),
+    await waitFor(async () =>
+      expect((await moreOptions()).some((t) => t.startsWith("Thinking"))).toBe(true),
     );
     expect(options).toHaveBeenCalledTimes(2);
   });

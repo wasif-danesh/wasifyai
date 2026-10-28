@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
 const SCREENS = [
   { name: "image create", path: "/image", button: /Select image model|FLUX\.2 klein 4B/ },
   { name: "video create", path: "/video", button: /Select video model|LTX-Video 2B/ },
-  { name: "chat", path: "/", button: /Select chat model|gemma4:e4b/ },
+  { name: "chat", path: "/", button: /Select chat model|Gemma4 E4B/ },
 ] as const;
 
 for (const screen of SCREENS) {
@@ -55,7 +55,7 @@ test("3D model has the model button at the top, and it says Pixal3D is ready @la
 test("a saved chat on a phone does not scroll sideways @layout", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/chat/0f3c1a52-7a49-4d1e-9a31-8f1d5b6c7d80"); // title, model button and tools share the bar
-  await expect(page.getByRole("button", { name: /gemma4:e4b/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Gemma4 E4B/ }).first()).toBeVisible();
   const wide = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );

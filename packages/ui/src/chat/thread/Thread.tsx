@@ -18,6 +18,8 @@ export type ThreadProps = {
   hero?: ReactNode;
   /** Suggestions under the box while the chat is empty. */
   examples?: string[];
+  /** Under the box while the chat is empty, in place of the suggestions: the home's quick starts, Running now and Recent */
+  start?: ReactNode;
   /** Setup notices (no model chosen yet, and so on). */
   notices?: ReactNode;
   blockedReason?: string | null;
@@ -50,6 +52,7 @@ export function Thread({
   empty,
   hero,
   examples = [],
+  start,
   notices,
   blockedReason,
   options,
@@ -121,8 +124,10 @@ export function Thread({
       </div>
 
       {empty ? (
-        <div key="examples" className="min-h-0 flex-1 px-8 pt-4">
-          {examples.length ? (
+        <div key="examples" className="min-h-0 flex-1 overflow-auto px-6 pt-4 pb-6">
+          {start ? (
+            start
+          ) : examples.length ? (
             <ul className="mx-auto flex max-w-3xl flex-wrap justify-center gap-2">
               {examples.map((ex) => (
                 <li key={ex}>

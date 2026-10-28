@@ -21,6 +21,7 @@ import { type RecentItem, RecentStrip } from "../components/recent-strip";
 import { Spinner } from "../components/spinner";
 import { Stage, type StageState } from "../components/stage";
 import { Textarea } from "../components/textarea";
+import { takeDraft } from "../draft";
 import { fileNameFor, savedText, useSaveCopy } from "../save";
 import { appearsHere, makeLabel, makingLabel } from "../words";
 import { LoadingModels, ModelPicker, NotReadyText } from "./ModelPicker";
@@ -84,7 +85,8 @@ export function SpeakWorkspace({
   const { models, runtime, error, loading, reload } = useVoiceModels(api, task);
   const [modelId, setModelId] = useState<string | null>(initialModel ?? null);
   const [values, setValues] = useState<Record<string, unknown>>({});
-  const [text, setText] = useState("");
+  // the words typed in the chat box before a quick start (ADR-0093 U9)
+  const [text, setText] = useState(() => takeDraft().slice(0, MAX_TEXT));
   const [step, setStep] = useState<string | null>(null);
   const [waited, setWaited] = useState(0);
   const [problem, setProblem] = useState<string | null>(null);
@@ -326,7 +328,7 @@ export function SpeakWorkspace({
     cover: (
       <span className="grid size-full place-items-center gap-0.5 bg-muted p-1 text-center">
         <AudioLines className="size-4 text-muted-foreground" aria-hidden="true" />
-        <span className="line-clamp-2 text-[0.625rem] leading-tight">{s.text}</span>
+        <span className="line-clamp-2 text-xs leading-tight">{s.text}</span>
       </span>
     ),
     label: `Open: ${s.text.slice(0, 80)}`,

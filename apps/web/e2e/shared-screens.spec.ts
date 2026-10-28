@@ -81,7 +81,12 @@ for (const screen of SCREENS) {
       await expect(page.getByText(/footprints into the night/)).toBeVisible();
     if (screen.name === "library") {
       // the cards are there, and their pictures drawn
-      await expect(page.getByRole("main").getByRole("link", { name: /a lighthouse/i }).first()).toBeVisible();
+      await expect(
+        page
+          .getByRole("main")
+          .getByRole("link", { name: /a lighthouse/i })
+          .first(),
+      ).toBeVisible();
     }
     await settle(page);
     await expect(page).toHaveScreenshot(`${screen.name}.png`, {
@@ -175,7 +180,11 @@ test("Your images is the Library showing pictures, and a picture opens with its 
   const nav = await menu(page);
   await expect(nav.getByRole("link", { name: /^Library/ })).toHaveAttribute("aria-current", "page");
   if ((page.viewportSize()?.width ?? 1280) < 768) await page.keyboard.press("Escape"); // the drawer
-  await page.getByRole("main").getByRole("link", { name: /a lighthouse/i }).first().click();
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: /a lighthouse/i })
+    .first()
+    .click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("button", { name: /Edit this/ })).toBeVisible();
   await expect(dialog.getByRole("button", { name: /Animate this/ })).toBeVisible();
@@ -193,7 +202,10 @@ test("Your videos is the Library showing videos, being made and failed ones too 
   await page.goto("/video/library");
   await expect(page).toHaveURL(/\/creations\?show=videos$/);
   await expect(page.getByText(/Making your video/).first()).toBeVisible();
-  await page.getByRole("link", { name: /a paper boat/i }).first().click();
+  await page
+    .getByRole("link", { name: /a paper boat/i })
+    .first()
+    .click();
   await expect(page.getByRole("dialog").getByText(/took too long/i)).toBeVisible();
 });
 

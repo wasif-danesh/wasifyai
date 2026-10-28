@@ -4,6 +4,7 @@ import type {
   LipSyncCard,
   Model3d,
   NotebookSummary,
+  Recent,
   SongCard,
   SpeechCard,
   TrainedModel,
@@ -230,3 +231,38 @@ export type CreationsNav = {
   /** which actions `use` takes for an entry */
   canUse?(entry: Entry, action: UseAction): boolean;
 };
+
+/** The last `n` things made, of every kind, newest first (the home's Recent; ADR-0093 U9). */
+export function latestEntries(recent: Recent, n: number): Entry[] {
+  const all: Entry[] = [
+    ...(recent.images?.images ?? []).map(
+      (image): Entry => ({ kind: "image", id: image.id, createdAt: image.created_at, image }),
+    ),
+    ...(recent.videos?.videos ?? [])
+      .filter((v) => v.status === "done")
+      .map((video): Entry => ({ kind: "video", id: video.id, createdAt: video.created_at, video })),
+    ...recent.songs.map(
+      (song): Entry => ({ kind: "song", id: song.id, createdAt: song.created_at, song }),
+    ),
+    ...recent.speeches.map(
+      (speech): Entry => ({ kind: "speech", id: speech.id, createdAt: speech.created_at, speech }),
+    ),
+    ...recent.lipsyncs.map(
+      (lipsync): Entry => ({
+        kind: "lipsync",
+        id: lipsync.id,
+        createdAt: lipsync.created_at,
+        lipsync,
+      }),
+    ),
+    ...(recent.others?.models3d ?? []).map(
+      (model3d): Entry => ({
+        kind: "model3d",
+        id: model3d.id,
+        createdAt: model3d.created_at,
+        model3d,
+      }),
+    ),
+  ];
+  return all.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, n);
+}

@@ -32,4 +32,7 @@ if (typeof window !== "undefined") {
   })) as unknown as typeof window.matchMedia;
   Element.prototype.scrollTo ??= () => {};
   Element.prototype.scrollIntoView ??= () => {};
+  // Radix's menus and lists hold the pointer
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.releasePointerCapture ??= () => {};
 }

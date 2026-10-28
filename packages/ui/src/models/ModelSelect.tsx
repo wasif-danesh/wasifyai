@@ -8,6 +8,7 @@ import { Modal } from "../components/dialog";
 import { Bar } from "../components/progress-bar";
 import { formatBytes } from "../notebook/format";
 import { useChoicesChanged } from "./context";
+import { displayName } from "./copy";
 import { type ChoicesApi, type GroupId, type ModelChoice, groupOf } from "./types";
 import { useModelChoices } from "./use-model-choices";
 
@@ -132,7 +133,7 @@ export function ModelSelect({
         : choices.filter((c) => c.tier === "advanced");
 
   const getting = m.working;
-  const label = chosen?.title ?? g.select;
+  const label = chosen ? displayName(chosen.title) : g.select;
 
   async function pick(c: ModelChoice) {
     if (c.state === "ready") {
@@ -256,7 +257,7 @@ export function ModelSelect({
                   >
                     <span className="flex items-center gap-2">
                       <span className="min-w-0 flex-1 truncate font-medium text-sm" title={c.title}>
-                        {c.title}
+                        {displayName(c.title)}
                       </span>
                       {c.readsPictures ? (
                         <span title="Can read pictures" className="text-muted-foreground">
@@ -328,10 +329,11 @@ export function GetModelDialog({
   const total = choice.downloadBytes + choice.engineBytes;
   const tooLittleDisk = diskFree !== null && diskFree < total + 1e9;
   return (
-    <Modal label={`Download ${choice.title}?`} onClose={onCancel}>
+    <Modal label={`Download ${displayName(choice.title)}?`} onClose={onCancel}>
       <div className="grid gap-3 text-sm">
         <p className="m-0">
-          To use <strong>{choice.title}</strong> we need to download it first. {choice.plain}
+          To use <strong>{displayName(choice.title)}</strong> we need to download it first.{" "}
+          {choice.plain}
         </p>
         <ul className="m-0 grid list-none gap-1 p-0">
           {choice.engineBytes > 0 ? (
@@ -341,7 +343,7 @@ export function GetModelDialog({
             </li>
           ) : null}
           <li className="flex justify-between gap-4">
-            <span>{choice.title}</span>
+            <span>{displayName(choice.title)}</span>
             <span>{formatBytes(choice.downloadBytes)}</span>
           </li>
           <li className="flex justify-between gap-4 border-t pt-1 font-medium">

@@ -12,12 +12,20 @@ import {
   editWords,
   separateAudio,
 } from "@wasifyai/client";
+import { AudioLines, FolderOpen, Scissors, Shuffle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import type { Action } from "../components/actions-row";
 import { Button } from "../components/button";
+import { Checkbox } from "../components/checkbox";
 import { Label } from "../components/label";
+import { MakeScreen } from "../components/make-screen";
+import { Player } from "../components/player";
+import { type RecentItem, RecentStrip } from "../components/recent-strip";
+import { Select } from "../components/select";
 import { Spinner } from "../components/spinner";
+import { Stage, type StageState } from "../components/stage";
 import { Textarea } from "../components/textarea";
-import { ModelPicker, NotReadyText } from "./ModelPicker";
+import { LoadingModels, ModelPicker, NotReadyText } from "./ModelPicker";
 import { RuntimeCard } from "./RuntimeCard";
 import { clock, pickModel } from "./format";
 import { useVoiceModels } from "./use-voice-models";
@@ -38,31 +46,56 @@ export type AudioToolWorkspaceProps = {
   /** open Your music, or the Voices screen when a voice is needed */
   onOpenLibrary?: () => void;
   onOpenVoices?: () => void;
+  /** the screen's heading and the line under it */
+  title?: string;
+  lead?: string;
 };
 
-const TEXT: Record<AudioTool, { ask: string; blurb: string; button: string; busy: string }> = {
+const TEXT: Record<
+  AudioTool,
+  {
+    title: string;
+    ask: string;
+    blurb: string;
+    button: string;
+    busy: string;
+    empty: string;
+    mode: string;
+  }
+> = {
   separate: {
+    title: "Split into parts",
     ask: "Which recording?",
     blurb:
       "Split a song into its parts: the singing, the drums, the bass and the rest. Every part is kept in Your music.",
-    button: "Split it",
-    busy: "Splitting",
+    button: "Split the song",
+    busy: "Splitting the song…",
+    empty: "The parts appear here.",
+    mode: "stem",
   },
   convert: {
+    title: "Change a voice",
     ask: "Which recording?",
     blurb:
       "Make a recording sound like another voice. The voice has to be one you saved from a recording, with your say-so that it is yours or that you have permission.",
     button: "Change the voice",
-    busy: "Changing the voice",
+    busy: "Changing the voice…",
+    empty: "The new recording appears here.",
+    mode: "converted",
   },
   edit: {
+    title: "Edit speech",
     ask: "Which speech?",
     blurb:
       "Change some words in a recording of speech. The voice and the rest of what is said stay as they were.",
     button: "Change the words",
-    busy: "Changing the words",
+    busy: "Changing the words…",
+    empty: "The changed speech appears here.",
+    mode: "edited",
   },
 };
+
+const ICON = { separate: Scissors, convert: Shuffle, edit: AudioLines } as const;
 
 type Library = { tracks: Track[]; speeches: Speech[] };
 
@@ -81,6 +114,8 @@ export function AudioToolWorkspace({
   initialSource,
   onOpenLibrary,
   onOpenVoices,
+  title,
+  lead,
 }: AudioToolWorkspaceProps) {
   const { models, runtime, error, loading, reload } = useVoiceModels(api, tool);
   const [modelId, setModelId] = useState<string | null>(initialModel ?? null);
@@ -96,6 +131,7 @@ export function AudioToolWorkspace({
   const [waited, setWaited] = useState(0);
   const [problem, setProblem] = useState<string | null>(null);
   const [made, setMade] = useState<ToolTrack[]>([]);
+  const [opened, setOpened] = useState<Track | null>(null); // a result from the recent strip
   const abort = useRef<AbortController | null>(null);
   const picker = useRef<HTMLInputElement>(null);
 
@@ -174,6 +210,7 @@ export function AudioToolWorkspace({
     if (!chosen || !source || working) return;
     setProblem(null);
     setMade([]);
+    setOpened(null);
     setStep("Starting");
     abort.current = new AbortController();
     const signal = abort.current.signal;
@@ -198,8 +235,14 @@ export function AudioToolWorkspace({
                 signal,
                 setStep,
               );
-      if (r.ok) setMade(r.tracks);
-      else setProblem(r.message);
+      if (r.ok) {
+        setMade(r.tracks);
+        // the results join the library, so the recent strip has them
+        void api
+          .tracks({ limit: 200 })
+          .then((tracks) => setLibrary((l) => ({ tracks, speeches: l?.speeches ?? [] })))
+          .catch(() => undefined);
+      } else setProblem(r.message);
     } catch (e) {
       if (!signal.aborted) setProblem(e instanceof Error ? e.message : "That could not be done.");
     } finally {
@@ -210,12 +253,12 @@ export function AudioToolWorkspace({
 
   if (error) {
     return (
-      <p role="alert" className="text-destructive">
+      <p role="alert" className="p-6 text-destructive">
         {error}
       </p>
     );
   }
-  if (loading || library === null) return <Spinner />;
+  if (loading || library === null) return <LoadingModels />;
 
   const missing =
     tool === "convert"
@@ -224,253 +267,324 @@ export function AudioToolWorkspace({
         ? before.trim().length < 2 || after.trim().length < 2 || before.trim() === after.trim()
         : wanted.length === 0;
   const speed = chosen?.measured.speed_x;
-  return (
-    <div className="mx-auto grid w-full min-w-0 max-w-3xl gap-6">
-      <p className="text-muted-foreground">{text.blurb}</p>
-      {runtime && chosen?.engine !== "comfyui" ? (
-        <RuntimeCard runtime={runtime} api={api} onChanged={reload} />
-      ) : null}
-      <ModelPicker
-        models={models}
-        task={tool}
-        value={chosen?.id ?? null}
-        onChange={(id) => {
-          setModelId(id);
-          onModelChosen?.(id);
-        }}
-        onGetModel={onGetModel}
-        disabled={working}
-      />
-      <div className="grid gap-2">
-        <Label htmlFor={`source-${tool}`}>{text.ask}</Label>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            id={`source-${tool}`}
-            className="h-10 min-w-0 flex-1 rounded-md border border-input bg-transparent px-3 text-sm"
-            value={source ? `${source.kind}:${source.id}` : ""}
-            disabled={working}
-            onChange={(e) => {
-              const [kind, ...id] = e.target.value.split(":");
-              setSource(kind === "track" || kind === "speech" ? { kind, id: id.join(":") } : null);
-              setBefore("");
-              setAfter("");
-              setMade([]);
-            }}
-          >
-            <option value="">Choose…</option>
-            {library.tracks.length > 0 ? (
-              <optgroup label="Your music and recordings">
-                {library.tracks.map((t) => (
-                  <option key={t.id} value={`track:${t.id}`}>
-                    {t.title} ({clock(t.seconds)})
-                  </option>
+  const results: ToolTrack[] = opened ? [opened] : made;
+  const sourceOptions = [
+    ...(library.tracks.length > 0
+      ? [
+          {
+            label: "Your music and recordings",
+            options: library.tracks.map((t) => ({
+              value: `track:${t.id}`,
+              label: `${t.title} (${clock(t.seconds)})`,
+            })),
+          },
+        ]
+      : []),
+    ...(library.speeches.length > 0
+      ? [
+          {
+            label: "Speech you made",
+            options: library.speeches.map((sp) => ({
+              value: `speech:${sp.id}`,
+              label: `${sp.text.slice(0, 50)} (${clock(sp.seconds)})`,
+            })),
+          },
+        ]
+      : []),
+  ];
+
+  const resultActions: Action[] = onOpenLibrary
+    ? [
+        {
+          label: "Open Your music",
+          onSelect: onOpenLibrary,
+          icon: <FolderOpen aria-hidden="true" />,
+        },
+      ]
+    : [];
+  const stage: StageState = working
+    ? {
+        kind: "working",
+        label: text.busy,
+        text: `${step} · ${clock(waited)}`,
+        onStop: () => abort.current?.abort(),
+      }
+    : problem && results.length === 0
+      ? { kind: "error", message: problem, onReset: () => setProblem(null) }
+      : results.length > 0
+        ? {
+            kind: "result",
+            children: (
+              <ul className="m-0 grid w-full list-none gap-3 p-0">
+                {results.map((t) => (
+                  <li key={t.id} className="grid gap-1.5 text-start">
+                    <span className="font-medium text-sm">{t.stem ?? t.title}</span>
+                    <Player
+                      src={t.audio_url}
+                      title={t.stem ?? t.title}
+                      duration={t.seconds}
+                      waveform
+                    />
+                  </li>
                 ))}
-              </optgroup>
-            ) : null}
-            {library.speeches.length > 0 ? (
-              <optgroup label="Speech you made">
-                {library.speeches.map((s) => (
-                  <option key={s.id} value={`speech:${s.id}`}>
-                    {s.text.slice(0, 50)} ({clock(s.seconds)})
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-          </select>
-          <input
-            ref={picker}
-            type="file"
-            accept="audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus,.caf,.aiff"
-            className="sr-only"
-            aria-label="Add a recording from this computer"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (f) void addFile(f);
-            }}
-          />
-          <Button variant="outline" disabled={working} onClick={() => picker.current?.click()}>
-            Add a recording
-          </Button>
-        </div>
-        {picked ? (
-          // biome-ignore lint/a11y/useMediaCaption: the recording the person chose
-          <audio controls preload="none" src={picked.url} className="h-10 w-full" />
-        ) : null}
-        {tooLong && limit ? (
-          <p role="alert" className="text-destructive text-sm">
-            {chosen?.title} takes a recording of up to {clock(limit)}. This one is{" "}
-            {clock(picked?.seconds ?? 0)}.
-          </p>
-        ) : null}
-        {library.tracks.length + library.speeches.length === 0 && onOpenLibrary ? (
-          <p className="text-muted-foreground text-sm">
-            Nothing in the library yet. Add a recording, or make something first.
-          </p>
-        ) : null}
-      </div>
-
-      {tool === "separate" && stems.length > 0 ? (
-        <fieldset className="grid gap-2" disabled={working}>
-          <legend className="font-medium text-sm">Keep these parts</legend>
-          <div className="flex flex-wrap gap-4">
-            {stems.map((name) => (
-              <label key={name} className="flex items-center gap-1.5 text-sm">
-                <input
-                  type="checkbox"
-                  checked={wanted.includes(name)}
-                  onChange={(e) =>
-                    setKept(e.target.checked ? [...wanted, name] : wanted.filter((x) => x !== name))
-                  }
-                />
-                {name}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-      ) : null}
-
-      {tool === "convert" ? (
-        <div className="grid gap-2">
-          <Label htmlFor="convert-voice">Sound like</Label>
-          <select
-            id="convert-voice"
-            className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-            value={voice}
-            disabled={working || voices.length === 0}
-            onChange={(e) => setVoice(e.target.value)}
-          >
-            <option value="">{voices.length ? "Choose a voice…" : "No saved voices yet"}</option>
-            {voices.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name} ({v.consent.basis === "own" ? "your own voice" : "used with permission"})
-              </option>
-            ))}
-          </select>
-          {voices.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              Save a voice from a recording first.{" "}
-              {onOpenVoices ? (
-                <button
-                  type="button"
-                  className="underline underline-offset-4"
-                  onClick={onOpenVoices}
-                >
-                  Open Voices
-                </button>
-              ) : null}
-            </p>
-          ) : (
-            <p className="text-muted-foreground text-sm">
-              Only change a voice into your own, or into one you have permission to use.
-            </p>
-          )}
-        </div>
-      ) : null}
-
-      {tool === "edit" ? (
-        <div className="grid gap-3">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="edit-before">What it says now</Label>
-            <Button
-              size="xs"
-              variant="outline"
-              className="ms-auto"
-              disabled={!source || working || writing}
-              onClick={() => void writeDown()}
-            >
-              {writing ? "Writing it down…" : "Write down what it says"}
-            </Button>
-          </div>
-          <Textarea
-            id="edit-before"
-            rows={3}
-            value={before}
-            disabled={working}
-            onChange={(e) => {
-              if (after === before) setAfter(e.target.value);
-              setBefore(e.target.value);
-            }}
-          />
-          <Label htmlFor="edit-after">What it should say</Label>
-          <Textarea
-            id="edit-after"
-            rows={3}
-            value={after}
-            disabled={working}
-            placeholder="Change a few words in the text above"
-            onChange={(e) => setAfter(e.target.value)}
-          />
-          <p className="text-muted-foreground text-sm">
-            Change a few words at a time: up to {chosen?.speech_edit?.max_changes ?? 5} separate
-            changes. English and Chinese work best.
-          </p>
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          onClick={() => void run()}
-          disabled={!ready || !source || working || missing || tooLong}
-        >
-          {working ? `${text.busy}…` : text.button}
-        </Button>
-        {working ? (
-          <>
-            <output className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Spinner /> {step} · {clock(waited)}
-            </output>
-            <Button variant="ghost" onClick={() => abort.current?.abort()}>
-              Cancel
-            </Button>
-          </>
-        ) : speed && picked ? (
-          <span className="text-muted-foreground text-sm">
-            About {Math.max(1, Math.round(picked.seconds / speed))} seconds of work on this
-            computer, plus a few to load the model.
-          </span>
-        ) : null}
-        {!ready && chosen ? (
-          <span className="text-muted-foreground text-sm">
-            <NotReadyText task={tool} seeAbove />
-          </span>
-        ) : null}
-      </div>
-      {problem ? (
-        <p role="alert" className="text-destructive">
-          {problem}
-        </p>
-      ) : null}
-      {made.length > 0 ? (
-        <section aria-label="Result" className="grid gap-3">
-          <div className="flex items-center gap-3">
-            <h2 className="me-auto font-semibold">
-              {made.length > 1 ? "Kept in Your music" : "Kept in Your music"}
-            </h2>
-            {onOpenLibrary ? (
-              <button
-                type="button"
-                className="text-sm underline underline-offset-4"
-                onClick={onOpenLibrary}
-              >
-                Open Your music
-              </button>
-            ) : null}
-          </div>
-          <ul className="grid gap-3">
-            {made.map((t) => (
-              <li key={t.id} className="grid gap-2 rounded-xl border bg-card p-3">
-                <span className="font-medium">
-                  {t.stem ?? t.title}{" "}
-                  <span className="text-muted-foreground text-xs">{clock(t.seconds)}</span>
+              </ul>
+            ),
+            caption: (
+              <div className="grid gap-1">
+                <span>
+                  {results.length > 1 ? "The parts are kept" : "It is kept"} in Your music, next to
+                  the recording it came from.
                 </span>
-                {/* biome-ignore lint/a11y/useMediaCaption: the result of the tool */}
-                <audio controls preload="none" src={t.audio_url} className="h-10 w-full" />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-    </div>
+                {problem ? (
+                  <p role="alert" className="m-0 text-destructive text-sm">
+                    {problem}
+                  </p>
+                ) : null}
+              </div>
+            ),
+            actions: resultActions,
+          }
+        : {
+            kind: "empty",
+            icon: ICON[tool],
+            title: text.empty,
+            text: `Choose a recording on the left, then press ${text.button}.`,
+          };
+
+  const recent: RecentItem[] = library.tracks
+    .filter((t) => t.mode === text.mode)
+    .slice(0, 24)
+    .map((t) => ({
+      id: t.id,
+      cover: (
+        <span className="grid size-full place-items-center gap-0.5 bg-muted p-1 text-center">
+          <AudioLines className="size-4 text-muted-foreground" aria-hidden="true" />
+          <span className="line-clamp-2 text-[0.625rem] leading-tight">{t.title}</span>
+        </span>
+      ),
+      label: `Open: ${t.title}`,
+      current: opened?.id === t.id,
+      onOpen: () => {
+        if (working) return;
+        setProblem(null);
+        setOpened(t);
+      },
+    }));
+
+  return (
+    <MakeScreen
+      title={title ?? text.title}
+      lead={lead ?? text.blurb}
+      ask={
+        <>
+          {runtime && chosen?.engine !== "comfyui" ? (
+            <RuntimeCard runtime={runtime} api={api} onChanged={reload} />
+          ) : null}
+          <ModelPicker
+            models={models}
+            task={tool}
+            value={chosen?.id ?? null}
+            onChange={(id) => {
+              setModelId(id);
+              onModelChosen?.(id);
+            }}
+            onGetModel={onGetModel}
+            disabled={working}
+          />
+          <div className="grid gap-2">
+            <Label htmlFor={`source-${tool}`} className="font-semibold text-ui-lg">
+              {text.ask}
+            </Label>
+            <Select
+              id={`source-${tool}`}
+              value={source ? `${source.kind}:${source.id}` : undefined}
+              placeholder={sourceOptions.length ? "Choose…" : "Nothing in the library yet"}
+              disabled={working || sourceOptions.length === 0}
+              options={sourceOptions}
+              onValueChange={(v) => {
+                const [kind, ...id] = v.split(":");
+                setSource(
+                  kind === "track" || kind === "speech" ? { kind, id: id.join(":") } : null,
+                );
+                setBefore("");
+                setAfter("");
+                setMade([]);
+                setOpened(null);
+              }}
+            />
+            <input
+              ref={picker}
+              type="file"
+              accept="audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus,.caf,.aiff"
+              className="sr-only"
+              aria-label="Add a recording from this computer"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) void addFile(f);
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="justify-self-start"
+              disabled={working}
+              onClick={() => picker.current?.click()}
+            >
+              Add a recording
+            </Button>
+            {picked ? (
+              <Player src={picked.url} title={picked.title} duration={picked.seconds} />
+            ) : null}
+            {tooLong && limit ? (
+              <p role="alert" className="m-0 text-destructive text-sm">
+                {chosen?.title} takes a recording of up to {clock(limit)}. This one is{" "}
+                {clock(picked?.seconds ?? 0)}.
+              </p>
+            ) : null}
+            {sourceOptions.length === 0 && onOpenLibrary ? (
+              <p className="m-0 text-muted-foreground text-sm">
+                Nothing in the library yet. Add a recording, or make something first.
+              </p>
+            ) : null}
+          </div>
+
+          {tool === "separate" && stems.length > 0 ? (
+            <fieldset className="m-0 grid gap-2 border-0 p-0" disabled={working}>
+              <legend className="mb-1 font-semibold text-ui-lg">Keep these parts</legend>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {stems.map((name) => (
+                  <Checkbox
+                    key={name}
+                    label={name}
+                    checked={wanted.includes(name)}
+                    disabled={working}
+                    onCheckedChange={(on) =>
+                      setKept(on ? [...wanted, name] : wanted.filter((x) => x !== name))
+                    }
+                  />
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+
+          {tool === "convert" ? (
+            <div className="grid gap-2">
+              <Label htmlFor="convert-voice" className="font-semibold text-ui-lg">
+                Sound like
+              </Label>
+              <Select
+                id="convert-voice"
+                value={voice || undefined}
+                placeholder={voices.length ? "Choose a voice…" : "No saved voices yet"}
+                disabled={working || voices.length === 0}
+                options={voices.map((v) => ({
+                  value: v.id,
+                  label: v.name,
+                  hint: v.consent.basis === "own" ? "your own voice" : "used with permission",
+                }))}
+                onValueChange={setVoice}
+              />
+              {voices.length === 0 ? (
+                <p className="m-0 text-muted-foreground text-sm">
+                  Save a voice from a recording first.{" "}
+                  {onOpenVoices ? (
+                    <button
+                      type="button"
+                      className="underline underline-offset-4"
+                      onClick={onOpenVoices}
+                    >
+                      Open Voices
+                    </button>
+                  ) : null}
+                </p>
+              ) : (
+                <p className="m-0 text-muted-foreground text-sm">
+                  Only change a voice into your own, or into one you have permission to use.
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {tool === "edit" ? (
+            <div className="grid gap-3">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="edit-before" className="font-semibold text-ui-lg">
+                  What it says now
+                </Label>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="ms-auto"
+                  disabled={!source || working || writing}
+                  onClick={() => void writeDown()}
+                >
+                  {writing ? "Writing it down…" : "Write down what it says"}
+                </Button>
+              </div>
+              <Textarea
+                id="edit-before"
+                rows={3}
+                value={before}
+                disabled={working}
+                onChange={(e) => {
+                  if (after === before) setAfter(e.target.value);
+                  setBefore(e.target.value);
+                }}
+              />
+              <Label htmlFor="edit-after" className="font-semibold text-ui-lg">
+                What it should say
+              </Label>
+              <Textarea
+                id="edit-after"
+                rows={3}
+                value={after}
+                disabled={working}
+                placeholder="Change a few words in the text above"
+                onChange={(e) => setAfter(e.target.value)}
+              />
+              <p className="m-0 text-muted-foreground text-sm">
+                Change a few words at a time: up to {chosen?.speech_edit?.max_changes ?? 5} separate
+                changes. English and Chinese work best.
+              </p>
+            </div>
+          ) : null}
+        </>
+      }
+      action={
+        <>
+          <Button
+            type="button"
+            size="lg"
+            className="w-full rounded-full md:w-auto md:px-10"
+            onClick={() => void run()}
+            disabled={!ready || !source || working || missing || tooLong}
+          >
+            {working ? <Spinner /> : null}
+            {text.button}
+          </Button>
+          {!ready && chosen ? (
+            <p className="mt-2 text-muted-foreground text-xs">
+              <NotReadyText task={tool} seeAbove />
+            </p>
+          ) : speed && picked && !working ? (
+            <p className="mt-2 text-muted-foreground text-xs">
+              About {Math.max(1, Math.round(picked.seconds / speed))} seconds of work on this
+              computer, plus a few to load the model.
+            </p>
+          ) : null}
+        </>
+      }
+      stage={<Stage state={stage} className="w-full" minHeight="min-h-[14rem]" />}
+      recent={
+        <RecentStrip
+          title="Made here before"
+          items={recent}
+          onSeeAll={onOpenLibrary}
+          empty="Nothing made here yet."
+        />
+      }
+    />
   );
 }

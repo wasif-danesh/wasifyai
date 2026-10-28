@@ -14,8 +14,9 @@ Write down what a recording in your library says and keep it as a transcript.
 ## Steps in the app
 
 1. Open **Voice › Speech to text**.
-2. Choose a recording or add a file.
-3. Choose Transcribe. The transcript appears in your library.
+2. Drop a recording on the screen or choose **Choose a recording**.
+3. Choose **Transcribe**. The text appears with its times, with Copy and Save (.txt, .srt or .vtt), and
+   joins Recent transcripts.
 
 ## Fields
 

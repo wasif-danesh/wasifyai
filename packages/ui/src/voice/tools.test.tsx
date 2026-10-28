@@ -9,7 +9,7 @@ import type {
   VoiceApi,
   VoiceModelInfo,
 } from "@wasifyai/client";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { AudioToolWorkspace } from "./AudioToolWorkspace";
 import { TrackList, trackKind } from "./TrackList";
 import { modelOption, stateText } from "./format";
@@ -121,8 +121,16 @@ const runsThat = (events: ParsedEvent[]) => ({
 const finished = (tracks: Record<string, unknown>[]) =>
   ev("done", { outputs: { status: "done", tracks } });
 
-async function pickSource(id = "track:t1") {
-  await userEvent.selectOptions(await screen.findByRole("combobox", { name: /which/i }), id);
+// Radix's pointer handling needs these in jsdom
+beforeAll(() => {
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.releasePointerCapture ??= () => {};
+  Element.prototype.scrollIntoView ??= () => {};
+});
+
+async function pickSource(name: RegExp = /^Summer/) {
+  await userEvent.click(await screen.findByRole("combobox", { name: /which/i }));
+  await userEvent.click(await screen.findByRole("option", { name }));
 }
 
 describe("splitting a recording", () => {
@@ -144,7 +152,7 @@ describe("splitting a recording", () => {
     for (const name of ["drums", "bass", "other"]) {
       await userEvent.click(screen.getByRole("checkbox", { name }));
     }
-    await userEvent.click(screen.getByRole("button", { name: "Split it" }));
+    await userEvent.click(screen.getByRole("button", { name: "Split the song" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
     expect(runs.startRun.mock.calls[0]?.[1]).toEqual({
       task: "separate",
@@ -160,7 +168,7 @@ describe("splitting a recording", () => {
     const runs = runsThat([finished([{ track_id: "p", title: "x", seconds: 1, audio_url: "u" }])]);
     render(<AudioToolWorkspace api={api([tool()])} runs={runs} tool="separate" />);
     await pickSource();
-    const split = screen.getByRole("button", { name: "Split it" }) as HTMLButtonElement;
+    const split = screen.getByRole("button", { name: "Split the song" }) as HTMLButtonElement;
     for (const name of ["drums", "bass", "other", "vocals"]) {
       await userEvent.click(screen.getByRole("checkbox", { name }));
     }
@@ -190,9 +198,9 @@ describe("splitting a recording", () => {
     render(<AudioToolWorkspace api={api([long])} runs={runs} tool="separate" />);
     await pickSource();
     expect(await screen.findByText(/takes a recording of up to 0:10/)).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Split it" }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    expect(
+      (screen.getByRole("button", { name: "Split the song" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   it("shows the refusal of the engine in words", async () => {
@@ -203,8 +211,8 @@ describe("splitting a recording", () => {
     ]);
     render(<AudioToolWorkspace api={api([tool()])} runs={runs} tool="separate" />);
     await pickSource();
-    await userEvent.click(screen.getByRole("button", { name: "Split it" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("Nothing came out.");
+    await userEvent.click(screen.getByRole("button", { name: "Split the song" }));
+    expect(await screen.findByText("Nothing came out.")).toBeTruthy();
   });
 
   it("adds a recording from this computer and chooses it", async () => {
@@ -223,8 +231,9 @@ describe("splitting a recording", () => {
       file,
     );
     await waitFor(() => expect(importTrack).toHaveBeenCalledWith(file));
-    const select = screen.getByRole("combobox", { name: /which/i }) as HTMLSelectElement;
-    await waitFor(() => expect(select.value).toBe("track:t9"));
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: /which/i })).toHaveTextContent("Dad"),
+    );
   });
 });
 
@@ -276,10 +285,12 @@ describe("changing a voice", () => {
       />,
     );
     await pickSource();
-    const voice = await screen.findByRole("combobox", { name: "Sound like" });
-    expect(screen.getByRole("option", { name: "Ann (your own voice)" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "Bo (used with permission)" })).toBeTruthy();
-    await userEvent.selectOptions(voice, "v2");
+    await userEvent.click(await screen.findByRole("combobox", { name: "Sound like" }));
+    expect(screen.getByRole("option", { name: /^Ann/ }).textContent).toContain("your own voice");
+    expect(screen.getByRole("option", { name: /^Bo/ }).textContent).toContain(
+      "used with permission",
+    );
+    await userEvent.click(screen.getByRole("option", { name: /^Bo/ }));
     await userEvent.click(screen.getByRole("button", { name: "Change the voice" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
     expect(runs.startRun.mock.calls[0]?.[1]).toEqual({
@@ -343,7 +354,7 @@ describe("changing the words", () => {
     render(<AudioToolWorkspace api={api([edit], { words })} runs={runsThat([])} tool="edit" />);
     await pickSource();
     await userEvent.click(screen.getByRole("button", { name: "Write down what it says" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("Set up speech to text first.");
+    expect(await screen.findByText("Set up speech to text first.")).toBeTruthy();
   });
 });
 

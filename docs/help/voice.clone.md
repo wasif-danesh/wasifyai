@@ -13,7 +13,7 @@ Save a voice copied from a short recording, to speak in it later.
 
 ## Steps in the app
 
-1. Open **Voice › Voices**.
+1. Open **Voice › Voices**, or choose **Make a voice** under the voice list in **Voice › Text to speech**.
 2. Choose to copy a voice and pick a recording.
 3. Say whose voice it is: yours, or someone who agreed.
 4. Save.

@@ -63,6 +63,17 @@ function Frame({ title, lead, children }: { title: string; lead: ReactNode; chil
   );
 }
 
+/** A screen on the one make screen (ADR-0093): the frame fills the window under the top bar. */
+function MakeFrame({ children }: { children: ReactNode }) {
+  return (
+    <TopBarSlot>
+      <div data-workspace className="flex h-[calc(100dvh-3rem)] min-h-[32rem] flex-col">
+        {children}
+      </div>
+    </TopBarSlot>
+  );
+}
+
 const device = (p: VoicePageProps, onDevice: string, onService: string) =>
   p.place === "device" ? onDevice : onService;
 
@@ -104,44 +115,44 @@ export function SpeakPage(p: VoicePageProps) {
   const [voice] = useState(() => take(p.remembered, USE_VOICE));
   const key = "wasifyai.voice.model.speak";
   return (
-    <Frame
-      title="Text to speech"
-      lead={device(
-        p,
-        "Type something and hear it. It is made on this computer; nothing is sent away.",
-        "Type something and hear it. The speech is kept in your account. A model marked Hosted sends the text to its provider.",
-      )}
-    >
+    <MakeFrame>
       <SpeakWorkspace
         api={p.api}
         runs={p.runs}
+        lead={device(
+          p,
+          "Type something and hear it. It is made on this computer; nothing is sent away.",
+          "Type something and hear it. The speech is kept in your account. A model marked Hosted sends the text to its provider.",
+        )}
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
         initialSavedVoice={voice}
+        onTool={(speech, tool) => {
+          sendToTool(p.remembered, { kind: "speech", id: speech.id });
+          p.go(tool === "convert" ? "convert" : "speechedit");
+        }}
       />
-    </Frame>
+    </MakeFrame>
   );
 }
 
 export function TranscribePage(p: VoicePageProps) {
   const key = "wasifyai.voice.model.transcribe";
   return (
-    <Frame
-      title="Speech to text"
-      lead={device(
-        p,
-        "Turn a recording into text with times. It is read on this computer; nothing is sent away.",
-        "Turn a recording into text with times. The text is kept in your account; the recording is not. A model marked Hosted sends the recording to its provider.",
-      )}
-    >
+    <MakeFrame>
       <TranscribeWorkspace
         api={p.api}
+        lead={device(
+          p,
+          "Turn a recording into text with times. It is read on this computer; nothing is sent away.",
+          "Turn a recording into text with times. The text is kept in your account; the recording is not. A model marked Hosted sends the recording to its provider.",
+        )}
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
       />
-    </Frame>
+    </MakeFrame>
   );
 }
 
@@ -317,12 +328,14 @@ export function ToolPage({ tool, ...p }: VoicePageProps & { tool: AudioToolName 
   const key = `wasifyai.tool.model.${tool}`;
   const [source] = useState(() => takeSource(p.remembered));
   return (
-    <Frame title={text.title} lead={device(p, text.device, text.service)}>
+    <MakeFrame>
       <AudioToolWorkspace
         key={tool}
         api={p.api}
         runs={p.runs}
         tool={tool}
+        title={text.title}
+        lead={device(p, text.device, text.service)}
         initialSource={source}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
@@ -330,7 +343,7 @@ export function ToolPage({ tool, ...p }: VoicePageProps & { tool: AudioToolName 
         onOpenLibrary={() => p.go("tracks")}
         onOpenVoices={() => p.go("voices")}
       />
-    </Frame>
+    </MakeFrame>
   );
 }
 

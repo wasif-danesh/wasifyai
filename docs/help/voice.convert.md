@@ -15,7 +15,8 @@ Make a recording sound like one of your copied voices. The original stays.
 
 1. Open **Voice › Change a voice**.
 2. Choose the recording and the voice.
-3. Choose Change.
+3. Choose **Change the voice**. Under a speech you made, **Change the voice** opens this screen with it
+   chosen.
 
 ## Fields
 

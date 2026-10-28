@@ -10,7 +10,7 @@ import type {
   VoiceApi,
   VoiceModelInfo,
 } from "@wasifyai/client";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { SaveAsProvider } from "../save";
 import { MusicWorkspace } from "./MusicWorkspace";
 import { SpeakWorkspace } from "./SpeakWorkspace";
@@ -161,29 +161,47 @@ describe("the model list", () => {
   });
 });
 
+// Radix's pointer handling and the media element need these in jsdom
+beforeAll(() => {
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.releasePointerCapture ??= () => {};
+  Element.prototype.scrollIntoView ??= () => {};
+  window.HTMLMediaElement.prototype.play = vi.fn(async () => {});
+  window.HTMLMediaElement.prototype.pause = vi.fn();
+});
+
+const stage = () => screen.getByRole("region", { name: "Result" });
+
 describe("text to speech", () => {
-  it("speaks with the chosen voice and option, then lists what was made", async () => {
-    const speeches = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([speech()]);
+  it("speaks with the chosen voice and option, then plays it on the stage", async () => {
+    const speeches = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([speech({ id: "s2", text: "Good morning", seconds: 3 })]);
     const runs = runsThat([ev("node", { label: "Making the speech" }), done]);
     const user = userEvent.setup();
     render(<SpeakWorkspace api={api({ speeches })} runs={runs} />);
-    await screen.findByLabelText("Model");
-    expect(screen.getByLabelText("Model")).toHaveValue("kokoro-82m");
-    expect(within(screen.getByLabelText("Built-in voice")).getAllByRole("option")).toHaveLength(2);
-    fireEvent.change(screen.getByLabelText(/Speed/), { target: { value: "1.5" } });
-    await user.selectOptions(screen.getByLabelText("Built-in voice"), "bm_george");
-    await user.type(screen.getByLabelText("Text"), "Good morning");
-    await user.click(screen.getByRole("button", { name: "Speak" }));
+    expect(await screen.findByRole("combobox", { name: "Model" })).toHaveTextContent("Kokoro 82M");
+    const voices = screen.getByRole("group", { name: "Voices" });
+    expect(within(voices).getAllByRole("radio")).toHaveLength(2);
+    expect(within(voices).getByRole("radio", { name: /Heart/ })).toBeChecked(); // the model's own default
+    await user.click(within(voices).getByRole("radio", { name: /George/ }));
+    await user.click(screen.getByText("For experts"));
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Speed" }), { key: "ArrowRight" });
+    await user.type(screen.getByLabelText("What should it say?"), "Good morning");
+    await user.click(screen.getByRole("button", { name: "Make the speech" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
     expect(runs.startRun.mock.calls[0]?.[0]).toBe("wasifyai-voice");
     expect(runs.startRun.mock.calls[0]?.[1]).toEqual({
       text: "Good morning",
       model: "kokoro-82m",
       voice: "bm_george",
-      options: { speed: 1.5 },
+      options: { speed: 1.05 },
     });
-    expect(await screen.findByText("Hello there")).toBeInTheDocument();
-    expect(screen.getByText("1:05")).toBeInTheDocument();
+    await waitFor(() => expect(stage()).toHaveAttribute("data-state", "result"));
+    expect(within(stage()).getByText("Good morning")).toBeInTheDocument();
+    expect(within(stage()).getByRole("button", { name: /Play Good morning/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open: Good morning" })).toBeInTheDocument(); // the recent strip
   });
 
   it("shows a refusal in words and keeps the text", async () => {
@@ -194,10 +212,10 @@ describe("text to speech", () => {
     ]);
     const user = userEvent.setup();
     render(<SpeakWorkspace api={api()} runs={runs} />);
-    await user.type(await screen.findByLabelText("Text"), "Hi");
-    await user.click(screen.getByRole("button", { name: "Speak" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("No such voice.");
-    expect(screen.getByLabelText("Text")).toHaveValue("Hi");
+    await user.type(await screen.findByLabelText("What should it say?"), "Hi");
+    await user.click(screen.getByRole("button", { name: "Make the speech" }));
+    expect(await screen.findByText("No such voice.")).toBeInTheDocument();
+    expect(screen.getByLabelText("What should it say?")).toHaveValue("Hi");
   });
 
   it("will not speak with a model that is not ready, and offers the way to get it", async () => {
@@ -205,8 +223,8 @@ describe("text to speech", () => {
     const models = vi.fn(async () => [model({ state: "can_install", bytes_missing: 189_549_408 })]);
     const user = userEvent.setup();
     render(<SpeakWorkspace api={api({ models })} runs={runsThat([])} onGetModel={onGet} />);
-    await user.type(await screen.findByLabelText("Text"), "Hi");
-    expect(screen.getByRole("button", { name: "Speak" })).toBeDisabled();
+    await user.type(await screen.findByLabelText("What should it say?"), "Hi");
+    expect(screen.getByRole("button", { name: "Make the speech" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Get it in the Model hub" }));
     expect(onGet).toHaveBeenCalledWith("kokoro-82m");
     expect(screen.getByText(/190 MB/)).toBeInTheDocument();
@@ -218,18 +236,57 @@ describe("text to speech", () => {
     expect(await screen.findByText("Not for commercial use")).toBeInTheDocument();
   });
 
-  it("deletes a speech from the list", async () => {
+  it("plays a voice heard before, and makes a sample of one never heard", async () => {
+    const runs = runsThat([done]);
+    const user = userEvent.setup();
+    render(
+      <SpeakWorkspace
+        api={api({ speeches: vi.fn(async () => [speech({ voice: "af_heart" })]) })}
+        runs={runs}
+      />,
+    );
+    expect(await screen.findByRole("button", { name: "Play Heart" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Hear a sample of George" }));
+    expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({
+      voice: "bm_george",
+      model: "kokoro-82m",
+    });
+    expect(await screen.findByRole("button", { name: "Stop George" })).toBeInTheDocument();
+  });
+
+  it("opens a speech from the recent strip, and deletes it after asking", async () => {
     const removeSpeech = vi.fn(async () => undefined);
+    const onTool = vi.fn();
     const user = userEvent.setup();
     render(
       <SpeakWorkspace
         api={api({ speeches: vi.fn(async () => [speech()]), removeSpeech })}
         runs={runsThat([])}
+        onTool={onTool}
       />,
     );
-    await user.click(await screen.findByRole("button", { name: "Delete" }));
+    await user.click(await screen.findByRole("button", { name: "Open: Hello there" }));
+    expect(within(stage()).getByText("Hello there")).toBeInTheDocument();
+    expect(within(stage()).getAllByText(/1:05/).length).toBeGreaterThan(0);
+    await user.click(within(stage()).getByRole("button", { name: /Change the voice/ }));
+    expect(onTool).toHaveBeenCalledWith(expect.objectContaining({ id: "s1" }), "convert");
+    await user.click(within(stage()).getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Delete/ }));
+    expect(removeSpeech).not.toHaveBeenCalled(); // asks first
+    await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(removeSpeech).toHaveBeenCalledWith("s1");
-    await waitFor(() => expect(screen.queryByText("Hello there")).not.toBeInTheDocument());
+    await waitFor(() => expect(stage()).toHaveAttribute("data-state", "empty"));
+  });
+
+  it("makes a voice without leaving the screen, and speaks with it", async () => {
+    const voices = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([saved({ id: "v9", name: "Calm" })]);
+    const user = userEvent.setup();
+    render(<SpeakWorkspace api={api({ voices })} runs={runsThat([])} />);
+    await user.click(await screen.findByRole("button", { name: "Make a voice" }));
+    expect(await screen.findByRole("dialog", { name: "Make a voice" })).toBeInTheDocument();
   });
 });
 
@@ -301,12 +358,15 @@ const asr = () =>
   });
 
 describe("speech to text", () => {
-  it("transcribes a chosen recording with the chosen model and shows the times", async () => {
+  it("transcribes a chosen recording with the chosen model and shows the times on the stage", async () => {
     const transcribe = vi.fn(async () => transcript());
     const user = userEvent.setup();
     render(<TranscribeWorkspace api={api({ models: vi.fn(async () => [asr()]), transcribe })} />);
-    const input = (await screen.findByLabelText("Recording")) as HTMLInputElement;
+    const input = (await screen.findByLabelText("Choose a recording")) as HTMLInputElement;
     await user.upload(input, new File(["x"], "board.wav", { type: "audio/wav" }));
+    expect(screen.getByText("board.wav")).toBeInTheDocument(); // chosen, not sent yet
+    expect(transcribe).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Transcribe" }));
     await waitFor(() => expect(transcribe).toHaveBeenCalled());
     const call = transcribe.mock.calls[0] as unknown as [File, string];
     expect(call[0].name).toBe("board.wav");
@@ -331,16 +391,16 @@ describe("speech to text", () => {
         })}
       />,
     );
-    await user.click(await screen.findByText("Board meeting"));
+    await user.click(await screen.findByRole("button", { name: "Open: Board meeting" }));
     await user.click(await screen.findByRole("button", { name: "Save .srt" }));
     expect(exportTranscript).toHaveBeenCalledWith("t1", "srt");
   });
 
   it("in the app window asks where to save a transcript and writes it there, or does nothing on cancel", async () => {
     const exportTranscript = vi.fn(async () => new Blob(["1\n00:00"]));
-    const write = vi.fn(async (path: string) => ({ name: "board-meeting.srt", path }));
+    const write = vi.fn(async (path: string) => ({ name: "board-meeting.txt", path }));
     const choose = vi.fn<(name: string) => Promise<string | null>>(
-      async () => "/Users/me/Documents/b.srt",
+      async () => "/Users/me/Documents/b.txt",
     );
     const user = userEvent.setup();
     render(
@@ -355,16 +415,16 @@ describe("speech to text", () => {
         />
       </SaveAsProvider>,
     );
-    await user.click(await screen.findByText("Board meeting"));
-    await user.click(await screen.findByRole("button", { name: "Save .srt" }));
-    expect(choose).toHaveBeenCalledWith("board-meeting.srt");
+    await user.click(await screen.findByRole("button", { name: "Open: Board meeting" }));
+    await user.click(await screen.findByRole("button", { name: "Save .txt" }));
+    expect(choose).toHaveBeenCalledWith("board-meeting.txt");
     await waitFor(() =>
-      expect(write).toHaveBeenCalledWith("/Users/me/Documents/b.srt", expect.any(Blob)),
+      expect(write).toHaveBeenCalledWith("/Users/me/Documents/b.txt", expect.any(Blob)),
     );
     choose.mockResolvedValueOnce(null); // the person cancels the box: nothing is fetched or written
     exportTranscript.mockClear();
     write.mockClear();
-    await user.click(screen.getByRole("button", { name: "Save .srt" }));
+    await user.click(screen.getByRole("button", { name: "Save .txt" }));
     await new Promise((r) => setTimeout(r, 20));
     expect(exportTranscript).not.toHaveBeenCalled();
     expect(write).not.toHaveBeenCalled();
@@ -376,15 +436,17 @@ describe("speech to text", () => {
     });
     const user = userEvent.setup();
     render(<TranscribeWorkspace api={api({ models: vi.fn(async () => [asr()]), transcribe })} />);
-    await user.upload(await screen.findByLabelText("Recording"), new File(["x"], "a.mp3"));
+    await user.upload(await screen.findByLabelText("Choose a recording"), new File(["x"], "a.mp3"));
+    await user.click(screen.getByRole("button", { name: "Transcribe" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Install ffmpeg");
   });
 
-  it("does not take a recording until the model is ready", async () => {
+  it("does not transcribe until the model is ready", async () => {
     const models = vi.fn(async () => [{ ...asr(), state: "can_install" as const }]);
+    const user = userEvent.setup();
     render(<TranscribeWorkspace api={api({ models })} />);
-    expect(await screen.findByLabelText("Recording")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Choose a recording" })).toBeDisabled();
+    await user.upload(await screen.findByLabelText("Choose a recording"), new File(["x"], "a.wav"));
+    expect(screen.getByRole("button", { name: "Transcribe" })).toBeDisabled();
   });
 });
 
@@ -499,11 +561,15 @@ describe("text to speech with a saved voice", () => {
       />,
     );
     await waitFor(() =>
-      expect(screen.getByLabelText("Model")).toHaveValue("qwen3-tts-1.7b-voicedesign"),
+      expect(screen.getByRole("combobox", { name: "Model" })).toHaveTextContent(
+        "Qwen3-TTS 1.7B VoiceDesign",
+      ),
     );
-    expect(screen.queryByLabelText("Built-in voice")).not.toBeInTheDocument();
-    await user.type(screen.getByLabelText("Text"), "Good morning");
-    await user.click(screen.getByRole("button", { name: "Speak" }));
+    const voices = screen.getByRole("group", { name: "Voices" });
+    expect(within(voices).getAllByRole("radio")).toHaveLength(1); // only the saved voice: no built-in ones
+    expect(within(voices).getByRole("radio", { name: /Calm/ })).toBeChecked();
+    await user.type(screen.getByLabelText("What should it say?"), "Good morning");
+    await user.click(screen.getByRole("button", { name: "Make the speech" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
     expect(runs.startRun.mock.calls[0]?.[1]).toEqual({
       text: "Good morning",
@@ -582,7 +648,9 @@ describe("music", () => {
     const runs = runsThat([ev("node", { label: "Making the music" }), doneTrack]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models, tracks })} runs={runs} />);
-    expect(await screen.findByLabelText("Model")).toHaveValue("ace-step-1.5-turbo");
+    expect(await screen.findByRole("combobox", { name: "Model" })).toHaveTextContent(
+      "ACE-Step 1.5 Turbo",
+    );
     expect(screen.getByLabelText(/Lyrics \(optional\)/)).toBeInTheDocument();
     expect(screen.getByLabelText(/No singing/)).toBeInTheDocument();
     expect(screen.getByText(/About 15 seconds of work/)).toBeInTheDocument();
@@ -606,7 +674,8 @@ describe("music", () => {
     const models = vi.fn(async () => [ace(), stable()]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models })} runs={runsThat([])} />);
-    await user.selectOptions(await screen.findByLabelText("Model"), "stable-audio-3-small-music");
+    await user.click(await screen.findByRole("combobox", { name: "Model" }));
+    await user.click(await screen.findByRole("option", { name: /Stable Audio 3 Small \(music\)/ }));
     expect(screen.queryByLabelText(/Lyrics/)).not.toBeInTheDocument();
     expect(screen.getByText("This model makes music without singing.")).toBeInTheDocument();
     expect(screen.getByText("Commercial use with conditions")).toBeInTheDocument();

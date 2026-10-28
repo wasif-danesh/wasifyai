@@ -373,7 +373,7 @@
    "karaoke",
    "remove vocals"
   ],
-  "body": "# Split into parts\n\nAction: `music.separate`\n\n## What it is for\n\nSplit a recording into its parts (voice, drums, bass, other); each part is saved.\n\n## Steps in the app\n\n1. Open **Music › Split into parts**.\n2. Choose a recording.\n3. Choose the parts to keep.\n4. Choose Split.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `stems`: Which parts, or all.\n\n## Limits\n\n- Recordings up to an hour.\n\n## Needs\n\n- A separation model (Models).\n\n## Examples\n\n- Give me just the vocals of that song.\n\n## Problems\n\n- **No such part** That model does not make that part; choose from the list."
+  "body": "# Split into parts\n\nAction: `music.separate`\n\n## What it is for\n\nSplit a recording into its parts (voice, drums, bass, other); each part is saved.\n\n## Steps in the app\n\n1. Open **Music › Split into parts**.\n2. Choose a recording.\n3. Choose the parts to keep.\n4. Choose **Split the song**. Each part plays where it appears and is kept in Your music.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `stems`: Which parts, or all.\n\n## Limits\n\n- Recordings up to an hour.\n\n## Needs\n\n- A separation model (Models).\n\n## Examples\n\n- Give me just the vocals of that song.\n\n## Problems\n\n- **No such part** That model does not make that part; choose from the list."
  },
  {
   "action": "notebook.add_source",
@@ -457,7 +457,7 @@
    "say this",
    "narrate"
   ],
-  "body": "# Text to speech\n\nAction: `speech.speak`\n\n## What it is for\n\nRead a text aloud in a voice and keep the recording in your library.\n\n## Steps in the app\n\n1. Open **Voice › Text to speech**.\n2. Type or paste the text.\n3. Choose a voice: one that comes with the model, or one of your saved voices.\n4. Choose Speak. The recording appears under Made before.\n\n## Fields\n\n- `text`: What to say.\n- `voice`: A built-in voice of the model.\n- `saved_voice`: One of your saved voices (see `voice.list`).\n- `model`: Optional: a model id.\n\n## Limits\n\n- 5,000 characters.\n- A voice is either built-in or saved, not both.\n\n## Needs\n\n- A speech model (Models) and the speech runtime.\n\n## Examples\n\n- Hello, and welcome.\n- Read this paragraph in my calm narrator voice.\n\n## Problems\n\n- **It says a model is missing** Open **Model hub**, get a speech model, then try again.\n- **The text is too long** Split it, or use the Audiobook screen."
+  "body": "# Text to speech\n\nAction: `speech.speak`\n\n## What it is for\n\nRead a text aloud in a voice and keep the recording in your library.\n\n## Steps in the app\n\n1. Open **Voice › Text to speech**.\n2. Type or paste the text.\n3. Choose a voice in the list: your own voices first, then the ones that come with the model. **Hear it**\n   speaks a short line in a voice you have not heard yet; a voice heard before plays at once. **Make a voice**\n   at the end of the list describes or copies a new one without leaving the screen.\n4. Choose **Make the speech**. It plays where it appears, with its waveform, and joins Recent speech under it.\n   Speed and seed are under **For experts**.\n\n## Fields\n\n- `text`: What to say.\n- `voice`: A built-in voice of the model.\n- `saved_voice`: One of your saved voices (see `voice.list`).\n- `model`: Optional: a model id.\n\n## Limits\n\n- 5,000 characters.\n- A voice is either built-in or saved, not both.\n\n## Needs\n\n- A speech model (Models) and the speech runtime.\n\n## Examples\n\n- Hello, and welcome.\n- Read this paragraph in my calm narrator voice.\n\n## Problems\n\n- **It says a model is missing** Open **Model hub**, get a speech model, then try again.\n- **The text is too long** Split it, or use the Audiobook screen."
  },
  {
   "action": "speech.transcribe",
@@ -473,7 +473,7 @@
    "what was said",
    "subtitles"
   ],
-  "body": "# Speech to text\n\nAction: `speech.transcribe`\n\n## What it is for\n\nWrite down what a recording in your library says and keep it as a transcript.\n\n## Steps in the app\n\n1. Open **Voice › Speech to text**.\n2. Choose a recording or add a file.\n3. Choose Transcribe. The transcript appears in your library.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `path`: For another app connected to Wasify AI: the full path of an audio or video file inside a folder that connection may read (Settings › Other apps), instead of a recording of the library.\n- `title`: Optional name.\n\n## Limits\n\n- The recording must be in your library.\n\n## Needs\n\n- A transcription model (Models).\n\n## Examples\n\n- Write down what that speech says.\n\n## Problems\n\n- **Recording is no longer there** Choose another one."
+  "body": "# Speech to text\n\nAction: `speech.transcribe`\n\n## What it is for\n\nWrite down what a recording in your library says and keep it as a transcript.\n\n## Steps in the app\n\n1. Open **Voice › Speech to text**.\n2. Drop a recording on the screen or choose **Choose a recording**.\n3. Choose **Transcribe**. The text appears with its times, with Copy and Save (.txt, .srt or .vtt), and\n   joins Recent transcripts.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `path`: For another app connected to Wasify AI: the full path of an audio or video file inside a folder that connection may read (Settings › Other apps), instead of a recording of the library.\n- `title`: Optional name.\n\n## Limits\n\n- The recording must be in your library.\n\n## Needs\n\n- A transcription model (Models).\n\n## Examples\n\n- Write down what that speech says.\n\n## Problems\n\n- **Recording is no longer there** Choose another one."
  },
  {
   "action": "train.start",
@@ -602,7 +602,7 @@
    "my voice",
    "voice cloning"
   ],
-  "body": "# Copy a voice\n\nAction: `voice.clone`\n\n## What it is for\n\nSave a voice copied from a short recording, to speak in it later.\n\n## Steps in the app\n\n1. Open **Voice › Voices**.\n2. Choose to copy a voice and pick a recording.\n3. Say whose voice it is: yours, or someone who agreed.\n4. Save.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `name`: A name.\n- `voice_is`: own or permission.\n\n## Limits\n\n- A few seconds up to 30 seconds of one person speaking clearly.\n- Always needs your word in the app window.\n\n## Needs\n\n- Nothing beyond the recording.\n\n## Examples\n\n- Copy my voice from that speech.\n\n## Problems\n\n- **Too short** Use a recording of at least a few seconds.\n- **Needs your word** Approve in the app window; the question names whose voice it is."
+  "body": "# Copy a voice\n\nAction: `voice.clone`\n\n## What it is for\n\nSave a voice copied from a short recording, to speak in it later.\n\n## Steps in the app\n\n1. Open **Voice › Voices**, or choose **Make a voice** under the voice list in **Voice › Text to speech**.\n2. Choose to copy a voice and pick a recording.\n3. Say whose voice it is: yours, or someone who agreed.\n4. Save.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `name`: A name.\n- `voice_is`: own or permission.\n\n## Limits\n\n- A few seconds up to 30 seconds of one person speaking clearly.\n- Always needs your word in the app window.\n\n## Needs\n\n- Nothing beyond the recording.\n\n## Examples\n\n- Copy my voice from that speech.\n\n## Problems\n\n- **Too short** Use a recording of at least a few seconds.\n- **Needs your word** Approve in the app window; the question names whose voice it is."
  },
  {
   "action": "voice.convert",
@@ -613,7 +613,7 @@
    "sound like",
    "change the voice"
   ],
-  "body": "# Change a voice\n\nAction: `voice.convert`\n\n## What it is for\n\nMake a recording sound like one of your copied voices. The original stays.\n\n## Steps in the app\n\n1. Open **Voice › Change a voice**.\n2. Choose the recording and the voice.\n3. Choose Change.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `saved_voice`: A copied voice.\n\n## Limits\n\n- The voice must be one copied from a recording.\n\n## Needs\n\n- A voice-changing model (Models).\n\n## Examples\n\n- Make this song sound like my voice.\n\n## Problems\n\n- **A described voice cannot be used** Choose a voice copied from a recording."
+  "body": "# Change a voice\n\nAction: `voice.convert`\n\n## What it is for\n\nMake a recording sound like one of your copied voices. The original stays.\n\n## Steps in the app\n\n1. Open **Voice › Change a voice**.\n2. Choose the recording and the voice.\n3. Choose **Change the voice**. Under a speech you made, **Change the voice** opens this screen with it\n   chosen.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `saved_voice`: A copied voice.\n\n## Limits\n\n- The voice must be one copied from a recording.\n\n## Needs\n\n- A voice-changing model (Models).\n\n## Examples\n\n- Make this song sound like my voice.\n\n## Problems\n\n- **A described voice cannot be used** Choose a voice copied from a recording."
  },
  {
   "action": "voice.design",
@@ -625,7 +625,7 @@
    "new voice",
    "voice from words"
   ],
-  "body": "# Describe a voice\n\nAction: `voice.design`\n\n## What it is for\n\nSave a voice described in words (age, tone, pace) to use again. No recording is needed.\n\n## Steps in the app\n\n1. Open **Voice › Voices**.\n2. Choose to describe a voice.\n3. Give it a name and a description.\n4. Save.\n\n## Fields\n\n- `name`: A name.\n- `description`: The voice in words, up to 300 characters, without brackets.\n\n## Limits\n\n- 300 characters; no brackets.\n\n## Needs\n\n- Nothing to save it; a model that can use it to speak.\n\n## Examples\n\n- Calm narrator: a calm middle-aged woman, slow and warm.\n\n## Problems\n\n- **Brackets** Take the brackets out of the description."
+  "body": "# Describe a voice\n\nAction: `voice.design`\n\n## What it is for\n\nSave a voice described in words (age, tone, pace) to use again. No recording is needed.\n\n## Steps in the app\n\n1. Open **Voice › Voices**, or choose **Make a voice** under the voice list in **Voice › Text to speech**.\n2. Choose to describe a voice.\n3. Give it a name and a description.\n4. Save.\n\n## Fields\n\n- `name`: A name.\n- `description`: The voice in words, up to 300 characters, without brackets.\n\n## Limits\n\n- 300 characters; no brackets.\n\n## Needs\n\n- Nothing to save it; a model that can use it to speak.\n\n## Examples\n\n- Calm narrator: a calm middle-aged woman, slow and warm.\n\n## Problems\n\n- **Brackets** Take the brackets out of the description."
  },
  {
   "action": "voice.edit_speech",
@@ -636,7 +636,7 @@
    "fix a word",
    "edit a recording"
   ],
-  "body": "# Edit speech\n\nAction: `voice.edit_speech`\n\n## What it is for\n\nChange some of the words a recording says, keeping the voice.\n\n## Steps in the app\n\n1. Open **Voice › Edit speech**.\n2. Choose the recording; its words are shown.\n3. Change the words and choose Edit.\n\n## Fields\n\n- `old_text`: What it says now.\n- `text`: What it should say.\n\n## Limits\n\n- 1,000 characters.\n\n## Needs\n\n- A speech-editing model (Models).\n\n## Examples\n\n- Change 'meet at noon' to 'meet at one'.\n\n## Problems\n\n- **Nothing to change** The new words must differ from the old."
+  "body": "# Edit speech\n\nAction: `voice.edit_speech`\n\n## What it is for\n\nChange some of the words a recording says, keeping the voice.\n\n## Steps in the app\n\n1. Open **Voice › Edit speech**.\n2. Choose the recording; its words are shown.\n3. Change the words and choose **Change the words**. Under a speech you made, **Edit the words** opens this\n   screen with it chosen.\n\n## Fields\n\n- `old_text`: What it says now.\n- `text`: What it should say.\n\n## Limits\n\n- 1,000 characters.\n\n## Needs\n\n- A speech-editing model (Models).\n\n## Examples\n\n- Change 'meet at noon' to 'meet at one'.\n\n## Problems\n\n- **Nothing to change** The new words must differ from the old."
  },
  {
   "action": "voice.list",

@@ -13,10 +13,13 @@ export function Modal({
   label,
   onClose,
   children,
+  wide,
 }: {
   label: string;
   onClose: () => void;
   children: ReactNode;
+  /** room for a whole tool (Make a voice), not just a question */
+  wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const labelId = useId();
@@ -39,7 +42,10 @@ export function Modal({
         if (e.target === ref.current) onClose(); // a click on the dimmed page behind
       }}
       className={cn(
-        "m-auto w-[min(28rem,calc(100vw-2rem))] rounded-xl border bg-background p-0 text-foreground shadow-card",
+        "m-auto rounded-xl border bg-background p-0 text-foreground shadow-card",
+        wide
+          ? "max-h-[calc(100dvh-4rem)] w-[min(44rem,calc(100vw-2rem))] overflow-auto"
+          : "w-[min(28rem,calc(100vw-2rem))]",
         "backdrop:bg-foreground/40",
       )}
     >

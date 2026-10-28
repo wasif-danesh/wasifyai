@@ -24,7 +24,8 @@ const EXAMPLES = [
   "A bright, energetic young woman who speaks quickly",
   "A warm, gentle narrator with a soft voice",
 ];
-const SAMPLE = "Hello, this is how I sound. I hope you like it.";
+/** The line a voice says when the person asks to hear it. */
+export const SAMPLE = "Hello, this is how I sound. I hope you like it.";
 
 export type VoicesWorkspaceProps = {
   api: VoiceApi;

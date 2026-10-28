@@ -51,6 +51,7 @@ export function pickModel(models: VoiceModelInfo[], task: string, last?: string 
 }
 
 const LANGUAGE: Record<string, string> = {
+  en: "English",
   "en-us": "American English",
   "en-gb": "British English",
 };

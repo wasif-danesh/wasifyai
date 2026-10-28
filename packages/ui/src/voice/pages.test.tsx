@@ -33,22 +33,24 @@ const props = (place: "device" | "service", go = vi.fn(), remembered = memory())
 });
 
 describe("the voice pages", () => {
-  it("promise that nothing leaves the computer only on the desktop", () => {
+  it("promise that nothing leaves the computer only on the desktop", async () => {
     const { unmount } = render(<SpeakPage {...props("device")} />);
-    expect(screen.getByText(/nothing is sent away/i)).toBeInTheDocument();
+    expect(await screen.findByText(/nothing is sent away/i)).toBeInTheDocument();
     unmount();
     render(<SpeakPage {...props("service")} />);
+    expect(
+      await screen.findByText(/marked Hosted sends the text to its provider/i),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/nothing is sent away/i)).toBeNull();
-    expect(screen.getByText(/marked Hosted sends the text to its provider/i)).toBeInTheDocument();
   });
 
-  it("name each tool and say where it runs", () => {
+  it("name each tool and say where it runs", async () => {
     const { unmount } = render(<ToolPage tool="separate" {...props("device")} />);
-    expect(screen.getByRole("heading", { name: "Split into parts" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Split into parts" })).toBeInTheDocument();
     expect(screen.getByText(/on this computer/i)).toBeInTheDocument();
     unmount();
     render(<ToolPage tool="convert" {...props("service")} />);
-    expect(screen.getByRole("heading", { name: "Change a voice" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Change a voice" })).toBeInTheDocument();
     expect(screen.queryByText(/nothing leaves/i)).toBeNull();
   });
 

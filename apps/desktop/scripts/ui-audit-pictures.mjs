@@ -10,6 +10,8 @@
 //                                                                the stage while it is made and when it is done)
 //   apps/desktop/scripts/ui-audit.sh light video-make           a real clip from the newest picture: Animate this on
 //                                                                Images, the clip made on the stage, then Extend this
+//   apps/desktop/scripts/ui-audit.sh light speech-make          a real speech with its waveform, then a real transcript
+//                                                                of it on Speech to text
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -218,6 +220,44 @@ for (const scheme of ["light", "dark"]) {
       await page.getByText("Extend a video").first().waitFor();
       await page.waitForTimeout(1500);
       await shot(page, "video-extend-chosen");
+    });
+  }
+  if (scheme === "light" && names.has("speech-make")) {
+    // the check of stage U5: a real speech on the stage with its waveform, then that speech transcribed
+    await attempt("speech-make", async () => {
+      await open(page, "/voice/speak");
+      await page.getByLabel("What should it say?").waitFor({ timeout: 60_000 });
+      await shot(page, "speech-voices");
+      await page
+        .getByLabel("What should it say?")
+        .fill("Good morning. This is the new speech screen, made on this computer.");
+      await page.getByRole("button", { name: "Make the speech" }).click();
+      await page
+        .locator('[data-slot="stage"][data-state="result"] [data-slot="player"]')
+        .waitFor({ timeout: 300_000 });
+      await page.waitForTimeout(2500); // the waveform is read
+      await shot(page, "speech-made");
+      const src = await page.locator('[data-slot="stage"] audio').getAttribute("src");
+      const b64 = await page.evaluate(async (url) => {
+        const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
+        let bin = "";
+        for (const b of bytes) bin += String.fromCharCode(b);
+        return btoa(bin);
+      }, src);
+      await page.getByRole("button", { name: "Make a voice" }).click();
+      await page.waitForTimeout(800);
+      await shot(page, "speech-make-a-voice");
+      await page.keyboard.press("Escape");
+      await open(page, "/voice/transcribe");
+      await page.getByLabel("Choose a recording").setInputFiles({
+        name: "good-morning.wav",
+        mimeType: "audio/wav",
+        buffer: Buffer.from(b64, "base64"),
+      });
+      await page.getByRole("button", { name: "Transcribe" }).click();
+      await page.getByRole("article", { name: "Transcript" }).waitFor({ timeout: 300_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "transcript-made");
     });
   }
   if (scheme === "light" && names.size === 0) {

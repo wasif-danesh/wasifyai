@@ -3,6 +3,8 @@
 import type { VoiceModelInfo, VoiceTask } from "@wasifyai/client";
 import { cn } from "../cn";
 import { Label } from "../components/label";
+import { Select } from "../components/select";
+import { Spinner } from "../components/spinner";
 import { ModelSelect, groupOfTask, useChoicesFor } from "../models";
 import { formatBytes } from "../notebook/format";
 import { PageHeader } from "../window-bar";
@@ -69,19 +71,13 @@ export function ModelPicker({
   return (
     <div className="grid gap-2">
       <Label htmlFor={`model-${task}`}>Model</Label>
-      <select
+      <Select
         id={`model-${task}`}
-        className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-        value={value ?? ""}
+        value={value ?? undefined}
         disabled={disabled || models.length === 0}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {models.map((m) => (
-          <option key={m.id} value={m.id}>
-            {modelOption(m, task)}
-          </option>
-        ))}
-      </select>
+        options={models.map((m) => ({ value: m.id, label: modelOption(m, task) }))}
+        onValueChange={onChange}
+      />
       {chosen ? (
         <div className="grid gap-1 text-muted-foreground text-sm" data-testid="model-details">
           <p>
@@ -137,4 +133,13 @@ export function NotReadyText({ task, seeAbove }: { task: string; seeAbove?: bool
   const choices = useChoicesFor(groupOfTask(task), task);
   if (choices) return "Download the model first: use the model button at the top.";
   return seeAbove ? "Set this model up first (see above)." : "Set this model up first.";
+}
+
+/** What a voice screen shows while it reads which models the engine has. */
+export function LoadingModels() {
+  return (
+    <output className="flex flex-1 items-center justify-center gap-2 text-muted-foreground text-sm">
+      <Spinner /> Getting the models ready…
+    </output>
+  );
 }

@@ -257,7 +257,29 @@ made with the tray saying "1 running", the clip and its More menu, then Extend t
 seconds; pictures `video-animate-handed`, `video-making`, `video-made`, `video-made-more` and
 `video-extend-chosen` in `docs/ui-audit/desktop/`).
 
-About 44 days of work in thirteen stages; U0 to U4 are done, U5 next, then the products in the order a
+**Built:** U5 on 2026-10-28: Text to speech, Speech to text, Change a voice and Edit speech on the `MakeScreen`
+(`voice/SpeakWorkspace.tsx`, `TranscribeWorkspace.tsx`, `AudioToolWorkspace.tsx`, mounted by `MakeFrame` in
+`voice/pages.tsx`; the modes stay the menu's items). Speech: the words in a large box, the `VoicesPanel`
+(`voice/VoicesPanel.tsx`: your voices first, then the model's by language, each a radio with Play when it was
+heard before, a cloned voice's recording, or "Hear it", which speaks the Voices screen's sample line; search from
+nine voices; "Make a voice" opens the Voices tool in a dialog and chooses the new voice), the model's settings
+(speed, seed) under "For experts", "Make the speech"; the stage plays the speech in the `Player`, which now draws
+the recording's waveform as its seek bar (`useWaveform`, the browser's decoder; the plain bar when a file cannot
+be read); Save a copy, Use these words, Change the voice, and in More: Edit the words and Delete (asks first);
+Recent speech is the strip. Transcribe: drop or choose the recording, then "Transcribe"; the text with its times
+on the stage with Copy, Save .txt, Save .srt and in More Save .vtt and Delete; Recent transcripts. The tools: the
+recording from the app's `Select` and "Add a recording", the result players on the stage, "Made here before" (the
+library's tracks of that kind). `OptionFields` and the web's model list use the app's controls (no native select,
+checkbox or range), so Music gets them too; Split into parts is on the frame already (it shares the tool screen).
+The help pages of speak, transcribe, convert, edit, split, design and clone are updated. Checked with the voice
+unit tests (76), both apps' tests, the web specs (the five voice pictures taken again) and a real speech and
+transcript in the window (`ui-audit.sh light speech-make`: Kokoro 82M, the waveform read from the real file,
+"Make a voice", then Parakeet TDT 0.6B v3 writing the same words with their times; pictures `speech-voices`,
+`speech-made`, `speech-make-a-voice`, `transcript-made`). Not in this stage: a voice preview that is not kept as a
+speech (it needs an engine route: an owner decision), the Voices page leaving the menu (it is now also the "Make a
+voice" dialog; the menu's names are decision 1), and the strips reading the one Library (U8).
+
+About 44 days of work in thirteen stages; U0 to U5 are done, U6 next, then the products in the order a
 new person meets them (Pictures, Video, Speech), with the Library before the home so the quick starts and the
 recent strips have one source.
 

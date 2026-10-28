@@ -874,28 +874,30 @@ async def probe_servers(
 ) -> list[dict[str, Any]]:
     """Which of the known local servers answer. Loopback addresses from our own list only."""
     own = client or httpx.AsyncClient(timeout=0.6)
-    found: list[dict[str, Any]] = []
+
+    async def one(tool: Tool, s: dict[str, str]) -> dict[str, Any] | None:
+        url = s["url"]
+        if not url.startswith("http://127.0.0.1:"):
+            return None
+        try:
+            r = await own.get(url + s["probe"])
+        except httpx.HTTPError:
+            return None
+        if r.status_code != 200:
+            return None
+        return {
+            "tool": tool.id, "title": tool.title, "url": url, "kind": s["kind"],
+            "models": _server_models(s["kind"], r),
+        }  # fmt: skip
+
     try:
-        for tool in tools:
-            for s in tool.servers:
-                url = s["url"]
-                if not url.startswith("http://127.0.0.1:"):
-                    continue
-                try:
-                    r = await own.get(url + s["probe"])
-                except httpx.HTTPError:
-                    continue
-                if r.status_code == 200:
-                    found.append(
-                        {
-                            "tool": tool.id, "title": tool.title, "url": url, "kind": s["kind"],
-                            "models": _server_models(s["kind"], r),
-                        }
-                    )  # fmt: skip
+        # all at once: a tool that is not running costs its timeout once,
+        # not once for every tool before it
+        answers = await asyncio.gather(*(one(t, s) for t in tools for s in t.servers))
     finally:
         if client is None:
             await own.aclose()
-    return found
+    return [a for a in answers if a is not None]
 
 
 # ---- the service ------------------------------------------------------------------------------
@@ -952,8 +954,19 @@ class DiscoveryService:
             self._task = asyncio.create_task(self._later(delay))
 
     async def _later(self, delay: float) -> None:
+        # the running tools first, at once: a model chosen in Ollama or LM Studio is found
+        # before the window asks for it, not after the slower look through the folders
+        await self.probe()
         await asyncio.sleep(delay)
         await self.scan()
+
+    async def probe(self) -> None:
+        """Look again at which local tools run and what they offer (a few loopback requests)."""
+        try:
+            client = self._client_factory() if self._client_factory else None
+            self.servers = await probe_servers(self.tools, client)
+        except Exception:
+            log.exception("looking for running tools failed")
 
     async def stop(self) -> None:
         if self._task and not self._task.done():

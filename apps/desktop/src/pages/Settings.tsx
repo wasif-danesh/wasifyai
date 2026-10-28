@@ -56,7 +56,8 @@ function ThemeSetting() {
 
 /** The automatic look for models other tools left here (ADR-0063): a switch and extra folders, saved as they change. */
 function FindingModels() {
-  const [enabled, setEnabled] = useState(true);
+  // null until the engine has said: a switch shown before then would save a guess
+  const [enabled, setEnabled] = useState<boolean | null>(null);
   const [folders, setFolders] = useState("");
   const [state, setState] = useState<string>("idle");
   const foldersId = useId();
@@ -73,7 +74,14 @@ function FindingModels() {
       .catch(() => {});
   }, []);
 
-  async function save(nextEnabled: boolean, nextFolders: string) {
+  // one save at a time, in the order they were asked for: two quick clicks must not land the other way round
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  function save(nextEnabled: boolean, nextFolders: string) {
+    queue.current = queue.current.then(() => send(nextEnabled, nextFolders));
+    return queue.current;
+  }
+
+  async function send(nextEnabled: boolean, nextFolders: string) {
     setState("saving");
     try {
       await discoveryApi.settings(
@@ -89,6 +97,8 @@ function FindingModels() {
       setState(e instanceof Error ? e.message : "That could not be saved.");
     }
   }
+
+  if (enabled === null) return null;
 
   return (
     <div className="grid gap-3">
@@ -128,6 +138,7 @@ function FindingModels() {
 function HubSwitch() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [state, setState] = useState<string>("idle");
+  const queue = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     hubApi
       .state()
@@ -145,14 +156,18 @@ function HubSwitch() {
       <Checkbox
         checked={enabled}
         onCheckedChange={(next) => {
+          setEnabled(next);
           setState("saving");
-          hubApi
-            .setEnabled(next)
-            .then((r) => {
-              setEnabled(r.enabled);
-              setState("saved");
-            })
-            .catch((err) => setState(err instanceof Error ? err.message : "That did not work."));
+          // one at a time, in order, as with Finding models
+          queue.current = queue.current.then(() =>
+            hubApi
+              .setEnabled(next)
+              .then((r) => {
+                setEnabled(r.enabled);
+                setState("saved");
+              })
+              .catch((err) => setState(err instanceof Error ? err.message : "That did not work.")),
+          );
         }}
         label="Let the app contact Hugging Face to browse models"
       />
@@ -405,10 +420,9 @@ const matches = (q: string, ...texts: string[]) =>
 export function SettingsPage() {
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
-  const shown = GROUPS.map((g) => ({
-    ...g,
-    items: g.items.filter((i) => matches(q, g.title, i.title, i.words)),
-  })).filter((g) => g.items.length > 0);
+  // a setting that does not match is hidden, not removed: it keeps what it read and what was typed in it
+  const hit = (g: Group, i: Item) => matches(q, g.title, i.title, i.words);
+  const shown = GROUPS.filter((g) => g.items.some((i) => hit(g, i)));
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-8 px-8 pt-10 pb-12 md:grid-cols-[12rem_minmax(0,1fr)]">
       <aside className="md:sticky md:top-6 md:self-start">
@@ -455,9 +469,10 @@ export function SettingsPage() {
         {shown.length === 0 ? (
           <p className="m-0 text-muted-foreground">No setting matches “{query.trim()}”.</p>
         ) : null}
-        {shown.map((g) => (
+        {GROUPS.map((g) => (
           <section
             key={g.id}
+            hidden={!shown.includes(g)}
             id={`settings-${g.id}`}
             aria-labelledby={`settings-${g.id}-title`}
             className="grid scroll-mt-6 gap-5"
@@ -467,9 +482,11 @@ export function SettingsPage() {
             </h2>
             {g.items.map((i) =>
               i.own ? (
-                <div key={i.id}>{i.body}</div>
+                <div key={i.id} hidden={!hit(g, i)}>
+                  {i.body}
+                </div>
               ) : (
-                <section key={i.id} aria-label={i.title} className="grid gap-2">
+                <section key={i.id} hidden={!hit(g, i)} aria-label={i.title} className="grid gap-2">
                   <h3 className="m-0 font-semibold text-base">{i.title}</h3>
                   {i.body}
                 </section>

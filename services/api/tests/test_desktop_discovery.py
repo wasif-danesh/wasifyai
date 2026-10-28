@@ -3,6 +3,7 @@
 import asyncio
 import json
 import struct
+import time
 from pathlib import Path
 
 import httpx
@@ -326,6 +327,54 @@ async def test_only_servers_that_answer_are_reported(tmp_path):
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         found_ = await probe_servers(tools_for(tmp_path), client)
     assert [(s["tool"], s["kind"]) for s in found_] == [("ollama", "ollama")]
+
+
+async def test_the_servers_are_asked_together_so_one_that_is_down_costs_its_wait_once(tmp_path):
+    asked: list[int] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(request.url.port or 0)
+        await asyncio.sleep(0.2)  # every server is slow to answer
+        if request.url.port == 11434:
+            return httpx.Response(200, json={"models": [{"name": "qwen3.8:27b-mlx"}]})
+        raise httpx.ConnectError("refused")
+
+    tools = tools_for(tmp_path)
+    count = sum(1 for t in tools for x in t.servers if x["url"].startswith("http://127.0.0.1:"))
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        started = time.monotonic()
+        found_ = await probe_servers(tools, client)
+        took = time.monotonic() - started
+    assert len(asked) == count > 1
+    assert took < 0.2 * count * 0.75  # together, not one after another
+    assert found_[0]["models"] == ["qwen3.8:27b-mlx"]
+
+
+async def test_the_running_tools_are_found_at_start_before_the_folders_are_read(tmp_path):
+    """A model chosen in Ollama is there as soon as the window asks (not after the slow scan)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.port == 11434:
+            return httpx.Response(200, json={"models": [{"name": "qwen3.8:27b-mlx"}]})
+        raise httpx.ConnectError("refused")
+
+    store = InMemorySettingsStore()
+    svc = DiscoveryService(
+        store,
+        None,
+        tools_for(tmp_path / "home"),
+        client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+    svc.start(delay=60)  # the folder scan waits a minute; the servers do not
+    try:
+        for _ in range(50):
+            if svc.servers:
+                break
+            await asyncio.sleep(0.02)
+        assert [s["tool"] for s in svc.servers] == ["ollama"]
+        assert svc.scanned_at is None  # the folders have not been read yet
+    finally:
+        await svc.stop()
 
 
 # ---- the service ------------------------------------------------------------------------------

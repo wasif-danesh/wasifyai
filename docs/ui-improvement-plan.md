@@ -433,6 +433,14 @@ label. Checked: lint, types, the design check, every unit test, all 506 web e2e 
 window on 32 screens in both themes. Not in this stage: a screen reader read through by a person; the window's own
 keyboard walk (the web's covers the same shared screens).
 
+**Fixed after U12 (2026-10-28):** right after the engine started, the home offered "Get a chat model" for a moment
+although a model was chosen in Ollama: the engine looked for running tools (Ollama, LM Studio) only at the end of
+its slower look through the models folders. It now asks the running tools first, at start, all at once
+(`desktop_discovery.py`: `DiscoveryService.probe`, `probe_servers` with `asyncio.gather`), so they are known by the
+engine's first answer. In Settings, Finding models no longer shows its switch before it has read the setting (a click
+then saved a guess), its saves and Browsing models' go one at a time in order, and the search hides settings rather
+than removing them, so nothing is read again or loses what was typed.
+
 About 44 days of work in thirteen stages; U0 to U12 are done (the plan is complete), then the products in the order a
 new person meets them (Pictures, Video, Speech), with the Library before the home so the quick starts and the
 recent strips have one source.

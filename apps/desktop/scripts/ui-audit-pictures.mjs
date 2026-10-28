@@ -494,10 +494,19 @@ for (const scheme of ["light", "dark"]) {
       await page.getByRole("searchbox", { name: "Search settings" }).fill("");
       // saved as it changes: the switch off and on again, so the computer's setting is as it was
       const look = page.getByRole("checkbox", { name: "Look for models when the app starts" });
-      await look.click();
-      await page.getByText("Saved.").first().waitFor({ timeout: 15_000 });
-      await look.click();
-      await page.getByText("Saved.").first().waitFor({ timeout: 15_000 });
+      const was = (await look.getAttribute("aria-checked")) === "true";
+      // each change waits for the engine's answer, and the switch ends as it began (it is the person's setting)
+      const saved = () =>
+        page.waitForResponse(
+          (r) => r.url().includes("/desktop/discovery/settings") && r.request().method() === "PUT",
+          { timeout: 15_000 },
+        );
+      await Promise.all([saved(), look.click()]);
+      await Promise.all([saved(), look.click()]);
+      if (((await look.getAttribute("aria-checked")) === "true") !== was)
+        throw new Error("Look for models did not end as it began");
+      const after = await engine("/desktop/discovery");
+      if (after && after.enabled !== was) throw new Error("the engine kept the switch changed");
       await page.getByRole("radio", { name: "Dark" }).click();
       await page.waitForTimeout(600);
       await shot(page, "u11-settings-dark");

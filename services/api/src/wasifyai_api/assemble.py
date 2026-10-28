@@ -662,7 +662,7 @@ async def _web_services(s: ApiServices, settings: Settings, r: _Running, given: 
 
 async def _web_voice(s: ApiServices, settings: Settings, queue: Callable[[], EngineQueue] | None):
     try:
-        from wasifyai_voice.pgstore import PostgresVoiceStore
+        from wasifyai_voice.store import VoiceStore
 
         from wasifyai_api.hosted_speech import HostedSpeechEngine, load_hosted_models
     except ImportError:  # the voice product is not part of this build
@@ -671,7 +671,7 @@ async def _web_voice(s: ApiServices, settings: Settings, queue: Callable[[], Eng
     assert s.products_dir is not None and s.storage is not None
     pdir = s.products_dir
     s.voice_store = await asyncio.to_thread(
-        PostgresVoiceStore, settings.database_url, schema=settings.voice_schema
+        VoiceStore.on_postgres, settings.database_url, schema=settings.voice_schema
     )
     hosted = None
     if settings.voice_engine in ("hosted", "both", "worker"):
@@ -731,8 +731,8 @@ def _web_notebooks(s: ApiServices, settings: Settings) -> None:
 async def _web_model3d(s: ApiServices, settings: Settings, queue: Callable[[], EngineQueue]):
     try:
         from wasifyai_model3d.blobs import StorageBlobs
-        from wasifyai_model3d.pgstore import PostgresModel3dStore
         from wasifyai_model3d.runtime import sweep as sweep_model3d
+        from wasifyai_model3d.store import Model3dStore
 
         from wasifyai_api.remote_model3d import RemoteModel3dEngine
     except ImportError:  # the 3D product is not part of this build
@@ -741,7 +741,7 @@ async def _web_model3d(s: ApiServices, settings: Settings, queue: Callable[[], E
     assert s.storage is not None
     # 3D models on engine workers (ADR-0087, P3): Postgres for the rows, object storage for the
     # files, a worker that has the component for the work
-    s.model3d_store = await asyncio.to_thread(PostgresModel3dStore, settings.database_url)
+    s.model3d_store = await asyncio.to_thread(Model3dStore.on_postgres, settings.database_url)
     s.model3d_blobs = StorageBlobs(s.storage)
     s.model3d = RemoteModel3dEngine(queue(), s.storage.backing, s.engine_workers, usage=s.usage)
     await sweep_model3d(s)
@@ -749,7 +749,7 @@ async def _web_model3d(s: ApiServices, settings: Settings, queue: Callable[[], E
 
 async def _web_builder(s: ApiServices, settings: Settings, queue: Callable[[], EngineQueue]):
     try:
-        from wasifyai_video.builder.pgstore import PostgresBuilderStore
+        from wasifyai_video.builder.store import BuilderStore
 
         from wasifyai_api.remote_builder import RemoteBuilderEngine
     except ImportError:  # the video product is not part of this build
@@ -758,7 +758,7 @@ async def _web_builder(s: ApiServices, settings: Settings, queue: Callable[[], E
     assert s.storage is not None
     # Motion graphics on engine workers (ADR-0087, P4): Postgres for the compositions, a worker
     # with the sandboxed browser for the drawing; videos are library clips
-    s.builder_store = await asyncio.to_thread(PostgresBuilderStore, settings.database_url)
+    s.builder_store = await asyncio.to_thread(BuilderStore.on_postgres, settings.database_url)
     s.builder_scratch = Path(tempfile.mkdtemp(prefix="wasifyai-builder-"))
     s.video_builder = RemoteBuilderEngine(
         queue(),
@@ -775,7 +775,7 @@ async def _web_builder(s: ApiServices, settings: Settings, queue: Callable[[], E
 async def _web_training(s: ApiServices, settings: Settings, queue: Callable[[], EngineQueue]):
     try:
         from wasifyai_training.files import StorageFiles
-        from wasifyai_training.pgstore import PostgresTrainingStore
+        from wasifyai_training.store import TrainingStore
 
         from wasifyai_api.remote_train import (
             RemoteDecisionTrainer,
@@ -790,7 +790,7 @@ async def _web_training(s: ApiServices, settings: Settings, queue: Callable[[], 
     # Train on engine workers (ADR-0073, docs/train-web-plan.md): Postgres for the rows, object
     # storage for the files, a worker that has the trainer for the work
     tstore = await asyncio.to_thread(
-        PostgresTrainingStore,
+        TrainingStore.on_postgres,
         settings.database_url,
         cache=Path(tempfile.mkdtemp(prefix="wasifyai-training-")),
     )

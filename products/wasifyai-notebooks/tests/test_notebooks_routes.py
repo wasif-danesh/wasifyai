@@ -33,7 +33,7 @@ class Indexed:
 
 
 def make_app(tmp_path, file_kind="local", **components):
-    store = NotebookStore(tmp_path / "nb", dimension=SPEC.dimension, embedder_id=SPEC.id)
+    store = NotebookStore.in_folder(tmp_path / "nb", dimension=SPEC.dimension, embedder_id=SPEC.id)
     comps = FakeComponents(tmp_path, **components)
     reader = FakeReader()
     files = tmp_path / "nb" / "files"

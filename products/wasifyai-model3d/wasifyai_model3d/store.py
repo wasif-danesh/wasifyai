@@ -1,19 +1,22 @@
-"""The 3D models a person made, and the pictures they are made from (ADR-0080, TD1): one small
-SQLite file and the files beside it, in the app's own data folder.
+"""The 3D models a person made, and the pictures they are made from (ADR-0080, TD1): on the desktop
+one small SQLite file and the files beside it, in the app's own data folder; on the web the same
+tables in their own Postgres schema (`model3d`) and the files in object storage (ADR-0087, P3). One
+store class on either database (stage J2: `wasifyai_platform_sdk.sqlstore`).
 
 Every query is scoped by tenant and user. A model has a state (`working`, `done`, `failed`,
 `cancelled`); a picture waiting to become a model is an *input* (its cut-out and the checks of it).
-A model or an input left `working` by a process that is gone is failed when the store opens: a 3D
-run takes minutes, and the engine that started it is not there any more."""
+On the desktop a model or an input left `working` by a process that is gone is failed when the store
+opens (`in_folder`): a 3D run takes minutes, and the engine that started it is not there any more.
+The web's service follows such a job again on its worker instead."""
 
 import json
 import re
-import sqlite3
-import threading
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from wasifyai_platform_sdk.sqlstore import PostgresStoreDb, SqliteStoreDb, StoreDb
 
 SCHEMA = 1
 LEFT_RUNNING = "It was stopped when the app closed. Make it again."
@@ -47,9 +50,10 @@ CREATE TABLE IF NOT EXISTS models(
   id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
   title TEXT NOT NULL, prompt TEXT NOT NULL DEFAULT '', input_id TEXT,
   status TEXT NOT NULL CHECK (status IN ('working', 'done', 'failed', 'cancelled')),
-  stage TEXT NOT NULL DEFAULT '', progress REAL NOT NULL DEFAULT 0, error TEXT,
+  stage TEXT NOT NULL DEFAULT '', progress DOUBLE PRECISION NOT NULL DEFAULT 0, error TEXT,
   detail TEXT NOT NULL DEFAULT 'standard', seed INTEGER NOT NULL DEFAULT 42,
-  recipe TEXT NOT NULL DEFAULT '{}', elapsed_s REAL, peak_gb REAL, glb_bytes INTEGER,
+  recipe TEXT NOT NULL DEFAULT '{}', elapsed_s DOUBLE PRECISION, peak_gb DOUBLE PRECISION,
+  glb_bytes BIGINT,
   created_at TEXT NOT NULL, finished_at TEXT);
 CREATE INDEX IF NOT EXISTS models_owner ON models(tenant_id, user_id, created_at);
 CREATE INDEX IF NOT EXISTS inputs_owner ON inputs(tenant_id, user_id, created_at);
@@ -57,48 +61,68 @@ CREATE INDEX IF NOT EXISTS inputs_owner ON inputs(tenant_id, user_id, created_at
 
 
 class Model3dStore:
-    def __init__(self, folder: Path):
+    def __init__(self, db: StoreDb, folder: Path | None = None):
+        """The store on `db`. `folder` is where the files are on the desktop; on the web they are in
+        object storage and there is none."""
+        self.db = db
         self.folder = folder
-        folder.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
-        self._db = sqlite3.connect(folder / "model3d.db", check_same_thread=False, timeout=10)
-        self._db.row_factory = sqlite3.Row
-        with self._lock:
-            self._db.executescript(DDL)
-            self._db.execute("INSERT OR IGNORE INTO meta VALUES ('schema', ?)", (str(SCHEMA),))
-            self._db.execute(
-                "UPDATE models SET status = 'failed', error = ?, finished_at = ? "
-                "WHERE status = 'working'",
-                (LEFT_RUNNING, now()),
-            )
-            self._db.execute(
-                "UPDATE inputs SET status = 'failed', error = ? WHERE status = 'checking'",
-                ("It was stopped when the app closed. Add the picture again.",),
-            )
-            self._db.commit()
+        db.open_tables(DDL)
+        db.exec("INSERT INTO meta VALUES ('schema', ?) ON CONFLICT DO NOTHING", (str(SCHEMA),))
+
+    @classmethod
+    def in_folder(cls, folder: Path) -> "Model3dStore":
+        """The desktop's store: `model3d.db` and the files beside it. What a closed app left being
+        made is failed, in words."""
+        store = cls(SqliteStoreDb(folder / "model3d.db"), folder)
+        store.fail_left_running()
+        return store
+
+    @classmethod
+    def on_postgres(cls, dsn: str, schema: str = "model3d") -> "Model3dStore":
+        """The web's store, in its own schema of the deployment's Postgres."""
+        return cls(PostgresStoreDb(dsn, schema))
+
+    def fail_left_running(self) -> None:
+        self.db.exec(
+            "UPDATE models SET status = 'failed', error = ?, finished_at = ? "
+            "WHERE status = 'working'",
+            (LEFT_RUNNING, now()),
+        )
+        self.db.exec(
+            "UPDATE inputs SET status = 'failed', error = ? WHERE status = 'checking'",
+            ("It was stopped when the app closed. Add the picture again.",),
+        )
+
+    def close(self) -> None:
+        self.db.close()
+
+    def drop_schema(self) -> None:
+        """Remove every table of this store (tests on Postgres)."""
+        drop = getattr(self.db, "drop", None)
+        if drop is not None:
+            drop()
 
     # ---- where the files are ----------------------------------------------------------------
 
     def folder_of(self, tenant: str, user: str, kind: str, item_id: str) -> Path:
+        if self.folder is None:
+            raise NotImplementedError("the web keeps these files in object storage")
         if not re.fullmatch(r"[0-9a-f]{32}", item_id):
             raise ValueError("not an id")
         return self.folder / "files" / _slug(tenant) / _slug(user) / kind / item_id
 
-    # ---- pictures -----------------------------------------------------------------------------
+    # ---- the three calls every query goes through -----------------------------------------------
 
-    def _one(self, sql: str, args: tuple[Any, ...]) -> sqlite3.Row | None:
-        with self._lock:
-            return self._db.execute(sql, args).fetchone()
+    def _one(self, sql: str, args: tuple[Any, ...]) -> Any:
+        return self.db.one(sql, args)
 
     def _all(self, sql: str, args: tuple[Any, ...] = ()) -> list[Any]:
-        with self._lock:
-            return self._db.execute(sql, args).fetchall()
+        return self.db.all(sql, args)
 
     def _exec(self, sql: str, args: tuple[Any, ...] = ()) -> int:
-        with self._lock:
-            cur = self._db.execute(sql, args)
-            self._db.commit()
-            return cur.rowcount
+        return self.db.exec(sql, args)
+
+    # ---- pictures -----------------------------------------------------------------------------
 
     def add_input(
         self, tenant: str, user: str, name: str, width: int, height: int
@@ -112,7 +136,7 @@ class Model3dStore:
         return self.get_input(tenant, user, item)
 
     @staticmethod
-    def _input(row: sqlite3.Row) -> dict[str, Any]:
+    def _input(row: Any) -> dict[str, Any]:
         out = dict(row)
         out["checks"] = json.loads(out["checks"])
         return out
@@ -176,7 +200,7 @@ class Model3dStore:
         return self.get_model(tenant, user, item)
 
     @staticmethod
-    def _model(row: sqlite3.Row) -> dict[str, Any]:
+    def _model(row: Any) -> dict[str, Any]:
         out = dict(row)
         out["recipe"] = json.loads(out["recipe"])
         return out

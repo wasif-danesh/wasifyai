@@ -73,7 +73,7 @@ def root_for(state: Any) -> Path:
 def store_for(state: Any) -> TrainingStore:
     existing = state.training_store
     if existing is None:
-        existing = TrainingStore(root_for(state))
+        existing = TrainingStore.in_folder(root_for(state))
         state.training_store = existing
     return existing
 

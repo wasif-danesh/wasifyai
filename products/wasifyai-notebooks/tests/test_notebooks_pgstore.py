@@ -6,15 +6,15 @@ import threading
 import pytest
 from notebooks_rig import SPEC, pg_dsn
 from wasifyai_notebooks.chunking import Passage
-from wasifyai_notebooks.pgstore import PostgresNotebookStore
 from wasifyai_notebooks.retrieval import retrieve
+from wasifyai_notebooks.store import NotebookStore
 from wasifyai_platform_sdk.pg import translate, vector_text
 
 
 def test_the_schema_name_is_checked_before_it_is_used_in_sql():
     for bad in ("Notebooks", "a;drop table x", "", "1abc", 'a"b'):
         with pytest.raises(ValueError, match="schema name"):
-            PostgresNotebookStore("postgresql://x", dimension=4, embedder_id="e", schema=bad)
+            NotebookStore.on_postgres("postgresql://x", dimension=4, embedder_id="e", schema=bad)
 
 
 def test_sql_parameters_are_translated_and_percent_signs_kept():
@@ -30,12 +30,12 @@ def test_several_replicas_can_start_on_a_new_schema_at_once(new_store):
         pytest.skip("Postgres only")
     first = new_store(dimension=SPEC.dimension, embedder_id=SPEC.id, name="shared")
     errors: list[BaseException] = []
-    started: list[PostgresNotebookStore] = []
+    started: list[NotebookStore] = []
 
     def start():
         try:
             started.append(
-                PostgresNotebookStore(
+                NotebookStore.on_postgres(
                     pg_dsn(), dimension=SPEC.dimension, embedder_id=SPEC.id, schema=first.schema
                 )
             )
@@ -115,7 +115,7 @@ def test_the_vector_extension_goes_in_public_where_the_migrations_look_for_it():
         admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
     try:
         dsn = make_conninfo(base, dbname=name)
-        store = PostgresNotebookStore(dsn, dimension=4, embedder_id="e", schema="nbt_vec")
+        store = NotebookStore.on_postgres(dsn, dimension=4, embedder_id="e", schema="nbt_vec")
         store.close()
         with psycopg.connect(dsn) as conn:
             where = conn.execute(

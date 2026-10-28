@@ -131,7 +131,7 @@ def test_the_thumbnail_is_a_square_picture_of_the_object_on_a_light_ground():
 
 
 def test_the_store_keeps_models_per_person_and_renames_them(tmp_path):
-    store = Model3dStore(tmp_path)
+    store = Model3dStore.in_folder(tmp_path)
     a = store.add_model("t1", "u1", title="Frog mug", prompt="a frog mug", input_id=None,
                         detail="standard", seed=7, recipe={"seed": 7})  # fmt: skip
     store.add_model("t1", "u2", title="Other", prompt="", input_id=None, detail="light", seed=1,
@@ -154,18 +154,18 @@ def test_the_store_keeps_models_per_person_and_renames_them(tmp_path):
 
 
 def test_a_model_left_working_by_a_process_that_is_gone_is_failed_when_the_store_opens(tmp_path):
-    store = Model3dStore(tmp_path)
+    store = Model3dStore.in_folder(tmp_path)
     row = store.add_model("t1", "u1", title="x", prompt="", input_id=None, detail="light",
                           seed=1, recipe={})  # fmt: skip
     pic = store.add_input("t1", "u1", "p.png", 300, 200)
-    again = Model3dStore(tmp_path)
+    again = Model3dStore.in_folder(tmp_path)
     assert again.get_model("t1", "u1", row["id"])["status"] == "failed"
     assert again.get_model("t1", "u1", row["id"])["error"] == LEFT_RUNNING
     assert again.get_input("t1", "u1", pic["id"])["status"] == "failed"
 
 
 def test_old_pictures_nobody_made_a_model_from_are_purged_but_a_used_one_stays(tmp_path):
-    store = Model3dStore(tmp_path)
+    store = Model3dStore.in_folder(tmp_path)
     used = store.add_input("t1", "u1", "a", 300, 200)
     spare = store.add_input("t1", "u1", "b", 300, 200)
     store.add_model("t1", "u1", title="x", prompt="", input_id=used["id"], detail="light", seed=1,
@@ -178,7 +178,7 @@ def test_old_pictures_nobody_made_a_model_from_are_purged_but_a_used_one_stays(t
 
 
 def test_the_folder_of_an_item_is_inside_the_store_and_refuses_a_path(tmp_path):
-    store = Model3dStore(tmp_path)
+    store = Model3dStore.in_folder(tmp_path)
     folder = store.folder_of("desktop:local", "../../etc", "models", "a" * 32)
     assert tmp_path in folder.parents and ".." not in folder.parts
     with pytest.raises(ValueError):
@@ -561,7 +561,7 @@ def test_where_there_is_no_engine_the_routes_are_not_there(tmp_path):
 
 async def test_models_are_found_by_their_title_and_the_words_they_were_made_from(tmp_path):
     engine = create_sqlite_engine(tmp_path / "wasifyai.db")
-    store = Model3dStore(tmp_path / "model3d")
+    store = Model3dStore.in_folder(tmp_path / "model3d")
     a = store.add_model("t1", "u1", title="Frog mug", prompt="a ceramic frog mug", input_id=None,
                         detail="standard", seed=1, recipe={})  # fmt: skip
     b = store.add_model("t1", "u1", title="Chair", prompt="", input_id=None, detail="light",

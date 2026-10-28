@@ -98,7 +98,7 @@ def old_database(folder: Path) -> None:
 
 def test_an_older_database_keeps_its_runs_and_can_now_pause_one(tmp_path: Path):
     old_database(tmp_path / "t")
-    store = TrainingStore(tmp_path / "t")
+    store = TrainingStore.in_folder(tmp_path / "t")
     runs = store.list_runs("t1", "u1")
     assert len(runs) == 1 and runs[0]["status"] == "done"
     row = store.add_run("t1", "u1", "d" * 32, base="b", steps=10, settings={}, preview=False)
@@ -110,14 +110,14 @@ def test_an_older_database_keeps_its_runs_and_can_now_pause_one(tmp_path: Path):
 
 
 def test_a_run_the_app_left_going_is_paused_when_it_kept_a_checkpoint_else_stopped(tmp_path: Path):
-    store = TrainingStore(tmp_path)
+    store = TrainingStore.in_folder(tmp_path)
     kept = store.add_run("t1", "u1", "d" * 32, base="b", steps=10, settings={}, preview=False)
     lost = store.add_run("t1", "u1", "d" * 32, base="b", steps=10, settings={}, preview=False)
     checkpoints = store.folder_of("t1", "u1", "runs", kept["id"]) / "out" / "checkpoints"
     checkpoints.mkdir(parents=True)
     (checkpoints / "0000025_checkpoint.zip").write_bytes(b"zip")
-    store._db.close()  # noqa: SLF001
-    again = TrainingStore(tmp_path)
+    store.close()  # the app quits
+    again = TrainingStore.in_folder(tmp_path)
     a, b = again.get_run("t1", "u1", kept["id"]), again.get_run("t1", "u1", lost["id"])
     assert (a["status"], a["error"]) == ("paused", LEFT_PAUSED)
     assert (b["status"], b["error"]) == ("failed", LEFT_RUNNING)

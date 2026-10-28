@@ -185,7 +185,7 @@ def quota_app(tmp_path, caps):
     from notebooks_rig import FakeComponents
     from wasifyai_notebooks.store import NotebookStore
 
-    store = NotebookStore(tmp_path / "nb", dimension=SPEC.dimension, embedder_id=SPEC.id)
+    store = NotebookStore.in_folder(tmp_path / "nb", dimension=SPEC.dimension, embedder_id=SPEC.id)
     comps = FakeComponents(tmp_path)
     files, tmp = tmp_path / "nb" / "files", tmp_path / "nb" / "tmp"
     files.mkdir(parents=True)

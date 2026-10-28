@@ -68,7 +68,7 @@ def test_exports_handle_no_segments_and_awkward_titles():
 
 
 def test_the_store_keeps_each_persons_things_apart_and_refuses_a_newer_file(tmp_path):
-    s = VoiceStore(tmp_path)
+    s = VoiceStore.in_folder(tmp_path)
     t = s.add_transcript(
         "t", "u", title="x", source_name="x.wav", model_id="m", text="hello",
         segments=[{"start": 0, "end": 1, "text": "hello"}], seconds=1, elapsed_s=0.1,
@@ -78,14 +78,14 @@ def test_the_store_keeps_each_persons_things_apart_and_refuses_a_newer_file(tmp_
         s.get_transcript("t", "other", t["id"])
     with pytest.raises(NotFound):
         s.get_transcript("other", "u", t["id"])
-    with sqlite3.connect(s.path) as db:
+    with sqlite3.connect(s.root / "voice.db") as db:
         db.execute("UPDATE meta SET value = '99' WHERE key = 'schema'")
     with pytest.raises(RuntimeError, match="newer"):
-        VoiceStore(tmp_path)
+        VoiceStore.in_folder(tmp_path)
 
 
 async def test_the_index_source_pages_both_kinds_and_knows_what_is_gone(tmp_path):
-    s = VoiceStore(tmp_path / "voice")
+    s = VoiceStore.in_folder(tmp_path / "voice")
     s.add_speech(
         "t", "u", text="spoken words", model_id="m", voice=None, options={}, seconds=1,
         sample_rate=24000, audio_key="k", load_s=0, elapsed_s=0, speech_id="a",
@@ -122,16 +122,16 @@ def test_a_version_one_file_is_upgraded_in_place(tmp_path):
             "INSERT INTO speeches VALUES "
             "('old','t','u','hi','kokoro-82m',NULL,'{}',1,24000,'k',0,0,'x');"
         )
-    s = VoiceStore(root)
+    s = VoiceStore.in_folder(root)
     old = s.get_speech("t", "u", "old")
     assert (old["mode"], old["saved_voice_id"]) == ("speak", None)
     v = s.add_voice("t", "u", kind="design", name="n", description="a man")
     assert s.list_voices("t", "u")[0]["id"] == v["id"]
-    VoiceStore(root)  # opening an upgraded file again is fine
+    VoiceStore.in_folder(root)  # opening an upgraded file again is fine
 
 
 def test_voices_are_kept_apart_and_a_reference_path_cannot_leave_its_folder(tmp_path):
-    s = VoiceStore(tmp_path)
+    s = VoiceStore.in_folder(tmp_path)
     v = s.add_voice("t", "u", kind="clone", name="n", reference_key="k", reference_seconds=3.0)
     with pytest.raises(NotFound):
         s.get_voice("t", "other", v["id"])
@@ -141,7 +141,7 @@ def test_voices_are_kept_apart_and_a_reference_path_cannot_leave_its_folder(tmp_
 
 
 async def test_the_index_source_also_pages_voices(tmp_path):
-    s = VoiceStore(tmp_path / "voice")
+    s = VoiceStore.in_folder(tmp_path / "voice")
     s.add_voice("t", "u", kind="design", name="Calm", description="a deep man", voice_id="v1")
     s.add_voice("t", "u", kind="clone", name="Me", voice_id="v2")
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'wasifyai.db'}")
@@ -174,11 +174,11 @@ async def test_a_recording_is_cut_at_thirty_seconds_and_refused_under_two(monkey
 
 def test_a_version_two_file_gains_tracks_and_the_index_pages_them(tmp_path):
     root = tmp_path / "voice"
-    s = VoiceStore(root)
-    with sqlite3.connect(s.path) as db:
+    s = VoiceStore.in_folder(root)
+    with sqlite3.connect(s.root / "voice.db") as db:
         db.executescript("DROP TABLE tracks; DROP TABLE clips; DROP TABLE pictures;")
         db.execute("UPDATE meta SET value = '2' WHERE key = 'schema'")
-    s = VoiceStore(root)
+    s = VoiceStore.in_folder(root)
     t = s.add_track(
         "t", "u", title="Song", mode="song", description="pop", lyrics="", instrumental=True,
         model_id="m", options={}, seed=None, seconds=1, sample_rate=24000, audio_key="k",
@@ -190,7 +190,7 @@ def test_a_version_two_file_gains_tracks_and_the_index_pages_them(tmp_path):
 
 
 async def test_the_index_source_also_pages_tracks(tmp_path):
-    s = VoiceStore(tmp_path / "voice")
+    s = VoiceStore.in_folder(tmp_path / "voice")
     s.add_track(
         "t", "u", title="Summer", mode="song", description="pop upbeat", lyrics="la la",
         instrumental=False, model_id="m", options={}, seed=1, seconds=1, sample_rate=1,
@@ -208,8 +208,8 @@ async def test_the_index_source_also_pages_tracks(tmp_path):
 
 def test_a_version_three_file_gains_favourites_and_the_source_of_an_edit(tmp_path):
     root = tmp_path / "voice"
-    s = VoiceStore(root)
-    with sqlite3.connect(s.path) as db:
+    s = VoiceStore.in_folder(root)
+    with sqlite3.connect(s.root / "voice.db") as db:
         db.executescript("DROP TABLE clips; DROP TABLE pictures;")
         db.execute("DROP TABLE tracks")
         db.execute(
@@ -227,21 +227,21 @@ def test_a_version_three_file_gains_favourites_and_the_source_of_an_edit(tmp_pat
             "'k',0,0,'x','x')"
         )
         db.execute("UPDATE meta SET value = '3' WHERE key = 'schema'")
-    s = VoiceStore(root)
+    s = VoiceStore.in_folder(root)
     old = s.get_track("t", "u", "old")
     assert (old["favourite"], old["edit"]) == (False, {})
     assert s.update_track("t", "u", "old", favourite=True)["favourite"] is True
     assert [t["id"] for t in s.list_tracks("t", "u", favourites=True)] == ["old"]
-    VoiceStore(root)  # opening it again is fine
+    VoiceStore.in_folder(root)  # opening it again is fine
 
 
 def test_a_version_four_file_gains_clips_and_pictures(tmp_path):
     root = tmp_path / "voice"
-    s = VoiceStore(root)
-    with sqlite3.connect(s.path) as db:
+    s = VoiceStore.in_folder(root)
+    with sqlite3.connect(s.root / "voice.db") as db:
         db.executescript("DROP TABLE clips; DROP TABLE pictures;")
         db.execute("UPDATE meta SET value = '4' WHERE key = 'schema'")
-    s = VoiceStore(root)
+    s = VoiceStore.in_folder(root)
     p = s.add_picture("t", "u", key="lipsync/p1.png", width=640, height=480, picture_id="p1")
     c = s.add_clip(
         "t", "u", title="Hello", model_id="musetalk-v15", picture_key=p["key"],
@@ -261,7 +261,7 @@ def test_a_version_four_file_gains_clips_and_pictures(tmp_path):
 
 
 async def test_the_index_source_also_pages_clips(tmp_path):
-    s = VoiceStore(tmp_path / "voice")
+    s = VoiceStore.in_folder(tmp_path / "voice")
     s.add_clip(
         "t", "u", title="Greeting", model_id="m", picture_key="k", video_key="v", voice={},
         script="Welcome to the show", seconds=2, fps=25, width=1, height=1, consent={},

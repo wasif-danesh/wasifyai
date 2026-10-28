@@ -85,7 +85,7 @@ class Runtime:
     ) -> "Runtime":
         root = Path(data_dir) / "notebooks"
         components = Components(roots, reader_dir_from(data_dir))
-        store = NotebookStore(
+        store = NotebookStore.in_folder(
             root, dimension=components.spec.dimension, embedder_id=components.spec.id
         )
         files = root / "files"
@@ -140,12 +140,11 @@ class WebSetup:
         tokenizer_factory: Callable[[], Any] | None = None,
     ) -> "Runtime":
         from wasifyai_notebooks.files import ObjectFiles
-        from wasifyai_notebooks.pgstore import PostgresNotebookStore
 
         comps = (
             components or self.components or Components(lambda: [self.models_dir], self.reader_dir)
         )
-        store = PostgresNotebookStore(
+        store = NotebookStore.on_postgres(
             self.dsn,
             dimension=comps.spec.dimension,
             embedder_id=comps.spec.id,

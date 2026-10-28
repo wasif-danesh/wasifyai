@@ -114,7 +114,7 @@ def store_for(state: Any) -> BuilderStore:
     existing = state.builder_store
     if existing is not None:
         return existing  # type: ignore[no-any-return]
-    store = BuilderStore(root_for(state))
+    store = BuilderStore.in_folder(root_for(state))
     state.builder_store = store
     return store
 

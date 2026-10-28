@@ -4,7 +4,7 @@ title and the names of its sources, in any language.
 
 On the desktop the notebooks live in their own SQLite file next to the main one, so the source reads
 that file directly and read-only. On the web they are in the `notebooks` schema of the main Postgres
-database (`pgstore.py`) and the source reads them through the engine's connection.
+database (`NotebookStore.on_postgres`) and the source reads them through the engine's connection.
 """
 
 import asyncio

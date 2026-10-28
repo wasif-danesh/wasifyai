@@ -28,7 +28,9 @@ OTHER = Identity("t1", "someone-else")
 
 class Rig:
     def __init__(self, tmp_path: Path):
-        store = NotebookStore(tmp_path / "nb", dimension=SPEC.dimension, embedder_id=SPEC.id)
+        store = NotebookStore.in_folder(
+            tmp_path / "nb", dimension=SPEC.dimension, embedder_id=SPEC.id
+        )
         files, tmp = tmp_path / "nb" / "files", tmp_path / "nb" / "tmp"
         files.mkdir(parents=True)
         tmp.mkdir()

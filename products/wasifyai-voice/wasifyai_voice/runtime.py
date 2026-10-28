@@ -32,6 +32,6 @@ def store_for(state: Any) -> VoiceStore:
     data = state.desktop_dir
     if not data:
         raise NotAvailable("Speech is not available in this deployment yet.")
-    store = VoiceStore(Path(data) / "voice")
+    store = VoiceStore.in_folder(Path(data) / "voice")
     state.voice_store = store
     return store

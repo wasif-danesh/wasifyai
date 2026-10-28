@@ -32,7 +32,7 @@ def web(tmp_path):
     app = FastAPI()
     app.state.services = EngineServices()
     app.state.services.model3d = FakeEngine()
-    app.state.services.model3d_store = Model3dStore(tmp_path / "rows")
+    app.state.services.model3d_store = Model3dStore.in_folder(tmp_path / "rows")
     app.state.services.model3d_blobs = StorageBlobs(ScopedStorage(storage))
     app.state.services.creation_index = Index()
     app.include_router(
@@ -133,7 +133,7 @@ async def test_the_start_up_sweep_fails_work_whose_owner_is_gone_and_drops_old_p
 
 
 def test_the_same_names_work_on_the_desktop_folders(tmp_path):
-    store = Model3dStore(tmp_path)
+    store = Model3dStore.in_folder(tmp_path)
     local = LocalBlobs(store)
     assert local.local is True and StorageBlobs(ScopedStorage(memory_storage())).local is False
     with pytest.raises(ValueError):

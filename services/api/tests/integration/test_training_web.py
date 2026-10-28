@@ -40,8 +40,8 @@ from wasifyai_api.remote_train import (  # noqa: E402
 from wasifyai_api.services import ApiServices
 from wasifyai_training.comfy_lora import write_tensors  # noqa: E402
 from wasifyai_training.files import StorageFiles  # noqa: E402
-from wasifyai_training.pgstore import PostgresTrainingStore  # noqa: E402
 from wasifyai_training.routes import build_routes  # noqa: E402
+from wasifyai_training.store import TrainingStore  # noqa: E402
 from wasifyai_training.trainer import PreviewTrainer  # noqa: E402
 
 
@@ -94,7 +94,7 @@ async def web(engine, redis_conn, tmp_path):
     from wasifyai_api.config import get_settings
 
     storage = memory_storage()
-    store = PostgresTrainingStore(
+    store = TrainingStore.on_postgres(
         get_settings().database_url, schema="trn_w_" + uuid4().hex[:8], cache=tmp_path / "cache"
     )
     import os

@@ -6,13 +6,15 @@ The files of a composition are in a folder next to this database (`projects.py`)
 makes is a clip in the video product's table (`mode = "composition"`), linked here by `video_id`."""
 
 import json
-import sqlite3
+import tempfile
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from wasifyai_platform_sdk.sqlstore import PostgresStoreDb, SqliteStoreDb, StoreDb, ddl_for
 
 SCHEMA_VERSION = 2
 KEEP_VERSIONS = 20  # earlier versions of a composition that can be brought back
@@ -34,8 +36,9 @@ CREATE INDEX compositions_owner ON compositions(tenant_id, user_id, updated_at D
 CREATE TABLE renders(
   id TEXT PRIMARY KEY, composition_id TEXT NOT NULL, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('working', 'done', 'failed', 'cancelled')),
-  video_id TEXT, error TEXT, progress REAL NOT NULL DEFAULT 0, settings TEXT NOT NULL DEFAULT '{}',
-  elapsed_s REAL, peak_mb INTEGER, blocked INTEGER NOT NULL DEFAULT 0,
+  video_id TEXT, error TEXT, progress DOUBLE PRECISION NOT NULL DEFAULT 0,
+  settings TEXT NOT NULL DEFAULT '{}',
+  elapsed_s DOUBLE PRECISION, peak_mb INTEGER, blocked INTEGER NOT NULL DEFAULT 0,
   started_at TEXT NOT NULL, finished_at TEXT, check_report TEXT);
 CREATE INDEX renders_composition ON renders(composition_id, started_at DESC);
 """
@@ -63,11 +66,65 @@ def new_id() -> str:
     return uuid.uuid4().hex
 
 
+LOCK_KEY = 0x62646C72  # "bdlr": the advisory lock that serialises schema creation on Postgres
+
+
 class BuilderStore:
-    def __init__(self, root: Path):
+    """One store class on either database (stage J2: `wasifyai_platform_sdk.sqlstore`): the
+    desktop's `builder.db`, or the web's own Postgres schema (`builder`)."""
+
+    def __init__(self, db: StoreDb, root: Path):
+        """`root` is where a composition's files are on the desktop (`projects.py`); the web keeps
+        none, so it is a temporary folder there."""
+        self.db = db
         self.root = Path(root)
-        self.path = self.root / "builder.db"
         self.root.mkdir(parents=True, exist_ok=True)
+        try:
+            self._init_postgres() if db.dialect == "postgres" else self._init_sqlite()
+        except BaseException:
+            db.close()
+            raise
+
+    @classmethod
+    def in_folder(cls, root: Path) -> "BuilderStore":
+        """The desktop's `builder.db` under `root`. A render that was still working belongs to a
+        process that is gone, so it is failed in words."""
+        root = Path(root)
+        store = cls(SqliteStoreDb(root / "builder.db", shared=False), root)
+        with store._connect() as db:
+            db.execute(
+                "UPDATE renders SET status = 'failed', error = ?, finished_at = ? "
+                "WHERE status = 'working'",
+                (LEFT_RUNNING, now()),
+            )
+        return store
+
+    @classmethod
+    def on_postgres(
+        cls, dsn: str, *, schema: str = "builder", max_connections: int = 8
+    ) -> "BuilderStore":
+        """The web's store, in its own schema of the deployment's Postgres."""
+        db = PostgresStoreDb(dsn, schema, max_connections=max_connections)
+        return cls(db, Path(tempfile.gettempdir()))
+
+    @property
+    def path(self) -> Path | None:
+        return getattr(self.db, "path", None)
+
+    @property
+    def schema(self) -> str:
+        return str(getattr(self.db, "schema", ""))
+
+    def close(self) -> None:
+        self.db.close()
+
+    def drop_schema(self) -> None:
+        """Remove every table of this store (tests)."""
+        drop = getattr(self.db, "drop", None)
+        if drop is not None:
+            drop()
+
+    def _init_sqlite(self) -> None:
         with self._connect() as db:
             have = db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='meta'"
@@ -75,34 +132,58 @@ class BuilderStore:
             if have is None:
                 db.executescript("BEGIN;" + _SCHEMA + "COMMIT;")
                 db.execute("INSERT INTO meta VALUES ('schema', ?)", (str(SCHEMA_VERSION),))
-            else:
-                row = db.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()
-                version = int(row[0])
-                if version > SCHEMA_VERSION:
-                    raise RuntimeError("builder.db was made by a newer version of this app")
-                if version == 1:
-                    db.executescript("BEGIN;" + _V2_UPGRADE + "COMMIT;")
-                    db.execute(
-                        "UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),)
-                    )
-            # a render that was still working belongs to a process that is gone
-            db.execute(
-                "UPDATE renders SET status = 'failed', error = ?, finished_at = ? "
-                "WHERE status = 'working'",
-                (LEFT_RUNNING, now()),
+                return
+            row = db.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()
+            version = int(row[0])
+            if version > SCHEMA_VERSION:
+                raise RuntimeError("builder.db was made by a newer version of this app")
+            if version == 1:
+                db.executescript("BEGIN;" + _V2_UPGRADE + "COMMIT;")
+                db.execute("UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),))
+
+    def _init_postgres(self) -> None:
+        with self.db.transaction() as conn:
+            conn.execute("SELECT pg_advisory_xact_lock(?)", (LOCK_KEY,))
+            conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{self.schema}"')
+            fresh = (
+                conn.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = ? AND table_name = 'meta'",
+                    (self.schema,),
+                ).fetchone()
+                is None
+            )
+            if fresh:
+                for statement in ddl_for(_SCHEMA, "postgres").split(";"):
+                    if statement.strip():
+                        conn.execute(statement)
+                conn.execute("INSERT INTO meta VALUES ('schema', ?)", (str(SCHEMA_VERSION),))
+                return
+            row = conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()
+        if not row or int(row["value"]) > SCHEMA_VERSION:
+            raise RuntimeError(
+                "the Motion graphics tables were made by a newer version of this app"
+            )
+
+    def fail_stale(self, before: str, message: str) -> int:
+        """Fail renders still working since before `before`: nobody is working on them (a service
+        that restarted)."""
+        with self._connect() as db:
+            return int(
+                db.execute(
+                    "UPDATE renders SET status = 'failed', error = ?, finished_at = ? "
+                    "WHERE status = 'working' AND started_at < ?",
+                    (message, now(), before),
+                ).rowcount
             )
 
     @contextmanager
-    def _connect(self) -> Iterator[sqlite3.Connection]:
-        db = sqlite3.connect(self.path, timeout=10, isolation_level=None)
-        db.row_factory = sqlite3.Row
-        try:
+    def _connect(self) -> Iterator[Any]:
+        with self.db.connect() as db:
             yield db
-        finally:
-            db.close()
 
     @staticmethod
-    def _composition(r: sqlite3.Row) -> dict[str, Any]:
+    def _composition(r: Any) -> dict[str, Any]:
         out = dict(r)
         out["slots"] = json.loads(out["slots"])
         return out

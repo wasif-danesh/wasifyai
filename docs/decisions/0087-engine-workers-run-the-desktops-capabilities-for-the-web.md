@@ -74,7 +74,8 @@ Edit speech, Dub, Audiobook, Split, 3D and Video Builder have none, and the web 
 - **Lip sync (P2)** is one of the speech kinds of P1 and ran for real; no new code beyond what P1 has.
 - **3D (P3):** kinds `model3d.matte` and `model3d.generate`; the worker runs the desktop's `Model3dService` and reports
   its state (`ready`, `problem`, `fit`) in its heartbeat (`EngineWorkerInfo.components`). The product keeps its code: its
-  store has a Postgres subclass (`pgstore.py`, schema `model3d`), its files go through one interface with two homes
+  store runs on Postgres too (schema `model3d`; a `pgstore.py` subclass until stage J2 made it one class,
+  `Model3dStore.on_postgres`), its files go through one interface with two homes
   (`blobs.py`: folders on the desktop, object storage on the web, where a step works in a temporary `workspace`), and its job
   manager is per person on the web. Cancelling asks the worker (`EngineQueue.cancel`), which kills the 3D process.
 - **Video Builder (P4):** kinds `builder.inspect`, `builder.snapshot`, `builder.render`, `builder.lint`. A composition

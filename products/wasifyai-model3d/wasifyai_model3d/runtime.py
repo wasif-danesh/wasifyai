@@ -79,7 +79,7 @@ KEEP_PICTURES_DAYS = 14  # a picture nobody made a model from
 def store_for(state: Any) -> Model3dStore:
     existing = state.model3d_store
     if existing is None:  # the desktop: a file beside the app's other data
-        existing = Model3dStore(root_for(state))
+        existing = Model3dStore.in_folder(root_for(state))
         state.model3d_store = existing
         state.model3d_blobs = LocalBlobs(existing)
         old = (datetime.now(UTC) - timedelta(days=KEEP_PICTURES_DAYS)).isoformat()

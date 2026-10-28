@@ -5,7 +5,6 @@ desktop's, run on both databases with the same steps, and the ownership rules.""
 from uuid import uuid4
 
 import pytest
-from wasifyai_training.pgstore import PostgresTrainingStore
 from wasifyai_training.store import NotFound, TrainingStore
 
 
@@ -13,7 +12,7 @@ from wasifyai_training.store import NotFound, TrainingStore
 def pg(engine):
     from wasifyai_api.config import get_settings
 
-    s = PostgresTrainingStore(get_settings().database_url, schema="trn_t_" + uuid4().hex[:8])
+    s = TrainingStore.on_postgres(get_settings().database_url, schema="trn_t_" + uuid4().hex[:8])
     yield s
     s.drop_schema()
     s.close()
@@ -21,7 +20,7 @@ def pg(engine):
 
 @pytest.fixture
 def lite(tmp_path):
-    return TrainingStore(tmp_path)
+    return TrainingStore.in_folder(tmp_path)
 
 
 def steps(store) -> dict:

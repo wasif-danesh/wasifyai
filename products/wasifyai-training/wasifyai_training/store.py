@@ -1,25 +1,29 @@
 # ruff: noqa: E501  (the SQL is easier to read on one line)
-"""The datasets, runs and trained models of a person (ADR-0073, T1): one small SQLite file and the files
-beside it, in the app's own data folder.
+"""The datasets, runs and trained models of a person (ADR-0073, T1): on the desktop one small SQLite file
+and the files beside it, in the app's own data folder; on the web the same tables in their own Postgres
+schema (`training`) and the files in object storage (`files.py`). One store class on either database
+(stage J2: `wasifyai_platform_sdk.sqlstore`).
 
 Every query is scoped by tenant and user. A **dataset** is pictures with a kind, a name, a magic word and
 the person's statement of rights; an **item** is one picture with its checks and its written caption; a
-**run** is one go at training a dataset; a **model** is what a finished run leaves, with its card. A run
-left `working` by a process that is gone is failed when the store opens: a run takes minutes to hours, and
-the engine that started it is not there any more."""
+**run** is one go at training a dataset; a **model** is what a finished run leaves, with its card. On the
+desktop a run left `working` by a process that is gone is paused (or failed) when the store opens; on the
+web a restarted service fails it and stops its worker job (`runs_left_working`)."""
 
 import json
 import re
-import sqlite3
-import threading
+import tempfile
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from wasifyai_platform_sdk.sqlstore import PostgresStoreDb, SqliteStoreDb, StoreDb
+
 SCHEMA = 1
 LEFT_RUNNING = "It was stopped when the app closed. Start it again."
 LEFT_PAUSED = "It was paused when the app closed. You can pick it up where it stopped."
+LEFT_RUNNING_WEB = "It was stopped when the service restarted. Start it again."
 KINDS = ("character", "style", "object")
 FAMILIES = ("image", "video")  # what a set of pictures (and clips) teaches
 RIGHTS = ("mine", "permission", "drawing", "artwork")
@@ -52,8 +56,8 @@ CREATE TABLE IF NOT EXISTS runs(
   id TEXT PRIMARY KEY, dataset_id TEXT NOT NULL, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('working', 'paused', 'done', 'failed', 'cancelled')),
   stage TEXT NOT NULL DEFAULT '', step INTEGER NOT NULL DEFAULT 0, steps INTEGER NOT NULL DEFAULT 0,
-  progress REAL NOT NULL DEFAULT 0, error TEXT, base TEXT NOT NULL DEFAULT '', settings TEXT NOT NULL DEFAULT '{}',
-  samples TEXT NOT NULL DEFAULT '[]', preview INTEGER NOT NULL DEFAULT 0, model_id TEXT, elapsed_s REAL,
+  progress DOUBLE PRECISION NOT NULL DEFAULT 0, error TEXT, base TEXT NOT NULL DEFAULT '', settings TEXT NOT NULL DEFAULT '{}',
+  samples TEXT NOT NULL DEFAULT '[]', preview INTEGER NOT NULL DEFAULT 0, model_id TEXT, elapsed_s DOUBLE PRECISION,
   created_at TEXT NOT NULL, finished_at TEXT);
 """
 
@@ -77,7 +81,7 @@ CREATE TABLE IF NOT EXISTS items(
   id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL, run_id TEXT NOT NULL, dataset_id TEXT,
   name TEXT NOT NULL, trigger_word TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT 'character',
   base TEXT NOT NULL DEFAULT '', card TEXT NOT NULL DEFAULT '{}', preview INTEGER NOT NULL DEFAULT 0,
-  adapter_bytes INTEGER, created_at TEXT NOT NULL);
+  adapter_bytes BIGINT, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS datasets_owner ON datasets(tenant_id, user_id, created_at);
 CREATE INDEX IF NOT EXISTS items_dataset ON items(dataset_id, created_at);
 CREATE INDEX IF NOT EXISTS runs_owner ON runs(tenant_id, user_id, created_at);
@@ -107,62 +111,92 @@ CREATE INDEX IF NOT EXISTS decision_examples_set ON decision_examples(set_id, po
 )
 
 
+# what a later version added to a table an older one made (video sets, 2026-10-26)
+COLUMNS = (
+    ("datasets", "family", "TEXT NOT NULL DEFAULT 'image'"),
+    ("items", "media", "TEXT NOT NULL DEFAULT 'picture'"),
+    ("items", "seconds", "DOUBLE PRECISION"),
+    ("items", "frames", "INTEGER"),
+)
+
+
+def _rebuild_runs(db: Any) -> None:
+    """A run can be paused (2026-10-25): the status check of a desktop file made before does not
+    allow it, so that table is made again with its rows (SQLite cannot change a check)."""
+    row = db.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'runs'"
+    ).fetchone()
+    if row is None or "'paused'" in row["sql"]:
+        return
+    db.execute("ALTER TABLE runs RENAME TO runs_old")
+    db.execute("DROP INDEX IF EXISTS runs_owner")
+    db.executescript(RUNS_DDL)
+    db.execute("INSERT INTO runs SELECT * FROM runs_old")
+    db.execute("DROP TABLE runs_old")
+    db.commit()
+
+
 class TrainingStore:
-    def __init__(self, folder: Path):
+    def __init__(self, db: StoreDb, folder: Path):
+        """The store on `db`. `folder` holds the files on the desktop; on the web it is a working
+        folder only, the files being in object storage."""
+        self.db = db
         self.folder = folder
         folder.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
-        self._db = sqlite3.connect(folder / "training.db", check_same_thread=False, timeout=10)
-        self._db.row_factory = sqlite3.Row
-        with self._lock:
-            self._migrate()
-            self._db.executescript(DDL)
-            self._add_columns()
-            self._db.execute("INSERT OR IGNORE INTO meta VALUES ('schema', ?)", (str(SCHEMA),))
-            # a run the app left going: paused when a checkpoint was kept, else stopped
-            for row in self._db.execute(
-                "SELECT id, tenant_id, user_id FROM runs WHERE status = 'working'"
-            ).fetchall():
-                kept = self._has_checkpoint(row["tenant_id"], row["user_id"], row["id"])
-                self._db.execute(
-                    "UPDATE runs SET status = ?, error = ?, finished_at = ? WHERE id = ?",
-                    (
-                        "paused" if kept else "failed",
-                        LEFT_PAUSED if kept else LEFT_RUNNING,
-                        None if kept else now(),
-                        row["id"],
-                    ),
-                )
-            self._db.execute(
-                "UPDATE items SET caption_state = 'none' WHERE caption_state = 'writing'"
+        db.open_tables(DDL, COLUMNS, before=_rebuild_runs)
+        db.exec("INSERT INTO meta VALUES ('schema', ?) ON CONFLICT DO NOTHING", (str(SCHEMA),))
+
+    @classmethod
+    def in_folder(cls, folder: Path) -> "TrainingStore":
+        """The desktop's store: `training.db` and the files beside it. A run the app left going is
+        paused when a checkpoint was kept, else stopped, in words."""
+        store = cls(SqliteStoreDb(folder / "training.db"), folder)
+        store.settle_left_running()
+        return store
+
+    @classmethod
+    def on_postgres(
+        cls, dsn: str, schema: str = "training", cache: Path | None = None
+    ) -> "TrainingStore":
+        """The web's store, in its own schema of the deployment's Postgres; `cache` is the API's
+        working folder (the files themselves are in object storage)."""
+        folder = cache or Path(tempfile.gettempdir()) / "wasifyai-training"
+        return cls(PostgresStoreDb(dsn, schema), folder)
+
+    def settle_left_running(self) -> None:
+        for row in self._all("SELECT id, tenant_id, user_id FROM runs WHERE status = 'working'"):
+            kept = self._has_checkpoint(row["tenant_id"], row["user_id"], row["id"])
+            self._exec(
+                "UPDATE runs SET status = ?, error = ?, finished_at = ? WHERE id = ?",
+                (
+                    "paused" if kept else "failed",
+                    LEFT_PAUSED if kept else LEFT_RUNNING,
+                    None if kept else now(),
+                    row["id"],
+                ),
             )
-            self._db.commit()
+        self._exec("UPDATE items SET caption_state = 'none' WHERE caption_state = 'writing'")
 
-    def _add_columns(self) -> None:
-        """What a later version added to a table an older one made (video sets, 2026-10-26)."""
-        for table, column, ddl in (
-            ("datasets", "family", "TEXT NOT NULL DEFAULT 'image'"),
-            ("items", "media", "TEXT NOT NULL DEFAULT 'picture'"),
-            ("items", "seconds", "REAL"),
-            ("items", "frames", "INTEGER"),
-        ):
-            have = {r["name"] for r in self._db.execute(f"PRAGMA table_info({table})")}
-            if column not in have:
-                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+    def runs_left_working(self) -> list[dict[str, Any]]:
+        """Runs a service that is gone left going: the web has no checkpoint to pick up (a worker's
+        job is cancelled by the caller), so each is failed with a sentence."""
+        rows = self._all("SELECT id, tenant_id, user_id FROM runs WHERE status = 'working'")
+        for r in rows:
+            self._exec(
+                "UPDATE runs SET status = 'failed', error = ?, finished_at = ? WHERE id = ?",
+                (LEFT_RUNNING_WEB, now(), r["id"]),
+            )
+        self._exec("UPDATE items SET caption_state = 'none' WHERE caption_state = 'writing'")
+        return [dict(r) for r in rows]
 
-    def _migrate(self) -> None:
-        """A run can be paused (2026-10-25): the status check of an older table does not allow it."""
-        row = self._db.execute(
-            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'runs'"
-        ).fetchone()
-        if row is None or "'paused'" in row["sql"]:
-            return
-        self._db.execute("ALTER TABLE runs RENAME TO runs_old")
-        self._db.execute("DROP INDEX IF EXISTS runs_owner")
-        self._db.executescript(RUNS_DDL)
-        self._db.execute("INSERT INTO runs SELECT * FROM runs_old")
-        self._db.execute("DROP TABLE runs_old")
-        self._db.commit()
+    def close(self) -> None:
+        self.db.close()
+
+    def drop_schema(self) -> None:
+        """Remove every table of this store (tests on Postgres)."""
+        drop = getattr(self.db, "drop", None)
+        if drop is not None:
+            drop()
 
     def _has_checkpoint(self, tenant: str, user: str, run: str) -> bool:
         try:
@@ -180,19 +214,14 @@ class TrainingStore:
 
     # ---- the plumbing -----------------------------------------------------------------------
 
-    def _one(self, sql: str, args: tuple[Any, ...]) -> sqlite3.Row | None:
-        with self._lock:
-            return self._db.execute(sql, args).fetchone()
+    def _one(self, sql: str, args: tuple[Any, ...]) -> Any:
+        return self.db.one(sql, args)
 
     def _all(self, sql: str, args: tuple[Any, ...] = ()) -> list[Any]:
-        with self._lock:
-            return self._db.execute(sql, args).fetchall()
+        return self.db.all(sql, args)
 
     def _exec(self, sql: str, args: tuple[Any, ...] = ()) -> int:
-        with self._lock:
-            cur = self._db.execute(sql, args)
-            self._db.commit()
-            return cur.rowcount
+        return self.db.exec(sql, args)
 
     def _replace_rows(
         self,
@@ -202,10 +231,10 @@ class TrainingStore:
         rows: list[tuple[Any, ...]],
     ) -> None:
         """Delete some rows and insert others, together: the examples of a set are replaced whole."""
-        with self._lock:
-            self._db.execute(delete_sql, delete_args)
-            self._db.executemany(insert_sql, rows)
-            self._db.commit()
+        with self.db.transaction() as db:
+            db.execute(delete_sql, delete_args)
+            for row in rows:
+                db.execute(insert_sql, row)
 
     # ---- datasets -----------------------------------------------------------------------------
 
@@ -271,7 +300,7 @@ class TrainingStore:
     # ---- items --------------------------------------------------------------------------------
 
     @staticmethod
-    def _item(row: sqlite3.Row) -> dict[str, Any]:
+    def _item(row: Any) -> dict[str, Any]:
         out = dict(row)
         out["checks"] = json.loads(out["checks"])
         return out
@@ -333,7 +362,7 @@ class TrainingStore:
     # ---- runs ---------------------------------------------------------------------------------
 
     @staticmethod
-    def _run(row: sqlite3.Row) -> dict[str, Any]:
+    def _run(row: Any) -> dict[str, Any]:
         out = dict(row)
         out["settings"] = json.loads(out["settings"])
         out["samples"] = json.loads(out["samples"])
@@ -414,7 +443,7 @@ class TrainingStore:
     # ---- trained models -----------------------------------------------------------------------
 
     @staticmethod
-    def _model(row: sqlite3.Row) -> dict[str, Any]:
+    def _model(row: Any) -> dict[str, Any]:
         out = dict(row)
         out["card"] = json.loads(out["card"])
         out["preview"] = bool(out["preview"])
@@ -566,7 +595,7 @@ class TrainingStore:
         return self.get_decision_set(tenant, user, item)
 
     @staticmethod
-    def _decision_set(row: sqlite3.Row) -> dict[str, Any]:
+    def _decision_set(row: Any) -> dict[str, Any]:
         out = dict(row)
         out["options"] = json.loads(out["options"] or "[]")
         return out

@@ -213,7 +213,9 @@ and Hindi; a reranker; video overview; scanned non-Latin text.
 ## Amendment 2026-10-18: the web profile's store (docs/phase3-web-parity-plan.md, W4 step 1)
 
 The notebooks store has a Postgres form, `PostgresNotebookStore` (`pgstore.py`), the "adapter written when the web
-product needs it" of decision 5. It is the same class of store: every method and its ownership rule runs the same SQL
+product needs it" of decision 5. (Since stage J2, 2026-10-29, it is not a subclass: `NotebookStore.on_postgres(...)` and
+`NotebookStore.in_folder(...)` are one class over `wasifyai_platform_sdk.sqlstore`, and the hooks below are its branches
+on `db.dialect`.) It is the same class of store: every method and its ownership rule runs the same SQL
 through a thin connection (`PgDb`); the few differences are hooks (`_INTEGRITY`, `_guard` for a savepoint, `_replace_chunks`).
 The tables are in their own schema (`notebooks`), created and checked by the store on start under an advisory lock
 (the product owns its schema, as above), with `chunks.embedding vector(N)` in the passage row and the passage's terms in

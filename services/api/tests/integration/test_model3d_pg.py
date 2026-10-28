@@ -6,8 +6,7 @@ from uuid import uuid4
 
 import pytest
 from wasifyai_engine_worker.worker import Worker
-from wasifyai_model3d.pgstore import PostgresModel3dStore
-from wasifyai_model3d.store import NotFound
+from wasifyai_model3d.store import Model3dStore, NotFound
 from wasifyai_platform_sdk import EngineJob, EngineQueue, memory_storage, model3d_wire
 
 
@@ -16,7 +15,7 @@ def store(engine):
     from wasifyai_api.config import get_settings
 
     schema = "m3d_t_" + uuid4().hex[:8]
-    s = PostgresModel3dStore(get_settings().database_url, schema=schema)
+    s = Model3dStore.on_postgres(get_settings().database_url, schema=schema)
     yield s
     s.drop_schema()
     s.close()

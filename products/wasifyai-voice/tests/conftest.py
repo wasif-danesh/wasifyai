@@ -14,14 +14,13 @@ def anyio_backend():
 def new_store(request, tmp_path):
     """Makes a voice store on SQLite or on Postgres: the same tests run against both. Each
     Postgres test has a schema of its own, dropped at the end, so nothing real is touched."""
-    from wasifyai_voice.pgstore import PostgresVoiceStore
 
-    made: list[PostgresVoiceStore] = []
+    made: list[VoiceStore] = []
 
     def make(name: str = "voice"):
         if request.param == "sqlite":
-            return VoiceStore(tmp_path / name)
-        store = PostgresVoiceStore(pg_dsn(), schema=f"vt_{uuid.uuid4().hex[:10]}_{name}")
+            return VoiceStore.in_folder(tmp_path / name)
+        store = VoiceStore.on_postgres(pg_dsn(), schema=f"vt_{uuid.uuid4().hex[:10]}_{name}")
         made.append(store)
         return store
 

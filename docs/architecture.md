@@ -118,6 +118,12 @@ service and `None` where this deployment has none (stage F1). The engine builds 
 (`ApiServices`), in `wasifyai_api/assemble.py`: what both deployments share first, then the web's or the desktop's builder.
 `app.state.services` is the only attribute of the app; an engine route reads it with `services_of(request)`.
 
+A product that keeps its own tables (notebooks, 3D, training, voice, Motion graphics) has one store class over a
+`StoreDb` (`wasifyai_platform_sdk.sqlstore`, stage J2): a SQLite file on the desktop (`Store.in_folder(...)`) or its
+own schema in the deployment's Postgres on the web (`Store.on_postgres(...)`). The SQL is written once, with `?`
+parameters and types both databases read alike; what really differs (the notebooks' keyword and vector index) is a
+branch on `db.dialect` inside the product.
+
 ## Capabilities
 
 Graphs request **capabilities** (`text.<name>`, `image.generate`, `video.generate`), never specific models. `product.yaml` binds each capability to a

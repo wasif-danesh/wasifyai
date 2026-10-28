@@ -62,7 +62,7 @@ def test_a_project_folder_is_rewritten_from_its_slots_and_its_path_is_safe(tmp_p
 
 
 def test_the_store_keeps_compositions_per_person_and_renders_with_them(tmp_path):
-    store = BuilderStore(tmp_path)
+    store = BuilderStore.in_folder(tmp_path)
     a = store.add_composition("t1", "u1", title="One", template="title", slots={"title": "One"})
     store.add_composition("t1", "u2", title="Two", template="title", slots={"title": "Two"})
     assert [c["title"] for c in store.list_compositions("t1", "u1")] == ["One"]
@@ -85,7 +85,7 @@ def test_the_store_keeps_compositions_per_person_and_renders_with_them(tmp_path)
 
 
 def test_every_change_is_a_version_that_undo_brings_back_one_at_a_time(tmp_path):
-    store = BuilderStore(tmp_path)
+    store = BuilderStore.in_folder(tmp_path)
     a = store.add_composition("t1", "u1", title="One", template="title", slots={"title": "One"})
     cid = a["id"]
     with pytest.raises(NothingToUndo):
@@ -103,7 +103,7 @@ def test_every_change_is_a_version_that_undo_brings_back_one_at_a_time(tmp_path)
 
 
 def test_only_the_last_versions_are_kept(tmp_path):
-    store = BuilderStore(tmp_path)
+    store = BuilderStore.in_folder(tmp_path)
     cid = store.add_composition("t1", "u1", title="0", template="title", slots={"n": 0})["id"]
     for n in range(1, 31):
         store.update_composition("t1", "u1", cid, title=str(n), slots={"n": n})
@@ -112,10 +112,10 @@ def test_only_the_last_versions_are_kept(tmp_path):
 
 
 def test_a_render_left_working_by_a_process_that_is_gone_is_failed_when_the_store_opens(tmp_path):
-    store = BuilderStore(tmp_path)
+    store = BuilderStore.in_folder(tmp_path)
     a = store.add_composition("t1", "u1", title="One", template="title", slots={})
     r = store.add_render("t1", "u1", a["id"], {})
-    again = BuilderStore(tmp_path)
+    again = BuilderStore.in_folder(tmp_path)
     row = again.get_render("t1", "u1", r["id"])
     assert row["status"] == "failed" and row["error"] == LEFT_RUNNING
 
@@ -145,7 +145,7 @@ def test_a_file_made_before_versions_and_checks_is_upgraded_and_keeps_its_projec
     )
     db.commit()
     db.close()
-    store = BuilderStore(tmp_path)
+    store = BuilderStore.in_folder(tmp_path)
     assert store.get_composition("t1", "u1", "c1")["title"] == "Old"
     assert store.get_render("t1", "u1", "r1")["check"] is None
     store.update_composition("t1", "u1", "c1", title="New", slots={"title": "New"})
@@ -770,7 +770,7 @@ def test_where_there_is_no_component_the_routes_are_not_there(tmp_path):
 
 async def test_compositions_and_clips_are_one_source_found_by_every_word_on_the_screen(tmp_path):
     engine = create_sqlite_engine(tmp_path / "wasifyai.db")
-    store = BuilderStore(tmp_path / "video-builder")
+    store = BuilderStore.in_folder(tmp_path / "video-builder")
     q = templates.normalize_slots("quote", {"quote": "Make it simple.", "author": "Anon"})
     a = store.add_composition("t1", "u1", title="Make it simple.", template="quote", slots=q)
     c = templates.normalize_slots("chart", {"title": "Sales", "data": "North, 120\nSouth, 95"})

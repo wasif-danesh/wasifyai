@@ -135,10 +135,11 @@ def test_deleting_a_notebook_removes_its_passages(store):
 
 
 def test_deleting_removes_passages_vectors_and_keyword_entries_in_sqlite(tmp_path):
-    store = NotebookStore(tmp_path, dimension=SPEC.dimension, embedder_id=SPEC.id)
+    store = NotebookStore.in_folder(tmp_path, dimension=SPEC.dimension, embedder_id=SPEC.id)
     nb = store.create_notebook(T, U, "n")
     d, _ = file_doc(store, nb)
     index(store, d["id"], ["alpha beta", "gamma delta"])
+    assert store.path is not None
     db = sqlite3.connect(store.path)
     db.enable_load_extension(True)
     import sqlite_vec

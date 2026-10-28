@@ -249,13 +249,13 @@ def test_deleting_a_set_removes_its_pictures(rig, tmp_path):
 
 
 def test_a_run_left_working_by_a_closed_app_is_failed_when_the_store_opens(tmp_path):
-    store = TrainingStore(tmp_path / "training")
+    store = TrainingStore.in_folder(tmp_path / "training")
     ds = store.add_dataset("t1", "u1", "style", "Ink")
     run = store.add_run("t1", "u1", ds["id"], base="b", steps=10, settings={}, preview=True)
     store.add_item(
         "t1", "u1", ds["id"], name="a", width=1, height=1, sha256="x", dhash=0, checks=[]
     )
-    again = TrainingStore(tmp_path / "training")
+    again = TrainingStore.in_folder(tmp_path / "training")
     got = again.get_run("t1", "u1", run["id"])
     assert got["status"] == "failed" and got["error"] == LEFT_RUNNING
     # a late failure does not undo a finished run
@@ -264,7 +264,7 @@ def test_a_run_left_working_by_a_closed_app_is_failed_when_the_store_opens(tmp_p
 
 
 def test_the_trained_models_are_a_kind_of_creation_in_the_database_search_reads(tmp_path):
-    store = TrainingStore(tmp_path / "training")
+    store = TrainingStore.in_folder(tmp_path / "training")
     store.add_model(
         "t1",
         "u1",

@@ -4,15 +4,14 @@ SQL."""
 from uuid import uuid4
 
 import pytest
-from wasifyai_video.builder.pgstore import PostgresBuilderStore
-from wasifyai_video.builder.store import NotFound, NothingToUndo
+from wasifyai_video.builder.store import BuilderStore, NotFound, NothingToUndo
 
 
 @pytest.fixture
 def store(engine):
     from wasifyai_api.config import get_settings
 
-    s = PostgresBuilderStore(get_settings().database_url, schema="builder_t_" + uuid4().hex[:8])
+    s = BuilderStore.on_postgres(get_settings().database_url, schema="builder_t_" + uuid4().hex[:8])
     yield s
     s.drop_schema()
     s.close()

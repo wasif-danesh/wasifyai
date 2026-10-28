@@ -169,7 +169,7 @@ def web(tmp_path):
     app.state.services = ApiServices()
     app.state.services.engine = sql  # the video library's rows
     app.state.services.storage = ScopedStorage(raw)
-    app.state.services.builder_store = BuilderStore(tmp_path / "rows")
+    app.state.services.builder_store = BuilderStore.in_folder(tmp_path / "rows")
     app.state.services.builder_scratch = tmp_path / "scratch"
     app.state.services.video_builder = RemoteBuilderEngine(queue, raw, directory)  # type: ignore[arg-type]
     app.state.services.creation_index = Index()

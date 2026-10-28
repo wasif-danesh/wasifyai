@@ -201,24 +201,24 @@ def _installer(
 
 def runtime_for(state: Any) -> Runtime:
     """The engine's runtime, made on first use and kept on the app state."""
-    existing = getattr(state, "notebooks_runtime", None)
+    existing = state.notebooks_runtime
     if existing is not None:
         return existing
-    web = getattr(state, "notebooks_web", None)
+    web = state.notebooks_web
     if web is not None:  # the web profile: Postgres and object storage, read by a worker
         runtime = web.build(reads_sources=False)
         state.notebooks_runtime = runtime
         return runtime
-    data = getattr(state, "desktop_dir", None)
+    data = state.desktop_dir
     if not data:
         raise NotAvailable("Notebooks are not available in this deployment yet.")
-    models = getattr(state, "desktop_models", None)
+    models = state.desktop_models
     data_dir = Path(data)
 
     def roots() -> list[Path]:
         return list(models.roots()) if models is not None else [data_dir / "models"]
 
-    products = getattr(state, "products_dir", None)
+    products = state.products_dir
     runtime = Runtime.build(data_dir, roots, products_dir=Path(products) if products else None)
     state.notebooks_runtime = runtime
     return runtime

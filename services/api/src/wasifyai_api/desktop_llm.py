@@ -15,19 +15,20 @@ from wasifyai_api.desktop_fit import assess_fit, need_of_language
 from wasifyai_api.desktop_language import CONTEXTS, DEFAULT_CONTEXT, LanguageService
 from wasifyai_api.desktop_models import DownloadError
 from wasifyai_api.identity import get_identity
+from wasifyai_api.services import services_of
 
 router = APIRouter(prefix="/desktop", tags=["desktop"])
 
 
 def _server(request: Request) -> Any:
-    server = getattr(request.app.state, "llama_server", None)
+    server = services_of(request).llama_server
     if server is None:
         raise HTTPException(404, "not available in this deployment")
     return server
 
 
 def _language(request: Request) -> LanguageService:
-    svc = getattr(request.app.state, "desktop_language", None)
+    svc = services_of(request).desktop_language
     if svc is None:
         raise HTTPException(404, "not available in this deployment")
     return svc
@@ -138,7 +139,7 @@ async def choose_language(
 
 
 def _vision(request: Request) -> Any:
-    svc = getattr(request.app.state, "desktop_vision", None)
+    svc = services_of(request).desktop_vision
     if svc is None:
         raise HTTPException(404, "not available in this deployment")
     return svc

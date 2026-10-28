@@ -99,7 +99,7 @@ class VideoResult:
 
 
 def engine_for(state: Any) -> Any:
-    engine = getattr(state, "video_training", None)
+    engine = state.video_training
     if engine is None:
         raise NotAvailable("Teaching the video model is not available here.")
     return engine
@@ -357,7 +357,7 @@ class VideoRunManager:
 
 
 def manager_for(deps: RouteDeps) -> VideoRunManager:
-    existing = getattr(deps.state, "video_runs", None)
+    existing = deps.state.video_runs
     if existing is None:
         existing = VideoRunManager(deps)
         deps.state.video_runs = existing

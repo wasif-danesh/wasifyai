@@ -37,6 +37,7 @@ from wasifyai_api.remote_train import (  # noqa: E402
     RemoteVideoTrainer,
     RemoteWritingTrainer,
 )
+from wasifyai_api.services import ApiServices
 from wasifyai_training.comfy_lora import write_tensors  # noqa: E402
 from wasifyai_training.files import StorageFiles  # noqa: E402
 from wasifyai_training.pgstore import PostgresTrainingStore  # noqa: E402
@@ -128,22 +129,29 @@ async def web(engine, redis_conn, tmp_path):
         0.2,
     )
     app = FastAPI()
-    app.state.training_store = store
-    app.state.training_files = StorageFiles(storage)
-    app.state.usage = InMemoryUsageRecorder()
-    app.state.creation_index = Index()
+    app.state.services = ApiServices()
+    app.state.services.training_store = store
+    app.state.services.training_files = StorageFiles(storage)
+    app.state.services.usage = InMemoryUsageRecorder()
+    app.state.services.creation_index = Index()
     vision = Vision()
-    app.state.caps = {"wasifyai-training": SimpleNamespace(text=vision, db=None, config=None)}
-    app.state.video_training = RemoteVideoTrainer(queue, storage, directory, usage=app.state.usage)
-    app.state.training = RemoteImageTrainer(queue, storage, directory, usage=app.state.usage)
-    app.state.decision_training = RemoteDecisionTrainer(
-        queue, storage, directory, usage=app.state.usage
+    app.state.services.caps = {
+        "wasifyai-training": SimpleNamespace(text=vision, db=None, config=None)
+    }
+    app.state.services.video_training = RemoteVideoTrainer(
+        queue, storage, directory, usage=app.state.services.usage
     )
-    app.state.language_training = RemoteWritingTrainer(
-        queue, storage, directory, usage=app.state.usage
+    app.state.services.training = RemoteImageTrainer(
+        queue, storage, directory, usage=app.state.services.usage
+    )
+    app.state.services.decision_training = RemoteDecisionTrainer(
+        queue, storage, directory, usage=app.state.services.usage
+    )
+    app.state.services.language_training = RemoteWritingTrainer(
+        queue, storage, directory, usage=app.state.services.usage
     )
     app.include_router(
-        build_routes(RouteDeps(app.state, user_of)), prefix="/products/wasifyai-training"
+        build_routes(RouteDeps(app.state.services, user_of)), prefix="/products/wasifyai-training"
     )
     running = asyncio.create_task(worker.run())
     await asyncio.sleep(0.5)
@@ -333,11 +341,11 @@ async def test_a_picture_style_is_taught_through_a_worker_with_its_samples_and_k
     # the styles the person can use are the ones taught for pictures; the resolver names this person's file
     from wasifyai_api.person_looks import person_looks
 
-    resolve = person_looks(web.app.state, video=False)
+    resolve = person_looks(web.app.state.services, video=False)
     assert await resolve("t1", "u1", [name]) == {name: looks[0]}
     assert await resolve("t1", "u2", [name]) is None  # another person's style is not theirs
     assert (
-        await person_looks(web.app.state, video=True)("t1", "u1", [name]) is None
+        await person_looks(web.app.state.services, video=True)("t1", "u1", [name]) is None
     )  # nor a video look
     # a run on a worker cannot be paused: the screen is told
     assert (await c.post(f"{BASE}/runs/{done['id']}/pause")).status_code in (200, 404, 409)

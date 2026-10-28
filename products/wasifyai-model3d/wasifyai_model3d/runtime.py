@@ -55,14 +55,14 @@ class Refused(Exception):
 
 
 def engine_for(state: Any) -> Any:
-    engine = getattr(state, "model3d", None)
+    engine = state.model3d
     if engine is None:
         raise NotAvailable("3D models are not available in this deployment.")
     return engine
 
 
 def root_for(state: Any) -> Path:
-    data = getattr(state, "desktop_dir", None)
+    data = state.desktop_dir
     if not data:
         raise NotAvailable("3D models are not available in this deployment.")
     return Path(data) / "model3d"
@@ -77,7 +77,7 @@ KEEP_PICTURES_DAYS = 14  # a picture nobody made a model from
 
 
 def store_for(state: Any) -> Model3dStore:
-    existing = getattr(state, "model3d_store", None)
+    existing = state.model3d_store
     if existing is None:  # the desktop: a file beside the app's other data
         existing = Model3dStore(root_for(state))
         state.model3d_store = existing
@@ -116,7 +116,7 @@ def not_ready(engine: Any) -> str:
 
 async def add_to_search(state: Any, identity: Identity, item_id: str, text: str) -> None:
     """Make a model searchable by its words (ADR-0041): best effort, never fails the request."""
-    index = getattr(state, "creation_index", None)
+    index = state.creation_index
     if index is None:
         return
     try:
@@ -132,7 +132,7 @@ def words_of(row: dict[str, Any]) -> str:
 
 
 def manager_for(deps: RouteDeps) -> "JobManager":
-    existing = getattr(deps.state, "model3d_jobs", None)
+    existing = deps.state.model3d_jobs
     if existing is None:
         existing = JobManager(deps)
         deps.state.model3d_jobs = existing

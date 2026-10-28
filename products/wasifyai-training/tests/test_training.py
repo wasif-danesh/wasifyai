@@ -144,7 +144,7 @@ def test_a_picture_that_cannot_be_described_says_so_and_can_be_tried_again(rig):
 
 def test_without_a_vision_model_the_descriptions_say_what_to_do(tmp_path):
     app, _ = make_app(tmp_path)
-    app.state.caps = {}
+    app.state.services.caps = {}
     with TestClient(app) as client:
         ds = new_dataset(client)
         add_picture(client, ds["id"])

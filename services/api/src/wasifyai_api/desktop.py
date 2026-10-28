@@ -69,6 +69,7 @@ from wasifyai_api.lipsync_runtime import LipSyncSidecar
 from wasifyai_api.llama_server import LlamaServer
 from wasifyai_api.runs import RunManager
 from wasifyai_api.safeguards import SettingsStore
+from wasifyai_api.services import services_of
 from wasifyai_api.sqlite_stores import SqliteIndexStore, SqliteSettingsStore, SqliteUserStore
 from wasifyai_api.training_setup import HUB, LOCK_NAME, TrainingSetup
 from wasifyai_api.video_setup import LOCK_NAME as VIDEO_LOCK_NAME
@@ -461,7 +462,7 @@ files_router = APIRouter(tags=["files"])
 async def get_file(key: str, e: int, s: str, request: Request) -> Response:
     """A stored file for a link signed by this engine. The signature is the authorisation, the way
     a presigned S3 link is, so an `<img>` can use it."""
-    files: LocalFileStorage = request.app.state.local_files
+    files: LocalFileStorage = services_of(request).local_files
     if not files.verify(key, e, s):
         raise HTTPException(403, "this link is not valid or has expired")
     try:

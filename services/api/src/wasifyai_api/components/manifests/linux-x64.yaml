@@ -1,0 +1,19 @@
+# The optional components on linux-x64 (stage F2 of the 2026-10-27 plan): what each fetches, pinned by
+# size and SHA-256. Data, read by wasifyai_api/components; scripts/build-engine-bundle.sh reads the list.
+schema: 1
+platform: linux-x64
+python: "3.12.15"  # the Python a component's own environment is made with
+components:
+  llamacpp:
+    title: Language engine (llama.cpp)
+    version: b11655
+    licence: MIT
+    source: github.com/ggml-org/llama.cpp
+    min_free_bytes: 268435456
+    backend: cpu
+    archive:
+      url: https://github.com/ggml-org/llama.cpp/releases/download/b11655/llama-b11655-bin-ubuntu-x64.tar.gz
+      size: 17834204
+      sha256: 0e3f2cb057d2f4439ddacc281761b370a47b74f2d9f6d74f29c5b6546a459a0c
+      kind: tar.gz
+      strip: 1

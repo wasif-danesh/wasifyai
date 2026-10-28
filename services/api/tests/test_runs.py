@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
+from wasifyai_api.assemble import Injected
 from wasifyai_api.graphs.hello import build_hello
 from wasifyai_api.main import create_app
 from wasifyai_platform_sdk import (
@@ -25,15 +26,17 @@ def hello_registry() -> GraphRegistry:
 def mem_app(registry, products, usage, *, storage=None, **kw):
     """An app wired entirely in memory: no Redis, Postgres or network."""
     return create_app(
-        registry,
-        products,
-        InMemorySaver(),
-        usage,
-        storage,
-        heartbeat_s=0.05,
-        event_log=InMemoryEventLog(),
-        run_store=InMemoryRunStore(),
-        **kw,
+        Injected(
+            registry=registry,
+            products_dir=products,
+            checkpointer=InMemorySaver(),
+            usage=usage,
+            storage=storage,
+            heartbeat_s=0.05,
+            event_log=InMemoryEventLog(),
+            run_store=InMemoryRunStore(),
+            **kw,
+        )
     )
 
 

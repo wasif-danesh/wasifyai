@@ -19,7 +19,7 @@ from wasifyai_model3d.actions import actions, library_kinds
 from wasifyai_model3d.index import Model3dIndexSource
 from wasifyai_model3d.routes import build_routes
 from wasifyai_model3d.store import LEFT_RUNNING, Model3dStore, NotFound
-from wasifyai_platform_sdk import Identity, RouteDeps
+from wasifyai_platform_sdk import EngineServices, Identity, RouteDeps
 from wasifyai_platform_sdk.actions import ActionExecutor, ActionRegistry, builtin_actions
 from wasifyai_platform_sdk.actions.model import Readiness, need_runtime
 from wasifyai_platform_sdk.actions.testing import FakeActionHost
@@ -257,15 +257,16 @@ def user_of(x_user: str = Header("u1"), x_tenant: str = Header("t1")) -> Identit
 @pytest.fixture
 def rig(tmp_path):
     app = FastAPI()
-    app.state.desktop_dir = tmp_path
-    app.state.model3d = FakeEngine()
-    app.state.creation_index = Index()
-    app.state.export_dir = tmp_path / "exports"
+    app.state.services = EngineServices()
+    app.state.services.desktop_dir = tmp_path
+    app.state.services.model3d = FakeEngine()
+    app.state.services.creation_index = Index()
+    app.state.services.export_dir = tmp_path / "exports"
     app.include_router(
-        build_routes(RouteDeps(app.state, user_of)), prefix="/products/wasifyai-model3d"
+        build_routes(RouteDeps(app.state.services, user_of)), prefix="/products/wasifyai-model3d"
     )
     with TestClient(app) as client:
-        client.app_state = app.state  # type: ignore[attr-defined]
+        client.app_state = app.state.services  # type: ignore[attr-defined]
         yield client
 
 
@@ -545,9 +546,10 @@ def test_a_picture_can_be_thrown_away_and_a_missing_one_is_fine(rig):
 
 def test_where_there_is_no_engine_the_routes_are_not_there(tmp_path):
     app = FastAPI()
-    app.state.desktop_dir = tmp_path
+    app.state.services = EngineServices()
+    app.state.services.desktop_dir = tmp_path
     app.include_router(
-        build_routes(RouteDeps(app.state, user_of)), prefix="/products/wasifyai-model3d"
+        build_routes(RouteDeps(app.state.services, user_of)), prefix="/products/wasifyai-model3d"
     )
     with TestClient(app) as c:
         assert c.get(f"{BASE}/status").status_code == 404
@@ -583,7 +585,7 @@ async def test_models_are_found_by_their_title_and_the_words_they_were_made_from
 
 class ActionRig:
     def __init__(self, tmp_path: Path, pictures_: dict[str, bytes]):
-        self.state: Any = SimpleNamespace(
+        self.state = EngineServices(
             desktop_dir=tmp_path, model3d=FakeEngine(), creation_index=Index(),
             export_dir=tmp_path / "exports",
         )  # fmt: skip

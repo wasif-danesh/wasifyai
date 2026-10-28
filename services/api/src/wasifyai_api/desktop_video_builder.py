@@ -25,6 +25,7 @@ from wasifyai_api.audio_runtime import InstallError
 from wasifyai_api.desktop_fit import GB, assess_fit, need_declared, read_machine
 from wasifyai_api.desktop_language import thinking_fields
 from wasifyai_api.identity import get_identity
+from wasifyai_api.services import services_of
 
 # what a render holds, measured on the owner's Mac (docs/spikes/video-builder-v1.md): 0.6 GB for a
 # plain composition by `ps`, 1.8 to 3 GB by V0's sampler; the fit check uses the larger figure
@@ -209,7 +210,7 @@ router = APIRouter(prefix="/desktop/video-builder", tags=["desktop"])
 
 
 def _service(request: Request) -> VideoBuilderService:
-    service: VideoBuilderService | None = getattr(request.app.state, "video_builder", None)
+    service: VideoBuilderService | None = services_of(request).video_builder
     if service is None:
         raise HTTPException(404, "not available in this deployment")
     return service

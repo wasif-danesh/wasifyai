@@ -14,7 +14,7 @@ import pytest
 from fastapi import FastAPI, Header
 from fastapi.testclient import TestClient
 from PIL import Image, ImageFilter
-from wasifyai_platform_sdk import Identity, InMemoryUsageRecorder, RouteDeps
+from wasifyai_platform_sdk import EngineServices, Identity, InMemoryUsageRecorder, RouteDeps
 from wasifyai_training.routes import build_routes
 from wasifyai_training.trainer import PreviewTrainer
 
@@ -334,19 +334,22 @@ class FakeVideoTrainer:
 
 def make_app(tmp_path: Path) -> tuple[FastAPI, Vision]:
     app = FastAPI()
-    app.state.desktop_dir = tmp_path
+    app.state.services = EngineServices()
+    app.state.services.desktop_dir = tmp_path
     trainer = PreviewTrainer()
     trainer.step_s = 0.001
-    app.state.training = trainer
-    app.state.language_training = FakeWriter()
-    app.state.decision_training = FakeDecider()
-    app.state.video_training = FakeVideoTrainer(tmp_path)
+    app.state.services.training = trainer
+    app.state.services.language_training = FakeWriter()
+    app.state.services.decision_training = FakeDecider()
+    app.state.services.video_training = FakeVideoTrainer(tmp_path)
     vision = Vision()
-    app.state.caps = {"wasifyai-training": SimpleNamespace(text=vision, db=None, config=None)}
-    app.state.creation_index = Index()
-    app.state.usage = InMemoryUsageRecorder()
+    app.state.services.caps = {
+        "wasifyai-training": SimpleNamespace(text=vision, db=None, config=None)
+    }
+    app.state.services.creation_index = Index()
+    app.state.services.usage = InMemoryUsageRecorder()
     app.include_router(
-        build_routes(RouteDeps(app.state, user_of)), prefix="/products/wasifyai-training"
+        build_routes(RouteDeps(app.state.services, user_of)), prefix="/products/wasifyai-training"
     )
     return app, vision
 
@@ -355,7 +358,7 @@ def make_app(tmp_path: Path) -> tuple[FastAPI, Vision]:
 def rig(tmp_path):
     app, vision = make_app(tmp_path)
     with TestClient(app) as client:
-        client.app_state = app.state  # type: ignore[attr-defined]
+        client.app_state = app.state.services  # type: ignore[attr-defined]
         client.vision = vision  # type: ignore[attr-defined]
         yield client
 

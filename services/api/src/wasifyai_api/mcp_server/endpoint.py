@@ -254,7 +254,8 @@ class LazyGate:
     the executor. Until then the endpoint says so."""
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
-        gate = getattr(scope["app"].state, "mcp_gate", None)
+        services = getattr(scope["app"].state, "services", None)
+        gate = services.mcp_gate if services is not None else None
         if gate is None:
             return await _json(503, "the engine is still starting")(scope, receive, send)
         await gate(scope, receive, send)
@@ -264,8 +265,9 @@ def mount(app: FastAPI) -> None:
     app.router.routes.append(Route("/mcp", endpoint=LazyGate(), methods=["POST", "GET", "DELETE"]))
 
 
-def attach(app: FastAPI, server: WasifyMCP, connections: ConnectionsService) -> None:
-    app.state.mcp = server
-    app.state.mcp_gate = ConnectionGate(
+def attach(services: Any, server: WasifyMCP, connections: ConnectionsService) -> None:
+    """Put the built server and its gate into the engine's services (`ApiServices`)."""
+    services.mcp = server
+    services.mcp_gate = ConnectionGate(
         StreamableHTTPASGIApp(server.session_manager), connections, server
     )

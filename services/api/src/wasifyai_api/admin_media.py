@@ -4,6 +4,7 @@ API keys are write-only: they arrive in a request body, are encrypted, and appea
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from wasifyai_platform_sdk import need
 
 from wasifyai_api.admin import AuditEntry
 from wasifyai_api.identity import Identity, require_admin
@@ -14,6 +15,7 @@ from wasifyai_api.media_access import (
     MediaList,
     MediaView,
 )
+from wasifyai_api.services import services_of
 
 router = APIRouter(prefix="/admin/media", tags=["admin"])
 
@@ -25,11 +27,11 @@ class MediaTestOutcome(BaseModel):
 
 
 def _media(request: Request) -> MediaAccess:
-    return request.app.state.media
+    return need(services_of(request).media, "media access")
 
 
 async def _audit(request: Request, who: Identity, action: str, target: str, **detail) -> None:
-    await request.app.state.admin.audit(
+    await need(services_of(request).admin, "the admin store").audit(
         who.tenant_id,
         AuditEntry(
             id="", actor_user_id=who.user_id, action=action, target_type="media_capability",

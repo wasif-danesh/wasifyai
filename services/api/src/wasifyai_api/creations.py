@@ -14,6 +14,7 @@ from wasifyai_platform_sdk.usage import record_safely
 
 from wasifyai_api.creation_index import PLATFORM, CreationIndex, long_enough
 from wasifyai_api.identity import Identity, get_identity
+from wasifyai_api.services import services_of
 
 router = APIRouter(tags=["creations"])
 SEARCHED = "creation.searched"
@@ -41,8 +42,8 @@ async def search_creations(
     limit: int = Query(20, ge=1, le=50),
     identity: Identity = Depends(get_identity),
 ) -> SearchResponse:
-    state: Any = request.app.state
-    index: CreationIndex | None = getattr(state, "creation_index", None)
+    state: Any = services_of(request)
+    index: CreationIndex | None = state.creation_index
     query = " ".join(q.split())
     if index is None:
         raise HTTPException(503, "Search is not available right now.")

@@ -56,7 +56,7 @@ export type UpdateStatus =
 export const updateCheck = () => invoke<UpdateStatus>("update_check");
 export const updateInstall = () => invoke<void>("update_install");
 
-/** An optional part the person can add: today the image engine ("comfyui"). */
+/** An optional part the person can add (the image engine, the language engine): `components.ts` asks the engine. */
 export type ComponentStatus =
   | { state: "unsupported"; reason: string }
   | { state: "not_installed"; needs_bytes: number }
@@ -67,19 +67,6 @@ export type ComponentStatus =
 
 export const COMFYUI = "comfyui";
 export const LLAMACPP = "llamacpp";
-const COMPONENT_EVENT = "component://status";
-
-export const componentStatus = (id: string) => invoke<ComponentStatus>("component_status", { id });
-export const componentInstall = (id: string, repair = false) =>
-  invoke<void>("component_install", { id, repair });
-
-export async function onComponentStatus(
-  fn: (id: string, s: ComponentStatus) => void,
-): Promise<() => void> {
-  return listen<{ id: string; status: ComponentStatus }>(COMPONENT_EVENT, (e) =>
-    fn(e.payload.id, e.payload.status),
-  );
-}
 
 /** "4.3 GB", "620 MB": sizes in sentences, in decimal units like the rest of the app. */
 export function humanBytes(bytes: number): string {

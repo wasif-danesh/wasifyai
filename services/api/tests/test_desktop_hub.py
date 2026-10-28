@@ -29,6 +29,7 @@ from wasifyai_api.desktop_hub import (
 from wasifyai_api.desktop_models import DownloadManager, ModelsService
 from wasifyai_api.identity import get_identity
 from wasifyai_api.safeguards import InMemorySettingsStore
+from wasifyai_api.services import ApiServices
 from wasifyai_platform_sdk import Identity
 
 COMMIT = "a" * 40
@@ -304,9 +305,10 @@ async def test_a_gated_model_is_not_fetched_without_a_token(tmp_path):
 
 def app_for(hub: HubService, models: ModelsService) -> TestClient:
     app = FastAPI()
+    app.state.services = ApiServices()
     app.include_router(desktop_hub.router)
-    app.state.desktop_hub = hub
-    app.state.desktop_discovery = SimpleNamespace(items=[], running=True)
+    app.state.services.desktop_hub = hub
+    app.state.services.desktop_discovery = SimpleNamespace(items=[], running=True)
     app.dependency_overrides[get_identity] = lambda: Identity("local", "u1", "user")
     return TestClient(app)
 

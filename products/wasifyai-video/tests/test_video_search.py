@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from test_video_graph import Story
 from test_video_routes import identity, video
 from video_rig import make_rig
-from wasifyai_platform_sdk import RouteDeps, ScopedStorage, memory_storage
+from wasifyai_platform_sdk import EngineServices, RouteDeps, ScopedStorage, memory_storage
 from wasifyai_video.index import VideoIndexSource, index_text, video_index_source
 from wasifyai_video.routes import build_routes
 from wasifyai_video.videos import InMemoryVideoStore
@@ -64,15 +64,17 @@ def make_client(removed):
     working = video(3, status="working", created_at=datetime.now(UTC) - timedelta(minutes=1))
     store.videos = [video(1), video(2), working, video(5, user="someone-else")]
     app = FastAPI()
-    app.state.storage = ScopedStorage(memory_storage())
+    app.state.services = EngineServices()
+    app.state.services.storage = ScopedStorage(memory_storage())
 
     class Index:
         async def remove(self, tenant_id, product_id, item_id):
             removed.append((tenant_id, product_id, item_id))
 
-    app.state.creation_index = Index()
+    app.state.services.creation_index = Index()
     app.include_router(
-        build_routes(RouteDeps(app.state, identity), store), prefix="/products/wasifyai-video"
+        build_routes(RouteDeps(app.state.services, identity), store),
+        prefix="/products/wasifyai-video",
     )
     return TestClient(app)
 

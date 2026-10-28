@@ -489,7 +489,7 @@ def test_the_video_model_is_in_the_catalogue_and_search_takes_every_kind(data_di
 def test_the_assistant_is_offered_the_tools_the_desktop_can_run(data_dir):
     app = create_app()
     with TestClient(app):
-        host = app.state.caps["wasifyai-assistant"].extras["tool_host"]
+        host = app.state.services.caps["wasifyai-assistant"].extras["tool_host"]
         # the meta-tools of ADR-0071 always; the notebooks and web search are served by the desktop
         # engine (the assistant offers the two web tools to the model only while Search is on);
         # the outside-tools pair of ADR-0070 on the desktop, where the MCP client lives

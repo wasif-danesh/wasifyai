@@ -228,7 +228,7 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         }
 
     async def reindex_track(identity: Identity, t: dict[str, Any]) -> None:
-        index = getattr(deps.state, "creation_index", None)
+        index = deps.state.creation_index
         if index is None:
             return
         try:
@@ -536,7 +536,7 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
             )  # fmt: skip
         except NotFound:
             raise HTTPException(404, "clip not found") from None
-        index = getattr(deps.state, "creation_index", None)
+        index = deps.state.creation_index
         if index is not None:
             try:
                 text = search_text(c["title"], c["script"][:TRANSCRIPT_INDEX_CHARS])
@@ -659,7 +659,7 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         return out
 
     async def reindex_voice(identity: Identity, v: dict[str, Any]) -> None:
-        index = getattr(deps.state, "creation_index", None)
+        index = deps.state.creation_index
         if index is None:
             return
         try:
@@ -788,7 +788,7 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
     # ---- transcripts -----------------------------------------------------------------------
 
     async def reindex(identity: Identity, t: dict[str, Any]) -> None:
-        index = getattr(deps.state, "creation_index", None)
+        index = deps.state.creation_index
         if index is None:
             return
         try:

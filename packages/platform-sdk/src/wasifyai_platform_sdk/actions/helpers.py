@@ -23,7 +23,7 @@ async def stage_picture(ctx: Any, product_id: str, data: bytes) -> str:
     passes as `image_key`. The graph deletes it when it is done."""
     deps = need_deps(ctx)
     state = deps.state
-    if state.storage is None or getattr(state, "uploads", None) is None:
+    if state.storage is None or state.uploads is None:
         raise ActionRefused("unavailable", "Pictures cannot be used here.")
     try:
         image = await asyncio.to_thread(process_image, data)

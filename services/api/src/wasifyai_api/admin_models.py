@@ -5,6 +5,7 @@ not in responses, the audit log or the logs."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from wasifyai_platform_sdk import need
 
 from wasifyai_api.admin import AuditEntry
 from wasifyai_api.identity import Identity, require_admin
@@ -18,6 +19,7 @@ from wasifyai_api.model_access import (
     ProviderView,
     TestOutcome,
 )
+from wasifyai_api.services import services_of
 
 router = APIRouter(prefix="/admin/models", tags=["admin"])
 
@@ -33,11 +35,11 @@ class ModelUpdated(BaseModel):
 
 
 def _models(request: Request) -> ModelAccess:
-    return request.app.state.models
+    return need(services_of(request).models, "model access")
 
 
 async def _audit(request: Request, who: Identity, action: str, alias: str, **detail) -> None:
-    await request.app.state.admin.audit(
+    await need(services_of(request).admin, "the admin store").audit(
         who.tenant_id,
         AuditEntry(
             id="", actor_user_id=who.user_id, action=action, target_type="model_alias",

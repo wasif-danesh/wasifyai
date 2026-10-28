@@ -57,7 +57,7 @@ class ApiToolHost:
         # The desktop engine is one process: a run it holds as running or waiting for an answer,
         # and is not executing, ended when the engine last closed. (A run waiting for a media job
         # is resumed by the worker's result; on the web another replica may hold the run.)
-        single = getattr(self._app_state(), "desktop_dir", None) is not None
+        single = self._app_state().desktop_dir is not None
         if single and state["status"] in ("running", "waiting_input") and not runs.live(run_id):
             return {"status": "unknown"}
         return state
@@ -99,14 +99,14 @@ class ApiToolHost:
     def can_see(self) -> bool:
         """Can the chat model in use read a picture? (False only when it is known it cannot: a
         model whose abilities are not known is given the picture to try.)"""
-        language = getattr(self._app_state(), "desktop_language", None)
+        language = self._app_state().desktop_language
         if language is None:
             return True  # the hosted model decides; the provider says if it cannot
         chosen = language.selected
         return chosen is not None and chosen.vision is not False
 
     async def web_search(self, query: str, limit: int = 5) -> Any:
-        web = getattr(self._app_state(), "web", None)
+        web = self._app_state().web
         if web is None:
             raise WebError("search_off", "Web search is not available here.")
         return await web.search(query, limit)
@@ -115,7 +115,7 @@ class ApiToolHost:
         """The tools of the servers the person connected (ADR-0070 decision 8), best matches
         first; [] where the client is not part of this deployment. The person is the one of the
         current run, as every tool's."""
-        client = getattr(self._app_state(), "mcp_client", None)
+        client = self._app_state().mcp_client
         if client is None:
             return []
         ctx = require_context()
@@ -124,7 +124,7 @@ class ApiToolHost:
     async def external_servers(self) -> list[str]:
         """The names of the outside servers the person can use now (ADR-0070 decision 8: the
         model is told they exist); none where the client is not part of this deployment."""
-        client = getattr(self._app_state(), "mcp_client", None)
+        client = self._app_state().mcp_client
         if client is None:
             return []
         ctx = require_context()
@@ -133,14 +133,14 @@ class ApiToolHost:
 
     async def external_trusted(self, connection: str, tool: str) -> bool:
         """Whether a tool of an outside server runs without a card (ADR-0070 decision 4)."""
-        client = getattr(self._app_state(), "mcp_client", None)
+        client = self._app_state().mcp_client
         if client is None:
             return False
         ctx = require_context()
         return await client.trusted_read_only(ctx.tenant_id, ctx.user_id, connection, tool)
 
     async def web_read(self, url: str) -> Any:
-        web = getattr(self._app_state(), "web", None)
+        web = self._app_state().web
         if web is None:
             raise WebError("search_off", "Web search is not available here.")
         return await web.read(url)
@@ -165,7 +165,7 @@ class ApiToolHost:
                 return Readiness.unavailable(f"{need.name} is not part of this build.")
             return Readiness.ready()
         if need.kind == "model":
-            audio = getattr(state, "audio", None)
+            audio = state.audio
             if audio is None:
                 return Readiness.unavailable("Speech and music are not available here yet.")
             try:
@@ -176,11 +176,11 @@ class ApiToolHost:
                 return Readiness.unavailable(e.message)
             return Readiness.ready()
         if need.kind == "runtime" and need.name == "models":
-            if getattr(state, "desktop_models", None) is None:
+            if state.desktop_models is None:
                 return Readiness.unavailable("Models are managed in the desktop app.")
             return Readiness.ready()
         if need.kind == "runtime" and need.name == "video-builder":
-            builder = getattr(state, "video_builder", None)
+            builder = state.video_builder
             if builder is None or not builder.installer.supported:
                 return Readiness.unavailable(
                     "Motion graphics is not available on this kind of computer yet."
@@ -193,7 +193,7 @@ class ApiToolHost:
                 )
             return Readiness.ready()
         if need.kind == "runtime" and need.name == "training":
-            trainer = getattr(state, "training", None)
+            trainer = state.training
             if trainer is None:
                 return Readiness.unavailable("Training is not available here.")
             if not trainer.ready():
@@ -202,7 +202,7 @@ class ApiToolHost:
                 )
             return Readiness.ready()
         if need.kind == "runtime" and need.name == "model3d":
-            engine = getattr(state, "model3d", None)
+            engine = state.model3d
             if engine is None or not engine.installer.supported:
                 return Readiness.unavailable(
                     "3D models are not available on this kind of computer yet."
@@ -214,12 +214,12 @@ class ApiToolHost:
                 )
             return Readiness.ready()
         if need.kind == "notebooks":
-            here = getattr(state, "desktop_dir", None) or getattr(state, "notebooks_web", None)
+            here = state.desktop_dir or state.notebooks_web
             if not here:
                 return Readiness.unavailable("Notebooks are not available here.")
             return Readiness.ready()
         if need.kind == "web":
-            web = getattr(state, "web", None)
+            web = state.web
             if web is None:
                 return Readiness.unavailable("Web search is not available here.")
             return await web.readiness()
@@ -231,7 +231,7 @@ class ApiToolHost:
         """Small facts for `app.status`: nothing private, no paths of the person's files."""
         state = self._app_state()
         facts: dict[str, Any] = {}
-        svc = getattr(state, "desktop_models", None)
+        svc = state.desktop_models
         if svc is not None:
             from wasifyai_api.desktop_models import free_disk_bytes
 
@@ -239,7 +239,7 @@ class ApiToolHost:
             facts["models_ready"] = sum(
                 1 for e in svc.catalogue.values() if all(svc.locate(f) is not None for f in e.files)
             )
-        facts["export_folder_set"] = getattr(state, "export_dir", None) is not None
+        facts["export_folder_set"] = state.export_dir is not None
         # the desktop runs models in one memory slot (ADR-0056): an action that needs a model of its
         # own pauses the chat model while it runs; the card says so
         facts["one_slot"] = svc is not None

@@ -10,6 +10,7 @@ from wasifyai_api.litellm_admin import InMemoryModelBackend
 from wasifyai_api.media_access import MediaAccess, MediaCapability
 from wasifyai_api.model_access import ModelAccess
 from wasifyai_api.models_in_use import in_use
+from wasifyai_api.services import ApiServices
 from wasifyai_api.users import InMemoryUserStore
 from wasifyai_platform_sdk import InMemoryMediaBindingStore, InMemoryUsageRecorder, SecretBox
 
@@ -35,8 +36,10 @@ def request_with(products, caps=CAPS):
         InMemoryMediaBindingStore(), SecretBox(SecretBox.generate_key()), lambda: caps, "http://c"
     )
     models = ModelAccess(InMemoryModelBackend(), DEFAULTS)
-    state = SimpleNamespace(models=models, media=media, products_dir=products)
-    return cast("Any", SimpleNamespace(app=SimpleNamespace(state=state)))
+    services = ApiServices(models=models, media=media, products_dir=products)
+    return cast(
+        "Any", SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(services=services)))
+    )
 
 
 def catalogue(tmp_path):
@@ -61,7 +64,7 @@ async def test_a_chosen_service_is_named_by_the_service(tmp_path):
     request = request_with(catalogue(tmp_path))
     from wasifyai_api.media_access import MediaBindingIn
 
-    await request.app.state.media.set(
+    await request.app.state.services.media.set(
         "t",
         "wasifyai-image",
         "image.generate",

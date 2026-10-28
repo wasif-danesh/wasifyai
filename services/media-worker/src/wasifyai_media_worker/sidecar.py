@@ -1,7 +1,7 @@
 """ComfyUI as a sidecar of the desktop engine (ADR-0059).
 
 `ComfySidecar` starts and supervises one ComfyUI process that the app installed itself (the
-shell's installer put it under `<app data>/engine/comfyui`), on loopback with a free port.
+engine's installer put it under `<app data>/engine/comfyui`), on loopback with a free port.
 `SidecarRunner` is the job runner that uses it: it checks the model files are there, makes sure
 the process is running, and runs the job with the model kept loaded. The slot manager
 (wasifyai_platform_sdk.slots) decides when the model is unloaded again.

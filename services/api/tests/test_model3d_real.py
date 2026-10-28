@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from wasifyai_api import model3d_runtime as m3
 from wasifyai_api.desktop_model3d import Model3dService
+from wasifyai_api.services import ApiServices
 from wasifyai_model3d.routes import build_routes
 from wasifyai_platform_sdk import Identity, RouteDeps
 
@@ -47,14 +48,15 @@ def user_of(x_user: str = Header("u1"), x_tenant: str = Header("t1")) -> Identit
 def rig(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("m3d")
     app = FastAPI()
-    app.state.desktop_dir = tmp
-    app.state.model3d = Model3dService(tmp)
-    app.state.export_dir = tmp / "exports"
+    app.state.services = ApiServices()
+    app.state.services.desktop_dir = tmp
+    app.state.services.model3d = Model3dService(tmp)
+    app.state.services.export_dir = tmp / "exports"
     app.include_router(
-        build_routes(RouteDeps(app.state, user_of)), prefix="/products/wasifyai-model3d"
+        build_routes(RouteDeps(app.state.services, user_of)), prefix="/products/wasifyai-model3d"
     )
     with TestClient(app) as client:
-        client.app_state = app.state  # type: ignore[attr-defined]
+        client.app_state = app.state.services  # type: ignore[attr-defined]
         yield client
 
 

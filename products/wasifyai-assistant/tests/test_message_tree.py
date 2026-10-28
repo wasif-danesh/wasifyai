@@ -16,7 +16,7 @@ from wasifyai_assistant.store import (
     leaf_in,
     path_in,
 )
-from wasifyai_platform_sdk import Identity, RouteDeps
+from wasifyai_platform_sdk import EngineServices, Identity, RouteDeps
 from wasifyai_platform_sdk.sqlite import create_sqlite_engine
 
 
@@ -262,11 +262,7 @@ def client():
     store = InMemoryConversationStore()
     app = FastAPI()
 
-    class State:
-        engine = None
-        storage = None
-
-    deps = RouteDeps(State(), who)
+    deps = RouteDeps(EngineServices(), who)
     app.include_router(build_routes(deps, store), prefix="/products/wasifyai-assistant")
     c = TestClient(app)
     c.store = store  # type: ignore[attr-defined]

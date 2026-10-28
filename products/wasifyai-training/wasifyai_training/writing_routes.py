@@ -86,8 +86,8 @@ def add_writing_routes(router: APIRouter, deps: RouteDeps) -> None:
     @router.get("/writing/status")
     async def writing_status(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
         engine = guard()
-        setup = getattr(deps.state, "language_setup", None)
-        lang = getattr(deps.state, "desktop_language", None)
+        setup = deps.state.language_setup
+        lang = deps.state.desktop_language
         base = bases.descriptors("language")[0]
         ready = engine.ready(base.id)
         return {
@@ -191,8 +191,8 @@ def add_writing_routes(router: APIRouter, deps: RouteDeps) -> None:
 
     def chat_parts() -> tuple[Any, Any]:
         """The writing setup and the chat's language service, or a refusal in words."""
-        setup = getattr(deps.state, "language_setup", None)
-        lang = getattr(deps.state, "desktop_language", None)
+        setup = deps.state.language_setup
+        lang = deps.state.desktop_language
         if setup is None or lang is None:
             raise HTTPException(404, "Chatting with a taught model is not available here.")
         return setup, lang

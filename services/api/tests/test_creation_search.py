@@ -277,7 +277,7 @@ def search_app(monkeypatch, tmp_path):
         search_limiter=InMemoryUploadLimiter(4, clock=lambda: 0.0),
     )  # fmt: skip
     with TestClient(app) as client:
-        client.index = app.state.creation_index  # type: ignore[attr-defined]
+        client.index = app.state.services.creation_index  # type: ignore[attr-defined]
         client.usage = usage  # type: ignore[attr-defined]
         yield client
     monkeypatch.undo()

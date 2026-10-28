@@ -26,6 +26,7 @@ from wasifyai_platform_sdk import Identity
 from wasifyai_api.desktop_models import DownloadError, ModelEntry, ModelFile, free_disk_bytes
 from wasifyai_api.identity import get_identity
 from wasifyai_api.language_setup import ConfirmInstall
+from wasifyai_api.services import services_of
 from wasifyai_api.training_setup import (
     STATE_FILE,
     BaseFile,
@@ -360,7 +361,7 @@ router = APIRouter(prefix="/desktop/decision-setup", tags=["desktop"])
 
 
 def _setup(request: Request) -> DecisionSetup:
-    found: DecisionSetup | None = getattr(request.app.state, "decision_setup", None)
+    found: DecisionSetup | None = services_of(request).decision_setup
     if found is None:
         raise HTTPException(404, "not available in this deployment")
     return found

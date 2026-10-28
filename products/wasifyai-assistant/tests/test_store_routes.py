@@ -9,7 +9,7 @@ from wasifyai_assistant.store import (
     InMemoryConversationStore,
     SqlConversationStore,
 )
-from wasifyai_platform_sdk import Identity, RouteDeps
+from wasifyai_platform_sdk import EngineServices, Identity, RouteDeps
 from wasifyai_platform_sdk.sqlite import create_sqlite_engine
 
 
@@ -103,13 +103,7 @@ def client():
     unindexed: list[str] = []
     app = FastAPI()
 
-    class State:
-        engine = None
-        storage = None
-
-        async def noop(self) -> None: ...
-
-    deps = RouteDeps(State(), who)
+    deps = RouteDeps(EngineServices(), who)
 
     async def unindex(identity, product_id, item_id):
         unindexed.append(item_id)
@@ -178,13 +172,13 @@ def test_the_web_offers_thinking_only_when_the_chat_alias_says_how_to_switch_it(
     def state_with(defaults):
         binding = SimpleNamespace(defaults=defaults)
         caps = SimpleNamespace(text=SimpleNamespace(_bound={"chat": (binding, object())}))
-        return SimpleNamespace(engine=None, storage=None, caps={"wasifyai-assistant": caps})
+        return EngineServices(caps={"wasifyai-assistant": caps})
 
     url = "/products/wasifyai-assistant/options"
     declared = {"thinking_options": {"on": {"enable_thinking": True}}}
     assert options_client(state_with(declared)).get(url).json()["thinking"] is True
     assert options_client(state_with({})).get(url).json()["thinking"] is False
-    nothing = SimpleNamespace(engine=None, storage=None, caps={})
+    nothing = EngineServices()
     assert options_client(nothing).get(url).json()["thinking"] is False
 
 
@@ -193,7 +187,7 @@ def test_the_desktop_offers_thinking_for_a_model_that_can_think():
 
     def state_with(selected):
         language = SimpleNamespace(selected=selected)
-        return SimpleNamespace(engine=None, storage=None, desktop_language=language)
+        return EngineServices(desktop_language=language)
 
     url = "/products/wasifyai-assistant/options"
     thinks = SimpleNamespace(thinking=True)
@@ -252,9 +246,8 @@ class FakeWeb:
 
 
 def web_client(web):
-    from types import SimpleNamespace
 
-    return options_client(SimpleNamespace(engine=None, storage=None, web=web))
+    return options_client(EngineServices(web=web))
 
 
 def test_the_search_settings_are_read_and_changed_through_the_assistants_routes():
@@ -304,9 +297,8 @@ def test_the_options_tell_the_box_what_pressing_search_will_do():
 
 
 def test_where_there_is_no_web_search_the_box_gets_no_button_and_the_settings_are_a_404():
-    from types import SimpleNamespace
 
-    c = options_client(SimpleNamespace(engine=None, storage=None))
+    c = options_client(EngineServices())
     assert c.get("/products/wasifyai-assistant/options").json()["search"]["available"] is False
     assert c.get("/products/wasifyai-assistant/search").status_code == 404
     assert c.put("/products/wasifyai-assistant/search", json={"consent": True}).status_code == 404

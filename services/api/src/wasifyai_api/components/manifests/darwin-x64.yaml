@@ -1,0 +1,19 @@
+# The optional components on darwin-x64 (stage F2 of the 2026-10-27 plan): what each fetches, pinned by
+# size and SHA-256. Data, read by wasifyai_api/components; scripts/build-engine-bundle.sh reads the list.
+schema: 1
+platform: darwin-x64
+python: "3.12.15"  # the Python a component's own environment is made with
+components:
+  llamacpp:
+    title: Language engine (llama.cpp)
+    version: b11655
+    licence: MIT
+    source: github.com/ggml-org/llama.cpp
+    min_free_bytes: 268435456
+    backend: cpu
+    archive:
+      url: https://github.com/ggml-org/llama.cpp/releases/download/b11655/llama-b11655-bin-macos-x64.tar.gz
+      size: 11664084
+      sha256: c3924eacb8580ea8843e48ee6179302b22e6a1602e85c2fd5253e8b1e3357316
+      kind: tar.gz
+      strip: 1

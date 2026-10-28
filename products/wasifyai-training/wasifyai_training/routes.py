@@ -246,7 +246,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         if family == "video":
             return (await video_status_of(deps, kind))["choices"]
         engine = guard()
-        found = getattr(deps.state, "desktop_discovery", None)
+        found = deps.state.desktop_discovery
         installed = [i.public() for i in getattr(found, "items", [])]
         ready = engine.ready()
         return bases.choices(kind, engine.fit() if ready else None, ready, installed)

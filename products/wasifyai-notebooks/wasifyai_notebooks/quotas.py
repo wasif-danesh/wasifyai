@@ -41,7 +41,7 @@ def megabytes(n: int) -> str:
 async def active_limits(state: Any) -> Limits:
     """The limits in force now: none unless the product has them and the safeguards are on (asked
     each time: an admin can switch them)."""
-    caps = (getattr(state, "caps", None) or {}).get(PRODUCT_ID)
+    caps = (state.caps or {}).get(PRODUCT_ID)
     config = getattr(caps, "config", None)
     quotas = getattr(config, "quotas", None) or {}
     if caps is None or not quotas or not await caps.safeguards_on():

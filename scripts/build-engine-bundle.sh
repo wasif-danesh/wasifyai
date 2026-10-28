@@ -14,8 +14,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${1:-$ROOT/apps/desktop/engine-bundle}"
-PACKAGES="wasifyai-contracts wasifyai-platform-sdk wasifyai-api wasifyai-media-worker wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice wasifyai-training"
-PRODUCTS="wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice wasifyai-training"
+PACKAGES="wasifyai-contracts wasifyai-platform-sdk wasifyai-api wasifyai-media-worker wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice wasifyai-training wasifyai-model3d"
+PRODUCTS="wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice wasifyai-training wasifyai-model3d"
 
 cd "$ROOT"
 rm -rf "$OUT"
@@ -31,12 +31,28 @@ echo "locking third-party packages"
 uv export --package wasifyai-api --extra desktop --no-emit-workspace --no-dev --hashes \
   --format requirements-txt --no-header --quiet > "$OUT/requirements.lock"
 
-# The optional ComfyUI component (ADR-0059): a hashed lock per platform the manifest lists, compiled from the
-# requirements of the pinned release. Torch is not pinned by ComfyUI, so the version released with the app
-# is the one resolved here.
+# The optional ComfyUI component (ADR-0059): a hashed lock per platform whose component manifest lists it
+# (services/api/src/wasifyai_api/components/manifests/<platform>.yaml, stage F2), compiled from the requirements
+# of the pinned release. Torch is not pinned by ComfyUI, so the version released with the app is the one
+# resolved here.
 MANIFEST="$ROOT/apps/desktop/src-tauri/engine-manifest.json"
-COMFY_VERSION="$(uv run --no-project python -c "import json,sys; print(json.load(open(sys.argv[1]))['comfyui']['version'])" "$MANIFEST")"
-COMFY_PLATFORMS="$(uv run --no-project python -c "import json,sys; print(' '.join(json.load(open(sys.argv[1]))['comfyui']['platforms']))" "$MANIFEST")"
+COMPONENTS="$ROOT/services/api/src/wasifyai_api/components/manifests"
+read -r COMFY_VERSION COMFY_PLATFORMS <<EOF_COMFY
+$(uv run --no-project --with pyyaml python - "$COMPONENTS" <<'PY'
+import pathlib, sys, yaml
+found = {}
+for f in sorted(pathlib.Path(sys.argv[1]).glob("*.yaml")):
+    c = (yaml.safe_load(f.read_text()).get("components") or {}).get("comfyui")
+    if c:
+        target = str(c["lock"]).split("requirements-")[-1].split(".lock")[0]
+        found.setdefault(str(c["version"]), []).append(target)
+if len(found) != 1:
+    sys.exit(f"the component manifests must pin one ComfyUI version, not {sorted(found)}")
+(version, targets), = found.items()
+print(version, " ".join(targets))
+PY
+)
+EOF_COMFY
 PY_VERSION="$(uv run --no-project python -c "import json,sys; print(json.load(open(sys.argv[1]))['python']['version'])" "$MANIFEST")"
 mkdir -p "$OUT/comfyui"
 COMFY_REQ="$OUT/comfyui/requirements.txt"

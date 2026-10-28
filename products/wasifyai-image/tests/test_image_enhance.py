@@ -5,7 +5,7 @@ from image_rig import make_rig, put_upload, verdict
 from wasifyai_image import prompts
 from wasifyai_image.guardrail import REFUSALS
 from wasifyai_image.routes import build_routes
-from wasifyai_platform_sdk import Identity, InMemoryUploadLimiter, RouteDeps
+from wasifyai_platform_sdk import EngineServices, Identity, InMemoryUploadLimiter, RouteDeps
 
 BASE = "/products/wasifyai-image/prompt/enhance"
 
@@ -16,11 +16,14 @@ def who(x_user: str = Header("u1")) -> Identity:
 
 def client_for(rig):
     app = FastAPI()
-    app.state.caps = {"wasifyai-image": rig.caps}
-    app.state.uploads = rig.uploads
-    app.state.storage = rig.caps.storage
-    app.state.enhance_limiter = InMemoryUploadLimiter(40)
-    app.include_router(build_routes(RouteDeps(app.state, who)), prefix="/products/wasifyai-image")
+    app.state.services = EngineServices()
+    app.state.services.caps = {"wasifyai-image": rig.caps}
+    app.state.services.uploads = rig.uploads
+    app.state.services.storage = rig.caps.storage
+    app.state.services.enhance_limiter = InMemoryUploadLimiter(40)
+    app.include_router(
+        build_routes(RouteDeps(app.state.services, who)), prefix="/products/wasifyai-image"
+    )
     return TestClient(app)
 
 

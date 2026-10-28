@@ -40,6 +40,7 @@ from wasifyai_api.desktop_fit import (
 )
 from wasifyai_api.identity import get_identity
 from wasifyai_api.safeguards import SettingsStore
+from wasifyai_api.services import services_of
 
 log = logging.getLogger(__name__)
 
@@ -463,7 +464,7 @@ router = APIRouter(prefix="/desktop", tags=["desktop"])
 
 
 def _svc(request: Request) -> ModelsService:
-    svc = getattr(request.app.state, "desktop_models", None)
+    svc = services_of(request).desktop_models
     if svc is None:
         raise HTTPException(404, "not available in this deployment")
     return svc

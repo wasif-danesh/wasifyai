@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from wasifyai_api.identity import Identity, get_identity
+from wasifyai_api.services import services_of
 
 log = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ def _name(model: str | None) -> str:
 
 
 async def _chat(request: Request) -> list[InUseModel]:
-    access = getattr(request.app.state, "models", None)
+    access = services_of(request).models
     if access is None:
         return []
     try:
@@ -72,7 +73,7 @@ async def _chat(request: Request) -> list[InUseModel]:
 def _titles(request: Request, product_id: str) -> list[tuple[str, str]]:
     from wasifyai_api.desktop_models import load_catalogue
 
-    pdir = getattr(request.app.state, "products_dir", None)
+    pdir = services_of(request).products_dir
     if pdir is None:
         return []
     try:
@@ -83,7 +84,7 @@ def _titles(request: Request, product_id: str) -> list[tuple[str, str]]:
 
 
 async def _media(request: Request, who: Identity, group: str) -> list[InUseModel]:
-    media = getattr(request.app.state, "media", None)
+    media = services_of(request).media
     if media is None:
         return []
     product_id = MEDIA_PRODUCTS[group]

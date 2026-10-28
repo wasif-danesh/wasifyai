@@ -76,7 +76,7 @@ def client(monkeypatch, tmp_path):
         return {"ok": p.origin}
 
     with TestClient(app) as c:
-        c.app.state.credential_verifiers["tcs_"] = FakeConnections()  # type: ignore[attr-defined]
+        c.app.state.services.credential_verifiers["tcs_"] = FakeConnections()  # type: ignore[attr-defined]
         yield c
     monkeypatch.undo()
     get_settings.cache_clear()

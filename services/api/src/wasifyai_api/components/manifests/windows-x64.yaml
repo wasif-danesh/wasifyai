@@ -1,0 +1,19 @@
+# The optional components on windows-x64 (stage F2 of the 2026-10-27 plan): what each fetches, pinned by
+# size and SHA-256. Data, read by wasifyai_api/components; scripts/build-engine-bundle.sh reads the list.
+schema: 1
+platform: windows-x64
+python: "3.12.15"  # the Python a component's own environment is made with
+components:
+  llamacpp:
+    title: Language engine (llama.cpp)
+    version: b11655
+    licence: MIT
+    source: github.com/ggml-org/llama.cpp
+    min_free_bytes: 268435456
+    backend: cpu
+    archive:
+      url: https://github.com/ggml-org/llama.cpp/releases/download/b11655/llama-b11655-bin-win-cpu-x64.zip
+      size: 19526871
+      sha256: 5963904d774b2189ac912c8547830fd8bc502acecd4fdf5e5e931b6284f4bfa6
+      kind: zip
+      strip: 0

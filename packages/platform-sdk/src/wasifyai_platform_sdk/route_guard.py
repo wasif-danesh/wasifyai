@@ -27,7 +27,7 @@ class RouteGuard:
     @property
     def caps(self) -> Any:
         """This product's capabilities (its moderators, config and database), when built."""
-        return (getattr(self._state, "caps", None) or {}).get(self.product_id)
+        return (self._state.caps or {}).get(self.product_id)
 
     async def on(self) -> bool:
         guard = getattr(self._state, "safeguards", None)
@@ -63,7 +63,7 @@ class RouteGuard:
     async def record(
         self, identity: Identity, event: str, quantity: float, unit: str, **meta: Any
     ) -> None:
-        recorder = getattr(self._state, "usage", None)
+        recorder = self._state.usage
         if recorder is None:
             return
         ctx = RunContext(identity.tenant_id, self.product_id, identity.user_id)

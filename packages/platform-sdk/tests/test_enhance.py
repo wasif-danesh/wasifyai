@@ -6,6 +6,7 @@ from fastapi import FastAPI, Header
 from fastapi.testclient import TestClient
 from PIL import Image as PILImage
 from wasifyai_platform_sdk import (
+    EngineServices,
     Identity,
     InMemoryUploadLimiter,
     InMemoryUploadStore,
@@ -72,17 +73,18 @@ class Rig:
                 raise EnhanceRefused("I can't help with that.")
 
         app = FastAPI()
-        app.state.caps = {"demo": self.caps}
-        app.state.uploads = InMemoryUploadStore()
-        app.state.storage = self.storage
-        app.state.enhance_limiter = InMemoryUploadLimiter(per_hour, clock=lambda: 0.0)
-        deps_r = RouteDeps(app.state, who)
+        app.state.services = EngineServices()
+        app.state.services.caps = {"demo": self.caps}
+        app.state.services.uploads = InMemoryUploadStore()
+        app.state.services.storage = self.storage
+        app.state.services.enhance_limiter = InMemoryUploadLimiter(per_hour, clock=lambda: 0.0)
+        deps_r = RouteDeps(app.state.services, who)
         loader = {"p_text": "TEXT SYSTEM", "p_edit": "EDIT SYSTEM"}.__getitem__
         app.include_router(
             build_enhance_router(deps_r, "demo", loader, guard or default_guard),
             prefix="/products/demo",
         )
-        self.uploads = app.state.uploads
+        self.uploads = app.state.services.uploads
         self.client = TestClient(app)
 
     def text_model(self):

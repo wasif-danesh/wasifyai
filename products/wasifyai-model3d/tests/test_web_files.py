@@ -13,7 +13,13 @@ from wasifyai_model3d.blobs import LocalBlobs, StorageBlobs
 from wasifyai_model3d.routes import build_routes
 from wasifyai_model3d.runtime import sweep
 from wasifyai_model3d.store import Model3dStore
-from wasifyai_platform_sdk import Identity, InMemoryUsageRecorder, RouteDeps, memory_storage
+from wasifyai_platform_sdk import (
+    EngineServices,
+    Identity,
+    InMemoryUsageRecorder,
+    RouteDeps,
+    memory_storage,
+)
 from wasifyai_platform_sdk.storage import ScopedStorage
 
 ME = Identity("t1", "u1")
@@ -24,15 +30,16 @@ def web(tmp_path):
     """No desktop folder at all: the store is a file only because SQLite is the test's database."""
     storage = memory_storage()
     app = FastAPI()
-    app.state.model3d = FakeEngine()
-    app.state.model3d_store = Model3dStore(tmp_path / "rows")
-    app.state.model3d_blobs = StorageBlobs(ScopedStorage(storage))
-    app.state.creation_index = Index()
+    app.state.services = EngineServices()
+    app.state.services.model3d = FakeEngine()
+    app.state.services.model3d_store = Model3dStore(tmp_path / "rows")
+    app.state.services.model3d_blobs = StorageBlobs(ScopedStorage(storage))
+    app.state.services.creation_index = Index()
     app.include_router(
-        build_routes(RouteDeps(app.state, user_of)), prefix="/products/wasifyai-model3d"
+        build_routes(RouteDeps(app.state.services, user_of)), prefix="/products/wasifyai-model3d"
     )
     with TestClient(app) as client:
-        client.app_state = app.state  # type: ignore[attr-defined]
+        client.app_state = app.state.services  # type: ignore[attr-defined]
         client.storage = storage  # type: ignore[attr-defined]
         yield client
 

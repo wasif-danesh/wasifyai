@@ -1,28 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// The two engines a model may run on, set up by the shell on request (ADR-0086): the image engine (ComfyUI) and the
-// language engine (llama.cpp). A model that needs one shows the engine's size in its dialog and gets it first.
-import {
-  COMFYUI,
-  type ComponentStatus,
-  LLAMACPP,
-  componentInstall,
-  componentStatus,
-  installFraction,
-  onComponentStatus,
-} from "../engine";
+// The two engines a model may run on, set up on request (ADR-0086): the image engine (ComfyUI) and the language
+// engine (llama.cpp), both by the engine's one installer since stage F2. A model that needs one shows the engine's
+// size in its dialog and gets it first.
+import { componentInstall, componentStatus, onComponentStatus } from "../components";
+import { COMFYUI, type ComponentStatus, LLAMACPP, installFraction } from "../engine";
 import type { Step } from "./steps";
 import type { EngineState, Engines } from "./types";
 
-/** What the shell offers; a test passes a fake. */
+/** What the engine offers; a test passes a fake. */
 export type ComponentPort = {
   status(id: string): Promise<ComponentStatus>;
-  install(id: string): Promise<void>;
+  install(id: string, bytes?: number): Promise<void>;
   onStatus(fn: (id: string, s: ComponentStatus) => void): Promise<() => void>;
 };
 
-export const tauriPort: ComponentPort = {
+export const enginePort: ComponentPort = {
   status: componentStatus,
-  install: (id) => componentInstall(id),
+  install: (id, bytes) => componentInstall(id, false, bytes),
   onStatus: onComponentStatus,
 };
 
@@ -62,8 +56,8 @@ function installStep(port: ComponentPort, id: string, label: string, bytes: numb
       const look = setInterval(() => void port.status(id).then(finish, () => {}), 3000);
       try {
         finish(first);
-        // the shell is told to start only when nothing is running yet
-        if (first.state !== "installing") await port.install(id);
+        // it is told to start only when nothing is running yet, with the size the dialog showed
+        if (first.state !== "installing") await port.install(id, bytes || undefined);
         await done;
       } finally {
         clearInterval(look);
@@ -73,7 +67,7 @@ function installStep(port: ComponentPort, id: string, label: string, bytes: numb
   };
 }
 
-export function createEngines(port: ComponentPort = tauriPort): Engines {
+export function createEngines(port: ComponentPort = enginePort): Engines {
   const read = (id: string, name: string) => port.status(id).then((s) => stateOf(s, name));
   return {
     image: () => read(COMFYUI, "The image engine"),

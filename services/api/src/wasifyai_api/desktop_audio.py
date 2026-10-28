@@ -11,12 +11,13 @@ from wasifyai_platform_sdk import Identity
 
 from wasifyai_api.audio_runtime import AudioEngine, InstallError
 from wasifyai_api.identity import get_identity
+from wasifyai_api.services import services_of
 
 router = APIRouter(prefix="/desktop/audio", tags=["desktop"])
 
 
 def _engine(request: Request) -> AudioEngine:
-    engine = getattr(request.app.state, "audio", None)
+    engine = services_of(request).audio
     if engine is None:
         raise HTTPException(404, "not available in this deployment")
     return engine

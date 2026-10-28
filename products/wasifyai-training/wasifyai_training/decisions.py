@@ -41,7 +41,7 @@ KIND = "decision"
 
 
 def engine_for(state: Any) -> Any:
-    engine = getattr(state, "decision_training", None)
+    engine = state.decision_training
     if engine is None:
         raise NotAvailable("Teaching it to decide is not available here.")
     return engine
@@ -286,7 +286,7 @@ def folder_of(store: Any, identity: Identity, model_id: str) -> Path:
 
 
 def manager_for(deps: RouteDeps) -> DecisionRunManager:
-    existing = getattr(deps.state, "decision_runs", None)
+    existing = deps.state.decision_runs
     if existing is None:
         existing = DecisionRunManager(deps)
         deps.state.decision_runs = existing

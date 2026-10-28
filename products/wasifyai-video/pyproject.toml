@@ -14,3 +14,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["wasifyai_video"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"prompts" = "wasifyai_video/prompts"  # the code reads them inside the package when installed (backlog D29)

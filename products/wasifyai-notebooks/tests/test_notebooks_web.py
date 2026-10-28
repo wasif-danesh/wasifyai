@@ -15,7 +15,7 @@ from wasifyai_notebooks.retrieval import retrieve
 from wasifyai_notebooks.routes import build_routes
 from wasifyai_notebooks.runtime import STALE_AFTER_S, WebSetup, runtime_for
 from wasifyai_notebooks.worker import setup_from_environment
-from wasifyai_platform_sdk import Identity, RouteDeps, memory_storage
+from wasifyai_platform_sdk import EngineServices, Identity, RouteDeps, memory_storage
 
 T, U = "t1", "u1"
 
@@ -101,13 +101,7 @@ def test_a_source_a_reader_lost_is_failed_only_when_it_is_stale(setup, tmp_path)
 def test_the_engine_serves_notebooks_through_the_web_runtime_and_reads_none(setup, tmp_path):
     setup.components = FakeComponents(tmp_path)
 
-    class State:
-        creation_index = None
-        engine = None
-        storage = None
-        notebooks_web = setup
-
-    state = State()
+    state = EngineServices(notebooks_web=setup)
     runtime = runtime_for(state)
     assert runtime_for(state) is runtime and runtime.reads_sources is False
     try:

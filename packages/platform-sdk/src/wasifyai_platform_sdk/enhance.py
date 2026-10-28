@@ -22,6 +22,7 @@ from wasifyai_platform_sdk.capabilities import Capabilities
 from wasifyai_platform_sdk.errors import RunError
 from wasifyai_platform_sdk.parts import Image
 from wasifyai_platform_sdk.routes import RouteDeps
+from wasifyai_platform_sdk.services import need
 from wasifyai_platform_sdk.uploads import UploadLimiter
 
 log = logging.getLogger(__name__)
@@ -138,7 +139,7 @@ def build_enhance_router(
             raise HTTPException(422, "Please type something first.")
         if len(text) > rule.max_chars:
             raise HTTPException(422, f"Please keep it under {rule.max_chars} characters.")
-        limiter: UploadLimiter = state.enhance_limiter
+        limiter: UploadLimiter = need(state.enhance_limiter, "the enhance limiter")
         if not await limiter.allow(identity.tenant_id, identity.user_id):
             raise HTTPException(429, "You've enhanced a lot of prompts. Please wait a while.")
 
@@ -187,7 +188,9 @@ async def _picture(deps: RouteDeps, product_id: str, identity, body: EnhanceIn, 
         key = f"uploads/{UUID(body.upload_id)}.png"
     except ValueError:
         raise HTTPException(422, "Please upload your picture again.") from None
-    record = await deps.state.uploads.find(identity.tenant_id, product_id, identity.user_id, key)
+    record = await need(deps.state.uploads, "uploads").find(
+        identity.tenant_id, product_id, identity.user_id, key
+    )
     if record is None or deps.storage is None:
         raise HTTPException(422, "Please upload your picture again.")
     try:

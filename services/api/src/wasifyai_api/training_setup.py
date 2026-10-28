@@ -46,6 +46,7 @@ from wasifyai_api.desktop_models import (
     free_disk_bytes,
 )
 from wasifyai_api.identity import get_identity
+from wasifyai_api.services import services_of
 
 log = logging.getLogger(__name__)
 
@@ -485,7 +486,7 @@ router = APIRouter(prefix="/desktop/training-setup", tags=["desktop"])
 
 
 def _setup(request: Request) -> TrainingSetup:
-    found: TrainingSetup | None = getattr(request.app.state, "training_setup", None)
+    found: TrainingSetup | None = services_of(request).training_setup
     if found is None:
         raise HTTPException(404, "not available in this deployment")
     return found

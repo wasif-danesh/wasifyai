@@ -160,7 +160,7 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
     async def reindex(identity: Identity, nid: str) -> None:
         """Keep the notebook findable in My creations search by its title and its sources' names
         (ADR-0041): at once, so it does not wait for the platform's periodic check. Best effort."""
-        index = getattr(deps.state, "creation_index", None)
+        index = deps.state.creation_index
         if index is None:
             return
         try:
@@ -558,7 +558,7 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
         """Copy the output's file to the place the person chose in the Save As box (`path`), or
         into the export folder when there is none: the desktop window cannot save a file by itself
         (it has no download handler). The folder never overwrites; a copy gets a number."""
-        folder = getattr(deps.state, "export_dir", None)
+        folder = deps.state.export_dir
         if folder is None and not (body and body.path):
             raise HTTPException(404, "saving to a folder is not available here")
         r = rt()
@@ -574,7 +574,7 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
         if body and body.path:
             try:
                 path = await asyncio.to_thread(
-                    write_to_path, body.path, data, getattr(deps.state, "desktop_dir", None)
+                    write_to_path, body.path, data, deps.state.desktop_dir
                 )
             except SaveRefused as exc:
                 raise HTTPException(422, str(exc)) from None
@@ -607,7 +607,7 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
     ) -> dict[str, Any]:
         r = rt()
         art = await overview_art(identity, nid, aid)
-        engine = getattr(deps.state, "audio", None)
+        engine = deps.state.audio
         if engine is None:
             raise HTTPException(503, "Speech is not available in this deployment yet.")
         try:

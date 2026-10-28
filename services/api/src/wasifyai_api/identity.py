@@ -18,6 +18,7 @@ from wasifyai_platform_sdk import Identity, Principal
 
 from wasifyai_api.auth import AuthError, verify_token
 from wasifyai_api.config import get_settings
+from wasifyai_api.services import services_of
 
 __all__ = [
     "CredentialVerifier",
@@ -51,7 +52,7 @@ async def _person(token: str, request: Request) -> Principal:
     except AuthError as exc:
         log.warning("rejected token: %s", exc)
         raise _unauthorized("invalid or expired token") from exc
-    user = await request.app.state.users.resolve(
+    user = await services_of(request).users.resolve(
         settings.default_tenant_id, claims, settings.admin_email_set
     )
     return Principal.person(settings.default_tenant_id, user.id, user.role)
@@ -70,9 +71,7 @@ async def get_principal(request: Request) -> Principal:
         credential = credential.strip()
         if scheme.lower() != "bearer" or not credential:
             raise _unauthorized("sign in required")
-        verifiers: dict[str, CredentialVerifier] = getattr(
-            request.app.state, "credential_verifiers", {}
-        )
+        verifiers: dict[str, CredentialVerifier] = services_of(request).credential_verifiers
         verifier = next((v for p, v in verifiers.items() if credential.startswith(p)), None)
         if verifier is None:
             principal = await _person(credential, request)

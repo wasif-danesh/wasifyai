@@ -19,17 +19,17 @@ class NotAvailable(Exception):
 
 
 def engine_for(state: Any) -> SpeechEngine:
-    engine = getattr(state, "audio", None)
+    engine = state.audio
     if engine is None:
         raise NotAvailable("Speech is not available in this deployment yet.")
     return engine  # type: ignore[no-any-return]
 
 
 def store_for(state: Any) -> VoiceStore:
-    existing = getattr(state, "voice_store", None)
+    existing = state.voice_store
     if existing is not None:
         return existing  # type: ignore[no-any-return]
-    data = getattr(state, "desktop_dir", None)
+    data = state.desktop_dir
     if not data:
         raise NotAvailable("Speech is not available in this deployment yet.")
     store = VoiceStore(Path(data) / "voice")

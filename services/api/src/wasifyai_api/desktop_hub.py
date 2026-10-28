@@ -31,6 +31,7 @@ from wasifyai_api.desktop_fit import Fit, Machine, assess_fit, need_of_image, ne
 from wasifyai_api.desktop_models import DownloadError, ModelEntry, ModelFile
 from wasifyai_api.identity import get_identity
 from wasifyai_api.safeguards import SettingsStore
+from wasifyai_api.services import services_of
 
 log = logging.getLogger(__name__)
 
@@ -458,7 +459,7 @@ router = APIRouter(prefix="/desktop/hub", tags=["desktop"])
 
 
 def _hub(request: Request) -> HubService:
-    svc = getattr(request.app.state, "desktop_hub", None)
+    svc = services_of(request).desktop_hub
     if svc is None:
         raise HTTPException(404, "not available in this deployment")
     return svc
@@ -620,7 +621,7 @@ async def hub_remove(
     """Delete a model this app downloaded. Only files under the app's own `language` folder; a file
     another tool keeps is never touched."""
     svc = _hub(request)
-    discovery = getattr(request.app.state, "desktop_discovery", None)
+    discovery = services_of(request).desktop_discovery
     item = next((i for i in (discovery.items if discovery else []) if i.id == item_id), None)
     if svc.models is None or item is None or item.tool != "app":
         raise HTTPException(404, "That file is not one this app downloaded.")

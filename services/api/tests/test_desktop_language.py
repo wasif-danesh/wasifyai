@@ -24,6 +24,7 @@ from wasifyai_api.desktop_language import (
 from wasifyai_api.identity import get_identity
 from wasifyai_api.llama_server import LlamaServer
 from wasifyai_api.safeguards import InMemorySettingsStore
+from wasifyai_api.services import ApiServices
 from wasifyai_platform_sdk import (
     Identity,
     InMemoryUsageRecorder,
@@ -361,9 +362,10 @@ def app_for(svc: LanguageService, servers: list[dict], items: list[Found]) -> Te
     svc.discovery = discovery
     svc.models = FakeModels(Machine("cpu", 16 * GB, 12 * GB))
     app = FastAPI()
+    app.state.services = ApiServices()
     app.include_router(desktop_llm.router)
-    app.state.desktop_language = svc
-    app.state.llama_server = svc.llama
+    app.state.services.desktop_language = svc
+    app.state.services.llama_server = svc.llama
     app.dependency_overrides[get_identity] = lambda: Identity("local", "u1", "user")
     return TestClient(app)
 

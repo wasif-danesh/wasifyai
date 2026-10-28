@@ -7,12 +7,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from wasifyai_api.desktop_save import router
 from wasifyai_api.identity import Identity, get_identity
+from wasifyai_api.services import ApiServices
 
 
 @pytest.fixture
 def api(tmp_path):
     app = FastAPI()
-    app.state = SimpleNamespace(desktop_dir=tmp_path / "app")  # type: ignore[assignment]
+    app.state.services = ApiServices()
+    app.state.services = SimpleNamespace(desktop_dir=tmp_path / "app")  # type: ignore[assignment]
     (tmp_path / "app").mkdir()
     (tmp_path / "Documents").mkdir()
     app.dependency_overrides[get_identity] = lambda: Identity("t1", "u1")

@@ -14,6 +14,7 @@ from wasifyai_platform_sdk import SaveRefused
 from wasifyai_platform_sdk.saving import chosen_path
 
 from wasifyai_api.identity import Identity, get_identity
+from wasifyai_api.services import services_of
 
 router = APIRouter(tags=["desktop"])
 
@@ -33,7 +34,7 @@ async def save_file(
     _: Identity = Depends(get_identity),
 ) -> Saved:
     """Write the sent file at `path`, replacing a file there (the Save As box asked)."""
-    protect = getattr(request.app.state, "desktop_dir", None)
+    protect = services_of(request).desktop_dir
     try:
         target = chosen_path(path, Path(protect) if protect else None)
     except SaveRefused as exc:

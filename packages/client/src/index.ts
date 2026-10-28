@@ -385,3 +385,10 @@ export {
   type TrainedModel,
   type TrainingApi,
 } from "./training";
+export {
+  type InstallStepProgress,
+  type ComponentState,
+  type ComponentView,
+  type ComponentsApi,
+  createComponentsApi,
+} from "./components";

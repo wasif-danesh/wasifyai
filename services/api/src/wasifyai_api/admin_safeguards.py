@@ -2,10 +2,12 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from wasifyai_platform_sdk import need
 
 from wasifyai_api.admin import AuditEntry
 from wasifyai_api.identity import Identity, require_admin
 from wasifyai_api.safeguards import ForcedOn, Safeguards, SafeguardsStatus
+from wasifyai_api.services import services_of
 
 router = APIRouter(prefix="/admin/safeguards", tags=["admin"])
 
@@ -15,7 +17,7 @@ class SafeguardsIn(BaseModel):
 
 
 def _safeguards(request: Request) -> Safeguards:
-    return request.app.state.safeguards
+    return need(services_of(request).safeguards, "the safeguards")
 
 
 @router.get("", response_model=SafeguardsStatus)
@@ -35,7 +37,7 @@ async def set_safeguards(
         status = await guard.set(body.enabled, who.user_id)
     except ForcedOn:
         raise HTTPException(409, "The safeguards are forced on by this deployment.") from None
-    await request.app.state.admin.audit(
+    await need(services_of(request).admin, "the admin store").audit(
         who.tenant_id,
         AuditEntry(
             id="", actor_user_id=who.user_id, action="admin.safeguards.update",

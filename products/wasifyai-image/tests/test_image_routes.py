@@ -8,6 +8,7 @@ from image_rig import png
 from wasifyai_image.images import ImageRecord, InMemoryImageStore
 from wasifyai_image.routes import build_routes, file_name
 from wasifyai_platform_sdk import (
+    EngineServices,
     Identity,
     RouteDeps,
     RunContext,
@@ -42,7 +43,7 @@ def put(client, user: str, rel: str, data: bytes):
     async def go():
         token = set_context(RunContext("t1", "wasifyai-image", user))
         try:
-            await client.app.state.storage.put(rel, data, "image/png")
+            await client.app.state.services.storage.put(rel, data, "image/png")
         finally:
             reset_context(token)
 
@@ -57,10 +58,12 @@ def client(tmp_path):
         image(5, user="someone-else"), image(6, tenant="other-tenant"),
     ]  # fmt: skip
     app = FastAPI()
-    app.state.storage = ScopedStorage(memory_storage())
-    app.state.export_dir = tmp_path / "Downloads"
+    app.state.services = EngineServices()
+    app.state.services.storage = ScopedStorage(memory_storage())
+    app.state.services.export_dir = tmp_path / "Downloads"
     app.include_router(
-        build_routes(RouteDeps(app.state, identity), store), prefix="/products/wasifyai-image"
+        build_routes(RouteDeps(app.state.services, identity), store),
+        prefix="/products/wasifyai-image",
     )
     c = TestClient(app)
     c.store = store  # type: ignore[attr-defined]
@@ -137,7 +140,7 @@ def test_deleting_removes_the_files_and_the_record_for_the_owner_only(client):
     async def files_left() -> list[bool]:
         token = set_context(RunContext("t1", "wasifyai-image", "u1"))
         try:
-            s = client.app.state.storage
+            s = client.app.state.services.storage
             return [await s.exists(f"{uid(1)}/image.png"), await s.exists(f"{uid(1)}/thumb.jpg")]
         finally:
             reset_context(token)
@@ -202,7 +205,7 @@ def test_export_writes_where_the_save_as_box_chose(client, tmp_path):
 def test_export_is_only_for_the_owner_and_only_where_a_folder_is_set(client):
     other = client.post(f"{BASE}/{uid(2)}/export", headers={"x-user": "someone-else"})
     assert other.status_code == 404
-    del client.app.state.export_dir  # the web profile never sets one
+    del client.app.state.services.export_dir  # the web profile never sets one
     assert client.post(f"{BASE}/{uid(2)}/export").status_code == 404
 
 

@@ -29,6 +29,7 @@ from wasifyai_api import model3d_runtime as m3
 from wasifyai_api.audio_runtime import InstallError
 from wasifyai_api.desktop_fit import assess_fit, need_declared, read_machine
 from wasifyai_api.identity import get_identity
+from wasifyai_api.services import services_of
 
 CUTOUT_WALL_S = 900.0
 GENERATE_WALL_S = 4 * 3600.0
@@ -331,7 +332,7 @@ router = APIRouter(prefix="/desktop/model3d", tags=["desktop"])
 
 
 def _service(request: Request) -> Model3dService:
-    service: Model3dService | None = getattr(request.app.state, "model3d", None)
+    service: Model3dService | None = services_of(request).model3d
     if service is None:
         raise HTTPException(404, "not available in this deployment")
     return service

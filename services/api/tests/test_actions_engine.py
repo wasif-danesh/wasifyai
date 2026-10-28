@@ -25,7 +25,7 @@ class Engine:
         self.client = client
         me = client.get("/me", headers=auth()).json()
         self.me = Identity(me["tenant_id"], me["user_id"])
-        self.executor = client.app.state.actions  # type: ignore[attr-defined]
+        self.executor = client.app.state.services.actions  # type: ignore[attr-defined]
 
     def run(self, action_id: str, params: dict | None = None, origin="window", **kw):
         return self.client.portal.call(  # type: ignore[union-attr]
@@ -34,7 +34,7 @@ class Engine:
 
     def sql(self, query: str, **params):
         async def go():
-            async with self.client.app.state.engine.connect() as conn:  # type: ignore[attr-defined]
+            async with self.client.app.state.services.engine.connect() as conn:  # type: ignore[attr-defined]
                 return [dict(r._mapping) for r in await conn.execute(text(query), params)]
 
         return self.client.portal.call(go)  # type: ignore[union-attr]

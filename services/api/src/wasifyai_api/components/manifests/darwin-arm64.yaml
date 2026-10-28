@@ -1,0 +1,32 @@
+# The optional components on darwin-arm64 (stage F2 of the 2026-10-27 plan): what each fetches, pinned by
+# size and SHA-256. Data, read by wasifyai_api/components; scripts/build-engine-bundle.sh reads the list.
+schema: 1
+platform: darwin-arm64
+python: "3.12.15"  # the Python a component's own environment is made with
+components:
+  llamacpp:
+    title: Language engine (llama.cpp)
+    version: b11655
+    licence: MIT
+    source: github.com/ggml-org/llama.cpp
+    min_free_bytes: 268435456
+    backend: metal
+    archive:
+      url: https://github.com/ggml-org/llama.cpp/releases/download/b11655/llama-b11655-bin-macos-arm64.tar.gz
+      size: 12182376
+      sha256: e6be96363b99def1b4ee6b06aa91cc81beb4ddec7523cb9614a653536814fe37
+      kind: tar.gz
+      strip: 1
+  comfyui:
+    title: Image engine (ComfyUI)
+    version: 0.40.0
+    licence: GPL-3.0
+    source: github.com/comfyanonymous/ComfyUI
+    min_free_bytes: 4294967296
+    lock: comfyui/requirements-aarch64-apple-darwin.lock  # in the engine bundle (scripts/build-engine-bundle.sh)
+    archive:
+      url: https://github.com/comfyanonymous/ComfyUI/archive/refs/tags/v0.40.0.tar.gz
+      size: 12722767
+      sha256: d82636cc721b8060099cf31b8d9ed40807c2147db438f88321a0396b7894e8e5
+      kind: tar.gz
+      strip: 1

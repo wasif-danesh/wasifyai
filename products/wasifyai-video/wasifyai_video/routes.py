@@ -158,7 +158,7 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
         it can be carried on in Extend video. ffmpeg decodes it: the file is never kept as sent."""
         if deps.storage is None:
             raise HTTPException(503, "file storage is not available")
-        limiter = getattr(deps.state, "upload_limiter", None)
+        limiter = deps.state.upload_limiter
         if limiter is not None and not await limiter.allow(identity.tenant_id, identity.user_id):
             raise HTTPException(429, "Too many uploads. Please wait a while and try again.")
         with tempfile.TemporaryDirectory(prefix="wasifyai-video-") as tmp:
@@ -199,7 +199,7 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
             identity.tenant_id, video_id, width, height, f"{video_id}/video.mp4",
             f"{video_id}/poster.jpg",
         )  # fmt: skip
-        index = getattr(deps.state, "creation_index", None)  # found in search at once (ADR-0041)
+        index = deps.state.creation_index  # found in search at once (ADR-0041)
         if index is not None:
             try:
                 await index.index(
@@ -228,7 +228,7 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
         """Copy the clip to the place the person chose in the Save As box (`path`), or into the
         export folder when there is none: a webview cannot save a file by itself. The folder never
         overwrites: a second copy gets a number."""
-        folder = getattr(deps.state, "export_dir", None)
+        folder = deps.state.export_dir
         if (folder is None and not (body and body.path)) or deps.storage is None:
             raise HTTPException(404, "saving to a folder is not available here")
         video = await videos().get(identity.tenant_id, identity.user_id, video_id)
@@ -242,7 +242,7 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
         if body and body.path:
             try:
                 path = await asyncio.to_thread(
-                    write_to_path, body.path, data, getattr(deps.state, "desktop_dir", None)
+                    write_to_path, body.path, data, deps.state.desktop_dir
                 )
             except SaveRefused as exc:
                 raise HTTPException(422, str(exc)) from None

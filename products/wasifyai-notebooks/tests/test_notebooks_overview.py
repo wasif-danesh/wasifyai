@@ -3,7 +3,6 @@
 import asyncio
 import io
 import wave
-from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI, Header
@@ -12,6 +11,7 @@ from test_notebooks_routes import make_app
 from wasifyai_notebooks import overview
 from wasifyai_notebooks.routes import build_routes
 from wasifyai_platform_sdk import (
+    EngineServices,
     Identity,
     RouteDeps,
     SpeechResult,
@@ -96,7 +96,7 @@ def test_pieces_are_joined_with_their_pauses_and_must_share_a_rate():
 def api(tmp_path):
     app, runtime, comps, reader = make_app(tmp_path)
     engine = Engine()
-    state = SimpleNamespace(audio=engine, creation_index=None, engine=None, storage=None)
+    state = EngineServices(audio=engine)
 
     async def identity(x_user: str = Header("u1"), x_tenant: str = Header("t1")) -> Identity:
         return Identity(x_tenant, x_user)

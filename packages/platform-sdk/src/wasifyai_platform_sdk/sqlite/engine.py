@@ -14,21 +14,30 @@ renames and dropped columns included: before a store that already has a version 
 of the file is put in `backups/` beside it, and the store's migrations run in one transaction.
 """
 
+import asyncio
+import contextlib
 import logging
+import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from weakref import WeakKeyDictionary
 
 from sqlalchemy import event
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
 log = logging.getLogger("wasifyai_platform_sdk.sqlite")
 
 # the stores that are up to date, per engine (gone when the engine is)
 _CREATED: WeakKeyDictionary[AsyncEngine, set[str]] = WeakKeyDictionary()
+# the migrations under way, per engine and store, so a cancel never cuts one off
+_RUNNING: WeakKeyDictionary[AsyncEngine, dict[str, "asyncio.Task[None]"]] = WeakKeyDictionary()
 BACKUPS_KEPT = 5  # copies of a database file kept in backups/, newest first
+LOCK_TRIES = 8  # a refused write lock is asked for again this many times
+WAL_TRIES = 100  # and the switch of a new file to WAL (0.05 s apart)
 
 
 def now_iso() -> str:
@@ -56,13 +65,30 @@ def create_sqlite_engine(path: Path | str) -> AsyncEngine:
     @event.listens_for(engine.sync_engine, "connect")
     def _pragmas(dbapi_connection, _record) -> None:
         cur = dbapi_connection.cursor()
-        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute("PRAGMA busy_timeout=30000")
+        _wal(cur)
         cur.execute("PRAGMA synchronous=NORMAL")
         cur.execute("PRAGMA foreign_keys=ON")
-        cur.execute("PRAGMA busy_timeout=30000")
         cur.close()
 
     return engine
+
+
+def _wal(cur: Any) -> None:
+    """WAL, which a file keeps once set. Only the first connection to a new file switches it, and
+    SQLite refuses the switch at once, without waiting, while another connection has the file
+    open: the switch is tried again for a moment."""
+    cur.execute("PRAGMA journal_mode")
+    if str(cur.fetchone()[0]).lower() == "wal":
+        return
+    for attempt in range(WAL_TRIES):
+        try:
+            cur.execute("PRAGMA journal_mode=WAL")
+            return
+        except Exception as e:  # the driver's own OperationalError, wrapped or not
+            if "locked" not in str(e) or attempt == WAL_TRIES - 1:
+                raise
+            time.sleep(0.05)
 
 
 def is_sqlite(engine: AsyncEngine) -> bool:
@@ -104,26 +130,67 @@ async def migrate(engine: AsyncEngine, store: str, migrations: Sequence[Migratio
     if versions != list(range(1, len(versions) + 1)):
         raise ValueError(f"the migrations of {store} must be numbered 1, 2, 3 ... in order")
     latest = len(migrations)
-    async with engine.connect() as conn:
-        await conn.exec_driver_sql(_VERSIONS_DDL)
-        await conn.commit()
-        have = await _version(conn, store)
-        if have > latest:
-            raise SchemaTooNew(
-                f"The {store} data was made by a newer version of Wasify AI. Update the app."
-            )
-        if have < latest:
-            if have > 0:  # a store with data is about to change: keep a copy first
-                await _back_up(conn, engine, store, have)
-            await _apply(conn, store, migrations, latest)
+    # A migration is never stopped half-way: a cancel (the app stopping) waits for it to end. A
+    # transaction cut off by a cancel left its connection being torn down while it still held the
+    # file's write lock, and every other store waited behind it. Callers at the same time share it.
+    running = _RUNNING.setdefault(engine, {})
+    task = running.get(store)
+    if task is None or task.done():
+        task = asyncio.ensure_future(_migrate(engine, store, migrations, latest))
+        running[store] = task
+    await asyncio.shield(task)
     done.add(store)
 
 
+async def _migrate(
+    engine: AsyncEngine, store: str, migrations: Sequence[Migration], latest: int
+) -> None:
+    async with engine.connect() as conn:
+        # the usual case, every start: the store is current, which a read says without a lock
+        have = await _version(conn, store)
+        await conn.commit()
+        _not_newer(store, have, latest)
+        if have == latest:
+            return
+        if have > 0:  # a store with data is about to change: keep a copy first
+            await _back_up(conn, engine, store, have)
+        await _apply(conn, store, migrations, latest)
+
+
+def _not_newer(store: str, have: int, latest: int) -> None:
+    if have > latest:
+        raise SchemaTooNew(
+            f"The {store} data was made by a newer version of Wasify AI. Update the app."
+        )
+
+
 async def _version(conn: AsyncConnection, store: str) -> int:
-    row = (
-        await conn.exec_driver_sql("SELECT version FROM schema_versions WHERE store = ?", (store,))
-    ).first()
+    """The store's version; 0 for a file that has no versions yet."""
+    try:
+        row = (
+            await conn.exec_driver_sql(
+                "SELECT version FROM schema_versions WHERE store = ?", (store,)
+            )
+        ).first()
+    except OperationalError as e:
+        if "no such table" not in str(e):
+            raise
+        await conn.rollback()
+        return 0
     return int(row[0]) if row else 0
+
+
+async def _begin_immediate(conn: AsyncConnection) -> None:
+    """Take the file's write lock. SQLite waits for another writer (busy_timeout), but refuses at
+    once in a few cases (two connections that both read first); those are tried again briefly."""
+    for attempt in range(LOCK_TRIES):
+        try:
+            await conn.exec_driver_sql("BEGIN IMMEDIATE")
+            return
+        except OperationalError as e:
+            if "locked" not in str(e) or attempt == LOCK_TRIES - 1:
+                raise
+            await asyncio.sleep(0.1 * (attempt + 1))
 
 
 async def _apply(
@@ -131,9 +198,11 @@ async def _apply(
 ) -> None:
     # SQLite runs DDL inside a transaction; it is begun here by hand, because the driver begins one
     # only before a change of rows, so a failed step would leave the steps before it in place
-    await conn.exec_driver_sql("BEGIN IMMEDIATE")
+    await _begin_immediate(conn)
     try:
+        await conn.exec_driver_sql(_VERSIONS_DDL)
         have = await _version(conn, store)  # another process may have done it meanwhile
+        _not_newer(store, have, latest)
         for m in migrations[have:]:
             for statement in m.statements:
                 await conn.exec_driver_sql(statement)
@@ -157,7 +226,11 @@ async def _apply(
             log.info("%s: schema version %d to %d", store, have, latest)
         await conn.exec_driver_sql("COMMIT")
     except BaseException:
-        await conn.exec_driver_sql("ROLLBACK")
+        # the original error (a cancel above all) must come out, never one from the rollback: a
+        # cancel that arrives while BEGIN still waits for the lock has no transaction to roll back,
+        # and a loop that retries on any error would then never stop
+        with contextlib.suppress(Exception):
+            await conn.exec_driver_sql("ROLLBACK")
         raise
 
 

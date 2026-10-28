@@ -60,6 +60,6 @@ def test_the_product_is_served_and_says_what_to_do_without_the_component(data_di
 
 def test_the_engine_knows_3d_as_an_owner_of_the_one_slot(data_dir):  # noqa: F811
     with TestClient(create_app()) as c:
-        engine = c.app.state.model3d  # type: ignore[attr-defined]
+        engine = c.app.state.services.model3d  # type: ignore[attr-defined]
         assert engine is not None and engine.installer.pins.need_gb >= 18
         assert engine.slot is not None and "model3d" in engine.slot._unloaders  # noqa: SLF001

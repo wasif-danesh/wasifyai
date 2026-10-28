@@ -16,7 +16,7 @@ def person_looks(
     state: Any, video: bool = True
 ) -> Callable[[str, str, list[str]], Awaitable[dict[str, str] | None]]:
     async def resolve(tenant: str, user: str, names: list[str]) -> dict[str, str] | None:
-        store = getattr(state, "training_store", None)
+        store = state.training_store
         if store is None:
             return {}
         models = await asyncio.to_thread(store.list_models, tenant, user, 500)

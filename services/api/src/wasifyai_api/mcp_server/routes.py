@@ -18,20 +18,21 @@ from wasifyai_api.identity import Identity, get_identity
 from wasifyai_api.mcp_server.approvals import ApprovalDesk
 from wasifyai_api.mcp_server.connections import DEFAULT_SCOPES, ConnectionsService
 from wasifyai_api.mcp_server.skill import skill_markdown
+from wasifyai_api.services import services_of
 
 router = APIRouter(tags=["connections"])
 LAUNCHER_PLACEHOLDER = "<path to wasify-mcp>"
 
 
 def _connections(request: Request) -> ConnectionsService:
-    svc = getattr(request.app.state, "connections", None)
+    svc = services_of(request).connections
     if svc is None:
         raise HTTPException(404, "connections are not available in this deployment")
     return svc
 
 
 def _desk(request: Request) -> ApprovalDesk:
-    desk = getattr(request.app.state, "approval_desk", None)
+    desk = services_of(request).approval_desk
     if desk is None:
         raise HTTPException(404, "not available in this deployment")
     return desk
@@ -187,13 +188,13 @@ async def connection_snippets(
     settings = get_settings()
     launcher = settings.wasifyai_mcp_launcher or LAUNCHER_PLACEHOLDER
     # the HTTP forms name the opt-in fixed port (stage M3), never the engine's per-launch port
-    port = getattr(getattr(request.app.state, "fixed_port", None), "port", None)
+    port = getattr(services_of(request).fixed_port, "port", None)
     return {"launcher": launcher, "snippets": snippets(launcher, port)}
 
 
 @router.get("/connections/launcher")
 async def launcher_state(request: Request, me: Identity = Depends(get_identity)) -> dict[str, Any]:
-    launcher = getattr(request.app.state, "launcher", None)
+    launcher = services_of(request).launcher
     if launcher is None:
         return {"available": False, "enabled": False}
     return {"available": True, **(await launcher.state(me))}
@@ -205,7 +206,7 @@ async def launcher_set(
 ) -> dict[str, Any]:
     """The switch "Let other apps use Wasify AI": on makes the launcher's connection and writes
     `engine.json`; off revokes it and removes the file."""
-    launcher = getattr(request.app.state, "launcher", None)
+    launcher = services_of(request).launcher
     if launcher is None:
         raise HTTPException(404, "the launcher is a desktop feature")
     if body.enabled:
@@ -221,7 +222,7 @@ async def connection_skill(
 ) -> PlainTextResponse:
     """A SKILL.md for Claude Code, generated from the catalogue (stage M3): how to use the tools
     the launcher's connection offers."""
-    executor = getattr(request.app.state, "actions", None)
+    executor = services_of(request).actions
     if executor is None:
         raise HTTPException(404, "not available in this deployment")
     return PlainTextResponse(
@@ -231,7 +232,7 @@ async def connection_skill(
 
 @router.get("/connections/fixed-port")
 async def fixed_port_state(request: Request, _: Identity = Depends(get_identity)) -> dict[str, Any]:
-    fixed = getattr(request.app.state, "fixed_port", None)
+    fixed = services_of(request).fixed_port
     if fixed is None:
         return {"available": False, "port": None, "url": None}
     return {"available": True, **fixed.state()}
@@ -242,7 +243,7 @@ async def fixed_port_set(
     body: FixedPortIn, request: Request, _: Identity = Depends(get_identity)
 ) -> dict[str, Any]:
     """The opt-in fixed port for HTTP clients: a port number turns it on, null turns it off."""
-    fixed = getattr(request.app.state, "fixed_port", None)
+    fixed = services_of(request).fixed_port
     if fixed is None:
         raise HTTPException(404, "not available in this deployment")
     try:
@@ -262,7 +263,7 @@ async def fixed_port_set(
 @router.get("/actions/jobs")
 async def running_jobs(request: Request, me: Identity = Depends(get_identity)) -> dict[str, Any]:
     """The jobs running for this person, with who started them ("from Codex")."""
-    executor = getattr(request.app.state, "actions", None)
+    executor = services_of(request).actions
     if executor is None:
         raise HTTPException(404, "not available in this deployment")
     jobs = executor.jobs.running(me.tenant_id, me.user_id)
@@ -286,7 +287,7 @@ async def cancel_running_job(
     job_id: str, request: Request, me: Identity = Depends(get_identity)
 ) -> dict[str, Any]:
     """The person stops a job, their own or one an agent started."""
-    executor = getattr(request.app.state, "actions", None)
+    executor = services_of(request).actions
     if executor is None:
         raise HTTPException(404, "not available in this deployment")
     job = await executor.jobs.find(me.tenant_id, me.user_id, job_id)

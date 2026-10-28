@@ -9,7 +9,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from voice_rig import FakeEngine, app_state
-from wasifyai_platform_sdk import Identity, RouteDeps, VoiceEngineError
+from wasifyai_platform_sdk import EngineServices, Identity, RouteDeps, VoiceEngineError
 from wasifyai_voice import read_aloud
 from wasifyai_voice.read_aloud import ReadAloudError, passages, plain_words
 from wasifyai_voice.routes import build_routes
@@ -184,13 +184,12 @@ def test_the_engine_failing_is_a_502_with_its_sentence(api):
 
 
 def test_no_engine_is_a_503(tmp_path):
-    from types import SimpleNamespace
 
     async def identity() -> Identity:
         return Identity("t1", "u1")
 
     app = FastAPI()
-    state = SimpleNamespace(desktop_dir=tmp_path, storage=None)
+    state = EngineServices(desktop_dir=tmp_path)
     app.include_router(build_routes(RouteDeps(state, identity)), prefix="/products/wasifyai-voice")
     with TestClient(app) as c:
         assert c.post("/products/wasifyai-voice/read-aloud", json={"text": "hi"}).status_code == 503

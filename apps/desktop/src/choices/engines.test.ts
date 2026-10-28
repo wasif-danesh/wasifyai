@@ -49,7 +49,7 @@ describe("the image engine step", () => {
     const step = await createEngines(p).imageStep();
     expect(step.bytes).toBe(7);
     await step.run(() => {}, new AbortController().signal);
-    expect(p.install).toHaveBeenCalledWith("comfyui");
+    expect(p.install).toHaveBeenCalledWith("comfyui", 7); // with the size the dialog showed
   });
 
   it("does nothing when it is there already", async () => {

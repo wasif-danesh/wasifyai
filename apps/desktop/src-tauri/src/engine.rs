@@ -80,6 +80,9 @@ pub struct LaunchConfig {
     /// The operating system's own Downloads folder, where the engine saves a copy when nothing asks
     /// the person for a place (the assistant's export action). `None` leaves the engine's default.
     pub download_dir: Option<PathBuf>,
+    /// The engine files this app installs from; the engine reads the locks of its optional components
+    /// there (`WASIFYAI_ENGINE_BUNDLE`, stage F2). `None` in a checkout without a built bundle.
+    pub bundle_dir: Option<PathBuf>,
 }
 
 /// What the shell noticed about this run, for the evidence documents and the self-test's report.
@@ -322,6 +325,7 @@ fn plan(input: &Input, repair: bool) -> Result<Plan, String> {
     let cwd = data_dir.clone(); // never the checkout: its `.env` must not reach the engine
     let image_engine = std::env::var("WASIFYAI_IMAGE_ENGINE").unwrap_or_else(|_| "auto".into());
     let products_env = std::env::var_os("WASIFYAI_PRODUCTS_DIR").map(PathBuf::from);
+    let bundle_dir = find_bundle_dir(input);
 
     let launch = |python: PathBuf, products_dir: PathBuf| LaunchConfig {
         python,
@@ -330,6 +334,7 @@ fn plan(input: &Input, repair: bool) -> Result<Plan, String> {
         data_dir: data_dir.clone(),
         image_engine: image_engine.clone(),
         download_dir: input.download_dir.clone(),
+        bundle_dir: bundle_dir.clone(),
     };
 
     if let Some(p) = std::env::var_os("WASIFYAI_ENGINE_PYTHON") {
@@ -350,8 +355,6 @@ fn plan(input: &Input, repair: bool) -> Result<Plan, String> {
     let layout = provision::Layout::new(data_dir, &manifest);
     let managed_python = venv_python_in(&layout.venv_dir());
 
-    let bundle_dir = find_bundle_dir(input);
-
     let dev_python = repo.as_ref().map(|r| venv_python_in(&r.join(".venv")));
     if !env_flag("WASIFYAI_PROVISION") {
         if let (Some(py), Some(r)) = (&dev_python, &repo) {
@@ -362,7 +365,7 @@ fn plan(input: &Input, repair: bool) -> Result<Plan, String> {
         }
     }
 
-    let Some(bundle_dir) = bundle_dir else {
+    let Some(bundle_dir) = bundle_dir.clone() else {
         return Err(
             "The engine is not installed and this app has no engine files to install it from. \
              In a development checkout run `make setup`; to try the installer run \
@@ -552,6 +555,9 @@ async fn run_once(
         .kill_on_drop(true);
     if let Some(uv) = managed_uv(&cfg.data_dir) {
         cmd.env("WASIFYAI_UV", uv);
+    }
+    if let Some(dir) = &cfg.bundle_dir {
+        cmd.env("WASIFYAI_ENGINE_BUNDLE", dir);
     }
     // a folder set in the shell's own environment (for tests) wins over the system's
     if std::env::var_os("WASIFYAI_EXPORT_DIR").is_none() {

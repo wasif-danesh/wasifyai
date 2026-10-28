@@ -479,7 +479,7 @@ async def test_a_connection_runs_one_job_at_a_time_and_is_told_which(engine):
     class Executor:
         jobs = JobBook()
 
-    offered = list(engine.app.state.actions.registry.for_surface("mcp"))
+    offered = list(engine.app.state.services.actions.registry.for_surface("mcp"))
     c = Connection(id="c1", tenant_id="t", user_id="u", name="Codex", secret_hash="x")
     running = await Executor.jobs.start("image.generate", "t", "u", c.origin, True)
     long_action = next(a for a in offered if a.long)
@@ -513,7 +513,7 @@ async def test_the_daily_quota_counts_tool_calls_and_then_refuses(engine):
 
 def test_the_person_sees_jobs_from_other_apps_and_can_stop_them(engine):
     """Decision 10: jobs carry who started them, and the window can stop them."""
-    executor = engine.app.state.actions
+    executor = engine.app.state.services.actions
     me = executor.jobs  # the book is shared; start a job as the launcher's agent would
     c, _ = engine.connection("Codex")
     tenant, user = _person_of(engine)

@@ -153,3 +153,23 @@ async def test_migrations_must_be_numbered_from_one_in_order(tmp_path: Path, num
     with pytest.raises(ValueError, match="numbered"):
         await migrate(engine, "t", [Migration(n) for n in numbers])
     await engine.dispose()
+
+
+async def test_a_cancel_while_waiting_for_the_lock_comes_out_as_a_cancel(tmp_path: Path):
+    """A task stopped while its migration waits for another writer must end as cancelled: a
+    rollback error in its place kept a retrying loop (the desktop's completion consumer) alive,
+    and the engine never stopped."""
+    holder = create_sqlite_engine(tmp_path / "app.db")
+    waiter = create_sqlite_engine(tmp_path / "app.db")
+    async with holder.connect() as conn:
+        await conn.exec_driver_sql("BEGIN IMMEDIATE")  # another writer holds the file
+        task = asyncio.create_task(migrate(waiter, "notes", [NOTES_V1]))
+        await asyncio.sleep(0.3)  # it is waiting for the lock now
+        task.cancel()
+        await conn.exec_driver_sql("COMMIT")
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    await migrate(waiter, "notes", [NOTES_V1])  # and the next start does it
+    assert await version(waiter, "notes") == 1
+    await holder.dispose()
+    await waiter.dispose()

@@ -28,7 +28,7 @@ async def video_status_of(deps: RouteDeps, kind: str = "character") -> dict[str,
         engine = engine_for(deps.state)
     except NotAvailable:
         raise HTTPException(404, "Teaching the video model is not available here.") from None
-    setup = getattr(deps.state, "video_setup", None)
+    setup = deps.state.video_setup
     base = bases.descriptors("video")[0]
     ready = engine.ready()
     return {

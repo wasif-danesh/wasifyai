@@ -3,7 +3,8 @@
 // (ComfyUI) is set up.
 import { useEffect, useState } from "react";
 import { modelsApi } from "./api";
-import { COMFYUI, type ComponentStatus, componentStatus, onComponentStatus } from "./engine";
+import { componentStatus, onComponentStatus } from "./components";
+import { COMFYUI, type ComponentStatus } from "./engine";
 import type { ModelEntry } from "./models";
 
 /** The first model of a product in the catalogue, or null while it is read. */

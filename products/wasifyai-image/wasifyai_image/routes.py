@@ -159,7 +159,7 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
         """Copy the image to the place the person chose in the Save As box (`path`), or into the
         export folder when there is none: a webview cannot save a file by itself. The folder never
         overwrites: a second copy gets a number."""
-        folder = getattr(deps.state, "export_dir", None)
+        folder = deps.state.export_dir
         if (folder is None and not (body and body.path)) or deps.storage is None:
             raise HTTPException(404, "saving to a folder is not available here")
         image = await images().get(identity.tenant_id, identity.user_id, image_id)
@@ -174,7 +174,7 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
         if body and body.path:
             try:
                 path = await asyncio.to_thread(
-                    write_to_path, body.path, data, getattr(deps.state, "desktop_dir", None)
+                    write_to_path, body.path, data, deps.state.desktop_dir
                 )
             except SaveRefused as exc:
                 raise HTTPException(422, str(exc)) from None

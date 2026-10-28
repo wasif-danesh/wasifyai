@@ -57,21 +57,21 @@ class Refused(Exception):
 
 
 def engine_for(state: Any) -> Any:
-    engine = getattr(state, "training", None)
+    engine = state.training
     if engine is None:
         raise NotAvailable("Training is not available here.")
     return engine
 
 
 def root_for(state: Any) -> Path:
-    data = getattr(state, "desktop_dir", None)
+    data = state.desktop_dir
     if not data:
         raise NotAvailable("Training is not available here.")
     return Path(data) / "training"
 
 
 def store_for(state: Any) -> TrainingStore:
-    existing = getattr(state, "training_store", None)
+    existing = state.training_store
     if existing is None:
         existing = TrainingStore(root_for(state))
         state.training_store = existing
@@ -100,7 +100,7 @@ def model_folder(store: TrainingStore, identity: Identity, model_id: str) -> Pat
 async def folder_ready(state: Any, identity: Identity, kind: str, item_id: str) -> Path:
     """The folder of an item with its files in it (on the web: fetched from storage, `files.py`)."""
     folder = store_for(state).folder_of(identity.tenant_id, identity.user_id, kind, item_id)
-    files = getattr(state, "training_files", None)
+    files = state.training_files
     if files is not None:
         await files.ensure(identity.tenant_id, identity.user_id, kind, item_id, folder)
     return folder
@@ -110,7 +110,7 @@ async def folder_saved(
     state: Any, identity: Identity, kind: str, item_id: str, only: tuple[str, ...] | None = None
 ) -> None:
     """What was written into a folder is kept: on the web it goes to object storage."""
-    files = getattr(state, "training_files", None)
+    files = state.training_files
     if files is not None:
         folder = store_for(state).folder_of(identity.tenant_id, identity.user_id, kind, item_id)
         await files.commit(identity.tenant_id, identity.user_id, kind, item_id, folder, only)
@@ -119,7 +119,7 @@ async def folder_saved(
 async def folder_gone(state: Any, identity: Identity, kind: str, item_id: str) -> None:
     """An item is deleted: its folder, and on the web its files in object storage."""
     folder = store_for(state).folder_of(identity.tenant_id, identity.user_id, kind, item_id)
-    files = getattr(state, "training_files", None)
+    files = state.training_files
     if files is not None:
         await files.drop(identity.tenant_id, identity.user_id, kind, item_id, folder)
     else:
@@ -135,7 +135,7 @@ def words_of(row: dict[str, Any]) -> str:
 
 async def add_to_search(state: Any, identity: Identity, item_id: str, text: str) -> None:
     """Make a trained model searchable by its name and magic word (ADR-0041): best effort."""
-    index = getattr(state, "creation_index", None)
+    index = state.creation_index
     if index is None:
         return
     try:
@@ -353,7 +353,7 @@ class CaptionManager:
 
 
 def caption_manager_for(deps: RouteDeps) -> CaptionManager:
-    existing = getattr(deps.state, "training_captions", None)
+    existing = deps.state.training_captions
     if existing is None:
         existing = CaptionManager(deps)
         deps.state.training_captions = existing
@@ -629,7 +629,7 @@ def model_or_none(deps: RouteDeps, identity: Identity, model_id: str) -> dict[st
 
 
 def run_manager_for(deps: RouteDeps) -> RunManager:
-    existing = getattr(deps.state, "training_runs", None)
+    existing = deps.state.training_runs
     if existing is None:
         existing = RunManager(deps)
         deps.state.training_runs = existing
@@ -653,12 +653,12 @@ async def delete_model(deps: RouteDeps, identity: Identity, model_id: str) -> bo
         run_of = None
     if not store.delete_model(identity.tenant_id, identity.user_id, model_id):
         return False
-    lang = getattr(deps.state, "desktop_language", None)
+    lang = deps.state.desktop_language
     chosen = getattr(getattr(lang, "selected", None), "style", None)
     if lang is not None and chosen == model_id:
         with contextlib.suppress(Exception):
             await lang.end_style()  # a model that is gone is not the one chat answers with
-    taught_on = getattr(deps.state, "video_training", None) if family == "video" else None
+    taught_on = deps.state.video_training if family == "video" else None
     unpublish = getattr(taught_on or engine_for(deps.state), "unpublish", None)
     if published and unpublish is not None:
         with contextlib.suppress(Exception):

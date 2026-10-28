@@ -105,6 +105,7 @@ from wasifyai_platform_sdk.secrets import (
     SqlSecretStore,
     secret_name,
 )
+from wasifyai_platform_sdk.services import EngineServices, need
 from wasifyai_platform_sdk.slots import Held, OwnerLock, SlotManager
 from wasifyai_platform_sdk.storage import (
     LocalFileStorage,
@@ -228,6 +229,8 @@ __all__ = [
     "SCOPE_WORDS",
     "ALL_SCOPES",
     "USER_SCOPES",
+    "EngineServices",
+    "need",
     "RouteDeps",
     "RouteGuard",
     "SaveRefused",

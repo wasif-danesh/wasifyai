@@ -11,12 +11,13 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from wasifyai_platform_sdk import EngineJob, admin_wire
+from wasifyai_platform_sdk import EngineJob, admin_wire, need
 from wasifyai_platform_sdk.storage import object_key
 
 from wasifyai_api.admin import AuditEntry
 from wasifyai_api.engine_workers import WorkerDirectory
 from wasifyai_api.identity import Identity, require_admin
+from wasifyai_api.services import services_of
 
 log = logging.getLogger("wasifyai_api.admin_workers")
 
@@ -63,14 +64,14 @@ class JobState(BaseModel):
 
 
 def _directory(request: Request) -> WorkerDirectory:
-    found = getattr(request.app.state, "engine_workers", None)
+    found = services_of(request).engine_workers
     if found is None:
         raise HTTPException(404, "This deployment has no engine workers.")
     return found  # type: ignore[no-any-return]
 
 
 async def _audit(request: Request, who: Identity, action: str, target: str, **detail: Any) -> None:
-    await request.app.state.admin.audit(
+    await need(services_of(request).admin, "the admin store").audit(
         who.tenant_id,
         AuditEntry(
             id="", actor_user_id=who.user_id, action=action, target_type="worker",
@@ -117,7 +118,7 @@ async def _start(
 ) -> JobStarted:
     directory = _directory(request)
     queue = directory.queue
-    running: dict[str, str] = request.app.state.__dict__.setdefault("admin_fetches", {})
+    running: dict[str, str] = services_of(request).admin_fetches
     existing = running.get(f"{who.tenant_id}/{kind}/{key}")
     if existing and await queue.status(existing) == "waiting":
         return JobStarted(job_id=existing)  # already on its way: follow that one

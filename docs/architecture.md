@@ -112,6 +112,12 @@ live in one shared Next.js app, `apps/web` (ADR-0014). Controls and data grids u
 (ADR-0045), and inside a product the user navigates with a side panel while the home page keeps its cards (ADR-0046);
 the side panel and the shadcn/ui components are built for the product screens; other screens migrate as they are touched.
 
+What a product's routes and graphs may reach is the engine's services: one typed `EngineServices` object
+(`wasifyai_platform_sdk.services`), `deps.state` in a route and `caps.extras["app_state"]` in a graph, with a field for each
+service and `None` where this deployment has none (stage F1). The engine builds it, with its own services added
+(`ApiServices`), in `wasifyai_api/assemble.py`: what both deployments share first, then the web's or the desktop's builder.
+`app.state.services` is the only attribute of the app; an engine route reads it with `services_of(request)`.
+
 ## Capabilities
 
 Graphs request **capabilities** (`text.<name>`, `image.generate`, `video.generate`), never specific models. `product.yaml` binds each capability to a

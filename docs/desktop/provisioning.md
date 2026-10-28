@@ -52,15 +52,21 @@ are in `docs/spikes/desktop-phase1.md`.
 Not done here: ComfyUI and the models are Phase 2 (ADR-0059). The window needs an internet connection for
 steps 2 and 5; an offline install would need a wheelhouse in the bundle.
 
-## Optional components: the image engine
+## Optional components: the image engine and the language engine
 
-ComfyUI (ADR-0059) is not part of the first-run install. The window's "Set up image generation" action (the
-Tauri command `component_install`, with `component_status` and the `component://status` event) installs it on
-demand into `<app data>/engine/comfyui`: the pinned release source (`engine-manifest.json`, `comfyui`), its own
-Python environment and the hashed lock the engine bundle carries for this platform
-(`comfyui/requirements-<target>.lock`, made by `scripts/build-engine-bundle.sh`). Same steps, progress,
-Repair and logs (`provision.log`) as the engine's installer. It is supported on Apple-silicon Macs only in this
-version; elsewhere the window says so and the placeholder engine keeps working.
+ComfyUI (ADR-0059) and llama.cpp's `llama-server` (stage D) are not part of the first-run install. Since stage F2
+(2026-10-29) the engine sets them up, on its one installer for every optional component
+(`services/api/src/wasifyai_api/components/`): the window's "Set up image generation" and "Set up the language
+engine" actions call `POST /components/{comfyui|llamacpp}/install` with the size the person was shown, follow
+`component` events on `/desktop/events`, and read `GET /components/{id}`. The pins are in
+`components/manifests/<platform>.yaml`. ComfyUI goes into `<app data>/engine/comfyui`: the pinned release source,
+its own Python environment from the hashed lock the engine bundle carries for this platform
+(`comfyui/requirements-<target>.lock`, made by `scripts/build-engine-bundle.sh`; the shell tells the engine where
+the bundle is with `WASIFYAI_ENGINE_BUNDLE`), and the app's own uv and Python. llama.cpp goes into
+`<app data>/engine/llamacpp/<release>/`. Both write the same `state.json` as when the shell installed them, so an
+install from before is found as it is. Steps, progress, Repair and `logs/provision.log` are the same as before.
+ComfyUI is supported on Apple-silicon Macs only in this version; elsewhere the window says so and the placeholder
+engine keeps working.
 
 ### Using it (stage A2)
 

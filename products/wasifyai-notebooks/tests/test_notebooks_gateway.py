@@ -15,7 +15,7 @@ from wasifyai_notebooks.files import ObjectFiles, original_key
 from wasifyai_notebooks.ingest import IngestWorker
 from wasifyai_notebooks.quotas import Limits, QuotaExceeded, check_new_notebook, check_new_source
 from wasifyai_notebooks.routes import Runtime, build_routes
-from wasifyai_platform_sdk import Identity, RouteDeps, memory_storage
+from wasifyai_platform_sdk import EngineServices, Identity, RouteDeps, memory_storage
 
 T, U = "t1", "u1"
 DIM = SPEC.dimension
@@ -193,13 +193,7 @@ def quota_app(tmp_path, caps):
     worker = IngestWorker(store, comps, FakeReader(), files, tokenizer_factory=lambda: "word")
     runtime = Runtime(store, comps, worker, files, tmp, reads_sources=False)
 
-    class State:
-        creation_index = None
-        engine = None
-        storage = None
-
-    state = State()
-    state.caps = {"wasifyai-notebooks": caps} if caps is not None else {}  # type: ignore[attr-defined]
+    state = EngineServices(caps={"wasifyai-notebooks": caps} if caps is not None else {})
 
     async def identity(x_user: str = Header("u1"), x_tenant: str = Header("t1")) -> Identity:
         return Identity(x_tenant, x_user)

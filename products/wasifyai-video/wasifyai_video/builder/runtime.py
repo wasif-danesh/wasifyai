@@ -48,7 +48,7 @@ def not_ready(engine: Any) -> str:
 
 
 def engine_for(state: Any) -> Any:
-    engine = getattr(state, "video_builder", None)
+    engine = state.video_builder
     if engine is None:
         raise NotAvailable("Motion graphics is not available in this deployment.")
     return engine
@@ -101,17 +101,17 @@ async def make_draft(
 
 
 def root_for(state: Any) -> Path:
-    scratch = getattr(state, "builder_scratch", None)  # the web: a folder for stand-in projects
+    scratch = state.builder_scratch  # the web: a folder for stand-in projects
     if scratch is not None:
         return Path(scratch)
-    data = getattr(state, "desktop_dir", None)
+    data = state.desktop_dir
     if not data:
         raise NotAvailable("Motion graphics is not available in this deployment.")
     return Path(data) / "video-builder"
 
 
 def store_for(state: Any) -> BuilderStore:
-    existing = getattr(state, "builder_store", None)
+    existing = state.builder_store
     if existing is not None:
         return existing  # type: ignore[no-any-return]
     store = BuilderStore(root_for(state))
@@ -121,7 +121,7 @@ def store_for(state: Any) -> BuilderStore:
 
 async def add_to_search(state: Any, identity: Identity, kind: str, item_id: str, text: str) -> None:
     """Make a creation searchable by its words (ADR-0041): best effort, never fails the request."""
-    index = getattr(state, "creation_index", None)
+    index = state.creation_index
     if index is None:
         return
     try:
@@ -133,7 +133,7 @@ async def add_to_search(state: Any, identity: Identity, kind: str, item_id: str,
 
 
 def manager_for(deps: RouteDeps) -> "RenderManager":
-    existing = getattr(deps.state, "builder_renders", None)
+    existing = deps.state.builder_renders
     if existing is None:
         existing = RenderManager(deps)
         deps.state.builder_renders = existing
@@ -157,7 +157,7 @@ class RenderManager:
 
     def _who(self, identity: Identity) -> str:
         """The desktop has one person, so one render in all; the web has one per person."""
-        if getattr(self._deps.state, "builder_scratch", None) is None:
+        if self._deps.state.builder_scratch is None:
             return "-"
         return f"{identity.tenant_id}/{identity.user_id}"
 

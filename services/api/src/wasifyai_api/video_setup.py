@@ -29,6 +29,7 @@ from wasifyai_api.decision_setup import _whole
 from wasifyai_api.desktop_models import DownloadError
 from wasifyai_api.identity import get_identity
 from wasifyai_api.language_setup import ConfirmInstall
+from wasifyai_api.services import services_of
 from wasifyai_api.training_setup import (
     STATE_FILE,
     InstallError,
@@ -204,7 +205,7 @@ router = APIRouter(prefix="/desktop/video-trainer-setup", tags=["desktop"])
 
 
 def _setup(request: Request) -> VideoSetup:
-    found: VideoSetup | None = getattr(request.app.state, "video_setup", None)
+    found: VideoSetup | None = services_of(request).video_setup
     if found is None:
         raise HTTPException(404, "not available in this deployment")
     return found

@@ -370,7 +370,7 @@ def test_web_search_is_off_until_allowed_then_cites_the_web_and_keeps_keys_encry
     base = "/products/wasifyai-assistant"
     with TestClient(create_app()) as c:
         choose_the_model(c)
-        web = c.app.state.web  # type: ignore[attr-defined]
+        web = c.app.state.services.web  # type: ignore[attr-defined]
         web._ddg = DuckDuckGoProvider(  # no real search is made by a test
             min_gap_s=0,
             run=lambda q, n: [
@@ -441,7 +441,7 @@ def test_a_picture_asked_for_after_the_web_was_read_waits_for_a_click_then_is_ma
     base = "/products/wasifyai-assistant"
     with TestClient(create_app()) as c:
         choose_the_model(c)
-        web = c.app.state.web  # type: ignore[attr-defined]
+        web = c.app.state.services.web  # type: ignore[attr-defined]
         web._ddg = DuckDuckGoProvider(
             min_gap_s=0,
             run=lambda q, n: [{"title": "Fox", "href": "https://wiki.test/fox", "body": "Foxes."}],
@@ -597,7 +597,7 @@ def test_the_picture_reader_is_offered_with_its_size_fetched_only_when_confirmed
         # the size must be the one that was shown
         wrong = c.post("/desktop/vision/download", json={"bytes": 1}, headers=auth())
         assert wrong.status_code == 409
-        manager = c.app.state.desktop_models.downloads  # type: ignore[attr-defined]
+        manager = c.app.state.services.desktop_models.downloads  # type: ignore[attr-defined]
         assert manager.latest() is None  # nothing was fetched
 
         # serve the stand-in instead of the network

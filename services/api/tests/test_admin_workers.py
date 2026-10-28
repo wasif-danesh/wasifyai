@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from wasifyai_api.admin_workers import router
 from wasifyai_api.identity import Identity, get_identity
+from wasifyai_api.services import ApiServices
 from wasifyai_platform_sdk import EngineError, EngineOutcome, EngineWorkerInfo, admin_wire
 
 
@@ -60,8 +61,9 @@ def rig():
         audited.append((tenant, entry))
 
     app = FastAPI()
-    app.state.engine_workers = directory
-    app.state.admin = SimpleNamespace(audit=audit)
+    app.state.services = ApiServices()
+    app.state.services.engine_workers = directory
+    app.state.services.admin = SimpleNamespace(audit=audit)  # type: ignore[assignment]
     app.include_router(router)
     role = {"v": "admin"}
     app.dependency_overrides[get_identity] = lambda: Identity("t1", "u1", role["v"])

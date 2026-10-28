@@ -150,9 +150,7 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
             "busy": manager_for(deps).busy(identity),
             "problem": engine.problem() if hasattr(engine, "problem") else None,
             # where the work is done: on this computer, or on a service's worker
-            "place": "device"
-            if getattr(deps.state, "builder_scratch", None) is None
-            else "service",
+            "place": "device" if deps.state.builder_scratch is None else "service",
         }
 
     @router.get("/templates")

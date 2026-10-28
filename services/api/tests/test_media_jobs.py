@@ -7,6 +7,7 @@ import json
 import httpx
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
+from wasifyai_api.assemble import Injected
 from wasifyai_api.graphs.media_demo import build_media_demo
 from wasifyai_api.jobs_consumer import handle_completion
 from wasifyai_api.main import create_app
@@ -37,15 +38,17 @@ def rig(tmp_path):
     raw = memory_storage()
     sink, store = InMemoryJobSink(), InMemoryRunStore()
     app = create_app(
-        registry,
-        tmp_path,
-        InMemorySaver(),
-        InMemoryUsageRecorder(),
-        ScopedStorage(raw),
-        heartbeat_s=0.05,
-        event_log=InMemoryEventLog(),
-        run_store=store,
-        job_sink=sink,
+        Injected(
+            registry=registry,
+            products_dir=tmp_path,
+            checkpointer=InMemorySaver(),
+            usage=InMemoryUsageRecorder(),
+            storage=ScopedStorage(raw),
+            heartbeat_s=0.05,
+            event_log=InMemoryEventLog(),
+            run_store=store,
+            job_sink=sink,
+        )
     )
     return app, raw, sink, store
 
@@ -64,7 +67,7 @@ def parse(text: str) -> list[tuple[str, dict]]:
 async def deliver(app, store, msg: dict) -> None:
     """What the API's completion consumer does: retry until the graph has reached its wait."""
     for _ in range(500):
-        if await handle_completion(app.state.runs, store, msg):
+        if await handle_completion(app.state.services.runs, store, msg):
             return
         await asyncio.sleep(0.01)
     raise AssertionError("the completion was never accepted")
@@ -167,7 +170,7 @@ async def test_redelivered_completion_does_not_resume_twice(rig):
         msg = completion(job, result)
         await deliver(app, store, msg)
         # Redis redelivers the same entry: the wait was already taken, so nothing resumes again
-        await handle_completion(app.state.runs, store, msg)
+        await handle_completion(app.state.services.runs, store, msg)
 
     events = await run_to_end(app, sink, worker)
 
@@ -178,8 +181,11 @@ async def test_completion_for_unknown_or_finished_runs_is_dropped(rig):
     app, _, _, store = rig
     async with app.router.lifespan_context(app):
         ghost = {"tenant_id": "t", "run_id": "no-such-run", "job_id": "j", "result": {}}
-        assert await handle_completion(app.state.runs, store, ghost) is True
-        assert await handle_completion(app.state.runs, store, {**ghost, "run_id": None}) is True
+        assert await handle_completion(app.state.services.runs, store, ghost) is True
+        assert (
+            await handle_completion(app.state.services.runs, store, {**ghost, "run_id": None})
+            is True
+        )
 
 
 # ---- one job per person (ADR-0088, stage J4) and Stop reaching the job (stage J3) ----------
@@ -204,7 +210,9 @@ async def _queued(sink, n: int) -> None:
 async def test_a_second_picture_is_refused_while_the_first_waits_and_allowed_once_it_is_done(rig):
     app, raw, sink, store = rig
     async with app.router.lifespan_context(app):
-        app.state.job_policy._limit = lambda: 1  # MAX_JOBS_PER_USER=1, as the web's values set it
+        app.state.services.job_policy._limit = lambda: (
+            1
+        )  # MAX_JOBS_PER_USER=1, as the web's values set it
         as_a_person(app)
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://t"
@@ -225,7 +233,7 @@ async def test_a_second_picture_is_refused_while_the_first_waits_and_allowed_onc
             await deliver(app, store, completion(job, JobResult(job_id=job.job_id, status="failed",
                           error=JobError(code="x", message="no"))))  # fmt: skip
             await asyncio.wait_for(first, 10)
-            assert await app.state.job_policy.leases.held("t1", "u1") == []
+            assert await app.state.services.job_policy.leases.held("t1", "u1") == []
             third = asyncio.create_task(start())
             await _queued(sink, 2)  # its place was given back: the next one goes in
             third.cancel()
@@ -235,13 +243,13 @@ async def test_stopping_a_run_that_waits_for_its_picture_stops_the_job_and_frees
     app, _, sink, store = rig
     stopped: list[str] = []
     async with app.router.lifespan_context(app):
-        app.state.job_policy._limit = lambda: 1
+        app.state.services.job_policy._limit = lambda: 1
         as_a_person(app)
 
         async def media_cancel(job_id):
             stopped.append(job_id)
 
-        app.state.runs.media_cancel = media_cancel
+        app.state.services.runs.media_cancel = media_cancel
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://t"
         ) as c:
@@ -259,4 +267,4 @@ async def test_stopping_a_run_that_waits_for_its_picture_stops_the_job_and_frees
             assert r.json()["status"] == "cancelled"
             await asyncio.wait_for(run, 10)
             assert stopped == [job.job_id]
-            assert await app.state.job_policy.leases.held(job.tenant_id, job.user_id) == []
+            assert await app.state.services.job_policy.leases.held(job.tenant_id, job.user_id) == []

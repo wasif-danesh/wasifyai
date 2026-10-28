@@ -16,7 +16,9 @@ from wasifyai_platform_sdk import Capabilities, Image, RunError
 
 log = logging.getLogger(__name__)
 
-PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
+# inside the package when installed from a wheel (the build copies `prompts/` in), else beside it
+_HERE = Path(__file__).resolve().parent
+PROMPTS_DIR = _HERE / "prompts" if (_HERE / "prompts").is_dir() else _HERE.parent / "prompts"
 ATTEMPTS = 2
 REVIEW_PX = 768  # the classifier needs a look at the picture, not every pixel
 

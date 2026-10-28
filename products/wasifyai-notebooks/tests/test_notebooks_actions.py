@@ -2,8 +2,6 @@
 direct ones, a scripted child run behind asking and the Studio."""
 
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any
 
 import pytest
 from notebooks_rig import SPEC, FakeComponents, FakeReader
@@ -12,7 +10,7 @@ from wasifyai_notebooks.files import ObjectFiles
 from wasifyai_notebooks.ingest import IngestWorker
 from wasifyai_notebooks.routes import Runtime
 from wasifyai_notebooks.store import NotebookStore
-from wasifyai_platform_sdk import Identity, RouteDeps, memory_storage
+from wasifyai_platform_sdk import EngineServices, Identity, RouteDeps, memory_storage
 from wasifyai_platform_sdk.actions import (
     ActionExecutor,
     ActionRegistry,
@@ -58,7 +56,7 @@ class Rig:
             async def remove(self, tenant, product, item_id) -> None:
                 rig.indexed.pop(item_id, None)
 
-        self.state: Any = SimpleNamespace(notebooks_runtime=self.runtime, creation_index=Index())
+        self.state = EngineServices(notebooks_runtime=self.runtime, creation_index=Index())
         self.host = FakeActionHost(RouteDeps(self.state, lambda: ME))
         self.store = store
         self.ex = ActionExecutor(

@@ -12,8 +12,10 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
+from wasifyai_platform_sdk import need
 
 from wasifyai_api.identity import Identity, get_identity, require_admin
+from wasifyai_api.services import services_of
 
 
 class Me(BaseModel):
@@ -185,7 +187,7 @@ def _params(tenant_id: str, limit: int, before: datetime | None) -> dict[str, An
 
 
 def _store(request: Request) -> AdminStore:
-    return request.app.state.admin
+    return need(services_of(request).admin, "the admin store")
 
 
 me_router = APIRouter(tags=["admin"])

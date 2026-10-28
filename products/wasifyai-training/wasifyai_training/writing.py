@@ -44,7 +44,7 @@ LEARNT_BY = 0.2
 
 
 def engine_for(state: Any) -> Any:
-    engine = getattr(state, "language_training", None)
+    engine = state.language_training
     if engine is None:
         raise NotAvailable("Teaching a writing model is not available here.")
     return engine
@@ -285,7 +285,7 @@ def estimate_words(steps: int, d: bases.Descriptor) -> str:
 
 
 def manager_for(deps: RouteDeps) -> WritingRunManager:
-    existing = getattr(deps.state, "writing_runs", None)
+    existing = deps.state.writing_runs
     if existing is None:
         existing = WritingRunManager(deps)
         deps.state.writing_runs = existing

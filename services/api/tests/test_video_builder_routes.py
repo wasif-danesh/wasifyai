@@ -33,7 +33,7 @@ def test_nothing_is_fetched_unless_the_confirmation_carries_the_size_that_was_sh
     monkeypatch.delenv("WASIFYAI_VIDEO_BUILDER_HOME", raising=False)
     app = create_app()
     with TestClient(app) as c:
-        service = app.state.video_builder
+        service = app.state.services.video_builder
         service.installer.pins = replace(service.installer.pins, platforms=(_here(),))
         wrong = c.post("/desktop/video-builder/install", json={"confirm_bytes": 1}, headers=auth())
         assert wrong.status_code == 409 and "changed since it was shown" in wrong.json()["detail"]
@@ -45,7 +45,7 @@ def test_a_computer_it_was_not_measured_on_is_told_so(data_dir, monkeypatch):  #
     monkeypatch.delenv("WASIFYAI_VIDEO_BUILDER_HOME", raising=False)
     app = create_app()
     with TestClient(app) as c:
-        service = app.state.video_builder
+        service = app.state.services.video_builder
         service.installer.pins = replace(service.installer.pins, platforms=("some-other-system",))
         r = c.post("/desktop/video-builder/install", json={"confirm_bytes": 0}, headers=auth())
         assert (

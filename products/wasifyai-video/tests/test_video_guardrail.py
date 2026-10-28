@@ -7,7 +7,13 @@ import yaml
 from fastapi import FastAPI, Header
 from fastapi.testclient import TestClient
 from video_rig import make_rig, put_upload, verdict
-from wasifyai_platform_sdk import Capabilities, Identity, InMemoryUploadLimiter, RouteDeps
+from wasifyai_platform_sdk import (
+    Capabilities,
+    EngineServices,
+    Identity,
+    InMemoryUploadLimiter,
+    RouteDeps,
+)
 from wasifyai_video import prompts
 from wasifyai_video.canary import CASES, FIXTURES, moderation_check, picture_check
 from wasifyai_video.guardrail import REFUSALS
@@ -93,11 +99,14 @@ def who(x_user: str = Header("u1")) -> Identity:
 
 def client_for(rig):
     app = FastAPI()
-    app.state.caps = {"wasifyai-video": rig.caps}
-    app.state.uploads = rig.uploads
-    app.state.storage = rig.caps.storage
-    app.state.enhance_limiter = InMemoryUploadLimiter(40)
-    app.include_router(build_routes(RouteDeps(app.state, who)), prefix="/products/wasifyai-video")
+    app.state.services = EngineServices()
+    app.state.services.caps = {"wasifyai-video": rig.caps}
+    app.state.services.uploads = rig.uploads
+    app.state.services.storage = rig.caps.storage
+    app.state.services.enhance_limiter = InMemoryUploadLimiter(40)
+    app.include_router(
+        build_routes(RouteDeps(app.state.services, who)), prefix="/products/wasifyai-video"
+    )
     return TestClient(app)
 
 

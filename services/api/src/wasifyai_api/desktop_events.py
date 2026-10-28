@@ -9,8 +9,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
+from wasifyai_platform_sdk import need
 
 from wasifyai_api.identity import Identity, get_identity
+from wasifyai_api.services import services_of
 
 KEEPALIVE_S = 15
 
@@ -51,7 +53,7 @@ router = APIRouter(prefix="/desktop", tags=["desktop"])
 async def desktop_events(
     request: Request, _: Identity = Depends(get_identity)
 ) -> StreamingResponse:
-    bus: EventBus = request.app.state.events
+    bus: EventBus = need(services_of(request).events, "events")
     return StreamingResponse(
         bus.stream(), media_type="text/event-stream", headers={"cache-control": "no-cache"}
     )

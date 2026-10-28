@@ -13,7 +13,7 @@ from wasifyai_notebooks.files import ObjectFiles, artifact_key
 from wasifyai_notebooks.ingest import IngestWorker
 from wasifyai_notebooks.routes import Runtime, build_routes
 from wasifyai_notebooks.store import NotebookStore
-from wasifyai_platform_sdk import Identity, RouteDeps, memory_storage
+from wasifyai_platform_sdk import EngineServices, Identity, RouteDeps, memory_storage
 
 pytestmark = pytest.mark.usefixtures("use_backends")  # on SQLite and on Postgres
 
@@ -32,12 +32,6 @@ class Indexed:
         self.items.pop(item_id, None)
 
 
-class State:
-    creation_index = None
-    engine = None
-    storage = None
-
-
 def make_app(tmp_path, file_kind="local", **components):
     store = NotebookStore(tmp_path / "nb", dimension=SPEC.dimension, embedder_id=SPEC.id)
     comps = FakeComponents(tmp_path, **components)
@@ -54,8 +48,10 @@ def make_app(tmp_path, file_kind="local", **components):
         return Identity(x_tenant, x_user)
 
     app = FastAPI()
+    app.state.services = EngineServices()  # read per request, so a test may change it
     app.include_router(
-        build_routes(RouteDeps(State(), identity), runtime), prefix="/products/wasifyai-notebooks"
+        build_routes(RouteDeps(app.state.services, identity), runtime),
+        prefix="/products/wasifyai-notebooks",
     )
     return app, runtime, comps, reader
 
@@ -355,7 +351,7 @@ def test_conversations_are_listed_read_renamed_and_deleted(api):
 def test_a_notebook_is_in_search_at_once_with_its_sources_and_leaves_with_it(tmp_path):
     app, runtime, *_ = make_app(tmp_path)
     index = Indexed()
-    State.creation_index = index  # type: ignore[assignment]  # read from the state per request
+    app.state.services.creation_index = index
     try:
         with TestClient(app) as c:
             c.base_url = c.base_url.join("/products/wasifyai-notebooks/")
@@ -371,7 +367,7 @@ def test_a_notebook_is_in_search_at_once_with_its_sources_and_leaves_with_it(tmp
             assert c.portal is not None
             c.portal.call(runtime.worker.stop)
     finally:
-        State.creation_index = None
+        app.state.services.creation_index = None
 
 
 def test_outputs_are_listed_read_downloaded_renamed_stopped_and_deleted(api):
@@ -427,7 +423,8 @@ def test_an_outputs_file_is_copied_to_the_export_folder_when_there_is_one(api, t
     )  # fmt: skip
     path = f"notebooks/{nid}/artifacts/{made['id']}/export"
     assert c.post(path).status_code == 404  # no export folder: the web has none
-    State.export_dir = tmp_path / "exports"  # type: ignore[attr-defined]
+    services: EngineServices = c.app.state.services  # type: ignore[attr-defined]
+    services.export_dir = tmp_path / "exports"
     try:
         first = c.post(path)
         second = c.post(path)  # a copy never replaces a file
@@ -446,7 +443,7 @@ def test_an_outputs_file_is_copied_to_the_export_folder_when_there_is_one(api, t
         none = c.post(f"notebooks/{nid}/artifacts/{report['id']}/export")
         assert none.status_code == 404  # no file to copy
     finally:
-        del State.export_dir  # type: ignore[attr-defined]
+        services.export_dir = None
 
 
 def test_the_guide_route_reads_what_the_graph_saved_and_says_when_it_is_stale(api):

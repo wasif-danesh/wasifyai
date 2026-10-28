@@ -24,6 +24,7 @@ from wasifyai_api.desktop_models import (
 )
 from wasifyai_api.identity import get_identity
 from wasifyai_api.safeguards import InMemorySettingsStore
+from wasifyai_api.services import ApiServices
 from wasifyai_platform_sdk import Identity
 
 PRODUCTS = Path(__file__).resolve().parents[3] / "products"
@@ -299,8 +300,9 @@ async def test_one_download_at_a_time_and_cancel_keeps_the_partial_file(tmp_path
 
 def app_for(svc: ModelsService) -> TestClient:
     app = FastAPI()
+    app.state.services = ApiServices()
     app.include_router(dm.router)
-    app.state.desktop_models = svc
+    app.state.services.desktop_models = svc
     app.dependency_overrides[get_identity] = lambda: Identity("local", "u1", "user")
     return TestClient(app)
 

@@ -342,7 +342,7 @@ def test_only_the_person_may_change_the_servers(data_dir):  # noqa: F811
             )  # fmt: skip
 
     with TestClient(app) as c:
-        app.state.credential_verifiers["wsc_"] = Verifier()
+        app.state.services.credential_verifiers["wsc_"] = Verifier()
         r = c.get("/external", headers={"Authorization": "Bearer wsc_c1_x"})
         assert r.status_code == 403 and "only the person" in r.text
 

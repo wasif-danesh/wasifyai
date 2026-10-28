@@ -24,6 +24,7 @@ from wasifyai_platform_sdk import Identity
 
 from wasifyai_api.desktop_models import DownloadError, ModelEntry, ModelFile, free_disk_bytes
 from wasifyai_api.identity import get_identity
+from wasifyai_api.services import services_of
 from wasifyai_api.training_setup import (
     STATE_FILE,
     BaseFile,
@@ -486,7 +487,7 @@ router = APIRouter(prefix="/desktop/language-setup", tags=["desktop"])
 
 
 def _setup(request: Request) -> LanguageSetup:
-    found: LanguageSetup | None = getattr(request.app.state, "language_setup", None)
+    found: LanguageSetup | None = services_of(request).language_setup
     if found is None:
         raise HTTPException(404, "not available in this deployment")
     return found

@@ -15,6 +15,7 @@ from fastapi import FastAPI, Header
 from fastapi.testclient import TestClient
 from wasifyai_api.engine_workers import WorkerDirectory
 from wasifyai_api.remote_builder import RemoteBuilderEngine
+from wasifyai_api.services import ApiServices
 from wasifyai_engine_worker.handlers import run_job
 from wasifyai_platform_sdk import (
     EngineJob,
@@ -165,18 +166,19 @@ def web(tmp_path):
     directory.workers = [listing()]
     sql = create_sqlite_engine(tmp_path / "wasifyai.db")
     app = FastAPI()
-    app.state.engine = sql  # the video library's rows
-    app.state.storage = ScopedStorage(raw)
-    app.state.builder_store = BuilderStore(tmp_path / "rows")
-    app.state.builder_scratch = tmp_path / "scratch"
-    app.state.video_builder = RemoteBuilderEngine(queue, raw, directory)  # type: ignore[arg-type]
-    app.state.creation_index = Index()
+    app.state.services = ApiServices()
+    app.state.services.engine = sql  # the video library's rows
+    app.state.services.storage = ScopedStorage(raw)
+    app.state.services.builder_store = BuilderStore(tmp_path / "rows")
+    app.state.services.builder_scratch = tmp_path / "scratch"
+    app.state.services.video_builder = RemoteBuilderEngine(queue, raw, directory)  # type: ignore[arg-type]
+    app.state.services.creation_index = Index()
     app.include_router(
-        build_routes(RouteDeps(app.state, user_of)), prefix="/products/wasifyai-video"
+        build_routes(RouteDeps(app.state.services, user_of)), prefix="/products/wasifyai-video"
     )
     with TestClient(app) as client:
         client.service, client.queue, client.raw = service, queue, raw  # type: ignore[attr-defined]
-        client.app_state_items = lambda: app.state.creation_index.items  # type: ignore[attr-defined]
+        client.app_state_items = lambda: app.state.services.creation_index.items  # type: ignore[attr-defined]
         yield client
     asyncio.run(sql.dispose())
 
@@ -254,7 +256,7 @@ def test_each_person_renders_one_video_at_a_time_and_nobody_sees_anothers(web):
 def restarted(web, composition: dict[str, Any], *, checked=True, sent=True) -> str:
     """A render the service was waiting for when it went down: its row, and the drawing job that
     went out under the row's id (and whether the worker has finished it)."""
-    store = web.app.state.builder_store
+    store = web.app.state.services.builder_store
     row = store.add_render("t1", "u1", composition["id"], {"format": "mp4", "fit": "fits"})
     if checked:
         store.set_check(row["id"], {"ok": True, "message": "", "items": []})
@@ -272,7 +274,7 @@ def restarted(web, composition: dict[str, Any], *, checked=True, sent=True) -> s
 def resume(web) -> int:
     from wasifyai_video.builder.runtime import manager_for
 
-    return web.portal.call(manager_for(RouteDeps(web.app.state, user_of)).resume_all)
+    return web.portal.call(manager_for(RouteDeps(web.app.state.services, user_of)).resume_all)
 
 
 def test_a_video_the_worker_finished_while_the_service_was_down_is_saved_after_the_restart(web):
@@ -303,7 +305,7 @@ def test_a_drawing_the_queue_has_lost_is_failed_in_words_not_waited_for(web):
 def test_a_stopping_service_leaves_the_drawing_to_the_worker(web):
     web.service.hold = True
     made = create(web)
-    engine = web.app.state.video_builder
+    engine = web.app.state.services.video_builder
     start = web.post(f"{BASE}/projects/{made['id']}/render")
     assert start.status_code == 202
     for _ in range(100):  # until the drawing has begun
@@ -313,7 +315,7 @@ def test_a_stopping_service_leaves_the_drawing_to_the_worker(web):
     engine.closing = True  # the service is going down
     from wasifyai_video.builder.runtime import manager_for
 
-    web.portal.call(manager_for(RouteDeps(web.app.state, user_of)).stop_all)
+    web.portal.call(manager_for(RouteDeps(web.app.state.services, user_of)).stop_all)
     row = web.get(f"{BASE}/renders/{start.json()['id']}").json()
     assert row["status"] == "working" and web.queue.cancelled == []
     engine.closing = False

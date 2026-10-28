@@ -129,7 +129,7 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
         """Which options of the box work with the model in use: on the desktop the model the person
         chose (its chat template takes the thinking switch); on the web the chat alias, when its
         settings say how to switch thinking (`thinking_options`)."""
-        language = getattr(deps.state, "desktop_language", None)
+        language = deps.state.desktop_language
         if language is not None:
             chosen = language.selected
             thinking = bool(chosen and chosen.thinking)
@@ -141,7 +141,7 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
                 "mmproj, kept next to the model). None was found for this model."
             )
         else:
-            caps = (getattr(deps.state, "caps", None) or {}).get(PRODUCT_ID)
+            caps = (deps.state.caps or {}).get(PRODUCT_ID)
             try:
                 binding = caps.text._bound["chat"][0] if caps is not None else None
             except (AttributeError, KeyError):
@@ -149,9 +149,9 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
             thinking = bool(binding and binding.defaults.get("thinking_options"))
             images = bool(binding and "image" in getattr(binding, "inputs", []))
             why = "" if images else "The chat model in use does not read pictures."
-        stored = getattr(deps.state, "uploads", None) is not None and deps.storage is not None
+        stored = deps.state.uploads is not None and deps.storage is not None
         reader = None
-        vision = getattr(deps.state, "desktop_vision", None)
+        vision = deps.state.desktop_vision
         if stored and images is False and vision is not None:
             found = await vision.status()
             if found and found.get("state") in ("available", "downloading"):
@@ -166,7 +166,7 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
         return ChatOptions(thinking=thinking, search=await search_options(identity), attach=attach)
 
     async def search_options(identity: Identity) -> SearchOptions:
-        web = getattr(deps.state, "web", None)
+        web = deps.state.web
         if web is None:
             return SearchOptions()
         st = await web.status(identity)
@@ -186,7 +186,7 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
     async def search_status(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
         """The web search settings: which service, whether the person allowed it, which keys are
         saved (never the keys)."""
-        web = getattr(deps.state, "web", None)
+        web = deps.state.web
         if web is None:
             raise HTTPException(404, "Web search is not available here.")
         return await web.status(identity)
@@ -195,7 +195,7 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
     async def search_update(
         body: SearchUpdate, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
-        web = getattr(deps.state, "web", None)
+        web = deps.state.web
         if web is None:
             raise HTTPException(404, "Web search is not available here.")
         # on a service the admins choose the search service and keep its keys; anyone may allow it

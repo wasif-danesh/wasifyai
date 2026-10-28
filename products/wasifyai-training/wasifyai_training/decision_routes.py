@@ -104,7 +104,7 @@ def add_decision_routes(router: APIRouter, deps: RouteDeps) -> None:
     @router.get("/decision/status")
     async def decision_status(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
         engine = guard()
-        setup = getattr(deps.state, "decision_setup", None)
+        setup = deps.state.decision_setup
         base = bases.descriptors("decision")[0]
         ready = engine.ready(base.id)
         return {

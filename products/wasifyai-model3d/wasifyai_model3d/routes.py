@@ -281,7 +281,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         """Copy the model to the place the person chose in the Save As box (`path`), or into the
         export folder when there is none."""
         guard()
-        folder = getattr(deps.state, "export_dir", None)
+        folder = deps.state.export_dir
         if folder is None and not (body and body.path):
             raise HTTPException(404, "saving to a folder is not available here")
         row = model_or_404(identity, model_id)
@@ -293,7 +293,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         if body and body.path:
             try:
                 path = await asyncio.to_thread(
-                    copy_to_path, body.path, source, getattr(deps.state, "desktop_dir", None)
+                    copy_to_path, body.path, source, deps.state.desktop_dir
                 )
             except SaveRefused as exc:
                 raise HTTPException(422, str(exc)) from None

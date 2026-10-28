@@ -16,6 +16,7 @@ from fastapi import FastAPI, Header
 from fastapi.testclient import TestClient
 from video_rig import mp4, png
 from wasifyai_platform_sdk import (
+    EngineServices,
     Identity,
     InMemoryUsageRecorder,
     RouteDeps,
@@ -296,15 +297,16 @@ def user_of(x_user: str = Header("u1"), x_tenant: str = Header("t1")) -> Identit
 def rig(tmp_path):
     engine = create_sqlite_engine(tmp_path / "wasifyai.db")
     app = FastAPI()
-    app.state.engine = engine
-    app.state.storage = ScopedStorage(memory_storage())
-    app.state.desktop_dir = tmp_path
-    app.state.video_builder = FakeEngine(tmp_path)
-    app.state.creation_index = Index()
+    app.state.services = EngineServices()
+    app.state.services.engine = engine
+    app.state.services.storage = ScopedStorage(memory_storage())
+    app.state.services.desktop_dir = tmp_path
+    app.state.services.video_builder = FakeEngine(tmp_path)
+    app.state.services.creation_index = Index()
     prefix = "/products/wasifyai-video"
-    app.include_router(build_routes(RouteDeps(app.state, user_of)), prefix=prefix)
+    app.include_router(build_routes(RouteDeps(app.state.services, user_of)), prefix=prefix)
     with TestClient(app) as client:
-        client.app_state = app.state  # type: ignore[attr-defined]
+        client.app_state = app.state.services  # type: ignore[attr-defined]
         yield client
     asyncio.run(engine.dispose())
 
@@ -753,10 +755,11 @@ def test_the_desktop_with_safeguards_off_checks_nothing_but_still_counts(rig):
 
 def test_where_there_is_no_component_the_routes_are_not_there(tmp_path):
     app = FastAPI()
-    app.state.engine = create_sqlite_engine(tmp_path / "x.db")
-    app.state.desktop_dir = tmp_path
+    app.state.services = EngineServices()
+    app.state.services.engine = create_sqlite_engine(tmp_path / "x.db")
+    app.state.services.desktop_dir = tmp_path
     prefix = "/products/wasifyai-video"
-    app.include_router(build_routes(RouteDeps(app.state, user_of)), prefix=prefix)
+    app.include_router(build_routes(RouteDeps(app.state.services, user_of)), prefix=prefix)
     with TestClient(app) as c:
         assert c.get(f"{BASE}/status").status_code == 404
         assert c.get(f"{BASE}/projects").status_code == 404
@@ -797,7 +800,7 @@ class ActionRig:
                 rig.unindexed.append(item_id)
                 await super().remove(tenant, product, item_id)
 
-        self.state: Any = SimpleNamespace(
+        self.state = EngineServices(
             engine=engine, storage=ScopedStorage(memory_storage()), desktop_dir=tmp_path,
             video_builder=FakeEngine(tmp_path), creation_index=Idx(),
         )  # fmt: skip

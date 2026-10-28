@@ -6,6 +6,7 @@ from fastapi import FastAPI, Header
 from fastapi.testclient import TestClient
 from video_rig import frame_count, mp4
 from wasifyai_platform_sdk import (
+    EngineServices,
     Identity,
     RouteDeps,
     RunContext,
@@ -51,7 +52,7 @@ def put(client, user: str, rel: str, data: bytes):
     async def go():
         token = set_context(RunContext("t1", "wasifyai-video", user))
         try:
-            await client.app.state.storage.put(rel, data, "video/mp4")
+            await client.app.state.services.storage.put(rel, data, "video/mp4")
         finally:
             reset_context(token)
 
@@ -71,10 +72,14 @@ def client(tmp_path):
         video(6, tenant="other-tenant"),
     ]
     app = FastAPI()
-    app.state.storage = ScopedStorage(memory_storage())
-    app.state.export_dir = tmp_path / "Downloads"  # the desktop app sets one; the web does not
+    app.state.services = EngineServices()
+    app.state.services.storage = ScopedStorage(memory_storage())
+    app.state.services.export_dir = (
+        tmp_path / "Downloads"
+    )  # the desktop app sets one; the web does not
     app.include_router(
-        build_routes(RouteDeps(app.state, identity), store), prefix="/products/wasifyai-video"
+        build_routes(RouteDeps(app.state.services, identity), store),
+        prefix="/products/wasifyai-video",
     )
     c = TestClient(app)
     c.store = store  # type: ignore[attr-defined]
@@ -151,7 +156,7 @@ def test_export_writes_where_the_save_as_box_chose_and_says_so_when_it_cannot(cl
     assert not (tmp_path / "Downloads").exists()  # the folder of the assistant was not used
     gone = client.post(f"{BASE}/{uid(1)}/export", json={"path": str(tmp_path / "nope" / "a.mp4")})
     assert gone.status_code == 422 and "does not exist" in gone.json()["detail"]
-    del client.app.state.export_dir  # no export folder, but a chosen path still works
+    del client.app.state.services.export_dir  # no export folder, but a chosen path still works
     again = client.post(f"{BASE}/{uid(1)}/export", json={"path": str(chosen)})
     assert again.status_code == 200
 
@@ -161,7 +166,7 @@ def test_export_is_for_the_owner_a_finished_clip_and_only_where_a_folder_is_set(
     assert client.post(f"{BASE}/{uid(1)}/export", headers={"x-user": "other"}).status_code == 404
     assert client.post(f"{BASE}/{uid(3)}/export").status_code == 404  # still being made
     assert client.post(f"{BASE}/{uid(2)}/export").status_code == 404  # file missing
-    del client.app.state.export_dir  # the web profile never sets one
+    del client.app.state.services.export_dir  # the web profile never sets one
     assert client.post(f"{BASE}/{uid(1)}/export").status_code == 404
 
 
@@ -174,7 +179,7 @@ def test_delete_removes_the_files_then_the_row_and_a_working_clip_is_kept(client
     async def left():
         token = set_context(RunContext("t1", "wasifyai-video", "u1"))
         try:
-            return await client.app.state.storage.exists(f"{uid(1)}/video.mp4")
+            return await client.app.state.services.storage.exists(f"{uid(1)}/video.mp4")
         finally:
             reset_context(token)
 
@@ -210,7 +215,7 @@ def stored(client, rel: str, user: str = "u1") -> bytes:
     async def go() -> bytes:
         token = set_context(RunContext("t1", "wasifyai-video", user))
         try:
-            return await client.app.state.storage.get(rel)
+            return await client.app.state.services.storage.get(rel)
         finally:
             reset_context(token)
 
@@ -226,7 +231,7 @@ class Indexed:
 
 
 def test_a_video_file_is_added_to_the_library_made_to_fit_and_found_in_search(client):
-    client.app.state.creation_index = Indexed()
+    client.app.state.services.creation_index = Indexed()
     r = client.post(
         f"{BASE}/import", files={"file": ("holiday_clip-1.mp4", mp4((200, 150), 24), "video/mp4")}
     )
@@ -238,7 +243,7 @@ def test_a_video_file_is_added_to_the_library_made_to_fit_and_found_in_search(cl
     assert made["prompt"] == "holiday clip 1"  # the file's name, made readable
     clip = stored(client, f"{made['id']}/video.mp4")
     assert frame_count(clip) == 24 and stored(client, f"{made['id']}/poster.jpg")
-    assert client.app.state.creation_index.items[made["id"]] == "video:holiday clip 1"
+    assert client.app.state.services.creation_index.items[made["id"]] == "video:holiday clip 1"
     ids = [v["id"] for v in client.get(BASE).json()["videos"]]
     assert made["id"] in ids
     assert made["id"] not in [

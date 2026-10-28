@@ -10,6 +10,7 @@ import urllib.request
 import httpx
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
+from wasifyai_api.assemble import Injected
 from wasifyai_api.graphs.media_demo import build_media_demo
 from wasifyai_api.main import create_app
 from wasifyai_media_worker.comfy import ComfyClient
@@ -52,16 +53,18 @@ class Pipeline:
         registry = GraphRegistry()
         registry.register("media-demo", build_media_demo)
         self.app = create_app(
-            registry,
-            products_dir,
-            InMemorySaver(),
-            InMemoryUsageRecorder(),
-            ScopedStorage(self.raw),
-            heartbeat_s=0.1,
-            event_log=log,
-            run_store=RedisRunStore(redis_conn),
-            job_sink=RedisJobSink(redis_conn, log),
-            redis=redis_conn,
+            Injected(
+                registry=registry,
+                products_dir=products_dir,
+                checkpointer=InMemorySaver(),
+                usage=InMemoryUsageRecorder(),
+                storage=ScopedStorage(self.raw),
+                heartbeat_s=0.1,
+                event_log=log,
+                run_store=RedisRunStore(redis_conn),
+                job_sink=RedisJobSink(redis_conn, log),
+                redis=redis_conn,
+            )
         )
         settings = WorkerSettings(ollama_base_url="", job_timeout_s=60)
         processor = JobProcessor(

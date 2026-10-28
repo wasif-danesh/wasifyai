@@ -10,6 +10,7 @@ from wasifyai_platform_sdk.identity import Identity
 from wasifyai_api.identity import require_person
 from wasifyai_api.mcp_client.client import ExternalClient
 from wasifyai_api.mcp_client.imports import SOURCES, default_path, read_definitions
+from wasifyai_api.services import services_of
 
 router = APIRouter(tags=["external"])
 
@@ -67,7 +68,7 @@ class ServerPatch(BaseModel):
 
 
 def _client(request: Request) -> ExternalClient:
-    client = getattr(request.app.state, "mcp_client", None)
+    client = services_of(request).mcp_client
     if client is None:
         raise HTTPException(404, "tools from other apps are not available in this deployment")
     return client
@@ -200,9 +201,9 @@ async def attach_resource(
 
     client = _client(request)
     s = await _mine(client, me, server_id)
-    state: Any = request.app.state
-    storage = getattr(state, "storage", None)
-    uploads = getattr(state, "uploads", None)
+    state: Any = services_of(request)
+    storage = state.storage
+    uploads = state.uploads
     if storage is None or uploads is None:
         raise HTTPException(503, "file storage is not available")
     try:

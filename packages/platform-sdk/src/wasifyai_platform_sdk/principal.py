@@ -2,9 +2,9 @@
 
 `Identity` is the tenant-and-user pair product code works with. A `Principal` is what the request
 edge resolves: the same pair plus the kind of caller, its scopes and its origin. A person in the
-window is a principal with every scope; an MCP connection or an API key is one with the scopes it
-was given. Product code keeps reading `Identity`; only the request edge, the executor and the
-audit log look at the principal.
+window is a principal with every scope; an MCP connection is one with the scopes it was given.
+Product code keeps reading `Identity`; only the request edge, the executor and the audit log look
+at the principal.
 
 Scopes are the catalogue's groups plus `read` (`scope_of` in `actions.model` says which an action
 needs). A principal outside a scope is refused with a sentence, never with a stack trace."""
@@ -16,7 +16,7 @@ from typing import Literal
 from wasifyai_platform_sdk.folders import AllowedFolders
 from wasifyai_platform_sdk.identity import Identity
 
-Kind = Literal["person", "connection", "api_key"]
+Kind = Literal["person", "connection"]
 Scope = Literal["read", "make", "library", "notebooks", "voices", "models", "admin"]
 
 SCOPES: tuple[Scope, ...] = ("read", "make", "library", "notebooks", "voices", "models", "admin")
@@ -32,20 +32,16 @@ SCOPE_WORDS: dict[str, str] = {
 }
 ALL_SCOPES: frozenset[str] = frozenset(SCOPES)
 USER_SCOPES: frozenset[str] = ALL_SCOPES - {"admin"}
-KIND_WORDS: dict[str, str] = {"person": "person", "connection": "connection", "api_key": "key"}
+KIND_WORDS: dict[str, str] = {"person": "person", "connection": "connection"}
 
-# who is asking: the person in the window, the assistant, an MCP connection, an API key
-ORIGIN_PATTERN = re.compile(
-    r"^(window|assistant|mcp:[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}|api:[A-Za-z0-9][A-Za-z0-9._-]{0,63})$"
-)
+# who is asking: the person in the window, the assistant, an MCP connection
+ORIGIN_PATTERN = re.compile(r"^(window|assistant|mcp:[A-Za-z0-9][A-Za-z0-9 ._-]{0,63})$")
 
 
 def parse_origin(origin: str) -> str:
-    """`window`, `assistant`, `mcp:<connection>` or `api:<key id>`. Anything else is a bug."""
+    """`window`, `assistant` or `mcp:<connection>`. Anything else is a bug."""
     if not ORIGIN_PATTERN.match(origin):
-        raise ValueError(
-            f"origin must be window, assistant, mcp:<connection> or api:<key>, not {origin!r}"
-        )
+        raise ValueError(f"origin must be window, assistant or mcp:<connection>, not {origin!r}")
     return origin
 
 
@@ -54,10 +50,12 @@ class Principal:
     kind: Kind
     tenant_id: str
     user_id: str
-    role: str = "user"  # "user" or "admin" (ADR-0030): the person's role, never widened by a key
+    role: str = (
+        "user"  # "user" or "admin" (ADR-0030): the person's role, never widened by a connection
+    )
     scopes: frozenset[str] = field(default_factory=frozenset)
     origin: str = "window"
-    connection_id: str | None = None  # the connection or key this credential belongs to
+    connection_id: str | None = None  # the connection this credential belongs to
     # the folders a connection may read from and write to (ADR-0069 decision 6); None for a
     # person in the window, who picks folders with the app's own dialogs
     folders: AllowedFolders | None = None
@@ -86,7 +84,7 @@ class Principal:
 
     @property
     def noun(self) -> str:
-        """`person`, `connection` or `key`: for a sentence."""
+        """`person` or `connection`: for a sentence."""
         return KIND_WORDS[self.kind]
 
     def may(self, scope: str) -> bool:

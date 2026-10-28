@@ -15,25 +15,26 @@ from tests.test_admin import ADMIN_EMAIL, as_admin, as_user
 from tests.test_auth import SECRET
 from tests.test_runs import hello_registry, mem_app
 
-KEYS = {
-    "wsk_test_reader_1": Principal(
-        "api_key",
+# connection secrets a test verifier knows; the prefix is made up for the test
+KNOWN = {
+    "tcs_reader_1": Principal(
+        "connection",
         "default",
-        "u-key",
+        "u-conn",
         scopes=frozenset({"read"}),
-        origin="api:reader",
+        origin="mcp:reader",
         connection_id="reader",
     ),  # fmt: skip
-    "wsk_test_maker_2": Principal(
-        "api_key", "default", "u-key", scopes=frozenset({"read", "make"}), origin="api:maker"
+    "tcs_maker_2": Principal(
+        "connection", "default", "u-conn", scopes=frozenset({"read", "make"}), origin="mcp:maker"
     ),
-    "wsk_test_boss_3": Principal(
-        "api_key",
+    "tcs_boss_3": Principal(
+        "connection",
         "default",
         "u-boss",
         role="admin",
         scopes=frozenset({"read", "admin"}),
-        origin="api:boss",
+        origin="mcp:boss",
     ),  # fmt: skip
 }
 
@@ -41,14 +42,14 @@ KEYS = {
 NEEDS_MAKE = require_scope("make")
 
 
-class FakeKeys:
-    """What stage K1 will register for `wsk_`: here a table of known keys."""
+class FakeConnections:
+    """A verifier registered by prefix: here a table of known connection secrets."""
 
     async def verify(self, credential: str, request) -> Principal:
         try:
-            return KEYS[credential]
+            return KNOWN[credential]
         except KeyError:
-            raise AuthError("unknown key") from None
+            raise AuthError("unknown connection") from None
 
 
 @pytest.fixture
@@ -75,13 +76,13 @@ def client(monkeypatch, tmp_path):
         return {"ok": p.origin}
 
     with TestClient(app) as c:
-        c.app.state.credential_verifiers["wsk_"] = FakeKeys()  # type: ignore[attr-defined]
+        c.app.state.credential_verifiers["tcs_"] = FakeConnections()  # type: ignore[attr-defined]
         yield c
     monkeypatch.undo()
     get_settings.cache_clear()
 
 
-def key(name: str) -> dict[str, str]:
+def bearer(name: str) -> dict[str, str]:
     return {"authorization": f"Bearer {name}"}
 
 
@@ -95,30 +96,30 @@ def test_a_person_is_a_principal_with_every_scope_of_their_role(client):
 
 
 def test_a_credential_is_verified_by_its_prefix_and_acts_as_the_person_behind_it(client):
-    r = client.get("/test/who", headers=key("wsk_test_reader_1")).json()
-    assert r == {"kind": "api_key", "origin": "api:reader", "scopes": ["read"], "user": "u-key"}
-    assert client.get("/me", headers=key("wsk_test_reader_1")).json()["user_id"] == "u-key"
+    r = client.get("/test/who", headers=bearer("tcs_reader_1")).json()
+    assert r == {"kind": "connection", "origin": "mcp:reader", "scopes": ["read"], "user": "u-conn"}
+    assert client.get("/me", headers=bearer("tcs_reader_1")).json()["user_id"] == "u-conn"
 
 
 def test_a_route_outside_the_scopes_is_403_in_a_sentence(client):
-    no = client.get("/test/make", headers=key("wsk_test_reader_1"))
+    no = client.get("/test/make", headers=bearer("tcs_reader_1"))
     assert no.status_code == 403
     assert no.json()["detail"] == (
-        "This key may not make pictures, videos, speech and music, and start training "
+        "This connection may not make pictures, videos, speech and music, and start training "
         "(the make scope)."
     )
-    assert client.get("/test/make", headers=key("wsk_test_maker_2")).json() == {"ok": "api:maker"}
+    assert client.get("/test/make", headers=bearer("tcs_maker_2")).json() == {"ok": "mcp:maker"}
 
 
 def test_the_admin_area_needs_the_admin_scope_as_well_as_the_role(client):
-    assert client.get("/admin/users", headers=key("wsk_test_maker_2")).status_code == 403
-    assert client.get("/admin/users", headers=key("wsk_test_boss_3")).status_code == 200
+    assert client.get("/admin/users", headers=bearer("tcs_maker_2")).status_code == 403
+    assert client.get("/admin/users", headers=bearer("tcs_boss_3")).status_code == 200
     assert client.get("/admin/users", headers=as_admin()).status_code == 200  # unchanged
 
 
 def test_an_unknown_credential_is_401_without_a_hint(client):
-    unknown = client.get("/test/who", headers=key("wsk_test_nobody_9"))
+    unknown = client.get("/test/who", headers=bearer("tcs_nobody_9"))
     assert unknown.status_code == 401
-    assert unknown.json() == {"detail": "this key or connection is not accepted"}
-    assert client.get("/test/who", headers=key("not-a-token")).status_code == 401  # the old path
+    assert unknown.json() == {"detail": "this connection is not accepted"}
+    assert client.get("/test/who", headers=bearer("not-a-token")).status_code == 401  # the old path
     assert client.get("/test/who").status_code == 401

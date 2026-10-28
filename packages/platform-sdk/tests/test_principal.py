@@ -39,11 +39,11 @@ def test_a_person_has_every_scope_their_role_allows():
     assert user.origin == "window" and user.may("make") and not user.may("admin")
 
 
-def test_a_key_or_connection_is_held_to_what_it_was_given():
-    key = Principal("api_key", "t1", "u1", scopes=frozenset({"read", "make"}), origin="api:k1")
-    assert key.may("make") and not key.may("library")
-    assert key.refusal("library") == (
-        "This key may not list, open and delete creations (the library scope)."
+def test_a_connection_is_held_to_what_it_was_given():
+    maker = Principal("connection", "t1", "u1", scopes=frozenset({"read", "make"}), origin="mcp:k1")
+    assert maker.may("make") and not maker.may("library")
+    assert maker.refusal("library") == (
+        "This connection may not list, open and delete creations (the library scope)."
     )
     conn = Principal(
         "connection", "t1", "u1", scopes=frozenset({"read"}), origin="mcp:Codex", connection_id="c1"
@@ -54,11 +54,12 @@ def test_a_key_or_connection_is_held_to_what_it_was_given():
 @pytest.mark.parametrize(
     "bad",
     [
-        dict(kind="api_key", scopes=frozenset({"everything"}), origin="api:k1"),
-        dict(kind="api_key", scopes=frozenset({"admin"}), origin="api:k1"),  # not an admin
-        dict(kind="api_key", origin="window"),  # a key does not come through the window
-        dict(kind="person", origin="api:k1"),
-        dict(kind="api_key", origin="api:"),
+        dict(kind="connection", scopes=frozenset({"everything"}), origin="mcp:k1"),
+        dict(kind="connection", scopes=frozenset({"admin"}), origin="mcp:k1"),  # not an admin
+        dict(kind="connection", origin="window"),  # a connection does not come through the window
+        dict(kind="person", origin="mcp:k1"),
+        dict(kind="connection", origin="mcp:"),
+        dict(kind="api_key", origin="api:k1"),  # there are no API keys
     ],
 )
 def test_what_is_not_a_principal(bad):
@@ -69,9 +70,9 @@ def test_what_is_not_a_principal(bad):
 def test_every_scope_has_words_and_the_origins_are_shared_with_the_actions():
     assert set(SCOPES) == set(SCOPE_WORDS) == ALL_SCOPES
     assert parse_origin is parse_origin_here
-    for ok in ("window", "assistant", "mcp:Claude Code", "api:wsk_live_abc"):
+    for ok in ("window", "assistant", "mcp:Claude Code"):
         assert parse_origin(ok) == ok
-    for bad in ("", "agent:x", "api:", "mcp:", "window2"):
+    for bad in ("", "agent:x", "api:k1", "mcp:", "window2"):
         with pytest.raises(ValueError):
             parse_origin(bad)
 

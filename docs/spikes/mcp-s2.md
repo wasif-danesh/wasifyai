@@ -54,7 +54,7 @@ notarised build.
 
 ## What this decides for M1 and M2
 
-- The rules live in the SDK, not in the MCP server, so API keys (K1) and the agent (G1) reuse them.
+- The rules live in the SDK, not in the MCP server, so any later surface reuses them.
 - Every path a client sends goes through `resolve` before the executor sees it; the action's own input model carries
   the path as a string, and the MCP layer resolves it against the connection's folders.
 - The default folders of a new connection: read none, write `~/Documents/Wasify AI exports` (ADR-0069 decision 6).

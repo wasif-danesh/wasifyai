@@ -33,8 +33,7 @@ SCOPE_OF_DOMAIN: dict[str, Scope] = {
 
 
 def surface_of(origin: str) -> Surface | None:
-    """The surface an origin comes through (`window` is not one: it is the person; an API key
-    is not one either until stage K1 says what it is offered)."""
+    """The surface an origin comes through (`window` is not one: it is the person)."""
     if origin == "assistant":
         return "assistant"
     if origin.startswith("mcp:"):

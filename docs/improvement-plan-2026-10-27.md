@@ -2,10 +2,10 @@
 
 Written 2026-10-27 from a read of the source, the ADRs (0001 to 0091), the plans, the spikes and the backlog, for both the
 desktop app and the web app. Every number below was taken from the checkout on that day; anything not read or run is marked
-**not verified**. The agent surfaces the owner asked about (an MCP server, an MCP client, API keys that give access to the
-products) have their own sections (5, 6 and 8) with a concrete design each, on top of the Accepted ADRs 0068 to 0071 and
-the spike that tested them (`docs/spikes/mcp-s1.md`). A fourth, an agent on Hermes (section 7), was dropped by the owner
-on 2026-10-28: a component of about 660 MB is not practical in the app.
+**not verified**. The agent surfaces the owner asked about (an MCP server and an MCP client) have their own sections (5
+and 6) with a concrete design each, on top of the Accepted ADRs 0068 to 0071 and the spike that tested them
+(`docs/spikes/mcp-s1.md`). Two more were dropped by the owner on 2026-10-28: an agent on Hermes (section 7; a component
+of about 660 MB is not practical in the app) and API keys for the products (section 8; not wanted).
 
 Nothing here changes an Accepted ADR. Where a recommendation needs a new decision it says so and names the ADR that would
 record it. The working tree holds uncommitted Train-on-the-web work (`docs/train-web-plan.md`, stage WT0); this plan does
@@ -20,7 +20,7 @@ not touch those files.
 5. [The MCP server](#5-the-mcp-server)
 6. [The MCP client](#6-the-mcp-client)
 7. [The agent on Hermes (dropped)](#7-the-agent-on-hermes-dropped)
-8. [API keys: access to the products from outside](#8-api-keys-access-to-the-products-from-outside)
+8. [API keys (dropped)](#8-api-keys-dropped)
 9. [Order, dependencies and sizes](#9-order-dependencies-and-sizes)
 10. [Decisions the owner must make](#10-decisions-the-owner-must-make)
 
@@ -105,10 +105,9 @@ differences, so each subclass repeats them.
 ### 3.5 Identity knows one kind of caller
 
 `Identity(tenant_id, user_id, role)` comes from one HS256 token whose subject is a sign-in provider or `desktop:local`.
-There is no notion of a **principal kind** (a person in the window, an MCP connection, an API key, an agent task), no
+There is no notion of a **principal kind** (a person in the window, an MCP connection), no
 **scopes**, and no second credential type in `get_identity`. The executor already carries `origin` (`window`, `assistant`,
-`mcp:<connection>`), so the seam exists on the action side but not on the request side. Every one of the four surfaces
-needs it.
+`mcp:<connection>`), so the seam exists on the action side but not on the request side. Every surface needs it.
 
 ### 3.6 Secrets: a Fernet file, no keychain, no interface
 
@@ -166,7 +165,7 @@ because the seams already exist.
 |---|---|---|---|
 | **F1 Engine services** | A typed `EngineServices` dataclass (stores, executor, runs, index, language, models, audio, web, workers, settings, secrets) built by one `assemble(settings, profile)` function with two small profile builders (`desktop_services()`, `web_services()`); `app.state.services` is the only attribute; `RouteDeps` and `ApiToolHost` take it. `getattr(state, ...)` is replaced by typed access; a missing service is a `None` field with a type, not a surprise. No behaviour change | M | `main.py` under 250 lines; pyright finds every use; the test apps inject `EngineServices` instead of twelve keyword arguments |
 | **F2 Components** | One `Component` protocol in the SDK: `manifest` (pins, sizes, hashes, platforms), `status()` (missing, installing with progress, ready, problem), `install(confirm_bytes)`, `repair()`, `uninstall()`, `fit()`, `slot_owner`, `start()`/`stop()`; one installer (download with resume and hash, unpack safely, uv environment from a hashed lock, verify, `state.json`, `provision.log`), one `/components` route family (`GET /components`, `GET/POST /components/{id}/install`, `/cancel`, `/uninstall`), one tray in the window. Move audio.cpp, MuseTalk, Pixal3D, Video Builder, the trainers and the reader onto it first; then move **ComfyUI and llama.cpp from the shell into the engine** so the shell keeps only the engine's own provisioning and the window's token. The nine `*_pins.json` become one `components.yaml` per platform (still data, still hashed) | L | every component installs through the same code and the same screen; `scripts/build-engine-bundle.sh` reads the component list (fixes D29); an engine worker installs components with the same code (`admin.fetch_engine` becomes a call to it); the Rust shell loses about 1,500 lines |
-| **F3 Principals and scopes** (built 2026-10-27, ADR-0092) | `Principal(kind, tenant_id, user_id, role, scopes, origin, connection_id?)` replaces `Identity` at the request edge (`Identity` stays as the tenant-and-user pair product code uses). `get_identity` dispatches on the credential: an HS256 token (today), a connection secret (section 5), an API key (section 8). Scopes are the catalogue's groups (`make`, `library`, `notebooks`, `voices`, `models`, `admin`) plus `read`; the executor refuses an action outside the principal's scopes with `not_offered`. Audit and usage carry `origin` from the principal | S | a route called with a principal of the wrong scope answers 403 with a sentence; every existing test passes unchanged |
+| **F3 Principals and scopes** (built 2026-10-27, ADR-0092) | `Principal(kind, tenant_id, user_id, role, scopes, origin, connection_id?)` replaces `Identity` at the request edge (`Identity` stays as the tenant-and-user pair product code uses). `get_identity` dispatches on the credential: an HS256 token (today), a connection secret (section 5). Scopes are the catalogue's groups (`make`, `library`, `notebooks`, `voices`, `models`, `admin`) plus `read`; the executor refuses an action outside the principal's scopes with `not_offered`. Audit and usage carry `origin` from the principal | S | a route called with a principal of the wrong scope answers 403 with a sentence; every existing test passes unchanged |
 | **F4 Secret store** (built 2026-10-27, ADR-0092) | A `SecretStore` interface (`put(name, value)`, `get(name)`, `delete(name)`, `names()`), never a list of values; three implementations: the Fernet file (today, kept), the OS keychain on the desktop (the shell owns it, Tauri command `secret_set/get/delete`, or Python `keyring` after spike S4 decides), and env or External Secrets on the web. Web search keys, the Hugging Face token, hosted-model keys, MCP client secrets and agent tokens all go through it. Logs and audit never hold a value; a test greps for them | S | the HF token is entered in Settings, kept in the keychain, never shown again; spike S4 of the phase 4 plan is answered by this stage |
 
 ### Data and jobs
@@ -295,10 +294,9 @@ The HTTP forms (a fixed port, off by default) put the secret in an environment v
 
 ### 5.6 On the web: the same server as a remote MCP endpoint
 
-Once F3 and section 8 exist, `POST /mcp` on the hosted API accepts an **API key** as the bearer (scopes are the key's),
-which makes the hosted service a remote MCP server for Claude Code and Codex with no new code beyond the gate. OAuth 2.1
-with Client ID Metadata Documents is the later, proper way (ADR-0069 "Alternatives"); the SDK has `auth=` for it
-(**not tested** in S1). Approvals on the web go to the person's browser session (the same card, over the BFF's SSE).
+A remote MCP endpoint on the hosted API (`POST /mcp`) needs a credential other than a browser session. With API keys
+dropped (section 8, 2026-10-28), that credential is OAuth 2.1 with Client ID Metadata Documents (ADR-0069
+"Alternatives"); the SDK has `auth=` for it (**not tested** in S1). Approvals on the web go to the person's browser session (the same card, over the BFF's SSE).
 
 ### 5.7 Stages, with the spike's corrections applied
 
@@ -370,89 +368,12 @@ remote tools are offered only with a hosted or larger model and Settings says so
 `docs/spikes/agent-g0.md` were removed, and stages G1 to G4 are no longer planned. The assistant (ADR-0071) with its cards,
 the MCP server (section 5) for outside agents such as Claude Code, and the MCP client (section 6) stay as they are.
 
-## 8. API keys: access to the products from outside
+## 8. API keys (dropped)
 
-The owner asked for "an API key to access products". Two needs hide in that sentence, and one design serves both:
-
-1. **Programs and other people's agents calling the hosted service** (a script, a partner, Claude Code against the web app)
-   with a credential that is not a browser session.
-2. **A second credential for the local engine**, which the MCP server's connections already are, and which the fixed-port
-   HTTP option needs.
-
-Today the only credential is the five-minute HS256 token the BFF or the shell mints (ADR-0030); every route refuses
-anything else. API keys do not exist. This needs a new ADR (suggested **ADR-0092: API keys and principals**) because it
-changes identity handling (CLAUDE.md "Ask before") and adds public API shape.
-
-### 8.1 The key
-
-- Format `wsk_<env>_<key id>_<secret>`: `env` is `live` or `test`; the key id (12 characters) is what logs and the UI show;
-  the secret (32 random bytes, base64url) is shown **once**. Stored: the key id, an argon2id hash of the secret (or SHA-256
-  with a per-key salt if argon2 is not wanted as a dependency), the prefix for lookup, never the secret.
-- Table `api_keys` (Postgres migration, SQLite on the J1 runner): id, tenant, user, name, key id, hash, scopes, `expires_at`,
-  `last_used_at`, `revoked_at`, `rate_limit` (per minute), `created_by`. Rule 7 holds: tenant and user on every row.
-- **Scopes are the catalogue's groups** (section 5: `make`, `library`, `notebooks`, `voices`, `models`, `admin`, plus
-  `read`), the same words Settings > Connections uses, so one mental model covers MCP connections and keys. A key's scopes
-  can only be a subset of what its owner may do; an admin key is an admin's.
-- Expiry optional (default 90 days with a reminder), rotation (a new secret, the old valid for an hour), revoke at once.
-
-### 8.2 Verification (F3)
-
-`get_identity` dispatches on the bearer: a JWT (three dot-separated parts) as today; a `wsk_` prefix looks the key up by
-key id, checks the hash, expiry and revocation, updates `last_used_at` (debounced), and returns
-`Principal(kind="api_key", scopes=key.scopes, origin=f"api:{key_id}")`. Constant-time compare; a failure is a 401 with no
-hint of which part failed; five failures a minute from one key id are rate-limited. Keys are never accepted on the
-sign-in, account or key-management routes themselves (a key cannot mint keys).
-
-### 8.3 What a key can reach
-
-A key is for products, so the public surface is small, versioned and generated from what already exists:
-
-| Route | Does |
-|---|---|
-| `POST /v1/actions/{action_id}` | run a catalogue action through the executor (`origin=api:<key>`, the key's scopes, `wait_seconds` from the body, at most 50); answers the `ActionResult` as JSON: `ok`, `refused`, `needs_setup`, `needs_approval` (with the id; approvals land in the owner's window or browser session), `running` (with a job id), `error` |
-| `GET /v1/actions` | the catalogue the key may use: id, title, description, input and output schema, effect, flags (a reviewer's and an SDK's view; `docs/contracts/actions.json` filtered) |
-| `GET /v1/jobs/{id}`, `POST /v1/jobs/{id}/cancel`, `GET /v1/jobs/{id}/wait?seconds=` | the job handles of J3 |
-| `GET /v1/creations?kind=&q=`, `GET /v1/creations/{kind}/{id}`, `GET .../download` | the library, read only, with the `library` scope; download streams the file as today's download routes do (rule 10's exception) |
-| `POST /v1/runs/{product}` with `Accept: text/event-stream` | the generic run route for a key that wants the stream (the same SSE contract) |
-| `POST /mcp` | the MCP endpoint with the key as the bearer (section 5.6) |
-
-Everything else (settings, admin, uploads of pictures) stays with a session, or is reached as an action (`models.download`
-is one). Uploads a key needs (a picture to edit, a recording to transcribe) go through `POST /v1/uploads` with the existing
-hardening and the key's quota.
-
-On the **web**, keys call the API host directly (`api.<domain>/v1`), not the Next.js BFF: a `/v1` ingress route to FastAPI
-in the Helm chart, CORS off, the same rate limits per key as per person. On the **desktop**, `/v1` is served on the
-loopback port like every route, and a key is the credential for the fixed-port HTTP option of ADR-0069.
-
-### 8.4 Limits, records and money
-
-- Per key: a rate limit (requests per minute), the daily quotas of the products (they already count per user: a key spends
-  its owner's allowance), ADR-0088's one-job rule (a key counts as its owner), and the executor's eight-waiting-jobs limit.
-- Every call writes the audit entry and the `action.run` usage event with `origin=api:<key id>`; when billing exists
-  (W3), credits are reserved and spent per key through the same executor path, and a key may carry its own monthly cap.
-- Logs hold the key id, never the secret; a test greps every log line in the test run for `wsk_`.
-
-### 8.5 The screens
-
-- Web: **Account > API keys** (and Admin > Keys for all users): create (name, scopes as sentences, expiry), the secret
-  shown once with a copy button and the `curl` example, the list with last used, rotate, revoke.
-- Desktop: the same screen under **Settings > Connections > Local API** (it only matters with the fixed port on), sharing the
-  connections components of section 5.4.
-- Docs: a page `docs/api-keys.md` with the three routes a script needs, the `ActionResult` statuses in words, and the
-  approval flow ("a destroy or a consent action is approved in the app, never by the key").
-
-### 8.6 What this is not
-
-Not OAuth for third-party apps acting for other users (that is the remote MCP's OAuth 2.1 later), not per-tenant keys for
-a tenant that does not exist yet, not an OpenAI-compatible `/v1/chat/completions` (exposing the assistant as a model is a
-separate decision; ADR-0069 chose not to expose the assistant as a tool).
-
-### 8.7 Stages
-
-| Stage | What | Size |
-|---|---|---|
-| **K1** | ADR-0092; the table; `Principal` dispatch (F3); `GET /v1/actions`, `POST /v1/actions/{id}`, the job routes; the account screen; the docs page; the log grep test | M |
-| **K2** | creations and uploads under `/v1`; the Helm ingress route; rate limits per key; the admin list; rotation and expiry reminders; `/mcp` with a key | S to M |
+**Dropped 2026-10-28 (owner): "We will not do it."** API keys for the products (stages K1 and K2: `wsk_` keys with
+scopes, `/v1` routes for actions, jobs, the library and uploads, the key screens) are not planned. ADR-0092 keeps its
+built parts (principals, scopes and the secret store, F3 and F4); its API-key decision was taken out. Outside programs
+reach the app through the MCP server (section 5).
 
 ## 9. Order, dependencies and sizes
 
@@ -463,7 +384,6 @@ F3 principals ┼──► M1 MCP server ──► M2 ──► M3          │
 F4 secrets ───┘        │                                 ▼
 J1 migrations ─► J2 base ─► J3 jobs ─► J4 one job per person
                        │
-F3 + J3 ──────────────► K1 API keys ──► K2 (needs the web ingress)
                                           C1 MCP client ──► C2 ──► C3   (last; needs A2, F4)
 O1 traces, O2 diagnostics, Q1 docs, Q2 release gates, W1 to W3, P1: beside the rest, as time allows
 ```
@@ -476,20 +396,19 @@ Suggested order for one person, three months, desktop first as the owner wants:
 | 3 to 4 | **A2** finished, **A3**, **S2**, **M1** started | the card path proves the catalogue with real people; M1 reuses the same approvals |
 | 5 to 6 | **M1** finished, **J3**, **F1** | the three real clients make things; job handles survive restarts before agents depend on them |
 | 7 to 9 | **F2** | one installer for the nine components (the agent on Hermes that was planned here was dropped on 2026-10-28) |
-| 10 to 11 | **M2**, **K1** | files and private groups for agents; keys reuse principals and jobs |
+| 10 to 11 | **M2** | files and private groups for agents (API keys, planned here, were dropped on 2026-10-28) |
 | 12 | **Q2**, **O2**, **M3** | the release gates for a signed desktop app with the server on |
-| after | **J1, J2, J4, O1, W1 to W3, K2, C1 to C3, P1** | the web service, the client last as ADR-0070 says |
+| after | **J1, J2, J4, O1, W1 to W3, C1 to C3, P1** | the web service, the client last as ADR-0070 says |
 
-Sizes add up to about 14 weeks of M and S stages for the desktop path; the web list (W1 to W3, K2, J4) is another two
+Sizes add up to about 14 weeks of M and S stages for the desktop path; the web list (W1 to W3, J4) is another two
 months and depends on the owner's hosting answers (P7).
 
 ## 10. Decisions the owner must make
 
 1. **Accept the order above**, in particular A2 before M1 (the card first) and the MCP client last.
-2. **New ADR-0092 (API keys and principals)**: scopes as the catalogue's groups; keys call the API host directly on the
-   web; no OpenAI-compatible chat endpoint in v1.
-3. **Dependencies to approve** (CLAUDE.md "Ask before"): `mcp` 2.3.0 and its eight packages; `argon2-cffi` for key and
-   connection secret hashing (or SHA-256 with salt and no new package); `keyring` or the shell as keychain owner (spike S4
+2. **New ADR-0092 (principals and scopes)**: scopes as the catalogue's groups. Its API-key part was dropped on 2026-10-28.
+3. **Dependencies to approve** (CLAUDE.md "Ask before"): `mcp` 2.3.0 and its eight packages; `argon2-cffi` for connection secret hashing (or
+   SHA-256 with salt and no new package); `keyring` or the shell as keychain owner (spike S4
    is answered by F4; recommend the shell, which already signs tokens and runs as the app's identity); OpenTelemetry SDK and
    exporter for O1.
 4. **Move ComfyUI and llama.cpp installation from the shell to the engine** (F2). It changes `apps/desktop` (AGPL) and the
@@ -499,5 +418,5 @@ months and depends on the owner's hosting answers (P7).
    user's key" was never built; the chat would use it.
 6. ~~The agent's web search without a key~~ Dropped with the agent (2026-10-28).
 7. **Names, once more before people have configs**: the launcher `wasify-mcp`, the tool names `image_generate` and the
-   rest, the key prefix `wsk_`, the scope words.
-8. **The remote MCP on the web** with keys first (5.6) and OAuth 2.1 later, or OAuth from the start.
+   rest, the scope words.
+8. **The remote MCP on the web** with OAuth 2.1 (5.6), since API keys were dropped.

@@ -1,7 +1,7 @@
 """Allowed folders: how a program outside the app hands it a file or gets one back without an
 arbitrary-path hole (ADR-0069 decision 6; spike S2, `docs/spikes/mcp-s2.md`).
 
-A connection (an MCP client, later an API key) names the folders it may read from and write to.
+A connection (an MCP client) names the folders it may read from and write to.
 Every path it sends is checked here before anything touches the disk:
 
 - it must be absolute, with no `..` segment, no NUL, no backslash and no newline; `~` is not

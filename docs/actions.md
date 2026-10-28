@@ -57,7 +57,7 @@ files and its registration line and changes nothing else.
 ## How a call is run
 
 `ActionExecutor.run_action(action_id, params, origin, ...)` is the only way a surface other than the window does
-anything. `origin` is `window`, `assistant`, `mcp:<connection>` or `api:<key id>`. `actor` may be an `Identity` (the
+anything. `origin` is `window`, `assistant` or `mcp:<connection>`. `actor` may be an `Identity` (the
 person) or a `Principal` (ADR-0092: a connection or an API key with scopes; it acts as the person who made it). In
 order it:
 

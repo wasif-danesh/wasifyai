@@ -1,7 +1,7 @@
 # ADR-0092: Principals, scopes and the secret store (the seams every agent surface needs)
 
-- **Status:** Proposed (stages F3 and F4 built 2026-10-27; the API-key parts, stage K1, are to be decided here too
-  and are marked **K1** below).
+- **Status:** Proposed (stages F3 and F4 built 2026-10-27). API keys (stage K1), first planned here too, were dropped
+  by the owner on 2026-10-28 and taken out of this ADR.
 - **Date:** 2026-10-27
 - **Asked by:** the owner, 2026-10-27: "Complete the F3 and F4" of `docs/improvement-plan-2026-10-27.md`.
 - **Depends on:** ADR-0011 (an identity on every request), ADR-0030 (roles), ADR-0056 (the desktop profile and its
@@ -11,19 +11,18 @@
 ## Context
 
 `Identity(tenant_id, user_id, role)` came from one HS256 token whose subject is a sign-in provider or `desktop:local`.
-There was no notion of a **kind of caller** (a person in the window, an MCP connection, an API key), no **scopes**,
+There was no notion of a **kind of caller** (a person in the window or an MCP connection), no **scopes**,
 and no second credential type. The executor already carried `origin` (`window`, `assistant`, `mcp:<connection>`), so
 the seam existed on the action side but not on the request side. Keys were encrypted with `SecretBox` (Fernet) under
 `MEDIA_SECRETS_KEY` on the web and a `secrets.key` file on the desktop; there was no interface, no keychain, and the
-Hugging Face token was read from the environment only. The MCP server (M1), the agent (G1), API keys (K1) and the MCP
-client (C1) all need both seams.
+Hugging Face token was read from the environment only. The MCP server (M1) and the MCP client (C1) need both seams.
 
 ## Decision
 
 1. **A `Principal` at the request edge.** `Principal(kind, tenant_id, user_id, role, scopes, origin, connection_id)`
-   with `kind` in `person`, `connection`, `api_key`. `Identity` stays as the tenant-and-user pair product code works
+   with `kind` in `person` or `connection`. `Identity` stays as the tenant-and-user pair product code works
    with (`principal.identity`); nothing below the request edge changes. A person has every scope their role allows
-   (`admin` only with the admin role); a connection or a key has the scopes it was given and acts **as the person who
+   (`admin` only with the admin role); a connection has the scopes it was given and acts **as the person who
    made it** (the audit and usage rows carry that person's `user_id` and the credential's `origin`).
 2. **Scopes are the catalogue's groups plus `read`:** `read`, `make`, `library`, `notebooks`, `voices`, `models`,
    `admin`. An action needs its domain's group when the domain has one (`library.*` → `library`, `notebook.*` →
@@ -32,10 +31,9 @@ client (C1) all need both seams.
    sentence; a route with `require_scope(...)` answers 403 with the same sentence; the admin area needs the admin
    role **and** the `admin` scope. A person is never refused by scope: the window behaves as before.
 3. **One `get_principal` that dispatches on the credential.** A bearer that starts with a registered prefix goes to
-   that verifier (`app.state.credential_verifiers`, by prefix: `wsk_` for API keys in K1, the connection secret for
-   MCP in M1); anything else is a person's HS256 token as before. A credential nobody accepts is a 401 without a hint.
-   `origin` gains `api:<key id>`; an API key is not a "surface" in the `surfaces` sense until K1 says what it is
-   offered (today: everything in its scopes, with the default approval policy, so a `make` still asks).
+   that verifier (`app.state.credential_verifiers`, by prefix; none is registered yet, and a connection secret of the
+   MCP server would be one); anything else is a person's HS256 token as before. A credential nobody accepts is a 401
+   without a hint. `origin` stays `window`, `assistant` or `mcp:<connection>`.
 4. **A `SecretStore` interface:** `put(name, value)`, `get(name)`, `delete(name)`, `names()`, `ready`. Names are
    `area.thing` (`hf.token`, `web.search.exa`, later `mcp.client.<server>`, `hosted.<provider>`). It never lists
    values; logs, audit and settings rows never hold one. Implementations: `FileSecretStore` (one 0600 JSON file of
@@ -57,18 +55,14 @@ client (C1) all need both seams.
    search settings row before this ADR move into the store once (`legacy_box`), then the row holds choices only.
 6. **What goes through the store now:** the web search keys (desktop and web) and the person's Hugging Face token
    (Settings > Hugging Face token on the desktop: typed once, kept in the keychain, sent only to huggingface.co, shown
-   only as "saved"). Next: hosted-model keys, MCP client secrets and agent tokens, as their stages land. Media provider
+   only as "saved"). Next: hosted-model keys and MCP client secrets, as their stages land. Media provider
    keys (ADR-0025) stay per binding row for now.
-7. **K1 (to decide): API keys.** Format `wsk_<env>_<key id>_<secret>`; an argon2id or salted SHA-256 hash in an
-   `api_keys` table with scopes from decision 2, expiry, rotation and revoke; keys call the API host directly on the
-   web (`/v1` ingress) and the loopback on the desktop; no OAuth and no OpenAI-compatible chat endpoint in v1. Details in
-   section 8 of the improvement plan.
 
 ## Consequences
 
-- Every surface stage (M1, G1, K1, C1) starts from `Principal`, `require_scope` and `SecretStore`; none touches
+- Every surface stage (M1, C1) starts from `Principal`, `require_scope` and `SecretStore`; none touches
   identity or secrets again.
-- A connection or key can never do more than the person who made it, and never approves for itself (ADR-0068
+- A connection can never do more than the person who made it, and never approves for itself (ADR-0068
   decision 4 holds: `person_approved` is the window's alone).
 - A 403 or a `not_offered` says which scope was missing, in words; a 401 says nothing about why.
 - The native store code is ours to maintain (three small modules, about 350 lines); the one real test

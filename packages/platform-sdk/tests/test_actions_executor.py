@@ -507,17 +507,19 @@ async def test_a_principal_is_held_to_its_scopes_and_the_audit_names_its_origin(
     from wasifyai_platform_sdk import Principal
 
     ex, _, _, audit, _ = setup(act("demo.read"), act("library.list"))
-    key = Principal("api_key", "t1", "u1", scopes=frozenset({"read"}), origin="api:k1")
-    ok = await ex.run_action("demo.read", {"text": "hi"}, key.origin, actor=key)
+    conn = Principal("connection", "t1", "u1", scopes=frozenset({"read"}), origin="mcp:k1")
+    ok = await ex.run_action("demo.read", {"text": "hi"}, conn.origin, actor=conn)
     assert ok.ok and ok.output == {"echoed": "hi"}
-    no = await ex.run_action("library.list", {"text": "hi"}, key.origin, actor=key)
+    no = await ex.run_action("library.list", {"text": "hi"}, conn.origin, actor=conn)
     assert no.status == "refused" and no.code == "not_offered"
-    assert no.text == "This key may not list, open and delete creations (the library scope)."
+    assert no.text == (
+        "This connection may not list, open and delete creations (the library scope)."
+    )
     assert [(e.action_id, e.origin, e.status) for e in audit.entries] == [
-        ("demo.read", "api:k1", "ok"),
-        ("library.list", "api:k1", "refused"),
+        ("demo.read", "mcp:k1", "ok"),
+        ("library.list", "mcp:k1", "refused"),
     ]
-    assert audit.entries[0].user_id == "u1"  # the key acts as the person who made it
+    assert audit.entries[0].user_id == "u1"  # the connection acts as the person who made it
 
 
 async def test_a_person_principal_changes_nothing_for_the_window():
@@ -541,8 +543,8 @@ async def test_the_action_sees_the_principal_behind_the_call():
     ex, _, _, _, _ = setup(act("demo.read", bind=CallBinding(peek)))
     await ex.run_action("demo.read", {"text": "hi"}, "assistant", actor=ME)
     folders = AllowedFolders.of(read=["/tmp/in"], write=["/tmp/out"])
-    key = Principal(
-        "api_key", "t1", "u1", scopes=frozenset({"read"}), origin="api:k1", folders=folders
+    conn = Principal(
+        "connection", "t1", "u1", scopes=frozenset({"read"}), origin="mcp:k1", folders=folders
     )
-    await ex.run_action("demo.read", {"text": "hi"}, key.origin, actor=key)
-    assert seen[0] is None and seen[1] is key and seen[1].folders is folders
+    await ex.run_action("demo.read", {"text": "hi"}, conn.origin, actor=conn)
+    assert seen[0] is None and seen[1] is conn and seen[1].folders is folders

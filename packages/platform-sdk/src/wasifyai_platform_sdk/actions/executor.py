@@ -179,7 +179,7 @@ class ActionExecutor:
         `approval_id` is how a caller comes back with the person's yes (see `decide_approval`).
         `person_approved` is for the window only: its own click is the approval. Nothing that
         comes from an agent can set it.
-        A `Principal` as `actor` (a connection, an API key) is held to its scopes: an action
+        A `Principal` as `actor` (an MCP connection) is held to its scopes: an action
         outside them is refused with `not_offered` (ADR-0092)."""
         started = time.monotonic()
         origin = parse_origin(origin)

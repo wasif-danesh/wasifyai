@@ -250,7 +250,7 @@ def create_app(
         )
         app.state.safeguards = guard
         # who may call with what (ADR-0092): credentials other than a person's token are
-        # verified by prefix (API keys in stage K1, MCP connections in stage M1)
+        # verified by their prefix (none is registered yet)
         app.state.credential_verifiers = {}
         # keys and tokens (ADR-0092): the desktop's keychain or file; on the web the `secrets`
         # table under MEDIA_SECRETS_KEY, with what External Secrets put in the environment behind

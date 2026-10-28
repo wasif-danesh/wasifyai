@@ -34,8 +34,8 @@ log = logging.getLogger("wasifyai_api.identity")
 
 class CredentialVerifier(Protocol):
     """Turns a bearer credential that starts with `prefix` into a principal, or raises
-    `AuthError`. Registered in `app.state.credential_verifiers` by prefix (`wsk_` for API keys,
-    stage K1; a connection secret for MCP, stage M1)."""
+    `AuthError`. Registered in `app.state.credential_verifiers` by prefix (none is registered yet;
+    a connection secret of the MCP server would be one)."""
 
     async def verify(self, credential: str, request: Request) -> Principal: ...
 
@@ -81,7 +81,7 @@ async def get_principal(request: Request) -> Principal:
                 principal = await verifier.verify(credential, request)
             except AuthError as exc:
                 log.warning("rejected credential: %s", exc)
-                raise _unauthorized("this key or connection is not accepted") from exc
+                raise _unauthorized("this connection is not accepted") from exc
     request.state.principal = principal
     return principal
 

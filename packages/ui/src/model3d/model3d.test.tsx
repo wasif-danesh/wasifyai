@@ -462,6 +462,7 @@ describe("checking and making", () => {
     await user.click(screen.getByRole("button", { name: /Save a copy/ }));
     expect(a.exportCopy).toHaveBeenCalledWith("m".repeat(32), undefined);
     expect(await screen.findByText("Saved as frog-mug.glb in Downloads.")).toBeInTheDocument();
+    // three actions on the stage, the rest (Delete) in its More menu (ADR-0093 U10)
     await user.click(screen.getByRole("button", { name: /Library/ }));
     expect(onOpenLibrary).toHaveBeenCalled();
     const name = screen.getByLabelText("Name");
@@ -469,10 +470,12 @@ describe("checking and making", () => {
     await user.type(name, "Green frog");
     await user.click(screen.getByRole("button", { name: "Rename" }));
     expect(a.rename).toHaveBeenCalledWith("m".repeat(32), "Green frog");
-    await user.click(screen.getByRole("button", { name: /Delete/ }));
+    await user.click(screen.getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Delete/ }));
     expect(a.remove).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Keep it" }));
-    await user.click(screen.getByRole("button", { name: /Delete/ }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Delete/ }));
     await user.click(screen.getByRole("button", { name: "Delete it for good" }));
     expect(a.remove).toHaveBeenCalledWith("m".repeat(32));
   });
@@ -484,7 +487,7 @@ describe("checking and making", () => {
     await user.upload(await screen.findByLabelText("Choose a picture"), file());
     await user.click(await screen.findByLabelText(/I may use this picture/));
     await user.click(screen.getByRole("button", { name: "Make the 3D model" }));
-    await user.click(await screen.findByRole("button", { name: /Cancel/ }));
+    await user.click(await screen.findByRole("button", { name: "Stop" }));
     expect(a.cancel).toHaveBeenCalledWith("m".repeat(32));
     expect(await screen.findByText("Stopped")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();

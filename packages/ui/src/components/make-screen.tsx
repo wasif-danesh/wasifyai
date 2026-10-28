@@ -3,6 +3,9 @@
 import type { ReactNode } from "react";
 import { cn } from "../cn";
 
+/** A box that fills the window under its top bar, for a screen that is only the frame (the voice tools, 3D, Motion graphics). */
+export const FRAME = "flex h-[calc(100dvh-3rem)] min-h-[32rem] flex-col";
+
 /**
  * The one make screen (ADR-0093 decision 2): **ask** on the left (the prompt and the few controls that matter,
  * with the main button always in view at the bottom), **stage** on the right (where the result appears, in

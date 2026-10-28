@@ -2,6 +2,7 @@
 
 import type { AudioSource, ParsedEvent, VoiceApi } from "@wasifyai/client";
 import { type ReactNode, useRef, useState } from "react";
+import { FRAME } from "../components/make-screen";
 import { TopBarSlot } from "../window-bar";
 import { AudioToolWorkspace } from "./AudioToolWorkspace";
 import { AudiobookWorkspace } from "./AudiobookWorkspace";
@@ -67,7 +68,7 @@ function Frame({ title, lead, children }: { title: string; lead: ReactNode; chil
 function MakeFrame({ children }: { children: ReactNode }) {
   return (
     <TopBarSlot>
-      <div data-workspace className="flex h-[calc(100dvh-3rem)] min-h-[32rem] flex-col">
+      <div data-workspace className={FRAME}>
         {children}
       </div>
     </TopBarSlot>

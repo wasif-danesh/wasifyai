@@ -106,7 +106,7 @@ export function PromptBox({
   return (
     <section aria-label="What to make" className="grid min-w-0 content-start gap-5">
       <div className="grid gap-1">
-        <h2 className="font-semibold font-serif text-step-2">What should we make?</h2>
+        <h2 className="m-0 font-semibold text-base">What should we make?</h2>
         <p className="text-muted-foreground">
           Say it in your own words. You check the form before anything is made.
         </p>
@@ -200,7 +200,7 @@ export function PromptBox({
       ) : null}
 
       <h3 className="text-muted-foreground text-sm">Or start from an example</h3>
-      <div className="-mt-3 grid grid-cols-2 gap-2.5 md:grid-cols-[repeat(auto-fill,minmax(11.5rem,1fr))]">
+      <div className="-mt-3 grid grid-cols-2 gap-2.5 md:grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))]">
         {EXAMPLES.map((e, i) => (
           <button
             key={e.label}

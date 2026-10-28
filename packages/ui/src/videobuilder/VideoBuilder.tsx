@@ -11,13 +11,16 @@ import {
   type VideosApi,
   megabytes,
 } from "@wasifyai/client";
-import { Library, Plus, Save, Trash2, Undo2, X } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { Clapperboard, Library, Plus, Save, Trash2, Undo2, X } from "lucide-react";
+import { type ReactNode, useEffect, useId, useState } from "react";
 import { cn } from "../cn";
+import type { Action } from "../components/actions-row";
 import { Button } from "../components/button";
 import { Chip } from "../components/chip";
 import { JobMeter, WorkingCard } from "../components/create";
+import { FRAME, MakeScreen } from "../components/make-screen";
 import { Notice } from "../components/notice";
+import { Stage } from "../components/stage";
 import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../save";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
 import { PromptBox } from "./PromptBox";
@@ -61,79 +64,119 @@ export function VideoBuilder({
 }: VideoBuilderProps) {
   const b = useVideoBuilder(api);
   const { state } = b;
-  return (
-    <div className="mx-auto grid w-full max-w-5xl gap-5 p-[clamp(1rem,3vw,2rem)]">
-      <header className="grid gap-1.5">
-        <span className={eyebrow}>Experimental</span>
-        <h1 className="font-semibold text-step-2">Motion graphics</h1>
-        <p className="max-w-3xl text-muted-foreground">
+  const about = (
+    <>
+      Experimental.{" "}
+      {place === "device"
+        ? "Write a title, a quote, a chart, a name strap or captions and have it drawn on your computer."
+        : "Write a title, a quote, a chart, a name strap or captions and have it drawn on the service's computer."}{" "}
+      <details className="mt-1 text-sm">
+        <summary className="w-fit cursor-pointer underline underline-offset-4">
+          How is it made, and is it safe?
+        </summary>
+        <p className="mt-1.5">
           {place === "device"
-            ? "Write a title, a quote, a chart, a name strap or captions and have it drawn on your computer."
-            : "Write a title, a quote, a chart, a name strap or captions and have it drawn on the service's computer."}
+            ? "Every word is checked against what you typed before anything is drawn. Each video is drawn in a locked box: it can reach nothing outside its own folder, and nothing is sent anywhere."
+            : "Every word is checked against what you typed before anything is drawn. Each video is drawn in a locked box: it can reach nothing outside its own folder. The words you type are sent to the service and deleted when the video is made."}
         </p>
-        <details className="text-muted-foreground text-sm">
-          <summary className="w-fit cursor-pointer underline underline-offset-4">
-            How is it made, and is it safe?
-          </summary>
-          <p className="mt-1.5 max-w-3xl">
-            {place === "device"
-              ? "Every word is checked against what you typed before anything is drawn. Each video is drawn in a locked box: it can reach nothing outside its own folder, and nothing is sent anywhere."
-              : "Every word is checked against what you typed before anything is drawn. Each video is drawn in a locked box: it can reach nothing outside its own folder. The words you type are sent to the service and deleted when the video is made."}
-          </p>
-        </details>
-      </header>
-
+      </details>
+    </>
+  );
+  if (state.loading || !state.component?.installed) {
+    return (
+      <div className="mx-auto grid w-full max-w-5xl gap-5 p-[clamp(1rem,3vw,2rem)]">
+        <header className="grid gap-1.5">
+          <h1 className="font-semibold text-step-2">Motion graphics</h1>
+          <div className="max-w-3xl text-muted-foreground">{about}</div>
+        </header>
+        {state.error ? (
+          <Notice tone="error" title="That did not work">
+            {state.error}
+          </Notice>
+        ) : null}
+        {state.loading ? (
+          <output className="text-muted-foreground">Looking at Motion graphics…</output>
+        ) : (
+          <SetupCard
+            component={state.component}
+            onInstall={(bytes) => void b.install(bytes)}
+            onRetry={() => void b.refresh()}
+          />
+        )}
+      </div>
+    );
+  }
+  // what goes above the form on every screen of the frame: what failed, and a missing tool
+  const notices = (
+    <>
       {state.error ? (
         <Notice tone="error" title="That did not work">
           {state.error}
         </Notice>
       ) : null}
-
-      {state.loading ? (
-        <output className="text-muted-foreground">Looking at Motion graphics…</output>
-      ) : !state.component?.installed ? (
-        <SetupCard
-          component={state.component}
-          onInstall={(bytes) => void b.install(bytes)}
-          onRetry={() => void b.refresh()}
+      {state.component.tools && !state.component.tools.ready ? (
+        <Notice
+          tone="warn"
+          title="One more thing is needed to make videos"
+          actions={<Button onClick={() => void b.refresh()}>Check again</Button>}
+        >
+          {state.component.tools.message}
+        </Notice>
+      ) : null}
+    </>
+  );
+  const recent = (
+    <ProjectList
+      projects={state.projects}
+      catalogue={state.catalogue}
+      selected={state.selected}
+      onOpen={(id) => void b.open(id)}
+      onNew={() => void b.open(NEW)}
+    />
+  );
+  // the make frame (ADR-0093 U10): say it or fill in the form on the left, the video on the stage, the
+  // projects under it; the say-it-then-check flow is unchanged
+  return (
+    <div data-workspace className={FRAME}>
+      {state.selected ? (
+        <Editor
+          key={`${state.selected}:${state.project?.template ?? state.draft}`}
+          api={b}
+          videos={videos}
+          canSave={canSave}
+          downloadHref={downloadHref}
+          onOpenLibrary={onOpenLibrary}
+          lead={about}
+          notices={notices}
+          recent={recent}
         />
       ) : (
-        <>
-          {state.component.tools && !state.component.tools.ready ? (
-            <Notice
-              tone="warn"
-              title="One more thing is needed to make videos"
-              actions={<Button onClick={() => void b.refresh()}>Check again</Button>}
-            >
-              {state.component.tools.message}
-            </Notice>
-          ) : null}
-          <div className="grid items-start gap-5 md:grid-cols-[15rem_minmax(0,1fr)] md:gap-8">
-            <ProjectList
-              projects={state.projects}
-              catalogue={state.catalogue}
-              selected={state.selected}
-              onOpen={(id) => void b.open(id)}
-              onNew={() => void b.open(NEW)}
-            />
-            {state.selected ? (
-              <Editor
-                key={`${state.selected}:${state.project?.template ?? state.draft}`}
-                api={b}
-                videos={videos}
-                canSave={canSave}
-                downloadHref={downloadHref}
-                onOpenLibrary={onOpenLibrary}
-              />
-            ) : (
+        <MakeScreen
+          title="Motion graphics"
+          lead={about}
+          ask={
+            <>
+              {notices}
               <PromptBox
                 busy={state.drafting}
                 onSend={(request) => void b.draftFrom(request)}
                 onForm={() => void b.open(NEW)}
               />
-            )}
-          </div>
-        </>
+            </>
+          }
+          action={<p className={hint}>You check the form before anything is made.</p>}
+          stage={
+            <Stage
+              state={{
+                kind: "empty",
+                icon: Clapperboard,
+                title: "Your video appears here",
+                text: "Say what to make, or start from an example. You check the form, preview it, then make it.",
+              }}
+            />
+          }
+          recent={recent}
+        />
       )}
     </div>
   );
@@ -237,39 +280,34 @@ function ProjectList({
 }) {
   const kind = (id: string) => catalogue?.templates.find((t) => t.id === id)?.title ?? id;
   return (
-    <nav
-      aria-label="Your video projects"
-      className="grid min-w-0 gap-2.5 max-md:flex max-md:items-center max-md:gap-2 max-md:overflow-x-auto max-md:pb-1"
-    >
-      <h2 className={cn(eyebrow, "max-md:hidden")}>Your videos</h2>
-      <Button type="button" variant="outline" className="max-md:shrink-0" onClick={onNew}>
-        <Plus className="size-4" /> New video
-      </Button>
-      <ul className="max-md:contents md:grid md:gap-1">
-        {projects.map((p) => (
-          <li key={p.id} className="min-w-0 max-md:shrink-0">
-            <button
-              type="button"
-              aria-current={selected === p.id ? "true" : undefined}
-              onClick={() => onOpen(p.id)}
-              className="grid w-full min-w-0 items-center gap-x-2.5 rounded-lg border border-transparent p-2 text-start hover:bg-accent aria-[current=true]:border-border aria-[current=true]:bg-surface aria-[current=true]:shadow-card max-md:max-w-56 max-md:border-border md:grid-cols-[3.5rem_minmax(0,1fr)]"
-            >
-              <span
-                aria-hidden="true"
-                className="grid h-9 place-items-center rounded-md bg-muted font-semibold font-serif text-sm max-md:hidden"
+    <nav aria-label="Your video projects" className="grid min-w-0 gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="m-0 font-semibold text-sm">Your videos</h2>
+        <Button type="button" variant="outline" size="sm" onClick={onNew}>
+          <Plus className="size-4" /> New video
+        </Button>
+      </div>
+      {projects.length === 0 ? (
+        <p className="m-0 text-muted-foreground text-sm">Nothing made here yet.</p>
+      ) : (
+        <ul className="m-0 flex list-none gap-2 overflow-x-auto p-0 pb-1">
+          {projects.map((p) => (
+            <li key={p.id} className="shrink-0">
+              <button
+                type="button"
+                aria-current={selected === p.id ? "true" : undefined}
+                onClick={() => onOpen(p.id)}
+                className="grid w-48 min-w-0 gap-0.5 rounded-lg border p-2.5 text-start hover:border-primary/50 aria-[current=true]:border-primary aria-[current=true]:ring-2 aria-[current=true]:ring-primary/40"
               >
-                {kind(p.template).slice(0, 2)}
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate font-medium">{p.title}</span>
-                <span className="block truncate text-muted-foreground text-sm max-md:hidden">
+                <span className="block truncate font-medium text-sm">{p.title}</span>
+                <span className="block truncate text-muted-foreground text-xs">
                   {kind(p.template)} · {String(p.slots.seconds)} seconds
                 </span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </nav>
   );
 }
@@ -414,13 +452,20 @@ function Editor({
   canSave,
   downloadHref,
   onOpenLibrary,
+  lead,
+  notices,
+  recent,
 }: {
   api: ReturnType<typeof useVideoBuilder>;
   videos?: Pick<VideosApi, "exportCopy">;
   canSave: boolean;
   downloadHref?: (videoId: string) => string;
   onOpenLibrary?: () => void;
+  lead: ReactNode;
+  notices: ReactNode;
+  recent: ReactNode;
 }) {
+  const formId = useId();
   const { state } = api;
   const { project, render, status, catalogue, stills, check, drafted } = state;
   const template = templateOf(state);
@@ -491,22 +536,18 @@ function Editor({
   }
 
   const renderCheck = render?.check ?? null;
-  return (
-    <div className="grid gap-5">
+  const ask = (
+    <>
+      {notices}
       <form
-        className={panel}
+        id={formId}
+        className="grid gap-5"
         aria-label="Your video"
         onSubmit={(e) => {
           e.preventDefault();
           void keep();
         }}
       >
-        <div className="flex justify-end">
-          {/* a way out: back to the first screen; what is saved stays in "Your videos" */}
-          <Button type="button" variant="ghost" size="sm" onClick={() => void api.open(null)}>
-            <X className="size-4" aria-hidden="true" /> {project ? "Close" : "Cancel"}
-          </Button>
-        </div>
         {!project && drafted && drafted.template === template.id ? (
           <Notice
             tone={drafted.warnings.length > 0 ? "warn" : "info"}
@@ -568,7 +609,6 @@ function Editor({
             </p>
           </fieldset>
         ) : null}
-
         {status?.fit.verdict === "tight" ? (
           <Notice tone="warn" title="Memory is tight">
             {status.fit.reason}
@@ -579,110 +619,153 @@ function Editor({
             {status?.fit.reason}
           </Notice>
         ) : null}
-
-        <div className={actions}>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={!valid || working}
-            onClick={() => void previewIt()}
-          >
-            Preview
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={!valid || working}
-            onClick={() => void checkIt()}
-          >
-            Check the words
-          </Button>
-          <Button
-            type="button"
-            size="lg"
-            disabled={!valid || working || tooBig || busy}
-            onClick={() => void makeIt()}
-          >
-            Make the video
-          </Button>
-          <Button type="submit" variant="ghost" disabled={!valid || !dirty}>
-            <Save className="size-4" /> Save
-          </Button>
-          {project?.can_undo ? (
-            <Button type="button" variant="ghost" onClick={() => void api.undo()}>
-              <Undo2 className="size-4" /> Undo the last change
-            </Button>
-          ) : null}
-          {project ? (
-            confirmDelete ? (
-              <>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() => void api.remove(project.id)}
-                >
-                  Delete it and its videos
-                </Button>
-                <Button type="button" variant="ghost" onClick={() => setConfirmDelete(false)}>
-                  Keep it
-                </Button>
-              </>
-            ) : (
-              <Button type="button" variant="ghost" onClick={() => setConfirmDelete(true)}>
-                <Trash2 className="size-4" /> Delete
-              </Button>
-            )
-          ) : null}
-        </div>
-        {unfilled ? <p className={hint}>Fill in the {unfilled.toLowerCase()} to go on.</p> : null}
-        {busy ? <p className={hint}>A video is being made. Wait for it to finish.</p> : null}
       </form>
-
-      {check ? <CheckNotice check={check} /> : null}
-
-      {stills.length > 0 ? (
-        <section className={cn(panel, "justify-items-center")} aria-label="Stills of your video">
-          <div className="flex flex-wrap justify-center gap-3">
-            {stills.map((s) => (
-              <figure key={s.at} className="m-0 grid justify-items-center gap-1">
-                <img
-                  src={s.url}
-                  alt={`A still of your video at ${s.at} seconds`}
-                  className="h-auto max-h-[30vh] max-w-full rounded-xl bg-black shadow-card"
-                  style={template.transparent ? { background: CHEQUER } : undefined}
-                />
-                <figcaption className={hint}>{s.at} seconds in</figcaption>
-              </figure>
-            ))}
-          </div>
-        </section>
+      {project?.code ? (
+        <details className="grid gap-2 text-sm">
+          <summary className="cursor-pointer font-medium">
+            The page behind this video (read only)
+          </summary>
+          <pre className="mt-2 max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs">
+            {project.code}
+          </pre>
+        </details>
       ) : null}
+    </>
+  );
 
-      {working && render ? (
-        <WorkingCard label="Making your video" onCancel={() => void api.cancel()}>
-          <JobMeter
-            title={render.stage === "checking" ? "Checking the words" : "Drawing the video"}
-            text={render.progress > 0 ? `${Math.round(render.progress * 100)}%` : "Starting"}
-            value={render.progress > 0 ? render.progress : undefined}
-            label="Video progress"
-          />
-        </WorkingCard>
-      ) : null}
+  const action = (
+    <div className="grid gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="lg"
+          disabled={!valid || working || tooBig || busy}
+          onClick={() => void makeIt()}
+        >
+          Make the video
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!valid || working}
+          onClick={() => void previewIt()}
+        >
+          Preview
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!valid || working}
+          onClick={() => void checkIt()}
+        >
+          Check the words
+        </Button>
+      </div>
+      <div className="flex flex-wrap items-center gap-1">
+        <Button type="submit" form={formId} variant="ghost" size="sm" disabled={!valid || !dirty}>
+          <Save className="size-4" /> Save
+        </Button>
+        {project?.can_undo ? (
+          <Button type="button" variant="ghost" size="sm" onClick={() => void api.undo()}>
+            <Undo2 className="size-4" /> Undo the last change
+          </Button>
+        ) : null}
+        {project ? (
+          confirmDelete ? (
+            <>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => void api.remove(project.id)}
+              >
+                Delete it and its videos
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setConfirmDelete(false)}
+              >
+                Keep it
+              </Button>
+            </>
+          ) : (
+            <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>
+              <Trash2 className="size-4" /> Delete
+            </Button>
+          )
+        ) : null}
+        {/* a way out: back to the first screen; what is saved stays in "Your videos" */}
+        <Button type="button" variant="ghost" size="sm" onClick={() => void api.open(null)}>
+          <X className="size-4" aria-hidden="true" /> {project ? "Close" : "Cancel"}
+        </Button>
+      </div>
+      {unfilled ? <p className={hint}>Fill in the {unfilled.toLowerCase()} to go on.</p> : null}
+      {busy ? <p className={hint}>A video is being made. Wait for it to finish.</p> : null}
+    </div>
+  );
 
-      {render?.status === "done" && render.video_url ? (
-        <>
-          <Notice tone="ok" title="Your video is ready">
-            It took {Math.max(1, Math.round(render.elapsed_s ?? 0))} seconds and is saved in Your
-            videos.
-            {renderCheck?.ok
-              ? ` Every word on the screen was checked against what you typed (${renderCheck.checked} places).`
-              : ""}
-            {render.blocked > 0
-              ? ` It tried to reach outside its folder ${render.blocked} time${render.blocked === 1 ? "" : "s"}; every try was refused.`
-              : ""}
-          </Notice>
-          <figure className={cn(panel, "m-0 justify-items-center")}>
-            {/* biome-ignore lint/a11y/useMediaCaption: these videos are written words, with no speech to caption */}
+  const videoActions: Action[] = [
+    ...(canSave && videos && render?.video_id
+      ? [
+          {
+            label: "Save a copy",
+            onSelect: () => void saveCopy(render.video_id as string),
+            icon: <Save aria-hidden="true" />,
+          },
+        ]
+      : downloadHref && render?.video_id
+        ? [
+            {
+              label: "Download",
+              href: downloadHref(render.video_id),
+              download: true,
+              icon: <Save aria-hidden="true" />,
+            },
+          ]
+        : []),
+    ...(onOpenLibrary
+      ? [{ label: "Your videos", onSelect: onOpenLibrary, icon: <Library aria-hidden="true" /> }]
+      : []),
+  ];
+
+  const stills_ =
+    stills.length > 0 ? (
+      <section className="grid w-full justify-items-center gap-3" aria-label="Stills of your video">
+        <div className="flex flex-wrap justify-center gap-3">
+          {stills.map((s) => (
+            <figure key={s.at} className="m-0 grid justify-items-center gap-1">
+              <img
+                src={s.url}
+                alt={`A still of your video at ${s.at} seconds`}
+                className="h-auto max-h-[30vh] max-w-full rounded-xl bg-black shadow-card"
+                style={template.transparent ? { background: CHEQUER } : undefined}
+              />
+              <figcaption className={hint}>{s.at} seconds in</figcaption>
+            </figure>
+          ))}
+        </div>
+      </section>
+    ) : null;
+
+  const stage =
+    working && render ? (
+      <Stage
+        state={{
+          kind: "working",
+          label: "Making your video",
+          text: `${render.stage === "checking" ? "Checking the words" : "Drawing the video"}${render.progress > 0 ? ` · ${Math.round(render.progress * 100)}%` : ""}`,
+          value: render.progress > 0 ? render.progress : undefined,
+          onStop: () => void api.cancel(),
+        }}
+      />
+    ) : render?.status === "done" && render.video_url ? (
+      <Stage
+        state={{
+          kind: "result",
+          children: (
+            // biome-ignore lint/a11y/useMediaCaption: these videos are written words, with no speech to caption
             <video
               className="h-auto max-h-[60vh] max-w-full rounded-xl bg-black shadow-card"
               style={template.transparent ? { background: CHEQUER } : undefined}
@@ -692,58 +775,71 @@ function Editor({
               poster={render.poster_url || undefined}
               src={render.video_url}
             />
-          </figure>
-          <div className={actions}>
-            {canSave && videos && render.video_id ? (
-              <Button type="button" onClick={() => void saveCopy(render.video_id as string)}>
-                <Save className="size-4" /> Save a copy
-              </Button>
-            ) : downloadHref && render.video_id ? (
-              <Button asChild>
-                <a href={downloadHref(render.video_id)} download>
-                  <Save className="size-4" /> Download
-                </a>
-              </Button>
-            ) : null}
-            {onOpenLibrary ? (
-              <Button type="button" variant="outline" onClick={onOpenLibrary}>
-                <Library className="size-4" /> Your videos
-              </Button>
-            ) : null}
-          </div>
-          {saved ? <output className="text-sm">{saved}</output> : null}
-          {problem ? (
-            <Notice tone="error" title="That did not work">
-              {problem}
-            </Notice>
-          ) : null}
-        </>
-      ) : null}
-
-      {render?.status === "failed" || render?.status === "cancelled" ? (
-        <>
-          <Notice
-            tone={render.status === "cancelled" ? "info" : "error"}
-            title={render.status === "cancelled" ? "Stopped" : "The video could not be made"}
-          >
-            {render.error ?? "It did not finish."}
-          </Notice>
-          {renderCheck && !renderCheck.ok && renderCheck.problems.length > 0 ? (
+          ),
+          caption: (
+            <span className="grid gap-1">
+              <span>
+                <strong className="font-medium text-foreground">Your video is ready</strong>
+                {" · "}
+                It took {Math.max(1, Math.round(render.elapsed_s ?? 0))} seconds and is saved in
+                Your videos.
+                {renderCheck?.ok
+                  ? ` Every word on the screen was checked against what you typed (${renderCheck.checked} places).`
+                  : ""}
+                {render.blocked > 0
+                  ? ` It tried to reach outside its folder ${render.blocked} time${render.blocked === 1 ? "" : "s"}; every try was refused.`
+                  : ""}
+              </span>
+              {saved ? <output>{saved}</output> : null}
+              {problem ? <output className="text-destructive">{problem}</output> : null}
+            </span>
+          ),
+          actions: videoActions,
+        }}
+      />
+    ) : render?.status === "failed" || render?.status === "cancelled" ? (
+      <div className="grid w-full justify-items-center gap-3">
+        <Stage
+          state={{
+            kind: "error",
+            title: render.status === "cancelled" ? "Stopped" : "The video could not be made",
+            message: render.error ?? "It did not finish.",
+          }}
+        />
+        {renderCheck && !renderCheck.ok && renderCheck.problems.length > 0 ? (
+          <div className="w-full max-w-xl">
             <CheckNotice check={renderCheck} />
-          ) : null}
-        </>
-      ) : null}
+          </div>
+        ) : null}
+      </div>
+    ) : stills_ || check ? (
+      <div className="grid w-full justify-items-center gap-4">
+        {check ? (
+          <div className="w-full max-w-xl">
+            <CheckNotice check={check} />
+          </div>
+        ) : null}
+        {stills_}
+      </div>
+    ) : (
+      <Stage
+        state={{
+          kind: "empty",
+          icon: Clapperboard,
+          title: "Your video appears here",
+          text: "Preview it to see a few stills, check the words, then make it.",
+        }}
+      />
+    );
 
-      {project?.code ? (
-        <details className={cn(panel, "gap-2")}>
-          <summary className="cursor-pointer font-semibold">
-            The page behind this video (read only)
-          </summary>
-          <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs">
-            {project.code}
-          </pre>
-        </details>
-      ) : null}
-    </div>
+  return (
+    <MakeScreen
+      title="Motion graphics"
+      lead={lead}
+      ask={ask}
+      action={action}
+      stage={stage}
+      recent={recent}
+    />
   );
 }

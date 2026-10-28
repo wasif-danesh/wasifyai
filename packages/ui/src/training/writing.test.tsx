@@ -268,7 +268,7 @@ describe("Writing", () => {
   it("starts with no sets, makes one, and says what is missing before teaching", async () => {
     const user = userEvent.setup();
     const engine = fake();
-    render(<Writing api={engine.api} pollMs={10} onBack={() => {}} />);
+    render(<Writing api={engine.api} pollMs={10} />);
     await user.click(await screen.findByRole("button", { name: "New set of examples" }));
     expect(
       await screen.findByText("Add at least 10 examples. You have 0. 50 or more is better.", {
@@ -286,7 +286,7 @@ describe("Writing", () => {
     async () => {
       const user = userEvent.setup();
       const engine = fake();
-      render(<Writing api={engine.api} pollMs={10} onBack={() => {}} />);
+      render(<Writing api={engine.api} pollMs={10} />);
       await user.click(await screen.findByRole("button", { name: "New set of examples" }));
       await user.click(await screen.findByRole("button", { name: "Add an example" }));
       // a row can be added, typed into and removed
@@ -328,7 +328,7 @@ describe("Writing", () => {
   it("keeps the model and method behind one closed line that says what is recommended", async () => {
     const user = userEvent.setup();
     const engine = fake();
-    render(<Writing api={engine.api} pollMs={10} onBack={() => {}} />);
+    render(<Writing api={engine.api} pollMs={10} />);
     await user.click(await screen.findByRole("button", { name: "New set of examples" }));
     const summary = await screen.findByText("Choose the model and method");
     const box = summary.closest("details") as HTMLDetailsElement;
@@ -346,7 +346,7 @@ describe("Writing", () => {
   it("pastes rows in and stops a run that is going", { timeout: 30_000 }, async () => {
     const user = userEvent.setup();
     const engine = fake();
-    render(<Writing api={engine.api} pollMs={10} onBack={() => {}} />);
+    render(<Writing api={engine.api} pollMs={10} />);
     await user.click(await screen.findByRole("button", { name: "New set of examples" }));
     await user.click(await screen.findByText("Paste from a spreadsheet"));
     const rows = Array.from({ length: 12 }, (_, i) => `Q${i}?\tA${i}`).join("\n");
@@ -374,7 +374,7 @@ describe("Writing", () => {
       status: { ready: false, problem: "Training is not set up on this computer yet." },
       setup: OFFER,
     });
-    render(<Writing api={engine.api} pollMs={10} onBack={() => {}} />);
+    render(<Writing api={engine.api} pollMs={10} />);
     expect(await screen.findByText("Set up training")).toBeTruthy();
     expect(screen.getByText(/needs a trainer and a small model to learn on/)).toBeTruthy();
     expect(screen.getByText("Trainer (mlx-lm)")).toBeTruthy();
@@ -391,7 +391,7 @@ describe("Writing", () => {
         problem: "Training is not set up on this computer yet. Set it up first.",
       },
     });
-    render(<Writing api={engine.api} pollMs={10} onBack={() => {}} />);
+    render(<Writing api={engine.api} pollMs={10} />);
     expect(await screen.findByText("Teaching a writing model is not ready")).toBeTruthy();
     expect(screen.getByText(/Set it up first/)).toBeTruthy();
     expect(
@@ -583,7 +583,7 @@ describe("Which model?", () => {
         getting = true;
         return parts();
       }) as unknown as TrainingApi["installLanguagePart"];
-      render(<Writing api={engine.api} pollMs={10} onBack={() => {}} />);
+      render(<Writing api={engine.api} pollMs={10} />);
       await user.click(await screen.findByRole("button", { name: "New set of examples" }));
       await user.click(await screen.findByText("Paste from a spreadsheet"));
       await user.click(screen.getByLabelText(/Two columns/));

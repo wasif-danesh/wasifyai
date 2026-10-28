@@ -73,6 +73,10 @@ function api(setup: () => Promise<TrainingSetupState>, extra: Partial<TrainingAp
 describe("Set up training", () => {
   it("shows what will be fetched, how large and whose licence, before anything is", async () => {
     render(<Train api={api(async () => OFFER)} pollMs={10} />);
+    // shown when the card's Set up asks for it (ADR-0093 U10)
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Set up: Make my own character or style" }),
+    );
     expect(await screen.findByText("Set up training")).toBeTruthy();
     expect(screen.getByText("Trainer (mflux)")).toBeTruthy();
     expect(screen.getByText(/MIT · from pypi\.org/)).toBeTruthy();
@@ -87,6 +91,9 @@ describe("Set up training", () => {
     const calls = api(async () => OFFER);
     render(<Train api={calls} pollMs={10} />);
     expect(calls.installSetup).not.toHaveBeenCalled();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Set up: Make my own character or style" }),
+    );
     await userEvent.click(await screen.findByRole("button", { name: /Download and set up/ }));
     expect(calls.installSetup).toHaveBeenCalledWith(17_080_000_000);
   });

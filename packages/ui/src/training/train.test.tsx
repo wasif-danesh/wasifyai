@@ -501,10 +501,11 @@ describe("Train", () => {
   it("does not offer Start when the trainer is not ready, and says why", async () => {
     const { api } = fake({ ready: false, problem: "Not enough free disk space." });
     render(<Train api={api} pollMs={10} />);
-    expect(await screen.findByText("Not enough free disk space.")).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Start" }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    // the card says it in one look, and offers no Start (ADR-0093 U10)
+    expect(
+      await screen.findByText("Not on this computer: Not enough free disk space."),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
   });
 
   it("takes pictures, says what is wrong with each, and suggests removing the bad ones", async () => {
@@ -863,12 +864,15 @@ describe("Train", () => {
       },
     );
     render(<Train api={engine.api} pollMs={10} />);
-    const start = await screen.findByRole("button", {
-      name: /Start: make my own look or motion for video/,
-    });
-    expect((start as HTMLButtonElement).disabled).toBe(true);
-    expect(await screen.findByText("The video model is not on this computer yet.")).toBeTruthy();
-    expect(screen.getByText(/Choose Select video model on a Video screen/)).toBeTruthy();
+    // the card says what is missing and how to get it, and offers no Start
+    expect(
+      await screen.findByText(
+        /Needs a step: The video model is not on this computer yet\. .*Choose Select video model on a Video screen/,
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: /Start: make my own look or motion for video/ }),
+    ).toBeNull();
   });
 
   it("offers the video trainer's set-up with its sizes first", async () => {
@@ -909,6 +913,14 @@ describe("Train", () => {
       throw new Error("stop here");
     };
     render(<Train api={engine.api} pollMs={10} />);
+    // the set-up is shown when the card's Set up asks for it, with its size on the card first
+    expect(
+      await screen.findByText(/Needs a step: set it up first \(183 MB download\)/),
+    ).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Set up video training" })).toBeNull();
+    await user.click(
+      screen.getByRole("button", { name: "Set up: Make my own look or motion for video" }),
+    );
     expect(await screen.findByRole("heading", { name: "Set up video training" })).toBeTruthy();
     await user.click(await screen.findByRole("button", { name: /Download and set up/ }));
     expect(installed).toEqual([182_500_000]);
@@ -935,10 +947,11 @@ describe("Train", () => {
       },
     );
     render(<Train api={engine.api} place="service" pollMs={10} />);
-    const start = await screen.findByRole("button", {
-      name: /Start: make my own look or motion for video/,
-    });
-    expect((start as HTMLButtonElement).disabled).toBe(true);
-    expect(await screen.findByText(/Ask an admin to set it up/)).toBeTruthy();
+    expect(
+      await screen.findByText(/Not on this service: No worker here can teach .*Ask an admin/),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: /Start: make my own look or motion for video/ }),
+    ).toBeNull();
   });
 });

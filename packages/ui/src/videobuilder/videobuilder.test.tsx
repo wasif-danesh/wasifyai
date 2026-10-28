@@ -625,7 +625,7 @@ describe("writing and making a video", () => {
     await user.click(await screen.findByRole("button", { name: "Make the video" }));
     expect(a.render).toHaveBeenCalledWith("a".repeat(32), "mp4");
     expect(await screen.findByText("Making your video")).toBeInTheDocument();
-    expect(await screen.findByText("50%", undefined, { timeout: 3000 })).toBeInTheDocument();
+    expect(await screen.findByText(/50%/, undefined, { timeout: 3000 })).toBeInTheDocument();
     expect(
       await screen.findByText("Your video is ready", undefined, { timeout: 3000 }),
     ).toBeInTheDocument();
@@ -649,7 +649,7 @@ describe("writing and making a video", () => {
     render(<VideoBuilder api={a} />);
     await user.click(await screen.findByRole("button", { name: /Launch day/ }));
     await user.click(await screen.findByRole("button", { name: "Make the video" }));
-    await user.click(await screen.findByRole("button", { name: /Cancel/ }));
+    await user.click(await screen.findByRole("button", { name: "Stop" }));
     expect(a.cancel).toHaveBeenCalled();
     expect(await screen.findByText("Stopped")).toBeInTheDocument();
     expect(screen.getByText("The video was cancelled.")).toBeInTheDocument();

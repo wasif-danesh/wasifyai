@@ -206,7 +206,16 @@ export async function runSmoke(): Promise<void> {
         ? true
         : null,
     );
-    await notebooksApi.remove(saved[1] ?? "");
+    // a computer with the search model is still reading the file: the notebook can be deleted once it is read
+    for (const deadline = Date.now() + TIMEOUT_MS; ; ) {
+      try {
+        await notebooksApi.remove(saved[1] ?? "");
+        break;
+      } catch (e) {
+        if (Date.now() > deadline || !String(e).includes("being read")) throw e;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
 
     // Voice (ADR-0066): both screens list their models from the engine's descriptors and say what
     // they need. Nothing here needs the speech runtime or a model.
@@ -233,9 +242,10 @@ export async function runSmoke(): Promise<void> {
       );
     }
 
-    // Your music and Lyrics open without a model and say what they are for.
+    // the tools open without a model and say what they are for; the old "Your music" and "Your videos"
+    // addresses open the one Library (ADR-0093 U8)
     for (const [path, heading] of [
-      ["/music/library", "Your music"],
+      ["/music/library", "Library"],
       ["/music/lyrics", "Lyrics"],
       ["/music/separate", "Split into parts"],
       ["/voice/convert", "Change a voice"],
@@ -246,7 +256,7 @@ export async function runSmoke(): Promise<void> {
       ["/video/create", "Make a video"],
       ["/video/animate", "Animate a picture"],
       ["/video/extend", "Extend a video"],
-      ["/video/library", "Your videos"],
+      ["/video/library", "Library"],
     ] as const) {
       window.location.hash = path;
       await until(`the ${heading} screen`, () =>
@@ -256,7 +266,7 @@ export async function runSmoke(): Promise<void> {
 
     await report(
       true,
-      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}; a notebook saved with its first source; the speech and music screens listing their models; Your music, Lyrics, Lip sync, Dub, Audiobook, the three audio tools and the three video screens opening`,
+      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}; a notebook saved with its first source; the speech and music screens listing their models; the Library from its old addresses, Lyrics, Lip sync, Dub, Audiobook, the three audio tools and the three video screens opening`,
     );
   } catch (e) {
     // what the window was saying when it gave up makes a CI log readable

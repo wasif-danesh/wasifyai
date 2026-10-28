@@ -361,7 +361,34 @@ Picture, a real FLUX picture made, then opened from the home's Recent in the Lib
 `home-plus`, `home-to-images`, `home-recent`, `home-recent-opened`). Not in this stage: the quick starts for 3D
 and Motion graphics carry no words (their screens take a picture or a template first).
 
-About 44 days of work in thirteen stages; U0 to U9 are done, U10 next, then the products in the order a
+**Built:** U10 on 2026-10-28. **Notebooks:** the Studio's eleven makers are in four groups (Read, Show, Hear,
+Export: `STUDIO_GROUPS` in `notebook/outputs.ts`) as compact tiles; the outputs are cards with a picture of their
+kind, the name, the kind and when, and their actions in view (rename, save a copy, delete; stop and make it again
+while one is made or failed); an output is renamed in place on its card. The notebook's own name already renamed in
+place in the bar. **Teach:** each front-door card says in one look what it can do here, with the reason on the
+card: "Works here", "Needs a step" (the trainer to set up, with its download size, or the video model to get) or
+"Not on this computer" / "Not on this service" (and why); only a card that works has Start, a card that needs a
+step has Set up, which opens the set-up under the cards instead of showing it always; the kind of model is a small
+line, not an upper-case eyebrow; sets started and left empty are folded under "N empty sets"; "Back to Train
+models" is in the bar (`BackInBar` in `window-bar.tsx`) on every step and run page, and the flows' own Back buttons
+are gone. The run page already had progress, Pause (where the trainer can pause), Cancel and the time it takes.
+**3D:** on the `MakeScreen`: the stepper (Picture, Check, Make) and the step's fields on the left with "Make the 3D
+model" at the bottom, the picture and its cut-out, the progress with Stop, the model in its viewer with three
+actions and a menu (Save a copy, Make it again, Library; Delete asks in a dialog) on the stage, and Your 3D models
+as the recent strip; "Four photos (soon)" is gone. **Motion graphics:** on the `MakeScreen` with its flow kept (say
+it, check the form, make it): the prompt box or the form on the left with Make the video, Preview and Check the
+words in view, the stills, the check of the words, the progress with Stop and the video on the stage, and the
+projects as a row under it; the serif heading and the left column are gone (the examples keep their samples of
+the letters). Both fill the window under the bar (`FRAME` in `make-screen.tsx`, which the voice tools now share). Also fixed: the home's quick starts ran off the side on a phone when a running job had a long name.
+Checked: the UI, desktop and web tests; the web e2e layout specs (the Motion graphics layout spec follows the
+frame); the notebook, home and U9's chat snapshots refreshed after looking at them; a real run in the window
+(`ui-audit.sh light u10-make`: Teach's front door, a real report made by the chat model shown as a card and
+renamed in place, a real Motion graphics video made on the frame, a real 3D picture check with its cut-out;
+pictures `u10-*`). Not checked for real: a whole 3D model (5 to 25 minutes) and a whole teaching run on the new
+pages. Not in this stage: an output card's picture is its kind's icon (an infographic does not show its picture
+yet); taught models in the Library.
+
+About 44 days of work in thirteen stages; U0 to U10 are done, U11 next, then the products in the order a
 new person meets them (Pictures, Video, Speech), with the Library before the home so the quick starts and the
 recent strips have one source.
 

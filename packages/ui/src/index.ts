@@ -218,7 +218,13 @@ export {
   savedText,
   useSaveCopy,
 } from "./save";
-export { PageHeader, TopBarSlot, type WindowBar, WindowBarProvider } from "./window-bar";
+export {
+  BackInBar,
+  PageHeader,
+  TopBarSlot,
+  type WindowBar,
+  WindowBarProvider,
+} from "./window-bar";
 export * from "./models";
 export { Train, type TrainProps } from "./training/Train";
 export { MyCreations } from "./creations/MyCreations";

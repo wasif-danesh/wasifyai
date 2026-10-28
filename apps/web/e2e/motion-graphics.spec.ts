@@ -84,10 +84,11 @@ for (const scheme of ["light", "dark"] as const) {
       ]);
       if (!s || !l || !h) throw new Error("a part of the screen is missing");
       expect(h.x + h.width, "the heading leaves its column").toBeLessThanOrEqual(s.x + s.width + 1);
+      // the make frame (ADR-0093 U10): the projects are under the stage, beside the ask column or below it
       if (width >= 768) {
-        expect(l.x + l.width, "the list runs into the main column").toBeLessThanOrEqual(s.x + 1);
+        expect(l.x, "the list runs into the ask column").toBeGreaterThanOrEqual(s.x + s.width - 1);
       } else {
-        expect(l.y + l.height, "the list sits on the main column").toBeLessThanOrEqual(s.y + 1);
+        expect(l.y, "the list sits on the ask column").toBeGreaterThanOrEqual(s.y + s.height - 1);
       }
       await expect(
         page.getByRole("button", { name: "Fill in the form", exact: true }),

@@ -61,11 +61,7 @@ function Sure({ label, name, onSure }: { label: string; name: string; onSure: ()
  * words, one button, and then the same questions asked before and after, side by side. Nothing here says QLoRA, steps
  * or loss; the person types, checks and teaches.
  */
-export function Writing({
-  api,
-  pollMs,
-  onBack,
-}: { api: TrainingApi; pollMs?: number; onBack: () => void }) {
+export function Writing({ api, pollMs }: { api: TrainingApi; pollMs?: number }) {
   const w = useWriting(api, pollMs);
   const { state } = w;
   const status = state.status;
@@ -113,7 +109,7 @@ export function Writing({
       ) : state.current ? (
         <Editor w={w} api={api} pollMs={pollMs} />
       ) : (
-        <Sets w={w} onBack={onBack} />
+        <Sets w={w} />
       )}
     </div>
   );
@@ -121,7 +117,7 @@ export function Writing({
 
 // ---- the sets -------------------------------------------------------------------------------
 
-function Sets({ w, onBack }: { w: WritingHook; onBack: () => void }) {
+function Sets({ w }: { w: WritingHook }) {
   const { state } = w;
   return (
     <section className={panel} aria-label="Sets of examples">
@@ -138,9 +134,6 @@ function Sets({ w, onBack }: { w: WritingHook; onBack: () => void }) {
           onClick={() => void w.newSet()}
         >
           New set of examples
-        </Button>
-        <Button type="button" variant="outline" onClick={onBack}>
-          Back
         </Button>
       </div>
       {state.sets.length > 0 ? (

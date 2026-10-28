@@ -20,6 +20,9 @@
 //                                                                then Split into parts with it chosen
 //   apps/desktop/scripts/ui-audit.sh light library-make         the Library: a picture opened, Edit this, a real
 //                                                                edit made, then "Made from" and "Made from this"
+//   apps/desktop/scripts/ui-audit.sh light u10-make             Teach's front door, a real notebook report as a card,
+//                                                                a real Motion graphics video on the frame, and a real
+//                                                                3D picture check (its cut-out) on the stage
 //   apps/desktop/scripts/ui-audit.sh light home-make            the home: quick starts with readiness, the "+" menu,
 //                                                                typed words taken to Images by Picture, a real
 //                                                                picture made, then opened from the home's Recent
@@ -449,6 +452,75 @@ for (const scheme of ["light", "dark"]) {
         .waitFor({ timeout: 30_000 });
       await page.waitForTimeout(800);
       await shot(page, "library-made-from-this");
+    });
+  }
+  if (scheme === "light" && names.has("u10-make")) {
+    // the check of stage U10: the four screens with real work in them
+    await attempt("u10-train", async () => {
+      await open(page, "/train");
+      await page.getByRole("region", { name: "What to teach" }).waitFor();
+      await page.waitForTimeout(1500);
+      await shot(page, "u10-train", 1300);
+    });
+    await attempt("u10-notebook", async () => {
+      if (!NOTEBOOK) throw new Error("no notebook to open");
+      await open(page, `/notebooks/${NOTEBOOK}`);
+      await page.getByRole("button", { name: "Report", exact: true }).click();
+      await page
+        .getByRole("form", { name: "Make a report" })
+        .getByRole("button", { name: "Create" })
+        .click();
+      // a real report by the chat model, shown as a card in Outputs
+      await page
+        .locator('[data-slot="output-card"]')
+        .filter({ hasText: /Report · / })
+        .first()
+        .waitFor({ timeout: 600_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "u10-notebook-output");
+      await page
+        .locator('[data-slot="output-card"]')
+        .first()
+        .getByRole("button", { name: /^Rename/ })
+        .click();
+      await page.waitForTimeout(400);
+      await shot(page, "u10-notebook-rename");
+      await page.keyboard.press("Escape");
+    });
+    await attempt("u10-motion", async () => {
+      await open(page, "/video/builder");
+      await shot(page, "u10-motion-start");
+      await page.getByRole("button", { name: "Or fill in the form yourself" }).click();
+      await page.getByLabel("Title").fill("Launch day");
+      await page.getByRole("button", { name: "Make the video" }).click();
+      await untilDone(
+        page,
+        page.locator('[data-slot="stage"][data-state="result"] video'),
+        600_000,
+      );
+      await page.waitForTimeout(1500);
+      await shot(page, "u10-motion-made");
+    });
+    await attempt("u10-3d", async () => {
+      await open(page, "/images/3d");
+      await shot(page, "u10-3d-start");
+      // the newest picture of the Library, as a file, checked for real (its cut-out); no model is made
+      const images = (await engine("/products/wasifyai-image/images?limit=10"))?.images ?? [];
+      const teapot = images.find((i) => /teapot/i.test(i.prompt)) ?? images[0];
+      if (!teapot) throw new Error("no picture to start from");
+      const res = await fetch(
+        teapot.image_url.startsWith("http") ? teapot.image_url : `${BASE}${teapot.image_url}`,
+        {
+          headers: { authorization: `Bearer ${TOKEN}` },
+        },
+      );
+      const buffer = Buffer.from(await res.arrayBuffer());
+      await page
+        .getByLabel("Choose a picture")
+        .setInputFiles({ name: "teapot.png", mimeType: "image/png", buffer });
+      await page.getByRole("img", { name: "The object cut out" }).waitFor({ timeout: 600_000 });
+      await page.waitForTimeout(1000);
+      await shot(page, "u10-3d-check");
     });
   }
   if (scheme === "light" && names.has("home-make")) {

@@ -20,6 +20,7 @@ import { JobMeter, WorkingCard } from "../components/create";
 import { Notice } from "../components/notice";
 import type { ImageFlowApi } from "../hooks/use-image-flow";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
+import { BackInBar } from "../window-bar";
 import { CheckIt, EvaluationLine } from "./CheckIt";
 import { Choose } from "./Choose";
 import { Decide, DecideResult } from "./Decide";
@@ -51,7 +52,7 @@ const KIND_NOTE_VIDEO: Record<TrainKind, string> = {
  * What can be taught, one card each (ADR-0073): the label says which kind of model it makes, the
  * headline says what the person gets. Only pictures are built; the others say when they are coming.
  */
-const FAMILIES: {
+type Family = {
   id: string;
   label: string;
   title: string;
@@ -60,7 +61,9 @@ const FAMILIES: {
   /** which screen Start opens: the pictures (default), the writing examples, the decisions or a set for the video model */
   start?: "writing" | "decide" | "video";
   soon?: string;
-}[] = [
+};
+
+const FAMILIES: Family[] = [
   {
     id: "image",
     label: "Image model training",
@@ -117,13 +120,26 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
   const video = useVideoTraining(api, true, state.status, pollMs, place === "device");
   const showingRun = state.run !== null;
   const [screen, setScreen] = useState<"writing" | "decide" | null>(null);
+  // the set-up a card's "Set up" opened (ADR-0093 U10: shown when asked, not always)
+  const [setting, setSetting] = useState<"image" | "video" | null>(null);
+  const home = !screen && !state.current && !showingRun;
   const writing = screen !== null;
   // a set for the video model: the picture trainer's notices do not apply to it
   const forVideo = state.current?.family === "video";
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-5 p-[clamp(1rem,3vw,2rem)]">
+      {home || (showingRun && state.run?.status === "working") ? null : (
+        <BackInBar
+          label="Train models"
+          onBack={() => {
+            if (screen) {
+              setScreen(null);
+              void t.refresh();
+            } else void t.leave();
+          }}
+        />
+      )}
       <header className="grid gap-1.5">
-        <span className={eyebrow}>Train models</span>
         <h1 className="font-semibold text-step-2">
           {screen === "writing"
             ? "Teach it from examples"
@@ -163,19 +179,20 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
       {writing || forVideo ? null : notReady &&
         setup.setup &&
         setup.setup.plan.supported &&
-        !setup.setup.installed ? (
+        !setup.setup.installed &&
+        (!home || setting === "image" || installing(setup.setup)) ? (
         <SetupCard
           setup={setup.setup}
           error={setup.error}
           onInstall={(bytes) => void setup.install(bytes)}
           onCancel={() => void setup.cancel()}
         />
-      ) : notReady ? (
+      ) : notReady && !home ? (
         <Notice tone="warn" title="Training is not ready">
           {setup.setup?.problem ?? state.status?.problem ?? "It could not be started."}
         </Notice>
       ) : null}
-      {!writing && !forVideo && state.status?.fit?.verdict === "too_big" ? (
+      {!writing && !forVideo && !home && state.status?.fit?.verdict === "too_big" ? (
         <Notice tone="warn" title="Not enough memory to teach a model">
           {state.status.fit.reason}
         </Notice>
@@ -192,23 +209,9 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
       ) : null}
 
       {screen === "writing" ? (
-        <Writing
-          api={api}
-          pollMs={pollMs}
-          onBack={() => {
-            setScreen(null);
-            void t.refresh();
-          }}
-        />
+        <Writing api={api} pollMs={pollMs} />
       ) : screen === "decide" ? (
-        <Decide
-          api={api}
-          pollMs={pollMs}
-          onBack={() => {
-            setScreen(null);
-            void t.refresh();
-          }}
-        />
+        <Decide api={api} pollMs={pollMs} />
       ) : state.loading ? (
         <output className="text-muted-foreground">Looking at training…</output>
       ) : showingRun && state.run ? (
@@ -222,6 +225,9 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
           setup={setup}
           video={video}
           api={api}
+          setting={setting}
+          place={place}
+          onSetUp={(which) => setSetting(setting === which ? null : which)}
           onStart={{
             writing: place === "device" ? () => setScreen("writing") : undefined,
             decide: place === "device" ? () => setScreen("decide") : undefined,
@@ -242,6 +248,9 @@ function Home({
   video,
   api,
   onStart,
+  setting,
+  onSetUp,
+  place,
 }: {
   t: Hook;
   runs?: ImageFlowApi;
@@ -249,23 +258,108 @@ function Home({
   video: VideoTraining;
   api: TrainingApi;
   onStart?: { writing?: () => void; decide?: () => void; video?: () => void };
+  setting?: "image" | "video" | null;
+  onSetUp?: (which: "image" | "video") => void;
+  place: "device" | "service";
 }) {
   const { state } = t;
   const ready = state.status?.ready === true;
+  // what each card can do here, in one look (ADR-0093 U10): it works, it needs a step first, or it cannot
+  const look = (f: Family): CardLook => {
+    if (!f.live) return { tone: "no", text: f.soon ?? "Soon" };
+    if ((f.start === "writing" || f.start === "decide") && !onStart?.[f.start])
+      return { tone: "no", text: "On the desktop app" };
+    if (f.start === "writing" || f.start === "decide") return { tone: "ok", text: "Works here" };
+    const status = f.start === "video" ? video.status : state.status;
+    const plan = f.start === "video" ? video.setup.setup : setup.setup;
+    if (status === null) return { tone: "no", text: "Looking…" };
+    if (status.fit?.verdict === "too_big")
+      return { tone: "no", text: `Not enough memory: ${status.fit.reason}` };
+    if (status.ready) return { tone: "ok", text: "Works here" };
+    const missing = "needs" in status ? status.needs.filter((n) => !n.have) : [];
+    if (missing.length > 0)
+      return {
+        tone: "step",
+        text: `Needs a step: ${status.problem ?? ""} ${missing.map((n) => `${n.name} (${gigabytes(n.bytes)}). ${n.how}`).join(" ")}`,
+      };
+    if (plan?.plan.supported && !plan.installed)
+      return {
+        tone: "step",
+        text:
+          plan.progress.state === "installing"
+            ? "Setting up…"
+            : `Needs a step: set it up first (${gigabytes(plan.plan.bytes)} download)`,
+        setUp: f.start === "video" ? "video" : "image",
+      };
+    return {
+      tone: "no",
+      text: `${place === "device" ? "Not on this computer" : "Not on this service"}: ${plan?.problem ?? status.problem ?? "it could not be started"}`,
+    };
+  };
+  const filled = state.datasets.filter((d) => d.pictures > 0);
+  const empty = state.datasets.filter((d) => d.pictures === 0);
+  const setRow = (d: (typeof state.datasets)[number]) => (
+    <li key={d.id} className="flex flex-wrap items-center gap-3 rounded-xl border p-3">
+      <span className="min-w-0 flex-1">
+        <strong>{d.name || "Untitled set"}</strong>{" "}
+        <span className="text-muted-foreground">
+          · {KIND_LABEL[d.kind].title.toLowerCase()} · {d.pictures}{" "}
+          {d.family === "video"
+            ? d.pictures === 1
+              ? "picture or clip"
+              : "pictures and clips"
+            : d.pictures === 1
+              ? "picture"
+              : "pictures"}
+        </span>
+      </span>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        aria-label={`Continue ${d.name || "the set"}`}
+        onClick={() => void t.openDataset(d.id)}
+      >
+        Continue
+      </Button>
+      <Sure label="Remove" name={d.name || "the set"} onSure={() => void t.removeDataset(d.id)} />
+    </li>
+  );
   return (
     <>
       <section aria-label="What to teach" className="grid gap-3 md:grid-cols-2">
-        {FAMILIES.map((f) => (
-          <div
-            key={f.id}
-            className={cn(panel, "content-start", !f.live && "opacity-70")}
-            aria-disabled={f.live ? undefined : "true"}
-          >
-            <span className={eyebrow}>{f.label}</span>
-            <h2 className="m-0 font-semibold text-lg">{f.title}</h2>
-            <p className="m-0 text-muted-foreground">{f.text}</p>
-            {f.live && (f.start === "writing" || f.start === "decide" || f.start === "video") ? (
-              onStart?.[f.start] ? (
+        {FAMILIES.map((f) => {
+          const l = look(f);
+          const busy =
+            state.busy !== null ||
+            (f.start === "video" && (video.status?.busy === true || state.status?.busy === true));
+          return (
+            <div
+              key={f.id}
+              data-state={l.tone}
+              className={cn(panel, "content-start", l.tone === "no" && "opacity-80")}
+              aria-disabled={l.tone === "no" ? "true" : undefined}
+            >
+              <span className="text-muted-foreground text-xs">{f.label}</span>
+              <h2 className="m-0 font-semibold text-lg">{f.title}</h2>
+              <p className="m-0 text-muted-foreground">{f.text}</p>
+              <p className="m-0 flex items-start gap-2 text-sm" data-slot="card-state">
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "mt-1.5 size-2 shrink-0 rounded-full",
+                    l.tone === "ok"
+                      ? "bg-ok"
+                      : l.tone === "step"
+                        ? "bg-warn"
+                        : "bg-muted-foreground",
+                  )}
+                />
+                <span className={l.tone === "ok" ? undefined : "text-muted-foreground"}>
+                  {l.text}
+                </span>
+              </p>
+              {l.tone === "ok" ? (
                 <div className={actions}>
                   <Button
                     type="button"
@@ -274,45 +368,41 @@ function Home({
                         ? "Start: teach it from examples"
                         : f.start === "decide"
                           ? "Start: teach it to decide"
-                          : "Start: make my own look or motion for video"
+                          : f.start === "video"
+                            ? "Start: make my own look or motion for video"
+                            : undefined
                     }
-                    disabled={
-                      f.start === "video" &&
-                      (video.status?.ready !== true ||
-                        video.status.busy ||
-                        state.busy !== null ||
-                        state.status?.busy === true)
+                    disabled={(f.start === undefined && !ready) || busy}
+                    onClick={
+                      f.start === "writing" || f.start === "decide" || f.start === "video"
+                        ? onStart?.[f.start]
+                        : () => void t.newDataset()
                     }
-                    onClick={onStart[f.start]}
                   >
                     Start
                   </Button>
                 </div>
-              ) : (
-                <span className="w-fit rounded-full border px-2.5 py-0.5 text-muted-foreground text-xs">
-                  On the desktop app
-                </span>
-              )
-            ) : f.live ? (
-              <div className={actions}>
-                <Button
-                  type="button"
-                  disabled={!ready || state.busy !== null}
-                  onClick={() => void t.newDataset()}
-                >
-                  Start
-                </Button>
-              </div>
-            ) : (
-              <span className="w-fit rounded-full border px-2.5 py-0.5 text-muted-foreground text-xs">
-                {f.soon}
-              </span>
-            )}
-          </div>
-        ))}
+              ) : l.setUp && onSetUp ? (
+                <div className={actions}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-label={`Set up: ${f.title}`}
+                    aria-expanded={setting === l.setUp}
+                    onClick={() => onSetUp(l.setUp as "image" | "video")}
+                  >
+                    Set up
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
       </section>
 
-      <VideoSetup video={video} onStart={onStart?.video !== undefined} />
+      {setting === "video" || installing(video.setup.setup) ? (
+        <VideoSetup video={video} onStart={onStart?.video !== undefined} />
+      ) : null}
 
       {state.paused.length > 0 ? (
         <section aria-label="Paused" className="grid gap-2">
@@ -339,39 +429,18 @@ function Home({
       {state.datasets.length > 0 ? (
         <section aria-label="Sets of pictures" className="grid gap-2">
           <h2 className="m-0 font-semibold text-lg">Sets of pictures and clips</h2>
-          <ul className="m-0 grid list-none gap-2 p-0">
-            {state.datasets.map((d) => (
-              <li key={d.id} className="flex flex-wrap items-center gap-3 rounded-xl border p-3">
-                <span className="min-w-0 flex-1">
-                  <strong>{d.name || "Untitled set"}</strong>{" "}
-                  <span className="text-muted-foreground">
-                    · {KIND_LABEL[d.kind].title.toLowerCase()} · {d.pictures}{" "}
-                    {d.family === "video"
-                      ? d.pictures === 1
-                        ? "picture or clip"
-                        : "pictures and clips"
-                      : d.pictures === 1
-                        ? "picture"
-                        : "pictures"}
-                  </span>
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  aria-label={`Continue ${d.name || "the set"}`}
-                  onClick={() => void t.openDataset(d.id)}
-                >
-                  Continue
-                </Button>
-                <Sure
-                  label="Remove"
-                  name={d.name || "the set"}
-                  onSure={() => void t.removeDataset(d.id)}
-                />
-              </li>
-            ))}
-          </ul>
+          {filled.length > 0 ? (
+            <ul className="m-0 grid list-none gap-2 p-0">{filled.map(setRow)}</ul>
+          ) : null}
+          {empty.length > 0 ? (
+            // sets started and left with nothing in them wait folded, so the ones in use are seen (ADR-0093 U10)
+            <details className="group">
+              <summary className="cursor-pointer text-muted-foreground text-sm">
+                {empty.length === 1 ? "1 empty set" : `${empty.length} empty sets`}
+              </summary>
+              <ul className="m-0 mt-2 grid list-none gap-2 p-0">{empty.map(setRow)}</ul>
+            </details>
+          ) : null}
         </section>
       ) : null}
 
@@ -426,6 +495,11 @@ function Home({
  * trainer's set-up (sizes first, nothing fetched before the button), and the video model itself, which the
  * Video screens already get and this screen does not fetch.
  */
+type CardLook = { tone: "ok" | "step" | "no"; text: string; setUp?: "image" | "video" };
+
+const installing = (s: { progress: { state: string } } | null | undefined) =>
+  s?.progress.state === "installing" || s?.progress.state === "failed";
+
 function VideoSetup({ video, onStart }: { video: VideoTraining; onStart: boolean }) {
   const { status, setup } = video;
   if (!onStart || status === null || status.ready) return null;
@@ -640,11 +714,6 @@ function MakeView({
           video={isVideo ? video : undefined}
         />
       )}
-      <div>
-        <Button type="button" variant="ghost" size="sm" onClick={() => void t.leave()}>
-          Back to Train models
-        </Button>
-      </div>
     </>
   );
 }

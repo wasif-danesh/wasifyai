@@ -152,9 +152,10 @@ function RunningNow({ load }: { load: () => Promise<TrayJob[]> }) {
   }, [load]);
   if (jobs.length === 0) return null;
   return (
-    <section aria-label="Running now" className="grid gap-1.5">
+    <section aria-label="Running now" className="grid min-w-0 gap-1.5">
       <h2 className="m-0 font-semibold text-sm">Running now</h2>
-      <ul className="m-0 grid list-none gap-1 p-0">
+      {/* one column that may shrink: a long job's name is cut, not the page widened */}
+      <ul className="m-0 grid list-none grid-cols-[minmax(0,1fr)] gap-1 p-0">
         {jobs.map((j) => (
           <li key={j.id} className="flex items-center gap-2 text-sm">
             <Spinner />
@@ -235,7 +236,10 @@ export function HomeStart({
   onOpenLibrary?: () => void;
 }) {
   return (
-    <div className="mx-auto grid w-full max-w-3xl gap-6" data-slot="home-start">
+    <div
+      className="mx-auto grid w-full max-w-3xl grid-cols-[minmax(0,1fr)] gap-6"
+      data-slot="home-start"
+    >
       {onStart ? <QuickStarts offered={offered} onStart={onStart} /> : null}
       {running ? <RunningNow load={running} /> : null}
       {creations && onOpenEntry ? (

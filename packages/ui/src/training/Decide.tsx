@@ -152,11 +152,7 @@ export function parseTable(text: string): DecisionExample[] {
  * a report on texts it had not seen. Nothing here says encoder, loss or calibration: the person writes the question,
  * adds examples, checks and teaches.
  */
-export function Decide({
-  api,
-  pollMs,
-  onBack,
-}: { api: TrainingApi; pollMs?: number; onBack: () => void }) {
+export function Decide({ api, pollMs }: { api: TrainingApi; pollMs?: number }) {
   const w = useDecide(api, pollMs);
   const { state } = w;
   const status = state.status;
@@ -204,7 +200,7 @@ export function Decide({
       ) : state.current ? (
         <Editor w={w} api={api} pollMs={pollMs} />
       ) : (
-        <Sets w={w} onBack={onBack} />
+        <Sets w={w} />
       )}
     </div>
   );
@@ -212,7 +208,7 @@ export function Decide({
 
 // ---- the sets -----------------------------------------------------------------------------------
 
-function Sets({ w, onBack }: { w: DecideHook; onBack: () => void }) {
+function Sets({ w }: { w: DecideHook }) {
   const { state } = w;
   return (
     <section className={panel} aria-label="Sets of examples">
@@ -230,9 +226,6 @@ function Sets({ w, onBack }: { w: DecideHook; onBack: () => void }) {
           onClick={() => void w.newSet()}
         >
           New set of examples
-        </Button>
-        <Button type="button" variant="outline" onClick={onBack}>
-          Back
         </Button>
       </div>
       {state.sets.length > 0 ? (

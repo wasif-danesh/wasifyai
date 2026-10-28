@@ -1,8 +1,10 @@
 "use client";
 
+import { ArrowLeft } from "lucide-react";
 import { type ReactNode, createContext, useContext, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "./cn";
+import { Button } from "./components/button";
 
 /** The top bar of the app window: where its content goes, and a way to say a page has put something there. */
 export type WindowBar = {
@@ -73,5 +75,26 @@ export function TopBarSlot({ children }: { children: ReactNode }) {
       />
       {children}
     </WindowBarProvider>
+  );
+}
+
+/**
+ * "Back" in the bar (ADR-0093, stage U10): a screen with steps (Teach, a set, a run) leads back to its front door from
+ * the top of the screen, where the window's own Back is, instead of a link under the card.
+ */
+export function BackInBar({ label, onBack }: { label: string; onBack: () => void }) {
+  return (
+    <PageHeader className="flex shrink-0 items-center px-4 pt-3">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={onBack}
+        aria-label={`Back to ${label}`}
+      >
+        <ArrowLeft aria-hidden="true" />
+        {label}
+      </Button>
+    </PageHeader>
   );
 }

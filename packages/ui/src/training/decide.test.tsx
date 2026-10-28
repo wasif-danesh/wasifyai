@@ -354,7 +354,7 @@ describe("Decide", () => {
   it("starts with no sets, makes one, and says what is missing before teaching", async () => {
     const user = userEvent.setup();
     const engine = fake();
-    render(<Decide api={engine.api} pollMs={10} onBack={() => {}} />);
+    render(<Decide api={engine.api} pollMs={10} />);
     await user.click(await screen.findByRole("button", { name: "New set of examples" }));
     expect(await screen.findByText("1 The question")).toBeTruthy();
     expect(
@@ -368,7 +368,7 @@ describe("Decide", () => {
   it("asks for categories with their meaning and keeps them as they are typed", async () => {
     const user = userEvent.setup();
     const engine = fake();
-    render(<Decide api={engine.api} pollMs={10} onBack={() => {}} />);
+    render(<Decide api={engine.api} pollMs={10} />);
     await user.click(await screen.findByRole("button", { name: "New set of examples" }));
     await user.click(await screen.findByRole("button", { name: "One of several" }));
     expect(await screen.findByText("The categories")).toBeTruthy();
@@ -396,7 +396,7 @@ describe("Decide", () => {
   it("asks what the ends of a score mean", async () => {
     const user = userEvent.setup();
     const engine = fake();
-    render(<Decide api={engine.api} pollMs={10} onBack={() => {}} />);
+    render(<Decide api={engine.api} pollMs={10} />);
     await user.click(await screen.findByRole("button", { name: "New set of examples" }));
     await user.click(await screen.findByRole("button", { name: "A score" }));
     expect(await screen.findByLabelText("What 1 means")).toBeTruthy();
@@ -410,7 +410,7 @@ describe("Decide", () => {
     async () => {
       const user = userEvent.setup();
       const engine = fake();
-      render(<Decide api={engine.api} pollMs={10} onBack={() => {}} />);
+      render(<Decide api={engine.api} pollMs={10} />);
       await user.click(await screen.findByRole("button", { name: "New set of examples" }));
       await user.click(await screen.findByLabelText("The question"));
       await user.paste("Is this review positive?");
@@ -448,7 +448,7 @@ describe("Decide", () => {
   it("stops a run that is going", async () => {
     const user = userEvent.setup();
     const engine = fake();
-    render(<Decide api={engine.api} pollMs={10} onBack={() => {}} />);
+    render(<Decide api={engine.api} pollMs={10} />);
     await user.click(await screen.findByRole("button", { name: "New set of examples" }));
     await user.click(await screen.findByLabelText("The question"));
     await user.paste("Is this good?");
@@ -476,7 +476,7 @@ describe("Decide", () => {
   it("keeps the model and method behind one closed line that says what is recommended", async () => {
     const user = userEvent.setup();
     const engine = fake();
-    render(<Decide api={engine.api} pollMs={10} onBack={() => {}} />);
+    render(<Decide api={engine.api} pollMs={10} />);
     await user.click(await screen.findByRole("button", { name: "New set of examples" }));
     const summary = await screen.findByText("Choose the model and method");
     const box = summary.closest("details") as HTMLDetailsElement;
@@ -494,7 +494,7 @@ describe("Decide", () => {
       status: { ready: false, problem: "Training is not set up on this computer yet." },
       setup: OFFER,
     });
-    render(<Decide api={engine.api} pollMs={10} onBack={() => {}} />);
+    render(<Decide api={engine.api} pollMs={10} />);
     expect(await screen.findByText("Set up training")).toBeTruthy();
     expect(screen.getByText(/needs a trainer and a small model to learn on/)).toBeTruthy();
     expect(screen.getByText("Trainer (Laya and PyTorch)")).toBeTruthy();
@@ -510,7 +510,7 @@ describe("Decide", () => {
         problem: "Training is not set up on this computer yet. Set it up first.",
       },
     });
-    render(<Decide api={engine.api} pollMs={10} onBack={() => {}} />);
+    render(<Decide api={engine.api} pollMs={10} />);
     expect(await screen.findByText("Teaching it to decide is not ready")).toBeTruthy();
     expect(
       (screen.getByRole("button", { name: "New set of examples" }) as HTMLButtonElement).disabled,

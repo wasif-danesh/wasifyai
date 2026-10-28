@@ -79,30 +79,31 @@ beforeEach(() => {
 });
 
 describe("the cards of the outputs", () => {
-  it("renames in a box of the page and keeps the name, with the pencil saying what it does", async () => {
+  it("renames in place on the card and keeps the name, with the pencil saying what it does", async () => {
     const user = userEvent.setup();
     const api = setup();
     const pencil = await screen.findByRole("button", { name: "Rename Launch plan" });
     expect(pencil).toHaveAttribute("title", "Rename");
     await user.click(pencil);
-    const box = screen.getByRole("dialog", { name: "Rename this output" });
-    const field = within(box).getByLabelText("Name");
+    const field = screen.getByRole("textbox", { name: "Name of Launch plan" });
     expect(field).toHaveValue("Launch plan");
+    expect(screen.queryByRole("dialog")).toBeNull(); // in place, not in a box
     await user.clear(field);
     await user.type(field, "Q3 plan{Enter}");
     expect(api.renameOutput).toHaveBeenCalledWith("n1", "o1", "Q3 plan");
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: /^Name of/ })).toBeNull());
   });
 
-  it("does nothing when the name is left as it was or the box is cancelled", async () => {
+  it("does nothing when the name is left as it was or Escape is pressed", async () => {
     const user = userEvent.setup();
     const api = setup();
     await user.click(await screen.findByRole("button", { name: "Rename Launch plan" }));
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.keyboard("{Enter}");
     expect(api.renameOutput).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Rename Launch plan" }));
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("dialog")).toBeNull();
+    await user.type(screen.getByRole("textbox", { name: "Name of Launch plan" }), " draft");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("textbox", { name: /^Name of/ })).toBeNull();
     expect(api.renameOutput).not.toHaveBeenCalled();
   });
 

@@ -14,9 +14,9 @@ Turn a picture of your library into a short clip by saying what should move.
 ## Steps in the app
 
 1. Open **Video › Animate an image**.
-2. Choose a picture.
+2. Choose a picture, or choose **Animate this** under a picture on an Images screen to bring it here.
 3. Say what should move and the length.
-4. Choose Create.
+4. Choose **Make the video**.
 
 ## My looks
 

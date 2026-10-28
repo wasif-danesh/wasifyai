@@ -405,4 +405,24 @@ describe("styles, Vary and the edit source", () => {
     await user.click(screen.getByRole("button", { name: /^edit this$/i }));
     expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: "i1" }));
   });
+
+  it("hands a result to Video's Animate, next to Edit this", async () => {
+    const onAnimate = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ImageWorkspace
+        mode="text"
+        runs={runs}
+        images={fakeApi([summary()])}
+        onEditThis={vi.fn()}
+        onAnimateThis={onAnimate}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: "Open: a lighthouse" }));
+    const row = within(screen.getByRole("region", { name: "Result" }));
+    const buttons = row.getAllByRole("button").map((b) => b.textContent);
+    expect(buttons.slice(0, 2)).toEqual(["Edit this", "Animate this"]);
+    await user.click(row.getByRole("button", { name: /^animate this$/i }));
+    expect(onAnimate).toHaveBeenCalledWith(expect.objectContaining({ id: "i1" }));
+  });
 });

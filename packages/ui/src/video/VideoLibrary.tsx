@@ -1,7 +1,7 @@
 "use client";
 
 import { type VideoSummary, type VideosApi, clipLength, when } from "@wasifyai/client";
-import { Save, Search, Sparkles } from "lucide-react";
+import { Maximize2, Save, Search, Sparkles } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
@@ -23,6 +23,8 @@ export type VideoLibraryProps = {
   className?: string;
   /** How often to look again while a clip is being made (milliseconds). */
   pollMs?: number;
+  /** "Extend this" on a finished clip: the app opens Extend with it chosen. */
+  onExtend?: (video: VideoSummary) => void;
 };
 
 /** Everything the person made, newest first, with search, save and delete; clips being made show up too. */
@@ -34,6 +36,7 @@ export function VideoLibrary({
   subtitle = "Every clip you made on this computer.",
   className,
   pollMs = 5000,
+  onExtend,
 }: VideoLibraryProps) {
   const [items, setItems] = useState<VideoSummary[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
@@ -257,6 +260,11 @@ export function VideoLibrary({
               {when(open.created_at)}
             </p>
             <div className="flex flex-wrap gap-2">
+              {onExtend && open.status === "done" ? (
+                <Button type="button" onClick={() => onExtend(open)}>
+                  <Maximize2 className="size-4" /> Extend this
+                </Button>
+              ) : null}
               {canSave && open.status === "done" ? (
                 <Button type="button" variant="outline" onClick={() => void save(open)}>
                   <Save className="size-4" /> Save a copy

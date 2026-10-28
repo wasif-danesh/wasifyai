@@ -8,6 +8,8 @@
 //   apps/desktop/scripts/ui-audit.sh light home,image-create   only these screens
 //   apps/desktop/scripts/ui-audit.sh light image-make           a real picture, made in the window (pictures of
 //                                                                the stage while it is made and when it is done)
+//   apps/desktop/scripts/ui-audit.sh light video-make           a real clip from the newest picture: Animate this on
+//                                                                Images, the clip made on the stage, then Extend this
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -184,6 +186,38 @@ for (const scheme of ["light", "dark"]) {
       await page.waitForTimeout(400);
       await shot(page, "image-made-more");
       await page.keyboard.press("Escape");
+    });
+  }
+  if (scheme === "light" && names.has("video-make")) {
+    // the check of stage U4: Animate this hands the newest picture to Video, a real clip is made on the stage,
+    // and Extend this opens Extend with it chosen
+    await attempt("video-make", async () => {
+      await open(page, "/images/create");
+      await page.locator('[data-slot="recent-strip"] button[aria-label^="Open:"]').first().click();
+      await page.getByRole("button", { name: "Animate this" }).click();
+      await page.getByText("Animate a picture").first().waitFor();
+      await page.waitForTimeout(3000); // the picture is fetched and uploaded
+      await shot(page, "video-animate-handed");
+      await page
+        .getByRole("textbox", { name: /what should move/i })
+        .fill("Steam rises slowly from the cup and the camera gently pushes in");
+      await page.getByRole("button", { name: "Make the video" }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(20_000);
+      await shot(page, "video-making");
+      await page
+        .locator('[data-slot="stage"][data-state="result"] video')
+        .waitFor({ timeout: 1_800_000 });
+      await page.waitForTimeout(1500);
+      await shot(page, "video-made");
+      await page.getByRole("button", { name: "More" }).click();
+      await page.waitForTimeout(400);
+      await shot(page, "video-made-more");
+      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: "Extend this" }).click();
+      await page.getByText("Extend a video").first().waitFor();
+      await page.waitForTimeout(1500);
+      await shot(page, "video-extend-chosen");
     });
   }
   if (scheme === "light" && names.size === 0) {

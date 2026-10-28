@@ -11,7 +11,7 @@ import {
   sizeName,
   when,
 } from "@wasifyai/client";
-import { Heart, ImageIcon, Pencil, Save } from "lucide-react";
+import { Film, Heart, ImageIcon, Pencil, Save } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import type { Action } from "../components/actions-row";
 import { Button } from "../components/button";
@@ -143,6 +143,8 @@ export type ImageWorkspaceProps = {
   onUseLora?: (id: string) => Promise<void> | void;
   /** Take a result into Edit as its source picture (the app opens the Edit screen). */
   onEditThis?: (image: ImageSummary) => void;
+  /** Take a result into Video's Animate as its picture (the app opens the Animate screen). */
+  onAnimateThis?: (image: ImageSummary) => void;
   /** A picture to start Edit from: fetched and handed over like one the person chose. */
   sourceImage?: { url: string; name: string } | null;
 };
@@ -195,6 +197,7 @@ export function ImageWorkspace({
   availableLoras = [],
   onUseLora,
   onEditThis,
+  onAnimateThis,
   onOpenLibrary,
   sourceImage = null,
 }: ImageWorkspaceProps) {
@@ -427,6 +430,15 @@ export function ImageWorkspace({
                 label: "Edit this",
                 onSelect: () => onEditThis(shown),
                 icon: <Pencil aria-hidden="true" />,
+              },
+            ]
+          : []),
+        ...(onAnimateThis
+          ? [
+              {
+                label: "Animate this",
+                onSelect: () => onAnimateThis(shown),
+                icon: <Film aria-hidden="true" />,
               },
             ]
           : []),

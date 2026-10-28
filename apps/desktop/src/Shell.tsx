@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import type { ImageSummary } from "@wasifyai/client";
+import type { ImageSummary, VideoSummary } from "@wasifyai/client";
 import {
   AppBar,
   ApprovalCards,
@@ -43,6 +43,7 @@ import { VideoBuilderPage } from "./pages/VideoBuilder";
 import { VideosPage } from "./pages/Videos";
 import { remembered } from "./remember";
 import { useHistoryButtons, useRoute } from "./router";
+import { videos } from "./videos";
 
 const COLLAPSED_KEY = "wasifyai:sidebar-collapsed";
 
@@ -74,20 +75,37 @@ function Tool({
   );
 }
 
-/** The running jobs of this window's engine, for the tray: what each is doing, and Stop where it can be. */
+/**
+ * The running jobs of this window's engine, for the tray: what each is doing, and Stop where it can be. A clip
+ * made on the Video screen is a run, not an action, so the clips being made are listed too, by their words.
+ */
 async function runningJobs(): Promise<TrayJob[]> {
-  const { jobs } = await connectionsApi.jobs();
-  return jobs.map((j) => ({
-    id: j.job_id,
-    label: jobLabel(j.action_id),
-    from: j.from,
-    seconds: j.seconds,
-    onStop: j.cancellable
-      ? async () => {
-          await connectionsApi.cancelJob(j.job_id);
-        }
-      : undefined,
-  }));
+  const [{ jobs }, clips] = await Promise.all([
+    connectionsApi.jobs(),
+    videos
+      .list({ limit: 5, status: "working" })
+      .then((p) => p.videos)
+      .catch(() => []),
+  ]);
+  // a clip an agent asked for is already listed as its action
+  const asAction = jobs.some((j) => j.action_id.startsWith("video."));
+  const making: TrayJob[] = asAction
+    ? []
+    : clips.map((v) => ({ id: v.id, label: `Making your video: ${v.prompt}` }));
+  return [
+    ...making,
+    ...jobs.map((j) => ({
+      id: j.job_id,
+      label: jobLabel(j.action_id),
+      from: j.from,
+      seconds: j.seconds,
+      onStop: j.cancellable
+        ? async () => {
+            await connectionsApi.cancelJob(j.job_id);
+          }
+        : undefined,
+    })),
+  ];
 }
 
 function readCollapsed(): boolean {
@@ -133,10 +151,29 @@ export function Shell() {
   const [again, setAgain] = useState<ImageSummary | null>(null);
   // a result sent to Edit as its source picture ("Edit this result")
   const [editSource, setEditSource] = useState<{ url: string; name: string } | null>(null);
+  // a picture sent to Video's Animate ("Animate this"), and a clip sent to Extend ("Extend this")
+  const [animateSource, setAnimateSource] = useState<{ url: string; name: string } | null>(null);
+  const [extendSource, setExtendSource] = useState<VideoSummary | null>(null);
   useEffect(() => {
     if (route !== "create") setAgain(null);
     if (route !== "edit") setEditSource(null);
+    if (route !== "animate") setAnimateSource(null);
+    if (route !== "extend") setExtendSource(null);
   }, [route]);
+  const animateThis = useCallback(
+    (image: ImageSummary) => {
+      setAnimateSource({ url: image.image_url, name: `${image.id}.png` });
+      go("animate");
+    },
+    [go],
+  );
+  const extendThis = useCallback(
+    (video: VideoSummary) => {
+      setExtendSource(video);
+      go("extend");
+    },
+    [go],
+  );
   // a notebook has three panes: on a window too narrow for them and the menu, the menu steps aside
   // (until the person opens it; this is not remembered)
   const stepped = useRef(false);
@@ -244,6 +281,7 @@ export function Shell() {
                     setEditSource({ url: image.image_url, name: `${image.id}.png` });
                     go("edit");
                   }}
+                  onAnimateThis={animateThis}
                 />
               ) : null}
               {route === "edit" ? (
@@ -252,10 +290,15 @@ export function Shell() {
                   mode="image"
                   go={go}
                   source={editSource}
+                  onAnimateThis={animateThis}
                 />
               ) : null}
-              {route === "reference" ? <CreatePage mode="reference" go={go} /> : null}
-              {route === "inpaint" ? <CreatePage mode="inpaint" go={go} /> : null}
+              {route === "reference" ? (
+                <CreatePage mode="reference" go={go} onAnimateThis={animateThis} />
+              ) : null}
+              {route === "inpaint" ? (
+                <CreatePage mode="inpaint" go={go} onAnimateThis={animateThis} />
+              ) : null}
               {route === "creations" ? <CreationsPage go={go} /> : null}
               {route === "library" ? (
                 <LibraryPage
@@ -286,13 +329,30 @@ export function Shell() {
               {route === "separate" ? <ToolPage tool="separate" {...voice} /> : null}
               {route === "convert" ? <ToolPage tool="convert" {...voice} /> : null}
               {route === "speechedit" ? <ToolPage tool="edit" {...voice} /> : null}
-              {route === "video" ? <VideoPage mode="text" go={go} /> : null}
-              {route === "animate" ? <VideoPage mode="image" go={go} /> : null}
-              {route === "extend" ? <VideoPage mode="extend" go={go} /> : null}
+              {route === "video" ? (
+                <VideoPage mode="text" go={go} onExtendThis={extendThis} />
+              ) : null}
+              {route === "animate" ? (
+                <VideoPage
+                  key={`animate-${animateSource?.url ?? ""}`}
+                  mode="image"
+                  go={go}
+                  onExtendThis={extendThis}
+                  sourceImage={animateSource}
+                />
+              ) : null}
+              {route === "extend" ? (
+                <VideoPage
+                  key={`extend-${extendSource?.id ?? ""}`}
+                  mode="extend"
+                  go={go}
+                  sourceVideo={extendSource}
+                />
+              ) : null}
               {route === "videobuilder" ? <VideoBuilderPage go={go} /> : null}
               {route === "model3d" ? <Model3dPage go={go} /> : null}
               {route === "train" ? <TrainPage go={go} /> : null}
-              {route === "videos" ? <VideosPage go={go} /> : null}
+              {route === "videos" ? <VideosPage go={go} onExtend={extendThis} /> : null}
               {route === "models" ? <ModelsPage /> : null}
               {route === "settings" ? <SettingsPage /> : null}
             </main>

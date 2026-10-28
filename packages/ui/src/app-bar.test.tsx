@@ -36,17 +36,18 @@ function Window({ header }: { header: "none" | "tools" | "title" }) {
 }
 
 describe("the one top bar", () => {
-  it("shows the title", () => {
+  it("shows the title, which is not a heading: the screen's own h1 is the page's one heading", () => {
     render(<AppBar title="Images" theme={false} />);
-    expect(screen.getByRole("heading", { name: "Images" })).toBeInTheDocument();
+    expect(screen.getByText("Images")).toHaveAttribute("data-slot", "app-bar-title");
+    expect(screen.queryByRole("heading")).toBeNull();
   });
 
   it("keeps its title while a screen only adds its tools, and yields it to a screen's own title", () => {
     const { rerender } = render(<Window header="tools" />);
-    expect(screen.getByRole("heading", { name: "Images" })).toBeInTheDocument();
+    expect(screen.getByText("Images")).toHaveAttribute("data-slot", "app-bar-title");
     expect(screen.getByRole("button", { name: "FLUX.2 klein 4B" })).toBeInTheDocument();
     rerender(<Window header="title" />);
-    expect(screen.queryByRole("heading", { name: "Images" })).toBeNull();
+    expect(screen.queryByText("Images")).toBeNull();
     expect(screen.getByRole("heading", { name: "Launch plan" })).toBeInTheDocument();
   });
 

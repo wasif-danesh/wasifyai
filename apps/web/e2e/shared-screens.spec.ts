@@ -160,7 +160,7 @@ test("a picture is made, and can be downloaded @layout", async ({ page }) => {
 test("a video is made, and can be downloaded @layout", async ({ page }) => {
   await page.goto("/video");
   await page.getByRole("textbox").first().fill("A red fox walks through fresh snow at dawn");
-  await page.getByRole("button", { name: /make my video/i }).click();
+  await page.getByRole("button", { name: "Make the video" }).click();
   await expect(page.getByRole("link", { name: /download/i })).toHaveAttribute(
     "href",
     "/api/products/wasifyai-video/videos/v1/download",

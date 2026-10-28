@@ -15,8 +15,9 @@ Make a short video clip (5 or 8 seconds) from a description.
 
 1. Open **Video › Create**.
 2. Describe what happens.
-3. Choose the shape and the length.
-4. Choose Create. It takes minutes; you can leave the screen.
+3. Choose the length and the shape.
+4. Choose **Make the video**. It takes minutes; you can leave the screen, and the clip plays where it appears
+   when it is done. Under it are your recent videos; **Extend this** carries a clip on.
 
 ## My looks
 

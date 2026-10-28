@@ -1,5 +1,6 @@
 "use client";
 
+import { ANIMATE } from "@/components/video/VideoScreens";
 import { putHandoff, takeHandoff } from "@/lib/handoff";
 import { imageDownload, webImages, webTraining } from "@/lib/library";
 import { webClient } from "@/lib/run-client";
@@ -58,6 +59,10 @@ export function ImageScreen({ mode }: { mode: ImageMode }) {
           onEditThis={(image) => {
             putHandoff(EDIT, { url: image.image_url, name: `${image.id}.png` });
             router.push("/image/edit");
+          }}
+          onAnimateThis={(image) => {
+            putHandoff(ANIMATE, { url: image.image_url, name: `${image.id}.png` });
+            router.push("/video/animate");
           }}
         />
       ) : null}

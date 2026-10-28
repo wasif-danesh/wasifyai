@@ -44,6 +44,16 @@ const clip = (over: Partial<VideoSummary> = {}): VideoSummary => ({
   ...over,
 });
 
+/** The BFF as the video screen meets it: no looks, no clips yet, and the run's stream. */
+function answer(url: string, stream: BodyInit): Response {
+  if (url.startsWith("/api/products/wasifyai-training/")) return Response.json({ models: [] });
+  if (url.startsWith("/api/products/wasifyai-video/videos"))
+    return Response.json({ videos: [], next_before: null });
+  if (url === "/api/products/wasifyai-video/runs")
+    return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+  return new Response("not found", { status: 404 });
+}
+
 describe("VideoScreen (the web app's mount of the shared screen)", () => {
   it("goes through the BFF, tells the header and offers the download", async () => {
     const user = userEvent.setup();
@@ -72,23 +82,19 @@ describe("VideoScreen (the web app's mount of the shared screen)", () => {
           `id: ${i + 1}\nevent: ${name}\ndata: ${JSON.stringify({ run_id: "r", thread_id: "t", seq: i + 1, ts: "", ...data })}\n\n`,
       )
       .join("");
-    // the screen first reads the looks the person taught (none here)
-    fetchMock.mockResolvedValueOnce(Response.json({ models: [] }));
-    fetchMock.mockResolvedValueOnce(
-      new Response(body, { headers: { "content-type": "text/event-stream" } }),
-    );
+    fetchMock.mockImplementation(async (url: string) => answer(url, body));
     render(<VideoScreen mode="text" />);
-    await user.type(screen.getByRole("textbox"), "a red fox");
-    await user.click(screen.getByRole("button", { name: /make my video/i }));
+    await user.type(await screen.findByRole("textbox"), "a red fox");
+    await user.click(screen.getByRole("button", { name: "Make the video" }));
     expect(await screen.findByRole("link", { name: /download/i })).toHaveAttribute(
       "href",
       "/api/products/wasifyai-video/videos/v9/download",
     );
-    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
-      "/api/products/wasifyai-training/train/models",
-      "/api/products/wasifyai-video/runs",
-    ]);
-    await user.click(screen.getByRole("button", { name: /your videos/i }));
+    const paths = fetchMock.mock.calls.map((c) => String(c[0]).split("?")[0]);
+    expect(paths).toContain("/api/products/wasifyai-training/train/models"); // the looks the person taught
+    expect(paths).toContain("/api/products/wasifyai-video/videos"); // the recent strip
+    expect(paths).toContain("/api/products/wasifyai-video/runs");
+    await user.click(screen.getByRole("button", { name: "See all" }));
     expect(push).toHaveBeenCalledWith("/video/library");
   });
 
@@ -97,29 +103,54 @@ describe("VideoScreen (the web app's mount of the shared screen)", () => {
     const started = vi.fn();
     window.addEventListener(STARTED_EVENT, started);
     const frame = `id: 1\nevent: node\ndata: ${JSON.stringify({ run_id: "r", thread_id: "t", seq: 1, ts: "", node: "generate_video", status: "started", label: "Making your video" })}\n\n`;
-    // the screen first reads the looks the person taught (none here)
-    fetchMock.mockResolvedValueOnce(Response.json({ models: [] }));
-    fetchMock.mockResolvedValueOnce(
-      new Response(
+    fetchMock.mockImplementation(async (url: string) =>
+      answer(
+        url,
         new ReadableStream({
           start(c) {
             c.enqueue(new TextEncoder().encode(frame)); // the job goes on: the stream stays open
           },
         }),
-        { headers: { "content-type": "text/event-stream" } },
       ),
     );
     render(<VideoScreen mode="text" />);
-    await user.type(screen.getByRole("textbox"), "a red fox");
-    await user.click(screen.getByRole("button", { name: /make my video/i }));
+    await user.type(await screen.findByRole("textbox"), "a red fox");
+    await user.click(screen.getByRole("button", { name: "Make the video" }));
     await waitFor(() => expect(started).toHaveBeenCalled());
     window.removeEventListener(STARTED_EVENT, started);
   });
 
-  it("says what each mode is for and tells how long a clip takes here", () => {
+  it("says what each mode is for and tells how long a clip takes here", async () => {
+    fetchMock.mockImplementation(async (url: string) => answer(url, ""));
     render(<VideoScreen mode="image" />);
-    expect(screen.getByRole("heading", { name: "Animate a picture" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Animate a picture" })).toBeInTheDocument();
     expect(screen.getByText(/The clip keeps the shape of your picture/)).toBeInTheDocument();
+  });
+
+  it("starts Animate from a picture handed over by Images", async () => {
+    sessionStorage.setItem(
+      "wasifyai:handoff:video-animate",
+      JSON.stringify({ url: "http://x/i1.png", name: "i1.png" }),
+    );
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === "http://x/i1.png") return { blob: async () => png() } as unknown as Response;
+      if (url === "/api/products/wasifyai-video/uploads/images")
+        return Response.json({
+          upload_id: "u1",
+          key: "uploads/u1.png",
+          width: 8,
+          height: 8,
+          bytes: 10,
+        });
+      return answer(url, "");
+    });
+    render(<VideoScreen mode="image" />);
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.map((c) => c[0])).toContain(
+        "/api/products/wasifyai-video/uploads/images",
+      ),
+    );
+    expect(sessionStorage.getItem("wasifyai:handoff:video-animate")).toBeNull(); // used once
   });
 });
 

@@ -89,14 +89,14 @@ export function AppBar({
         </div>
       ) : null}
       {showTitle ? (
-        // the page's heading: where the person is, on every screen (a screen's own h1 is its tool's)
-        <h1
+        // where the person is, on every screen; not a heading: the screen's own h1 is the page's one heading
+        <p
           {...dragRegion}
           data-slot="app-bar-title"
           className="pointer-events-none m-0 max-w-[14rem] shrink-0 truncate ps-2 font-semibold text-sm max-sm:max-w-[8rem]"
         >
           {title}
-        </h1>
+        </p>
       ) : null}
       {/* a screen's own header goes in here, as items of this row, every control at the bar's one height */}
       <div

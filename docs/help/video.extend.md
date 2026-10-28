@@ -16,13 +16,14 @@ stays. The video can be one of your library or a video file you add from your co
 ## Steps in the app
 
 1. Open **Video › Extend video**.
-2. Choose one of your videos, or choose **Add a video from this computer** and pick a file (MP4, MOV or
-   WebM, up to 30 seconds). It is made to fit the model and added to Your videos; the file you picked is
-   not changed.
+2. Choose one of your videos in the row under the result, or choose **Add a video from this computer** (or
+   drop a file) and pick a file (MP4, MOV or WebM, up to 30 seconds). It is made to fit the model and added
+   to Your videos; the file you picked is not changed. **Extend this** under a clip, on a Video screen or
+   in Your videos, opens Extend with that clip chosen.
 3. Say what should keep happening. The words of a video made here are filled in from its own; change
    them if you like.
 4. Choose how much to add (about 5 or about 8 seconds).
-5. Choose Carry on my video.
+5. Choose **Make the video**.
 
 ## My looks
 

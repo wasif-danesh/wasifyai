@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Create, Animate and Extend (ADR-0037): a clip from words, from a picture and what should move, or one of
-// your videos carried on. The shared workspace with this window's model button (in the top bar) and setup notices.
-import type { VideoMode } from "@wasifyai/client";
+// your videos carried on. The shared make screen with this window's model button (in the top bar) and setup notices.
+import type { VideoMode, VideoSummary } from "@wasifyai/client";
 import {
   ModelSelect,
   type ModelSelectHandle,
   Notice,
-  PageHeader,
   VideoWorkspace,
   useChoicesFor,
 } from "@wasifyai/ui";
@@ -20,19 +19,19 @@ import { videos } from "../videos";
 
 type PageMode = Exclude<VideoMode, "import">;
 
-const TITLES: Record<PageMode, [string, string]> = {
-  text: ["Make a video", "Describe a scene and get a short clip. It is made on this computer."],
-  image: [
-    "Animate a picture",
-    "Choose a picture and say what should move. It is made on this computer.",
-  ],
-  extend: [
-    "Extend a video",
-    "Choose one of your videos, or add one from this computer, and carry it on for five or eight more seconds. It is made on this computer.",
-  ],
-};
-
-export function VideoPage({ mode, go }: { mode: PageMode; go: (r: Route) => void }) {
+export function VideoPage({
+  mode,
+  go,
+  onExtendThis,
+  sourceImage,
+  sourceVideo,
+}: {
+  mode: PageMode;
+  go: (r: Route) => void;
+  onExtendThis?: (video: VideoSummary) => void;
+  sourceImage?: { url: string; name: string } | null;
+  sourceVideo?: VideoSummary | null;
+}) {
   const model = useModelOf("wasifyai-video");
   const engine = useImageEngine();
   // "Select video model": the model in use, or the way to get one (ADR-0086)
@@ -47,35 +46,29 @@ export function VideoPage({ mode, go }: { mode: PageMode; go: (r: Route) => void
   const tight = real && model?.fit?.verdict === "tight";
 
   return (
-    <div className="grid gap-6 px-6 pt-10 pb-16">
-      <header className="mx-auto grid w-full max-w-3xl gap-2">
-        <div>
-          <h1 className="font-semibold text-2xl">{TITLES[mode][0]}</h1>
-          <p className="text-muted-foreground">{TITLES[mode][1]}</p>
-        </div>
-      </header>
-      <PageHeader className="flex h-14 shrink-0 items-center gap-4 border-b px-6 pt-1">
-        <ModelSelect group="video" api={choices} handleRef={picker} />
-      </PageHeader>
-      <VideoWorkspace
-        mode={mode}
-        runs={client}
-        videos={videos}
-        canSave
-        onOpenLibrary={() => go("videos")}
-        blockedReason={
-          tooBig && model?.fit ? `${model.title} will not fit. ${model.fit.reason}` : null
-        }
-        beforeMake={ensure}
-        looks={looks}
-        notices={
-          tight && model?.fit ? (
-            <Notice tone="warn" title="This computer is tight on memory">
-              {model.fit.reason}
-            </Notice>
-          ) : null
-        }
-      />
-    </div>
+    <VideoWorkspace
+      mode={mode}
+      runs={client}
+      videos={videos}
+      header={<ModelSelect group="video" api={choices} handleRef={picker} />}
+      canSave
+      hint="A 5 second clip takes a few minutes on a fast Mac, and an 8 second one about twice as long. It is made on this computer."
+      onOpenLibrary={() => go("videos")}
+      onExtendThis={onExtendThis}
+      sourceImage={sourceImage}
+      sourceVideo={sourceVideo}
+      blockedReason={
+        tooBig && model?.fit ? `${model.title} will not fit. ${model.fit.reason}` : null
+      }
+      beforeMake={ensure}
+      looks={looks}
+      notices={
+        tight && model?.fit ? (
+          <Notice tone="warn" title="This computer is tight on memory">
+            {model.fit.reason}
+          </Notice>
+        ) : null
+      }
+    />
   );
 }

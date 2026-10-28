@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type VideoSummary, type VideosApi, createRunClient } from "@wasifyai/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -52,34 +52,39 @@ const ready = done({
   mode: "extend",
 });
 
+const make = () => screen.getByRole("button", { name: "Make the video" });
+const resultShown = () =>
+  waitFor(() =>
+    expect(screen.getByRole("region", { name: "Result" })).toHaveAttribute("data-state", "result"),
+  );
+
 describe("Extend video", () => {
-  it("asks for the finished clips and shows them all, whatever their length", async () => {
+  it("asks for the finished clips and lists them all in the strip, whatever their length", async () => {
     const videos = api([
       clip(),
       clip({ id: "v3", prompt: "Waves on a beach", seconds: 4 }),
       clip({ id: "v9", prompt: "A long walk", seconds: 8 }),
     ]);
     render(<VideoWorkspace mode="extend" runs={client} videos={videos} />);
-    expect(await screen.findByRole("button", { name: /red fox walks/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /waves on a beach/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /a long walk/i })).toBeInTheDocument(); // no cap
+    expect(await screen.findByRole("button", { name: /choose: a red fox/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /choose: waves on a beach/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /choose: a long walk/i })).toBeInTheDocument(); // no cap
     expect(videos.list).toHaveBeenCalledWith(expect.objectContaining({ status: "done" }));
-    expect(screen.queryByText(/not shown/i)).toBeNull();
   });
 
   it("asks how much to add, five seconds unless said otherwise, and sends it", async () => {
     fetchMock.mockResolvedValueOnce(sse([node("check_request"), node("generate_video"), ready]));
     const user = userEvent.setup();
     render(<VideoWorkspace mode="extend" runs={client} videos={api([clip()])} />);
-    await user.click(await screen.findByRole("button", { name: /red fox walks/i }));
+    await user.click(await screen.findByRole("button", { name: /choose: a red fox/i }));
     expect(screen.getByRole("button", { name: /about 5 seconds/i })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
     await user.click(screen.getByRole("button", { name: /about 8 seconds/i }));
     expect(screen.getByText(/two or three rounds is a sensible stop/i)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /carry on my video/i }));
-    await screen.findByText(/saved in your videos/i);
+    await user.click(make());
+    await resultShown();
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(body.input).toMatchObject({ mode: "extend", source_id: "v1", seconds: 8 });
   });
@@ -95,20 +100,19 @@ describe("Extend video", () => {
         canSave
       />,
     );
-    const make = screen.getByRole("button", { name: /carry on my video/i });
-    expect(make).toBeDisabled(); // nothing chosen yet
-    await user.click(await screen.findByRole("button", { name: /red fox walks/i }));
+    expect(make()).toBeDisabled(); // nothing chosen yet
+    await user.click(await screen.findByRole("button", { name: /choose: a red fox/i }));
     const words = screen.getByRole("textbox");
     expect(words).toHaveValue("A red fox walks through the snow");
     await user.clear(words);
     await user.type(words, "the fox keeps walking");
-    await user.click(screen.getByRole("button", { name: /waves on a beach/i }));
+    await user.click(screen.getByRole("button", { name: /choose: waves on a beach/i }));
     expect(words).toHaveValue("the fox keeps walking"); // what the person typed stays
-    await user.click(screen.getByRole("button", { name: /red fox walks/i }));
-    expect(make).toBeEnabled();
-    await user.click(make);
+    await user.click(screen.getByRole("button", { name: /choose: a red fox/i }));
+    expect(make()).toBeEnabled();
+    await user.click(make());
 
-    expect(await screen.findByText(/saved in your videos/i)).toBeInTheDocument();
+    await resultShown();
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/products/wasifyai-video/runs");
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(body.input).toEqual({
@@ -117,11 +121,27 @@ describe("Extend video", () => {
       source_id: "v1",
       seconds: 5,
     });
-    expect(document.querySelector("video")).toHaveAttribute(
+    expect(screen.getByRole("region", { name: "Result" }).querySelector("video")).toHaveAttribute(
       "src",
       "http://127.0.0.1:1/files/v2.mp4",
     );
-    expect(screen.getByText(/your video, carried on/i)).toBeInTheDocument();
+    expect(screen.getByText(/carried on · 4 s/i)).toBeInTheDocument();
+  });
+
+  it("starts from a clip sent from another screen", async () => {
+    render(
+      <VideoWorkspace
+        mode="extend"
+        runs={client}
+        videos={api([clip()])}
+        sourceVideo={clip({ id: "v5", prompt: "A kite in the wind" })}
+      />,
+    );
+    expect(screen.getByRole("textbox")).toHaveValue("A kite in the wind");
+    expect(
+      within(screen.getByRole("region", { name: "Your video" })).getByText("A kite in the wind"),
+    ).toBeInTheDocument();
+    expect(make()).toBeEnabled();
   });
 
   it("says so when there is nothing to carry on, and when the list cannot be loaded", async () => {
@@ -135,13 +155,12 @@ describe("Extend video", () => {
       .mockResolvedValueOnce({ videos: [clip()], next_before: null });
     const user = userEvent.setup();
     render(<VideoWorkspace mode="extend" runs={client} videos={api([], { list })} />);
-    const alert = await screen.findByText(/could not be loaded/i);
-    const box = alert.closest("div") as HTMLElement;
-    await user.click(within(box.parentElement ?? box).getByRole("button", { name: /try again/i }));
-    expect(await screen.findByRole("button", { name: /red fox walks/i })).toBeInTheDocument();
+    await screen.findByText(/could not be loaded/i);
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+    expect(await screen.findByRole("button", { name: /choose: a red fox/i })).toBeInTheDocument();
   });
 
-  it("shows a refusal from the engine in words and brings the form back", async () => {
+  it("shows a refusal from the engine in words and keeps the choice", async () => {
     fetchMock.mockResolvedValueOnce(
       sse([
         node("check_request"),
@@ -153,10 +172,10 @@ describe("Extend video", () => {
     );
     const user = userEvent.setup();
     render(<VideoWorkspace mode="extend" runs={client} videos={api([clip()])} />);
-    await user.click(await screen.findByRole("button", { name: /red fox walks/i }));
-    await user.click(screen.getByRole("button", { name: /carry on my video/i }));
+    await user.click(await screen.findByRole("button", { name: /choose: a red fox/i }));
+    await user.click(make());
     expect(await screen.findByText(/as long as it can get/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /carry on my video/i })).toBeInTheDocument();
+    expect(make()).toBeEnabled();
   });
 
   it("adds a video file of the person's own, chooses it, and carries it on whatever its length", async () => {
@@ -178,16 +197,16 @@ describe("Extend video", () => {
         canSave
       />,
     );
-    expect(await screen.findByRole("button", { name: /red fox walks/i })).toBeInTheDocument();
+    await screen.findByRole("button", { name: /choose: a red fox/i });
     const file = new File(["x"], "holiday_clip.mp4", { type: "video/mp4" });
     await user.upload(screen.getByLabelText("Choose a video file"), file);
     expect(importVideo).toHaveBeenCalledWith(file);
-    const card = await screen.findByRole("button", { name: /holiday clip/i });
-    expect(card).toHaveAttribute("aria-pressed", "true"); // chosen at once
+    const card = await screen.findByRole("button", { name: /choose: holiday clip/i });
+    expect(card).toHaveAttribute("aria-current", "true"); // chosen at once
     expect(screen.getByRole("textbox")).toHaveValue(""); // the file's name is not what it is about
     await user.type(screen.getByRole("textbox"), "the people keep walking");
-    await user.click(screen.getByRole("button", { name: /carry on my video/i }));
-    await screen.findByText(/saved in your videos/i);
+    await user.click(make());
+    await resultShown();
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(body.input).toEqual({
       mode: "extend",
@@ -203,13 +222,35 @@ describe("Extend video", () => {
       .mockRejectedValue(new Error("That video is longer than 30 seconds. Try a shorter one."));
     const user = userEvent.setup();
     render(<VideoWorkspace mode="extend" runs={client} videos={api([clip()], { importVideo })} />);
-    await screen.findByRole("button", { name: /red fox walks/i });
+    await screen.findByRole("button", { name: /choose: a red fox/i });
     await user.upload(
       screen.getByLabelText("Choose a video file"),
       new File(["x"], "long.mp4", { type: "video/mp4" }),
     );
     expect(await screen.findByText(/longer than 30 seconds/i)).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /red fox walks/i })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /choose: a red fox/i })).toHaveLength(1);
     expect(screen.getByRole("button", { name: /add a video from this computer/i })).toBeEnabled();
+  });
+
+  it("offers Extend this on a finished clip, which chooses it here", async () => {
+    fetchMock.mockResolvedValueOnce(sse([node("check_request"), node("generate_video"), ready]));
+    const user = userEvent.setup();
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce({ videos: [clip()], next_before: null })
+      .mockResolvedValue({
+        videos: [clip({ id: "v2", prompt: "the fox keeps walking", seconds: 4 }), clip()],
+        next_before: null,
+      });
+    render(<VideoWorkspace mode="extend" runs={client} videos={api([], { list })} />);
+    await user.click(await screen.findByRole("button", { name: /choose: a red fox/i }));
+    await user.click(make());
+    await resultShown();
+    await user.click(await screen.findByRole("button", { name: /extend this/i }));
+    expect(screen.getByRole("textbox")).toHaveValue("the fox keeps walking");
+    expect(screen.getByRole("button", { name: /choose: the fox keeps walking/i })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
   });
 });

@@ -222,6 +222,10 @@ untouched (decision 1). The tray lists the engine's running actions on the deskt
 clips being made on the web (the web has no `/actions/jobs` yet). Checked with the menu walk, the shared-screens
 layout checks (one bar height on every screen), the unit tests of both shells and the pictures taken again.
 
+**Changed 2026-10-28 (with U4):** the bar's title is a plain line, not an `h1`: every screen already has its own
+`h1` (the tool's title, or the notebook's and chat's name in the bar), so each page now has one top-level heading
+instead of two, and the home test's heading check is steady.
+
 **Built:** U3 on 2026-10-28: `MakeScreen` (`packages/ui/src/components/make-screen.tsx`: ask, stage, recent;
 the main button in view, the three parts stacked on a phone) and the Images screen rebuilt on it
 (`image/ImageWorkspace.tsx`): "Make the picture" (`makeLabel`), the keyboard hint on the button, the Styles row in
@@ -234,7 +238,26 @@ picture handed to Video, stage U4) and the strip reading the one Library (stage 
 tests, the shared-screens specs, a real picture made in the window (`ui-audit.sh light image-make` pictures the
 stage while it works and when it is done) and the pictures taken again.
 
-About 44 days of work in thirteen stages; U0 to U3 are done, U4 next, then the products in the order a
+**Built:** U4 on 2026-10-28: Video on the `MakeScreen` (`video/VideoWorkspace.tsx`), one screen for Create,
+Animate and Extend, with the modes kept as the menu's items under Video (decision 3), not tabs in the screen.
+The ask column holds the prompt, Length, Shape (Create only), the picture (Animate) or the chosen clip (Extend,
+`video/ClipInput.tsx`: the clip, or a drop zone with "Add a video from this computer"), and My looks; "Make the
+video" for all three. The stage plays the clip, with Extend this, Save a copy or Download, and a More menu
+(Make it again, Use these words); progress says how long the last clip took. The recent strip lists the
+finished clips; on Extend it is the list to choose from, so Extend's grid and its "Show older videos" are gone
+(older clips: Your videos has Extend this in its dialog). "Animate this" on the Images stage hands the picture to
+Animate (the window keeps it in the shell's state, the web in the tab's session storage, like Edit this), and
+"Extend this" hands a clip to Extend from a Video screen or Your videos. The desktop tray now lists the clips
+being made by their words, as the web's does (a clip from the Video screen is a run, not an action). The help
+pages of the three actions say "Make the video". Checked with the video, Extend and image unit tests, the web's
+video tests and the shared-screens specs (the two video pictures taken again, and the image-create and phone
+notebook pictures, which still showed the screens from before U2 and U3), and a real clip made in the window
+with LTX-Video 2B 0.9.5 (`ui-audit.sh light video-make`: Animate this from a picture, the stage while the clip was
+made with the tray saying "1 running", the clip and its More menu, then Extend this; about two minutes for 5
+seconds; pictures `video-animate-handed`, `video-making`, `video-made`, `video-made-more` and
+`video-extend-chosen` in `docs/ui-audit/desktop/`).
+
+About 44 days of work in thirteen stages; U0 to U4 are done, U5 next, then the products in the order a
 new person meets them (Pictures, Video, Speech), with the Library before the home so the quick starts and the
 recent strips have one source.
 

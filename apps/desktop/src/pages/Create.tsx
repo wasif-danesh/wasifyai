@@ -39,12 +39,14 @@ export function CreatePage({
   go,
   preset,
   onEditThis,
+  onAnimateThis,
   source,
 }: {
   mode: ImageMode;
   go: (r: Route) => void;
   preset?: WorkspacePreset | null;
   onEditThis?: (image: ImageSummary) => void;
+  onAnimateThis?: (image: ImageSummary) => void;
   source?: { url: string; name: string } | null;
 }) {
   const model = useModelOf("wasifyai-image");
@@ -91,6 +93,7 @@ export function CreatePage({
         setTimeout(refreshLoras, 1500);
       }}
       onEditThis={onEditThis}
+      onAnimateThis={onAnimateThis}
       sourceImage={source ?? null}
       canSave
       blockedReason={

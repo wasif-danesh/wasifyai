@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type {
   ParsedEvent,
@@ -9,7 +9,7 @@ import type {
   VoiceApi,
   VoiceModelInfo,
 } from "@wasifyai/client";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { DubbingWorkspace, SPEAKER_TEXT } from "./DubbingWorkspace";
 
 const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
@@ -117,24 +117,39 @@ const dubbed = ev("done", {
   },
 });
 
-async function writeScript(language = "es") {
-  await userEvent.selectOptions(await screen.findByLabelText("Which recording?"), "track:t1");
-  await userEvent.selectOptions(screen.getByLabelText("Dub it into"), language);
+// Radix's pointer handling needs these in jsdom
+beforeAll(() => {
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.releasePointerCapture ??= () => {};
+  Element.prototype.scrollIntoView ??= () => {};
+});
+
+/** Open one of the app's lists by its label and choose an option by its name. */
+async function choose(list: string | RegExp, option: string | RegExp) {
+  await userEvent.click(await screen.findByRole("combobox", { name: list }));
+  await userEvent.click(await screen.findByRole("option", { name: option }));
+}
+
+async function writeScript(language = "Spanish", recording: RegExp = /^My talk/) {
+  await choose("Which recording?", recording);
+  await choose("Dub it into", language);
   await userEvent.click(screen.getByRole("button", { name: "Write the script" }));
   await screen.findByLabelText("Line 1");
 }
+
+const toVoice = () => userEvent.click(screen.getByRole("button", { name: "Next: the voice" }));
+const make = () => screen.getByRole("button", { name: "Make the dub" }) as HTMLButtonElement;
 
 describe("dubbing a recording", () => {
   it("offers the languages some voice model speaks, and writes the script after separating the voice", async () => {
     const runs = runsFor([ev("node", { label: "Translating" }), scripted]);
     render(<DubbingWorkspace api={api()} runs={runs} />);
-    const language = await screen.findByLabelText("Dub it into");
-    const names = within(language)
-      .getAllByRole("option")
-      .map((o) => o.textContent);
+    await userEvent.click(await screen.findByRole("combobox", { name: "Dub it into" }));
+    const names = screen.getAllByRole("option").map((o) => o.textContent);
     expect(names).toContain("Spanish");
     expect(names).toContain("English");
     expect(names).not.toContain("Maltese");
+    await userEvent.keyboard("{Escape}");
     expect(
       (screen.getByRole("button", { name: "Write the script" }) as HTMLButtonElement).disabled,
     ).toBe(true);
@@ -145,24 +160,26 @@ describe("dubbing a recording", () => {
       language: "es",
       background: true,
     });
+    // the script is read on the stage, before anything is spoken
     expect((screen.getByLabelText("Line 2") as HTMLTextAreaElement).value).toBe(
       "Gracias por venir.",
     );
+    expect(screen.getByRole("list", { name: "Steps" }).textContent).toContain("Script");
   });
 
   it("copies the speaker only with their word, and sends the script as it was changed", async () => {
     const runs = runsFor([scripted], [dubbed]);
     render(<DubbingWorkspace api={api()} runs={runs} />);
     await writeScript();
-    const make = screen.getByRole("button", { name: "Make the dub" }) as HTMLButtonElement;
-    expect(make.disabled).toBe(true); // the speaker's voice is the default and nobody said whose it is
-    expect(screen.getByText(/Say whose voice it is to copy it/)).toBeTruthy();
-    await userEvent.click(screen.getByRole("radio", { name: SPEAKER_TEXT.own }));
     const line = screen.getByLabelText("Line 1");
     await userEvent.clear(line);
     await userEvent.type(line, "Muy buenas noches.");
-    expect(make.disabled).toBe(false);
-    await userEvent.click(make);
+    await toVoice();
+    expect(make().disabled).toBe(true); // the speaker's voice is the default and nobody said whose it is
+    expect(screen.getByText(/Say whose voice it is to copy it/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("radio", { name: SPEAKER_TEXT.own }));
+    expect(make().disabled).toBe(false);
+    await userEvent.click(make());
     await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(2));
     expect(runs.startRun.mock.calls[1]?.[1]).toEqual({
       task: "dub",
@@ -178,17 +195,17 @@ describe("dubbing a recording", () => {
       vocals_track: "v-track",
       background_track: "b-track",
     });
-    const result = await screen.findByRole("region", { name: "The dub" });
-    expect(result.textContent).toContain("My talk (Spanish)");
+    const result = screen.getByRole("region", { name: "Result" });
+    await waitFor(() => expect(result.textContent).toContain("My talk (Spanish)"));
     expect(result.textContent).toContain("1 played a little faster");
   });
 
-  it("cannot make a line empty, and can drop the background", async () => {
+  it("cannot go on with an empty line, and can drop the background", async () => {
     const runs = runsFor([scripted], [dubbed]);
     render(<DubbingWorkspace api={api()} runs={runs} />);
-    await userEvent.selectOptions(await screen.findByLabelText("Which recording?"), "speech:s1");
+    await choose("Which recording?", /^Hello/);
     await userEvent.click(screen.getByRole("checkbox", { name: /Keep the music/ }));
-    await userEvent.selectOptions(screen.getByLabelText("Dub it into"), "es");
+    await choose("Dub it into", "Spanish");
     await userEvent.click(screen.getByRole("button", { name: "Write the script" }));
     await screen.findByLabelText("Line 1");
     // the voice still has to be separated to be copied, even without the background
@@ -196,13 +213,13 @@ describe("dubbing a recording", () => {
       source_speech: "s1",
       background: true,
     });
-    await userEvent.click(screen.getByRole("radio", { name: SPEAKER_TEXT.permission }));
-    const make = screen.getByRole("button", { name: "Make the dub" }) as HTMLButtonElement;
-    expect(make.disabled).toBe(false);
+    const next = screen.getByRole("button", { name: "Next: the voice" }) as HTMLButtonElement;
     await userEvent.clear(screen.getByLabelText("Line 2"));
-    expect(make.disabled).toBe(true);
+    expect(next.disabled).toBe(true);
     await userEvent.type(screen.getByLabelText("Line 2"), "Gracias.");
-    await userEvent.click(make);
+    await toVoice();
+    await userEvent.click(screen.getByRole("radio", { name: SPEAKER_TEXT.permission }));
+    await userEvent.click(make());
     await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(2));
     const sent = runs.startRun.mock.calls[1]?.[1] as Record<string, unknown>;
     expect(sent.speaker_basis).toBe("permission");
@@ -227,18 +244,18 @@ describe("dubbing a recording", () => {
       voices: vi.fn(async () => [voice(), voice({ id: "v2", name: "Design", kind: "design" })]),
     });
     render(<DubbingWorkspace api={a} runs={runs} />);
-    await writeScript("en");
+    await writeScript("English");
+    await toVoice();
     await userEvent.click(screen.getByRole("radio", { name: "A voice I saved" }));
-    const make = screen.getByRole("button", { name: "Make the dub" }) as HTMLButtonElement;
-    expect(make.disabled).toBe(true);
-    const saved = screen.getByLabelText("Saved voice");
-    expect(within(saved).queryByRole("option", { name: "Design" })).toBeNull(); // no recording to copy
-    await userEvent.selectOptions(saved, "v1");
-    expect(make.disabled).toBe(false);
+    expect(make().disabled).toBe(true);
+    await userEvent.click(screen.getByRole("combobox", { name: "Saved voice" }));
+    expect(screen.queryByRole("option", { name: "Design" })).toBeNull(); // no recording to copy
+    await userEvent.click(screen.getByRole("option", { name: "Ann" }));
+    expect(make().disabled).toBe(false);
     await userEvent.click(screen.getByRole("radio", { name: /A built-in voice/ }));
-    await userEvent.selectOptions(screen.getByLabelText("Built-in voice"), "am_adam");
-    expect(make.disabled).toBe(false);
-    await userEvent.click(make);
+    await choose("Built-in voice", "Adam");
+    expect(make().disabled).toBe(false);
+    await userEvent.click(make());
     await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(2));
     expect(runs.startRun.mock.calls[1]?.[1]).toMatchObject({
       voice_from: "builtin",
@@ -255,10 +272,10 @@ describe("dubbing a recording", () => {
       }),
     ]);
     render(<DubbingWorkspace api={api()} runs={failing} />);
-    await userEvent.selectOptions(await screen.findByLabelText("Which recording?"), "track:t1");
-    await userEvent.selectOptions(screen.getByLabelText("Dub it into"), "es");
+    await choose("Which recording?", /^My talk/);
+    await choose("Dub it into", "Spanish");
     await userEvent.click(screen.getByRole("button", { name: "Write the script" }));
-    expect((await screen.findByRole("alert")).textContent).toContain("language model");
+    expect(await screen.findByText(/language model did not answer/)).toBeTruthy();
   });
 
   it("says when no model speaks the language the voice is wanted in", async () => {
@@ -266,8 +283,8 @@ describe("dubbing a recording", () => {
       models: vi.fn(async (task?: string) => (task === "clone" ? [] : [kokoro])),
     });
     render(<DubbingWorkspace api={onlyKokoro} runs={runsFor([scripted])} />);
-    const language = await screen.findByLabelText("Dub it into");
-    expect(within(language).queryByRole("option", { name: "Spanish" })).toBeNull();
-    expect(within(language).getByRole("option", { name: "English" })).toBeTruthy();
+    await userEvent.click(await screen.findByRole("combobox", { name: "Dub it into" }));
+    expect(screen.queryByRole("option", { name: "Spanish" })).toBeNull();
+    expect(screen.getByRole("option", { name: "English" })).toBeTruthy();
   });
 });

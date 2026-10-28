@@ -12,6 +12,10 @@
 //                                                                Images, the clip made on the stage, then Extend this
 //   apps/desktop/scripts/ui-audit.sh light speech-make          a real speech with its waveform, then a real transcript
 //                                                                of it on Speech to text
+//   apps/desktop/scripts/ui-audit.sh light studio-make          a real dub of the newest speech (into English, or
+//                                                                WASIFYAI_AUDIT_DUB_LANGUAGE) (the
+//                                                                script, the voice, the dub), then a real portrait
+//                                                                made on Images and turned into a lip sync video
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -136,12 +140,33 @@ async function shot(page, name, height = 900) {
   if (height !== 900) await page.setViewportSize({ width: 1440, height: 900 });
   console.log("wrote", name);
 }
+let current = null; // the page of the step being tried, for a picture when it fails
 async function attempt(name, fn) {
   try {
     await fn();
   } catch (e) {
     console.log("failed", name, e instanceof Error ? e.message.split("\n")[0] : e);
+    if (current) {
+      await current.screenshot({ path: join(OUT, `${name}-failed.png`) }).catch(() => {});
+      const said = await current
+        .locator('[data-slot="stage"]')
+        .first()
+        .innerText()
+        .catch(() => "");
+      if (said) console.log("  the stage said:", said.replace(/\s+/g, " ").slice(0, 300));
+    }
   }
+}
+
+/** Wait for `ok`, but stop at once when the stage shows an error instead. */
+async function untilDone(page, ok, timeout) {
+  const failed = page.locator('[data-slot="stage"][data-state="error"]');
+  await Promise.race([
+    ok.waitFor({ timeout }),
+    failed.waitFor({ timeout }).then(() => {
+      throw new Error("the stage shows an error");
+    }),
+  ]);
 }
 
 const browser = await chromium.launch();
@@ -158,6 +183,7 @@ for (const scheme of ["light", "dark"]) {
     } catch {}
   });
   const page = await ctx.newPage();
+  current = page;
   const suffix = scheme === "dark" ? "-dark" : "";
   for (const [name, path] of SCREENS) {
     if (!wanted(name)) continue;
@@ -207,9 +233,11 @@ for (const scheme of ["light", "dark"]) {
       await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 20_000 });
       await page.waitForTimeout(20_000);
       await shot(page, "video-making");
-      await page
-        .locator('[data-slot="stage"][data-state="result"] video')
-        .waitFor({ timeout: 1_800_000 });
+      await untilDone(
+        page,
+        page.locator('[data-slot="stage"][data-state="result"] video'),
+        1_800_000,
+      );
       await page.waitForTimeout(1500);
       await shot(page, "video-made");
       await page.getByRole("button", { name: "More" }).click();
@@ -258,6 +286,76 @@ for (const scheme of ["light", "dark"]) {
       await page.getByRole("article", { name: "Transcript" }).waitFor({ timeout: 300_000 });
       await page.waitForTimeout(800);
       await shot(page, "transcript-made");
+    });
+  }
+  if (scheme === "light" && names.has("studio-make")) {
+    // the check of stage U6: a real dub with its script on the stage, and a real lip sync video
+    const choose = async (list, option) => {
+      await page.getByRole("combobox", { name: list }).click();
+      await page.getByRole("option", { name: option }).first().click();
+    };
+    await attempt("dub-make", async () => {
+      await open(page, "/voice/dub");
+      await page.getByRole("combobox", { name: "Which recording?" }).waitFor({ timeout: 60_000 });
+      await choose("Which recording?", /^Good morning/);
+      // the language a voice model on this computer speaks (Kokoro: English only)
+      await choose("Dub it into", process.env.WASIFYAI_AUDIT_DUB_LANGUAGE ?? "English");
+      await page.getByRole("button", { name: "Write the script" }).click();
+      await untilDone(page, page.getByLabel("Line 1"), 900_000);
+      await page.waitForTimeout(800);
+      await shot(page, "dub-script");
+      await page.getByRole("button", { name: "Next: the voice" }).click();
+      await page.getByRole("radio", { name: /A built-in voice/ }).click();
+      await page.waitForTimeout(800);
+      await shot(page, "dub-voice");
+      await page.getByRole("button", { name: "Make the dub" }).click();
+      await untilDone(
+        page,
+        page.locator('[data-slot="stage"][data-state="result"] [data-slot="player"]'),
+        900_000,
+      );
+      await page.waitForTimeout(2500);
+      await shot(page, "dub-made");
+    });
+    await attempt("lipsync-make", async () => {
+      await open(page, "/images/create");
+      await page
+        .getByRole("textbox", { name: /prompt/i })
+        .fill("A friendly illustrated portrait of a woman looking straight at the camera, plain light background");
+      await page.getByRole("button", { name: "Make the picture" }).click();
+      await page
+        .locator('[data-slot="stage"][data-state="result"] img')
+        .waitFor({ timeout: 600_000 });
+      const src = await page.locator('[data-slot="stage"] img').first().getAttribute("src");
+      const b64 = await page.evaluate(async (url) => {
+        const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
+        let bin = "";
+        for (const b of bytes) bin += String.fromCharCode(b);
+        return btoa(bin);
+      }, src);
+      await open(page, "/voice/lip-sync");
+      await page.getByRole("button", { name: "Choose a picture", exact: true }).first().waitFor({ timeout: 120_000 });
+      await page.locator('input[type="file"][aria-label="Choose a picture"]').setInputFiles({
+        name: "portrait.png",
+        mimeType: "image/png",
+        buffer: Buffer.from(b64, "base64"),
+      });
+      await page.getByAltText("The face to bring to life").waitFor({ timeout: 60_000 });
+      await page.getByRole("radio", { name: /drawing, painting/ }).click();
+      await page.getByLabel("What should it say?").fill("Hello! This video was made on this computer.");
+      await page.waitForTimeout(800);
+      await shot(page, "lipsync-face");
+      await page.getByRole("button", { name: "Make the video" }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 60_000 });
+      await page.waitForTimeout(15_000);
+      await shot(page, "lipsync-making");
+      await untilDone(
+        page,
+        page.locator('[data-slot="stage"][data-state="result"] video'),
+        1_800_000,
+      );
+      await page.waitForTimeout(1500);
+      await shot(page, "lipsync-made");
     });
   }
   if (scheme === "light" && names.size === 0) {

@@ -2,7 +2,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ParsedEvent, SavedVoice, VoiceApi, VoiceModelInfo } from "@wasifyai/client";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { AudiobookWorkspace } from "./AudiobookWorkspace";
 import { trackKind } from "./TrackList";
 
@@ -74,6 +74,8 @@ function api(over: Record<string, unknown> = {}): VoiceApi {
     })),
     models: vi.fn(async (task?: string) => (task === "design" ? [designer] : [kokoro])),
     voices: vi.fn(async () => []),
+    speeches: vi.fn(async () => []),
+    tracks: vi.fn(async () => []),
     planBook: vi.fn(async () => plan),
     ...over,
   } as unknown as VoiceApi;
@@ -116,8 +118,17 @@ async function planBook(title = "The Lighthouse") {
   await screen.findByLabelText("Title of chapter 1");
 }
 
-const make = () =>
-  screen.getByRole("button", { name: /Make the audiobook|Making the book/ }) as HTMLButtonElement;
+const make = () => screen.getByRole("button", { name: "Make the audiobook" }) as HTMLButtonElement;
+
+/** From the chapters on to the voice step. */
+const toVoice = () => userEvent.click(screen.getByRole("button", { name: "Next: the voice" }));
+
+// Radix's pointer handling needs these in jsdom
+beforeAll(() => {
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.releasePointerCapture ??= () => {};
+  Element.prototype.scrollIntoView ??= () => {};
+});
 
 describe("making an audiobook", () => {
   it("plans the chapters from the text, and shows them before anything is spoken", async () => {
@@ -132,7 +143,9 @@ describe("making an audiobook", () => {
     expect((screen.getByLabelText("Title of chapter 2") as HTMLInputElement).value).toBe(
       "The Boat",
     );
-    expect(screen.getByText(/3\)|\(3,/)).toBeTruthy();
+    expect(screen.getByText(/3 chapters, about/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Make the audiobook" })).toBeNull(); // the voice comes first
+    await toVoice();
     expect(make().disabled).toBe(false);
   });
 
@@ -144,7 +157,8 @@ describe("making an audiobook", () => {
     const t = screen.getByLabelText("Title of chapter 1");
     await userEvent.clear(t);
     await userEvent.type(t, "The Great Storm");
-    await userEvent.selectOptions(screen.getByLabelText("Voice"), "am_adam");
+    await toVoice();
+    await userEvent.click(screen.getByRole("radio", { name: /Adam/ }));
     await userEvent.click(screen.getByRole("checkbox", { name: /Say each chapter's title/ }));
     await userEvent.click(screen.getByRole("checkbox", { name: /one track of the whole book/ }));
     await userEvent.click(make());
@@ -161,8 +175,8 @@ describe("making an audiobook", () => {
       whole: true,
       read_titles: false,
     });
-    const done = await screen.findByRole("region", { name: "The audiobook" });
-    expect(done.textContent).toContain("2 chapters kept in Your music");
+    const done = await screen.findByRole("region", { name: "Result" });
+    await waitFor(() => expect(done.textContent).toContain("2 chapters, kept in Your music"));
     expect(done.textContent).toContain("B - 3. The Letter");
   });
 
@@ -174,6 +188,7 @@ describe("making an audiobook", () => {
       screen.getAllByRole("button", { name: "Join with next" })[0] as HTMLElement,
     );
     expect(screen.queryByLabelText("Title of chapter 3")).toBeNull();
+    await toVoice();
     await userEvent.click(make());
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
     const sent = runs.startRun.mock.calls[0]?.[1] as {
@@ -195,10 +210,9 @@ describe("making an audiobook", () => {
     const runs = runsThat([finished]);
     render(<AudiobookWorkspace api={api({ voices: vi.fn(async () => [saved]) })} runs={runs} />);
     await planBook();
-    await userEvent.click(screen.getByRole("radio", { name: "A voice I saved" }));
-    expect(make().disabled).toBe(true);
-    await userEvent.selectOptions(screen.getByLabelText("Saved voice"), "v1");
-    expect(make().disabled).toBe(false);
+    await toVoice();
+    await userEvent.click(await screen.findByRole("radio", { name: /Narrator/ }));
+    await waitFor(() => expect(make().disabled).toBe(false));
     await userEvent.click(make());
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
     expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({
@@ -223,11 +237,9 @@ describe("making an audiobook", () => {
       <AudiobookWorkspace api={api({ planBook: vi.fn(async () => long) })} runs={runsThat([])} />,
     );
     await planBook();
-    const box = screen.getByRole("checkbox", {
-      name: /one track of the whole book/,
-    }) as HTMLInputElement;
-    expect(box.disabled).toBe(true);
-    expect(screen.getByText(/only for books up to about two hours/)).toBeTruthy();
+    await toVoice();
+    expect(screen.getByRole("checkbox", { name: /one track of the whole book/ })).toBeDisabled();
+    expect(screen.getByText(/Only for books up to about two hours/)).toBeTruthy();
   });
 
   it("says in words when the chapters cannot be found or the book cannot be made", async () => {
@@ -249,6 +261,7 @@ describe("making an audiobook", () => {
     ]);
     render(<AudiobookWorkspace api={api()} runs={failing} />);
     await planBook();
+    await toVoice();
     await userEvent.click(make());
     expect((await screen.findByRole("alert")).textContent).toContain("were kept in Your music");
   });

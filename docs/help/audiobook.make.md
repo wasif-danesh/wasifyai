@@ -14,9 +14,10 @@ Read a long text aloud, one track per chapter, optionally one track of the whole
 ## Steps in the app
 
 1. Open **Voice › Audiobook**.
-2. Paste the text and check the chapters.
-3. Choose a voice.
-4. Choose Make. It can take a long time and keeps each chapter as it is done.
+2. **Text**: give the book a title, paste or open the text, and choose **Find the chapters**.
+3. **Chapters**: read them on the right; rename, join or remove them, then choose **Next: the voice**.
+4. **Voice**: choose a voice in the list (Hear it plays a short line), then **Make the audiobook**. It can take
+   a long time; the screen says which chapter it is on, and each chapter is kept in Your music as it is done.
 
 ## Fields
 

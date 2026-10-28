@@ -26,7 +26,8 @@ export function RadioGroup({
   const base = useId();
   return (
     <RadioGroupPrimitive.Root
-      value={value}
+      // "" keeps the group following the screen when nothing is chosen (undefined would let it keep its own)
+      value={value ?? ""}
       onValueChange={onValueChange}
       disabled={disabled}
       aria-label={label}

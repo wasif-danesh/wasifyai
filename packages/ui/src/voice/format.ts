@@ -87,3 +87,24 @@ export function minutesText(seconds: number): string {
   const minutes = Math.max(1, Math.round(seconds / 60));
   return `${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
 }
+
+/**
+ * How far a long job is, from the words the engine says while it works: "Chapter 2 of 5, part 1 of 3" (an
+ * audiobook) or "Speaking line 4 of 12" (a dub). Undefined when the words give no count.
+ */
+export function stepProgress(label: string | null | undefined): number | undefined {
+  if (!label) return undefined;
+  const book = /Chapter (\d+) of (\d+)(?:, part (\d+) of (\d+))?/.exec(label);
+  if (book) {
+    const [n, total, part, parts] = book.slice(1).map((x) => (x ? Number(x) : 0));
+    if (!total) return undefined;
+    const within = parts ? ((part || 1) - 1) / parts : 0;
+    return Math.min(1, ((n || 1) - 1 + within) / total);
+  }
+  const line = /(\d+) of (\d+)/.exec(label);
+  if (line) {
+    const [i, n] = [Number(line[1]), Number(line[2])];
+    return n ? Math.min(1, (i - 1) / n) : undefined;
+  }
+  return undefined;
+}

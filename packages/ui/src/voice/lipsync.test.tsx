@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type {
   Clip,
@@ -10,7 +10,7 @@ import type {
   VoiceApi,
   VoiceModelInfo,
 } from "@wasifyai/client";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { LipSyncWorkspace, MARK, PICTURE_TEXT, VOICE_TEXT } from "./LipSyncWorkspace";
 
 const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
@@ -161,6 +161,18 @@ async function addFace() {
 const makeButton = () =>
   screen.getByRole("button", { name: /Make the video/ }) as HTMLButtonElement;
 
+// Radix's pointer handling needs these in jsdom
+beforeAll(() => {
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.releasePointerCapture ??= () => {};
+  Element.prototype.scrollIntoView ??= () => {};
+});
+
+async function chooseRecording(name: RegExp) {
+  await userEvent.click(screen.getByRole("combobox", { name: "Which recording?" }));
+  await userEvent.click(await screen.findByRole("option", { name }));
+}
+
 describe("making a talking video", () => {
   it("needs the picture, what it is, and the words before it can be made, and says the mark is always there", async () => {
     render(<LipSyncWorkspace api={api()} runs={runsThat([])} />);
@@ -190,10 +202,12 @@ describe("making a talking video", () => {
       text: "Good evening, everyone.",
       model: "musetalk-v15",
     });
-    const list = await screen.findByRole("region", { name: "Your videos" });
-    await waitFor(() => expect(list.textContent).toContain("Mona says hello"));
-    expect(list.textContent).toContain(PICTURE_TEXT.drawn);
-    expect(list.textContent).toContain(VOICE_TEXT.generated);
+    // the new video plays on the stage with what was said about it
+    const stage = screen.getByRole("region", { name: "Result" });
+    await waitFor(() => expect(stage.textContent).toContain("Mona says hello"));
+    expect(stage.querySelector("video")).toHaveAttribute("src", "http://x/c.mp4");
+    expect(stage.textContent).toContain(PICTURE_TEXT.drawn);
+    expect(stage.textContent).toContain(VOICE_TEXT.generated);
   });
 
   it("asks whose voice a recording is, and 'made here' is only offered for speech made here", async () => {
@@ -201,13 +215,13 @@ describe("making a talking video", () => {
     render(<LipSyncWorkspace api={api()} runs={runs} />);
     await addFace();
     await userEvent.click(screen.getByRole("radio", { name: PICTURE_TEXT.drawn }));
-    await userEvent.click(screen.getByRole("tab", { name: "A recording" }));
-    await userEvent.selectOptions(screen.getByLabelText("Which recording?"), "track:t1");
+    await userEvent.click(screen.getByRole("radio", { name: "A recording" }));
+    await chooseRecording(/^My recording/);
     expect(screen.queryByRole("radio", { name: VOICE_TEXT.generated })).toBeNull();
     expect(makeButton().disabled).toBe(true);
     await userEvent.click(screen.getByRole("radio", { name: VOICE_TEXT.permission }));
     expect(makeButton().disabled).toBe(false);
-    await userEvent.selectOptions(screen.getByLabelText("Which recording?"), "speech:s1");
+    await chooseRecording(/^Hello there/);
     expect(screen.getByRole("radio", { name: VOICE_TEXT.generated })).toBeTruthy();
     expect(makeButton().disabled).toBe(true); // the answer was reset with the recording
     await userEvent.click(screen.getByRole("radio", { name: VOICE_TEXT.generated }));
@@ -226,12 +240,13 @@ describe("making a talking video", () => {
   it("adds a recording from this computer and chooses it", async () => {
     const importTrack = vi.fn(async () => track({ id: "t9", title: "Dad" }));
     render(<LipSyncWorkspace api={api({ importTrack })} runs={runsThat([])} />);
-    await userEvent.click(await screen.findByRole("tab", { name: "A recording" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "A recording" }));
     const file = new File(["RIFF"], "dad.wav", { type: "audio/wav" });
     await userEvent.upload(screen.getByLabelText("Add a recording from this computer"), file);
     await waitFor(() => expect(importTrack).toHaveBeenCalledWith(file));
-    const select = screen.getByLabelText("Which recording?") as HTMLSelectElement;
-    await waitFor(() => expect(select.value).toBe("track:t9"));
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Which recording?" })).toHaveTextContent("Dad"),
+    );
   });
 
   it("says in words why a video was not made", async () => {
@@ -305,11 +320,10 @@ describe("the lip sync engine and the videos", () => {
     expect(screen.getByText(/repair the app/)).toBeTruthy();
   });
 
-  it("renames, saves and deletes a video", async () => {
+  it("opens a video from the strip, renames, saves and deletes it, asking first", async () => {
     const updateClip = vi.fn(async () => clip({ title: "Hello again" }));
     const removeClip = vi.fn(async () => undefined);
     const downloadClip = vi.fn(async () => new Blob(["x"]));
-    vi.spyOn(window, "prompt").mockReturnValue("Hello again");
     URL.createObjectURL = vi.fn(() => "blob:x");
     URL.revokeObjectURL = vi.fn();
     render(
@@ -318,14 +332,43 @@ describe("the lip sync engine and the videos", () => {
         runs={runsThat([])}
       />,
     );
-    const list = await screen.findByRole("region", { name: "Your videos" });
-    await userEvent.click(await screen.findByRole("button", { name: "Rename" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Open: Mona says hello" }));
+    await userEvent.click(screen.getByRole("button", { name: "Rename" }));
+    const name = await screen.findByRole("textbox", { name: "Name" });
+    await userEvent.clear(name);
+    await userEvent.type(name, "Hello again{Enter}");
     await waitFor(() => expect(updateClip).toHaveBeenCalledWith("c1", { title: "Hello again" }));
-    expect((await screen.findAllByText("Hello again")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/Hello again/)).length).toBeGreaterThan(0);
     await userEvent.click(screen.getByRole("button", { name: "Save MP4" }));
     await waitFor(() => expect(downloadClip).toHaveBeenCalledWith("c1"));
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(
+      within(screen.getByRole("region", { name: "Result" })).getByRole("button", {
+        name: /Delete/,
+      }),
+    );
+    expect(removeClip).not.toHaveBeenCalled(); // asks first
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }),
+    );
     await waitFor(() => expect(removeClip).toHaveBeenCalledWith("c1"));
-    await waitFor(() => expect(list.textContent).toContain("Nothing made yet."));
+    expect(await screen.findByText(/Nothing made yet/)).toBeTruthy();
+  });
+});
+
+describe("after a video is made", () => {
+  it("clears what the picture was, so the next picture is asked about afresh", async () => {
+    const runs = runsThat([finished]);
+    const clips = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([clip()]);
+    render(<LipSyncWorkspace api={api({ clips })} runs={runs} />);
+    await addFace();
+    await userEvent.type(screen.getByLabelText("What should it say?"), "Good evening.");
+    await userEvent.click(screen.getByRole("radio", { name: PICTURE_TEXT.drawn }));
+    await userEvent.click(makeButton());
+    await waitFor(() =>
+      expect(screen.getByRole("region", { name: "Result" }).textContent).toContain(
+        "Mona says hello",
+      ),
+    );
+    expect(screen.getByRole("radio", { name: PICTURE_TEXT.drawn })).not.toBeChecked();
   });
 });

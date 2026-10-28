@@ -16,7 +16,8 @@ Make a picture talk: a video of the face saying words or a recording. Every vide
 1. Open **Voice › Lip sync**.
 2. Choose a picture and say what it is (a drawing, you, or someone who agreed).
 3. Type the words or choose a recording, and say whose voice it is.
-4. Choose Make.
+4. Choose **Make the video**. It plays on the right with what you said about the picture and the voice;
+   Save MP4, Rename and Delete are under it.
 
 ## Fields
 

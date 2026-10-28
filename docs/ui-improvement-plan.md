@@ -279,7 +279,28 @@ transcript in the window (`ui-audit.sh light speech-make`: Kokoro 82M, the wavef
 speech (it needs an engine route: an owner decision), the Voices page leaving the menu (it is now also the "Make a
 voice" dialog; the menu's names are decision 1), and the strips reading the one Library (U8).
 
-About 44 days of work in thirteen stages; U0 to U5 are done, U6 next, then the products in the order a
+**Built:** U6 on 2026-10-28: Dub a recording, Audiobook and Lip sync on the `MakeScreen` with the `Stepper` in the
+ask column (`voice/DubbingWorkspace.tsx`, `AudiobookWorkspace.tsx`, `LipSyncWorkspace.tsx`; mounted by `MakeFrame`).
+Dub: Recording, Language, Script, Voice; "Write the script" puts the lines on the stage to read and change, "Next:
+the voice" asks whose voice, "Make the dub" plays the dub on the stage with its fit (Open Your music, Change the
+script); progress follows "Speaking line i of n". Audiobook: Text, Chapters, Voice; the chapters are edited on the
+stage (rename, join, remove, open to change the words), the voice comes from the `VoicesPanel` (Hear it), the
+settings are under "For experts", and the stage follows "Chapter n of m, part j of k" (`stepProgress` in
+`voice/format.ts`); the results play on the stage (the waveform up to 15 minutes). Lip sync: Picture, Voice, Make;
+the stage shows the face with what was said about it before anything is made, then the video with the mark, Save
+MP4, Rename (`NameDialog`, no `window.prompt` in the window) and Delete (asks first). The recording is chosen with
+the shared `voice/SourcePicker.tsx`; no native select, checkbox or radio is left in the three (`RadioGroup` now
+stays controlled when nothing is chosen). The model button is in the bar at every step. Each has a recent strip
+(dubs, books and chapters, talking videos). Help pages of dub, audiobook and lip sync updated. Checked with the
+voice unit tests, both apps' tests, the web specs (the three pictures taken again) and in the window
+(`ui-audit.sh light studio-make`): a real portrait made with FLUX.2 klein 4B and turned into a 3 second talking
+video with MuseTalk 1.5 (pictures `lipsync-face`, `lipsync-making`, `lipsync-made`). Not verified: a real dub on this
+Mac. The engine refused it in words on the stage, twice: no voice model here speaks Spanish (Kokoro is English
+only and no copying model is installed), and writing the script needs the voice separated, with Mel-Band RoFormer
+not installed. Open: Dub lists languages that a model not on this computer speaks, and it separates the voice
+whenever the speaker's voice is the default, which is before the person chooses the voice.
+
+About 44 days of work in thirteen stages; U0 to U6 are done, U7 next, then the products in the order a
 new person meets them (Pictures, Video, Speech), with the Library before the home so the quick starts and the
 recent strips have one source.
 

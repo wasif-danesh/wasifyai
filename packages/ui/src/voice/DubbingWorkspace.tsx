@@ -15,13 +15,25 @@ import {
   dubScript,
   makeDub,
 } from "@wasifyai/client";
+import { AudioLines, FolderOpen, Languages, Pencil } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import type { Action } from "../components/actions-row";
 import { Button } from "../components/button";
+import { Checkbox } from "../components/checkbox";
 import { Label } from "../components/label";
+import { MakeScreen } from "../components/make-screen";
+import { Player } from "../components/player";
+import { RadioGroup } from "../components/radio-group";
+import { type RecentItem, RecentStrip } from "../components/recent-strip";
+import { Select } from "../components/select";
 import { Spinner } from "../components/spinner";
+import { Stage, type StageState } from "../components/stage";
+import { Stepper } from "../components/stepper";
 import { Textarea } from "../components/textarea";
-import { ModelPicker, NotReadyText } from "./ModelPicker";
-import { clock, pickModel } from "./format";
+import { LoadingModels, ModelPicker, NotReadyText } from "./ModelPicker";
+import { type Library, SourcePicker } from "./SourcePicker";
+import { clock, pickModel, stepProgress } from "./format";
+import { useElapsed } from "./use-elapsed";
 import { useVoiceModels } from "./use-voice-models";
 
 export const LANGUAGE_NAMES: Record<string, string> = {
@@ -48,6 +60,8 @@ export type DubbingWorkspaceProps = {
   /** a recording chosen elsewhere (Your music), to start with */
   initialSource?: AudioSource | null;
   onOpenLibrary?: () => void;
+  title?: string;
+  lead?: string;
 };
 
 const base = (code: string) => code.toLowerCase().split(/[-_]/)[0] ?? code;
@@ -58,12 +72,14 @@ function spoken(languages: string[]): string[] {
   return codes.includes("multi") ? Object.keys(LANGUAGE_NAMES) : codes;
 }
 
-type Library = { tracks: Track[]; speeches: Speech[] };
+const STEPS = ["Recording", "Language", "Script", "Voice"];
+type View = "setup" | "script" | "voice";
 
 /**
- * Dubbing: a recording in another language, in two steps so the person can read and change the
- * translation before anything is spoken. The voice is the original speaker's (copied, which needs the
- * person's word that it is theirs or allowed), a voice they saved, or a built-in one.
+ * Dubbing on the one make screen (ADR-0093, stage U6), in steps so the person reads and changes the translation
+ * before anything is spoken: the recording and the language, then the script on the stage, then the voice. The
+ * voice is the original speaker's (copied, which needs the person's word that it is theirs or allowed), a voice
+ * they saved, or a built-in one. The dub plays on the stage; the dubs made before are the recent strip.
  */
 export function DubbingWorkspace({
   api,
@@ -73,6 +89,8 @@ export function DubbingWorkspace({
   onModelChosen,
   initialSource,
   onOpenLibrary,
+  title = "Dub a recording",
+  lead,
 }: DubbingWorkspaceProps) {
   const [library, setLibrary] = useState<Library | null>(null);
   const [source, setSource] = useState<AudioSource | null>(initialSource ?? null);
@@ -86,37 +104,35 @@ export function DubbingWorkspace({
   const [modelId, setModelId] = useState<string | null>(initialModel ?? null);
   const [script, setScript] = useState<DubScript | null>(null);
   const [lines, setLines] = useState<DubLine[]>([]);
+  const [view, setView] = useState<View>("setup");
   const [step, setStep] = useState<string | null>(null);
-  const [waited, setWaited] = useState(0);
   const [problem, setProblem] = useState<string | null>(null);
   const [made, setMade] = useState<{
     track: Pick<Track, "id" | "title" | "seconds" | "audio_url">;
-    fit: DubFit;
+    fit: DubFit | null;
   } | null>(null);
   const abort = useRef<AbortController | null>(null);
   const working = step !== null;
+  const waited = useElapsed(working);
 
   const task = voiceFrom === "builtin" ? "speak" : "clone"; // copying a voice, saved or not, is "clone"
   const voices = useVoiceModels(api, task);
   const speakers = useVoiceModels(api, "speak");
   const clones = useVoiceModels(api, "clone");
 
-  useEffect(() => () => abort.current?.abort(), []);
-  useEffect(() => {
+  const loadLibrary = () =>
     Promise.all([api.tracks({ limit: 200 }), api.speeches(200)])
       .then(([tracks, speeches]) => setLibrary({ tracks, speeches }))
-      .catch(() => setLibrary({ tracks: [], speeches: [] }));
+      .catch(() => setLibrary((l) => l ?? { tracks: [], speeches: [] }));
+  useEffect(() => () => abort.current?.abort(), []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: read once, when the screen opens
+  useEffect(() => {
+    void loadLibrary();
     api
       .voices()
       .then(setSaved)
       .catch(() => undefined);
   }, [api]);
-  useEffect(() => {
-    if (!working) return;
-    setWaited(0);
-    const id = setInterval(() => setWaited((w) => w + 1), 1000);
-    return () => clearInterval(id);
-  }, [working]);
 
   // the languages a voice can be made in: what some speaking or copying model knows
   const languages = [
@@ -129,25 +145,33 @@ export function DubbingWorkspace({
   const ready = chosen?.state === "ready";
   const savedUsable = saved.filter((v) => v.kind === "clone");
 
-  const picked = (() => {
-    if (!source || !library) return null;
-    if (source.kind === "track") {
-      const t = library.tracks.find((x) => x.id === source.id);
-      return t ? { title: t.title, seconds: t.seconds, url: t.audio_url } : null;
-    }
-    const s = library.speeches.find((x) => x.id === source.id);
-    return s ? { title: s.text.slice(0, 60), seconds: s.seconds, url: s.audio_url } : null;
-  })();
-
   const voiceOk =
     voiceFrom === "speaker"
-      ? basis !== null && (script?.vocalsTrack !== undefined || false)
+      ? basis !== null && script?.vocalsTrack !== undefined
       : voiceFrom === "saved"
         ? savedId !== ""
         : true;
   const readyToWrite = source !== null && language !== "" && !working;
-  const readyToMake =
-    script !== null && lines.every((l) => l.text.trim()) && voiceOk && ready && !working;
+  const linesOk = lines.length > 0 && lines.every((l) => l.text.trim());
+  const readyToMake = script !== null && linesOk && voiceOk && ready && !working;
+
+  function restart() {
+    setScript(null);
+    setMade(null);
+    setView("setup");
+  }
+
+  async function addFile(file: File) {
+    setProblem(null);
+    try {
+      const t = await api.importTrack(file);
+      setLibrary((l) => ({ tracks: [t, ...(l?.tracks ?? [])], speeches: l?.speeches ?? [] }));
+      setSource({ kind: "track", id: t.id });
+      restart();
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "That recording could not be added.");
+    }
+  }
 
   async function write() {
     if (!source || !language) return;
@@ -168,6 +192,7 @@ export function DubbingWorkspace({
       if (r.ok) {
         setScript(r.script);
         setLines(r.script.segments);
+        setView("script");
       } else setProblem(r.message);
     } catch (e) {
       if (!signal.aborted)
@@ -204,8 +229,10 @@ export function DubbingWorkspace({
         signal,
         setStep,
       );
-      if (r.ok) setMade({ track: r.track, fit: r.fit });
-      else setProblem(r.message);
+      if (r.ok) {
+        setMade({ track: r.track, fit: r.fit });
+        void loadLibrary();
+      } else setProblem(r.message);
     } catch (e) {
       if (!signal.aborted) setProblem(e instanceof Error ? e.message : "That could not be made.");
     } finally {
@@ -214,243 +241,189 @@ export function DubbingWorkspace({
     }
   }
 
-  if (library === null || voices.loading || speakers.loading || clones.loading) return <Spinner />;
   if (voices.error) {
     return (
-      <p role="alert" className="text-destructive">
+      <p role="alert" className="p-6 text-destructive">
         {voices.error}
       </p>
     );
   }
+  if (library === null || voices.loading || speakers.loading || clones.loading) {
+    return <LoadingModels />;
+  }
+
   const builtinVoices = chosen?.voices ?? [];
-  return (
-    <div className="mx-auto grid w-full min-w-0 max-w-3xl gap-6">
-      <p className="text-muted-foreground">
-        Speak a recording again in another language. You read and change the translation before
-        anything is spoken. It all runs on this computer.
-      </p>
+  const current = view === "setup" ? (source ? 1 : 0) : view === "script" ? 2 : 3;
 
-      <fieldset className="grid gap-3" disabled={working}>
-        <legend className="font-medium">1. The recording and the language</legend>
-        <div className="grid gap-2">
-          <Label htmlFor="dub-source">Which recording?</Label>
-          <select
-            id="dub-source"
-            className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-            value={source ? `${source.kind}:${source.id}` : ""}
-            onChange={(e) => {
-              const [kind, ...id] = e.target.value.split(":");
-              setSource(kind === "track" || kind === "speech" ? { kind, id: id.join(":") } : null);
-              setScript(null);
-              setMade(null);
-            }}
-          >
-            <option value="">Choose…</option>
-            {library.tracks.length > 0 ? (
-              <optgroup label="Your music and recordings">
-                {library.tracks.map((t) => (
-                  <option key={t.id} value={`track:${t.id}`}>
-                    {t.title} ({clock(t.seconds)})
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-            {library.speeches.length > 0 ? (
-              <optgroup label="Speech you made">
-                {library.speeches.map((s) => (
-                  <option key={s.id} value={`speech:${s.id}`}>
-                    {s.text.slice(0, 50)} ({clock(s.seconds)})
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-          </select>
-          {picked ? (
-            // biome-ignore lint/a11y/useMediaCaption: the recording the person chose
-            <audio controls preload="none" src={picked.url} className="h-10 w-full" />
-          ) : library.tracks.length + library.speeches.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              Nothing in the library yet.{" "}
-              {onOpenLibrary ? (
-                <button
-                  type="button"
-                  className="underline underline-offset-4"
-                  onClick={onOpenLibrary}
-                >
-                  Open Your music
-                </button>
-              ) : null}{" "}
-              to add a recording.
-            </p>
-          ) : null}
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="dub-language">Dub it into</Label>
-          <select
-            id="dub-language"
-            className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-            value={language}
-            onChange={(e) => {
-              setLanguage(e.target.value);
-              setScript(null);
-              setMade(null);
-            }}
-          >
-            <option value="">Choose a language…</option>
-            {languages.map((c) => (
-              <option key={c} value={c}>
-                {LANGUAGE_NAMES[c]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={keepBackground}
-            onChange={(e) => setKeepBackground(e.target.checked)}
+  const scriptEditor = (
+    <ol aria-label="The script" className="m-0 grid w-full list-none gap-3 p-0 text-start">
+      {lines.map((l, i) => (
+        <li key={`${l.start}-${l.end}`} className="grid gap-1 rounded-lg border bg-background p-3">
+          <div className="flex items-baseline gap-2 text-muted-foreground text-xs">
+            <time className="tabular-nums">
+              {clock(l.start)}–{clock(l.end)}
+            </time>
+            <span className="min-w-0 flex-1">{l.source}</span>
+          </div>
+          <Textarea
+            aria-label={`Line ${i + 1}`}
+            rows={2}
+            value={l.text}
+            disabled={working || view === "voice"}
+            onChange={(e) =>
+              setLines((all) => all.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))
+            }
           />
-          Keep the music and sounds behind the voice
-        </label>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button disabled={!readyToWrite} onClick={() => void write()}>
-            {working && !script ? "Writing the script…" : "Write the script"}
-          </Button>
-          {working ? (
-            <>
-              <output className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Spinner /> {step} · {clock(waited)}
-              </output>
-              <Button variant="ghost" onClick={() => abort.current?.abort()}>
-                Cancel
-              </Button>
-            </>
-          ) : null}
-        </div>
-      </fieldset>
+        </li>
+      ))}
+    </ol>
+  );
 
-      {script ? (
-        <fieldset className="grid gap-3" disabled={working}>
-          <legend className="font-medium">2. The script: read it, change what you like</legend>
-          <ol className="grid gap-3">
-            {lines.map((l, i) => (
-              <li key={`${l.start}-${l.end}`} className="grid gap-1 rounded-lg border p-3">
-                <div className="flex items-baseline gap-2 text-muted-foreground text-xs">
-                  <time className="tabular-nums">
-                    {clock(l.start)}–{clock(l.end)}
-                  </time>
-                  <span className="min-w-0 flex-1">{l.source}</span>
-                </div>
-                <Textarea
-                  aria-label={`Line ${i + 1}`}
-                  rows={2}
-                  value={l.text}
-                  onChange={(e) =>
-                    setLines((all) =>
-                      all.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)),
-                    )
-                  }
-                />
-              </li>
-            ))}
-          </ol>
-        </fieldset>
-      ) : null}
+  const resultActions: Action[] = [
+    ...(onOpenLibrary
+      ? [
+          {
+            label: "Open Your music",
+            onSelect: onOpenLibrary,
+            icon: <FolderOpen aria-hidden="true" />,
+          },
+        ]
+      : []),
+    ...(script
+      ? [
+          {
+            label: "Change the script",
+            onSelect: () => {
+              setMade(null);
+              setView("script");
+            },
+            icon: <Pencil aria-hidden="true" />,
+          },
+        ]
+      : []),
+  ];
 
-      {script ? (
-        <fieldset className="grid gap-3" disabled={working}>
-          <legend className="font-medium">3. The voice</legend>
-          <div role="radiogroup" aria-label="Whose voice" className="grid gap-2">
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="radio"
-                name="dub-voice"
-                checked={voiceFrom === "speaker"}
-                onChange={() => setVoiceFrom("speaker")}
-                className="mt-1"
-              />
-              The original speaker's voice, copied from the recording
-            </label>
-            {voiceFrom === "speaker" ? (
-              <div role="radiogroup" aria-label="Whose voice it is" className="ms-6 grid gap-1.5">
-                {(Object.keys(SPEAKER_TEXT) as SpeakerBasis[]).map((b) => (
-                  <label key={b} className="flex items-start gap-2 text-sm">
-                    <input
-                      type="radio"
-                      name="dub-basis"
-                      checked={basis === b}
-                      onChange={() => setBasis(b)}
-                      className="mt-1"
-                    />
-                    {SPEAKER_TEXT[b]}
-                  </label>
-                ))}
-                {!script.vocalsTrack ? (
-                  <p className="text-destructive text-sm">
-                    Write the script again: the voice has to be separated to be copied.
+  const stage: StageState = working
+    ? {
+        kind: "working",
+        label: script ? "Making the dub…" : "Writing the script…",
+        text: `${step} · ${clock(waited)}`,
+        value: stepProgress(step),
+        onStop: () => abort.current?.abort(),
+      }
+    : made
+      ? {
+          kind: "result",
+          children: (
+            <Player
+              key={made.track.id}
+              className="w-full"
+              src={made.track.audio_url}
+              title={made.track.title}
+              duration={made.track.seconds}
+              waveform
+            />
+          ),
+          caption: (
+            <div className="grid gap-1">
+              <span className="text-foreground">{made.track.title}</span>
+              {made.fit ? (
+                <span className="text-xs">
+                  {made.fit.lines} lines
+                  {made.fit.sped_up > 0
+                    ? `, ${made.fit.sped_up} played a little faster to fit their time`
+                    : ""}
+                  {made.fit.max_overflow_s > 0.3
+                    ? `. One line runs ${made.fit.max_overflow_s.toFixed(1)} seconds past its place: shorten it in the script and make the dub again.`
+                    : "."}{" "}
+                  It is kept in Your music.
+                </span>
+              ) : (
+                <span className="text-xs">{clock(made.track.seconds)} · kept in Your music</span>
+              )}
+            </div>
+          ),
+          actions: resultActions,
+        }
+      : script
+        ? {
+            kind: "result",
+            children: scriptEditor,
+            caption: (
+              <div className="grid gap-1">
+                <span>
+                  {lines.length} lines in {LANGUAGE_NAMES[language] ?? language}.{" "}
+                  {view === "script"
+                    ? "Change any line; the times stay."
+                    : "Go back to Script to change a line."}
+                </span>
+                {problem ? (
+                  <p role="alert" className="m-0 text-destructive text-sm">
+                    {problem}
                   </p>
                 ) : null}
               </div>
-            ) : null}
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="radio"
-                name="dub-voice"
-                checked={voiceFrom === "saved"}
-                onChange={() => setVoiceFrom("saved")}
-                className="mt-1"
-              />
-              A voice I saved
-            </label>
-            {voiceFrom === "saved" ? (
-              <select
-                aria-label="Saved voice"
-                className="ms-6 h-10 max-w-[calc(100%-1.5rem)] rounded-md border border-input bg-transparent px-3 text-sm"
-                value={savedId}
-                onChange={(e) => setSavedId(e.target.value)}
-              >
-                <option value="">
-                  {savedUsable.length ? "Choose a voice…" : "No saved voices yet"}
-                </option>
-                {savedUsable.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="radio"
-                name="dub-voice"
-                checked={voiceFrom === "builtin"}
-                onChange={() => setVoiceFrom("builtin")}
-                className="mt-1"
-              />
-              A built-in voice (not every language has one)
-            </label>
-            {voiceFrom === "builtin" && builtinVoices.length > 0 ? (
-              <select
-                aria-label="Built-in voice"
-                className="ms-6 h-10 max-w-[calc(100%-1.5rem)] rounded-md border border-input bg-transparent px-3 text-sm"
-                value={builtin}
-                onChange={(e) => setBuiltin(e.target.value)}
-              >
-                <option value="">The model's usual voice</option>
-                {builtinVoices.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.label}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-          </div>
-          {usable.length === 0 ? (
-            <p role="alert" className="text-destructive text-sm">
-              No voice model speaks {LANGUAGE_NAMES[language] ?? language} this way. Get one in
-              Models or choose another voice.
-            </p>
-          ) : (
+            ),
+          }
+        : problem
+          ? { kind: "error", message: problem, onReset: () => setProblem(null) }
+          : {
+              kind: "empty",
+              icon: Languages,
+              title: "The script appears here.",
+              text: "Choose a recording and a language, then press Write the script. You read it before anything is spoken.",
+            };
+
+  const recent: RecentItem[] = library.tracks
+    .filter((t) => t.mode === "dubbed")
+    .slice(0, 24)
+    .map((t) => ({
+      id: t.id,
+      cover: (
+        <span className="grid size-full place-items-center gap-0.5 bg-muted p-1 text-center">
+          <AudioLines className="size-4 text-muted-foreground" aria-hidden="true" />
+          <span className="line-clamp-2 text-[0.625rem] leading-tight">{t.title}</span>
+        </span>
+      ),
+      label: `Open: ${t.title}`,
+      current: made?.track.id === t.id,
+      onOpen: () => {
+        if (working) return;
+        setProblem(null);
+        setMade({ track: t, fit: null });
+      },
+    }));
+
+  const mainButton = (label: string, onClick: () => void, disabled: boolean) => (
+    <Button
+      type="button"
+      size="lg"
+      className="w-full rounded-full md:w-auto md:px-10"
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {working ? <Spinner /> : null}
+      {label}
+    </Button>
+  );
+
+  return (
+    <MakeScreen
+      title={title}
+      lead={lead}
+      ask={
+        <>
+          <Stepper
+            steps={STEPS}
+            current={current}
+            onStep={(i) => {
+              if (working) return;
+              if (i <= 1) setView("setup");
+              else if (i === 2) setView("script");
+            }}
+          />
+          {/* in the window the model button is in the top bar, so it is there at every step */}
+          {usable.length > 0 ? (
             <ModelPicker
               models={usable}
               task={task}
@@ -462,58 +435,170 @@ export function DubbingWorkspace({
               onGetModel={onGetModel}
               disabled={working}
             />
-          )}
-          <div className="flex flex-wrap items-center gap-3">
-            <Button disabled={!readyToMake} onClick={() => void make()}>
-              {working ? "Making the dub…" : "Make the dub"}
-            </Button>
-            {voiceFrom === "speaker" && basis === null ? (
-              <span className="text-muted-foreground text-sm">
-                Say whose voice it is to copy it.
-              </span>
-            ) : null}
-            {!ready && chosen ? (
-              <span className="text-muted-foreground text-sm">
-                <NotReadyText task="dub" />
-              </span>
-            ) : null}
-          </div>
-        </fieldset>
-      ) : null}
+          ) : null}
+          {view === "setup" ? (
+            <>
+              <SourcePicker
+                id="dub-source"
+                label="Which recording?"
+                library={library}
+                value={source}
+                disabled={working}
+                onAdd={(f) => void addFile(f)}
+                onChange={(next) => {
+                  setSource(next);
+                  restart();
+                }}
+              />
+              {library.tracks.length + library.speeches.length === 0 && onOpenLibrary ? (
+                <p className="m-0 text-muted-foreground text-sm">
+                  Nothing in the library yet. Add a recording, or{" "}
+                  <button
+                    type="button"
+                    className="underline underline-offset-4"
+                    onClick={onOpenLibrary}
+                  >
+                    open Your music
+                  </button>
+                  .
+                </p>
+              ) : null}
+              <div className="grid gap-2">
+                <Label htmlFor="dub-language" className="font-semibold text-ui-lg">
+                  Dub it into
+                </Label>
+                <Select
+                  id="dub-language"
+                  value={language || undefined}
+                  placeholder="Choose a language…"
+                  disabled={working}
+                  options={languages.map((c) => ({ value: c, label: LANGUAGE_NAMES[c] ?? c }))}
+                  onValueChange={(c) => {
+                    setLanguage(c);
+                    restart();
+                  }}
+                />
+              </div>
+              <Checkbox
+                label="Keep the music and sounds behind the voice"
+                checked={keepBackground}
+                disabled={working}
+                onCheckedChange={setKeepBackground}
+              />
+            </>
+          ) : null}
 
-      {problem ? (
-        <p role="alert" className="text-destructive">
-          {problem}
-        </p>
-      ) : null}
-      {made ? (
-        <section aria-label="The dub" className="grid gap-2 rounded-xl border bg-card p-3">
-          <div className="flex items-baseline gap-2">
-            <span className="font-medium">{made.track.title}</span>
-            <span className="text-muted-foreground text-xs">{clock(made.track.seconds)}</span>
-            {onOpenLibrary ? (
-              <button
-                type="button"
-                className="ms-auto text-sm underline underline-offset-4"
-                onClick={onOpenLibrary}
-              >
-                Open Your music
-              </button>
-            ) : null}
+          {view === "script" ? (
+            <p className="m-0 text-muted-foreground text-sm">
+              Read the script on the right and change any line you like. Then choose the voice.
+            </p>
+          ) : null}
+
+          {view === "voice" ? (
+            <>
+              <RadioGroup
+                label="Whose voice"
+                value={voiceFrom}
+                disabled={working}
+                onValueChange={(v) => setVoiceFrom(v as VoiceFrom)}
+                options={[
+                  {
+                    value: "speaker",
+                    label: "The original speaker's voice, copied from the recording",
+                  },
+                  { value: "saved", label: "A voice I saved" },
+                  {
+                    value: "builtin",
+                    label: "A built-in voice",
+                    hint: "Not every language has one.",
+                  },
+                ]}
+              />
+              {voiceFrom === "speaker" ? (
+                <div className="grid gap-2 rounded-md border p-3">
+                  <RadioGroup
+                    label="Whose voice it is"
+                    value={basis ?? undefined}
+                    disabled={working}
+                    onValueChange={(b) => setBasis(b as SpeakerBasis)}
+                    options={(Object.keys(SPEAKER_TEXT) as SpeakerBasis[]).map((b) => ({
+                      value: b,
+                      label: SPEAKER_TEXT[b],
+                    }))}
+                  />
+                  {!script?.vocalsTrack ? (
+                    <p className="m-0 text-destructive text-sm">
+                      Write the script again: the voice has to be separated to be copied.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              {voiceFrom === "saved" ? (
+                <Select
+                  aria-label="Saved voice"
+                  value={savedId || undefined}
+                  placeholder={savedUsable.length ? "Choose a voice…" : "No saved voices yet"}
+                  disabled={working || savedUsable.length === 0}
+                  options={savedUsable.map((v) => ({ value: v.id, label: v.name }))}
+                  onValueChange={setSavedId}
+                />
+              ) : null}
+              {usable.length === 0 ? (
+                <p role="alert" className="m-0 text-destructive text-sm">
+                  No voice model speaks {LANGUAGE_NAMES[language] ?? language} this way. Get one in
+                  the Model hub or choose another voice.
+                </p>
+              ) : null}
+              {voiceFrom === "builtin" && builtinVoices.length > 0 ? (
+                <Select
+                  aria-label="Built-in voice"
+                  value={builtin || "usual"}
+                  disabled={working}
+                  options={[
+                    { value: "usual", label: "The model's usual voice" },
+                    ...builtinVoices.map((v) => ({ value: v.id, label: v.label })),
+                  ]}
+                  onValueChange={(v) => setBuiltin(v === "usual" ? "" : v)}
+                />
+              ) : null}
+            </>
+          ) : null}
+        </>
+      }
+      action={
+        view === "setup" ? (
+          mainButton("Write the script", () => void write(), !readyToWrite)
+        ) : view === "script" ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {mainButton("Next: the voice", () => setView("voice"), working || !linesOk)}
+            <Button type="button" variant="ghost" disabled={working} onClick={restart}>
+              Start again
+            </Button>
           </div>
-          {/* biome-ignore lint/a11y/useMediaCaption: the dub the person asked for */}
-          <audio controls src={made.track.audio_url} className="h-10 w-full" />
-          <p className="text-muted-foreground text-xs">
-            {made.fit.lines} lines
-            {made.fit.sped_up > 0
-              ? `, ${made.fit.sped_up} played a little faster to fit their time`
-              : ""}
-            {made.fit.max_overflow_s > 0.3
-              ? `. One line runs ${made.fit.max_overflow_s.toFixed(1)} seconds past its place: shorten it in the script and make the dub again.`
-              : "."}
-          </p>
-        </section>
-      ) : null}
-    </div>
+        ) : (
+          <>
+            {mainButton("Make the dub", () => void make(), !readyToMake)}
+            {voiceFrom === "speaker" && basis === null ? (
+              <p className="mt-2 text-muted-foreground text-xs">
+                Say whose voice it is to copy it.
+              </p>
+            ) : !ready && chosen ? (
+              <p className="mt-2 text-muted-foreground text-xs">
+                <NotReadyText task="dub" />
+              </p>
+            ) : null}
+          </>
+        )
+      }
+      stage={<Stage state={stage} className="w-full" minHeight="min-h-[14rem]" />}
+      recent={
+        <RecentStrip
+          title="Recent dubs"
+          items={recent}
+          onSeeAll={onOpenLibrary}
+          empty="No dubs yet. Your first one will show up here."
+        />
+      }
+    />
   );
 }

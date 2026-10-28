@@ -350,63 +350,57 @@ export function ToolPage({ tool, ...p }: VoicePageProps & { tool: AudioToolName 
 export function DubPage(p: VoicePageProps) {
   const key = "wasifyai.dub.model";
   return (
-    <Frame
-      title="Dub a recording"
-      lead="Hear a recording in another language, in the speaker's voice or one you choose. The result is kept in Your music."
-    >
+    <MakeFrame>
       <DubbingWorkspace
         api={p.api}
         runs={p.runs}
+        lead="Hear a recording in another language, in the speaker's voice or one you choose. The result is kept in Your music."
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
         onOpenLibrary={() => p.go("tracks")}
       />
-    </Frame>
+    </MakeFrame>
   );
 }
 
 export function AudiobookPage(p: VoicePageProps) {
   const key = "wasifyai.audiobook.model";
   return (
-    <Frame
-      title="Audiobook"
-      lead={device(
-        p,
-        "Read a long text aloud, chapter by chapter, in a voice you choose. It runs on this computer.",
-        "Read a long text aloud, chapter by chapter, in a voice you choose. Every chapter is kept in Your music as it is done.",
-      )}
-    >
+    <MakeFrame>
       <AudiobookWorkspace
         api={p.api}
         runs={p.runs}
+        lead={device(
+          p,
+          "Read a long text aloud, chapter by chapter, in a voice you choose. It runs on this computer.",
+          "Read a long text aloud, chapter by chapter, in a voice you choose. Every chapter is kept in Your music as it is done.",
+        )}
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
         onOpenLibrary={() => p.go("tracks")}
       />
-    </Frame>
+    </MakeFrame>
   );
 }
 
 export function LipSyncPage(p: VoicePageProps) {
   const key = "wasifyai.lipsync.model";
   return (
-    <Frame
-      title="Lip sync"
-      lead={device(
-        p,
-        "Make the face in a picture say your words or a recording. It runs on this computer, and every video is marked as AI-generated.",
-        "Make the face in a picture say your words or a recording. Every video is marked as AI-generated.",
-      )}
-    >
+    <MakeFrame>
       <LipSyncWorkspace
         api={p.api}
         runs={p.runs}
+        lead={device(
+          p,
+          "Make the face in a picture say your words or a recording. It runs on this computer, and every video is marked as AI-generated.",
+          "Make the face in a picture say your words or a recording. Every video is marked as AI-generated.",
+        )}
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
       />
-    </Frame>
+    </MakeFrame>
   );
 }

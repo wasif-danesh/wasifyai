@@ -7,23 +7,32 @@ import {
   type LipSyncEngine,
   type ParsedEvent,
   type PictureBasis,
-  type Speech,
-  type Track,
   type VoiceApi,
   type VoiceBasis,
   makeClip,
 } from "@wasifyai/client";
+import { Film, Pencil, Save, Trash2, UserRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Action } from "../components/actions-row";
 import { Button } from "../components/button";
+import { ConfirmDialog, NameDialog } from "../components/dialog";
 import { Label } from "../components/label";
+import { MakeScreen } from "../components/make-screen";
 import { Bar } from "../components/progress-bar";
+import { RadioGroup } from "../components/radio-group";
+import { type RecentItem, RecentStrip } from "../components/recent-strip";
+import { Segmented } from "../components/segmented";
 import { Spinner } from "../components/spinner";
+import { Stage, type StageState } from "../components/stage";
+import { Stepper } from "../components/stepper";
 import { Textarea } from "../components/textarea";
 import { useChoicesFor } from "../models";
 import { formatBytes } from "../notebook/format";
-import { fileNameFor, useSaveCopy } from "../save";
-import { ModelPicker } from "./ModelPicker";
-import { clock, minutesText, pickModel } from "./format";
+import { fileNameFor, savedText, useSaveCopy } from "../save";
+import { LoadingModels, ModelPicker } from "./ModelPicker";
+import { type Library, SourcePicker } from "./SourcePicker";
+import { clock, minutesText, pickModel, stepProgress } from "./format";
+import { useElapsed } from "./use-elapsed";
 import { useVoiceModels } from "./use-voice-models";
 
 export const PICTURE_TEXT: Record<PictureBasis, string> = {
@@ -48,6 +57,8 @@ export type LipSyncWorkspaceProps = {
   onGetModel?: (id: string) => void;
   initialModel?: string | null;
   onModelChosen?: (id: string) => void;
+  title?: string;
+  lead?: string;
 };
 
 /** Setting up the lip sync engine: a program environment of about 2 GB, fetched only on a click
@@ -136,13 +147,14 @@ function EngineCard({
   );
 }
 
-type Library = { tracks: Track[]; speeches: Speech[] };
+const STEPS = ["Picture", "Voice", "Make"];
 
 /**
- * Talking videos: a picture and a voice make a video of the face saying it. The model is chosen from a
- * list (ADR-0066). The person says what the picture is and whose voice it is before anything is made;
- * that answer is kept with the video, and every video carries a visible "AI-generated" mark that
- * cannot be turned off (ADR-0044).
+ * Talking videos on the one make screen (ADR-0093, stage U6): a picture and a voice make a video of the face
+ * saying it. The steps are in the ask column: the picture and what it is, then the voice and whose it is; the
+ * stage shows the face with that answer before anything is made, the progress while it is, and the video after.
+ * The answer is kept with the video, and every video carries a visible "AI-generated" mark that cannot be turned
+ * off (ADR-0044).
  */
 export function LipSyncWorkspace({
   api,
@@ -150,6 +162,8 @@ export function LipSyncWorkspace({
   onGetModel,
   initialModel,
   onModelChosen,
+  title = "Lip sync",
+  lead,
 }: LipSyncWorkspaceProps) {
   const { models, error, loading, reload } = useVoiceModels(api, "lipsync");
   const [engine, setEngine] = useState<LipSyncEngine | null>(null);
@@ -161,16 +175,19 @@ export function LipSyncWorkspace({
   const [source, setSource] = useState<AudioSource | null>(null);
   const [voiceBasis, setVoiceBasis] = useState<VoiceBasis | null>(null);
   const [library, setLibrary] = useState<Library>({ tracks: [], speeches: [] });
-  const [clips, setClips] = useState<Clip[]>([]);
+  const [clips, setClips] = useState<Clip[] | null>(null);
+  const [shownId, setShownId] = useState<string | null>(null);
   const [step, setStep] = useState<string | null>(null);
-  const [waited, setWaited] = useState(0);
   const [problem, setProblem] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<Clip | null>(null);
+  const [deleting, setDeleting] = useState<Clip | null>(null);
   const abort = useRef<AbortController | null>(null);
   const pictureInput = useRef<HTMLInputElement>(null);
-  const recordingInput = useRef<HTMLInputElement>(null);
+  const working = step !== null;
+  const waited = useElapsed(working);
 
   const chosen = models.find((m) => m.id === modelId) ?? pickModel(models, "lipsync", modelId);
-  const working = step !== null;
   const ready = chosen?.state === "ready";
   const maxWords = 1000;
 
@@ -187,7 +204,7 @@ export function LipSyncWorkspace({
       api
         .clips()
         .then(setClips)
-        .catch(() => undefined),
+        .catch(() => setClips((c) => c ?? [])),
     [api],
   );
   useEffect(() => {
@@ -207,12 +224,6 @@ export function LipSyncWorkspace({
     }, 1000);
     return () => clearInterval(id);
   }, [installing, loadEngine, reload]);
-  useEffect(() => {
-    if (!working) return;
-    setWaited(0);
-    const id = setInterval(() => setWaited((w) => w + 1), 1000);
-    return () => clearInterval(id);
-  }, [working]);
 
   // words are always made here; a recording is only "made here" when it is a speech from the library
   const voiceChoices: VoiceBasis[] =
@@ -224,12 +235,15 @@ export function LipSyncWorkspace({
   const basis = voiceFrom === "words" ? "generated" : voiceBasis;
   const basisOk = basis !== null && voiceChoices.includes(basis);
   const voiceReady = voiceFrom === "words" ? words.trim().length >= 2 : source !== null;
-  const canMake = ready && picture !== null && pictureBasis !== null && basisOk && voiceReady;
+  const pictureOk = picture !== null && pictureBasis !== null;
+  const canMake = ready && pictureOk && basisOk && voiceReady;
+  const current = !pictureOk ? 0 : !voiceReady || !basisOk ? 1 : 2;
 
   async function addPicture(file: File) {
     setProblem(null);
     try {
       setPicture(await api.addPicture(file));
+      setShownId(null);
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "That picture could not be added.");
     }
@@ -250,6 +264,7 @@ export function LipSyncWorkspace({
   async function make() {
     if (!chosen || !picture || !pictureBasis || !basis || working) return;
     setProblem(null);
+    setNote(null);
     setStep("Starting");
     abort.current = new AbortController();
     const signal = abort.current.signal;
@@ -267,10 +282,12 @@ export function LipSyncWorkspace({
         setStep,
       );
       if (r.ok) {
+        const before = new Set((clips ?? []).map((c) => c.id));
+        const list = await api.clips().catch(() => clips ?? []);
+        setClips(list);
+        setShownId(list.find((c) => !before.has(c.id))?.id ?? list[0]?.id ?? null);
         setPicture(null);
         setPictureBasis(null);
-        setWords("");
-        await loadClips();
       } else {
         setProblem(r.message);
       }
@@ -286,35 +303,45 @@ export function LipSyncWorkspace({
   async function save(c: Clip) {
     setProblem(null);
     try {
-      await saveCopy({
+      const out = await saveCopy({
         name: fileNameFor(c.title, "mp4", "video"),
         blob: () => api.downloadClip(c.id),
       });
+      if (out) setNote(savedText(out));
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "That could not be saved.");
     }
   }
 
-  async function rename(c: Clip) {
-    const next = window.prompt("Name this video", c.title)?.trim();
-    if (!next || next === c.title) return;
-    const saved = await api.updateClip(c.id, { title: next });
-    setClips((list) => list.map((x) => (x.id === saved.id ? saved : x)));
+  async function rename(c: Clip, next: string) {
+    setRenaming(null);
+    try {
+      const updated = await api.updateClip(c.id, { title: next });
+      setClips((list) => (list ?? []).map((x) => (x.id === updated.id ? updated : x)));
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "That could not be renamed.");
+    }
   }
 
-  async function remove(id: string) {
-    await api.removeClip(id);
-    setClips((list) => list.filter((x) => x.id !== id));
+  async function remove(c: Clip) {
+    setDeleting(null);
+    try {
+      await api.removeClip(c.id);
+      setClips((list) => (list ?? []).filter((x) => x.id !== c.id));
+      if (shownId === c.id) setShownId(null);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "That could not be deleted.");
+    }
   }
 
   if (error) {
     return (
-      <p role="alert" className="text-destructive">
+      <p role="alert" className="p-6 text-destructive">
         {error}
       </p>
     );
   }
-  if (loading || engine === null) return <Spinner />;
+  if (loading || engine === null) return <LoadingModels />;
 
   const speed = chosen?.measured.speed_x;
   const voiceSeconds =
@@ -323,246 +350,291 @@ export function LipSyncWorkspace({
         ? library.tracks.find((t) => t.id === source.id)?.seconds
         : library.speeches.find((s) => s.id === source.id)?.seconds
       : Math.max(2, words.trim().split(/\s+/).length / 2.5);
-  return (
-    <div className="mx-auto grid w-full min-w-0 max-w-3xl gap-6">
-      <EngineCard engine={engine} api={api} onChanged={loadEngine} />
-      <ModelPicker
-        models={models}
-        task="lipsync"
-        value={chosen?.id ?? null}
-        onChange={(id) => {
-          setModelId(id);
-          onModelChosen?.(id);
-        }}
-        onGetModel={onGetModel}
-        disabled={working}
-      />
+  const shown = (clips ?? []).find((c) => c.id === shownId) ?? null;
 
-      <fieldset className="grid gap-3" disabled={working}>
-        <legend className="font-medium">1. The picture</legend>
-        <div className="flex flex-wrap items-center gap-3">
-          <input
-            ref={pictureInput}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="sr-only"
-            aria-label="Choose a picture"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (f) void addPicture(f);
-            }}
-          />
-          <Button variant="outline" onClick={() => pictureInput.current?.click()}>
-            {picture ? "Choose another picture" : "Choose a picture"}
-          </Button>
-          <span className="text-muted-foreground text-sm">
-            A front-facing face works best. Photos are cleaned of location and camera data.
-          </span>
-        </div>
-        {picture ? (
-          <img
-            src={picture.url}
-            alt="The face to bring to life"
-            className="max-h-64 w-fit rounded-lg border object-contain"
-          />
-        ) : null}
-        <div role="radiogroup" aria-label="What the picture is" className="grid gap-1.5">
-          {(Object.keys(PICTURE_TEXT) as PictureBasis[]).map((b) => (
-            <label key={b} className="flex items-start gap-2 text-sm">
-              <input
-                type="radio"
-                name="picture-basis"
-                checked={pictureBasis === b}
-                onChange={() => setPictureBasis(b)}
-                className="mt-1"
+  const actions: Action[] = shown
+    ? [
+        { label: "Save MP4", onSelect: () => void save(shown), icon: <Save aria-hidden="true" /> },
+        {
+          label: "Rename",
+          onSelect: () => setRenaming(shown),
+          icon: <Pencil aria-hidden="true" />,
+        },
+        {
+          label: "Delete",
+          onSelect: () => setDeleting(shown),
+          icon: <Trash2 aria-hidden="true" />,
+          destructive: true,
+        },
+      ]
+    : [];
+
+  const stage: StageState = working
+    ? {
+        kind: "working",
+        label: "Making the talking video…",
+        text: `${step} · ${clock(waited)}`,
+        value: stepProgress(step),
+        onStop: () => abort.current?.abort(),
+      }
+    : problem && !shown && !picture
+      ? { kind: "error", message: problem, onReset: () => setProblem(null) }
+      : shown
+        ? {
+            kind: "result",
+            children: (
+              // biome-ignore lint/a11y/useMediaCaption: a talking video made from the person's own words or recording
+              <video
+                key={shown.id}
+                controls
+                playsInline
+                preload="metadata"
+                poster={shown.picture_url}
+                src={shown.video_url}
+                className="rounded-lg bg-black shadow-card"
               />
-              {PICTURE_TEXT[b]}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+            ),
+            caption: (
+              <div className="grid gap-1">
+                <span className="text-foreground">
+                  {shown.title}{" "}
+                  <span className="text-muted-foreground text-xs">
+                    {clock(shown.seconds)} · {shown.width}×{shown.height} · marked {MARK}
+                  </span>
+                </span>
+                <span className="text-xs">
+                  {shown.consent.picture ? PICTURE_TEXT[shown.consent.picture] : ""}{" "}
+                  {shown.consent.voice ? VOICE_TEXT[shown.consent.voice] : ""}
+                </span>
+                {note ? <output className="text-sm">{note}</output> : null}
+                {problem ? (
+                  <p role="alert" className="m-0 text-destructive text-sm">
+                    {problem}
+                  </p>
+                ) : null}
+              </div>
+            ),
+            actions,
+          }
+        : picture
+          ? {
+              kind: "result",
+              children: (
+                <img
+                  src={picture.url}
+                  alt="The face to bring to life"
+                  className="max-h-[calc(100dvh-24rem)] rounded-lg object-contain"
+                />
+              ),
+              caption: (
+                <div className="grid gap-1">
+                  <span>
+                    {pictureBasis
+                      ? PICTURE_TEXT[pictureBasis]
+                      : "Say what this picture is, on the left."}
+                  </span>
+                  {problem ? (
+                    <p role="alert" className="m-0 text-destructive text-sm">
+                      {problem}
+                    </p>
+                  ) : null}
+                </div>
+              ),
+            }
+          : {
+              kind: "empty",
+              icon: UserRound,
+              title: "The face appears here.",
+              text: "Choose a picture of a face on the left, say what it is, then give it words or a recording.",
+            };
 
-      <fieldset className="grid gap-3" disabled={working}>
-        <legend className="font-medium">2. The voice</legend>
-        <div role="tablist" aria-label="Where the voice comes from" className="flex gap-2">
-          {(["words", "recording"] as const).map((v) => (
-            <Button
-              key={v}
-              role="tab"
-              aria-selected={voiceFrom === v}
-              size="sm"
-              variant={voiceFrom === v ? "default" : "outline"}
-              onClick={() => {
-                setVoiceFrom(v);
-                setVoiceBasis(null);
+  const recent: RecentItem[] = (clips ?? []).slice(0, 24).map((c) => ({
+    id: c.id,
+    cover: c.picture_url ? (
+      <img src={c.picture_url} alt="" className="size-full object-cover" />
+    ) : (
+      <Film className="size-5 text-muted-foreground" aria-hidden="true" />
+    ),
+    label: `Open: ${c.title}`,
+    current: c.id === shownId,
+    onOpen: () => {
+      if (working) return;
+      setProblem(null);
+      setNote(null);
+      setShownId(c.id);
+    },
+  }));
+
+  return (
+    <>
+      <MakeScreen
+        title={title}
+        lead={lead}
+        ask={
+          <>
+            <EngineCard engine={engine} api={api} onChanged={loadEngine} />
+            <ModelPicker
+              models={models}
+              task="lipsync"
+              value={chosen?.id ?? null}
+              onChange={(id) => {
+                setModelId(id);
+                onModelChosen?.(id);
               }}
-            >
-              {v === "words" ? "Words to say" : "A recording"}
-            </Button>
-          ))}
-        </div>
-        {voiceFrom === "words" ? (
-          <div className="grid gap-2">
-            <Label htmlFor="lipsync-words">What should it say?</Label>
-            <Textarea
-              id="lipsync-words"
-              rows={3}
-              maxLength={maxWords}
-              value={words}
-              placeholder="Good evening, and welcome."
-              onChange={(e) => setWords(e.target.value)}
+              onGetModel={onGetModel}
+              disabled={working}
             />
-          </div>
-        ) : (
-          <div className="grid gap-2">
-            <Label htmlFor="lipsync-recording">Which recording?</Label>
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                id="lipsync-recording"
-                className="h-10 min-w-0 flex-1 rounded-md border border-input bg-transparent px-3 text-sm"
-                value={source ? `${source.kind}:${source.id}` : ""}
-                onChange={(e) => {
-                  const [kind, ...id] = e.target.value.split(":");
-                  setSource(
-                    kind === "track" || kind === "speech" ? { kind, id: id.join(":") } : null,
-                  );
-                  setVoiceBasis(null);
-                }}
-              >
-                <option value="">Choose…</option>
-                {library.tracks.length > 0 ? (
-                  <optgroup label="Your music and recordings">
-                    {library.tracks.map((t) => (
-                      <option key={t.id} value={`track:${t.id}`}>
-                        {t.title} ({clock(t.seconds)})
-                      </option>
-                    ))}
-                  </optgroup>
-                ) : null}
-                {library.speeches.length > 0 ? (
-                  <optgroup label="Speech you made">
-                    {library.speeches.map((s) => (
-                      <option key={s.id} value={`speech:${s.id}`}>
-                        {s.text.slice(0, 50)} ({clock(s.seconds)})
-                      </option>
-                    ))}
-                  </optgroup>
-                ) : null}
-              </select>
+            <Stepper steps={STEPS} current={current} />
+
+            <section className="grid gap-3" aria-label="The picture">
+              <h2 className="m-0 font-semibold text-ui-lg">The picture</h2>
               <input
-                ref={recordingInput}
+                ref={pictureInput}
                 type="file"
-                accept="audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus,.caf,.aiff"
+                accept="image/png,image/jpeg,image/webp"
                 className="sr-only"
-                aria-label="Add a recording from this computer"
+                aria-label="Choose a picture"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   e.target.value = "";
-                  if (f) void addRecording(f);
+                  if (f) void addPicture(f);
                 }}
               />
-              <Button variant="outline" onClick={() => recordingInput.current?.click()}>
-                Add a recording
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="justify-self-start"
+                disabled={working}
+                onClick={() => pictureInput.current?.click()}
+              >
+                {picture ? "Choose another picture" : "Choose a picture"}
               </Button>
-            </div>
-          </div>
-        )}
-        <div role="radiogroup" aria-label="Whose voice it is" className="grid gap-1.5">
-          {voiceFrom === "words" ? (
-            <p className="text-sm">{VOICE_TEXT.generated}</p>
-          ) : (
-            voiceChoices.map((b) => (
-              <label key={b} className="flex items-start gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="voice-basis"
-                  checked={voiceBasis === b}
-                  onChange={() => setVoiceBasis(b)}
-                  className="mt-1"
-                />
-                {VOICE_TEXT[b]}
-              </label>
-            ))
-          )}
-        </div>
-      </fieldset>
-
-      <p className="rounded-lg border bg-muted/40 p-3 text-sm">
-        Every video is marked "{MARK}" in the corner and in its file. The mark cannot be turned off.
-        Your answers above are kept with the video.
-      </p>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={() => void make()} disabled={!canMake || working}>
-          {working ? "Making the video…" : "Make the video"}
-        </Button>
-        {working ? (
-          <>
-            <output className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Spinner /> {step} · {clock(waited)}
-            </output>
-            <Button variant="ghost" onClick={() => abort.current?.abort()}>
-              Cancel
-            </Button>
-          </>
-        ) : speed && voiceSeconds ? (
-          <span className="text-muted-foreground text-sm">
-            About {minutesText(voiceSeconds / speed)} of work on this computer for{" "}
-            {clock(voiceSeconds)} of video.
-          </span>
-        ) : null}
-        {!ready && chosen ? (
-          <span className="text-muted-foreground text-sm">
-            Set lip sync up and get the model first (see above).
-          </span>
-        ) : null}
-      </div>
-      {problem ? (
-        <p role="alert" className="text-destructive">
-          {problem}
-        </p>
-      ) : null}
-
-      <section aria-label="Your videos" className="grid gap-3">
-        <h2 className="font-semibold">Your videos</h2>
-        {clips.length === 0 ? <p className="text-muted-foreground">Nothing made yet.</p> : null}
-        <ul className="grid gap-4">
-          {clips.map((c) => (
-            <li key={c.id} className="grid gap-2 rounded-xl border bg-card p-3">
-              <div className="flex flex-wrap items-baseline gap-2">
-                <span className="font-medium">{c.title}</span>
-                <span className="text-muted-foreground text-xs">
-                  {clock(c.seconds)} · {c.width}×{c.height}
-                </span>
-              </div>
-              {/* biome-ignore lint/a11y/useMediaCaption: a talking video made from the person's own words or recording */}
-              <video
-                controls
-                preload="metadata"
-                poster={c.picture_url}
-                src={c.video_url}
-                className="max-h-80 w-fit max-w-full rounded-lg"
-              />
-              <p className="text-muted-foreground text-xs">
-                {c.consent.picture ? PICTURE_TEXT[c.consent.picture] : ""}{" "}
-                {c.consent.voice ? VOICE_TEXT[c.consent.voice] : ""}
+              <p className="m-0 text-muted-foreground text-xs">
+                A front-facing face works best. Photos are cleaned of location and camera data.
               </p>
-              <div className="flex flex-wrap gap-1">
-                <Button size="sm" variant="ghost" onClick={() => void save(c)}>
-                  Save MP4
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => void rename(c)}>
-                  Rename
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => void remove(c.id)}>
-                  Delete
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </div>
+              <RadioGroup
+                label="What the picture is"
+                value={pictureBasis ?? undefined}
+                disabled={working}
+                onValueChange={(b) => setPictureBasis(b as PictureBasis)}
+                options={(Object.keys(PICTURE_TEXT) as PictureBasis[]).map((b) => ({
+                  value: b,
+                  label: PICTURE_TEXT[b],
+                }))}
+              />
+            </section>
+
+            <section className="grid gap-3" aria-label="The voice">
+              <h2 className="m-0 font-semibold text-ui-lg">The voice</h2>
+              <Segmented
+                label="Where the voice comes from"
+                value={voiceFrom}
+                onValueChange={(v) => {
+                  setVoiceFrom(v as "words" | "recording");
+                  setVoiceBasis(null);
+                }}
+                options={[
+                  { value: "words", label: "Words to say" },
+                  { value: "recording", label: "A recording" },
+                ]}
+              />
+              {voiceFrom === "words" ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="lipsync-words">What should it say?</Label>
+                  <Textarea
+                    id="lipsync-words"
+                    rows={3}
+                    maxLength={maxWords}
+                    value={words}
+                    disabled={working}
+                    placeholder="Good evening, and welcome."
+                    onChange={(e) => setWords(e.target.value)}
+                  />
+                  <p className="m-0 text-sm">{VOICE_TEXT.generated}</p>
+                </div>
+              ) : (
+                <>
+                  <SourcePicker
+                    id="lipsync-recording"
+                    label="Which recording?"
+                    library={library}
+                    value={source}
+                    disabled={working}
+                    onAdd={(f) => void addRecording(f)}
+                    onChange={(next) => {
+                      setSource(next);
+                      setVoiceBasis(null);
+                    }}
+                  />
+                  <RadioGroup
+                    label="Whose voice it is"
+                    value={voiceBasis ?? undefined}
+                    disabled={working}
+                    onValueChange={(b) => setVoiceBasis(b as VoiceBasis)}
+                    options={voiceChoices.map((b) => ({ value: b, label: VOICE_TEXT[b] }))}
+                  />
+                </>
+              )}
+            </section>
+
+            <p className="m-0 rounded-md border bg-muted/40 p-3 text-sm">
+              Every video is marked "{MARK}" in the corner and in its file. The mark cannot be
+              turned off. Your answers above are kept with the video.
+            </p>
+          </>
+        }
+        action={
+          <>
+            <Button
+              type="button"
+              size="lg"
+              className="w-full rounded-full md:w-auto md:px-10"
+              disabled={!canMake || working}
+              onClick={() => void make()}
+            >
+              {working ? <Spinner /> : null}
+              Make the video
+            </Button>
+            {!ready && chosen ? (
+              <p className="mt-2 text-muted-foreground text-xs">
+                Set lip sync up and get the model first (see above).
+              </p>
+            ) : speed && voiceSeconds && !working ? (
+              <p className="mt-2 text-muted-foreground text-xs">
+                About {minutesText(voiceSeconds / speed)} of work on this computer for{" "}
+                {clock(voiceSeconds)} of video.
+              </p>
+            ) : null}
+          </>
+        }
+        stage={<Stage state={stage} className="w-full" />}
+        recent={
+          <RecentStrip
+            title="Recent talking videos"
+            items={recent}
+            loading={clips === null}
+            empty="Nothing made yet. Your first talking video will show up here."
+          />
+        }
+      />
+      {renaming ? (
+        <NameDialog
+          title="Name this video"
+          label="Name"
+          initial={renaming.title}
+          onSubmit={(next) => void rename(renaming, next)}
+          onCancel={() => setRenaming(null)}
+        />
+      ) : null}
+      {deleting ? (
+        <ConfirmDialog
+          title="Delete this video?"
+          message={`“${deleting.title}” is deleted for good.`}
+          onConfirm={() => void remove(deleting)}
+          onCancel={() => setDeleting(null)}
+        />
+      ) : null}
+    </>
   );
 }

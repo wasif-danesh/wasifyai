@@ -14,7 +14,7 @@ Find the chapters of a long text and how long each takes to read aloud. Nothing 
 ## Steps in the app
 
 1. Open **Voice › Audiobook**.
-2. Paste the text; the chapters are listed.
+2. Paste or open the text and choose **Find the chapters**; they are listed on the right to read and change.
 
 ## Fields
 

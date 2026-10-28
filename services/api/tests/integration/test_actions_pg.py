@@ -5,9 +5,9 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
-from wasifyai_platform_sdk.actions import SqlApprovalStore, SqlAuditStore
+from wasifyai_platform_sdk.actions import SqlApprovalStore, SqlAuditStore, SqlJobStore
 
-from tests.action_store_contract import check_approvals, check_audit
+from tests.action_store_contract import check_approvals, check_audit, check_jobs
 
 
 @pytest.fixture
@@ -27,3 +27,12 @@ async def test_postgres_audit_store(pg):
 
 async def test_postgres_approval_store(pg):
     await check_approvals(SqlApprovalStore(pg), "it-" + uuid4().hex)
+
+
+async def test_job_store_on_postgres(pg):
+    try:
+        async with pg.connect() as c:
+            await c.execute(text("select 1 from action_jobs limit 1"))
+    except Exception:
+        pytest.skip("action_jobs missing (make migrate applies revision 0027)")
+    await check_jobs(SqlJobStore(pg), "it-" + uuid4().hex)

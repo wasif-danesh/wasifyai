@@ -1453,7 +1453,7 @@
       "id": "job.cancel",
       "title": "Stop a long job",
       "summary": "Stop a job that can still be stopped.",
-      "description": "Stop a job. Work that already runs as a product's own run cannot be stopped: it finishes and is saved to the library. The answer says which it was.",
+      "description": "Stop a job and the work behind it: a product's own run is stopped too (the speech runtime restarts, an engine worker stops its job). A picture or clip the image engine has started may still finish there, but it is not kept.",
       "input": {
         "additionalProperties": false,
         "properties": {

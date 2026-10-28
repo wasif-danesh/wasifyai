@@ -193,3 +193,35 @@ async def test_a_refusal_keeps_its_code_and_an_empty_worker_list_is_a_clear_erro
 async def test_the_lip_sync_state_says_installed_only_when_a_worker_has_it_ready():
     remote, *_ = await make(("kokoro-82m", "ready"))
     assert remote.lipsync_sidecar.state()["installed"] is False
+
+
+async def test_stop_tells_the_worker_to_stop_the_job_too(ctx):
+    """Stop on a speech (its run cancelled) stops the work on the worker, not only the wait: the
+    worker is told through the queue (stage J3)."""
+    import asyncio
+
+    class SlowQueue(InlineQueue):
+        def __init__(self, *a):
+            super().__init__(*a)
+            self.cancelled: list[str] = []
+            self.waiting = asyncio.Event()
+
+        async def submit(self, job):
+            self.jobs.append(job)  # the worker takes its time
+
+        async def wait(self, job_id, timeout_s, on_progress=None):
+            self.waiting.set()
+            await asyncio.Event().wait()
+
+        async def cancel(self, job_id):
+            self.cancelled.append(job_id)
+
+    storage = memory_storage()
+    queue = SlowQueue(storage, WorkerEngine(), [worker_listing(("kokoro-82m", "ready"))])
+    remote = RemoteSpeechEngine(queue, storage, CATALOGUE)  # type: ignore[arg-type]
+    remote._workers = await queue.workers()  # noqa: SLF001
+    speaking = asyncio.create_task(remote.speak(remote.resolve("speak", None), "hi", None, {}))
+    await queue.waiting.wait()
+    speaking.cancel()
+    await asyncio.gather(speaking, return_exceptions=True)
+    assert queue.cancelled == [queue.jobs[0].id]

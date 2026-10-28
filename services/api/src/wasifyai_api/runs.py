@@ -111,9 +111,61 @@ class RunManager:
         if task is not None:
             task.cancel()  # the run is here; on another replica its own loop notices the state
             await asyncio.gather(task, return_exceptions=True)  # let it save what it had
+        if current.status == "waiting_job":
+            await self._clean_up(rec)
         record_run(rec.product_id, "cancelled")
         await self._emit(rec, ErrorEvent, code="cancelled", message="Stopped.", retryable=False)
         return "cancelled"
+
+    async def _clean_up(self, rec: RunRecord) -> None:
+        """A run stopped while it waited for a media job never runs the node that would have
+        handled the job's end: the graph's `on_cancel`, if it declares one, gets the run's last
+        state to put things right (a clip's row, the person's uploads). Stage J3."""
+        graph = self.graphs.get(rec.product_id)
+        hook = getattr(graph, "on_cancel", None)
+        if graph is None or hook is None:
+            return
+
+        async def run_hook() -> None:
+            set_context(
+                RunContext(
+                    tenant_id=rec.tenant_id, product_id=rec.product_id, user_id=rec.user_id,
+                    run_id=rec.run_id, thread_id=rec.thread_id,
+                )
+            )  # fmt: skip
+            config = {"configurable": {"thread_id": rec.thread_id}}
+            snapshot = await graph.aget_state(config)
+            await hook(dict(snapshot.values or {}))
+
+        try:
+            await asyncio.create_task(run_hook())  # its own context, not the caller's
+        except Exception:
+            log.exception("the clean-up of stopped run %s failed", rec.run_id)
+
+    def live(self, run_id: str) -> bool:
+        """Whether this process is executing the run now."""
+        task = self._by_run.get(run_id)
+        return task is not None and not task.done()
+
+    async def state_of(self, tenant_id: str, run_id: str) -> dict[str, Any]:
+        """A run's status, and its last event once it has ended (`done`, `error`). An action job
+        reads it after a restart (stage J3)."""
+        rec = await self.store.get(tenant_id, run_id)
+        if rec is None:
+            return {"status": "unknown"}
+        if rec.status not in FINISHED:
+            return {"status": rec.status}
+        end: dict[str, Any] | None = None
+        after = 0
+        while True:
+            events = await self.log.read(tenant_id, run_id, after, 0)
+            if not events:
+                break
+            for ev in events:
+                after = max(after, int(ev.get("seq", after)))
+                if ev.get("event") in TERMINAL_EVENTS:
+                    end = ev
+        return {"status": rec.status, "end": end}
 
     async def run_child(
         self,

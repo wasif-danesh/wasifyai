@@ -96,10 +96,18 @@ parameters when decided. `person_approved=True` exists for the window only, for 
 ### Jobs
 
 A `long` action called with `wait_seconds` waits at most that long (never more than 50) and then answers
-`running` with a `job_id`. `job.status`, `job.wait` and `job.cancel` follow it. A job that is a direct function
-can be stopped; a child run of a product graph cannot once it started (the engine has no way to stop a run), and
-`job.cancel` says so. The job book is in memory; after a restart `job.status` answers from the audit log how the job
-ended.
+`running` with a `job_id`. `job.status`, `job.wait` and `job.cancel` follow it.
+
+Every job is kept in the `action_jobs` table (stage J3: `SqlJobStore`, Alembic 0027 on Postgres, created on first use on
+SQLite) with the product run it started, its parameters and, once it has ended, its result. After a restart
+`job.status` and `job.wait` answer from that record: a job whose product run is still going (a picture or clip the
+media worker is making) is followed until the run ends, and its result is read from the run's last event; work that
+ran in the engine's own process, or a run that ended with the engine, says it stopped when the app closed. Any job
+can be stopped: `job.cancel` stops the job and its product run, and with it the work (the speech runtime restarts on
+the desktop, an engine worker is told to stop its job). A picture or clip the media worker has started may still
+finish there, but it is not kept; a graph that holds something for a run (a clip's "being made" row) declares an
+`on_cancel` the run manager calls with the run's last state. Jobs that started before the table existed are
+answered from the audit log as before.
 
 ## Results are references
 

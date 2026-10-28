@@ -409,7 +409,8 @@ def _job_out(job: Any) -> Outcome:
 
 
 async def _remembered(p: JobIn, ctx: ActionContext) -> Outcome:
-    """A job the book does not hold (the app restarted): what the audit log last saw of it."""
+    """A job neither the book nor the store holds (started before jobs were kept): what the
+    audit log last saw of it."""
     seen = await ctx.executor.audit.last_for_job(ctx.actor.tenant_id, ctx.actor.user_id, p.job_id)
     if seen is None:
         return Outcome.refused("There is no such job.", "unknown_job")
@@ -431,28 +432,31 @@ async def _remembered(p: JobIn, ctx: ActionContext) -> Outcome:
 
 
 async def _job_status(p: JobIn, ctx: ActionContext) -> Outcome:
-    job = ctx.jobs.get(ctx.actor.tenant_id, ctx.actor.user_id, p.job_id)
-    return _job_out(job) if job else await _remembered(p, ctx)
+    # this process's job, else the one the store kept across a restart (stage J3), settled
+    job = await ctx.jobs.find(ctx.actor.tenant_id, ctx.actor.user_id, p.job_id)
+    if job is None:
+        return await _remembered(p, ctx)
+    return _job_out(await ctx.executor.settle(job))
 
 
 async def _job_wait(p: JobWaitIn, ctx: ActionContext) -> Outcome:
-    job = ctx.jobs.get(ctx.actor.tenant_id, ctx.actor.user_id, p.job_id)
+    job = await ctx.jobs.find(ctx.actor.tenant_id, ctx.actor.user_id, p.job_id)
     if job is None:
         return await _remembered(p, ctx)
-    await ctx.jobs.wait(job, p.seconds)
-    return _job_out(job)
+    return _job_out(await ctx.executor.wait_job(job, p.seconds))
 
 
 async def _job_cancel(p: JobIn, ctx: ActionContext) -> Outcome:
-    job = ctx.jobs.get(ctx.actor.tenant_id, ctx.actor.user_id, p.job_id)
+    job = await ctx.jobs.find(ctx.actor.tenant_id, ctx.actor.user_id, p.job_id)
     if job is None:
         return await _remembered(p, ctx)
+    job = await ctx.executor.settle(job)
     if job.status != "running":
         return _job_out(job)
     if not await ctx.executor.cancel_job(job):
         return Outcome.refused(
-            f"Job {job.id} cannot be stopped once it has started. It will finish and be saved to "
-            "the library; the person can delete it there.",
+            f"Job {job.id} cannot be stopped. It will finish and be saved to the library; the "
+            "person can delete it there.",
             "not_cancellable",
         )
     await asyncio.sleep(0)
@@ -598,8 +602,9 @@ def builtin_actions() -> list[Action]:
             id="job.cancel", title="Stop a long job",
             summary="Stop a job that can still be stopped.",
             description=(
-                "Stop a job. Work that already runs as a product's own run cannot be stopped: "
-                "it finishes and is saved to the library. The answer says which it was."
+                "Stop a job and the work behind it: a product's own run is stopped too (the "
+                "speech runtime restarts, an engine worker stops its job). A picture or clip the "
+                "image engine has started may still finish there, but it is not kept."
             ),
             input=JobIn, output=JobOut, examples=({"job_id": "a1b2c3d4e5f60718"},),
             effect="change", bind=CallBinding(_job_cancel),

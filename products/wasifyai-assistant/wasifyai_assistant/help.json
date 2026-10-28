@@ -151,7 +151,7 @@
    "long job",
    "job"
   ],
-  "body": "# Stop a long job\n\nAction: `job.cancel`\n\n## What it is for\n\nStop a job that can be stopped. Work that already runs as a product's own run finishes and is kept. This has no screen of its own: the assistant and other apps use it.\n\n## Steps in the app\n\nThis has no screen of its own: the assistant and other apps use it.\n\n## Fields\n\n- `job_id`: The id an action returned while it was still running.\n\n## Limits\n\n- A job lives while the app runs; after a restart only how it ended is known.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Is the video done yet?\n\n## Problems\n\n- **Not found** The id is wrong or belongs to someone else."
+  "body": "# Stop a long job\n\nAction: `job.cancel`\n\n## What it is for\n\nStop a job and the work behind it. A product's own run is stopped too: on this computer the speech runtime restarts, and on the service the engine worker stops its job. A picture or clip the image engine has already started may still finish there, but it is not kept. This has no screen of its own: the assistant and other apps use it.\n\n## Steps in the app\n\nThis has no screen of its own: the assistant and other apps use it.\n\n## Fields\n\n- `job_id`: The id an action returned while it was still running.\n\n## Limits\n\n- A job outlives a restart: its status then comes from the product run it started. Work that ran inside the engine itself stopped when the app closed, and says so.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Is the video done yet?\n\n## Problems\n\n- **Not found** The id is wrong or belongs to someone else."
  },
  {
   "action": "job.status",
@@ -161,7 +161,7 @@
    "long job",
    "job"
   ],
-  "body": "# Check a long job\n\nAction: `job.status`\n\n## What it is for\n\nHow a long job started earlier is going. This has no screen of its own: the assistant and other apps use it.\n\n## Steps in the app\n\nThis has no screen of its own: the assistant and other apps use it.\n\n## Fields\n\n- `job_id`: The id an action returned while it was still running.\n\n## Limits\n\n- A job lives while the app runs; after a restart only how it ended is known.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Is the video done yet?\n\n## Problems\n\n- **Not found** The id is wrong or belongs to someone else."
+  "body": "# Check a long job\n\nAction: `job.status`\n\n## What it is for\n\nHow a long job started earlier is going. This has no screen of its own: the assistant and other apps use it.\n\n## Steps in the app\n\nThis has no screen of its own: the assistant and other apps use it.\n\n## Fields\n\n- `job_id`: The id an action returned while it was still running.\n\n## Limits\n\n- A job outlives a restart: its status then comes from the product run it started. Work that ran inside the engine itself stopped when the app closed, and says so.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Is the video done yet?\n\n## Problems\n\n- **Not found** The id is wrong or belongs to someone else."
  },
  {
   "action": "job.wait",
@@ -171,7 +171,7 @@
    "long job",
    "job"
   ],
-  "body": "# Wait for a long job\n\nAction: `job.wait`\n\n## What it is for\n\nWait a little while (at most 50 seconds) for a job to end. This has no screen of its own: the assistant and other apps use it.\n\n## Steps in the app\n\nThis has no screen of its own: the assistant and other apps use it.\n\n## Fields\n\n- `job_id`: The id an action returned while it was still running.\n\n## Limits\n\n- A job lives while the app runs; after a restart only how it ended is known.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Is the video done yet?\n\n## Problems\n\n- **Not found** The id is wrong or belongs to someone else."
+  "body": "# Wait for a long job\n\nAction: `job.wait`\n\n## What it is for\n\nWait a little while (at most 50 seconds) for a job to end. This has no screen of its own: the assistant and other apps use it.\n\n## Steps in the app\n\nThis has no screen of its own: the assistant and other apps use it.\n\n## Fields\n\n- `job_id`: The id an action returned while it was still running.\n\n## Limits\n\n- A job outlives a restart: its status then comes from the product run it started. Work that ran inside the engine itself stopped when the app closed, and says so.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Is the video done yet?\n\n## Problems\n\n- **Not found** The id is wrong or belongs to someone else."
  },
  {
   "action": "library.delete",

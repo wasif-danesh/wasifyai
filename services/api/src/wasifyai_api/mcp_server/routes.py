@@ -289,10 +289,10 @@ async def cancel_running_job(
     executor = getattr(request.app.state, "actions", None)
     if executor is None:
         raise HTTPException(404, "not available in this deployment")
-    job = executor.jobs.get(me.tenant_id, me.user_id, job_id)
+    job = await executor.jobs.find(me.tenant_id, me.user_id, job_id)
     if job is None:
         raise HTTPException(404, "no such job")
-    stopped = await executor.cancel_job(job)
+    stopped = await executor.cancel_job(await executor.settle(job))
     return {"job_id": job.id, "status": job.status, "stopped": stopped}
 
 

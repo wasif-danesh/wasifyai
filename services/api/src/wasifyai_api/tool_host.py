@@ -51,6 +51,24 @@ class ApiToolHost:
         ctx = require_context()
         return self._runs().run_child(product_id, ctx.tenant_id, ctx.user_id, graph_input)
 
+    async def run_state(self, tenant_id: str, run_id: str) -> dict[str, Any]:
+        runs = self._runs()
+        state = await runs.state_of(tenant_id, run_id)
+        # The desktop engine is one process: a run it holds as running or waiting for an answer,
+        # and is not executing, ended when the engine last closed. (A run waiting for a media job
+        # is resumed by the worker's result; on the web another replica may hold the run.)
+        single = getattr(self._app_state(), "desktop_dir", None) is not None
+        if single and state["status"] in ("running", "waiting_input") and not runs.live(run_id):
+            return {"status": "unknown"}
+        return state
+
+    async def cancel_run(self, tenant_id: str, run_id: str) -> bool:
+        runs = self._runs()
+        rec = await runs.store.get(tenant_id, run_id)
+        if rec is None:
+            return False
+        return await runs.cancel(rec) == "cancelled"
+
     async def search_creations(self, query: str, limit: int = 6) -> list[dict[str, Any]]:
         ctx = require_context()
         hits, _degraded = await self._index().search(

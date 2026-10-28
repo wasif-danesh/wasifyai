@@ -176,6 +176,11 @@ class RemoteSpeechEngine:
             await self._queue.submit(job)
             try:
                 outcome = await self._queue.wait(job_id, self._timeout)
+            except asyncio.CancelledError:
+                # Stop was pressed (or the run ended): tell the worker, so the work stops too. A
+                # speech waits inside its run, so nothing would pick this job up again (stage J3).
+                await asyncio.shield(self._queue.cancel(job_id))
+                raise
             except EngineUnavailable:
                 raise VoiceEngineError(
                     "engine_unavailable", "The speech worker took too long. Try again."

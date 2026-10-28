@@ -31,10 +31,12 @@ from wasifyai_platform_sdk.actions import (
     CallBinding,
     InMemoryApprovalStore,
     InMemoryAuditStore,
+    JobBook,
     LibraryKind,
     Outcome,
     SqlApprovalStore,
     SqlAuditStore,
+    SqlJobStore,
     builtin_actions,
     need_runtime,
     render,
@@ -288,6 +290,8 @@ def build_executor(
         host,
         audit=SqlAuditStore(db) if db is not None else InMemoryAuditStore(),
         approvals=SqlApprovalStore(db) if db is not None else InMemoryApprovalStore(),
+        # long jobs outlive a restart (stage J3): kept in the same database
+        jobs=JobBook(SqlJobStore(db)) if db is not None else None,
         usage=usage,
         library=library_kinds(reg, served),
     )

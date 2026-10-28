@@ -3,7 +3,7 @@
 
 from datetime import UTC, datetime, timedelta
 
-from wasifyai_platform_sdk.actions import ApprovalRecord, AuditEntry
+from wasifyai_platform_sdk.actions import ActionResult, ApprovalRecord, AuditEntry, Job
 
 
 def audit(tenant: str, user: str, **kw) -> AuditEntry:
@@ -84,3 +84,30 @@ async def check_approvals(store, tenant: str) -> None:
     denied = await store.decide(tenant, "u2", b.id, False, "window")
     assert denied is not None and denied.status == "denied"
     assert await store.consume(tenant, "u2", b.id) is False
+
+
+async def check_jobs(store, tenant: str) -> None:
+    """A long job is kept, changes as it runs, and only its person sees it (stage J3)."""
+    job = Job(
+        "j" + tenant[-8:], "speech.speak", tenant, "u1", "mcp:Codex", True, product_id="voice"
+    )
+    job.params = {"text": "hello"}
+    await store.save(job)
+    kept = await store.get(tenant, "u1", job.id)
+    assert kept is not None and kept.status == "running" and not kept.live
+    assert (kept.action_id, kept.origin, kept.product_id) == ("speech.speak", "mcp:Codex", "voice")
+    assert kept.params == {"text": "hello"} and kept.cancellable and kept.run_id is None
+    assert await store.get(tenant, "someone-else", job.id) is None
+    assert await store.get("another-tenant", "u1", job.id) is None
+
+    job.run_id, job.progress = "run-1", {"progress": 0.5}
+    await store.save(job)
+    kept = await store.get(tenant, "u1", job.id)
+    assert kept is not None and kept.run_id == "run-1" and kept.progress == {"progress": 0.5}
+
+    job.status, job.ended_at = "ok", job.started_at + 12.5
+    job.result = ActionResult(status="ok", action_id="speech.speak", job_id=job.id, text="Done.")
+    await store.save(job)
+    kept = await store.get(tenant, "u1", job.id)
+    assert kept is not None and kept.status == "ok" and kept.finished.is_set()
+    assert kept.result is not None and kept.result.text == "Done." and kept.seconds == 12.5

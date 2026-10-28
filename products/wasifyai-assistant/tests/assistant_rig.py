@@ -68,6 +68,12 @@ class FakeHost:
         for ev in self.child_events:
             yield ev
 
+    async def run_state(self, tenant_id: str, run_id: str) -> dict[str, Any]:
+        return {"status": "unknown"}  # no runs outlive a test
+
+    async def cancel_run(self, tenant_id: str, run_id: str) -> bool:
+        return False
+
     async def search_creations(self, query: str, limit: int = 6) -> list[dict[str, Any]]:
         self.searches.append(query)
         return self.hits

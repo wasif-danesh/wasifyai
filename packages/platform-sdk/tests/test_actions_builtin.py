@@ -232,7 +232,9 @@ async def test_job_status_wait_and_cancel_on_a_running_job(tmp_path):
     assert gone.output["status"] == "cancelled"
 
 
-async def test_job_cancel_on_a_child_run_says_it_cannot_be_stopped(tmp_path):
+async def test_job_cancel_on_a_child_run_stops_the_run_and_its_work(tmp_path):
+    """Stage J3: a job that started a product run is stopped with its run (the speech runtime
+    restarts, an engine worker stops its job), not left to finish."""
     ex, host, *_ = rig(tmp_path)
     from pydantic import BaseModel
     from wasifyai_platform_sdk.actions import RunBinding
@@ -245,8 +247,8 @@ async def test_job_cancel_on_a_child_run_says_it_cannot_be_stopped(tmp_path):
 
     class Never:
         async def __aiter__(self):
+            yield {"event": "node", "run_id": "run-3"}
             await asyncio.Event().wait()
-            yield {}
 
     host.run_product = lambda pid, gi: Never()  # type: ignore[method-assign]
     ex.registry.add(
@@ -257,13 +259,10 @@ async def test_job_cancel_on_a_child_run_says_it_cannot_be_stopped(tmp_path):
         )
     )  # fmt: skip
     started = await run(ex, "demo.child", {}, wait_seconds=0.01)
+    await asyncio.sleep(0)  # the run's id arrives
     r = await run(ex, "job.cancel", {"job_id": started.job_id})
-    assert (r.status, r.code) == ("refused", "not_cancellable")
-    assert "saved to the library" in r.text
-    job = ex.jobs.get("t1", "u1", started.job_id or "")
-    assert job and job.task
-    job.task.cancel()
-    await asyncio.gather(job.task, return_exceptions=True)
+    assert r.ok and r.output["status"] == "cancelled"
+    assert host.cancelled_runs == ["run-3"]
 
 
 async def test_an_unknown_job_is_not_a_leak(tmp_path):

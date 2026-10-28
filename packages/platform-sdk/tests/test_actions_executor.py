@@ -14,9 +14,12 @@ from wasifyai_platform_sdk.actions import (
     CallBinding,
     InMemoryApprovalStore,
     InMemoryAuditStore,
+    InMemoryJobStore,
+    JobBook,
     Outcome,
     Readiness,
     RunBinding,
+    builtin_actions,
     need_model,
 )
 from wasifyai_platform_sdk.actions.testing import FakeActionHost
@@ -459,7 +462,9 @@ async def test_a_job_of_another_person_does_not_exist():
     gate.set()
 
 
-async def test_a_direct_call_can_be_stopped_and_a_child_run_cannot():
+async def test_a_direct_call_and_a_child_run_can_both_be_stopped():
+    """Stop on a job that started a product run stops that run too (stage J3), so the work stops
+    (the speech runtime is restarted, an engine worker told), not only the waiting."""
     gate = asyncio.Event()
 
     async def hold(p, ctx):
@@ -467,10 +472,6 @@ async def test_a_direct_call_can_be_stopped_and_a_child_run_cannot():
         return Outcome.ok({"echoed": "x"}, "x")
 
     host = FakeActionHost()
-
-    async def endless(p, ev):  # a child run that never ends
-        return {}
-
     ex, *_ = setup(
         act("demo.hold", long=True, bind=CallBinding(hold)),
         act(
@@ -482,22 +483,160 @@ async def test_a_direct_call_can_be_stopped_and_a_child_run_cannot():
         host=host,
     )
 
-    class Never:
+    class Endless:  # a child run that says who it is, then never ends
         async def __aiter__(self):
+            yield {"event": "node", "run_id": "run-9"}
             await asyncio.Event().wait()
-            yield {}
 
-    host.run_product = lambda pid, gi: Never()  # type: ignore[method-assign]
+    host.run_product = lambda pid, gi: Endless()  # type: ignore[method-assign]
     held = await run(ex, "demo.hold", wait_seconds=0.01)
     child_job = await run(ex, "demo.child", wait_seconds=0.01, policy=ApprovalPolicy(make="auto"))
     assert held.job_id and child_job.job_id
     job, run_job = ex.jobs.get("t1", "u1", held.job_id), ex.jobs.get("t1", "u1", child_job.job_id)
-    assert job and run_job and job.cancellable and not run_job.cancellable
+    assert job and run_job and job.cancellable and run_job.cancellable
     assert await ex.cancel_job(job) and job.status == "cancelled"
-    assert not await ex.cancel_job(run_job) and run_job.status == "running"
-    assert run_job.task is not None
-    run_job.task.cancel()
-    await asyncio.gather(run_job.task, return_exceptions=True)
+    await asyncio.sleep(0)  # the run's id is written as it arrives
+    assert run_job.run_id == "run-9"
+    assert await ex.cancel_job(run_job) and run_job.status == "cancelled"
+    assert host.cancelled_runs == ["run-9"]  # the product run itself was stopped
+
+
+# ---- jobs that outlive a restart (stage J3) ---------------------------------------------------
+
+
+def restarted(store: Any, *actions: Action, host: FakeActionHost | None = None):
+    """A second engine over the same job store: what an engine finds after a restart."""
+    host = host or FakeActionHost()
+    audit = InMemoryAuditStore()
+    ex = ActionExecutor(
+        ActionRegistry(actions), host, audit=audit, approvals=InMemoryApprovalStore(),
+        usage=InMemoryUsageRecorder(), jobs=JobBook(store),
+    )  # fmt: skip
+    return ex, host, audit
+
+
+def child_action() -> Action:
+    return act(
+        "demo.child", effect="make", long=True,
+        bind=RunBinding("wasifyai-demo", "thing", lambda p, c: {"text": p.text}, _result),
+    )  # fmt: skip
+
+
+async def start_child_job(store: Any) -> str:
+    """A job that started a product run, on an engine that then closed (its task is gone)."""
+    host = FakeActionHost()
+
+    class Pending:
+        async def __aiter__(self):
+            yield {"event": "node", "run_id": "run-1"}
+            await asyncio.Event().wait()
+
+    host.run_product = lambda pid, gi: Pending()  # type: ignore[method-assign]
+    first, *_ = restarted(store, child_action(), host=host)
+    r = await first.run_action(
+        "demo.child", {"text": "fox"}, "mcp:Codex", actor=ME, wait_seconds=0.01,
+        policy=ApprovalPolicy(make="auto"),
+    )  # fmt: skip
+    assert r.status == "running" and r.job_id
+    await asyncio.sleep(0.01)  # the run's id reaches the store
+    job = first.jobs.get("t1", "u1", r.job_id)
+    assert job and job.task
+    job.task.cancel()  # the engine closes: nothing finishes the job here
+    first.jobs._jobs.clear()
+    return r.job_id
+
+
+async def test_after_a_restart_a_job_is_answered_from_the_run_it_started():
+    store = InMemoryJobStore()
+    job_id = await start_child_job(store)
+    host = FakeActionHost()
+    host.run_states["run-1"] = {
+        "status": "done",
+        "end": {"event": "done", "outputs": {"thing_id": "t-42"}},
+    }
+    ex, _, audit = restarted(store, child_action(), host=host)
+    assert ex.jobs.get("t1", "u1", job_id) is None  # not this process's
+    job = await ex.jobs.find("t1", "u1", job_id)
+    assert job is not None and job.run_id == "run-1" and job.status == "running"
+    await ex.settle(job)
+    assert job.status == "ok" and job.result is not None
+    assert job.result.output == {"echoed": "t-42"} and job.result.job_id == job_id
+    kept = await store.get("t1", "u1", job_id)
+    assert kept is not None and kept.status == "ok"  # written back
+    assert [(e.job_id, e.status, e.origin) for e in audit.entries] == [(job_id, "ok", "mcp:Codex")]
+
+
+async def test_job_status_and_wait_follow_a_kept_job_until_its_run_ends():
+    store = InMemoryJobStore()
+    job_id = await start_child_job(store)
+    host = FakeActionHost()
+    host.run_states["run-1"] = {"status": "waiting_job"}  # its picture is still being made
+    ex, *_ = restarted(store, child_action(), *builtin_actions(), host=host)
+    status = await ex.run_action("job.status", {"job_id": job_id}, "mcp:Codex", actor=ME)
+    assert status.ok and status.output["status"] == "running"
+
+    async def ends_soon():
+        await asyncio.sleep(0.2)
+        host.run_states["run-1"] = {
+            "status": "done", "end": {"event": "done", "outputs": {"thing_id": "t-7"}},
+        }  # fmt: skip
+
+    later = asyncio.create_task(ends_soon())
+    waited = await ex.run_action(
+        "job.wait", {"job_id": job_id, "seconds": 5}, "mcp:Codex", actor=ME
+    )
+    await later
+    assert waited.ok and waited.output["status"] == "ok"
+    assert waited.output["result"]["output"] == {"echoed": "t-7"}
+
+
+async def test_a_kept_job_whose_run_died_with_the_engine_says_it_stopped():
+    store = InMemoryJobStore()
+    job_id = await start_child_job(store)
+    ex, *_ = restarted(store, child_action())  # the run is not known: it ended with the engine
+    job = await ex.jobs.find("t1", "u1", job_id)
+    assert job is not None
+    await ex.settle(job)
+    assert job.status == "error" and job.result is not None
+    assert job.result.code == "interrupted" and "app closed" in job.result.text
+
+
+async def test_a_kept_direct_call_could_not_have_finished():
+    store = InMemoryJobStore()
+    gate = asyncio.Event()
+
+    async def hold(p, ctx):
+        await gate.wait()
+        return Outcome.ok({"echoed": "x"}, "x")
+
+    first, *_ = restarted(store, act("demo.hold", long=True, bind=CallBinding(hold)))
+    r = await first.run_action(
+        "demo.hold", {"text": "hi"}, "assistant", actor=ME, wait_seconds=0.01
+    )
+    assert r.job_id
+    first.jobs._jobs.clear()  # the engine closed
+    ex, *_ = restarted(store, act("demo.hold", long=True, bind=CallBinding(hold)))
+    job = await ex.jobs.find("t1", "u1", r.job_id)
+    assert job is not None
+    await ex.settle(job)
+    assert job.status == "error" and job.result and job.result.code == "interrupted"
+    gate.set()
+
+
+async def test_a_kept_job_is_stopped_through_its_run():
+    store = InMemoryJobStore()
+    job_id = await start_child_job(store)
+    host = FakeActionHost()
+    host.run_states["run-1"] = {"status": "running"}
+    ex, *_ = restarted(store, child_action(), *builtin_actions(), host=host)
+    stopped = await ex.run_action(
+        "job.cancel", {"job_id": job_id}, "mcp:Codex", actor=ME,
+        policy=ApprovalPolicy(change="auto"),
+    )  # fmt: skip
+    assert stopped.ok and stopped.output["status"] == "cancelled"
+    assert host.cancelled_runs == ["run-1"]
+    kept = await store.get("t1", "u1", job_id)
+    assert kept is not None and kept.status == "cancelled"
 
 
 # ---- principals and scopes (stage F3; ADR-0092) -----------------------------------------------

@@ -6,12 +6,14 @@ import pytest
 from wasifyai_platform_sdk.actions import (
     InMemoryApprovalStore,
     InMemoryAuditStore,
+    InMemoryJobStore,
     SqlApprovalStore,
     SqlAuditStore,
+    SqlJobStore,
 )
 from wasifyai_platform_sdk.sqlite import create_sqlite_engine
 
-from tests.action_store_contract import check_approvals, check_audit
+from tests.action_store_contract import check_approvals, check_audit, check_jobs
 
 
 @pytest.fixture
@@ -49,3 +51,11 @@ async def test_the_sqlite_tables_are_additive_and_can_be_made_twice(engine):
         await SqlApprovalStore(other).pending("t", "u")
     finally:
         await other.dispose()
+
+
+async def test_memory_job_store():
+    await check_jobs(InMemoryJobStore(), tenant())
+
+
+async def test_sqlite_job_store_creates_its_table_on_first_use(engine):
+    await check_jobs(SqlJobStore(engine), tenant())

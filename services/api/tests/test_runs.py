@@ -254,6 +254,14 @@ async def test_a_child_run_yields_the_events_of_another_graph_until_it_ends(tmp_
     assert names[-1] == "done" and "token" in names
     assert [e["seq"] for e in events] == sorted(e["seq"] for e in events)
     # its own run: owned by the same user, and it is in the store like any other
+    run_id = events[0]["run_id"]
+    # what an action job reads after a restart (stage J3): the run's status and its last event
+    state = await runs.state_of("t1", run_id)
+    assert state["status"] == "done" and state["end"]["event"] == "done"
+    assert state["end"]["outputs"] == events[-1]["outputs"]
+    assert not runs.live(run_id)
+    assert await runs.state_of("t1", "no-such-run") == {"status": "unknown"}
+    assert (await runs.state_of("another-tenant", run_id))["status"] == "unknown"
     await runs.aclose()
 
 

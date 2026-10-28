@@ -256,6 +256,24 @@ async def test_a_failed_job_marks_the_row_failed_and_deletes_the_picture(tmp_pat
     assert not [e for e in rig.usage.events if e.kind == "video.created"]
 
 
+async def test_a_run_stopped_while_its_clip_is_made_does_not_leave_a_working_row(tmp_path, ctx):
+    """Stage J3: Stop while the media worker has the clip never reaches `await_job`; the graph's
+    `on_cancel` gets the run's last state, so the row is not held "being made" (blocking the next
+    clip for 90 minutes) and the picture is not kept."""
+    rig = make_rig(tmp_path)
+    up = await put_upload(rig)
+    s = await Story(rig).start({"mode": "image", "prompt": "snow falls", "image_key": up.key})
+    assert s.waiting.get("kind") == "job"
+    (row,) = s.videos.videos
+    assert row.status == "working"
+    snapshot = await s.graph.aget_state(CONFIG)
+    await s.graph.on_cancel(dict(snapshot.values))  # type: ignore[attr-defined]
+    (row,) = s.videos.videos
+    assert row.status == "failed" and row.error == "Stopped. Nothing was kept."
+    assert not await exists(rig, up.key)
+    assert await s.videos.working_count("t1", "u1") == 0  # the next clip may start
+
+
 async def test_a_clip_that_cannot_be_read_fails_the_row_and_the_run(tmp_path, ctx):
     rig = make_rig(tmp_path)
     s = await Story(rig).start({"mode": "text", "prompt": "a fox"})

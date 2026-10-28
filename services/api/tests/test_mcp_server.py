@@ -11,6 +11,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import httpx
 import httpx2
@@ -30,7 +31,7 @@ from wasifyai_api.mcp_server.connections import (
     hash_secret,
     secret_matches,
 )
-from wasifyai_platform_sdk.actions import ActionResult
+from wasifyai_platform_sdk.actions import Job
 from wasifyai_platform_sdk.sqlite import create_sqlite_engine
 
 from tests.test_desktop_profile import SECRET, auth, data_dir  # noqa: F401
@@ -480,7 +481,7 @@ async def test_a_connection_runs_one_job_at_a_time_and_is_told_which(engine):
 
     offered = list(engine.app.state.actions.registry.for_surface("mcp"))
     c = Connection(id="c1", tenant_id="t", user_id="u", name="Codex", secret_hash="x")
-    running = Executor.jobs.start("image.generate", "t", "u", c.origin, True)
+    running = await Executor.jobs.start("image.generate", "t", "u", c.origin, True)
     long_action = next(a for a in offered if a.long)
     quick = next(a for a in offered if not a.long)
     ex: Any = Executor()
@@ -516,7 +517,9 @@ def test_the_person_sees_jobs_from_other_apps_and_can_stop_them(engine):
     me = executor.jobs  # the book is shared; start a job as the launcher's agent would
     c, _ = engine.connection("Codex")
     tenant, user = _person_of(engine)
-    job = me.start("image.generate", tenant, user, f"mcp:{c['name']}", True)
+    # a job in the book as an agent's call puts it there (the store is written by the executor)
+    job = Job(uuid4().hex[:16], "image.generate", tenant, user, f"mcp:{c['name']}", True)
+    me._jobs[job.id] = job  # noqa: SLF001
     try:
         r = engine.get("/actions/jobs")
         assert r.status_code == 200, r.text
@@ -524,12 +527,12 @@ def test_the_person_sees_jobs_from_other_apps_and_can_stop_them(engine):
         assert mine and mine[0]["from"] == "Codex" and mine[0]["cancellable"] is True
         r = engine.post(f"/actions/jobs/{job.id}/cancel")
         assert r.status_code == 200 and r.json()["job_id"] == job.id
-        assert r.json()["stopped"] is False  # no task to cancel in this bare-book job
+        # no task here and no product run: it can only have stopped with an earlier engine, and
+        # is closed as such before anything is stopped (stage J3)
+        assert r.json()["stopped"] is False and r.json()["status"] == "error"
         assert engine.post("/actions/jobs/nope/cancel").status_code == 404
     finally:
-        me.finish(
-            job, "cancelled", ActionResult(status="refused", action_id="image.generate", text="x")
-        )
+        me._jobs.pop(job.id, None)  # noqa: SLF001
 
 
 async def _recorded(engine: Engine, connection_id: str, count: int) -> None:

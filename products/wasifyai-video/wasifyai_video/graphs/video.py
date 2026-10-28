@@ -75,6 +75,7 @@ log = logging.getLogger(__name__)
 Status = Literal["working", "done", "refused", "failed"]
 BUSY = "You already have a video being made. It will be in My creations when it's ready."
 FAILED = "Your video couldn't be made. Please try again."
+STOPPED = "Stopped. Nothing was kept."
 NOT_EXTENDABLE = "Please choose one of your finished videos to carry on."
 
 
@@ -495,4 +496,13 @@ def build_video_graph(
     g.add_edge("start_job", "await_job")
     g.add_edge("await_job", "finalise")
     g.add_edge("finalise", END)
-    return g.compile(checkpointer=checkpointer)
+    graph = g.compile(checkpointer=checkpointer)
+
+    async def stopped(state: VideoState) -> None:
+        await fail_clip(state, STOPPED)
+
+    # A run stopped while its clip is with the media worker never reaches `await_job`: the run
+    # manager calls this with the run's last state, so the row is not left "being made" (which
+    # would hold the one-clip-at-a-time rule for 90 minutes) and the picture is not kept (stage J3).
+    graph.on_cancel = stopped  # type: ignore[attr-defined]
+    return graph

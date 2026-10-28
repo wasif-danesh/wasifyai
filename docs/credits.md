@@ -149,7 +149,6 @@ Weights have their own licences, recorded per model in `products/*/models.yaml` 
 
 | Project | Repository | Licence | Use (ADR) |
 |---|---|---|---|
-| Hermes Agent | `NousResearch/hermes-agent` | MIT | The agent engine behind our `AgentEngine` interface (0072) |
 | MCP Python SDK | `modelcontextprotocol/python-sdk` | MIT | Our MCP server and client (0069, 0070) |
 | Claude Code, Codex, OpenCode | Anthropic (closed), `openai/codex`, `anomalyco/opencode` | Apache-2.0, MIT | MCP clients tested in spike S1; not dependencies |
 | HyperFrames | `heygen-com/hyperframes` | Apache-2.0 | Video Builder's render engine (0077) |

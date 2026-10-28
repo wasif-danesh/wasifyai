@@ -2,9 +2,10 @@
 
 Written 2026-10-27 from a read of the source, the ADRs (0001 to 0091), the plans, the spikes and the backlog, for both the
 desktop app and the web app. Every number below was taken from the checkout on that day; anything not read or run is marked
-**not verified**. The four agent surfaces the owner asked about (an MCP server, an MCP client, the Hermes agent, API keys
-that give access to the products) have their own sections (5 to 8) with a concrete design each, on top of the Accepted ADRs
-0068 to 0072 and the two spikes that tested them (`docs/spikes/mcp-s1.md`, `docs/spikes/agent-g0.md`).
+**not verified**. The agent surfaces the owner asked about (an MCP server, an MCP client, API keys that give access to the
+products) have their own sections (5, 6 and 8) with a concrete design each, on top of the Accepted ADRs 0068 to 0071 and
+the spike that tested them (`docs/spikes/mcp-s1.md`). A fourth, an agent on Hermes (section 7), was dropped by the owner
+on 2026-10-28: a component of about 660 MB is not practical in the app.
 
 Nothing here changes an Accepted ADR. Where a recommendation needs a new decision it says so and names the ADR that would
 record it. The working tree holds uncommitted Train-on-the-web work (`docs/train-web-plan.md`, stage WT0); this plan does
@@ -18,7 +19,7 @@ not touch those files.
 4. [The improvement plan, in stages](#4-the-improvement-plan-in-stages)
 5. [The MCP server](#5-the-mcp-server)
 6. [The MCP client](#6-the-mcp-client)
-7. [The agent on Hermes](#7-the-agent-on-hermes)
+7. [The agent on Hermes (dropped)](#7-the-agent-on-hermes-dropped)
 8. [API keys: access to the products from outside](#8-api-keys-access-to-the-products-from-outside)
 9. [Order, dependencies and sizes](#9-order-dependencies-and-sizes)
 10. [Decisions the owner must make](#10-decisions-the-owner-must-make)
@@ -30,7 +31,7 @@ not touch those files.
 | Shell | `apps/desktop/src-tauri` (Rust, AGPL-3.0): engine supervision, provisioning (uv, Python, hashed lock), ComfyUI and llama.cpp installers, updater skeleton, a per-launch HS256 token | `apps/web` (Next.js App Router): Auth.js sign-in, the BFF that mints a 5-minute HS256 token per request and proxies to the API, admin pages | `packages/ui` (every screen), `packages/client` (typed engine client, SSE, message tree, flow reducers), `packages/contracts-ts` (generated) |
 | Engine | `services/api` in the `desktop` profile: SQLite, in-process queue and event log, local files with signed links, loopback only | the same engine in the `web` profile: Postgres + pgvector, Redis Streams, S3 storage, LiteLLM; media worker, engine workers (ADR-0087), notebooks worker | `packages/platform-sdk`: capabilities, providers, storage, usage, slots, the action catalogue and executor, engine jobs |
 | Products | image, video (with Video Builder), voice (speech, music, tools, dub, audiobook, lip sync), notebooks, assistant, 3D, training | the same products; what has no web home runs as a job on an engine worker | `products/*`: `product.yaml`, graphs, routes, `actions.py`, `models.yaml`, prompts, workflows |
-| Agent surfaces | the catalogue (51 actions, help file each) and the executor are built; the assistant runs six of them; MCP server, MCP client, agent: **not started** | same catalogue; the web assistant does not offer `models.*` | ADR-0068 to 0072 Accepted; spikes S1 and G0 done |
+| Agent surfaces | the catalogue (51 actions, help file each) and the executor are built; the assistant runs six of them; MCP server, MCP client: **not started** | same catalogue; the web assistant does not offer `models.*` | ADR-0068 to 0072 Accepted; spikes S1 and G0 done |
 
 Sizes that matter for the plan: `services/api/src/wasifyai_api/` has about 95 files and 19,200 lines (`main.py` 808,
 `audio_runtime.py` 1,109, `desktop_discovery.py` 1,117); the SDK 9,300 lines; `products/wasifyai-voice/wasifyai_voice/actions.py`
@@ -78,8 +79,7 @@ Optional components are installed by hand-written code per component: ComfyUI an
 notebooks reader in **Python** (`audio_runtime.py`, `lipsync_runtime.py`, `model3d_runtime.py`, `video_builder_runtime.py`,
 `training_setup.py`, `language_setup.py`, `decision_setup.py`, `video_setup.py`, `reader_install.py`), each with its own
 `*_pins.json` (nine of them), its own consent-bytes check, progress shape, repair path, slot ownership and status route.
-The pattern is the same every time; the code is not shared. Consequences: a new component (the Hermes agent, section 7)
-costs a week of copying; the shell's two installers cannot be reused by an engine worker on the web (ADR-0087 had to
+The pattern is the same every time; the code is not shared. Consequences: a new component costs a week of copying; the shell's two installers cannot be reused by an engine worker on the web (ADR-0087 had to
 re-implement fetching for workers in `admin_wire.py`); and the engine bundle script already misses pieces (backlog D29: no
 3D product, no prompts for video and 3D in a packaged app).
 
@@ -115,8 +115,7 @@ needs it.
 Keys are encrypted with `SecretBox` (Fernet) under `MEDIA_SECRETS_KEY` on the web and a `secrets.key` file in the data
 folder on the desktop. There is no `SecretStore` interface, no OS keychain (ADR-0070 decision 7 and ADR-0058 decision 4
 both want one), and the Hugging Face token is read from the environment only (`desktop_hub.py`). The MCP client (OAuth
-tokens, API keys for remote servers), the agent (a GitHub token, a hosted-model key) and hosted models on the desktop all
-need the same thing.
+tokens, API keys for remote servers) and hosted models on the desktop all need the same thing.
 
 ### 3.7 Observability stops at the web profile
 
@@ -130,7 +129,7 @@ not kept beyond seven days.
 The assistant runs six catalogue actions through hand-written tool definitions, with `MAX_ROUNDS = 4` and an interim
 sentence listing the screens (`features.json`). ADR-0071's meta-tools (`how_to`, `app_status`, `propose_action`,
 `open_screen`), the action card and the evaluation gate (stage A2 and A3) are not built. Until they are, the assistant
-cannot guide ("how do I") or propose with a card, the agent has nothing to hand a request to, and every new action means a
+cannot guide ("how do I") or propose with a card, and every new action means a
 new hand-written tool definition, which is the drift ADR-0068 was written to stop.
 
 ### 3.9 Web-only debts that block a public service
@@ -185,7 +184,7 @@ because the seams already exist.
 |---|---|---|---|
 | **O1 Traces** | OpenTelemetry in the API, the workers and the executor (one span per run, per node, per action, per engine job), exported to the Grafana stack on the web and to a local file on the desktop; Langfuse for LLM traces behind a setting (ADR-0050). Metric labels stay bounded (ADR-0048) | M | a run on the web shows as one trace from the BFF to the worker; a prompt and its cost show in Langfuse on staging |
 | **O2 Diagnostics on the desktop** | A "Save diagnostics" button in Settings: engine log, provision log, component states, the last 50 audit entries, the machine's fit figures, no content and no secrets, as one zip the person chooses where to save | S | the zip opens and holds what a bug report needs |
-| **Q1 ADR and docs hygiene** (built 2026-10-27) | Amend ADR-0069 with the eight S1 findings; amend ADR-0072 "Owner's answers" into the decision text; update `CLAUDE.md`'s status line and reading table; split `docs/desktop-profile.md` into one page per area (profile, provisioning, components, the assistant, notebooks, voice, video, 3D) | S | each page under 400 lines; a new contributor can find a component's doc from its name |
+| **Q1 ADR and docs hygiene** (built 2026-10-27) | Amend ADR-0069 with the eight S1 findings; amend ADR-0072 "Owner's answers" into the decision text (ADR-0072 was removed on 2026-10-28); update `CLAUDE.md`'s status line and reading table; split `docs/desktop-profile.md` into one page per area (profile, provisioning, components, the assistant, notebooks, voice, video, 3D) | S | each page under 400 lines; a new contributor can find a component's doc from its name |
 | **Q2 Release gates** | Finish ADR-0056's pre-release table: signing and notarisation, the `.dmg`, the updater key and feed, an offline wheelhouse decision; fix D18 and D21 (the four `window.prompt` and `window.confirm` uses, rename and delete a chat from Recents with `NameDialog` and `ConfirmDialog`); run the whole desktop checklist in the real window and record it | M | a signed app installs on a second Mac, updates from a feed, and the checklist has no unticked line |
 
 ### Features (what a person sees)
@@ -345,8 +344,7 @@ five, so the model's tool list stays the same size whether zero or forty remote 
 The graph already has the mechanism for web results: `taint_outcome` marks an outcome untrusted and the turn then asks
 before anything is made (the checklist's section 3 tests it). Extend it: a result from `external.call` sets `tainted` in
 the run state; while it is set, the executor is called with a policy of `make="ask", change="ask"` whatever the
-conversation chose; the card says **where the request came from** ("after reading a result from `github`"). Hermes (section
-7) applies the same rule from the first web page.
+conversation chose; the card says **where the request came from** ("after reading a result from `github`").
 
 ### 6.4 Tests
 
@@ -365,120 +363,12 @@ environment. Each case has an assertion that nothing was called, leaked or run.
 The fallback ADR-0070 names stays real: if C2's evaluation shows the local model cannot choose among remote tools safely,
 remote tools are offered only with a hosted or larger model and Settings says so.
 
-## 7. The agent on Hermes
+## 7. The agent on Hermes (dropped)
 
-ADR-0072 is Accepted and spike G0 (2026-10-19) ran Hermes v0.21.5 on this Mac through all three control paths, with a
-scripted model and with Qwen3.5-9B at 64,000 tokens. The verdict was Go for G1 with conditions; this is the build.
-
-### 7.1 Shape
-
-```
-Agent screen (packages/ui/src/agent/)  ──►  product wasifyai-agent (graph: one task = one run)
-                                                │ AgentEngine protocol
-                                                ▼
-                                      HermesGateway (one process per task)
-                                        python -m tui_gateway.entry   (JSON-RPC over stdio)
-                                        HERMES_HOME=<app data>/components/agent/home
-                                        HERMES_WRITE_SAFE_ROOT=<app data>/agent/tasks/<id>/workspace
-                                        profile per task: toolsets allow-list, approvals.mode=manual,
-                                        tools.tool_search.enabled=off, mcp.servers=[wasify (untrusted)]
-                                                │
-                                   ┌────────────┴──────────────┐
-                                   ▼                           ▼
-                        web_search / web_extract        our MCP server (section 5)
-                        (Hermes's own tools)            a dedicated connection per task,
-                                                        scope = the task's profile
-```
-
-### 7.2 The component (on F2)
-
-- Pinned Hermes commit, its `uv.lock` (3,486 hash entries) and `pm/lock.json`, **pre-built ahead of time** by the installer
-  (G0 found Hermes builds a 379 MB environment plus a 272 MB cache on first start, downloading from PyPI; the installer must
-  do that from the hashed lock with no first-run download). Python 3.14 from uv. Size shown first (about 660 MB).
-- One `HERMES_HOME` under app data, **one profile per task** (not one home per task); `~/.hermes` is never read and
-  `auth.adopt_external_logins` is false.
-- Started by the engine when a task starts, stopped when the task ends or the app quits; it is a slot owner only when the
-  model is local.
-
-### 7.3 `AgentEngine` (so Hermes can be replaced)
-
-```python
-class AgentEngine(Protocol):
-    async def start(
-        self, task: AgentTask
-    ) -> AgentHandle: ...  # goal, profile, workspace, limits, model, mcp connection
-    def events(
-        self, handle: AgentHandle
-    ) -> AsyncIterator[
-        AgentEvent
-    ]: ...  # delta, tool_start, tool_done, approval, clarify, usage, done, error
-    async def answer(
-        self, handle: AgentHandle, request_id: str, choice: str | dict
-    ) -> None: ...  # approvals and clarify questions
-    async def steer(self, handle: AgentHandle, text: str) -> None: ...
-    async def cancel(self, handle: AgentHandle) -> None: ...
-    async def artifacts(self, handle: AgentHandle) -> list[Path]: ...
-```
-
-`HermesGateway` is the first implementation: `client.capabilities {server_requests: true}` first (else approval requests
-are refused), `session.create {cwd, cwd_explicit, profile}`, events `message.delta`, `tool.start`, `tool.complete`,
-`session.usage`, `message.complete`; approval requests answered with `once` or `deny` only (never `always` or `session`);
-`session.interrupt` for Stop (0.15 s in G0). ACP is the fallback and the only path with per-session MCP servers. A second,
-native implementation (a LangGraph loop over our actions and the MCP client) stays possible behind the same protocol.
-
-### 7.4 What Hermes does not enforce, and what we do instead (from G0)
-
-| Hermes fact | Our rule |
-|---|---|
-| default toolsets on a fresh home include `terminal`, `browser`, `computer_use`, `code_execution`, `cronjob`, `memory`, `skills` | the profile is an **allow-list** written by the host: Research = `web, clarify, todo, mcp`; no `terminal`, no `process_manage`, no `file` (next row) |
-| the write-root covers only `write_file` and `patch`; a shell command wrote outside it with no prompt | no shell in any v1 profile |
-| there is **no read-root**: `read_file` read outside the task folder | Hermes's `file` toolset is **not** given; reading and writing go through **our MCP server** (`library_*`, `notebook_*`, a per-task attached folder in the connection's read folders, `report_write` into the workspace) |
-| no taint rule (results are wrapped as untrusted text only) | ours, from the first web page: every non-read action asks in the window with its provenance |
-| keyless web search rotates through third parties (Exa, Parallel, Firecrawl, Keenable) | the start card says queries leave the computer even with a local model; `web.keyless_fallback` and a per-task domain list in Advanced; the person's own search key (F4) when they have one |
-| a second model call per session writes a title | accepted on a hosted model; off on a local one |
-| `approvals.mode` is config and the model cannot change it | the host writes `manual`; an unanswered request is denied after the timeout |
-| 64,000 tokens of context is enforced at start | the model readiness check (7.6) decides per machine before the task starts |
-
-### 7.5 The product `wasifyai-agent`
-
-- A task is a run of the product graph: `start` (the start card's answers: goal, profile, limits, model, attached folder) ->
-  `run` (events translated to `node`, `token`, `tool_call`, `tool_result`, `interrupt`, `job_progress`, `done`) ->
-  `finish` (promote results). An approval or a clarify question is an `interrupt` the Agent screen answers with
-  `POST /runs/{id}/resume`; the chat's card renderer is reused.
-- Store `agent.db` (J2 base): tasks (goal, profile, limits, model, state, usage), steps (kind, title, when; no hidden
-  reasoning), sources (URL, time read). Creations: `report` (Markdown with the mandatory **sources** section, exported to PDF
-  and Word by the notebooks' writers) and `agent_run`, both indexed (ADR-0041) with a card and a filter in the library.
-- Actions: `agent.run` (`make`, `costly`, `leaves_device` when the model is hosted or the web is used), `agent.status`,
-  `agent.cancel`; the assistant offers an Agent card when a request is too big for a turn (A2).
-- Limits on every task with defaults and ceilings: 30 minutes, steps, tokens (a hosted model shows a cost range first),
-  pages, workspace size, files; a watchdog stops a task with no progress for five minutes.
-- G0's conditions for G1: the acceptance run uses a **hosted model**; a deterministic read action **"repositories sorted by
-  stars"** (`web.github_top`, a `read` action over the GitHub search API, with the person's optional token from F4) because
-  free web search found the right repository in one of three local runs; every report has a sources section.
-
-### 7.6 Models
-
-- `agent-ready`, `limited` (with the reason: "context 8,192; the agent needs 64,000") or `not suitable` on the Models page,
-  from measured context, memory fit and the assistant's tool-calling cases. For a local model the language service starts
-  `llama-server` with a 65,536 context **for the task** and shows the memory (about 8 GB for Qwen3.5-9B Q4_K_M on this Mac;
-  16 and 32 GB Macs **not measured**); thinking off (`--reasoning off`), because G0 showed it costs two to three times the
-  tokens per tool call.
-- Hosted: **Hugging Face Inference Providers** only to start (GitHub Models was retired 2026-07-30); the person's key in
-  the keychain (F4); the start card states that everything the agent reads and writes goes to that provider. This needs a
-  **hosted text provider on the desktop** (an OpenAI-compatible endpoint with the person's key behind the same
-  `text_provider` seam `LocalTextProvider` uses), which the chat can then also use; it is a small, separate piece of F4.
-- The local 9B stays `limited` for agents until G3's evaluation says otherwise.
-
-### 7.7 Stages
-
-| Stage | What | Size | Done when |
-|---|---|---|---|
-| **G1** | the component, `AgentEngine` and `HermesGateway`, the product, a minimal Agent screen (goal box, feed, Stop, approvals as cards), the dedicated MCP connection per task, the sources section | M | the GitHub report runs end to end on a hosted model from the screen; needs **M1** |
-| **G2** | profiles and the workspace; limits and the watchdog; taint; `report` and `agent_run` creations; `agent-ready` on the Models page; the attached-folder rule | M | a task cannot write outside its folder, asks after reading a page before acting, and stops at its limits |
-| **G3** | the agent evaluation: about 20 task types with rubrics on three model tiers; safety cases (injection in a page, a delete request, an out-of-scope path) | M | acceptance set before G1 is declared done |
-| **G4** | the Build profile inside a container when Podman or Docker is found; learning as "ask me first" with the reviewed skill list; the local-model path on big Macs | M | optional; ships when G3 says it is safe |
-
-The web gets the agent later through an engine worker with the container backend; not in these stages.
+**Dropped 2026-10-28 (owner).** An agent for long tasks on Hermes Agent (ADR-0072, spike G0) needed a component of about
+660 MB (a pinned environment of 379 MB plus a 272 MB cache), which is not practical to add to the app. ADR-0072 and
+`docs/spikes/agent-g0.md` were removed, and stages G1 to G4 are no longer planned. The assistant (ADR-0071) with its cards,
+the MCP server (section 5) for outside agents such as Claude Code, and the MCP client (section 6) stay as they are.
 
 ## 8. API keys: access to the products from outside
 
@@ -487,7 +377,7 @@ The owner asked for "an API key to access products". Two needs hide in that sent
 1. **Programs and other people's agents calling the hosted service** (a script, a partner, Claude Code against the web app)
    with a credential that is not a browser session.
 2. **A second credential for the local engine**, which the MCP server's connections already are, and which the fixed-port
-   HTTP option and Hermes's connection need.
+   HTTP option needs.
 
 Today the only credential is the five-minute HS256 token the BFF or the shell mints (ADR-0030); every route refuses
 anything else. API keys do not exist. This needs a new ADR (suggested **ADR-0092: API keys and principals**) because it
@@ -571,7 +461,6 @@ F1 services ─┐
 F2 components ┼─► (any order, small)          A2 assistant ──► A3 evaluation
 F3 principals ┼──► M1 MCP server ──► M2 ──► M3          │
 F4 secrets ───┘        │                                 ▼
-                       ├──► G1 agent ──► G2 ──► G3 ──► G4
 J1 migrations ─► J2 base ─► J3 jobs ─► J4 one job per person
                        │
 F3 + J3 ──────────────► K1 API keys ──► K2 (needs the web ingress)
@@ -586,8 +475,8 @@ Suggested order for one person, three months, desktop first as the owner wants:
 | 1 to 2 | **F3, F4, Q1**, then **A2** started | the two small seams every surface needs; A2 is what the owner sees first and what the agent hands off to |
 | 3 to 4 | **A2** finished, **A3**, **S2**, **M1** started | the card path proves the catalogue with real people; M1 reuses the same approvals |
 | 5 to 6 | **M1** finished, **J3**, **F1** | the three real clients make things; job handles survive restarts before agents depend on them |
-| 7 to 9 | **G1**, **G2**, **F2** beside it | the headline feature; the agent is Hermes as an MCP client of M1; F2 makes the Hermes component the first on the shared installer |
-| 10 to 11 | **M2**, **K1**, **G3** | files and private groups for agents; keys reuse principals and jobs; the agent evaluation decides G4 |
+| 7 to 9 | **F2** | one installer for the nine components (the agent on Hermes that was planned here was dropped on 2026-10-28) |
+| 10 to 11 | **M2**, **K1** | files and private groups for agents; keys reuse principals and jobs |
 | 12 | **Q2**, **O2**, **M3** | the release gates for a signed desktop app with the server on |
 | after | **J1, J2, J4, O1, W1 to W3, K2, C1 to C3, P1** | the web service, the client last as ADR-0070 says |
 
@@ -602,14 +491,13 @@ months and depends on the owner's hosting answers (P7).
 3. **Dependencies to approve** (CLAUDE.md "Ask before"): `mcp` 2.3.0 and its eight packages; `argon2-cffi` for key and
    connection secret hashing (or SHA-256 with salt and no new package); `keyring` or the shell as keychain owner (spike S4
    is answered by F4; recommend the shell, which already signs tokens and runs as the app's identity); OpenTelemetry SDK and
-   exporter for O1; the Hermes component as a pinned, pre-built environment (about 660 MB).
+   exporter for O1.
 4. **Move ComfyUI and llama.cpp installation from the shell to the engine** (F2). It changes `apps/desktop` (AGPL) and the
    engine (Apache); the installer logic was written for this engine, so the licence boundary does not move, but the owner
    should say yes before 1,500 lines leave the shell.
-5. **A hosted text provider on the desktop with the person's key** (7.6): the ADR-0056 decision 4 "cloud provider with the
-   user's key" was never built; the agent needs it; the chat would get it too.
-6. **The agent's web search without a key** sends queries to third parties (G0): accept with the sentence on the start card,
-   or require the person's own key.
+5. **A hosted text provider on the desktop with the person's key**: the ADR-0056 decision 4 "cloud provider with the
+   user's key" was never built; the chat would use it.
+6. ~~The agent's web search without a key~~ Dropped with the agent (2026-10-28).
 7. **Names, once more before people have configs**: the launcher `wasify-mcp`, the tool names `image_generate` and the
    rest, the key prefix `wsk_`, the scope words.
 8. **The remote MCP on the web** with keys first (5.6) and OAuth 2.1 later, or OAuth from the start.

@@ -85,7 +85,7 @@ P0 and P1 give the owner everything in the web menu on the Mac within the plan's
 
 ## Not in this plan
 
-Training (ADR-0073 and onwards), the assistant's agent system (ADR-0072): each says what it does on the
+Training (ADR-0073 and onwards) says what it does on the
 web in its own ADR; the gate in P8 applies to them when they reach the menu.
 
 ## Status 2026-10-21: P0 and P1 built

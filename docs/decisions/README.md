@@ -73,7 +73,7 @@
 | [0069](0069-mcp-server.md) | An MCP server: Claude Code, Codex and OpenCode can use the app | Accepted |
 | [0070](0070-mcp-client.md) | An MCP client: the assistant can use other people's MCP servers | Accepted |
 | [0071](0071-assistant-that-knows-the-product.md) | An assistant that knows the product, guides, and runs it when the person clicks | Accepted |
-| [0072](0072-agent-system-on-hermes.md) | An agent system for long tasks, built on Hermes Agent | Accepted |
+| 0072 | An agent system for long tasks, built on Hermes Agent (removed 2026-10-28 by the owner: its component of about 660 MB is not practical in the app; the number is not reused, and ADRs that mention it predate the removal) | Removed |
 | [0073](0073-training-platform.md) | Training in the app, made simple: one platform, Unsloth as the trainer, three simple cards | Accepted |
 | [0074](0074-language-model-training.md) | Teach my assistant to write like me: language-model fine-tuning for non-technical people | Accepted |
 | [0075](0075-decision-model-training.md) | Training a decision model: teach the app to sort and judge things | Accepted |

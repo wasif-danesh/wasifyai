@@ -69,17 +69,27 @@ async def finished(installer: ar.AudioInstaller):
 # ---- pins ----------------------------------------------------------------------------------
 
 
-def test_the_shipped_pins_are_complete_and_https():
-    pins = ar.load_pins()
-    assert pins.tag.startswith("v0.9.0") and "darwin-arm64" in pins.assets
-    for pin in pins.assets.values():
-        assert pin.url.startswith("https://github.com/unslothai/audio.cpp/releases/download/")
-        assert len(pin.sha256) == 64 and pin.size > 1_000_000
-    assert [p.platform for p in pins.assets.values() if p.measured] == ["darwin-arm64"]
+PLATFORMS = ("darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64", "windows-x64")
+
+
+def test_the_shipped_pins_are_complete_and_https(tmp_path):
+    """Each platform's manifest pins its own build (read here whatever computer runs the test)."""
+    measured = []
+    for key in PLATFORMS:
+        path = tmp_path / f"{key}.json"
+        path.write_text(json.dumps(part_pins("audiocpp", platform=key)))
+        pins = ar.load_pins(path)
+        assert pins.tag.startswith("v0.9.0") and list(pins.assets) == [key], key
+        for pin in pins.assets.values():
+            assert pin.url.startswith("https://github.com/unslothai/audio.cpp/releases/download/")
+            assert len(pin.sha256) == 64 and pin.size > 1_000_000
+            measured += [pin.platform] if pin.measured else []
+    assert measured == ["darwin-arm64"]
+    assert list(ar.load_pins().assets) == [ar.platform_key()]  # this computer reads its own
 
 
 def test_a_pin_without_a_sha_is_refused(tmp_path):
-    raw = part_pins("audiocpp")
+    raw = part_pins("audiocpp", platform="darwin-arm64")
     raw["assets"]["darwin-arm64"]["sha256"] = "abc"
     bad = tmp_path / "pins.json"
     bad.write_text(json.dumps(raw))

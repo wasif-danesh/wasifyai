@@ -300,7 +300,23 @@ only and no copying model is installed), and writing the script needs the voice 
 not installed. Open: Dub lists languages that a model not on this computer speaks, and it separates the voice
 whenever the speaker's voice is the default, which is before the person chooses the voice.
 
-About 44 days of work in thirteen stages; U0 to U6 are done, U7 next, then the products in the order a
+**Built:** U7 on 2026-10-28: Create music on the `MakeScreen` (`voice/MusicWorkspace.tsx`, mounted by `MakeFrame`).
+The ask column: the model, Song or Sound effect (`Segmented`), the description with style chips that add or take
+out a word, "No singing (instrumental)", the Lyrics panel with "Write them for me" (the chat model) or pasted words,
+the length (`Slider`), and tempo, key, seed and how many under "For experts"; "Make the song" (or "Make the sound").
+A model that does not say what it makes, or no model yet, still gets the song form, so the screen is never blank
+(the web's dead end). The stage plays the piece with its waveform, its kind, length and model, its description and
+lyrics; Save a copy, Make it again, Another take, and in More: Change a part (the editor opens on the stage), Split
+into parts (Split opens with it chosen), the other formats, favourites, Rename (`NameDialog`) and Delete (asks
+first). Recent music is the strip. Your music's list renames with the dialog too (no `window.prompt`). Sliders made
+from a model's options show their name above them again. The words test's baseline for "Takes" fell to 3. Checked
+with the music unit tests, both apps' tests, the web specs (the music picture taken again) and a real song in the
+window (`ui-audit.sh light music-make`: a 30 second lo-fi instrumental with ACE-Step 1.5 Turbo, its More menu, then
+Split into parts with it chosen and HTDemucs ready; pictures `music-ask`, `music-making`, `music-made`,
+`music-made-more`, `music-split-handed`). Not in this stage: the Lyrics screen stays a page of its own (it is also
+the panel), and the strip reads Your music, not the one Library (U8).
+
+About 44 days of work in thirteen stages; U0 to U7 are done, U8 next, then the products in the order a
 new person meets them (Pictures, Video, Speech), with the Library before the home so the quick starts and the
 recent strips have one source.
 

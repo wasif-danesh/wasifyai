@@ -14,9 +14,13 @@ Make a piece of music, a song with words, or a sound effect and keep it in your 
 ## Steps in the app
 
 1. Open **Music › Create**.
-2. Describe the style and mood.
-3. Add lyrics if you want singing, or choose instrumental.
-4. Choose the length and Create.
+2. Describe the style and mood; the style chips under the box add or take out a word.
+3. Write or paste lyrics in the Lyrics panel (**Write them for me** uses the chat model), or tick
+   **No singing (instrumental)**.
+4. Choose the length and **Make the song**. Tempo, key, seed and how many are under **For experts**.
+5. The song plays where it appears with its lyrics: **Save a copy**, **Make it again** (the same seed) and
+   **Another take** are under it, and **Change a part**, **Split into parts**, other formats, favourites,
+   **Rename** and **Delete** are in **More**. Recent music lists what you made.
 
 ## Fields
 

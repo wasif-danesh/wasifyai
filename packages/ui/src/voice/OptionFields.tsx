@@ -48,6 +48,9 @@ export function OptionFields({
         if (slider) {
           return (
             <div key={o.name} className="grid gap-1.5">
+              <span aria-hidden="true" className="font-medium text-sm">
+                {o.label}
+              </span>
               <Slider
                 id={id}
                 label={o.label}

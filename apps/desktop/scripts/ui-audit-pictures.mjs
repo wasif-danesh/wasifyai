@@ -16,6 +16,8 @@
 //                                                                WASIFYAI_AUDIT_DUB_LANGUAGE) (the
 //                                                                script, the voice, the dub), then a real portrait
 //                                                                made on Images and turned into a lip sync video
+//   apps/desktop/scripts/ui-audit.sh light music-make           a real instrumental on Create music, its More menu,
+//                                                                then Split into parts with it chosen
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
@@ -356,6 +358,36 @@ for (const scheme of ["light", "dark"]) {
       );
       await page.waitForTimeout(1500);
       await shot(page, "lipsync-made");
+    });
+  }
+  if (scheme === "light" && names.has("music-make")) {
+    // the check of stage U7: a real song made on the stage, and handed to Split into parts
+    await attempt("music-make", async () => {
+      await open(page, "/music/create");
+      await page.getByLabel("Describe the song").waitFor({ timeout: 120_000 });
+      await page.getByLabel("Describe the song").fill("warm, mellow, soft piano and brushed drums");
+      await page.getByRole("button", { name: "lo-fi", exact: true }).click();
+      const instrumental = page.getByRole("checkbox", { name: /No singing/ });
+      if (await instrumental.count()) await instrumental.click();
+      await shot(page, "music-ask");
+      await page.getByRole("button", { name: /^Make the song/ }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 60_000 });
+      await page.waitForTimeout(10_000);
+      await shot(page, "music-making");
+      await untilDone(
+        page,
+        page.locator('[data-slot="stage"][data-state="result"] [data-slot="player"]'),
+        1_200_000,
+      );
+      await page.waitForTimeout(3000); // the waveform is read
+      await shot(page, "music-made");
+      await page.getByRole("button", { name: "More" }).click();
+      await page.waitForTimeout(400);
+      await shot(page, "music-made-more");
+      await page.getByRole("menuitem", { name: /Split into parts/ }).click();
+      await page.getByText("Split into parts").first().waitFor();
+      await page.waitForTimeout(2500);
+      await shot(page, "music-split-handed");
     });
   }
   if (scheme === "light" && names.size === 0) {

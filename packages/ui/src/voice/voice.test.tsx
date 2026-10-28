@@ -642,9 +642,12 @@ describe("music", () => {
     },
   });
 
-  it("asks only what the chosen model takes, and makes music with it", async () => {
+  it("asks only what the chosen model takes, makes the song and plays it on the stage", async () => {
     const models = vi.fn(async () => [ace(), stable()]);
-    const tracks = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([track()]);
+    const tracks = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([track({ id: "t2", title: "Summer" })]);
     const runs = runsThat([ev("node", { label: "Making the music" }), doneTrack]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models, tracks })} runs={runs} />);
@@ -652,22 +655,27 @@ describe("music", () => {
       "ACE-Step 1.5 Turbo",
     );
     expect(screen.getByLabelText(/Lyrics \(optional\)/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/No singing/)).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /No singing/ })).toBeInTheDocument();
     expect(screen.getByText(/About 15 seconds of work/)).toBeInTheDocument();
-    await user.type(screen.getByLabelText("Describe the music"), "upbeat pop, summer");
-    await user.type(screen.getByLabelText(/Lyrics/), "la la la");
-    fireEvent.change(screen.getByLabelText(/Length/), { target: { value: "45" } });
-    await user.click(screen.getByRole("button", { name: "Make" }));
+    await user.type(screen.getByLabelText("Describe the song"), "upbeat");
+    await user.click(screen.getByRole("button", { name: "pop" })); // a style chip adds its word
+    expect(screen.getByLabelText("Describe the song")).toHaveValue("upbeat, pop");
+    await user.type(screen.getByLabelText(/Lyrics \(optional\)/), "la la la");
+    const length = screen.getByRole("slider", { name: "Length" });
+    for (let i = 0; i < 15; i++) fireEvent.keyDown(length, { key: "ArrowRight" });
+    await user.click(screen.getByRole("button", { name: "Make the song" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
     expect(runs.startRun.mock.calls[0]?.[1]).toEqual({
       task: "music",
-      text: "upbeat pop, summer",
+      text: "upbeat, pop",
       model: "ace-step-1.5-turbo",
       music_mode: "song",
       lyrics: "la la la",
       duration: 45,
     });
-    expect(await screen.findByText("Summer")).toBeInTheDocument();
+    await waitFor(() => expect(stage()).toHaveAttribute("data-state", "result"));
+    expect(within(stage()).getByText("Summer")).toBeInTheDocument();
+    expect(within(stage()).getByText("la la")).toBeInTheDocument(); // the lyrics under the player
   });
 
   it("hides the lyrics for a model that does not sing, and says what the model is", async () => {
@@ -685,10 +693,10 @@ describe("music", () => {
     const runs = runsThat([doneTrack]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models: vi.fn(async () => [ace()]) })} runs={runs} />);
-    await user.type(await screen.findByLabelText("Describe the music"), "calm piano");
-    await user.click(screen.getByLabelText(/No singing/));
+    await user.type(await screen.findByLabelText("Describe the song"), "calm piano");
+    await user.click(screen.getByRole("checkbox", { name: /No singing/ }));
     expect(screen.queryByLabelText(/Lyrics/)).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Make" }));
+    await user.click(screen.getByRole("button", { name: "Make the song" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
     expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({ instrumental: true });
     expect(runs.startRun.mock.calls[0]?.[1]).not.toHaveProperty("lyrics");
@@ -702,15 +710,14 @@ describe("music", () => {
     ]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models: vi.fn(async () => [ace()]) })} runs={runs} />);
-    await user.type(await screen.findByLabelText("Describe the music"), "calm piano");
-    await user.click(screen.getByRole("button", { name: "Make" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("ACE-Step needs lyrics.");
+    await user.type(await screen.findByLabelText("Describe the song"), "calm piano");
+    await user.click(screen.getByRole("button", { name: "Make the song" }));
+    expect(await screen.findByText("ACE-Step needs lyrics.")).toBeInTheDocument();
   });
 
-  it("lists the music made, renames and deletes it", async () => {
+  it("opens the music made from the strip, renames and deletes it, asking first", async () => {
     const updateTrack = vi.fn(async () => track({ title: "Winter" }));
     const removeTrack = vi.fn(async () => undefined);
-    window.prompt = vi.fn(() => "Winter");
     const user = userEvent.setup();
     render(
       <MusicWorkspace
@@ -723,12 +730,19 @@ describe("music", () => {
         runs={runsThat([])}
       />,
     );
-    expect(await screen.findByText("Summer")).toBeInTheDocument();
-    expect(screen.getByText(/song · 0:31 · ACE-Step 1.5 Turbo/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Rename" }));
+    await user.click(await screen.findByRole("button", { name: "Open: Summer" }));
+    expect(within(stage()).getByText(/song · 0:31 · ACE-Step 1.5 Turbo/)).toBeInTheDocument();
+    await user.click(within(stage()).getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Rename" }));
+    const name = await screen.findByRole("textbox", { name: "Name" });
+    await user.clear(name);
+    await user.type(name, "Winter{Enter}");
     expect(updateTrack).toHaveBeenCalledWith("t1", { title: "Winter" });
-    expect(await screen.findByText("Winter")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(await within(stage()).findByText("Winter")).toBeInTheDocument();
+    await user.click(within(stage()).getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Delete/ }));
+    expect(removeTrack).not.toHaveBeenCalled();
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
     expect(removeTrack).toHaveBeenCalledWith("t1");
   });
 });
@@ -765,11 +779,12 @@ describe("more music", () => {
     ]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models: vi.fn(async () => [aceEdit()]) })} runs={runs} />);
-    await user.type(await screen.findByLabelText("Describe the music"), "upbeat pop");
+    await user.type(await screen.findByLabelText("Describe the song"), "upbeat pop");
+    await user.click(screen.getByText("For experts"));
     fireEvent.change(screen.getByLabelText(/Tempo/), { target: { value: "96" } });
     await user.type(screen.getByLabelText(/Seed/), "10");
-    await user.selectOptions(screen.getByLabelText("Takes"), "3");
-    await user.click(screen.getByRole("button", { name: "Make 3" }));
+    await user.click(screen.getByRole("radio", { name: "3" }));
+    await user.click(screen.getByRole("button", { name: "Make the song (3)" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(3));
     const inputs = runs.startRun.mock.calls.map((c) => c[1] as Record<string, unknown>);
     expect(inputs.map((i) => i.seed)).toEqual([10, 11, 12]);
@@ -792,7 +807,8 @@ describe("more music", () => {
         runs={runs}
       />,
     );
-    await user.click(await screen.findByRole("button", { name: "Make it again" }));
+    await user.click(await screen.findByRole("button", { name: "Open: Summer" }));
+    await user.click(screen.getByRole("button", { name: "Make it again" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(1));
     expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({
       text: "pop, upbeat",
@@ -801,6 +817,7 @@ describe("more music", () => {
       duration: 31,
       model: "ace-step-1.5-turbo",
     });
+    await user.click(await screen.findByRole("button", { name: "Open: Summer" }));
     await user.click(await screen.findByRole("button", { name: "Another take" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(2));
     expect(runs.startRun.mock.calls[1]?.[1]).not.toHaveProperty("seed");
@@ -813,8 +830,8 @@ describe("more music", () => {
     ]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models: vi.fn(async () => [aceEdit()]) })} runs={runs} />);
-    await user.type(await screen.findByLabelText("Describe the music"), "upbeat pop");
-    await user.click(screen.getByRole("button", { name: "Write lyrics for me" }));
+    await user.type(await screen.findByLabelText("Describe the song"), "upbeat pop");
+    await user.click(screen.getByRole("button", { name: "Write them for me" }));
     await user.type(screen.getByLabelText("What is the song about?"), "a summer day");
     await user.click(screen.getByRole("button", { name: "Write the lyrics" }));
     expect(await screen.findByLabelText(/The lyrics \(you can change them\)/)).toHaveValue(
@@ -838,7 +855,7 @@ describe("more music", () => {
     ]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models: vi.fn(async () => [aceEdit()]) })} runs={runs} />);
-    await user.click(await screen.findByRole("button", { name: "Write lyrics for me" }));
+    await user.click(await screen.findByRole("button", { name: "Write them for me" }));
     await user.type(screen.getByLabelText("What is the song about?"), "a summer day");
     await user.click(screen.getByRole("button", { name: "Write the lyrics" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Choose a chat model in Models.");
@@ -867,7 +884,9 @@ describe("more music", () => {
     render(
       <MusicWorkspace api={api({ models: vi.fn(async () => [aceEdit()]), tracks })} runs={runs} />,
     );
-    await user.click(await screen.findByRole("button", { name: "Change it" }));
+    await user.click(await screen.findByRole("button", { name: "Open: Summer" }));
+    await user.click(within(stage()).getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Change a part/ }));
     const panel = await screen.findByRole("region", { name: "Change this music" });
     await user.type(within(panel).getByLabelText("What should it become?"), "a drum fill");
     fireEvent.change(within(panel).getByLabelText("Part 1 from"), { target: { value: "5" } });
@@ -895,7 +914,9 @@ describe("more music", () => {
         runs={runsThat([])}
       />,
     );
-    await user.click(await screen.findByRole("button", { name: "Change it" }));
+    await user.click(await screen.findByRole("button", { name: "Open: Summer" }));
+    await user.click(within(stage()).getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Change a part/ }));
     expect(
       await screen.findByText(/None of the music models on this computer can change a clip yet/),
     ).toBeInTheDocument();

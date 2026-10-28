@@ -5,6 +5,7 @@ import { Heart } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
+import { NameDialog } from "../components/dialog";
 import { Spinner } from "../components/spinner";
 import { fileNameFor, useSaveCopy } from "../save";
 import { clock } from "./format";
@@ -101,10 +102,15 @@ export function TrackList({
   const change = (saved: Track) =>
     setTracks((list) => (list ?? []).map((x) => (x.id === saved.id ? saved : x)));
 
-  async function rename(t: Track) {
-    const next = window.prompt("Name this piece", t.title)?.trim();
-    if (!next || next === t.title) return;
-    change(await api.updateTrack(t.id, { title: next }));
+  // the window cannot show `window.prompt`: the app's own dialog asks for the name
+  const [renaming, setRenaming] = useState<Track | null>(null);
+  async function rename(t: Track, next: string) {
+    setRenaming(null);
+    try {
+      change(await api.updateTrack(t.id, { title: next }));
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "That could not be renamed.");
+    }
   }
 
   async function heart(t: Track) {
@@ -219,7 +225,7 @@ export function TrackList({
                   </Button>
                 </>
               ) : null}
-              <Button size="sm" variant="ghost" onClick={() => void rename(t)}>
+              <Button size="sm" variant="ghost" onClick={() => setRenaming(t)}>
                 Rename
               </Button>
               <Button size="sm" variant="ghost" onClick={() => void remove(t.id)}>
@@ -229,6 +235,15 @@ export function TrackList({
           </li>
         ))}
       </ul>
+      {renaming ? (
+        <NameDialog
+          title="Name this piece"
+          label="Name"
+          initial={renaming.title}
+          onSubmit={(next) => void rename(renaming, next)}
+          onCancel={() => setRenaming(null)}
+        />
+      ) : null}
     </section>
   );
 }

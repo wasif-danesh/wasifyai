@@ -183,24 +183,27 @@ export function MusicPage(p: VoicePageProps) {
   const [action] = useState(() => takeAction(p.remembered));
   const key = "wasifyai.music.model";
   return (
-    <Frame
-      title="Create music"
-      lead={device(
-        p,
-        "Songs, instrumentals and sound effects, made on this computer. Pick the model; what the form asks for follows from it.",
-        "Songs, instrumentals and sound effects. Pick the model; what the form asks for follows from it.",
-      )}
-    >
+    <MakeFrame>
       <MusicWorkspace
         api={p.api}
         runs={p.runs}
+        lead={device(
+          p,
+          "Songs, instrumentals and sound effects, made on this computer.",
+          "Songs, instrumentals and sound effects.",
+        )}
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
         initialLyrics={lyrics}
         initialAction={action}
+        onOpenLibrary={() => p.go("tracks")}
+        onSplit={(t) => {
+          sendToTool(p.remembered, { kind: "track", id: t.id });
+          p.go("separate");
+        }}
       />
-    </Frame>
+    </MakeFrame>
   );
 }
 

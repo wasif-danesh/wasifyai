@@ -14,6 +14,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["wasifyai_model3d"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"prompts" = "wasifyai_model3d/prompts"  # the code reads them inside the package when installed (backlog D29)

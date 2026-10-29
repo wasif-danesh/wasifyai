@@ -6,6 +6,7 @@ Remote backends run no GPU work here: the processor skips the GPU lock for them.
 
 import asyncio
 import base64
+import contextlib
 import logging
 import mimetypes
 import time
@@ -257,6 +258,187 @@ class OpenAIImagesRunner:
             raise ComfyError("missing_output", "The image service returned no image.")
         await on_progress(1.0)
         return {name: (data, ctype, _EXT.get(ctype, "png"))}
+
+
+# ---- fal.ai, on the person's own key (ADR-0095, stage K3) -------------------------------------
+
+FAL_QUEUE = "https://queue.fal.run"
+# the endpoint a capability uses, from the model the person chose for the product (its text-to-X
+# endpoint). A capability with no entry for that model cannot run on the key.
+FAL_EDIT = {"fal-ai/flux-2": "fal-ai/flux-2/edit"}
+FAL_ANIMATE = {"fal-ai/ltx-2/text-to-video/fast": "fal-ai/ltx-2/image-to-video/fast"}
+FAL_VIDEO_SECONDS = (6, 8, 10)  # what LTX-2 on fal.ai makes at 1080p
+NOT_WITH_KEY = {
+    "image.inpaint": "Painting over part of a picture",
+    "video.extend": "Making a clip longer",
+}
+
+
+def _data_uri(data: bytes) -> str:
+    kind = "image/png" if data[:4] == b"\x89PNG" else "image/jpeg"
+    return f"data:{kind};base64,{base64.b64encode(data).decode()}"
+
+
+def _fal_said(r: httpx.Response) -> str:
+    """fal.ai's own words for a refusal (its `detail`: a sentence or a list of them)."""
+    try:
+        detail = r.json().get("detail")
+    except ValueError:
+        return ""
+    if isinstance(detail, str):
+        return detail[:300]
+    if isinstance(detail, list):
+        words = [str(d.get("msg", "")) for d in detail if isinstance(d, dict)]
+        return "; ".join(w for w in words if w)[:300]
+    return ""
+
+
+class FalRunner:
+    """One job on fal.ai with the person's key: submit to its queue, follow `status_url`, read
+    `response_url`, fetch the file. The key goes to fal.ai's queue only, never to the file host."""
+
+    backend = "fal"
+    local_gpu = False
+
+    def __init__(
+        self,
+        key: str,
+        model: str,
+        http: httpx.AsyncClient,
+        timeout_s: float,
+        poll_s: float = 2.0,
+        base_url: str = FAL_QUEUE,
+    ):
+        self._headers = {"Authorization": f"Key {key}"}
+        self._model = model
+        self._http = http
+        self._timeout = timeout_s
+        self._poll = poll_s
+        self._base = base_url.rstrip("/")
+
+    def _request(self, job: JobRequest, files: InputFiles | None) -> tuple[str, dict[str, Any]]:
+        """The endpoint and the body for this job, from what was asked (`job.inputs`)."""
+        what = NOT_WITH_KEY.get(job.capability)
+        if what:
+            raise ComfyError(
+                "not_with_key",
+                f"{what} is not done with your key yet. Run it on this computer: Settings › "
+                "Your keys.",
+            )
+        if job.inputs.get("loras"):
+            raise ComfyError(
+                "not_with_key",
+                "Styles and looks made on this computer cannot be used with your key.",
+            )
+        prompt = job.inputs.get("prompt")
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ComfyError("invalid_input", "The request has no description.")
+        body: dict[str, Any] = {"prompt": prompt}
+        seed = job.inputs.get("seed")
+        cap = job.capability
+        if cap in ("image.generate", "image.edit", "image.reference"):
+            w, h = job.inputs.get("width"), job.inputs.get("height")
+            if isinstance(w, int) and isinstance(h, int):
+                body["image_size"] = {"width": w, "height": h}
+            if isinstance(seed, int):
+                body["seed"] = seed
+            if cap == "image.generate":
+                return self._model, body
+            pictures = [files[n] for n in ("image", "image2") if files and n in files]
+            if not pictures:
+                raise ComfyError("invalid_input", "The picture for this job is missing.")
+            body["image_urls"] = [_data_uri(p) for p in pictures]
+            return self._endpoint(FAL_EDIT, "Changing a picture"), body
+        if cap in ("video.generate", "video.animate"):
+            frames = job.inputs.get("length")
+            want = round(frames / 24) if isinstance(frames, int) else 6
+            body["duration"] = next((s for s in FAL_VIDEO_SECONDS if s >= want), 10)
+            body["generate_audio"] = False
+            if cap == "video.generate":
+                return self._model, body
+            if not files or "image" not in files:
+                raise ComfyError("invalid_input", "The picture for this job is missing.")
+            body["image_url"] = _data_uri(files["image"])
+            return self._endpoint(FAL_ANIMATE, "Animating a picture"), body
+        raise ComfyError("not_with_key", "This is not done with your key.")
+
+    def _endpoint(self, table: dict[str, str], what: str) -> str:
+        found = table.get(self._model)
+        if found is None:
+            raise ComfyError(
+                "not_with_key",
+                f"{what} needs a model fal.ai can do it with; {self._model} cannot. Choose "
+                "another model, or run it on this computer: Settings › Your keys.",
+            )
+        return found
+
+    def _refused(self, r: httpx.Response) -> ComfyError:
+        if r.status_code in (401, 403):
+            return ComfyError("provider_refused", "fal.ai did not accept the key.")
+        if r.status_code == 429:
+            return ComfyError("provider_refused", "fal.ai says too many requests. Try again soon.")
+        said = _fal_said(r)
+        return ComfyError(
+            "provider_refused",
+            f"fal.ai could not make it: {said}" if said else f"fal.ai answered {r.status_code}.",
+        )
+
+    async def run(
+        self, job: JobRequest, on_progress: ProgressFn, files: InputFiles | None = None
+    ) -> Files:
+        name, kind = next(
+            ((n, s.get("type", "image")) for n, s in job.outputs.items()), ("output", "image")
+        )
+        endpoint, body = self._request(job, files)
+        await on_progress(0.02)
+        try:
+            r = await self._http.post(
+                f"{self._base}/{endpoint}", json=body, headers=self._headers, timeout=60
+            )
+        except httpx.HTTPError:
+            raise ComfyError("connection_lost", "fal.ai could not be reached.") from None
+        if r.status_code >= 400:
+            raise self._refused(r)
+        sub = r.json()
+        started = time.monotonic()
+        try:
+            while True:
+                if time.monotonic() - started > self._timeout:
+                    raise TimeoutError
+                st = await self._http.get(sub["status_url"], headers=self._headers, timeout=30)
+                if st.status_code >= 400:
+                    raise self._refused(st)
+                state = st.json()
+                status = state.get("status")
+                if status == "COMPLETED":
+                    break
+                await on_progress(0.05 if status == "IN_QUEUE" else 0.4)
+                await asyncio.sleep(self._poll)
+        except asyncio.CancelledError:
+            # the person stopped it: ask fal.ai to stop too, without waiting on the answer
+            if sub.get("cancel_url"):
+                with contextlib.suppress(httpx.HTTPError):
+                    await self._http.put(sub["cancel_url"], headers=self._headers, timeout=5)
+            raise
+        if state.get("error"):
+            raise ComfyError(
+                "provider_refused", f"fal.ai could not make it: {state['error']}"[:400]
+            )
+        res = await self._http.get(sub["response_url"], headers=self._headers, timeout=60)
+        if res.status_code >= 400:
+            raise self._refused(res)
+        result = res.json()
+        item = (result.get("images") or [{}])[0] if kind == "image" else result.get("video") or {}
+        url = item.get("url")
+        if not url:
+            raise ComfyError("missing_output", "fal.ai returned nothing to keep.")
+        await on_progress(0.9)
+        got = await self._http.get(url, follow_redirects=True, timeout=self._timeout)  # no key here
+        raise_for_backend(got)
+        ctype = (item.get("content_type") or got.headers.get("content-type") or "").split(";")[0]
+        ctype = ctype.strip() or ("video/mp4" if kind == "video" else "image/png")
+        await on_progress(1.0)
+        return {name: (got.content, ctype, _EXT.get(ctype, "mp4" if kind == "video" else "png"))}
 
 
 class BackendRouter:

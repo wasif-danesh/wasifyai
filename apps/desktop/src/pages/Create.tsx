@@ -56,11 +56,11 @@ export function CreatePage({
   // "Select image model": the model in use, or the way to get one (ADR-0086)
   const choices = useChoicesFor("images");
   const picker = useRef<ModelSelectHandle>(null);
-  const { ensure } = useGroupReady(choices, picker);
+  const { ensure, keyed } = useGroupReady(choices, picker);
   const header = <ModelSelect group="images" api={choices} handleRef={picker} />;
 
   // only a real model can be too big: the placeholder engine runs anywhere
-  const real = engine?.state === "installed";
+  const real = engine?.state === "installed" && !keyed;
   const tooBig = real && model?.fit?.verdict === "too_big";
   const tight = real && model?.fit?.verdict === "tight";
 

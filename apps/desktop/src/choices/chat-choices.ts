@@ -2,13 +2,14 @@
 // The chat group's rows and work (ADR-0086): models already on this computer (the app's own downloads, files other
 // tools left, servers that are running) and a short list of ones worth getting from Hugging Face. A download
 // through here is the person's consent to contact huggingface.co, which the dialog says.
-import type { OwnKeys, OwnKeysApi } from "@wasifyai/client";
+import type { OwnKeysApi } from "@wasifyai/client";
 import type { ChoiceList, ChoicesApi, ModelChoice, Tier } from "@wasifyai/ui";
 import type { DiscoveryApi, FoundModel } from "../discovery";
 import type { HubApi, Variant } from "../hub";
 import type { LanguageApi, LanguageState } from "../language";
 import { type ModelsApi, downloadFraction } from "../models";
 import { CHAT_SHELF, type ChatShelfItem, recommendedChat } from "./copy";
+import { keyedId, keyedRow, leaveKey, withKeyed } from "./keyed";
 import { type Step, pause, runSteps } from "./steps";
 import type { Engines } from "./types";
 
@@ -26,30 +27,7 @@ const EMBEDDING = /embed|bge-|minilm|e5-|gte-|arctic-embed/i;
 const HUB = "hub:";
 const SERVER = "server:";
 /** the row of Chat and writing on the person's own key (ADR-0095, K2) */
-export const KEYED = "key:chat";
-
-/** The row that says chat runs with the person's key, or null while it runs on this computer. */
-export function keyedRow(keys: OwnKeys | null): ModelChoice | null {
-  const chat = keys?.products.find((p) => p.id === "chat");
-  if (!keys || !chat || chat.mode !== "key") return null;
-  const provider = keys.providers.find((v) => v.id === chat.provider);
-  const name = provider?.title ?? chat.provider ?? "your provider";
-  return {
-    id: KEYED,
-    title: `${chat.model ?? "Your model"} · with your key · ${name}`,
-    plain: `Runs with your key, through ${name}: what you write is sent there. Change it in Settings › Your keys.`,
-    tier: "recommended",
-    state: "ready",
-    chosen: true,
-    downloadBytes: 0,
-    engineBytes: 0,
-    engineName: null,
-    fit: null,
-    fitReason: null,
-    source: "server",
-    from: provider?.host || null,
-  };
-}
+export const KEYED = keyedId("chat");
 
 /** The folder the app puts a hub download in, by the engine's rule (desktop_hub.build_download). */
 export const folderOf = (repo: string) => `language/${repo.replace("/", "--")}`;
@@ -195,10 +173,9 @@ export function chatChoices(deps: ChatDeps): ChoicesApi {
         deps.keys?.list().catch(() => null) ?? Promise.resolve(null),
       ]);
       const local = rows(state, shelf, engine, overview?.memory_bytes ?? null);
-      const keyed = keyedRow(keys);
       return {
         // while chat runs with the key, no model on this computer is the one in use
-        choices: keyed ? [keyed, ...local.map((c) => ({ ...c, chosen: false }))] : local,
+        choices: withKeyed(local, keyedRow(keys, "chat")),
         diskFreeBytes: overview?.disk_free_bytes ?? null,
         memoryBytes: overview?.memory_bytes ?? null,
       };
@@ -209,10 +186,8 @@ export function chatChoices(deps: ChatDeps): ChoicesApi {
     },
 
     async choose(id) {
-      if (id === KEYED) return;
       // choosing a model on this computer takes chat off the key (the key stays saved)
-      const keys = await deps.keys?.list().catch(() => null);
-      if (keyedRow(keys ?? null)) await deps.keys?.save("chat", "here");
+      if (await leaveKey(deps.keys, "chat", id)) return;
       const state = await deps.language.state();
       const context = state.selected?.context ?? 8192;
       if (id.startsWith(SERVER)) {

@@ -169,6 +169,11 @@ class SqliteStoreDb:
             if before is not None:
                 before(db)
             db.executescript(ddl)
+        if not columns:
+            return
+        # under SQLite's write lock (BEGIN IMMEDIATE), as Postgres does under its advisory lock:
+        # replicas starting together would otherwise each see a column missing and each add it
+        with self.transaction() as db:
             for table, column, definition in columns:
                 have = {r[1] for r in db.execute(f"PRAGMA table_info({table})")}
                 if column not in have:

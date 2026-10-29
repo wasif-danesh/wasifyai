@@ -1,25 +1,45 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // The picker's rows for groups made of the app's own catalogue models: images, video and the notebooks' search
 // model (ADR-0086). Images and video run on the image engine, which a model's dialog sets up first.
+import type { OwnKeysApi } from "@wasifyai/client";
 import type { ChoiceList, ChoicesApi, ModelChoice } from "@wasifyai/ui";
 import type { ModelEntry, ModelsApi } from "../models";
 import { COPY, hostOf, plainFor } from "./copy";
+import { keyedRow, leaveKey, withKeyed } from "./keyed";
 import { modelStep, runSteps } from "./steps";
 import type { Engines, Memory } from "./types";
 
-export type CatalogueDeps = { models: ModelsApi; engines: Engines; memory: Memory };
+export type CatalogueDeps = {
+  models: ModelsApi;
+  engines: Engines;
+  memory: Memory;
+  /** Settings › Your keys (ADR-0095, K3): images and video may run with the person's key */
+  keys?: OwnKeysApi;
+};
 
 export type CatalogueGroup = {
   /** which catalogue entries belong to the group */
   has: (e: ModelEntry) => boolean;
   /** runs on the image engine */
   imageEngine: boolean;
+  /** the product of Settings › Your keys this group follows, if it can run on a key */
+  keyed?: string;
   key: string;
 };
 
 export const CATALOGUE_GROUPS = {
-  images: { has: (e) => e.product_id === "wasifyai-image", imageEngine: true, key: "images" },
-  video: { has: (e) => e.product_id === "wasifyai-video", imageEngine: true, key: "video" },
+  images: {
+    has: (e) => e.product_id === "wasifyai-image",
+    imageEngine: true,
+    key: "images",
+    keyed: "images",
+  },
+  video: {
+    has: (e) => e.product_id === "wasifyai-video",
+    imageEngine: true,
+    key: "video",
+    keyed: "video",
+  },
   documents: {
     has: (e) => e.id === "bge-small-en-v1.5",
     imageEngine: false,
@@ -70,20 +90,27 @@ export function catalogueChoices(deps: CatalogueDeps, group: CatalogueGroup): Ch
   };
   return {
     async list(): Promise<ChoiceList> {
-      const { overview, engine, entries } = await read();
+      const [{ overview, engine, entries }, keys] = await Promise.all([
+        read(),
+        group.keyed && deps.keys ? deps.keys.list().catch(() => null) : Promise.resolve(null),
+      ]);
       const last = deps.memory.get(key);
       const chosen =
         entries.find((e) => e.id === last && e.status === "ready") ??
         entries.find((e) => e.status === "ready") ??
         null;
       return {
-        choices: entries.map((e) => catalogueRow(e, engine, chosen?.id ?? null)),
+        choices: withKeyed(
+          entries.map((e) => catalogueRow(e, engine, chosen?.id ?? null)),
+          group.keyed ? keyedRow(keys, group.keyed) : null,
+        ),
         diskFreeBytes: overview.disk_free_bytes,
         memoryBytes: overview.memory_bytes,
       };
     },
 
     async choose(id) {
+      if (group.keyed && (await leaveKey(deps.keys, group.keyed, id))) return;
       deps.memory.set(key, id);
     },
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { type ChoicesApi, type ModelSelectHandle, useChoicesVersion } from "@wasifyai/ui";
 import { type RefObject, useCallback, useEffect, useState } from "react";
+import { isKeyed } from "./keyed";
 
 /** The window's self-test (smoke.ts) makes placeholder pictures with no model on the computer: it asks the gate to let it. */
 export const gate = { open: false };
@@ -11,13 +12,19 @@ export const gate = { open: false };
  */
 export function useGroupReady(api: ChoicesApi | null, picker: RefObject<ModelSelectHandle | null>) {
   const [ready, setReady] = useState<boolean | null>(null);
+  // the chosen row is the person's own key (ADR-0095): this computer's memory does not matter then
+  const [keyed, setKeyed] = useState(false);
   const version = useChoicesVersion();
   // biome-ignore lint/correctness/useExhaustiveDependencies: the version is the trigger
   useEffect(() => {
     let gone = false;
     api
       ?.list()
-      .then((l) => !gone && setReady(l.choices.some((c) => c.chosen && c.state === "ready")))
+      .then((l) => {
+        if (gone) return;
+        setReady(l.choices.some((c) => c.chosen && c.state === "ready"));
+        setKeyed(isKeyed(l.choices.find((c) => c.chosen)?.id));
+      })
       .catch(() => !gone && setReady(null));
     return () => {
       gone = true;
@@ -28,5 +35,5 @@ export function useGroupReady(api: ChoicesApi | null, picker: RefObject<ModelSel
     picker.current?.open();
     return false;
   }, [ready, picker]);
-  return { ready, ensure };
+  return { ready, ensure, keyed };
 }

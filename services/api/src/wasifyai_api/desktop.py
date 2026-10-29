@@ -68,6 +68,7 @@ from wasifyai_api.language_setup import LanguageSetup
 from wasifyai_api.lipsync_runtime import LipSyncSidecar
 from wasifyai_api.llama_server import LlamaServer
 from wasifyai_api.own_keys import OwnKeysService
+from wasifyai_api.own_keys_media import KeyedMediaRouter
 from wasifyai_api.runs import RunManager
 from wasifyai_api.services import services_of
 from wasifyai_api.settings_store import SettingsStore
@@ -388,6 +389,8 @@ def _build_worker(d: DesktopBackends):
 
     if mode != "stub" and models is not None:
         runner = FitGuardRunner(runner, sidecar, models, ComfyError)
+    if d.own_keys is not None:  # a product on the person's key runs on its provider (ADR-0095, K3)
+        runner = KeyedMediaRouter(runner, d.own_keys, http, ws.job_timeout_s)
 
     # one big model in memory at a time; the image engine unloads through ComfyUI's /free
     owners: dict[str, Any] = {"image": sidecar.unload_models}

@@ -77,6 +77,75 @@ const overview = (models: ModelEntry[]) => ({
 });
 
 describe("images and video", () => {
+  const imageKey = (mode: "here" | "key") => {
+    const save = vi.fn(async () => ({}));
+    const keys = {
+      list: async () => ({
+        can_save: true,
+        providers: [
+          {
+            id: "fal",
+            title: "fal.ai",
+            kind: "media",
+            host: "fal.ai",
+            needs_base: false,
+            models: [],
+          },
+        ],
+        products: ["images", "video"].map((id) => ({
+          id,
+          title: id,
+          kind: "media",
+          mode: id === "images" ? mode : "here",
+          provider: id === "images" && mode === "key" ? "fal" : null,
+          model: id === "images" && mode === "key" ? "fal-ai/flux-2" : null,
+          base_url: null,
+          key_saved: mode === "key",
+          state: id === "images" && mode === "key" ? "ok" : "here",
+          said: null,
+          tested_at: null,
+          models: [],
+        })),
+      }),
+      save,
+    } as unknown as OwnKeysApi;
+    return { keys, save };
+  };
+
+  it("with images on the person's key, that row is in use even with no image engine here", async () => {
+    const models = {
+      overview: async () => overview([entry({ status: "missing", bytes_missing: 9e9 })]),
+    } as unknown as ModelsApi;
+    const deps = { models, engines: engines(false), memory: memory(), keys: imageKey("key").keys };
+    const rows = (await catalogueChoices(deps, CATALOGUE_GROUPS.images).list()).choices;
+    expect(rows[0]).toMatchObject({
+      id: "key:images",
+      chosen: true,
+      state: "ready",
+      title: "fal-ai/flux-2 · with your key · fal.ai",
+    });
+    expect(rows.filter((r) => r.chosen)).toHaveLength(1);
+    // video follows its own setting, which is on this computer
+    const video = (await catalogueChoices(deps, CATALOGUE_GROUPS.video).list()).choices;
+    expect(video.some((r) => r.id.startsWith("key:"))).toBe(false);
+  });
+
+  it("choosing a model on this computer takes images off the key", async () => {
+    const models = {
+      overview: async () => overview([entry({ status: "ready", bytes_missing: 0 })]),
+    } as unknown as ModelsApi;
+    const { keys, save } = imageKey("key");
+    const mem = memory();
+    const api = catalogueChoices(
+      { models, engines: engines(true), memory: mem, keys },
+      CATALOGUE_GROUPS.images,
+    );
+    await api.choose("key:images");
+    expect(save).not.toHaveBeenCalled();
+    await api.choose(entry({}).id);
+    expect(save).toHaveBeenCalledWith("images", "here");
+  });
+
   it("shows a model that is on the computer as ready only when its engine is too", async () => {
     const models = {
       overview: async () => overview([entry({ status: "ready", bytes_missing: 0 })]),

@@ -1,7 +1,7 @@
 # ADR-0095: The person's own provider keys, one per product
 
 - **Status:** Proposed (2026-10-29). The owner set the requirement: "Person's own key must be supported in v1. Even
-  better, separate keys for each product." Nothing is built; stage K1 starts after the owner approves the mockup.
+  better, separate keys for each product." The mockup was approved by the owner on 2026-10-29; spike K0 is next.
 - **Date:** 2026-10-29
 - **Depends on:** ADR-0092 (the secret store: keychain on the desktop, the `secrets` table on the web), ADR-0005 and
   ADR-0025 (capabilities bound to providers; LiteLLM's OpenAI-compatible API), ADR-0086 (the model button and its
@@ -66,7 +66,7 @@ main way products run: the service does not pay for a person's models.
 
 ## Open questions for the owner
 
-1. The mockup: approve it or change it before K1.
+1. ~~The mockup~~ Approved (owner, 2026-10-29).
 2. Which media providers besides fal.ai, if any, for v1.
 3. On the web, whether the admin's own models stay available as a choice beside the person's keys.
 4. CLAUDE.md rule 5 says every LLM call goes through LiteLLM. A person's key can either go to its provider directly

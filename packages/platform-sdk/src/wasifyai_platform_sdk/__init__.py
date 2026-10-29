@@ -47,11 +47,15 @@ from wasifyai_platform_sdk.jobs import (
 )
 from wasifyai_platform_sdk.media_backends import (
     BACKENDS,
+    ENGINE_WORKERS,
+    FAL,
+    FAL_QUEUE,
     BackendSpec,
     CheckOutcome,
     InvalidBackendConfig,
     backends_for,
     check_backend,
+    default_backend,
     family,
     validate_config,
 )
@@ -190,6 +194,9 @@ __all__ = [
     "process_audio",
     "process_image",
     "BACKENDS",
+    "ENGINE_WORKERS",
+    "FAL",
+    "FAL_QUEUE",
     "BackendSpec",
     "CheckOutcome",
     "InMemoryMediaBindingStore",
@@ -208,6 +215,7 @@ __all__ = [
     "LayeredSecretStore",
     "secret_name",
     "backends_for",
+    "default_backend",
     "check_backend",
     "family",
     "validate_config",

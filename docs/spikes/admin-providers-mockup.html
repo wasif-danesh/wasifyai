@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin providers: mockup</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: light-dark(oklch(97% 0.004 250), oklch(15% 0.012 255));
+    --surface: light-dark(oklch(100% 0 0), oklch(20% 0.014 255));
+    --surface-2: light-dark(oklch(95.5% 0.006 250), oklch(25% 0.016 255));
+    --text: light-dark(oklch(21% 0.02 255), oklch(95% 0.006 250));
+    --muted: light-dark(oklch(49% 0.02 255), oklch(70% 0.016 255));
+    --border: light-dark(oklch(90% 0.01 250), oklch(32% 0.018 255));
+    --accent: light-dark(oklch(50% 0.17 258), oklch(76% 0.12 250));
+    --accent-soft: color-mix(in oklch, var(--accent) 14%, transparent);
+    --on-accent: light-dark(oklch(99% 0 0), oklch(19% 0.04 250));
+    --ok: light-dark(oklch(52% 0.13 155), oklch(74% 0.14 155));
+    --warn: light-dark(oklch(58% 0.14 70), oklch(80% 0.14 80));
+    --bad: light-dark(oklch(55% 0.2 25), oklch(72% 0.17 25));
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); }
+  .note { max-width: 980px; margin: 18px auto 0; padding: 0 16px; color: var(--muted); font-size: 13px; }
+  .win { max-width: 980px; margin: 12px auto 40px; border: 1px solid var(--border); border-radius: 14px;
+         overflow: hidden; background: var(--surface); display: grid; grid-template-columns: 220px 1fr; }
+  @media (max-width: 720px) { .win { grid-template-columns: 1fr; } .side { display: none; } }
+  .side { border-right: 1px solid var(--border); padding: 16px 10px; background: var(--surface-2); }
+  .side a { display: block; padding: 6px 10px; border-radius: 8px; color: var(--text); text-decoration: none; }
+  .side a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  main { padding: 20px 24px 28px; display: grid; gap: 16px; min-width: 0; }
+  h1 { margin: 0; font-size: 20px; }
+  .lead { margin: 2px 0 0; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+  .state { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.ok { background: var(--ok); } .dot.here { background: var(--muted); } .dot.bad { background: var(--bad); }
+  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px;
+         padding: 5px 12px; font: inherit; cursor: pointer; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn.link { border: 0; background: none; color: var(--accent); padding: 0; }
+  .edit { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+          display: grid; gap: 12px; }
+  .edit h2 { margin: 0; font-size: 15px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  input, select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+                  border-radius: 8px; padding: 7px 10px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+  .seg span { padding: 5px 14px; font-size: 13px; }
+  .seg .on { background: var(--accent); color: var(--on-accent); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .ok-text { color: var(--ok); font-size: 13px; }
+  .hint { color: var(--muted); font-size: 12.5px; margin: 0; }
+  .bar { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .model { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 8px;
+           padding: 4px 10px; font-size: 13px; background: var(--surface-2); }
+</style>
+<style>
+  .tag { font-size: 12px; color: var(--muted); }
+  .new { font-size: 11px; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 0 6px; margin-left: 6px; }
+  .person { max-width: 980px; margin: 0 auto 40px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+  .person .body { padding: 18px 24px; display: grid; gap: 10px; }
+  h3 { margin: 0; font-size: 14px; }
+  input, select { width: 100%; min-width: 0; }
+</style>
+</head>
+<body>
+<p class="note">Mockup for ADR-0095 stage K5 (not built). The web's Admin › Media: the admin chooses what runs each
+product's media, fal.ai among them. Text stays in Admin › Models, which already offers OpenRouter and others. People
+bring no keys; they see where a product runs on its model button.</p>
+
+<div class="win">
+  <nav class="side" aria-label="Admin">
+    <a href="#">Users</a>
+    <a href="#">Models</a>
+    <a href="#" class="on">Media</a>
+    <a href="#">Workers</a>
+    <a href="#">Search</a>
+    <a href="#">Settings</a>
+    <a href="#">Audit</a>
+  </nav>
+  <main>
+    <div>
+      <h1>Media</h1>
+      <p class="lead">Choose what makes each kind of picture, clip, speech and 3D model. The next job uses it.</p>
+    </div>
+    <table>
+      <thead><tr><th>Product</th><th>What</th><th>Runs on</th><th>Key</th><th>Changed</th></tr></thead>
+      <tbody>
+        <tr><td>Images</td><td>Make a picture</td><td><span class="state"><span class="dot ok"></span>fal.ai · fal-ai/flux-2</span></td><td>Saved</td><td>29 Oct, 14:02</td></tr>
+        <tr><td>Images</td><td>Change a picture, Combine two</td><td><span class="state"><span class="dot ok"></span>fal.ai · fal-ai/flux-2/edit</span></td><td>Same as Make a picture</td><td>29 Oct, 14:03</td></tr>
+        <tr><td>Images</td><td>Paint over part of a picture</td><td><span class="state"><span class="dot here"></span>ComfyUI</span><br><span class="tag">fal.ai cannot do this yet</span></td><td>—</td><td>—</td></tr>
+        <tr><td>Video</td><td>Make a video, Animate a picture</td><td><span class="state"><span class="dot ok"></span>fal.ai · fal-ai/ltx-2/text-to-video/fast</span></td><td>Saved</td><td>29 Oct, 14:05</td></tr>
+        <tr><td>Video</td><td>Make a clip longer</td><td><span class="state"><span class="dot here"></span>ComfyUI</span><br><span class="tag">fal.ai cannot do this yet</span></td><td>—</td><td>—</td></tr>
+        <tr><td>Voice<span class="new">new row</span></td><td>Speak</td><td><span class="state"><span class="dot here"></span>Engine workers</span></td><td>—</td><td>—</td></tr>
+        <tr><td>3D<span class="new">new row</span></td><td>Make a model</td><td><span class="state"><span class="dot bad"></span>fal.ai · fal-ai/pixal3d</span><br><span class="tag" style="color:var(--bad)">Key not working: fal.ai did not accept the key.</span></td><td>Saved</td><td>29 Oct, 14:09</td></tr>
+      </tbody>
+    </table>
+
+    <section class="edit" aria-label="Change Voice · Speak">
+      <h2>Voice · Speak</h2>
+      <div class="grid">
+        <label>Runs on
+          <select><option>Engine workers (the service's own)</option><option selected>fal.ai</option></select>
+        </label>
+        <label>Model
+          <input value="fal-ai/kokoro">
+        </label>
+      </div>
+      <div class="grid">
+        <label>fal.ai key
+          <input type="password" placeholder="Paste a key, or leave empty to keep the saved one">
+        </label>
+        <label>Or use a key already saved
+          <select><option>Use the key saved for Images · Make a picture</option><option>—</option></select>
+        </label>
+      </div>
+      <p class="hint">What people type is sent to fal.ai with this key. Speech on fal.ai has 20 American English voices;
+        cloning, voice design, music and transcription stay on the engine workers.</p>
+      <div class="row">
+        <button class="btn">Test</button>
+        <span class="ok-text">fal.ai accepted the key (0.4 s)</span>
+        <span style="flex:1"></span>
+        <button class="btn link">Back to the default</button>
+        <button class="btn">Cancel</button>
+        <button class="btn primary">Save</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="person">
+  <div class="bar"><span class="model">FLUX.2 · fal.ai</span></div>
+  <div class="body">
+    <h3>What a person sees on the web (Images)</h3>
+    <p class="hint">The model button names the model and where it runs, read only. Opening it says: "Chosen by your
+      admin. What you describe and the pictures you add are sent to fal.ai." With no model set up for a product, the
+      screen says "Not set up yet. Ask your admin." as it does today.</p>
+  </div>
+</div>
+</body>
+</html>

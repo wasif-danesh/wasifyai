@@ -32,6 +32,15 @@ export function inUseChoices(deps: InUseDeps, group: GroupId): ChoicesApi {
   return {
     async list(): Promise<ChoiceList> {
       if (group === "three_d") {
+        const chosen = (await deps.inUse.inUse()).three_d ?? [];
+        if (chosen.length > 0) {
+          // an admin put 3D on a provider (ADR-0095 K5): named like images and video
+          return {
+            choices: chosen.map((m) => inUseRow(m, true)),
+            diskFreeBytes: null,
+            memoryBytes: null,
+          };
+        }
         const c = await deps.model3d.component();
         const row = inUseRow(
           {

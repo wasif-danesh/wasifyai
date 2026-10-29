@@ -5,14 +5,15 @@ key" in Settings › Your keys, speaking runs on fal.ai (Kokoro) with that key; 
 transcribe and the other tools stay here. `KeyedModel3d` does the same for 3D models (Pixal3D on
 fal.ai; the cut-out with fal.ai's BiRefNet, so the 3D component need not be set up).
 
-Both read `OwnKeysService.known`, which is kept up to date on every change in Settings, because the
-products ask them synchronously (`ready()`, `models()`, `resolve()`)."""
+Both read `known`, which is kept up to date on every change, because the products ask them
+synchronously (`ready()`, `models()`, `resolve()`). On the desktop that is `OwnKeysService` (the
+person's key); on the web `AdminProviders` (the admin's fal.ai rows in Admin › Media, stage K5)."""
 
 import asyncio
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import httpx
 from wasifyai_media_worker.backends import FalQueue, data_uri
@@ -22,7 +23,7 @@ from wasifyai_platform_sdk.voice_models import OptionSpec, VoiceInfo, VoiceModel
 
 from wasifyai_api.audio_runtime import _wav_rate, _wav_seconds
 from wasifyai_api.desktop_model3d import ATLAS, RunResult
-from wasifyai_api.own_keys import KeyRoute, OwnKeysService
+from wasifyai_api.own_keys import KeyRoute
 
 # the voice model's id while Voice runs on the key: the one model offered for speaking
 KEYED_VOICE = "key:voice"
@@ -35,20 +36,30 @@ FAL_VOICES = (
 FAL_MATTE = "fal-ai/birefnet"  # the cut-out of a picture, on the same key as the 3D model
 FAL_3D_RESOLUTION = 1024  # what this computer's run uses too (`--res 1024`)
 WITH_KEY = "Runs on fal.ai with your key: the picture is sent there."
+BY_ADMIN = "Runs on fal.ai, chosen by your admin: the picture is sent there."
+
+
+class Routes(Protocol):
+    """Where a product runs: `OwnKeysService` on the desktop, `AdminProviders` on the web."""
+
+    def known(self, product: str) -> KeyRoute | None: ...
+
+    async def route(self, product: str) -> KeyRoute | None: ...
 
 
 async def _no_progress(_p: float) -> None:
     return None
 
 
-def _fal(keys: OwnKeysService, product: str) -> KeyRoute | None:
+def _fal(keys: Routes, product: str) -> KeyRoute | None:
     route = keys.known(product)
     return route if route is not None and route.provider.id == "fal" else None
 
 
-def keyed_voice_model(route: KeyRoute) -> VoiceModel:
+def keyed_voice_model(route: KeyRoute, admin: bool = False) -> VoiceModel:
+    title = f"{route.model} · {route.provider.title}" if admin else f"{route.model} · with your key"
     return VoiceModel(
-        id=KEYED_VOICE, title=f"{route.model} · with your key", engine="remote",
+        id=KEYED_VOICE, title=title, engine="remote",
         family="kokoro_tts", package="", server_task="tts", tasks=("speak",),
         recommended=("speak",), languages=("en-us",), sample_rate=24000,
         voices=tuple(
@@ -61,17 +72,19 @@ def keyed_voice_model(route: KeyRoute) -> VoiceModel:
 
 
 class KeyedSpeechEngine:
-    """The speech engine, with speaking on fal.ai while Voice runs on the person's key. Everything
-    it does not say otherwise is the engine of this computer's."""
+    """The speech engine, with speaking on fal.ai while Voice runs on the person's key (or, on the
+    web, the admin's row). Everything else is the engine it stands in front of."""
 
     def __init__(
         self,
         local: Any,
-        keys: OwnKeysService,
+        keys: Routes,
         client: Callable[[], httpx.AsyncClient] = httpx.AsyncClient,
         timeout_s: float = 300,
         poll_s: float = 1.0,
+        admin: bool = False,
     ):
+        self._admin = admin
         self._local = local
         self._keys = keys
         self._client = client
@@ -87,7 +100,7 @@ class KeyedSpeechEngine:
         if route is None:
             return local
         keyed = {
-            **keyed_voice_model(route).public(), "state": "ready", "files_ready": True,
+            **keyed_voice_model(route, self._admin).public(), "state": "ready", "files_ready": True,
             "runtime_ready": True, "bytes_missing": 0, "source": route.provider.host,
         }  # fmt: skip
         if task == "speak":  # the one model for speaking while it runs on the key
@@ -97,7 +110,7 @@ class KeyedSpeechEngine:
     def resolve(self, task: str, model_id: str | None) -> VoiceModel:
         route = _fal(self._keys, "voice")
         if route is not None and task == "speak":
-            return keyed_voice_model(route)
+            return keyed_voice_model(route, self._admin)
         return self._local.resolve(task, None if model_id == KEYED_VOICE else model_id)
 
     async def speak(
@@ -142,17 +155,19 @@ class KeyedSpeechEngine:
 
 
 class KeyedModel3d:
-    """The 3D engine, on fal.ai while 3D runs on the person's key: nothing to set up, no memory
-    of this computer's used. Everything else is the engine of this computer's."""
+    """The 3D engine, on fal.ai while 3D runs on the person's key (or, on the web, the admin's
+    row): nothing to set up, no memory used. Everything else is the engine it stands in front of."""
 
     def __init__(
         self,
         local: Any,
-        keys: OwnKeysService,
+        keys: Routes,
         client: Callable[[], httpx.AsyncClient] = httpx.AsyncClient,
         timeout_s: float = 900,
         poll_s: float = 2.0,
+        admin: bool = False,
     ):
+        self._where = BY_ADMIN if admin else WITH_KEY
         self._local = local
         self._keys = keys
         self._client = client
@@ -163,6 +178,14 @@ class KeyedModel3d:
         return getattr(self._local, name)
 
     @property
+    def closing(self) -> bool:
+        return bool(getattr(self._local, "closing", False))
+
+    @closing.setter
+    def closing(self, value: bool) -> None:  # the service is stopping: the web's jobs go on
+        self._local.closing = value
+
+    @property
     def keyed(self) -> bool:
         return _fal(self._keys, "model3d") is not None
 
@@ -171,8 +194,10 @@ class KeyedModel3d:
         if not self.keyed:
             return local
         # the screen asks `installed` to show the 3D maker; the picker asks `here` (installed here)
-        return {**local, "installed": True, "here": local["installed"], "fit": self.fit(),
-                "keyed": True, "about": {**local.get("about", {}), "where": WITH_KEY}}  # fmt: skip
+        return {
+            **local, "installed": True, "here": bool(local.get("installed")), "fit": self.fit(),
+            "keyed": True, "about": {**local.get("about", {}), "where": self._where},
+        }  # fmt: skip
 
     def ready(self) -> bool:
         return self.keyed or self._local.ready()
@@ -184,7 +209,7 @@ class KeyedModel3d:
         if not self.keyed:
             return self._local.fit()
         return {
-            "verdict": "fits", "reason": WITH_KEY, "needed_bytes": 0, "budget_bytes": None,
+            "verdict": "fits", "reason": self._where, "needed_bytes": 0, "budget_bytes": None,
             "capacity_bytes": None, "estimate": False, "partly_on_cpu": False,
         }  # fmt: skip
 
@@ -206,11 +231,15 @@ class KeyedModel3d:
         return RunResult(True, None, "", time.monotonic() - t0, output=out)
 
     async def matte(
-        self, picture: Path, out_dir: Path, on_line: Callable[[str], None] | None = None
+        self,
+        picture: Path,
+        out_dir: Path,
+        on_line: Callable[[str], None] | None = None,
+        **again: Any,  # job_key, resume: the web's engine workers pick a job up again
     ) -> RunResult:
         route = _fal(self._keys, "model3d")
         if route is None:
-            return await self._local.matte(picture, out_dir, on_line)
+            return await self._local.matte(picture, out_dir, on_line, **again)
         data = await asyncio.to_thread(picture.read_bytes)
         body = {"image_url": data_uri(data), "output_format": "png"}
         return await self._run(route, body, FAL_MATTE, "image", out_dir / "keyed_cutout.png")
@@ -224,12 +253,13 @@ class KeyedModel3d:
         detail: str = "standard",
         on_line: Callable[[str], None] | None = None,
         on_progress: Callable[[float, str], None] | None = None,
+        **again: Any,  # job_key, resume: on fal.ai a run picked up again is made again
     ) -> RunResult:
         route = _fal(self._keys, "model3d")
         if route is None:
             return await self._local.generate(
                 cutout, out_glb, seed=seed, detail=detail, on_line=on_line,
-                on_progress=on_progress,
+                on_progress=on_progress, **again,
             )  # fmt: skip
         data = await asyncio.to_thread(cutout.read_bytes)
         body = {

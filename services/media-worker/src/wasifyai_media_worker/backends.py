@@ -443,7 +443,8 @@ class FalRunner:
         raise ComfyError("not_with_key", "This is not done with your key.")
 
     def _endpoint(self, table: dict[str, str], what: str) -> str:
-        found = table.get(self._model)
+        # a model named for the job itself (an admin's row for Change a picture: fal-ai/flux-2/edit)
+        found = table.get(self._model) or (self._model if self._model in table.values() else None)
         if found is None:
             raise ComfyError(
                 "not_with_key",
@@ -533,6 +534,15 @@ class BackendRouter:
                     cfg.get("base_url") or "https://cloud.comfy.org", self._secret(b),
                     self._s.job_timeout_s, self._http, self._poll,
                 )  # fmt: skip
+            case "fal":  # ADR-0095 K5: the admin's fal.ai key and model for this capability
+                key = self._secret(b)
+                if not key:
+                    raise ComfyError(
+                        "backend_misconfigured", "The generation backend is not set up correctly."
+                    )
+                return FalRunner(
+                    key, cfg.get("model", ""), self._http, self._s.job_timeout_s, self._poll
+                )
             case "openai-images":
                 return OpenAIImagesRunner(
                     cfg.get("base_url") or "https://api.openai.com/v1", cfg.get("model", ""),

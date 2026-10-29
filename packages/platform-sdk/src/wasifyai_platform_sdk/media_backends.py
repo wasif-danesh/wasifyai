@@ -15,6 +15,11 @@ import httpx
 LOCAL = "comfyui-local"
 COMFY_API = "comfy-api"
 OPENAI_IMAGES = "openai-images"
+FAL = "fal"
+ENGINE_WORKERS = "engine-workers"
+FAL_QUEUE = "https://queue.fal.run"
+# what fal.ai is not set up for yet (ADR-0095): painting over part of a picture, a longer clip
+NOT_ON_FAL = frozenset({"image.inpaint", "video.extend"})
 
 
 class InvalidBackendConfig(ValueError):
@@ -98,6 +103,31 @@ BACKENDS: dict[str, BackendSpec] = {
                 ),
             ),
         ),
+        BackendSpec(
+            FAL,
+            "fal.ai",
+            "Runs on fal.ai with the service's key (ADR-0095). What people describe, and the "
+            "pictures they add, are sent to fal.ai.",
+            frozenset({"image", "video", "speech", "model3d"}),
+            (
+                Field_(
+                    "model",
+                    "Model",
+                    required=True,
+                    placeholder="fal-ai/flux-2",
+                    help="The fal.ai model: fal-ai/flux-2 (and fal-ai/flux-2/edit), "
+                    "fal-ai/ltx-2/text-to-video/fast (and .../image-to-video/fast), fal-ai/kokoro "
+                    "or fal-ai/pixal3d.",
+                ),
+                Field_("api_key", "API key", required=True, secret=True),
+            ),
+        ),
+        BackendSpec(
+            ENGINE_WORKERS,
+            "Engine workers (the service's own)",
+            "Runs on the service's engine workers, with the models fetched onto them.",
+            frozenset({"speech", "model3d"}),
+        ),
     )
 }
 
@@ -111,7 +141,17 @@ def family(capability: str) -> str:
 
 
 def backends_for(capability: str) -> list[BackendSpec]:
-    return [b for b in BACKENDS.values() if family(capability) in b.families]
+    return [
+        b
+        for b in BACKENDS.values()
+        if family(capability) in b.families and not (b.id == FAL and capability in NOT_ON_FAL)
+    ]
+
+
+def default_backend(capability: str) -> str:
+    """What runs a capability no admin has set: the product's ComfyUI workflow, or for speech and
+    3D models the engine workers."""
+    return ENGINE_WORKERS if family(capability) in ("speech", "model3d") else LOCAL
 
 
 def check_server_url(url: str) -> str:
@@ -137,7 +177,7 @@ def validate_config(
     spec = BACKENDS.get(backend)
     if spec is None:
         raise InvalidBackendConfig(f"unknown backend {backend!r}")
-    if family(capability) not in spec.families:
+    if spec not in backends_for(capability):
         raise InvalidBackendConfig(f"{spec.label} cannot serve {capability}")
     known = {f.name for f in spec.fields if not f.secret}
     extra = set(config) - known
@@ -175,7 +215,11 @@ class CheckOutcome:
     latency_ms: int = 0
 
 
-DEFAULT_BASES = {COMFY_API: "https://cloud.comfy.org", OPENAI_IMAGES: "https://api.openai.com/v1"}
+DEFAULT_BASES = {
+    COMFY_API: "https://cloud.comfy.org",
+    OPENAI_IMAGES: "https://api.openai.com/v1",
+    FAL: FAL_QUEUE,
+}
 
 
 async def check_backend(
@@ -191,8 +235,19 @@ async def check_backend(
     client = http or httpx.AsyncClient(timeout=15)
     started = time.monotonic()
     headers = {"authorization": f"Bearer {api_key}"} if api_key else {}
+    if backend == ENGINE_WORKERS:
+        return CheckOutcome(True, "the service's own engine workers")
     try:
-        if backend == LOCAL:
+        if backend == FAL:
+            # a request that does not exist: a rejected key answers 401 or 403, an accepted one
+            # that the request is not there. Nothing is made, so nothing is charged.
+            app = "/".join((config.get("model") or "fal-ai/flux-2").split("/")[:2])
+            r = await client.get(
+                f"{base}/{app}/requests/00000000-0000-0000-0000-000000000000/status",
+                headers={"authorization": f"Key {api_key}"} if api_key else {},
+            )
+            ok, msg = _judge_fal(r.status_code)
+        elif backend == LOCAL:
             r = await client.get(f"{base}/system_stats")
             ok, msg = (
                 r.status_code == 200,
@@ -226,6 +281,16 @@ def _judge_cloud(status: int) -> tuple[bool, str]:
     if status == 429:
         return False, "the subscription is not active"
     return False, f"answered {status}"
+
+
+def _judge_fal(status: int) -> tuple[bool, str]:
+    if status in (401, 403):
+        return False, "fal.ai did not accept the key"
+    if status == 429:
+        return False, "fal.ai says too many requests"
+    if status >= 500:
+        return False, f"fal.ai answered {status}"
+    return True, "fal.ai accepted the key"
 
 
 def _judge_models(status: int) -> tuple[bool, str]:

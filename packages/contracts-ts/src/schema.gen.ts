@@ -3560,6 +3560,15 @@ export interface components {
             /** Thinking */
             thinking: boolean;
         };
+        /** CheckView */
+        CheckView: {
+            /** At */
+            at: number;
+            /** Message */
+            message: string;
+            /** Ok */
+            ok: boolean;
+        };
         /** CheckedPicture */
         CheckedPicture: {
             /**
@@ -3957,6 +3966,11 @@ export interface components {
              */
             images: components["schemas"]["InUseModel"][];
             /**
+             * Three D
+             * @default []
+             */
+            three_d: components["schemas"]["InUseModel"][];
+            /**
              * Video
              * @default []
              */
@@ -4133,6 +4147,8 @@ export interface components {
             config: {
                 [key: string]: string;
             };
+            /** Key From */
+            key_from?: string | null;
         };
         /** MediaList */
         MediaList: {
@@ -4171,6 +4187,7 @@ export interface components {
             backend: string;
             /** Capability */
             capability: string;
+            check?: components["schemas"]["CheckView"] | null;
             /** Config */
             config: {
                 [key: string]: string;

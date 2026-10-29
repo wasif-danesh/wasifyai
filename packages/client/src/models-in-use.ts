@@ -8,7 +8,13 @@ export type InUseModel = {
   ready: boolean;
 };
 
-export type InUse = { chat: InUseModel[]; images: InUseModel[]; video: InUseModel[] };
+export type InUse = {
+  chat: InUseModel[];
+  images: InUseModel[];
+  video: InUseModel[];
+  /** only when an admin put 3D on a provider (fal.ai, ADR-0095 K5); otherwise the 3D screen reads its worker */
+  three_d?: InUseModel[];
+};
 
 export type ModelsInUseApi = { inUse(): Promise<InUse> };
 

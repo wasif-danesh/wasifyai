@@ -59,6 +59,8 @@ export async function submitMedia(
     backend: text(form, "backend"),
     config,
     api_key: text(form, "api_key") || null,
+    // "Use the key saved for …": another row on the same service (ADR-0095 K5)
+    key_from: ["", "none"].includes(text(form, "key_from")) ? null : text(form, "key_from"),
   };
 
   if (intent === "test") {

@@ -66,6 +66,7 @@ from wasifyai_platform_sdk.providers.litellm import LiteLLMTextProvider
 
 from wasifyai_api.actions_engine import build_executor
 from wasifyai_api.admin import AdminStore, PostgresAdminStore
+from wasifyai_api.admin_providers import AdminProviders
 from wasifyai_api.auth import Claims
 from wasifyai_api.components.comfyui import ComfyUiComponent
 from wasifyai_api.components.desktop import service_components
@@ -368,12 +369,19 @@ async def _shared(
             r.background.append(asyncio.create_task(_seed_models(models)))
     s.models = models
     s.products_dir = pdir  # the picker names the models a product ships (models_in_use)
+    bindings = InMemoryMediaBindingStore() if injected or desktop else PostgresMediaBindingStore(db)
+    box = SecretBox(settings.media_secrets_key)
+    if not desktop:  # speaking and 3D follow the admin's rows on the web (ADR-0095, K5)
+        s.admin_providers = AdminProviders(bindings, box, settings.default_tenant_id)
+        r.background.append(asyncio.create_task(s.admin_providers.run()))
     s.media = given.media_access or MediaAccess(
-        InMemoryMediaBindingStore() if injected or desktop else PostgresMediaBindingStore(db),
-        SecretBox(settings.media_secrets_key),
+        bindings,
+        box,
         lambda: media_capabilities_from(reg, pdir, settings.product_env),
         settings.comfyui_base_url,
         video_local_url=settings.comfyui_video_base_url,
+        checks=settings_store,
+        changed=s.admin_providers.changed if s.admin_providers else None,
     )
     s.caps = {}
     configs = r.configs
@@ -703,6 +711,8 @@ async def _web_voice(s: ApiServices, settings: Settings, queue: Callable[[], Eng
 
         local = build_local_engine(settings, Path(pdir))
         s.audio = CombinedSpeechEngine(local, hosted) if hosted is not None else local
+    if s.audio is not None and s.admin_providers is not None:  # Speak on fal.ai (K5)
+        s.audio = KeyedSpeechEngine(s.audio, s.admin_providers, admin=True)
 
 
 def _web_notebooks(s: ApiServices, settings: Settings) -> None:
@@ -743,6 +753,8 @@ async def _web_model3d(s: ApiServices, settings: Settings, queue: Callable[[], E
     s.model3d_store = await asyncio.to_thread(Model3dStore.on_postgres, settings.database_url)
     s.model3d_blobs = StorageBlobs(s.storage)
     s.model3d = RemoteModel3dEngine(queue(), s.storage.backing, s.engine_workers, usage=s.usage)
+    if s.admin_providers is not None:  # 3D models on fal.ai when the admin chose it (K5)
+        s.model3d = KeyedModel3d(s.model3d, s.admin_providers, admin=True)
     await sweep_model3d(s)
 
 

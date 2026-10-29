@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from wasifyai_platform_sdk.installer import Registry
 
     from wasifyai_api.admin import AdminStore
+    from wasifyai_api.admin_providers import AdminProviders
     from wasifyai_api.desktop_events import EventBus
     from wasifyai_api.mcp_client.client import ExternalClient
     from wasifyai_api.mcp_server.approvals import ApprovalDesk
@@ -44,6 +45,8 @@ class ApiServices(EngineServices):
     route_deps: RouteDeps | None = None  # what products' routes get, for resuming their jobs
     components: "Registry | None" = None  # the optional components and their installer (F2)
     own_keys: "OwnKeysService | None" = None  # the person's own provider keys (ADR-0095, desktop)
+    # on the web: speaking and 3D on the provider the admin chose in Admin › Media (ADR-0095, K5)
+    admin_providers: "AdminProviders | None" = None
 
 
 def services_of(request: Request) -> ApiServices:

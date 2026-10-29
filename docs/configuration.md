@@ -181,6 +181,15 @@ capability at `/admin/media` ([ADR-0032](decisions/0032-media-backends.md)):
 | `comfyui-local` | the workflow on a ComfyUI server (the default) | server address (optional) |
 | `comfy-api` | the same workflow on Comfy Cloud, a serverless deployment or comfy-api-proxy (API v2) | API address (default `https://cloud.comfy.org`), API key |
 | `openai-images` | images only: the prompt sent to `POST /images/generations` | API address, model, size (optional), API key (optional) |
+| `fal` | fal.ai's queue with the service's key ([ADR-0095](decisions/0095-own-provider-keys-per-product.md) K5): pictures (make, change, combine), clips (make, animate), speaking and 3D models; not painting over part of a picture or making a clip longer | model (`fal-ai/flux-2`, `fal-ai/flux-2/edit`, `fal-ai/ltx-2/text-to-video/fast`, `.../image-to-video/fast`, `fal-ai/kokoro`, `fal-ai/pixal3d`), API key |
+| `engine-workers` | speaking and 3D models only: the service's engine workers (the default for those two rows) | none |
+
+Two rows are not ComfyUI capabilities: **Voice · Speak** (`wasifyai-voice/speech.speak`) and **3D · Make a model**
+(`wasifyai-model3d/model3d.generate`). The API runs them itself; `AdminProviders` (`admin_providers.py`) reads them at
+start, at once after a save on the same replica and every 30 s on the others. A row on fal.ai can **use the key saved
+for another fal.ai row** (`key_from`; the key is copied inside the store). The last **Test** of a saved row is kept
+(settings key `media_checks`) and shown as "Key not working" until the key changes. People see the admin's choice on
+the model button (`/models/in-use`, e.g. "FLUX.2 · fal.ai"); they bring no keys on the web.
 
 The worker looks the binding up for every job, so a change applies to the next job. API keys are
 encrypted with `MEDIA_SECRETS_KEY` (set once by `make setup`; changing it makes saved keys unreadable) and are

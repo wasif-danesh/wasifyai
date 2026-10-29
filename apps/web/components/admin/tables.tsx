@@ -192,6 +192,8 @@ export type MediaRow = {
   workflow: string;
   runsOn: string;
   keySaved: boolean;
+  /** the last test of the saved row, when it did not work: "Key not working" */
+  keyProblem?: string | null;
   source: string;
   changed: string;
 };
@@ -217,6 +219,9 @@ export function MediaTable({ rows }: { rows: MediaRow[] }) {
             <>
               {m.runsOn}
               {m.keySaved ? <small className={muted}> key saved</small> : null}
+              {m.keyProblem ? (
+                <small className="block text-destructive">Key not working: {m.keyProblem}</small>
+              ) : null}
             </>
           ),
         }),

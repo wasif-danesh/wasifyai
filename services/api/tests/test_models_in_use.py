@@ -104,4 +104,4 @@ def test_it_needs_a_signed_in_person_but_not_an_admin(client):
     assert client.get("/models/in-use").status_code == 401
     h = {"authorization": "Bearer " + token(sub="google:1", email="ann@example.com")}
     r = client.get("/models/in-use", headers=h)
-    assert r.status_code == 200 and set(r.json()) == {"chat", "images", "video"}
+    assert r.status_code == 200 and set(r.json()) == {"chat", "images", "video", "three_d"}

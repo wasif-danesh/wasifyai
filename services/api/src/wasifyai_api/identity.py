@@ -18,6 +18,7 @@ from wasifyai_platform_sdk import Identity, Principal
 
 from wasifyai_api.auth import AuthError, verify_token
 from wasifyai_api.config import get_settings
+from wasifyai_api.logging import tenant_id as current_tenant
 from wasifyai_api.services import services_of
 
 __all__ = [
@@ -61,6 +62,7 @@ async def _person(token: str, request: Request) -> Principal:
 async def get_principal(request: Request) -> Principal:
     cached = getattr(request.state, "principal", None)
     if isinstance(cached, Principal):
+        current_tenant.set(cached.identity.tenant_id)
         return cached
     settings = get_settings()
     if settings.auth_mode == "stub":
@@ -82,6 +84,8 @@ async def get_principal(request: Request) -> Principal:
                 log.warning("rejected credential: %s", exc)
                 raise _unauthorized("this connection is not accepted") from exc
     request.state.principal = principal
+    # the request's tenant, for what is asked without an identity (logs; the admin's rows, K5)
+    current_tenant.set(principal.identity.tenant_id)
     return principal
 
 

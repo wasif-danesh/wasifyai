@@ -20,7 +20,20 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/models", tags=["models"])
 
 CHAT_ALIAS = "default-chat"
-MEDIA_PRODUCTS = {"images": "wasifyai-image", "video": "wasifyai-video"}
+MEDIA_PRODUCTS = {
+    "images": "wasifyai-image", "video": "wasifyai-video", "three_d": "wasifyai-model3d",
+}  # fmt: skip
+# fal.ai's models by the names people know (ADR-0095, K5); another model is shown as it is named
+FAL_NAMES = {
+    "fal-ai/flux-2": "FLUX.2", "fal-ai/flux-2/edit": "FLUX.2",
+    "fal-ai/ltx-2/text-to-video/fast": "LTX-2", "fal-ai/ltx-2/image-to-video/fast": "LTX-2",
+    "fal-ai/pixal3d": "Pixal3D", "fal-ai/kokoro": "Kokoro",
+}  # fmt: skip
+SENT = {
+    "images": "What you describe and the pictures you add are sent to fal.ai.",
+    "video": "What you describe and the pictures you add are sent to fal.ai.",
+    "three_d": "The picture you add is sent to fal.ai.",
+}
 
 
 class InUseModel(BaseModel):
@@ -34,6 +47,7 @@ class InUse(BaseModel):
     chat: list[InUseModel] = []
     images: list[InUseModel] = []
     video: list[InUseModel] = []
+    three_d: list[InUseModel] = []  # only when an admin put 3D on a provider (fal.ai)
 
 
 def _name(model: str | None) -> str:
@@ -96,6 +110,19 @@ async def _media(request: Request, who: Identity, group: str) -> list[InUseModel
     if not items:
         return []
     labels = {b.id: b.label for b in listing.backends}
+    main = next((i for i in items if i.capability.endswith(".generate")), items[0])
+    if main.backend == "fal":
+        model = main.config.get("model", "")
+        return [
+            InUseModel(
+                id=f"{product_id}:fal",
+                title=f"{FAL_NAMES.get(model, model or 'fal.ai')} · fal.ai",
+                plain=f"Chosen by your admin. {SENT[group]}",
+                ready=main.key_set,
+            )
+        ]
+    if group == "three_d":  # the engine workers: the 3D screen reads them itself
+        return []
     # the product's own workflow runs the catalogue's model; another backend is named by its service
     if all(i.source == "default" for i in items):
         known = _titles(request, product_id)
@@ -126,4 +153,5 @@ async def in_use(request: Request, who: Identity = Depends(get_identity)) -> InU
         chat=await _chat(request),
         images=await _media(request, who, "images"),
         video=await _media(request, who, "video"),
+        three_d=await _media(request, who, "three_d"),
     )

@@ -193,3 +193,11 @@ async def test_progress_moves_while_it_waits_and_ends_at_one():
 
     await runner(Fal(status_after=2)).run(job(), note)
     assert seen[0] < 0.1 and seen[-1] == 1.0 and seen == sorted(seen)
+
+
+async def test_an_admins_row_may_name_the_edit_endpoint_itself():
+    fal = Fal()
+    await runner(fal, "fal-ai/flux-2/edit").run(
+        job("image.edit", image_key="uploads/a.png"), progress, files={"image": PNG}
+    )
+    assert str(fal.requests[0].url) == "https://queue.fal.run/fal-ai/flux-2/edit"

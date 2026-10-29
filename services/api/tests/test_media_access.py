@@ -44,8 +44,8 @@ async def test_everything_starts_on_the_product_default():
         "openai-images",
     }
     image = listing.items[0]
-    assert set(image.allowed_backends) == {"comfyui-local", "comfy-api", "openai-images"}
-    assert set(listing.items[1].allowed_backends) == {"comfyui-local", "comfy-api"}
+    assert set(image.allowed_backends) == {"comfyui-local", "comfy-api", "openai-images", "fal"}
+    assert set(listing.items[1].allowed_backends) == {"comfyui-local", "comfy-api", "fal"}
 
 
 async def test_a_hosted_backend_is_saved_with_its_key_encrypted():

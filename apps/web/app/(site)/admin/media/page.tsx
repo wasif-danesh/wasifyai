@@ -29,8 +29,9 @@ export default async function Media() {
   return (
     <>
       <p className={muted}>
-        Music and cover jobs run on ComfyUI by default. Point a capability at Comfy Cloud or another
-        service instead; the next job uses it.
+        Pictures, clips and music run on ComfyUI by default, speaking and 3D models on the engine
+        workers. Point any of them at fal.ai, Comfy Cloud or another service instead; the next job
+        uses it.
       </p>
       {list.secrets_ready ? null : (
         <Notice tone="warn" title="API keys can't be saved yet">
@@ -43,8 +44,9 @@ export default async function Media() {
           product: m.product_id,
           capability: m.capability,
           workflow: m.workflow ?? "",
-          runsOn: label.get(m.backend) ?? m.backend,
+          runsOn: [label.get(m.backend) ?? m.backend, m.config.model].filter(Boolean).join(" · "),
           keySaved: m.key_set,
+          keyProblem: m.check && !m.check.ok ? m.check.message : null,
           source: m.source,
           changed: m.updated_at && m.source === "custom" ? fullDate(m.updated_at) : "—",
         }))}

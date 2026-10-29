@@ -61,7 +61,12 @@ const FLUX = {
 
 /** What the service says it uses, and what the 3D worker says; with the voice rig's other dependencies. */
 function inUseRig(
-  over: { images?: (typeof FLUX)[]; video?: (typeof FLUX)[]; threeD?: boolean } = {},
+  over: {
+    images?: (typeof FLUX)[];
+    video?: (typeof FLUX)[];
+    threeD?: boolean;
+    threeDChosen?: (typeof FLUX)[];
+  } = {},
 ) {
   const base = rig([]).deps;
   const deps = {
@@ -71,6 +76,7 @@ function inUseRig(
         chat: [{ ...FLUX, id: "default-chat", title: "gemma4:e4b" }],
         images: over.images ?? [FLUX],
         video: over.video ?? [],
+        three_d: over.threeDChosen ?? [],
       })),
     },
     model3d: {
@@ -99,6 +105,16 @@ describe("the picker on the web", () => {
     const three = await source("three_d")?.list();
     expect(three?.choices.map((c) => [c.title, c.state])).toEqual([["Pixal3D", "ready"]]);
     await expect(source("images")?.get("x", () => {}, never)).rejects.toThrow(/Ask an admin/);
+  });
+
+  it("names 3D by the provider an admin chose, without asking the worker", async () => {
+    const chosen = { ...FLUX, id: "wasifyai-model3d:fal", title: "Pixal3D · fal.ai" };
+    const deps = inUseRig({ threeD: false, threeDChosen: [chosen] });
+    const three = await webChoices(deps)("three_d")?.list();
+    expect(three?.choices.map((c) => [c.title, c.state, c.chosen])).toEqual([
+      ["Pixal3D · fal.ai", "ready", true],
+    ]);
+    expect((deps.model3d as { component: () => unknown }).component).not.toHaveBeenCalled();
   });
 
   it("says a model is not set up when the service has none ready, and shows none when it lists none", async () => {

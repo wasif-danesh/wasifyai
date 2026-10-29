@@ -15,6 +15,7 @@ import { Search } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { ComponentsPanel } from "../ComponentsPanel";
 import { assistantApi, connectionsApi, discoveryApi, externalApi, hubApi } from "../api";
+import { saveDiagnostics } from "../diagnostics";
 import { engineRepair, engineRestart } from "../engine";
 import { ImageEngineCard, LanguageEngineCard, UpdateBanner } from "../parts";
 
@@ -30,6 +31,49 @@ function SavedLine({ state }: { state: "idle" | "saving" | "saved" | string }) {
         <span className="text-destructive">{state}</span>
       ) : null}
     </output>
+  );
+}
+
+/** One zip to send when something goes wrong: what is in it is said before it is made. */
+function Diagnostics() {
+  const [state, setState] = useState<"idle" | "saving" | string>("idle");
+  async function run() {
+    setState("saving");
+    try {
+      const saved = await saveDiagnostics();
+      setState(saved ? `Saved ${saved.name}.` : "idle");
+    } catch (e) {
+      setState(e instanceof Error ? e.message : "The file could not be saved.");
+    }
+  }
+  return (
+    <div className="grid gap-3">
+      <p className="m-0 text-muted-foreground text-sm">
+        One zip file to send when something goes wrong: the app's and the computer's versions, the
+        state of each optional part, your last 50 actions (which ones and how they ended, not what
+        you asked) and the end of the engine's logs. No pictures, sounds, documents, prompts or
+        chats; keys and tokens are hidden.
+      </p>
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={state === "saving"}
+          onClick={() => void run()}
+        >
+          Save diagnostics
+        </Button>
+        <output aria-live="polite" className="text-sm">
+          {state === "saving" ? (
+            <span className="text-muted-foreground">Making the file…</span>
+          ) : state.startsWith("Saved") ? (
+            <span className="text-muted-foreground">{state}</span>
+          ) : state !== "idle" ? (
+            <span className="text-destructive">{state}</span>
+          ) : null}
+        </output>
+      </div>
+    </div>
   );
 }
 
@@ -413,6 +457,12 @@ const GROUPS: Group[] = [
             </div>
           </div>
         ),
+      },
+      {
+        id: "diagnostics",
+        title: "Diagnostics",
+        words: "diagnostics logs support problem report zip",
+        body: <Diagnostics />,
       },
     ],
   },

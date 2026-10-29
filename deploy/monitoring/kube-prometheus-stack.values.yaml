@@ -50,6 +50,10 @@ grafana:
       type: loki
       access: proxy
       url: http://loki:3100
+    - name: Tempo                 # traces (stage O1), release `tempo`
+      type: tempo
+      access: proxy
+      url: http://tempo:3200
   resources:
     requests: { cpu: 50m, memory: 150Mi }
     limits: { memory: 500Mi }

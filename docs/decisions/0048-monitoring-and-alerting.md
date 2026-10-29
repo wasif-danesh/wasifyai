@@ -65,6 +65,26 @@ The constraints that decide the design:
    environment (kind, staging, gcp-test). The application chart gets a `metrics.enabled` switch and the
    `ServiceMonitor` objects.
 
+## Amendment (2026-10-29, owner): traces
+
+Decision 7 excluded distributed tracing from v1. The owner approved it for stage O1 of the 2026-10-27 plan:
+
+- **OpenTelemetry** (`opentelemetry-api`, `-sdk`, `-exporter-otlp-proto-http`, Apache-2.0) in the API, the media
+  worker, the engine workers and the action executor: one span per request, per run stretch, per graph node,
+  per action and per engine or media job. The trace context travels in the job (`EngineJob.trace`,
+  `JobRequest.trace`) and arrives from the web app's BFF as a `traceparent` header, so a run is one trace from
+  the BFF to the worker. The helper is `wasifyai_platform_sdk/tracing.py`.
+- **Where they go:** OTLP over HTTP to **Tempo** in the `monitoring` namespace (`scripts/monitoring-up.sh`,
+  `deploy/monitoring/tempo.values.yaml`, 7 days), read in Grafana; the Helm value `tracing.otlpEndpoint` turns it
+  on (staging all traces, production one in ten). On the desktop the engine writes one JSON line per span to
+  `<data>/logs/traces.jsonl` (20 MB, then one older file).
+- **What a span carries** follows decision 5's rule for labels, loosened only for ids: a product, a node, an
+  action, a job kind, an outcome, an error code, a route template, the run's or job's id. Never a user id, an
+  e-mail address, a prompt or content; `tracing.span` drops any other attribute and records an exception by its
+  type only. Metric labels are unchanged.
+- **Not yet:** the BFF exports no spans of its own; it starts or continues the trace id and sends it on (a Next.js
+  OpenTelemetry setup is a later step and needs its own packages).
+
 ## Evaluation (the exit criterion for stage 2)
 
 1. On kind, the dashboards show real numbers while `make kind-e2e` runs: runs per product, job durations, queue

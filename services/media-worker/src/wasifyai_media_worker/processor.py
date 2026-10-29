@@ -23,6 +23,7 @@ from wasifyai_platform_sdk import (
     UsageRecorder,
     input_image_name,
     object_key,
+    tracing,
 )
 from wasifyai_platform_sdk.jobs import progress_event
 from wasifyai_platform_sdk.usage import record_safely
@@ -194,7 +195,18 @@ class JobProcessor:
             await self.log.append(job.tenant_id, job.run_id or "", event)
 
     async def process(self, job: JobRequest) -> JobResult:
-        """Returns the job's final result. Raises RetryJob for transient infrastructure failures."""
+        """Returns the job's final result. Raises RetryJob for transient infrastructure failures.
+        One span per job, in the trace of the run that asked for it (stage O1)."""
+        attrs = {"kind": job.capability, "job_id": job.job_id, "product": job.product_id}
+        with tracing.span("media job", attrs, parent=job.trace) as current:
+            result = await self._process(job)
+            result = result.model_copy(update={"trace": tracing.carrier()})
+            tracing.set_attrs(current, outcome=result.status)
+            if result.error is not None:
+                tracing.fail(current, result.error.code)
+            return result
+
+    async def _process(self, job: JobRequest) -> JobResult:
         if prior := await self.state.finished(job.tenant_id, job.job_id):
             return prior  # redelivered after a crash: report the same result again
         if await self._stopped(job):  # stopped while it waited in the line: never started

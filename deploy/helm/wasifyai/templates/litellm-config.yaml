@@ -8,3 +8,10 @@ data:
   config.yaml: |
     litellm_settings:
       drop_params: true
+      {{- if .Values.langfuse.baseUrl }}
+      # every model call to Langfuse with its tokens, latency and cost (ADR-0050); prompts only with capture on
+      success_callback: ["langfuse"]
+      failure_callback: ["langfuse"]
+      turn_off_message_logging: {{ not .Values.langfuse.captureContent }}
+      redact_user_api_key_info: true
+      {{- end }}

@@ -95,6 +95,23 @@ Facts (checked 2026-10-10):
 Yes to all four: ClickHouse as a new datastore; prompt and output text captured in staging and off in the GCP
 test and production until a privacy review; access by port-forward or Tailscale only; 30 days retention.
 
+## Built (2026-10-29, stage O1)
+
+- **The graphs:** `wasifyai_api/run_tracing.py` gives each run Langfuse's LangChain callback (the `langfuse`
+  Python SDK 5.0.4, MIT) when `LANGFUSE_BASE_URL`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are set. With
+  `LANGFUSE_CAPTURE_CONTENT` off (the default) every input and output is replaced by "[not captured]" before it
+  leaves; the person is a one-way hash of tenant and user; the product is a tag. Langfuse has a tracer provider
+  of its own, so its prompts never reach Tempo, and its traces share the run's trace id.
+- **The gateway:** with `langfuse.baseUrl` set, the chart turns on LiteLLM's `langfuse` callback, with
+  `turn_off_message_logging` unless content is captured and `redact_user_api_key_info`.
+- **The install:** `scripts/langfuse-up.sh` (chart 2.1.5, `deploy/monitoring/langfuse.values.yaml`) with sign-up
+  off, the first person, project and key pair made from a Secret, and the keys copied into the app's Secret.
+  Chart 2.x needs the ClickHouse operator and cert-manager first. Staging's values turn it on with content
+  captured; production leaves it off.
+- **Not verified:** nothing has run against a real Langfuse yet (no cluster with ClickHouse here); the acceptance
+  "a prompt and its cost show in Langfuse on staging" waits for staging. Media jobs are not yet observations in
+  Langfuse (they are spans in Tempo). Model prices for local models (decision 5) are not set.
+
 ## Docs to update
 
 `docs/architecture.md`, `docs/environments.md`, `docs/configuration.md`, `docs/runbooks/` (a Langfuse runbook),

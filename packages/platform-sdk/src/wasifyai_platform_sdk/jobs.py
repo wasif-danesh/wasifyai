@@ -20,6 +20,8 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 from wasifyai_contracts import JobProgressEvent
 
+from wasifyai_platform_sdk.tracing import carrier
+
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
@@ -54,6 +56,8 @@ class JobRequest(BaseModel):
     inputs: dict[str, Any] = Field(default_factory=dict)
     outputs: dict[str, Any]  # output name -> {node, type}, from the workflow map
     created_at: str = Field(default_factory=_now)
+    # the trace it belongs to (`traceparent`), taken where it is made, so the worker's span joins it
+    trace: dict[str, str] = Field(default_factory=carrier)
 
 
 class JobHandle(BaseModel):
@@ -80,6 +84,8 @@ class JobResult(BaseModel):
     outputs: dict[str, JobOutput] = Field(default_factory=dict)
     error: JobError | None = None
     gpu_seconds: float = 0.0
+    # the job's span (`traceparent`): the run's next stretch continues the same trace from it
+    trace: dict[str, str] = Field(default_factory=dict)
 
 
 class JobFailed(Exception):

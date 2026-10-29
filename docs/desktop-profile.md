@@ -93,6 +93,11 @@ output goes to `<app data>/logs/engine.log`. Tests: `uv run pytest services/api/
 packages/platform-sdk/tests/test_sqlite_adapters.py services/api/tests/test_sqlite_stores.py` and
 `cargo test` in `apps/desktop/src-tauri`.
 
+Each request, run, node, action and job also writes one JSON line to `<app data>/logs/traces.jsonl` (stage O1;
+20 MB, then `traces.1.jsonl`). Settings › Advanced › Diagnostics saves one zip with the ends of `engine.log` and
+`provision.log` (keys and tokens hidden), the optional parts' states, the person's last 50 actions and the
+computer's figures, where the person chooses (`POST /desktop/diagnostics`, stage O2).
+
 ## The areas, one page each
 
 The rest of what is built on the desktop is one page per area under `docs/desktop/`:

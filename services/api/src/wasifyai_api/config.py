@@ -46,6 +46,16 @@ class Settings(BaseSettings):
     comfyui_video_base_url: str = ""  # the ComfyUI video runs on (ADR-0037); empty: the one above
     ollama_base_url: str = "http://host.containers.internal:11434"
     log_level: str = "INFO"
+    # Traces (stage O1): OTLP to Tempo when OTEL_EXPORTER_OTLP_ENDPOINT is set (the OTel SDK reads
+    # its own OTEL_* variables); JSON lines in this file when set. The desktop writes
+    # <data dir>/logs/traces.jsonl unless this names another file.
+    wasifyai_traces_file: str = ""
+    # LLM traces in Langfuse (ADR-0050): on when all three are set. Prompts and outputs are stored
+    # only with capture on (development and staging); a person is a one-way hash either way.
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_base_url: str = ""
+    langfuse_capture_content: bool = False
     metrics_port: int = 9464  # Prometheus scrapes this port (ADR-0048); 0 turns the listener off
     media_secrets_key: str = ""  # encrypts media provider API keys saved in the admin area
     # the assistant may search the web once an admin picks the service and a person allows it

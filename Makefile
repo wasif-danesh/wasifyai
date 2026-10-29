@@ -1,7 +1,7 @@
 CONTAINER_ENGINE ?= podman
 export CONTAINER_ENGINE
 
-.PHONY: worker engine-bundle reader-locks test-comfyui test-integration setup setup-k8s preflight dev down logs migrate test lint format contracts helm-lint kind-up kind-test kind-e2e kind-down monitoring-up monitoring-drill monitoring-drill-meta urls
+.PHONY: worker engine-bundle reader-locks test-comfyui test-integration setup setup-k8s preflight dev down logs migrate test lint format contracts helm-lint kind-up kind-test kind-e2e kind-down monitoring-up monitoring-drill monitoring-drill-meta langfuse-up urls
 setup:
 	./scripts/setup.sh
 setup-k8s:
@@ -52,7 +52,9 @@ kind-up:
 urls:
 	@uv run python scripts/urls.py   # every URL of the running system, for the mode it is in
 monitoring-up:
-	./scripts/monitoring-up.sh   # Prometheus, Alertmanager, Grafana, Loki; alerts to Telegram (ADR-0048)
+	./scripts/monitoring-up.sh   # Prometheus, Alertmanager, Grafana, Loki, Tempo; alerts to Telegram (ADR-0048)
+langfuse-up:
+	./scripts/langfuse-up.sh     # Langfuse for LLM traces (ADR-0050); needs the ClickHouse operator first
 monitoring-drill-meta:
 	@scripts/monitoring-drill-meta.sh
 

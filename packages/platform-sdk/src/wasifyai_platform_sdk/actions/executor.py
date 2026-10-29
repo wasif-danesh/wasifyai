@@ -23,6 +23,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from wasifyai_platform_sdk import tracing
 from wasifyai_platform_sdk.actions.audit import (
     ApprovalRecord,
     ApprovalStore,
@@ -184,7 +185,36 @@ class ActionExecutor:
         `person_approved` is for the window only: its own click is the approval. Nothing that
         comes from an agent can set it.
         A `Principal` as `actor` (an MCP connection) is held to its scopes: an action
-        outside them is refused with `not_offered` (ADR-0092)."""
+        outside them is refused with `not_offered` (ADR-0092).
+        Each call is one span (stage O1), named by the action when the catalogue has it."""
+        known = action_id if self.registry.get(action_id) is not None else "unknown"
+        with tracing.span(
+            "action", {"action": known, "origin": str(origin).split(":", 1)[0]}
+        ) as current:
+            result = await self._run_action(
+                action_id, params, origin, actor=actor, policy=policy, wait_seconds=wait_seconds,
+                on_event=on_event, approval_id=approval_id, approval_wait_s=approval_wait_s,
+                person_approved=person_approved,
+            )  # fmt: skip
+            tracing.set_attrs(current, outcome=result.status, code=result.code or None)
+            if result.status == "error":
+                tracing.fail(current, result.code or "error")
+            return result
+
+    async def _run_action(
+        self,
+        action_id: str,
+        params: Mapping[str, Any] | None,
+        origin: str,
+        *,
+        actor: "Identity | Principal | None",
+        policy: ApprovalPolicy | None,
+        wait_seconds: float | None,
+        on_event: Emit | None,
+        approval_id: str | None,
+        approval_wait_s: float,
+        person_approved: bool,
+    ) -> ActionResult:
         started = time.monotonic()
         origin = parse_origin(origin)
         principal: Principal | None

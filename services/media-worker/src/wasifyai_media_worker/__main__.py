@@ -16,6 +16,7 @@ from wasifyai_platform_sdk import (
     UsageRecorder,
     memory_storage,
     s3_storage,
+    tracing,
 )
 from wasifyai_platform_sdk.jobqueue import RedisCancels
 
@@ -51,6 +52,7 @@ REDIS_SOCKET_TIMEOUT_S = 60
 async def main() -> None:
     s = WorkerSettings()
     logging.basicConfig(level=s.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    tracing.setup("wasifyai-media-worker")  # OTLP to Tempo when OTEL_EXPORTER_OTLP_ENDPOINT is set
     log = logging.getLogger("wasifyai_media_worker")
 
     redis = Redis.from_url(
@@ -133,6 +135,7 @@ async def main() -> None:
         await redis.aclose()
         if engine:
             await engine.dispose()
+        tracing.flush()
 
 
 if __name__ == "__main__":

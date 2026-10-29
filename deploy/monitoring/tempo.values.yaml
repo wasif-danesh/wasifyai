@@ -1,0 +1,17 @@
+# Tempo for traces (stage O1; ADR-0048 amended 2026-10-29), release `tempo` in the monitoring namespace. The
+# single-binary chart: it receives OTLP over HTTP on :4318 from the API and the workers (Helm value
+# tracing.otlpEndpoint) and Grafana reads it (the Tempo data source in kube-prometheus-stack.values.yaml).
+# Spans carry bounded words and ids only (wasifyai_platform_sdk/tracing.py drops anything else).
+tempo:
+  retention: 168h               # 7 days, like Loki
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4318
+persistence:
+  enabled: true
+  size: 5Gi
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits: { memory: 700Mi }

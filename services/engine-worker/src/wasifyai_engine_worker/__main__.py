@@ -23,7 +23,7 @@ from wasifyai_api.training_setup import HUB, TrainingSetup
 from wasifyai_api.training_setup import LOCK_NAME as IMAGE_LOCK_NAME
 from wasifyai_api.video_setup import LOCK_NAME as VIDEO_LOCK_NAME
 from wasifyai_api.video_setup import VideoSetup
-from wasifyai_platform_sdk import EngineQueue, admin_wire, memory_storage, s3_storage
+from wasifyai_platform_sdk import EngineQueue, admin_wire, memory_storage, s3_storage, tracing
 
 from wasifyai_engine_worker.admin import AdminComponent
 from wasifyai_engine_worker.settings import WorkerSettings
@@ -38,6 +38,7 @@ async def main() -> None:
     s = WorkerSettings()
     logging.basicConfig(level=s.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     log = logging.getLogger("wasifyai_engine_worker")
+    tracing.setup("wasifyai-engine-worker")  # OTLP to Tempo when OTEL_EXPORTER_OTLP_ENDPOINT is set
 
     redis = Redis.from_url(
         s.redis_url, decode_responses=True, socket_timeout=REDIS_SOCKET_TIMEOUT_S
@@ -140,6 +141,7 @@ async def main() -> None:
         if engine.lipsync_sidecar is not None:  # its server is a process of its own
             await engine.lipsync_sidecar.close()
         await redis.aclose()
+        tracing.flush()
 
 
 if __name__ == "__main__":

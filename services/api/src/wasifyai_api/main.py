@@ -2,6 +2,7 @@
 services (`assemble.run_engine`) and closes them again."""
 
 import logging
+import os
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -10,9 +11,10 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.telemetry import TelemetryConfig
 from pydantic import TypeAdapter
 from wasifyai_contracts import SseEvent
-from wasifyai_platform_sdk import RouteDeps
+from wasifyai_platform_sdk import RouteDeps, tracing
 
 from wasifyai_api.admin import me_router as me_router
 from wasifyai_api.admin import router as admin_router
@@ -38,6 +40,7 @@ from wasifyai_api.desktop_model3d import router as desktop_model3d_router
 from wasifyai_api.desktop_models import router as desktop_models_router
 from wasifyai_api.desktop_save import router as desktop_save_router
 from wasifyai_api.desktop_video_builder import router as desktop_video_builder_router
+from wasifyai_api.diagnostics import router as diagnostics_router
 from wasifyai_api.graphs import default_registry
 from wasifyai_api.identity import get_identity
 from wasifyai_api.language_setup import router as language_setup_router
@@ -49,6 +52,7 @@ from wasifyai_api.metrics import MetricsMiddleware
 from wasifyai_api.metrics import serve as serve_metrics
 from wasifyai_api.models_in_use import router as models_in_use_router
 from wasifyai_api.routes import router
+from wasifyai_api.run_tracing import TracingMiddleware
 from wasifyai_api.training_setup import router as training_setup_router
 from wasifyai_api.uploads import router as uploads_router
 from wasifyai_api.video_setup import router as video_setup_router
@@ -63,6 +67,12 @@ def create_app(given: Injected | None = None) -> FastAPI:
     given = given or Injected()
     settings = get_settings()
     configure_logging(settings.log_level)
+    traces = settings.wasifyai_traces_file
+    if not traces and settings.deployment_profile == "desktop" and settings.desktop_data_dir:
+        traces = str(settings.desktop_dir / "logs" / "traces.jsonl")
+    if not given.test_app:
+        env = {**os.environ, "WASIFYAI_TRACES_FILE": traces} if traces else None
+        tracing.setup("wasifyai-api", env)
     desktop_profile = settings.deployment_profile == "desktop"
     if desktop_profile and settings.auth_mode != "jwt":
         raise RuntimeError("the desktop profile signs in with the shell's token: AUTH_MODE=jwt")
@@ -91,9 +101,15 @@ def create_app(given: Injected | None = None) -> FastAPI:
         only = settings.enabled_product_set
         return [p for p in product_ids if not only or p in only]
 
-    app = FastAPI(title="wasifyai API", lifespan=lifespan)
+    # FastAPI's own telemetry is off: it records raw paths and exception messages, which can carry
+    # file names and content. `TracingMiddleware` makes the request spans by ADR-0048's rule.
+    off: TelemetryConfig = {
+        "tracing": False, "metrics": False, "logs": False, "auto_configure": False,
+    }  # fmt: skip
+    app = FastAPI(title="wasifyai API", lifespan=lifespan, telemetry=off)
     app.state.services = services  # the only attribute (stage F1)
     app.add_middleware(MetricsMiddleware)
+    app.add_middleware(TracingMiddleware)  # outermost: a request's span covers everything
     if desktop_profile:
         # The window is another origin (tauri://localhost) than this loopback engine.
         app.add_middleware(
@@ -149,6 +165,7 @@ def create_app(given: Injected | None = None) -> FastAPI:
         app.include_router(desktop_llm_router)
         app.include_router(desktop_hub_router)
         app.include_router(components_router)
+        app.include_router(diagnostics_router)
 
     # Product-provided routes (ADR-0023): mounted now so the OpenAPI schema (and the TypeScript
     # types generated from it) include them; what they use is read from the services at request

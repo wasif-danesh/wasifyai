@@ -26,6 +26,8 @@ from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 from redis.exceptions import ResponseError
 
+from wasifyai_platform_sdk.tracing import carrier
+
 NAMESPACE = "wasifyai:engine"
 JOBS_GROUP = "engine-workers"
 
@@ -51,6 +53,8 @@ class EngineJob(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)  # what was asked, as JSON
     files: dict[str, str] = Field(default_factory=dict)  # input name -> storage key
     created_at: str = Field(default_factory=_now)
+    # the trace it belongs to (`traceparent`), taken where it is made, so the worker's span joins it
+    trace: dict[str, str] = Field(default_factory=carrier)
 
 
 class EngineError(BaseModel):

@@ -14,6 +14,7 @@ from wasifyai_platform_sdk import (
     builder_wire,
     model3d_wire,
     speech_wire,
+    tracing,
 )
 from wasifyai_platform_sdk.engine_jobs import sleep_or_stop
 
@@ -181,7 +182,15 @@ class Worker:
         self._busy = True
         try:
             await self._queue.register(self.info())  # the API sees it is busy now
-            outcome = await self._run(job)
+            # one span per job, in the trace of the request that asked for it (stage O1)
+            with tracing.span(
+                "engine job", {"kind": job.kind, "job_id": job.id, "worker": self.name},
+                parent=job.trace,
+            ) as current:  # fmt: skip
+                outcome = await self._run(job)
+                tracing.set_attrs(current, outcome="done" if outcome.ok else "failed")
+                if outcome.error is not None:
+                    tracing.fail(current, outcome.error.code)
         finally:
             self._busy = False
         await self._queue.finish(stream_id, outcome)

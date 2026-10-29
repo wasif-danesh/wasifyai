@@ -1,0 +1,12 @@
+# Langfuse for LLM traces (ADR-0050), release `langfuse` in the `observability` namespace, installed by
+# scripts/langfuse-up.sh. Its own Postgres, ClickHouse, Redis and object storage (the chart's), never shared
+# with the platform's. Sign-up is off: the first person, the organisation, the project and its keys are made
+# from the `langfuse-init` Secret the script writes. No ingress: reach it with a port-forward or Tailscale.
+langfuse:
+  features:
+    telemetryEnabled: false
+    signUpDisabled: true
+  ingress:
+    enabled: false
+  additionalEnvFrom:
+    - secretRef: { name: langfuse-init }

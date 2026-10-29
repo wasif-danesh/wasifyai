@@ -19,6 +19,18 @@ env:
   COMFYUI_BASE_URL: ""                   # Phase 4
   COMFYUI_VIDEO_BASE_URL: ""             # a separate ComfyUI for video (ADR-0037); empty = the one above
 
+tracing:
+  # Traces (stage O1): the OTLP/HTTP endpoint of Tempo (scripts/monitoring-up.sh installs it in `monitoring`,
+  # http://tempo.monitoring:4318). Empty: the pods send no traces.
+  otlpEndpoint: ""
+  sampleRatio: "1.0"    # the share of new traces kept; a trace started by the BFF keeps its decision
+
+langfuse:
+  # LLM traces (ADR-0050): on when baseUrl is set and the Secret holds LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY.
+  # Langfuse itself is installed apart (scripts/langfuse-up.sh), never with an ingress.
+  baseUrl: ""           # e.g. http://langfuse-web.observability:3000
+  captureContent: false # prompts and outputs stored: true only in development and staging (ADR-0050)
+
 jobs:
   maxPerUser: 1         # ADR-0088: one job in the line per person across everything; admins are never limited; 0 = no limit
 

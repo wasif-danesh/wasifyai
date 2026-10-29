@@ -58,6 +58,7 @@ from wasifyai_platform_sdk import (
     build_capabilities,
     load_product_config,
     s3_storage,
+    tracing,
 )
 from wasifyai_platform_sdk.installer import Registry
 from wasifyai_platform_sdk.jobpolicy import AdmittedSink, InMemoryLeases, JobPolicy, RedisLeases
@@ -108,6 +109,7 @@ from wasifyai_api.model_access import ModelAccess, load_defaults
 from wasifyai_api.model_checks import RegistryCheckRunner
 from wasifyai_api.rag import DIMENSIONS, RagService
 from wasifyai_api.routes import HEARTBEAT_S
+from wasifyai_api.run_tracing import Langfuse
 from wasifyai_api.runs import RunManager
 from wasifyai_api.safeguards import KEY, InMemorySettingsStore, PostgresSettingsStore, Safeguards
 from wasifyai_api.services import ApiServices
@@ -227,6 +229,10 @@ async def run_engine(
             s.runs = RunManager(r.log, r.run_store, _build_graphs(s, settings, r, saver, enabled))
             s.runs.job_policy = s.job_policy  # a stopped run frees its job's place
             s.runs.media_cancel = getattr(r.sink, "cancel", None)  # and stops its job
+            s.runs.langfuse = Langfuse(
+                settings.langfuse_public_key, settings.langfuse_secret_key,
+                settings.langfuse_base_url, settings.langfuse_capture_content,
+            )  # fmt: skip
             if r.conn is not None:  # resume graphs when workers report results
                 consumer = JobCompletionConsumer(r.conn, s.runs, r.run_store)
                 await consumer.start()
@@ -260,6 +266,9 @@ async def run_engine(
                     if desktop and s.launcher is not None:
                         remove_runtime_file(s.launcher.path)
     finally:
+        if s.runs is not None:
+            s.runs.langfuse.flush()
+        tracing.flush()  # send the spans still waiting
         await _close(s, r, given, desktop, consumer)
 
 

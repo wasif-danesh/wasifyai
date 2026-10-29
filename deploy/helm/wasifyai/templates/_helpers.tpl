@@ -70,6 +70,8 @@ imagePullSecrets:
 {{/* Env shared by the API and the migration job. */}}
 {{- define "wasifyai.apiEnv" -}}
 {{ include "wasifyai.dbEnv" . }}
+{{ include "wasifyai.tracingEnv" (dict "root" . "service" "wasifyai-api") }}
+{{ include "wasifyai.langfuseEnv" . }}
 - name: REDIS_URL
   value: "redis://{{ .Release.Name }}-redis:6379/0"
 - name: LITELLM_BASE_URL
@@ -140,5 +142,29 @@ imagePullSecrets:
   valueFrom:
     secretKeyRef: { name: {{ $.Values.secrets.existingSecret }}, key: {{ $key }}, optional: true }
 {{- end }}
+{{- end }}
+{{- end -}}
+
+{{/* Traces (stage O1): OTLP to Tempo when tracing.otlpEndpoint is set. Call with (dict "root" . "service" "<name>"). */}}
+{{- define "wasifyai.tracingEnv" -}}
+{{- with .root.Values.tracing.otlpEndpoint }}
+- { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: {{ . | quote }} }
+- { name: OTEL_SERVICE_NAME, value: {{ $.service | quote }} }
+- { name: OTEL_TRACES_SAMPLER, value: parentbased_traceidratio }
+- { name: OTEL_TRACES_SAMPLER_ARG, value: {{ $.root.Values.tracing.sampleRatio | quote }} }
+{{- end }}
+{{- end -}}
+
+{{/* LLM traces in Langfuse (ADR-0050): the keys come from the Secret and are optional. */}}
+{{- define "wasifyai.langfuseEnv" -}}
+{{- with .Values.langfuse.baseUrl }}
+- { name: LANGFUSE_BASE_URL, value: {{ . | quote }} }
+- { name: LANGFUSE_CAPTURE_CONTENT, value: {{ $.Values.langfuse.captureContent | quote }} }
+- name: LANGFUSE_PUBLIC_KEY
+  valueFrom:
+    secretKeyRef: { name: {{ $.Values.secrets.existingSecret }}, key: LANGFUSE_PUBLIC_KEY, optional: true }
+- name: LANGFUSE_SECRET_KEY
+  valueFrom:
+    secretKeyRef: { name: {{ $.Values.secrets.existingSecret }}, key: LANGFUSE_SECRET_KEY, optional: true }
 {{- end }}
 {{- end -}}

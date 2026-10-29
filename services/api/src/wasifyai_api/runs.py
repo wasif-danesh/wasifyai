@@ -33,10 +33,13 @@ from wasifyai_platform_sdk import (
     RunRecord,
     RunStore,
     set_context,
+    tracing,
 )
 from wasifyai_platform_sdk.context import current_context
 
 from wasifyai_api.metrics import record_run
+from wasifyai_api.run_tracing import OFF as LANGFUSE_OFF
+from wasifyai_api.run_tracing import Langfuse, NodeSpans
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +66,7 @@ class RunManager:
         self.job_policy: Any = None
         # stage J3: stop a media job a stopped run was waiting for (the sink's `cancel`)
         self.media_cancel: Any = None
+        self.langfuse: Langfuse = LANGFUSE_OFF  # LLM traces, when the deployment has its keys
 
     def _spawn(self, coro: Coroutine[Any, Any, None], run_id: str | None = None) -> None:
         task = asyncio.create_task(coro)
@@ -224,22 +228,36 @@ class RunManager:
         self._spawn(self._execute(rec, Command(resume=value)), rec.run_id)
 
     def resume_with_job(self, rec: RunRecord, result: dict[str, Any]) -> None:
-        """Continue a run that was waiting for a media job; `result` is a JobResult dump."""
-        self._spawn(self._execute(rec, Command(resume=result)), rec.run_id)
+        """Continue a run that was waiting for a media job; `result` is a JobResult dump. The
+        stretch joins the trace the job's span is in (it carries its `trace`)."""
+        with tracing.continued(result.get("trace") or {}):
+            self._spawn(self._execute(rec, Command(resume=result)), rec.run_id)
 
     async def _emit(self, rec: RunRecord, cls: type, **kw: Any) -> None:
         event = cls(run_id=UUID(rec.run_id), thread_id=UUID(rec.thread_id), seq=0, **kw)
         await self.log.append(rec.tenant_id, rec.run_id, event.model_dump(mode="json"))
 
     async def _execute(self, rec: RunRecord, graph_input: Any) -> None:
+        """One stretch of a run (to its end, or to a pause for a job or an answer) as one span,
+        with a span per node under it (stage O1)."""
+        with tracing.span("run", {"product": rec.product_id, "run_id": rec.run_id}) as current:
+            outcome = await self._execute_traced(rec, graph_input, current)
+            tracing.set_attrs(current, outcome=outcome)
+            if outcome == "error":
+                tracing.fail(current, "run_failed")
+
+    async def _execute_traced(self, rec: RunRecord, graph_input: Any, current: Any) -> str:
         graph = self.graphs[rec.product_id]
+        llm, meta = self.langfuse.callbacks(rec.tenant_id, rec.user_id, rec.product_id)
         config = {
             "configurable": {
                 "thread_id": rec.thread_id,
                 "tenant_id": rec.tenant_id,
                 "product_id": rec.product_id,
                 "user_id": rec.user_id,
-            }
+            },
+            "callbacks": [NodeSpans(current), *llm],
+            "metadata": {**meta, "run_id": rec.run_id},
         }
         # Capabilities read tenant/product/user/run from this context (usage events, job
         # payloads, storage keys). It is task-local, so concurrent runs cannot mix.
@@ -275,7 +293,7 @@ class RunManager:
                         await self.store.set_state(
                             rec.tenant_id, rec.run_id, "waiting_job", waiting_job=value["job_id"]
                         )
-                        return
+                        return "waiting_job"
                     await self.store.set_state(
                         rec.tenant_id, rec.run_id, "waiting_input", awaiting=intr.id
                     )
@@ -286,7 +304,7 @@ class RunManager:
                         kind=value.get("kind", "interrupt"),
                         payload=value,
                     )
-                    return
+                    return "waiting_input"
                 else:
                     for node in chunk:
                         await self._emit(rec, NodeEvent, node=node, status="completed", label=node)
@@ -302,6 +320,7 @@ class RunManager:
             else:
                 record_run(rec.product_id, "done")
             await self._emit(rec, DoneEvent, outputs=dict(state.values))
+            return "refused" if refusal else "done"
         except JobFailed as e:
             err = e.result.error
             record_run(rec.product_id, "error", code=err.code if err else "job_failed")
@@ -314,10 +333,12 @@ class RunManager:
                 retryable=err.retryable if err else False,
                 job_id=e.result.job_id,
             )
+            return "error"
         except RunError as e:
             record_run(rec.product_id, "error", code=e.code)
             await self.store.set_state(rec.tenant_id, rec.run_id, "error")
             await self._emit(rec, ErrorEvent, code=e.code, message=e.message, retryable=e.retryable)
+            return "error"
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -327,6 +348,7 @@ class RunManager:
             await self._emit(
                 rec, ErrorEvent, code="run_failed", message="The run failed.", retryable=True
             )
+            return "error"
 
     async def _emit_custom(self, rec: RunRecord, chunk: dict[str, Any]) -> None:
         if chunk.get("type") == "token":

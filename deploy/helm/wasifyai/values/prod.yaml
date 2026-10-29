@@ -10,3 +10,8 @@ api:
   replicas: 2
 web:
   replicas: 2
+
+# Traces to Tempo, one in ten new traces kept; Langfuse stays off until the privacy review (ADR-0050).
+tracing:
+  otlpEndpoint: http://tempo.monitoring:4318
+  sampleRatio: "0.1"

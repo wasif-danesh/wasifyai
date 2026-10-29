@@ -98,7 +98,8 @@ async def test_redelivered_job_is_not_run_again(comfy_rig):
     n_events, n_submitted = len(await rig.events()), len(fake.submitted)
     again = await rig.p.process(job(job_id="same"))
 
-    assert again == first
+    # the same result; only its `trace` differs (each delivery is a span of its own)
+    assert again.model_copy(update={"trace": {}}) == first.model_copy(update={"trace": {}})
     assert len(fake.submitted) == n_submitted and len(await rig.events()) == n_events
 
 

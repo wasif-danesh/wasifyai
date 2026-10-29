@@ -2,6 +2,7 @@ import contextvars
 import logging
 
 from pythonjsonlogger.json import JsonFormatter
+from wasifyai_platform_sdk.tracing import trace_id
 
 request_id: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
 tenant_id: contextvars.ContextVar[str] = contextvars.ContextVar("tenant_id", default="-")
@@ -11,6 +12,7 @@ product_id: contextvars.ContextVar[str] = contextvars.ContextVar("product_id", d
 class ContextFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         record.request_id = request_id.get()
+        record.trace_id = trace_id()  # the span's trace, to find it in Tempo
         record.tenant_id = tenant_id.get()
         record.product_id = product_id.get()
         return True
@@ -21,7 +23,7 @@ def configure_logging(level: str = "INFO") -> None:
     handler.setFormatter(
         JsonFormatter(
             "%(asctime)s %(levelname)s %(name)s %(message)s "
-            "%(request_id)s %(tenant_id)s %(product_id)s"
+            "%(request_id)s %(trace_id)s %(tenant_id)s %(product_id)s"
         )
     )
     handler.addFilter(ContextFilter())

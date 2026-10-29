@@ -1,4 +1,5 @@
 import { apiAuthHeaders } from "./api-token";
+import { traceHeaders } from "./trace";
 
 // The BFF: route handlers forward to FastAPI and pass the response through unchanged, so event
 // streams stay streams. The browser never calls FastAPI directly.
@@ -34,7 +35,7 @@ export async function proxy(
   if (!identity) return Response.json({ detail: "sign in required" }, { status: 401 });
   const init: RequestInit & { duplex?: "half" } = {
     method: opts.method ?? req.method,
-    headers: { ...opts.headers, ...identity },
+    headers: { ...opts.headers, ...identity, ...traceHeaders(req) },
     body: opts.body,
     signal: req.signal,
     cache: "no-store",

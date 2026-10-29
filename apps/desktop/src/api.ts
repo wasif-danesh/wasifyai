@@ -8,6 +8,7 @@ import {
   createCreationsApi,
   createExternalApi,
   createNotebooksApi,
+  createOwnKeysApi,
   createRunClient,
   createVoiceApi,
 } from "@wasifyai/client";
@@ -22,6 +23,7 @@ import { createEngineTransport } from "./transport";
 export const transport = createEngineTransport(engineSession);
 export const client = createRunClient(transport);
 export const connectionsApi = createConnectionsApi(transport);
+export const ownKeysApi = createOwnKeysApi(transport);
 export const componentsApi = createComponentsApi(transport);
 export const externalApi = createExternalApi(transport);
 export const modelsApi = createModelsApi(transport);

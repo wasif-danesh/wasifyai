@@ -112,6 +112,17 @@ export {
   createConnectionsApi,
 } from "./connections";
 export {
+  type KeyChoice,
+  type KeyKind,
+  type KeyMode,
+  type KeyProduct,
+  type KeyProvider,
+  type KeyTest,
+  type OwnKeys,
+  type OwnKeysApi,
+  createOwnKeysApi,
+} from "./own-keys";
+export {
   type AttachedResource,
   type ExternalActivity,
   type ExternalApi,

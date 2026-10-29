@@ -106,6 +106,7 @@ from wasifyai_api.mcp_server.fixed_port import FixedPort
 from wasifyai_api.mcp_server.runtime_file import Launcher, remove_runtime_file
 from wasifyai_api.media_access import MediaAccess, media_capabilities_from
 from wasifyai_api.model_access import ModelAccess, load_defaults
+from wasifyai_api.own_keys_text import KeyedTextProvider
 from wasifyai_api.rag import DIMENSIONS, RagService
 from wasifyai_api.routes import HEARTBEAT_S
 from wasifyai_api.run_tracing import Langfuse
@@ -344,11 +345,7 @@ async def _shared(
         job_sink=sink,
         litellm_base_url=settings.litellm_base_url,
         litellm_api_key=settings.litellm_api_key,
-        text_provider=(
-            LocalTextProvider(desktop.language, recorder)
-            if desktop is not None and desktop.language is not None
-            else None
-        ),
+        text_provider=_desktop_text(desktop, recorder),
         storage=store,
         db=db,
         embedding_dims=DIMENSIONS,
@@ -819,6 +816,17 @@ async def _resume_web_jobs(s: ApiServices) -> None:
         await renders_for(s.route_deps).resume_all()
 
 
+def _desktop_text(desktop: Desktop | None, recorder: Any) -> Any:
+    """The text provider of the desktop: the model chosen on this computer, or the person's own
+    provider while Chat and writing runs with their key (ADR-0095, K2)."""
+    if desktop is None or desktop.language is None:
+        return None
+    local = LocalTextProvider(desktop.language, recorder)
+    if desktop.own_keys is None:
+        return local
+    return KeyedTextProvider(local, desktop.own_keys, recorder)
+
+
 def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     """What only the desktop has: the runtimes and components of this computer (ADR-0056)."""
     s.local_files = desktop.local_files
@@ -842,6 +850,7 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     s.desktop_language = desktop.language
     s.desktop_vision = desktop.vision
     s.desktop_hub = desktop.hub
+    s.own_keys = desktop.own_keys  # the person's own provider keys (ADR-0095)
     if desktop.web is not None:  # web search: off until the person allows it (ADR-0083)
         desktop.web.usage = s.usage
         s.web = desktop.web

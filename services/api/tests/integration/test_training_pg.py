@@ -36,9 +36,11 @@ def steps(store) -> dict:
     store.set_caption(pic["id"], "enavqx, a woman", "done")
     store.mark_writing(clip["id"])
     items = store.list_items("t1", "u1", d["id"])
-    out["items"] = [
-        (i["media"], i["seconds"], i["frames"], i["caption_state"], i["checks"]) for i in items
-    ]
+    # two items added in the same millisecond come back in the order of their random ids
+    out["items"] = sorted(
+        ((i["media"], i["seconds"], i["frames"], i["caption_state"], i["checks"]) for i in items),
+        key=lambda row: row[0],
+    )
     run = store.add_run("t1", "u1", d["id"], base="ltx-video-2b", steps=600,
                         settings={"family": "video"}, preview=False)  # fmt: skip
     store.set_progress(run["id"], 10, "Learning")

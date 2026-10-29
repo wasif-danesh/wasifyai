@@ -50,6 +50,7 @@ from wasifyai_api.mcp_server.routes import router as connections_router
 from wasifyai_api.metrics import MetricsMiddleware
 from wasifyai_api.metrics import serve as serve_metrics
 from wasifyai_api.models_in_use import router as models_in_use_router
+from wasifyai_api.own_keys import router as own_keys_router
 from wasifyai_api.routes import router
 from wasifyai_api.run_tracing import TracingMiddleware
 from wasifyai_api.training_setup import router as training_setup_router
@@ -162,6 +163,7 @@ def create_app(given: Injected | None = None) -> FastAPI:
         app.include_router(desktop_discovery_router)
         app.include_router(desktop_llm_router)
         app.include_router(desktop_hub_router)
+        app.include_router(own_keys_router)
         app.include_router(components_router)
         app.include_router(diagnostics_router)
 

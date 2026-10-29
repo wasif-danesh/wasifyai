@@ -1,7 +1,8 @@
 # ADR-0095: The person's own provider keys, one per product
 
 - **Status:** Proposed (2026-10-29). The owner set the requirement: "Person's own key must be supported in v1. Even
-  better, separate keys for each product." The mockup was approved by the owner on 2026-10-29; spike K0 is next.
+  better, separate keys for each product." The mockup was approved by the owner on 2026-10-29. The real-key run of spike K0 is done at release time
+  (owner, 2026-10-29); the stages are built against fakes until then.
 - **Date:** 2026-10-29
 - **Depends on:** ADR-0092 (the secret store: keychain on the desktop, the `secrets` table on the web), ADR-0005 and
   ADR-0025 (capabilities bound to providers; LiteLLM's OpenAI-compatible API), ADR-0086 (the model button and its
@@ -51,9 +52,9 @@ main way products run: the service does not pay for a person's models.
 
 | Stage | What | Done when |
 |---|---|---|
-| K0 | Spike: one OpenRouter chat, one fal.ai FLUX picture and one fal.ai LTX clip from the engine with a real key | times and the request shapes are written down |
-| K1 | The secret names, the settings beside them, Settings > Your keys with Test and Remove (desktop) | a key is saved to the keychain, tested and removed in the window |
-| K2 | Chat and every text product on the person's key | a chat, a lyric and a notebook answer come from the provider |
+| K0 | Spike: one OpenRouter chat, one fal.ai FLUX picture and one fal.ai LTX clip from the engine with a real key (`scripts/spike_own_keys_k0.py`, checked against a fake queue 2026-10-29) | **run with real keys at release time** (owner, 2026-10-29); times and the request shapes are written down then |
+| K1 | The secret names, the settings beside them, Settings > Your keys with Test and Remove (desktop). **Built 2026-10-29** against fakes: `own_keys.py` (`/desktop/keys`), `createOwnKeysApi`, `YourKeys` in Settings > Your keys; a text key is tested with a one-token chat, a fal.ai key by asking about a request that does not exist (nothing is charged); not yet seen in the real window | a key is saved to the keychain, tested and removed in the window |
+| K2 | Chat and every text product on the person's key. **Built 2026-10-29** against fakes: `KeyedTextProvider` (`own_keys_text.py`) is the desktop's text provider; while Chat and writing is "With my key" every `stream` and `chat` (chat, lyrics, Enhance, notebooks, the assistant, picture descriptions, training captions and judges) goes to that provider through the OpenAI-compatible client, tokens counted with the provider named; embeddings stay on this computer; a refusal is said in the provider's name. The model button shows "<model> · with your key · <provider>" as the chosen row, and choosing a model on this computer takes chat off the key (the key stays saved). Not seen in the real window | a chat, a lyric and a notebook answer come from the provider |
 | K3 | Images and video on fal.ai | a picture and a clip made with the key are saved to the library |
 | K4 | Voice and 3D on fal.ai | a speech, a lip sync and a 3D model made with the key |
 | K5 | The web: keys per person, With my key as the default | a person on the web makes each kind of thing with their own keys |

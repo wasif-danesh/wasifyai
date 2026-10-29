@@ -1,11 +1,11 @@
-import type { VoiceApi, VoiceModelInfo } from "@wasifyai/client";
+import type { OwnKeysApi, VoiceApi, VoiceModelInfo } from "@wasifyai/client";
 import { describe, expect, it, vi } from "vitest";
 import type { DiscoveryApi, FoundModel } from "../discovery";
 import type { HubApi } from "../hub";
 import type { LanguageApi, LanguageState } from "../language";
 import type { ModelEntry, ModelsApi } from "../models";
 import { CATALOGUE_GROUPS, catalogueChoices } from "./catalogue-choices";
-import { chatChoices, fitOf, pickVariant } from "./chat-choices";
+import { KEYED, chatChoices, fitOf, pickVariant } from "./chat-choices";
 import { recommendedChat } from "./copy";
 import type { Step } from "./steps";
 import type { Engines, Memory } from "./types";
@@ -341,6 +341,72 @@ describe("chat", () => {
   it("chooses a ready file with the context already in use", async () => {
     const { deps: d, choose } = deps(language([found()]));
     await chatChoices(d).choose("f1");
+    expect(choose).toHaveBeenCalledWith({ item_id: "f1", context: 8192 });
+  });
+
+  const keysWith = (mode: "here" | "key") => {
+    const save = vi.fn(async () => ({}));
+    const keys = {
+      list: async () => ({
+        can_save: true,
+        providers: [
+          {
+            id: "openrouter",
+            title: "OpenRouter",
+            kind: "text",
+            host: "openrouter.ai",
+            needs_base: false,
+            models: [],
+          },
+        ],
+        products: [
+          {
+            id: "chat",
+            title: "Chat and writing",
+            kind: "text",
+            mode,
+            provider: mode === "key" ? "openrouter" : null,
+            model: mode === "key" ? "openai/gpt-4o-mini" : null,
+            base_url: null,
+            key_saved: mode === "key",
+            state: mode === "key" ? "ok" : "here",
+            said: null,
+            tested_at: null,
+            models: [],
+          },
+        ],
+      }),
+      save,
+    } as unknown as OwnKeysApi;
+    return { keys, save };
+  };
+
+  it("with chat on the person's key, that is the row in use and no local model is", async () => {
+    const state = language([found()]);
+    state.files = state.files.map((f) => ({ ...f, chosen: true }));
+    const { deps: d } = deps(state);
+    const rows = (await chatChoices({ ...d, keys: keysWith("key").keys }).list()).choices;
+    expect(rows[0]).toMatchObject({
+      id: KEYED,
+      chosen: true,
+      state: "ready",
+      title: "openai/gpt-4o-mini · with your key · OpenRouter",
+      from: "openrouter.ai",
+    });
+    expect(rows.filter((r) => r.chosen).map((r) => r.id)).toEqual([KEYED]);
+    const here = (await chatChoices({ ...d, keys: keysWith("here").keys }).list()).choices;
+    expect(here.some((r) => r.id === KEYED)).toBe(false);
+  });
+
+  it("choosing a model on this computer takes chat off the key, and the key row is a no-op", async () => {
+    const { deps: d, choose } = deps(language([found()]));
+    const { keys, save } = keysWith("key");
+    const api = chatChoices({ ...d, keys });
+    await api.choose(KEYED);
+    expect(save).not.toHaveBeenCalled();
+    expect(choose).not.toHaveBeenCalled();
+    await api.choose("f1");
+    expect(save).toHaveBeenCalledWith("chat", "here");
     expect(choose).toHaveBeenCalledWith({ item_id: "f1", context: 8192 });
   });
 

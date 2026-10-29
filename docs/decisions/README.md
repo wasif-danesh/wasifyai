@@ -94,6 +94,6 @@
 | [0092](0092-principals-scopes-and-the-secret-store.md) | Principals, scopes and the secret store: who is calling, what they may do, where keys live (stages F3 and F4 of the 2026-10-27 plan; API keys were dropped on 2026-10-28) | Proposed (F3 and F4 built 2026-10-27) |
 | [0093](0093-one-shell-one-make-screen.md) | One shell and one make screen for every product: the UI audit of 2026-10-27 and its plan (`docs/ui-improvement-plan.md`, stages U0 to U12) | Proposed (nothing built) |
 | [0094](0094-no-safeguards-marks-or-licence-data-in-v1.md) | No safeguards, marks, consent gates, terms or licence data in v1 | Accepted (2026-10-29) |
-| [0095](0095-own-provider-keys-per-product.md) | The person's own provider keys, one per product (mockup `docs/spikes/own-keys-mockup.html`) | Proposed (mockup approved 2026-10-29; K0 spike next) |
+| [0095](0095-own-provider-keys-per-product.md) | The person's own provider keys, one per product (mockup `docs/spikes/own-keys-mockup.html`) | Proposed (mockup approved 2026-10-29; real-key tests at release) |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

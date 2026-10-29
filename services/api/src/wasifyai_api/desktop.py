@@ -67,6 +67,7 @@ from wasifyai_api.language_setup import LOCK_NAME as LANGUAGE_LOCK_NAME
 from wasifyai_api.language_setup import LanguageSetup
 from wasifyai_api.lipsync_runtime import LipSyncSidecar
 from wasifyai_api.llama_server import LlamaServer
+from wasifyai_api.own_keys import OwnKeysService
 from wasifyai_api.runs import RunManager
 from wasifyai_api.services import services_of
 from wasifyai_api.settings_store import SettingsStore
@@ -108,6 +109,7 @@ class DesktopBackends:
     hub: HubService | None = None
     web: WebService | None = None  # web search: the person's choices and keys (ADR-0083)
     secrets: SecretStore | None = None  # keys and tokens: the keychain or the file (ADR-0092)
+    own_keys: OwnKeysService | None = None  # the person's own provider keys (ADR-0095)
     audio: AudioEngine | None = None
     video_builder: VideoBuilderService | None = (
         None  # the render engine, installed on request (ADR-0077)
@@ -224,6 +226,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     hub = HubService(SqliteSettingsStore(engine), secrets=secrets)
     hub.models, hub.language = models, language
     web = WebService(SqliteSettingsStore(engine), secrets, legacy_box=box)
+    own_keys = OwnKeysService(SqliteSettingsStore(engine), secrets)
     cache = root / "engine" / "cache"
     setup = TrainingSetup(
         root,
@@ -261,6 +264,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     return DesktopBackends(
         web=web,
         secrets=secrets,
+        own_keys=own_keys,
         models=models,
         discovery=discovery,
         llama=llama,

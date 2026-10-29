@@ -9,12 +9,20 @@ import {
   SearchSettings,
   Segmented,
   Textarea,
+  YourKeys,
   useTheme,
 } from "@wasifyai/ui";
 import { Search } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { ComponentsPanel } from "../ComponentsPanel";
-import { assistantApi, connectionsApi, discoveryApi, externalApi, hubApi } from "../api";
+import {
+  assistantApi,
+  connectionsApi,
+  discoveryApi,
+  externalApi,
+  hubApi,
+  ownKeysApi,
+} from "../api";
 import { saveDiagnostics } from "../diagnostics";
 import { engineRepair, engineRestart } from "../engine";
 import { ImageEngineCard, LanguageEngineCard, UpdateBanner } from "../parts";
@@ -304,7 +312,7 @@ function WhatLeaves() {
     <ul className="m-0 grid list-disc gap-1.5 ps-5 text-muted-foreground text-sm">
       <li>
         What you make, your files and your chats stay on this computer. Models run here, not on a
-        service.
+        service, unless you give a product your own key.
       </li>
       <li>
         Searching the web (below, when you allow it) sends your question to the search service you
@@ -316,6 +324,10 @@ function WhatLeaves() {
       </li>
       <li>Getting a model downloads it from the place its row names; nothing is uploaded.</li>
       <li>Other apps (connections and tools) are reached only once you add them.</li>
+      <li>
+        A product you set to run with your own key (Your keys) sends what you make with it to that
+        provider.
+      </li>
     </ul>
   );
 }
@@ -391,6 +403,19 @@ const GROUPS: Group[] = [
         title: "Hugging Face token",
         words: "gated keychain account",
         body: <HubToken />,
+      },
+    ],
+  },
+  {
+    id: "keys",
+    title: "Your keys",
+    items: [
+      {
+        id: "own-keys",
+        title: "Your keys",
+        words: "api key provider openrouter openai anthropic gemini groq fal hosted cloud own key",
+        body: <YourKeys api={ownKeysApi} />,
+        own: true,
       },
     ],
   },

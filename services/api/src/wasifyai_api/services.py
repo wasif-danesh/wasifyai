@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from wasifyai_api.mcp_server.runtime_file import Launcher
     from wasifyai_api.media_access import MediaAccess
     from wasifyai_api.model_access import ModelAccess
+    from wasifyai_api.own_keys import OwnKeysService
 
 
 @dataclass(eq=False)
@@ -42,6 +43,7 @@ class ApiServices(EngineServices):
     admin_fetches: dict[str, str] = field(default_factory=dict)  # model fetches on workers
     route_deps: RouteDeps | None = None  # what products' routes get, for resuming their jobs
     components: "Registry | None" = None  # the optional components and their installer (F2)
+    own_keys: "OwnKeysService | None" = None  # the person's own provider keys (ADR-0095, desktop)
 
 
 def services_of(request: Request) -> ApiServices:

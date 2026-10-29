@@ -96,6 +96,7 @@ export {
 export { Reasoning } from "./chat/Reasoning";
 export { SearchSettings, type SearchSettingsProps } from "./chat/SearchSettings";
 export { ConnectionsSettings } from "./connections/ConnectionsSettings";
+export { YourKeys } from "./keys/YourKeys";
 export { ExternalServers } from "./connections/ExternalServers";
 export { ElicitationCards, FormCard, fieldsOf, useForms } from "./connections/ElicitationCards";
 export { ServersPanel, type ExternalControl } from "./chat/servers-panel";

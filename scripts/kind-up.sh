@@ -78,7 +78,6 @@ if [ "$MODE" = "light" ]; then
 fi
 
 extra=()
-[ "${KIND_SAFEGUARDS:-0}" = "1" ] && extra+=(--set safeguards.forceOn=true)
 
 step "Installing the chart"
 if [ "$MODE" = "full" ]; then

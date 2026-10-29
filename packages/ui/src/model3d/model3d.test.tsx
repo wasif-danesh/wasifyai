@@ -27,21 +27,18 @@ function component(over: Partial<Model3dComponent> = {}): Model3dComponent {
           name: "3D engine (pixal3d.cpp)",
           version: "v0.10.1",
           bytes: 2_440_967,
-          licence: "MIT",
           source: "github.com",
         },
         {
           name: "Pixal3D models",
           version: "single view, Q8_0",
           bytes: 8_091_975_360,
-          licence: "MIT, and the DINOv3 licence",
           source: "huggingface.co",
         },
         {
           name: "Cut-out model (BiRefNet)",
           version: "Q8_0",
           bytes: 882_749_024,
-          licence: "MIT",
           source: "huggingface.co",
         },
       ],
@@ -51,7 +48,6 @@ function component(over: Partial<Model3dComponent> = {}): Model3dComponent {
     fit: { verdict: "fits", reason: "It fits." },
     about: {
       built_with: "Built with DINOv3",
-      licence: "Models: MIT, and the DINOv3 licence for the image encoder.",
       where: "Everything runs on this computer.",
     },
     ...over,
@@ -166,7 +162,7 @@ afterEach(() => {
 });
 
 describe("setting up 3D", () => {
-  it("shows every part with its size and licence, and sets up with the size that was shown", async () => {
+  it("shows every part with its size, and sets up with the size that was shown", async () => {
     const a = api({
       component: vi.fn().mockResolvedValue(component()),
       install: vi.fn().mockResolvedValue(
@@ -187,9 +183,8 @@ describe("setting up 3D", () => {
     for (const name of ["3D engine (pixal3d.cpp)", "Pixal3D models", "Cut-out model (BiRefNet)"]) {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
-    expect(
-      screen.getByText(/MIT, and the DINOv3 licence · from huggingface\.co/),
-    ).toBeInTheDocument();
+    expect(screen.getAllByText(/· from huggingface\.co/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/MIT|licence/)).toBeNull();
     expect(screen.getByText(/Built with DINOv3\. The models need about 19 GB/)).toBeInTheDocument();
     expect(a.install).not.toHaveBeenCalled(); // nothing is fetched before the click
     await user.click(screen.getByRole("button", { name: "Download and set up (9.0 GB)" }));
@@ -333,30 +328,27 @@ describe("checking and making", () => {
     return user;
   }
 
-  it("will not make a model until the person says they may use the picture", async () => {
+  it("makes a model without asking whether the picture may be used", async () => {
     const a = api();
-    const user = await toCheck(a);
+    await toCheck(a);
     const make = screen.getByRole("button", { name: "Make the 3D model" });
-    expect(make).toBeDisabled();
-    await user.click(screen.getByLabelText(/I may use this picture/));
     expect(make).toBeEnabled();
+    expect(screen.queryByLabelText(/I may use this picture/)).toBeNull();
     expect(screen.getByText(/about 5 to 25 minutes/)).toBeInTheDocument();
   });
 
-  it("makes the model with the name, the detail and the statement of rights", async () => {
+  it("makes the model with the name and the detail", async () => {
     const a = api();
     const user = await toCheck(a);
     await user.type(screen.getByLabelText(/Name/), "Frog mug");
     await user.click(screen.getByRole("button", { name: "Detailed" }));
     expect(screen.getByText(/The sharpest texture \(4096\)/)).toBeInTheDocument();
-    await user.click(screen.getByLabelText(/I may use this picture/));
     await user.click(screen.getByRole("button", { name: "Make the 3D model" }));
     expect(a.make).toHaveBeenCalledWith({
       input_id: "p".repeat(32),
       title: "Frog mug",
       prompt: "",
       detail: "detailed",
-      rights: true,
     });
     expect(await screen.findByText("Making your 3D model")).toBeInTheDocument();
     expect(screen.getByText("Building the shape")).toBeInTheDocument();
@@ -379,7 +371,6 @@ describe("checking and making", () => {
     });
     const user = await toCheck(warn);
     expect(screen.getByText(/touches the edge of the picture/)).toBeInTheDocument();
-    await user.click(screen.getByLabelText(/I may use this picture/));
     expect(screen.getByRole("button", { name: "Make the 3D model" })).toBeEnabled();
   });
 
@@ -421,7 +412,6 @@ describe("checking and making", () => {
     });
     const user = await toCheck(big);
     expect(screen.getByText("Not enough memory for a 3D model")).toBeInTheDocument();
-    await user.click(screen.getByLabelText(/I may use this picture/));
     expect(screen.getByRole("button", { name: "Make the 3D model" })).toBeDisabled();
   });
 
@@ -432,7 +422,6 @@ describe("checking and making", () => {
         .mockRejectedValue(new Error("A 3D model is already being made. Wait for it to finish.")),
     });
     const user = await toCheck(a);
-    await user.click(screen.getByLabelText(/I may use this picture/));
     await user.click(screen.getByRole("button", { name: "Make the 3D model" }));
     const alert = await screen.findByRole("alert");
     expect(
@@ -446,7 +435,6 @@ describe("checking and making", () => {
     const a = api();
     render(<Model3d api={a} canSave onOpenLibrary={onOpenLibrary} />);
     await user.upload(await screen.findByLabelText("Choose a picture"), file());
-    await user.click(await screen.findByLabelText(/I may use this picture/));
     await user.click(screen.getByRole("button", { name: "Make the 3D model" }));
     expect(
       await screen.findByText("Your 3D model is ready", undefined, { timeout: 4000 }),
@@ -485,7 +473,6 @@ describe("checking and making", () => {
     const a = api({ get: vi.fn().mockResolvedValue(model()) });
     render(<Model3d api={a} />);
     await user.upload(await screen.findByLabelText("Choose a picture"), file());
-    await user.click(await screen.findByLabelText(/I may use this picture/));
     await user.click(screen.getByRole("button", { name: "Make the 3D model" }));
     await user.click(await screen.findByRole("button", { name: "Stop" }));
     expect(a.cancel).toHaveBeenCalledWith("m".repeat(32));
@@ -504,7 +491,6 @@ describe("checking and making", () => {
     });
     render(<Model3d api={a} />);
     await user.upload(await screen.findByLabelText("Choose a picture"), file());
-    await user.click(await screen.findByLabelText(/I may use this picture/));
     await user.click(screen.getByRole("button", { name: "Make the 3D model" }));
     expect(await screen.findByText("The 3D model could not be made")).toBeInTheDocument();
     expect(screen.getByText("The 3D engine stopped with an error.")).toBeInTheDocument();
@@ -585,9 +571,9 @@ describe("coming back and the models already made", () => {
     expect(await screen.findByText("Memory is tight")).toBeInTheDocument();
   });
 
-  it("always names the encoder's licence", async () => {
+  it("always names the encoder it is built with", async () => {
     render(<Model3d api={api()} />);
-    expect(await screen.findByText(/Built with DINOv3\. Models: MIT/)).toBeInTheDocument();
+    expect(await screen.findByText(/Built with DINOv3\./)).toBeInTheDocument();
   });
 });
 

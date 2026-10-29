@@ -144,12 +144,12 @@ class VideoSetup(TrainingSetup):
                 {
                     "name": "Trainer (PyTorch and diffusers)", "version": p.tool_version,
                     "bytes": 0 if tool else p.packages_bytes, "have": tool is not None,
-                    "licence": p.tool_licence, "source": "pypi.org",
+                    "source": "pypi.org",
                 },
                 {
                     "name": p.base_title, "version": "a few small files",
                     "bytes": 0 if base else p.base_bytes, "have": base is not None,
-                    "licence": p.base_licence, "source": "huggingface.co",
+                    "source": "huggingface.co",
                 },
             ],
             # what teaching also needs and this setup does not fetch: the video model of the Video screens

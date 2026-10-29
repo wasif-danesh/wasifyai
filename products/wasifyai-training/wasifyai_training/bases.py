@@ -38,7 +38,6 @@ class Descriptor:
     title: str
     family: str
     engine: str
-    licence: str
     methods_not: dict[str, str] = field(
         default_factory=dict
     )  # method -> why it cannot be used here
@@ -57,7 +56,6 @@ DESCRIPTORS = (
         title=trainer.BASE_TITLE,
         family="image",
         engine="mflux",
-        licence=trainer.BASE_LICENCE,
         methods_not={
             "qlora": "Pictures are taught as a small adapter. The less-memory version is for "
             "writing models.",
@@ -70,7 +68,6 @@ DESCRIPTORS = (
         title="Qwen3 0.6B",
         family="language",
         engine="mlx-lm",
-        licence="Apache-2.0",
         default_method="qlora",
         need_gb=1.5,
         architecture="qwen3",
@@ -89,7 +86,6 @@ DESCRIPTORS = (
         title="Qwen3 1.7B",
         family="language",
         engine="mlx-lm",
-        licence="Apache-2.0",
         default_method="qlora",
         note="A step up: better at keeping to a style, still not for facts.",
         measured="69 steps in 13 s, 2.0 GB, the whole run 21 s, on a 64 GB Mac (2026-10-26)",
@@ -108,7 +104,6 @@ DESCRIPTORS = (
         title="Qwen3 4B",
         family="language",
         engine="mlx-lm",
-        licence="Apache-2.0",
         default_method="qlora",
         note="The best of these at following a style and a format; slower to teach.",
         measured="69 steps in 19 s, 3.8 GB, the whole run 30 s, on a 64 GB Mac (2026-10-26)",
@@ -134,7 +129,6 @@ DESCRIPTORS += (
         title="LTX-Video 2B (0.9.5)",
         family="video",
         engine="diffusers",
-        licence="OpenRAIL-M",
         default_method="lora",
         need_gb=12.0,
         note="The model Video makes clips with. It learns a look, a motion or a subject from pictures and short clips.",
@@ -149,7 +143,6 @@ DESCRIPTORS += (
         title="Laya",
         family="decision",
         engine="laya",
-        licence="Apache-2.0",
         default_method="full",
         need_gb=12.0,
         seconds_per_step=0.85,
@@ -163,7 +156,6 @@ DESCRIPTORS += (
         title="Laya (many languages)",
         family="decision",
         engine="laya",
-        licence="Apache-2.0",
         default_method="full",
         need_gb=10.0,
         seconds_per_step=0.7,
@@ -225,7 +217,7 @@ def choices(
             can, reason = False, str(verdict.get("reason", ""))
         rows.append(
             {
-                "id": d.id, "title": d.title, "licence": d.licence, "engine": d.engine,
+                "id": d.id, "title": d.title, "engine": d.engine,
                 "note": d.note, "measured": d.measured,
                 "recommended": d is descriptors(family)[0], "can_teach": can, "reason": reason,
                 "installed": ready and (have(d) if have else True), "methods": method_rows(d),
@@ -238,7 +230,7 @@ def choices(
             continue
         rows.append(
             {
-                "id": "", "title": name, "licence": str(item.get("licence", "")), "engine": "",
+                "id": "", "title": name, "engine": "",
                 "recommended": False, "can_teach": False, "installed": True,
                 "reason": "This model cannot be taught yet: the app has no way to teach it.",
                 "methods": [],

@@ -234,9 +234,7 @@ async def test_a_video_look_is_taught_through_postgres_storage_and_a_worker(web,
     assert (await c.post(f"{BASE}/datasets/{d['id']}/captions")).status_code == 202
     await until(c, f"/datasets/{d['id']}", lambda x: not x["writing"])
     assert (
-        await c.patch(
-            f"{BASE}/datasets/{d['id']}", json={"trigger_word": "marlo", "rights": "drawing"}
-        )
+        await c.patch(f"{BASE}/datasets/{d['id']}", json={"trigger_word": "marlo"})
     ).status_code == 200
     run = await c.post(f"{BASE}/runs", json={"dataset_id": d["id"]})
     assert run.status_code == 202, run.text
@@ -293,7 +291,7 @@ async def test_stopping_a_run_on_the_web_stops_the_workers_job(web, tmp_path):
         )
     await c.post(f"{BASE}/datasets/{d['id']}/captions")
     await until(c, f"/datasets/{d['id']}", lambda x: not x["writing"])
-    await c.patch(f"{BASE}/datasets/{d['id']}", json={"trigger_word": "inkzy", "rights": "artwork"})
+    await c.patch(f"{BASE}/datasets/{d['id']}", json={"trigger_word": "inkzy"})
     web.fake.hold.clear()  # the stand-in trainer waits after its first step
     run = (await c.post(f"{BASE}/runs", json={"dataset_id": d["id"]})).json()
     await until(c, f"/runs/{run['id']}", lambda x: x["step"] >= 1)
@@ -317,9 +315,7 @@ async def test_a_picture_style_is_taught_through_a_worker_with_its_samples_and_k
     assert (await c.post(f"{BASE}/datasets/{d['id']}/captions")).status_code == 202
     await until(c, f"/datasets/{d['id']}", lambda x: not x["writing"])
     assert (
-        await c.patch(
-            f"{BASE}/datasets/{d['id']}", json={"trigger_word": "marlo", "rights": "drawing"}
-        )
+        await c.patch(f"{BASE}/datasets/{d['id']}", json={"trigger_word": "marlo"})
     ).status_code == 200
     status = (await c.get(f"{BASE}/status")).json()
     assert status["ready"] is True and status["can_pause"] is False
@@ -358,7 +354,7 @@ async def test_a_decision_model_is_taught_on_a_worker_kept_in_storage_and_asked_
     assert (
         await c.patch(
             f"{d}/sets/{s['id']}",
-            json={"kind": "yes_no", "question": "Is this review positive?", "rights": "mine"},
+            json={"kind": "yes_no", "question": "Is this review positive?"},
         )
     ).status_code == 200
     rows = [

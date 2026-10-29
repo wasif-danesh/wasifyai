@@ -35,7 +35,7 @@ Store adapters that depend on the database are chosen by the **engine's dialect*
 |---|---|
 | `packages/platform-sdk/src/wasifyai_platform_sdk/sqlite/` | engine factory, event log, run store, job queue, uploads, usage |
 | `packages/platform-sdk/.../storage.py` (`LocalFileStorage`) | folder storage and signed links |
-| `services/api/src/wasifyai_api/sqlite_stores.py` | users, safeguards setting, search index |
+| `services/api/src/wasifyai_api/sqlite_stores.py` | users, settings, search index |
 | `services/api/src/wasifyai_api/desktop.py` | the backends, `/files`, and the entry point `python -m wasifyai_api.desktop` |
 | `services/api/src/wasifyai_api/local_embedder.py` | the model-free embedder |
 | `services/media-worker/src/wasifyai_media_worker/local.py` | the worker loop over the SQLite queue |
@@ -243,8 +243,8 @@ reads or writes. Each file keeps one version per store in `schema_versions` (the
 - **Other screens** (music, speech, ...) still live in `apps/web`; the image and video screens are shared (`packages/ui`).
 - **Admin routes** are mounted but the admin store is Postgres-only; on desktop they answer 403 (the desktop
   user is not an admin).
-- **Text capabilities** (enhance, moderation) need a gateway; with none configured they fail with a typed error.
-  Safeguards are off by default, so image creation does not call them.
+- **Text capabilities** (enhance, describing a picture) need a gateway; with none configured they fail with a typed
+  error. Nothing is moderated (ADR-0094).
 - **Redis contract tests** (`test_sqlite_adapters.py`) skip without a reachable Redis; CI has one. The Redis job
   queue is not behind the same interface as the SQLite one, so the queue contract runs on SQLite only.
 - **Search** compares vectors in Python: fine for thousands of creations, not for a corpus. `sqlite-vec` is the

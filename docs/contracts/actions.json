@@ -2458,7 +2458,7 @@
       "id": "lipsync.make",
       "title": "Lip sync",
       "summary": "Make a picture talk.",
-      "description": "Make a picture of the library talk: a video of the face saying words (made into speech here) or a recording. The video is always marked AI-generated. It needs the person's word, in the app window, about the picture and the voice.",
+      "description": "Make a picture of the library talk: a video of the face saying words (made into speech here) or a recording.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -2527,34 +2527,6 @@
             "description": "A built-in voice for the words.",
             "title": "Voice"
           },
-          "picture_is": {
-            "description": "What the picture is: 'drawn' (artwork), 'own' (the person) or 'permission' (someone who agreed).",
-            "enum": [
-              "drawn",
-              "own",
-              "permission"
-            ],
-            "title": "Picture Is",
-            "type": "string"
-          },
-          "voice_is": {
-            "anyOf": [
-              {
-                "enum": [
-                  "generated",
-                  "own",
-                  "permission"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "For a recording: whose voice: 'own' or 'permission'. Words are 'generated'.",
-            "title": "Voice Is"
-          },
           "title": {
             "anyOf": [
               {
@@ -2583,8 +2555,7 @@
           }
         },
         "required": [
-          "image_id",
-          "picture_is"
+          "image_id"
         ],
         "title": "LipSyncIn",
         "type": "object"
@@ -2620,13 +2591,11 @@
       "examples": [
         {
           "image_id": "0b7c1f9e-0000-4000-8000-000000000000",
-          "text": "Hello, I am your guide.",
-          "picture_is": "drawn"
+          "text": "Hello, I am your guide."
         }
       ],
       "effect": "make",
       "flags": [
-        "needs_consent",
         "costly",
         "private"
       ],
@@ -2648,7 +2617,7 @@
         "assistant",
         "mcp"
       ],
-      "consent": "I confirm I may use this picture and this voice: the picture is artwork, a picture of me, or of someone who agreed; the voice is made here from words, my own, or one I have permission to use. The video is marked as AI-generated.",
+      "consent": "",
       "help": "docs/help/lipsync.make.md"
     },
     {
@@ -4751,7 +4720,7 @@
       "id": "train.start",
       "title": "Teach a character or style",
       "summary": "Teach the image model a character, style or object from a set of pictures.",
-      "description": "Teach the image model something of the person's own from a set of their pictures: a character, a pet, a person (with their agreement), a style or an object. The set is made on the Train screen: the pictures are added there, the app writes a description of each, the person chooses a magic word and says whose the pictures are. This starts the run on a set that is ready and waits for it. It takes about 25 minutes on a Mac and pauses chat and image making, so it is made one at a time. Then writing the magic word in a prompt draws the result. Or, with set_id, it teaches a small language model to answer the way the person's own examples do, from a set of questions and answers (made under 'Teach it from examples' on the same screen): it takes a minute or two and ends with the same questions answered before and after and a mark that says whether it learnt. Or, when the set was made under 'Make my own look or motion for video' (pictures and short clips), it teaches the video model a look, a motion or a subject: it takes about half an hour to an hour and pauses chat, image and video making, and the result is chosen under My looks on a Video screen.",
+      "description": "Teach the image model something of the person's own from a set of their pictures: a character, a pet, a person, a style or an object. The set is made on the Train screen: the pictures are added there, the app writes a description of each, the person chooses a magic word. This starts the run on a set that is ready and waits for it. It takes about 25 minutes on a Mac and pauses chat and image making, so it is made one at a time. Then writing the magic word in a prompt draws the result. Or, with set_id, it teaches a small language model to answer the way the person's own examples do, from a set of questions and answers (made under 'Teach it from examples' on the same screen): it takes a minute or two and ends with the same questions answered before and after and a mark that says whether it learnt. Or, when the set was made under 'Make my own look or motion for video' (pictures and short clips), it teaches the video model a look, a motion or a subject: it takes about half an hour to an hour and pauses chat, image and video making, and the result is chosen under My looks on a Video screen.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -4767,7 +4736,7 @@
               }
             ],
             "default": null,
-            "description": "The set of pictures to teach from: made on the Train screen, with its descriptions written, its magic word chosen and its statement of rights given.",
+            "description": "The set of pictures to teach from: made on the Train screen, with its descriptions written and its magic word chosen.",
             "title": "Dataset Id"
           },
           "set_id": {
@@ -4782,7 +4751,7 @@
               }
             ],
             "default": null,
-            "description": "Or the set of examples to teach a writing model from: made on the Train screen under 'Teach it from examples', with at least 10 questions and answers and a statement of whose they are. Give this or dataset_id, not both.",
+            "description": "Or the set of examples to teach a writing model from: made on the Train screen under 'Teach it from examples', with at least 10 questions and answers. Give this or dataset_id, not both.",
             "title": "Set Id"
           },
           "decision_set_id": {
@@ -4797,7 +4766,7 @@
               }
             ],
             "default": null,
-            "description": "Or the set of texts and answers to teach a decision model from: made on the Train screen under 'Teach it to decide', with one question, at least 20 texts with their answers and a statement of whose they are. Give one of dataset_id, set_id or decision_set_id.",
+            "description": "Or the set of texts and answers to teach a decision model from: made on the Train screen under 'Teach it to decide', with one question, at least 20 texts with their answers. Give one of dataset_id, set_id or decision_set_id.",
             "title": "Decision Set Id"
           },
           "base": {
@@ -5600,7 +5569,7 @@
       "id": "voice.clone",
       "title": "Copy a voice",
       "summary": "Save a voice cloned from a recording.",
-      "description": "Save a voice cloned from a recording of the library (2 to 30 seconds of one person speaking clearly). It needs the person's word, in the app window, that the voice is their own or that they have permission. Returns the voice id.",
+      "description": "Save a voice cloned from a recording of the library (2 to 30 seconds of one person speaking clearly). Returns the voice id.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -5627,15 +5596,6 @@
             "title": "Name",
             "type": "string"
           },
-          "voice_is": {
-            "description": "Whose voice it is: 'own' (the person's own voice) or 'permission' (someone who agreed).",
-            "enum": [
-              "own",
-              "permission"
-            ],
-            "title": "Voice Is",
-            "type": "string"
-          },
           "reference_text": {
             "default": "",
             "description": "What the recording says, if known.",
@@ -5646,8 +5606,7 @@
         },
         "required": [
           "source_id",
-          "name",
-          "voice_is"
+          "name"
         ],
         "title": "CloneIn",
         "type": "object"
@@ -5684,13 +5643,11 @@
         {
           "source_kind": "speech",
           "source_id": "0b7c1f9e-0000-4000-8000-000000000000",
-          "name": "My voice",
-          "voice_is": "own"
+          "name": "My voice"
         }
       ],
       "effect": "make",
       "flags": [
-        "needs_consent",
         "private"
       ],
       "requires": [
@@ -5707,7 +5664,7 @@
         "assistant",
         "mcp"
       ],
-      "consent": "I confirm this is my own voice, or that I have the permission of the person whose voice it is.",
+      "consent": "",
       "help": "docs/help/voice.clone.md"
     },
     {

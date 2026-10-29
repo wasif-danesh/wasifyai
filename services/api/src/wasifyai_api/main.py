@@ -20,7 +20,6 @@ from wasifyai_api.admin import me_router as me_router
 from wasifyai_api.admin import router as admin_router
 from wasifyai_api.admin_media import router as admin_media_router
 from wasifyai_api.admin_models import router as admin_models_router
-from wasifyai_api.admin_safeguards import router as admin_safeguards_router
 from wasifyai_api.admin_workers import router as admin_workers_router
 from wasifyai_api.assemble import ApiServices, Injected, run_engine
 from wasifyai_api.attachments import router as attachments_router
@@ -140,7 +139,6 @@ def create_app(given: Injected | None = None) -> FastAPI:
     app.include_router(admin_models_router)
     app.include_router(admin_media_router)
     app.include_router(admin_workers_router)
-    app.include_router(admin_safeguards_router)
     app.include_router(uploads_router)
     app.include_router(connections_router)
     app.include_router(external_router)

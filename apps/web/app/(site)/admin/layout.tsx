@@ -1,9 +1,7 @@
 import { NavLink } from "@/components/NavLink";
 import { Notice } from "@/components/Notice";
 import { PageHero } from "@/components/ui/page-hero";
-import { apiGet } from "@/lib/api";
 import { getMe } from "@/lib/me";
-import type { SafeguardsStatus } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
@@ -19,14 +17,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       </Notice>
     );
   }
-  const guard = await apiGet<SafeguardsStatus>("/admin/safeguards").catch(() => null);
   return (
     <>
-      {guard && !guard.enabled ? (
-        <Notice tone="warn" title="Safeguards are off">
-          Requests are not moderated and quotas do not apply. Change this under Safeguards.
-        </Notice>
-      ) : null}
       <div className="grid gap-3">
         <PageHero title="Admin" />
         <nav className="flex flex-wrap gap-1" aria-label="Admin">
@@ -39,7 +31,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <NavLink href="/admin/workers">Models and workers</NavLink>
           <NavLink href="/admin/search">Search</NavLink>
           <NavLink href="/admin/settings">Settings</NavLink>
-          <NavLink href="/admin/safeguards">Safeguards</NavLink>
           <NavLink href="/admin/audit">Audit log</NavLink>
         </nav>
       </div>

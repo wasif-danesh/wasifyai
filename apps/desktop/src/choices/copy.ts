@@ -12,7 +12,6 @@ export type ChatShelfItem = {
   /** the size of the usual 4-bit file, and the memory it needs, as measured (hub-shelf.yaml) */
   bytes: number;
   memoryGb: number;
-  licence: string;
   tier?: Tier;
 };
 
@@ -27,7 +26,6 @@ export const CHAT_SHELF: ChatShelfItem[] = [
     plain: "Answers questions and writes well on most computers. A good place to start.",
     bytes: 2.5e9,
     memoryGb: 4,
-    licence: "Apache-2.0",
   },
   {
     repo: "unsloth/Qwen3-8B-GGUF",
@@ -35,7 +33,6 @@ export const CHAT_SHELF: ChatShelfItem[] = [
     plain: "Fuller answers than the 4B, a little slower. Needs 16 GB of memory or more.",
     bytes: 5e9,
     memoryGb: 6.5,
-    licence: "Apache-2.0",
     tier: "also",
   },
   {
@@ -44,7 +41,6 @@ export const CHAT_SHELF: ChatShelfItem[] = [
     plain: "Tiny and very fast, for small computers. Simple answers only.",
     bytes: 0.4e9,
     memoryGb: 1,
-    licence: "Apache-2.0",
     tier: "also",
   },
   {
@@ -53,7 +49,6 @@ export const CHAT_SHELF: ChatShelfItem[] = [
     plain: "A large model that shows its reasoning. Needs 32 GB of memory or more.",
     bytes: 11e9,
     memoryGb: 14,
-    licence: "Apache-2.0",
     tier: "advanced",
   },
 ];

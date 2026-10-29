@@ -127,8 +127,8 @@ def test_the_card_is_drawn_from_the_actions_own_schema():
     assert card["params"] == {"prompt": "a fox"}
     clone = reg.get("voice.clone")
     assert clone is not None
-    assert "needs your word" in card_of(clone, clone.id, "", {})["badges"]
-    assert card_of(clone, clone.id, "", {})["consent"] == clone.consent
+    assert "needs your word" not in card_of(clone, clone.id, "", {})["badges"]
+    assert not card_of(clone, clone.id, "", {})["consent"]
     assert card_of(None, "x.y", "s", {"a": 1})["title"] == "x.y"
 
 

@@ -38,7 +38,6 @@ export type HubResult = {
   capability: string;
   pipeline: string | null;
   gated: boolean;
-  license: string;
   gguf: boolean;
   runnable: boolean;
 };
@@ -59,7 +58,6 @@ export type HubModel = {
   stale: boolean;
   capability: string;
   pipeline: string | null;
-  license: string;
   gated: boolean;
   downloads: number;
   likes: number;

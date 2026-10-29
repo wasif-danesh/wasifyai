@@ -1,13 +1,11 @@
 # The speech models this product can use, and where they come from (ADR-0066, docs/phase2-voice-plan.md).
 # Each entry is a download entry like the image models' (pinned by commit, size and SHA-256; a file is fetched only
-# after a click that has shown its name, size, source and licence) plus a `voice:` block, the model's descriptor.
+# after a click that has shown its name, size and source) plus a `voice:` block, the model's descriptor.
 # Figures under `measured` are from the owner's Mac (docs/spikes/voice-v0.md); voices, languages and options agree
-# with specs/ (a test checks it). `commercial_use` is read from the model card (`licence_evidence`); only `yes` can
-# be recommended. `clone`, `design` and `music` say how a model takes a recording, a voice description, or a music request. The URLs name a commit of the repository, so they cannot change under the pin.
+# with specs/ (a test checks it). `clone`, `design` and `music` say how a model takes a recording, a voice description, or a music request. The URLs name a commit of the repository, so they cannot change under the pin.
 models:
 - id: kokoro-82m
   title: Kokoro 82M
-  licence: Apache-2.0
   source: https://huggingface.co/hexgrad/Kokoro-82M
   note: Fast, light text to speech with 28 English voices. Made for audio.cpp from the Kokoro model.
   approx_ram_gb: 1
@@ -30,9 +28,6 @@ models:
     - en-us
     - en-gb
     sample_rate: 24000
-    commercial_use: 'yes'
-    licence_evidence: https://huggingface.co/hexgrad/Kokoro-82M
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 8.6
@@ -167,7 +162,6 @@ models:
       min: 0
 - id: qwen3-tts-0.6b-base
   title: Qwen3-TTS 0.6B Base
-  licence: Apache-2.0
   source: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base
   note: Speaks in a voice cloned from a 3 to 30 second recording, in 10 languages. Needs the words spoken in the recording.
   approx_ram_gb: 5
@@ -198,9 +192,6 @@ models:
     - es
     - it
     sample_rate: 24000
-    commercial_use: 'yes'
-    licence_evidence: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 3.5
@@ -212,7 +203,6 @@ models:
       max_seconds: 30
 - id: qwen3-tts-1.7b-voicedesign
   title: Qwen3-TTS 1.7B VoiceDesign
-  licence: Apache-2.0
   source: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
   note: Speaks in a voice you describe in words ("a deep, calm, elderly man"), in 10 languages.
   approx_ram_gb: 6
@@ -233,9 +223,6 @@ models:
     - design
     languages: *id001
     sample_rate: 24000
-    commercial_use: 'yes'
-    licence_evidence: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 2.9
@@ -246,7 +233,6 @@ models:
       max_chars: 300
 - id: voxcpm2
   title: VoxCPM2
-  licence: Apache-2.0
   source: https://huggingface.co/openbmb/VoxCPM2
   note: Natural speech in 30 languages. Can speak in a voice cloned from a short recording, or in a voice described in words.
     Larger and slower than Qwen3-TTS.
@@ -270,9 +256,6 @@ models:
     languages:
     - en
     sample_rate: 48000
-    commercial_use: 'yes'
-    licence_evidence: https://huggingface.co/openbmb/VoxCPM2
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 1.8
@@ -287,7 +270,6 @@ models:
       max_chars: 300
 - id: ace-step-1.5-turbo
   title: ACE-Step 1.5 Turbo
-  licence: MIT
   source: https://huggingface.co/ACE-Step/Ace-Step1.5
   note: Songs with singing from a style description and lyrics, or instrumentals, in 50+ languages, up to four minutes here.
     About one and a half times faster than real time on an Apple M5 Pro.
@@ -310,9 +292,6 @@ models:
     languages:
     - multi
     sample_rate: 48000
-    commercial_use: 'yes'
-    licence_evidence: https://huggingface.co/ACE-Step/Ace-Step1.5
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 1.6
@@ -352,7 +331,6 @@ models:
       description: For example C major or A minor. Leave empty to let the model choose.
 - id: ace-step-1.5-turbo-comfyui
   title: ACE-Step 1.5 Turbo (image engine)
-  licence: MIT
   source: https://huggingface.co/ACE-Step/Ace-Step1.5
   note: The same song model, run by the image engine (ComfyUI) for computers with a graphics card where the speech
     runtime has no GPU build. You choose the language of the lyrics and the time signature. A larger download (10 GB).
@@ -374,9 +352,6 @@ models:
     languages:
     - multi
     sample_rate: 48000
-    commercial_use: 'yes'
-    licence_evidence: https://huggingface.co/ACE-Step/Ace-Step1.5
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 0.7
@@ -512,10 +487,8 @@ models:
       - '6'
 - id: stable-audio-3-small-music
   title: Stable Audio 3 Small (music)
-  licence: Stability AI Community Licence
   source: https://huggingface.co/stabilityai/stable-audio-3-small
-  note: Instrumental music and loops from a description, up to two minutes. Free for commercial use under a yearly revenue
-    limit; needs registration and a credit.
+  note: Instrumental music and loops from a description, up to two minutes.
   approx_ram_gb: 4
   files:
   - folder: audio
@@ -534,9 +507,6 @@ models:
     languages:
     - en
     sample_rate: 44100
-    commercial_use: conditional
-    licence_evidence: https://huggingface.co/stabilityai/stable-audio-3-small
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 20
@@ -561,9 +531,8 @@ models:
         edit: stable_audio
 - id: stable-audio-3-small-sfx
   title: Stable Audio 3 Small (sound effects)
-  licence: Stability AI Community Licence
   source: https://huggingface.co/stabilityai/stable-audio-3-small
-  note: Sound effects and ambience from a description, up to two minutes. Same licence terms as the music model.
+  note: Sound effects and ambience from a description, up to two minutes.
   approx_ram_gb: 4
   files:
   - folder: audio
@@ -582,9 +551,6 @@ models:
     languages:
     - en
     sample_rate: 44100
-    commercial_use: conditional
-    licence_evidence: https://huggingface.co/stabilityai/stable-audio-3-small
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       load_s: 2.0
@@ -599,7 +565,6 @@ models:
         duration: top
 - id: parakeet-tdt-0.6b-v3
   title: Parakeet TDT 0.6B v3
-  licence: CC-BY-4.0
   source: https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
   note: 'Fast speech to text for 25 European languages, with word times. Credit: NVIDIA (CC-BY-4.0).'
   approx_ram_gb: 3
@@ -645,9 +610,6 @@ models:
     - sv
     - uk
     sample_rate: 16000
-    commercial_use: 'yes'
-    licence_evidence: https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 130
@@ -655,7 +617,6 @@ models:
       load_s: 1.5
 - id: htdemucs
   title: HTDemucs (4 stems)
-  licence: MIT
   source: https://github.com/facebookresearch/demucs
   note: Splits a song into drums, bass, vocals and everything else. Made for audio.cpp from Meta's Hybrid Transformer Demucs.
   approx_ram_gb: 1
@@ -676,9 +637,6 @@ models:
     - separate
     languages: []
     sample_rate: 44100
-    commercial_use: 'yes'
-    licence_evidence: https://github.com/facebookresearch/demucs/blob/main/LICENSE
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 2.2
@@ -693,7 +651,6 @@ models:
       max_source_s: 600
 - id: htdemucs-6stems
   title: HTDemucs (6 stems)
-  licence: MIT
   source: https://github.com/facebookresearch/demucs
   note: Like the 4-stem model, and also separates guitar and piano. The guitar and piano stems are less clean than the others.
   approx_ram_gb: 1
@@ -713,9 +670,6 @@ models:
     recommended: []
     languages: []
     sample_rate: 44100
-    commercial_use: 'yes'
-    licence_evidence: https://github.com/facebookresearch/demucs/blob/main/LICENSE
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 1.9
@@ -732,7 +686,6 @@ models:
       max_source_s: 600
 - id: mel-band-roformer
   title: Mel-Band RoFormer (vocals)
-  licence: MIT
   source: https://huggingface.co/mlx-community/mel-roformer-mlx
   note: Takes the singing out of a song cleanly, as a vocals stem and an instrumental stem.
   approx_ram_gb: 1
@@ -752,9 +705,6 @@ models:
     recommended: []
     languages: []
     sample_rate: 44100
-    commercial_use: 'yes'
-    licence_evidence: https://huggingface.co/mlx-community/mel-roformer-mlx
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 3.0
@@ -767,7 +717,6 @@ models:
       max_source_s: 600
 - id: tone-color-vc
   title: Tone Color VC (OpenVoice v2)
-  licence: MIT
   source: https://huggingface.co/myshell-ai/OpenVoiceV2
   note: Makes a recording sound like the voice in another recording you give it. Small and quick; marked experimental by its runtime.
   approx_ram_gb: 1
@@ -788,9 +737,6 @@ models:
     - convert
     languages: []
     sample_rate: 22050
-    commercial_use: 'yes'
-    licence_evidence: https://huggingface.co/myshell-ai/OpenVoiceV2
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 13.9
@@ -807,7 +753,6 @@ models:
         reference: voice_ref
 - id: meanvc2
   title: MeanVC2
-  licence: Apache-2.0
   source: https://huggingface.co/ASLP-lab/MeanVC2
   note: Makes a recording sound like the voice in another recording you give it. English and Chinese speech.
   approx_ram_gb: 1
@@ -829,9 +774,6 @@ models:
     - en
     - zh
     sample_rate: 22050
-    commercial_use: 'yes'
-    licence_evidence: https://huggingface.co/ASLP-lab/MeanVC2
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 11
@@ -848,7 +790,6 @@ models:
         reference: voice_ref
 - id: dots-tts-edit
   title: dots.tts Edit
-  licence: Apache-2.0 (the project's licence; the weights card says other)
   source: https://huggingface.co/dots-studio/dots.tts.edit
   note: Changes some words in a recording and keeps the speaker's voice and the rest of the speech. English and Chinese.
   approx_ram_gb: 7
@@ -870,9 +811,6 @@ models:
     - en
     - zh
     sample_rate: 48000
-    commercial_use: conditional
-    licence_evidence: https://github.com/studio-dots-ai/dots.tts/blob/main/LICENSE
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 1.2
@@ -900,7 +838,6 @@ models:
       max_source_s: 30
 - id: musetalk-v15
   title: MuseTalk 1.5
-  licence: MIT
   source: https://huggingface.co/TMElyralab/MuseTalk
   note: Makes the face in a still picture say a voice. The mouth is redrawn to match and the head stays still. Needs the
     lip sync engine (set up first) and about 4.2 GB of files. About five seconds of work for each second of video on
@@ -974,9 +911,6 @@ models:
     languages:
     - multi
     sample_rate: 0
-    commercial_use: 'yes'
-    licence_evidence: https://huggingface.co/TMElyralab/MuseTalk
-    reviewed: '2026-10-16'
     measured:
       platform: darwin-arm64
       speed_x: 0.2
@@ -985,4 +919,3 @@ models:
       max_voice_s: 300
       max_side: 768
       fps: 25
-      mark: required

@@ -28,7 +28,6 @@ class InUseModel(BaseModel):
     title: str
     plain: str
     ready: bool
-    licence: str = ""
 
 
 class InUse(BaseModel):
@@ -70,14 +69,14 @@ async def _chat(request: Request) -> list[InUseModel]:
     ]
 
 
-def _titles(request: Request, product_id: str) -> list[tuple[str, str]]:
+def _titles(request: Request, product_id: str) -> list[str]:
     from wasifyai_api.desktop_models import load_catalogue
 
     pdir = services_of(request).products_dir
     if pdir is None:
         return []
     try:
-        return [(e.title, e.licence) for e in load_catalogue(Path(pdir), [product_id])]
+        return [e.title for e in load_catalogue(Path(pdir), [product_id])]
     except Exception:
         log.warning("could not read the models of %s", product_id, exc_info=True)
         return []
@@ -107,9 +106,8 @@ async def _media(request: Request, who: Identity, group: str) -> list[InUseModel
                     title=title,
                     plain="Set up on this service by an admin.",
                     ready=True,
-                    licence=licence,
                 )
-                for n, (title, licence) in enumerate(known)
+                for n, title in enumerate(known)
             ]
     first = items[0]
     return [

@@ -2,7 +2,7 @@
 
 It acts for the user of the current run (the tenant and user come from the run context), so a tool
 can only ever touch that user's own creations, and a child run is a normal run: its own events,
-guardrails, quotas and job queue, saved to the same library."""
+checks and job queue, saved to the same library."""
 
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable

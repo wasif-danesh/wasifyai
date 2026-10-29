@@ -24,9 +24,7 @@ RUNS = Counter(
     "wdai_runs_total", "Runs that stopped, by product and outcome", ["product", "outcome"]
 )
 RUN_ERRORS = Counter("wdai_run_errors_total", "Runs that ended in an error", ["product", "code"])
-REFUSALS = Counter(
-    "wdai_refusals_total", "Requests refused by a safeguard or a rule", ["product", "category"]
-)
+REFUSALS = Counter("wdai_refusals_total", "Requests refused by a rule", ["product", "category"])
 UPLOADS = Counter("wdai_uploads_total", "Uploads", ["kind", "outcome"])
 
 

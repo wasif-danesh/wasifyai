@@ -9,7 +9,6 @@ export type Model3dPart = {
   name: string;
   version: string;
   bytes: number;
-  licence: string;
   source: string;
 };
 
@@ -36,7 +35,7 @@ export type Model3dComponent = {
   };
   progress: Model3dProgress;
   fit: Fit | null;
-  about: { built_with: string; licence: string; where: string };
+  about: { built_with: string; where: string };
 };
 
 export type Model3dStatus = {
@@ -101,8 +100,6 @@ export type MakeRequest = {
   prompt?: string;
   detail?: Detail;
   seed?: number;
-  /** the person says they may use the picture, and it is not a photo of a real person who has not agreed */
-  rights: boolean;
 };
 
 export type Model3dApi = {
@@ -139,7 +136,6 @@ export type Model3dApiOptions = {
 
 const HOSTED_ABOUT = {
   built_with: "Built with DINOv3",
-  licence: "Models: MIT, and the DINOv3 licence for the image encoder.",
   where: "Made on the service's graphics card; the picture is deleted when the model is made.",
 };
 

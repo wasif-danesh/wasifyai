@@ -3,7 +3,7 @@
 test_image_graph.py."""
 
 import pytest
-from image_rig import make_rig, mask_png, png, put_upload, verdict
+from image_rig import make_rig, mask_png, png, put_upload
 from test_image_graph import Story, exists
 from wasifyai_image.schemas import SIZES
 
@@ -31,7 +31,7 @@ async def test_reference_makes_a_new_picture_from_two_and_forgets_both(tmp_path,
     assert job.capability == "image.reference"
     assert job.prompt["image_key"] == a.key and job.prompt["image2_key"] == b.key
     assert (job.prompt["width"], job.prompt["height"]) == SIZES[size]
-    assert len(rig.word_checks()) == 1 and len(rig.picture_checks()) == 2  # both pictures looked at
+    assert rig.asked() == []  # nothing judges the words or the pictures
     assert await left(rig, a, b) == [True, True]  # kept while the job runs
 
     await s.finish_job()
@@ -51,7 +51,7 @@ async def test_reference_with_a_missing_second_picture_is_refused_and_keeps_noth
         {"mode": "reference", "prompt": "x", "image_key": a.key, "image2_key": "uploads/nope.png"}
     )
     assert s.state["status"] == "refused" and "pictures again" in s.state["refusal"]["message"]
-    assert rig.sink.submitted == [] and rig.picture_checks() == []
+    assert rig.sink.submitted == [] and rig.asked() == []
     assert await left(rig, a) == [False]  # the one that was there is deleted too
 
 
@@ -68,17 +68,6 @@ async def test_reference_refuses_an_unknown_size_and_deletes_both(tmp_path, ctx)
         }
     )
     assert s.state["status"] == "refused" and rig.sink.submitted == []
-    assert await left(rig, a, b) == [False, False]
-
-
-async def test_reference_refused_for_the_second_picture_deletes_both(tmp_path, ctx):
-    rig = make_rig(tmp_path, moderate_image=[verdict(), verdict(False, "minors", "SECRET")])
-    a, b = await put_upload(rig), await put_upload(rig, data=SECOND)
-    s = await Story(rig).start(
-        {"mode": "reference", "prompt": "x", "image_key": a.key, "image2_key": b.key}
-    )
-    assert s.state["status"] == "refused" and rig.sink.submitted == []
-    assert "SECRET" not in str(s.state["refusal"])
     assert await left(rig, a, b) == [False, False]
 
 
@@ -109,7 +98,7 @@ async def test_inpaint_changes_a_painted_area_and_forgets_both_uploads(tmp_path,
     assert job.prompt["prompt"] == (
         "Fill the white area with: a red cushion. Keep everything else exactly the same."
     )
-    assert len(rig.word_checks()) == 1 and len(rig.picture_checks()) == 1  # the mask is no picture
+    assert rig.asked() == []  # nothing judges the words or the picture
 
     await s.finish_job()
     assert s.state["status"] == "done"
@@ -140,7 +129,7 @@ async def test_inpaint_refuses_a_mask_that_cannot_be_used_and_deletes_both(
     )
     assert s.state["status"] == "refused" and says in s.state["refusal"]["message"]
     assert s.state["refusal"]["code"] == "invalid_mask"
-    assert rig.sink.submitted == [] and rig.picture_checks() == []
+    assert rig.sink.submitted == [] and rig.asked() == []
     assert await left(rig, a, m) == [False, False]
 
 

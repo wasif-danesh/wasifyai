@@ -86,11 +86,6 @@ spec:
           labels: { severity: warning }
           annotations:
             summary: "More than a fifth of the media jobs are failing"
-        - alert: ModerationUnavailable
-          expr: increase(wdai_run_errors_total{code="moderation_unavailable"}[10m]) > 3
-          labels: { severity: warning }
-          annotations:
-            summary: "The moderation model could not be reached several times (runs fail closed)"
         - alert: RunErrorsSpike
           expr: sum(increase(wdai_run_errors_total[10m])) > 10
           labels: { severity: warning }

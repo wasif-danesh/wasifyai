@@ -8,12 +8,9 @@ function model(over: Partial<VoiceModelInfo> = {}): VoiceModelInfo {
   return {
     id: "kokoro-82m",
     title: "Kokoro",
-    licence: "Apache-2.0",
     engine: "audio.cpp",
     tasks: ["speak"],
     recommended: ["speak"],
-    commercial_use: "yes",
-    licence_evidence: "https://x/licence",
     state: "ready",
     runtime_ready: true,
     bytes_missing: 0,
@@ -60,7 +57,6 @@ const FLUX = {
   title: "FLUX.2 klein 4B",
   plain: "Set up on this service by an admin.",
   ready: true,
-  licence: "Apache-2.0",
 };
 
 /** What the service says it uses, and what the 3D worker says; with the voice rig's other dependencies. */
@@ -72,7 +68,7 @@ function inUseRig(
     ...base,
     inUse: {
       inUse: vi.fn(async () => ({
-        chat: [{ ...FLUX, id: "default-chat", title: "gemma4:e4b", licence: "" }],
+        chat: [{ ...FLUX, id: "default-chat", title: "gemma4:e4b" }],
         images: over.images ?? [FLUX],
         video: over.video ?? [],
       })),
@@ -160,12 +156,6 @@ describe("the picker on the web", () => {
     expect(can.state).toBe("needs_download");
     expect(can.engineBytes).toBe(9e8);
     expect(can.engineName).toBe("The lip sync engine");
-  });
-
-  it("marks a model that is not for commercial use as advanced", () => {
-    const row = webRow(model({ commercial_use: "no" }), ["speak"], null, true, null);
-    expect(row.tier).toBe("advanced");
-    expect(row.commercial).toBe("no");
   });
 
   it("remembers the choice under the key the voice screens read", async () => {

@@ -1,6 +1,6 @@
 # pyright: reportTypedDictNotRequiredAccess=false
 # (Graph state is filled in node by node; a node only reads keys that earlier nodes have set.)
-"""The video graph: guardrail, one job, finish (ADR-0037).
+"""The video graph: a check of the request, one job, finish (ADR-0037).
 
     check_request -> start_job -> await_job -> finalise
         |
@@ -10,9 +10,8 @@
 Three modes: `text` (a description, a shape and a length), `image` (an uploaded picture, a
 description of the motion and a length) and `extend` (one of the person's clips and what should
 keep happening: the last frames of the clip start a new clip and the two are joined, see
-docs/spikes/video-extend-vx0.md). Graph code names capabilities (`text.moderate`,
-`text.moderate_image`, `video.generate`, `video.animate`, `video.extend`), never models or workflow
-node IDs.
+docs/spikes/video-extend-vx0.md). Graph code names capabilities (`video.generate`, `video.animate`,
+`video.extend`), never models or workflow node IDs.
 
 The clip's row is created when the job starts, with status "working", so the site can show "being
 made" on any page while the user explores it. The finished clip, a failure or a refusal ends it.
@@ -40,7 +39,6 @@ from wasifyai_platform_sdk import (
     upload_store,
 )
 
-from wasifyai_video import guardrail
 from wasifyai_video.index import index_text
 from wasifyai_video.schemas import (
     DEFAULT_SECONDS,
@@ -59,8 +57,6 @@ from wasifyai_video.videos import (
     InMemoryVideoStore,
     JoinError,
     PosterError,
-    Quota,
-    UsageQuota,
     VideoRecord,
     VideoStore,
     join_clips,
@@ -131,8 +127,7 @@ def build_video(caps: Capabilities, checkpointer: Any):
     """Registry entry point: wires the production stores from the capabilities."""
     videos: VideoStore = video_store(caps.db) if caps.db is not None else InMemoryVideoStore()
     uploads: UploadStore = upload_store(caps.db) if caps.db is not None else InMemoryUploadStore()
-    quota: Quota | None = UsageQuota(caps.db) if caps.db is not None else None
-    return build_video_graph(caps, checkpointer, videos, uploads, quota)
+    return build_video_graph(caps, checkpointer, videos, uploads)
 
 
 def build_video_graph(
@@ -140,18 +135,7 @@ def build_video_graph(
     checkpointer: Any,
     videos: VideoStore,
     uploads: UploadStore,
-    quota: Quota | None,
 ):
-    limit = (caps.config.quotas.get("videos_per_user_per_day") if caps.config else None) or None
-
-    async def over_quota() -> bool:
-        if not await caps.safeguards_on():  # ADR-0047: quotas apply only with safeguards
-            return False
-        return bool(limit and quota and await quota.used_today(require_context()) >= limit)
-
-    def quota_message() -> str:
-        return f"You've reached today's limit of {limit} videos. Please try again tomorrow."
-
     async def busy() -> bool:
         ctx = require_context()
         return await videos.working_count(ctx.tenant_id, ctx.user_id) >= 1
@@ -194,7 +178,7 @@ def build_video_graph(
         await discard_upload(state.get("image_key"))
         await discard_temp(state.get("temp_key"))
 
-    # ---- guardrail ----------------------------------------------------------------------
+    # ---- the request ----------------------------------------------------------------------
 
     async def check_request(state: VideoState) -> VideoState:
         write = get_stream_writer()
@@ -288,36 +272,13 @@ def build_video_graph(
 
         if await busy():  # the GPU does one clip at a time
             return await refused("busy", BUSY)
-        if await over_quota():  # before any LLM or GPU work
-            return await refused("quota_exceeded", quota_message())
-
-        if not await caps.safeguards_on():  # ADR-0047: no moderation while they are off
-            return out
-        kind = {
-            "text": "video description",
-            "image": "animation description",
-            "extend": "description of how a video carries on",
-        }[mode]
-        verdict = await guardrail.judge_text(caps, kind, prompt)
-        if not verdict.allowed:
-            return await refused(verdict.category, guardrail.refusal_message(verdict.category))
-        if mode == "image":
-            assert caps.storage is not None
-            picture = await caps.storage.get(key)
-            verdict = await guardrail.judge_picture(caps, prompt, picture)
-            if not verdict.allowed:
-                return await refused(verdict.category, guardrail.refusal_message(verdict.category))
         if mode == "extend" and out.get("source_mode") == "import":
-            # what the person added is looked at like any picture they bring: its last frame, which
-            # is what the new part grows from
+            # a video the person added must have a last frame to grow from
             assert caps.storage is not None
             try:
-                frame = await last_frame(await caps.storage.get(out["source_video_key"]))
+                await last_frame(await caps.storage.get(out["source_video_key"]))
             except (ClipError, FileNotFoundError):
                 return refuse_with("invalid_request", NOT_EXTENDABLE)
-            verdict = await guardrail.judge_picture(caps, prompt, frame)
-            if not verdict.allowed:
-                return refuse_with(verdict.category, guardrail.refusal_message(verdict.category))
         return out
 
     def after_check(state: VideoState) -> str:
@@ -329,9 +290,6 @@ def build_video_graph(
     # ---- the job ------------------------------------------------------------------------
 
     async def start_job(state: VideoState) -> VideoState:
-        if await over_quota():  # again, right before the GPU is used
-            await discard_upload(state.get("image_key"))
-            raise RunError("quota_exceeded", quota_message())
         if await busy():  # a second run that started while this one was being checked
             await discard_upload(state.get("image_key"))
             raise RunError("busy", BUSY)

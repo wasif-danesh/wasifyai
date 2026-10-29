@@ -149,7 +149,7 @@ BuildResult = Callable[[dict[str, Any], Any], Outcome | None]
 
 @dataclass(frozen=True)
 class RunBinding:
-    """The child run of a product graph (ADR-0057): its events, safeguards, quotas and queue are
+    """The child run of a product graph (ADR-0057): its events, checks and queue are
     the product's own. `noun` makes the sentences ("The image could not be made")."""
 
     product_id: str

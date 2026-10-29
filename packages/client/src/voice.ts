@@ -14,10 +14,6 @@ export type VoiceTask =
   | "transcribe"
   | "lipsync";
 
-/** `yes` and `conditional` may be used commercially; `no` and `unreviewed` are shown with a badge
- * and are never a default. */
-export type CommercialUse = "yes" | "conditional" | "no" | "unreviewed";
-
 /** Why a model cannot be used yet, and what to do: the dropdown's honest states (ADR-0066). */
 export type ModelState = "ready" | "needs_runtime" | "can_install" | "not_available";
 
@@ -51,16 +47,14 @@ export type MusicEditRules = { actions: EditAction[]; max_ranges: number; max_so
 export type VoiceModelInfo = {
   id: string;
   title: string;
-  licence: string;
   engine: string;
   family: string;
   tasks: VoiceTask[];
   recommended: VoiceTask[];
   languages: string[];
   sample_rate: number;
-  commercial_use: CommercialUse;
-  licence_evidence: string;
-  reviewed: string;
+  /** where the files come from (a URL), when they are downloaded */
+  source?: string;
   measured: {
     platform: string;
     speed_x: number | null;
@@ -120,10 +114,7 @@ export type LipSyncEngine = {
   install: RuntimeInstall;
 };
 
-export type PictureBasis = "drawn" | "own" | "permission";
-export type VoiceBasis = "generated" | "own" | "permission";
-
-/** A talking video made here. The picture and the voice basis are what the person said about them. */
+/** A talking video made here. */
 export type Clip = {
   id: string;
   title: string;
@@ -134,14 +125,6 @@ export type Clip = {
   fps: number;
   width: number;
   height: number;
-  consent: {
-    picture?: PictureBasis;
-    voice?: VoiceBasis;
-    mark?: string;
-    accepted_at?: string;
-    picture_statement?: string;
-    voice_statement?: string;
-  };
   favourite: boolean;
   load_s: number;
   elapsed_s: number;
@@ -154,7 +137,6 @@ export type Clip = {
 export type AddedPicture = { id: string; width: number; height: number; url: string };
 
 export type VoiceKind = "design" | "clone";
-export type ConsentBasis = "own" | "permission";
 
 /** A voice the person saved: described in words, or cloned from a recording. It works with any model
  * that can do that (the dropdown shows those), not with one model only. */
@@ -167,7 +149,6 @@ export type SavedVoice = {
   reference_seconds: number | null;
   /** a link to play the recording of a cloned voice */
   reference_url?: string;
-  consent: { basis?: ConsentBasis; statement?: string; accepted_at?: string };
   created_at: string;
   updated_at: string;
 };
@@ -282,7 +263,6 @@ export type ReadAloudPart = {
 export type SpeechModelOffer = {
   id: string;
   title: string;
-  licence: string;
   from: string;
   bytes: number;
   /** the languages it speaks or reads (codes such as "en-us") */
@@ -328,8 +308,7 @@ function readiness(
     model: {
       id: pick.id,
       title: pick.title,
-      licence: pick.licence,
-      from: hostOf(pick.licence_evidence),
+      from: hostOf(pick.source ?? ""),
       bytes: pick.bytes_missing,
       languages: pick.languages ?? [],
     },
@@ -546,11 +525,10 @@ export function createVoiceApi(transport: Transport, options: VoiceApiOptions = 
       (await json<{ items: SavedVoice[] }>(`${base}/voices${kind ? `?kind=${kind}` : ""}`)).items,
     designVoice: (name: string, description: string) =>
       json<SavedVoice>(`${base}/voices/design`, post({ name, description })),
-    cloneVoice(file: File, name: string, consent: ConsentBasis, referenceText?: string) {
+    cloneVoice(file: File, name: string, referenceText?: string) {
       const form = new FormData();
       form.append("file", file, file.name);
       form.append("name", name);
-      form.append("consent", consent);
       if (referenceText) form.append("reference_text", referenceText);
       return json<SavedVoice>(`${base}/voices/clone`, { method: "POST", body: form });
     },
@@ -1027,14 +1005,11 @@ export function editWords(
 export type ClipRequest = {
   /** the id of a picture added with `addPicture` */
   picture: string;
-  /** what the person said the picture is */
-  pictureBasis: PictureBasis;
   /** a recording of the library, or ... */
   source?: AudioSource;
   /** ... words to be spoken here (then the voice is always "generated") */
   text?: string;
   voice?: string;
-  voiceBasis: VoiceBasis;
   model?: string;
   title?: string;
 };
@@ -1060,8 +1035,6 @@ export async function makeClip(
   const input: Record<string, unknown> = {
     task: "lipsync",
     picture: request.picture,
-    picture_basis: request.pictureBasis,
-    voice_basis: request.voiceBasis,
   };
   if (request.text?.trim()) {
     input.text = request.text;
@@ -1190,7 +1163,6 @@ export async function dubScript(
 }
 
 export type VoiceFrom = "speaker" | "saved" | "builtin";
-export type SpeakerBasis = "own" | "permission";
 
 export type DubRequest = {
   source: AudioSource;
@@ -1198,8 +1170,6 @@ export type DubRequest = {
   /** the script, as the person left it */
   segments: DubLine[];
   voiceFrom: VoiceFrom;
-  /** copying the speaker's voice needs the person's word that it is theirs or allowed */
-  speakerBasis?: SpeakerBasis;
   savedVoice?: string;
   voice?: string;
   model?: string;
@@ -1234,7 +1204,6 @@ export async function makeDub(
     segments: request.segments,
     voice_from: request.voiceFrom,
   };
-  if (request.speakerBasis) input.speaker_basis = request.speakerBasis;
   if (request.savedVoice) input.saved_voice = request.savedVoice;
   if (request.voice) input.voice = request.voice;
   if (request.model) input.model = request.model;

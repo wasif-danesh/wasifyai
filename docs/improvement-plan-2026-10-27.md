@@ -415,9 +415,9 @@ months and depends on the owner's hosting answers (P7).
 4. **Move ComfyUI and llama.cpp installation from the shell to the engine** (F2). It changes `apps/desktop` (AGPL) and the
    engine (Apache); the installer logic was written for this engine, so the licence boundary does not move, but the owner
    should say yes before 1,500 lines leave the shell.
-5. **A hosted text provider on the desktop with the person's key**: the ADR-0056 decision 4 "cloud provider with the
-   user's key" was never built; the chat would use it.
+5. ~~A hosted text provider on the desktop with the person's key~~ Answered 2026-10-29 (owner): the person's own key
+   is a v1 requirement, preferably a separate key per product. ADR-0095 (Proposed) and its mockup; nothing built.
 6. ~~The agent's web search without a key~~ Dropped with the agent (2026-10-28).
-7. **Names, once more before people have configs**: the launcher `wasify-mcp`, the tool names `image_generate` and the
-   rest, the scope words.
+7. **Names, once more before people have configs**: the launcher `wasify-mcp` is frozen (owner, 2026-10-29); the tool
+   names `image_generate` and the rest, and the scope words, are still open.
 8. **The remote MCP on the web** with OAuth 2.1 (5.6), since API keys were dropped.

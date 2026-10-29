@@ -23,7 +23,6 @@ from PIL import Image, ImageDraw, ImageEnhance
 
 BASE = "flux2-klein-base-4b"  # what the first LoRA is taught on: the model Create image uses
 BASE_TITLE = "FLUX.2 klein base 4B"
-BASE_LICENCE = "Apache-2.0"
 # measured on the owner's M5 Pro (ADR-0073, 2026-10-25): 9.2 to 11.6 s a step at 768 pixels, the
 # model load and the sample pictures included, and 6.0 s a step at 512 pixels (518 steps in 51 min)
 SECONDS_PER_STEP = {512: 6.0, 768: 10.0}

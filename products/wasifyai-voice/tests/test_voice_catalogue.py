@@ -83,11 +83,11 @@ def test_a_descriptor_agrees_with_its_spec(model_id):
     )
 
 
-def test_recommendations_are_commercially_usable_and_unique_per_task():
+def test_recommendations_are_unique_per_task():
     models = catalogue().values()
     for task in ("speak", "transcribe", "clone", "design", "music", "separate", "convert"):
         recommended = [m for m in models if task in m.recommended]
-        assert len(recommended) == 1 and recommended[0].commercial_use == "yes"
+        assert len(recommended) == 1
 
 
 def test_the_english_voices_are_the_twenty_eight_kokoro_ones():

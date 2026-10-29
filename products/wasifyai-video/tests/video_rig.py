@@ -1,7 +1,6 @@
 """Test helpers for the video product: a rig of scripted fake models and an in-memory queue."""
 
 import io
-import json
 import re
 import subprocess
 import tempfile
@@ -26,10 +25,6 @@ from wasifyai_video.videos import ffmpeg_path
 CTX = RunContext(
     tenant_id="t1", product_id="wasifyai-video", user_id="u1", run_id="run-1", thread_id="th-1"
 )
-
-
-def verdict(allowed=True, category="ok", reason="") -> str:
-    return json.dumps({"allowed": allowed, "category": category, "reason": reason})
 
 
 def png(size=(640, 480), colour=(30, 120, 200)) -> bytes:
@@ -68,19 +63,15 @@ class Rig:
         self.caps, self.sink, self.usage, self.raw, self.uploads = caps, sink, usage, raw, uploads
 
     def asked(self) -> list:
-        """Everything the text models were asked, in order (one fake serves every capability)."""
-        return self.caps.text._bound["moderate"][1].prompts
+        """Everything the text models were asked, in order (one fake provider serves them all)."""
+        return self.caps.text._bound["enhance"][1].prompts
 
-    def word_checks(self) -> list:
-        return [p for p in self.asked() if isinstance(p, str) and "<request>" in p]
-
-    def picture_checks(self) -> list:
+    def pictures(self) -> list:
+        """What the models were shown with a picture: the instruction and the picture."""
         return [p for p in self.asked() if not isinstance(p, str)]
 
 
-def make_rig(
-    tmp_path: Path, moderate=None, moderate_image=None, quotas=None, enhance=None, describe=None
-):
+def make_rig(tmp_path: Path, enhance=None, describe=None):
     """Capabilities for a throwaway `wasifyai-video` product with scripted replies."""
     d = tmp_path / "wasifyai-video"
     d.mkdir(parents=True, exist_ok=True)
@@ -89,15 +80,6 @@ def make_rig(
             {
                 "id": "wasifyai-video",
                 "capabilities": {
-                    "text.moderate": {
-                        "provider": "fake",
-                        "defaults": {"replies": moderate or [verdict()]},
-                    },
-                    "text.moderate_image": {
-                        "provider": "fake",
-                        "defaults": {"replies": moderate_image or [verdict()]},
-                        "inputs": ["text", "image"],
-                    },
                     "text.enhance": {
                         "provider": "fake",
                         "defaults": {"replies": enhance or ["A tidy prompt."]},
@@ -111,7 +93,6 @@ def make_rig(
                     "video.animate": {"provider": "fake"},
                     "video.extend": {"provider": "fake"},
                 },
-                "quotas": quotas if quotas is not None else {"videos_per_user_per_day": 5},
                 "uploads": {"image": {}},
                 "enhance": {
                     "text_to_video": {"prompt": "enhance_text_to_video", "max_chars": 500},

@@ -260,7 +260,6 @@ export function useModel3d(api: Model3dApi) {
       title: string;
       prompt: string;
       detail: Detail;
-      rights: boolean;
     }) => {
       const input = latest.current.input;
       if (!input) return;

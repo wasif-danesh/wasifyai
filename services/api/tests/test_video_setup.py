@@ -39,11 +39,7 @@ def alone(monkeypatch: pytest.MonkeyPatch):
 
 def test_the_pins_name_every_small_file_with_a_size_and_a_checksum():
     p = vs.load_video_pins()
-    assert (
-        p.base_repo == "Lightricks/LTX-Video"
-        and p.base_licence == "OpenRAIL-M"
-        and p.tool_version == "0.42.0"
-    )
+    assert p.base_repo == "Lightricks/LTX-Video" and p.tool_version == "0.42.0"
     assert len(p.base_revision) == 40 and all(len(f.sha256) == 64 for f in p.base_files)
     assert {f.path for f in p.base_files} == {
         "tokenizer/added_tokens.json", "tokenizer/special_tokens_map.json", "tokenizer/spiece.model",

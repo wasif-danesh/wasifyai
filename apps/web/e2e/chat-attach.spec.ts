@@ -144,7 +144,6 @@ test("a picture for a model without its picture reader offers it, with the size,
             : {
                 state: "available",
                 title: "Qwen3.5 9B picture reader",
-                licence: "Apache-2.0",
                 from: "huggingface.co",
                 bytes: 918166080,
               },

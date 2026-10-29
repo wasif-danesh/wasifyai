@@ -30,18 +30,17 @@ async def lipsync(
     image: Annotated[UploadFile, File()],
     audio: Annotated[UploadFile, File()],
     fps: Annotated[int, Form()] = 25,
-    mark: Annotated[str, Form()] = "",
 ) -> Response:
     picture, voice = await image.read(), await audio.read()
     if not picture or not voice or len(picture) > MAX_BYTES or len(voice) > MAX_BYTES:
         raise HTTPException(422, "a picture and a voice are needed")
-    if not 5 <= fps <= 60 or len(mark) > 40:
-        raise HTTPException(422, "fps or mark out of range")
+    if not 5 <= fps <= 60:
+        raise HTTPException(422, "fps out of range")
     with tempfile.TemporaryDirectory(prefix="wasifyai-voice-") as tmp:
         path = Path(tmp) / "voice.wav"
         path.write_bytes(voice)
         try:
-            mp4 = await asyncio.to_thread(engine.generate, picture, str(path), fps, 8, mark)
+            mp4 = await asyncio.to_thread(engine.generate, picture, str(path), fps, 8)
         except NoFace:
             raise HTTPException(422, "no face found in the picture") from None
         except Exception:

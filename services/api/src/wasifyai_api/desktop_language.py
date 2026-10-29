@@ -38,7 +38,7 @@ from wasifyai_platform_sdk.usage import (
 from wasifyai_api.desktop_discovery import can_think, gguf_chat_template
 from wasifyai_api.desktop_fit import Fit, Machine, assess_fit, need_of_language
 from wasifyai_api.llama_server import LlamaError, LlamaServer
-from wasifyai_api.safeguards import SettingsStore
+from wasifyai_api.settings_store import SettingsStore
 
 log = logging.getLogger(__name__)
 

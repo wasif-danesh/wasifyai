@@ -6,7 +6,7 @@ key = await caps.storage.put("songs/42/audio.mp3", data)
 """
 
 import logging
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -190,18 +190,11 @@ class Capabilities:
     video: MediaCapabilities
     storage: ScopedStorage | None = None
     rag: RagStore | None = None
-    config: ProductConfig | None = None  # this product's validated config (quotas, settings)
+    config: ProductConfig | None = None  # this product's validated config (uploads, settings)
     db: AsyncEngine | None = None  # the shared database, for product tables and usage queries
     usage: UsageRecorder | None = None
     indexer: Any = None  # CreationIndexer: makes a creation searchable (ADR-0041); None in tests
-    # Says whether the safeguards are on (ADR-0047). None (tests, tools) means on.
-    safeguards: Callable[[], Awaitable[bool]] | None = None
     extras: dict[str, Any] = field(default_factory=dict)
-
-    async def safeguards_on(self) -> bool:
-        """Whether the safeguards (content moderation and per-user quotas) apply right now. Graphs
-        call this when checking, never once at start-up: an admin can flip it at any time."""
-        return True if self.safeguards is None else await self.safeguards()
 
     async def index_creation(self, kind: str, item_id: str, text: str) -> None:
         """Make a saved creation searchable (ADR-0041): call this when a creation is saved. It never

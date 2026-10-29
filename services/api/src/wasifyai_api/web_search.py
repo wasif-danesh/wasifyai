@@ -41,7 +41,7 @@ from wasifyai_platform_sdk.web import (
     make_provider,
 )
 
-from wasifyai_api.safeguards import SettingsStore
+from wasifyai_api.settings_store import SettingsStore
 
 log = logging.getLogger(__name__)
 

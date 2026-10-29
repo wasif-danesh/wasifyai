@@ -27,8 +27,8 @@ def steps(store) -> dict:
     """Everything a person does, in order; what comes back is compared between the two databases."""
     out: dict = {}
     d = store.add_dataset("t1", "u1", "character", "Ena", "video")
-    out["dataset"] = {k: d[k] for k in ("kind", "name", "family", "trigger_word", "rights")}
-    store.update_dataset("t1", "u1", d["id"], trigger_word="enavqx", rights="artwork")
+    out["dataset"] = {k: d[k] for k in ("kind", "name", "family", "trigger_word")}
+    store.update_dataset("t1", "u1", d["id"], trigger_word="enavqx")
     pic = store.add_item("t1", "u1", d["id"], name="a.png", width=640, height=480, sha256="s1",
                          dhash=5, checks=[{"code": "good", "level": "ok", "message": "Good."}])  # fmt: skip
     clip = store.add_item("t1", "u1", d["id"], name="c.mp4", width=512, height=768, sha256="s2",

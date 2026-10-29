@@ -18,7 +18,6 @@ function status(over: Partial<NotebooksStatus> = {}): NotebooksStatus {
         offer: {
           id: "docling",
           size_bytes: 1_466_177_706,
-          licences: "",
           source: "",
           needs_free_bytes: 3_221_225_472,
         },

@@ -62,7 +62,6 @@ class Download:
     url: str
     size: int
     sha256: str
-    licence: str
 
 
 @dataclass(frozen=True)
@@ -82,7 +81,7 @@ def _download(raw: dict[str, Any], what: str) -> Download:
     digest = str(raw["sha256"]).lower()
     if not url.startswith("https://") or len(digest) != 64:
         raise ValueError(f"the {what} pin needs an https URL and a SHA-256")
-    return Download(str(raw["version"]), url, int(raw["size"]), digest, str(raw["licence"]))
+    return Download(str(raw["version"]), url, int(raw["size"]), digest)
 
 
 def load_pins(path: Path | None = None) -> Pins:
@@ -299,16 +298,14 @@ class VideoBuilderInstaller:
             "bytes": self.total_bytes if self.supported else 0,
             "parts": [
                 {"name": "Node.js", "version": self.pins.node.version, "bytes": self.pins.node.size,
-                 "licence": self.pins.node.licence, "source": "nodejs.org"},
+                 "source": "nodejs.org"},
                 {"name": "Chrome headless shell", "version": self.pins.shell.version,
-                 "bytes": self.pins.shell.size, "licence": self.pins.shell.licence,
+                 "bytes": self.pins.shell.size,
                  "source": "googleapis.com (Chrome for Testing)"},
                 {"name": "HyperFrames and GSAP", "version": "0.8.171 and 3.15.0",
                  "bytes": self.pins.packages_bytes - MEDIA_BYTES,
-                 "licence": "Apache-2.0 and the GSAP Standard no charge licence",
                  "source": "registry.npmjs.org"},
                 {"name": "FFmpeg and ffprobe", "version": "4.4 and 4.4.1", "bytes": MEDIA_BYTES,
-                 "licence": "FFmpeg (a GPL build, run as separate programs)",
                  "source": "registry.npmjs.org"},
             ],
             "found": {"path": str(found.root)}

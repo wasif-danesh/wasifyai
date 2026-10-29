@@ -19,9 +19,6 @@ const choice = (over: Partial<ModelChoice> = {}): ModelChoice => ({
   engineName: null,
   fit: "fits",
   fitReason: null,
-  licence: "CC-BY-4.0",
-  commercial: "yes",
-  licenceUrl: null,
   source: "app",
   ...over,
 });

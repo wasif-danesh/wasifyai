@@ -7,7 +7,6 @@ import {
   type DubScript,
   type ParsedEvent,
   type SavedVoice,
-  type SpeakerBasis,
   type Speech,
   type Track,
   type VoiceApi,
@@ -43,11 +42,6 @@ export const LANGUAGE_NAMES: Record<string, string> = {
   nl: "Dutch", pl: "Polish", pt: "Portuguese", ro: "Romanian", ru: "Russian", sk: "Slovak",
   sl: "Slovenian", sv: "Swedish", uk: "Ukrainian", zh: "Chinese",
 }; // biome-ignore format: a table
-
-export const SPEAKER_TEXT: Record<SpeakerBasis, string> = {
-  own: "This is my own voice.",
-  permission: "The person whose voice this is has given me permission to copy it.",
-};
 
 export type DubbingWorkspaceProps = {
   api: VoiceApi;
@@ -97,7 +91,6 @@ export function DubbingWorkspace({
   const [language, setLanguage] = useState("");
   const [keepBackground, setKeepBackground] = useState(true);
   const [voiceFrom, setVoiceFrom] = useState<VoiceFrom>("speaker");
-  const [basis, setBasis] = useState<SpeakerBasis | null>(null);
   const [saved, setSaved] = useState<SavedVoice[]>([]);
   const [savedId, setSavedId] = useState("");
   const [builtin, setBuiltin] = useState("");
@@ -147,7 +140,7 @@ export function DubbingWorkspace({
 
   const voiceOk =
     voiceFrom === "speaker"
-      ? basis !== null && script?.vocalsTrack !== undefined
+      ? script?.vocalsTrack !== undefined
       : voiceFrom === "saved"
         ? savedId !== ""
         : true;
@@ -218,7 +211,6 @@ export function DubbingWorkspace({
           segments: lines,
           voiceFrom,
           model: chosen.id,
-          ...(voiceFrom === "speaker" && basis ? { speakerBasis: basis } : {}),
           ...(voiceFrom === "saved" ? { savedVoice: savedId } : {}),
           ...(voiceFrom === "builtin" && builtin ? { voice: builtin } : {}),
           ...(script.vocalsTrack ? { vocalsTrack: script.vocalsTrack } : {}),
@@ -514,24 +506,10 @@ export function DubbingWorkspace({
                   },
                 ]}
               />
-              {voiceFrom === "speaker" ? (
-                <div className="grid gap-2 rounded-md border p-3">
-                  <RadioGroup
-                    label="Whose voice it is"
-                    value={basis ?? undefined}
-                    disabled={working}
-                    onValueChange={(b) => setBasis(b as SpeakerBasis)}
-                    options={(Object.keys(SPEAKER_TEXT) as SpeakerBasis[]).map((b) => ({
-                      value: b,
-                      label: SPEAKER_TEXT[b],
-                    }))}
-                  />
-                  {!script?.vocalsTrack ? (
-                    <p className="m-0 text-destructive text-sm">
-                      Write the script again: the voice has to be separated to be copied.
-                    </p>
-                  ) : null}
-                </div>
+              {voiceFrom === "speaker" && !script?.vocalsTrack ? (
+                <p className="m-0 text-destructive text-sm">
+                  Write the script again: the voice has to be separated to be copied.
+                </p>
               ) : null}
               {voiceFrom === "saved" ? (
                 <Select
@@ -578,11 +556,7 @@ export function DubbingWorkspace({
         ) : (
           <>
             {mainButton("Make the dub", () => void make(), !readyToMake)}
-            {voiceFrom === "speaker" && basis === null ? (
-              <p className="mt-2 text-muted-foreground text-xs">
-                Say whose voice it is to copy it.
-              </p>
-            ) : !ready && chosen ? (
+            {!ready && chosen ? (
               <p className="mt-2 text-muted-foreground text-xs">
                 <NotReadyText task="dub" />
               </p>

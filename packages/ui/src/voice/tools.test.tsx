@@ -20,16 +20,12 @@ const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
 const tool = (over: Partial<VoiceModelInfo> = {}): VoiceModelInfo => ({
   id: "htdemucs",
   title: "HTDemucs (4 stems)",
-  licence: "MIT",
   engine: "audiocpp",
   family: "htdemucs",
   tasks: ["separate"],
   recommended: ["separate"],
   languages: [],
   sample_rate: 44100,
-  commercial_use: "yes",
-  licence_evidence: "https://github.com/facebookresearch/demucs",
-  reviewed: "2026-10-16",
   measured: { platform: "darwin-arm64", speed_x: 2.2, memory_gb: null, load_s: 9 },
   voices: [],
   default_voice: null,
@@ -92,7 +88,6 @@ const clone = (over: Partial<SavedVoice> = {}): SavedVoice => ({
   description: "",
   reference_text: "",
   reference_seconds: 5,
-  consent: { basis: "own" },
   created_at: "",
   updated_at: "",
   ...over,
@@ -275,10 +270,7 @@ describe("changing a voice", () => {
     render(
       <AudioToolWorkspace
         api={api([convert], {
-          voices: vi.fn(async () => [
-            clone(),
-            clone({ id: "v2", name: "Bo", consent: { basis: "permission" } }),
-          ]),
+          voices: vi.fn(async () => [clone(), clone({ id: "v2", name: "Bo" })]),
         })}
         runs={runs}
         tool="convert"
@@ -286,10 +278,7 @@ describe("changing a voice", () => {
     );
     await pickSource();
     await userEvent.click(await screen.findByRole("combobox", { name: "Sound like" }));
-    expect(screen.getByRole("option", { name: /^Ann/ }).textContent).toContain("your own voice");
-    expect(screen.getByRole("option", { name: /^Bo/ }).textContent).toContain(
-      "used with permission",
-    );
+    expect(screen.getByRole("option", { name: /^Ann/ })).toBeTruthy();
     await userEvent.click(screen.getByRole("option", { name: /^Bo/ }));
     await userEvent.click(screen.getByRole("button", { name: "Change the voice" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
@@ -308,7 +297,6 @@ describe("changing the words", () => {
     title: "dots.tts Edit",
     tasks: ["edit"],
     recommended: [],
-    commercial_use: "conditional",
     separate: undefined,
     speech_edit: { max_changes: 5, max_source_s: 30 },
   });

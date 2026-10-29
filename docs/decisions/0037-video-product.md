@@ -1,6 +1,7 @@
 # ADR-0037: The video product: text to video and image to video
 
 - **Status:** Accepted
+- **Superseded in part:** by ADR-0094 (2026-10-29): the video guardrail and the daily limit are removed.
 - **Date:** 2026-10-08
 
 ## Context

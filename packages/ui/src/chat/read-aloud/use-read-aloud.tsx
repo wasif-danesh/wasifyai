@@ -229,7 +229,7 @@ export function useReadAloud(control: ReadAloudControl | undefined): ReadAloud {
         <p className="font-medium">Set up read aloud</p>
         <p className="text-muted-foreground">
           Read aloud speaks a reply with a voice that runs on this computer, so the text is not sent
-          anywhere and no sound is kept. It needs {s.title} ({s.licence})
+          anywhere and no sound is kept. It needs {s.title}
           {s.from ? `, from ${s.from}` : ""}: {formatBytes(s.bytes)} to download once.
           {speaks ? ` It speaks ${speaks}.` : ""}
         </p>

@@ -23,9 +23,6 @@ export function inUseRow(m: InUseModel, chosen: boolean): ModelChoice {
     engineName: null,
     fit: null,
     fitReason: null,
-    licence: m.licence,
-    commercial: m.licence ? "yes" : "unreviewed",
-    licenceUrl: null,
     source: "app",
     unavailableReason: m.ready ? null : ASK_AN_ADMIN,
   };
@@ -42,7 +39,6 @@ export function inUseChoices(deps: InUseDeps, group: GroupId): ChoicesApi {
             title: "Pixal3D",
             plain: "Turns one picture into a 3D model you can turn around and save. Experimental.",
             ready: c.installed,
-            licence: c.about.licence,
           },
           true,
         );

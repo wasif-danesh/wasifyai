@@ -114,12 +114,7 @@ async def test_music_and_transcript_and_lipsync_results_round_trip():
     assert text.ok and speech_wire.transcript_result(text.meta).segments[0].text == "hello"
     await storage.put(f"{PREFIX}/in/picture", b"P")
     await storage.put(f"{PREFIX}/in/voice", b"V")
-    lips = {
-        "consent": {"picture": "own", "voice": "own"},
-        "fps": 25,
-        "voice_seconds": 3.0,
-        "mark": "m",
-    }
+    lips = {"fps": 25, "voice_seconds": 3.0}
     clip = await run_job(
         engine, storage,
         job(speech_wire.LIPSYNC, {"request": lips},

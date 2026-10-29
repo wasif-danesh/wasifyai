@@ -34,7 +34,6 @@ from wasifyai_platform_sdk.voice_models import MAX_DESCRIPTION_CHARS, MAX_REFERE
 from wasifyai_voice import (
     audio_input,
     audiobook,
-    consent,
     dictation,
     export,
     read_aloud,
@@ -711,19 +710,10 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
     async def create_clone(
         file: UploadFile = File(...),  # noqa: B008
         name: str = Form(..., min_length=1, max_length=100),
-        consent_basis: str = Form("", alias="consent"),
         reference_text: str = Form("", max_length=MAX_REFERENCE_TEXT_CHARS),
         identity: Identity = Depends(deps.identity),
     ) -> dict[str, Any]:
         assert deps.storage is not None, "storage is required"
-        if consent_basis not in consent.STATEMENTS:
-            raise HTTPException(
-                422,
-                {
-                    "code": "consent_required",
-                    "message": "Say whose voice this is: yours, or one you have permission to use.",
-                },
-            )
         data = await file.read(audio_input.MAX_BYTES + 1)
         try:
             wav, seconds = await reference.prepare(data, file.filename or "voice")
@@ -740,8 +730,7 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         v = await asyncio.to_thread(
             s.add_voice, identity.tenant_id, identity.user_id, kind="clone", name=name.strip(),
             reference_key=key, reference_text=" ".join(reference_text.split()),
-            reference_seconds=round(seconds, 2), consent=consent.record(consent_basis),
-            voice_id=vid,
+            reference_seconds=round(seconds, 2), voice_id=vid,
         )  # fmt: skip
         await reindex_voice(identity, v)
         return await voice_out(v, identity)

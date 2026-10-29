@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from wasifyai_api.mcp_server.runtime_file import Launcher
     from wasifyai_api.media_access import MediaAccess
     from wasifyai_api.model_access import ModelAccess
-    from wasifyai_api.safeguards import Safeguards
 
 
 @dataclass(eq=False)
@@ -28,7 +27,6 @@ class ApiServices(EngineServices):
 
     models: "ModelAccess | None" = None  # the model gateway's aliases (admin)
     media: "MediaAccess | None" = None  # where each media capability runs (admin)
-    safeguards: "Safeguards | None" = None  # moderation and quotas (ADR-0047)
     # credentials other than a person's token, verified by their prefix (ADR-0092)
     credential_verifiers: dict[str, Any] = field(default_factory=dict)
     users: Any = None  # a UserStore

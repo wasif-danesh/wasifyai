@@ -64,7 +64,6 @@ class BaseSpec:
     title: str
     repo: str
     revision: str
-    licence: str
     folder: str
     files: tuple[BaseFile, ...]
     subfolder: str = ""  # where the files are in the repository
@@ -90,12 +89,12 @@ def catalogue(pins: Pins | None = None, path: Path | None = None) -> list[BaseSp
     p = pins or (load_pins(path) if path is not None else load_decision_pins())
     raw = json.loads(path.read_text()) if path is not None else part_pins(PART)
     main = BaseSpec(
-        p.base_id, p.base_title, p.base_repo, p.base_revision, p.base_licence, p.base_folder,
+        p.base_id, p.base_title, p.base_repo, p.base_revision, p.base_folder,
         p.base_files, main=True,
     )  # fmt: skip
     more = [
         BaseSpec(
-            b["id"], b["title"], b["repo"], b["revision"], b["licence"], b["folder"],
+            b["id"], b["title"], b["repo"], b["revision"], b["folder"],
             _files(b["files"]), subfolder=b.get("subfolder", ""),
         )
         for b in raw.get("more", [])
@@ -201,12 +200,12 @@ class DecisionSetup(TrainingSetup):
                 {
                     "name": "Trainer (Laya and PyTorch)", "version": p.tool_version,
                     "bytes": 0 if tool else p.packages_bytes, "have": tool is not None,
-                    "licence": p.tool_licence, "source": "pypi.org",
+                    "source": "pypi.org",
                 },
                 {
                     "name": p.base_title, "version": "the model it learns on",
                     "bytes": 0 if base else p.base_bytes, "have": base is not None,
-                    "licence": p.base_licence, "source": "huggingface.co",
+                    "source": "huggingface.co",
                 },
             ],
         }  # fmt: skip
@@ -268,7 +267,7 @@ class DecisionSetup(TrainingSetup):
             pr = self.parts.get(spec.id, Progress())
             out.append(
                 {
-                    "id": spec.id, "title": spec.title, "licence": spec.licence,
+                    "id": spec.id, "title": spec.title,
                     "source": "huggingface.co", "main": spec.main,
                     "problem": self.problem() if not self.supported else None,
                     "model": {
@@ -310,7 +309,7 @@ class DecisionSetup(TrainingSetup):
             await asyncio.gather(*self._fetches.values(), return_exceptions=True)
 
     async def _fetch(self, spec: BaseSpec) -> None:
-        entry = ModelEntry(spec.id, "wasifyai-training", spec.title, spec.licence, "", "", 0, ())
+        entry = ModelEntry(spec.id, "wasifyai-training", spec.title, "", "", 0, ())
         prefix = f"{spec.subfolder}/" if spec.subfolder else ""
         files = [
             ModelFile(

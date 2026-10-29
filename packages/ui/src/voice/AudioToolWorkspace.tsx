@@ -479,11 +479,7 @@ export function AudioToolWorkspace({
                 value={voice || undefined}
                 placeholder={voices.length ? "Choose a voice…" : "No saved voices yet"}
                 disabled={working || voices.length === 0}
-                options={voices.map((v) => ({
-                  value: v.id,
-                  label: v.name,
-                  hint: v.consent.basis === "own" ? "your own voice" : "used with permission",
-                }))}
+                options={voices.map((v) => ({ value: v.id, label: v.name }))}
                 onValueChange={setVoice}
               />
               {voices.length === 0 ? (

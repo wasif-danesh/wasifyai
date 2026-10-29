@@ -234,24 +234,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/admin/safeguards": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Safeguards */
-        get: operations["get_safeguards_admin_safeguards_get"];
-        /** Set Safeguards */
-        put: operations["set_safeguards_admin_safeguards_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/admin/usage": {
         parameters: {
             query?: never;
@@ -3496,11 +3478,6 @@ export interface components {
         };
         /** Body_create_clone_products_wasifyai_voice_voices_clone_post */
         Body_create_clone_products_wasifyai_voice_voices_clone_post: {
-            /**
-             * Consent
-             * @default
-             */
-            consent: string;
             /** File */
             file: string;
             /** Name */
@@ -3711,8 +3688,6 @@ export interface components {
             kind?: string | null;
             /** Name */
             name?: string | null;
-            /** Rights */
-            rights?: string | null;
             /** Trigger Word */
             trigger_word?: string | null;
         };
@@ -3749,8 +3724,6 @@ export interface components {
             quality?: string | null;
             /** Question */
             question?: string | null;
-            /** Rights */
-            rights?: string | null;
         };
         /** DocumentPatch */
         DocumentPatch: {
@@ -3993,11 +3966,6 @@ export interface components {
         InUseModel: {
             /** Id */
             id: string;
-            /**
-             * Licence
-             * @default
-             */
-            licence: string;
             /** Plain */
             plain: string;
             /** Ready */
@@ -4133,12 +4101,6 @@ export interface components {
              */
             prompt: string;
             /**
-             * Rights
-             * @description The person says they may use the picture.
-             * @default false
-             */
-            rights: boolean;
-            /**
              * Seed
              * @default 42
              */
@@ -4254,14 +4216,10 @@ export interface components {
         ModelRow: {
             /** Bytes Missing */
             bytes_missing: number;
-            /** Commercial Use */
-            commercial_use: string;
             /** Engine */
             engine: string;
             /** Id */
             id: string;
-            /** Licence */
-            licence: string;
             /** Runtime Ready */
             runtime_ready: boolean;
             /** State */
@@ -4273,8 +4231,6 @@ export interface components {
         };
         /** ModelUpdated */
         ModelUpdated: {
-            /** Checks */
-            checks: string;
             model: components["schemas"]["ModelView"];
         };
         /** ModelView */
@@ -4289,8 +4245,6 @@ export interface components {
             kind: string;
             /** Model */
             model: string | null;
-            /** Protected */
-            protected: boolean;
             /** Provider */
             provider: string | null;
             /** Purpose */
@@ -4559,18 +4513,6 @@ export interface components {
             run_id?: string | null;
             /** Thread Id */
             thread_id?: string | null;
-        };
-        /** SafeguardsIn */
-        SafeguardsIn: {
-            /** Enabled */
-            enabled: boolean;
-        };
-        /** SafeguardsStatus */
-        SafeguardsStatus: {
-            /** Enabled */
-            enabled: boolean;
-            /** Forced */
-            forced: boolean;
         };
         /**
          * SaveTo
@@ -5077,8 +5019,6 @@ export interface components {
             name?: string | null;
             /** Quality */
             quality?: string | null;
-            /** Rights */
-            rights?: string | null;
         };
         /** RenameIn */
         wasifyai_model3d__routes__RenameIn: {
@@ -5486,59 +5426,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TestOutcome"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_safeguards_admin_safeguards_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SafeguardsStatus"];
-                };
-            };
-        };
-    };
-    set_safeguards_admin_safeguards_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SafeguardsIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SafeguardsStatus"];
                 };
             };
             /** @description Validation Error */

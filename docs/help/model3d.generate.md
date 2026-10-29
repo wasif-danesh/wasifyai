@@ -42,9 +42,7 @@ computer and nothing is sent anywhere. 3D models are experimental.
 - The model has about a million triangles and is not watertight, so it suits viewing and rendering
   better than 3D printing. A straight-on picture at eye level on a plain background works best; glass,
   mirrors, thin parts, fur and several objects do not come out well.
-- Pictures of real people need their agreement: you are asked to confirm it.
-- Built with DINOv3: the picture encoder is under Meta's DINOv3 licence, which is shown on the setup card
-  and the screen.
+- Built with DINOv3: the picture encoder is Meta's DINOv3.
 
 ## Needs
 

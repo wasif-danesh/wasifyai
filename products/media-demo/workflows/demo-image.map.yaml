@@ -1,5 +1,4 @@
 workflow: demo-image.json
-licence: "Developer-local sample; check the model card before using these weights in a product"
 models:
   - diffusion_models/z_image_turbo_bf16.safetensors
   - text_encoders/qwen_3_4b.safetensors

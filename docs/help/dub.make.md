@@ -15,7 +15,7 @@ The second step: speak the checked lines in the new language and mix them with t
 
 1. Open **Voice › Dub a recording**.
 2. Write and check the script, then choose **Next: the voice**.
-3. Choose whose voice (the speaker's needs your word that you may copy it), then **Make the dub**. The dub
+3. Choose whose voice to use, then **Make the dub**. The dub
    plays on the right and is kept in the Library; **Change the script** goes back to the lines.
 
 ## Fields

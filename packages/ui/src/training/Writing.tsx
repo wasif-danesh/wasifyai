@@ -1,13 +1,7 @@
 "use client";
 
 import { gigabytes } from "@wasifyai/client";
-import type {
-  TrainedModel,
-  TrainingApi,
-  WritingAsk,
-  WritingExample,
-  WritingRights,
-} from "@wasifyai/client";
+import type { TrainedModel, TrainingApi, WritingAsk, WritingExample } from "@wasifyai/client";
 import { Plus, Trash2 } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { cn } from "../cn";
@@ -24,11 +18,6 @@ import { useLanguageBases } from "./use-language-bases";
 import { useTrainingSetup } from "./use-setup";
 import { type WritingHook, useWriting } from "./use-writing";
 import { useWritingChat } from "./use-writing-chat";
-
-const RIGHTS: { id: WritingRights; label: string }[] = [
-  { id: "mine", label: "I wrote these" },
-  { id: "permission", label: "I have permission to use them" },
-];
 
 /** A button that asks once more before it removes something. */
 function Sure({ label, name, onSure }: { label: string; name: string; onSure: () => void }) {
@@ -421,20 +410,6 @@ function Editor({ w, api, pollMs }: { w: WritingHook; api: TrainingApi; pollMs?:
             ))}
           </>
         ) : null}
-        <fieldset className={cn(field, "m-0 border-0 p-0")}>
-          <legend className={cn(fieldLabel, "mb-1.5")}>Whose are these examples?</legend>
-          <div className={chips}>
-            {RIGHTS.map((r) => (
-              <Chip
-                key={r.id}
-                aria-pressed={set.rights === r.id}
-                onClick={() => void w.patch({ rights: r.id })}
-              >
-                {r.label}
-              </Chip>
-            ))}
-          </div>
-        </fieldset>
         <details className="rounded-lg border px-3 py-2">
           <summary className="cursor-pointer font-semibold">
             Choose the model and method
@@ -591,8 +566,8 @@ export function ChatWithIt({
         <>
           <p className="m-0 text-sm">
             To chat with it, the app needs the same model in the form its chat engine runs:{" "}
-            {copy.title}, {gigabytes(copy.bytes)}, {c.base?.licence}, from {c.base?.source}. It is
-            downloaded once, every file checked, and kept in the app's own folder. You need about{" "}
+            {copy.title}, {gigabytes(copy.bytes)}, from {c.base?.source}. It is downloaded once,
+            every file checked, and kept in the app's own folder. You need about{" "}
             {gigabytes(copy.needs_free_bytes)} of free disk space.
           </p>
           <div className={actions}>

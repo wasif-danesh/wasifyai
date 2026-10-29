@@ -236,7 +236,6 @@ export function FoundModels({ onChanged }: { onChanged?: () => void }) {
                 <p className="text-muted-foreground text-xs">
                   Found in {m.tool_title}
                   {detailOf(m) ? ` · ${detailOf(m)}` : ""}
-                  {m.licence ? ` · ${m.licence}` : ""}
                 </p>
                 {m.fit ? <FitBadge fit={m.fit} /> : null}
                 {m.reason ? <p className="text-sm">{m.reason}</p> : null}

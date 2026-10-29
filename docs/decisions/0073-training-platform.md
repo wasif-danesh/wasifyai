@@ -3,6 +3,7 @@
 - **Status:** Accepted (2026-10-18, by the owner), together with the components it names. **Revised the same day** after the owner's
   screenshot of Unsloth Studio's Train page and three clarifications (below); the first draft misread "decision
   model" as "diffusion model" and wrongly said Unsloth does not train on a Mac.
+- **Superseded in part:** by ADR-0094 (2026-10-29): decision 7 (whose face it is) and the daily limits are removed.
 - **Date:** 2026-10-18
 - **Depends on:** ADR-0068 (action catalogue), ADR-0056 (one engine; one memory slot), ADR-0058 (a runner for work on
   another machine), ADR-0061 (how Unsloth code enters), ADR-0062 (reuse matrix), ADR-0063/0064 (model discovery and

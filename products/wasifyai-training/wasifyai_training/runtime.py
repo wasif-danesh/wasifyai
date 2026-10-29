@@ -17,7 +17,7 @@ from typing import Any
 from wasifyai_platform_sdk import (
     Identity,
     RouteDeps,
-    RouteGuard,
+    RouteUsage,
     RunContext,
     RunError,
     search_text,
@@ -25,7 +25,7 @@ from wasifyai_platform_sdk import (
 )
 from wasifyai_platform_sdk.context import reset_context
 
-from wasifyai_training import bases, captions, evaluation, guardrail, magic, pictures, trainer
+from wasifyai_training import bases, captions, evaluation, magic, pictures, trainer
 from wasifyai_training.store import NotFound, TrainingStore
 
 log = logging.getLogger(__name__)
@@ -34,14 +34,8 @@ PRODUCT_ID = "wasifyai-training"
 KIND = "lora"  # a trained model, a creation of its own kind (ADR-0041)
 MIN_PICTURES = 8  # fewer teaches nothing; the screen says 15 to 25 good ones is plenty
 MAX_PICTURES = 100
-EV_PICTURE = "train.picture"  # the usage events the daily limits count (ADR-0047)
+EV_PICTURE = "train.picture"  # usage events
 EV_RUN = "train.run"
-STATEMENTS = {
-    "mine": "It's me",
-    "permission": "I have permission",
-    "drawing": "It's a drawing, a character or an animal",
-    "artwork": "It's my own artwork",
-}
 
 
 class NotAvailable(Exception):
@@ -146,36 +140,12 @@ async def add_to_search(state: Any, identity: Identity, item_id: str, text: str)
         log.warning("the trained model could not be added to search", exc_info=True)
 
 
-# ---- the safeguards (ADR-0047), the same as the 3D pictures ---------------------------------
+# ---- usage ------------------------------------------------------------------------------
 
 
-async def allowed_picture(deps: RouteDeps, identity: Identity, png: bytes) -> None:
-    """The day's limit, then the picture check: both only while the safeguards are on. The check
-    fails closed, and the picture is not kept when it is refused."""
-    guard = RouteGuard(deps.state, PRODUCT_ID)
-    if refusal := await guard.over_quota(
-        identity, EV_PICTURE, "train_pictures_per_user_per_day", "pictures"
-    ):
-        raise Refused(*refusal)
-    if await guard.on():
-        unavailable = Refused(
-            "moderation_unavailable", "We couldn't check your picture right now. Please try again."
-        )
-        caps = guard.caps
-        if caps is None:
-            raise unavailable
-        token = set_context(RunContext(identity.tenant_id, PRODUCT_ID, identity.user_id))
-        try:
-            verdict = await guardrail.judge_picture(caps, png)
-        except RunError as e:
-            raise Refused(e.code, e.message) from None
-        except Exception:  # no moderator bound, or the gateway is down: nothing is let through
-            log.exception("the training picture check failed")
-            raise unavailable from None
-        finally:
-            reset_context(token)
-        if not verdict.allowed:
-            raise Refused(verdict.category, guardrail.refusal_message(verdict.category))
+async def count_picture(deps: RouteDeps, identity: Identity, png: bytes) -> None:
+    """Counts a picture added to a set (usage only: nothing is checked or refused)."""
+    guard = RouteUsage(deps.state, PRODUCT_ID)
     await guard.record(identity, EV_PICTURE, 1, "pictures")
 
 
@@ -196,7 +166,7 @@ async def add_picture(
     except pictures.BadPicture as e:
         raise Refused("bad_picture", str(e)) from None
     png = await asyncio.to_thread(pictures.to_png, img)
-    await allowed_picture(deps, identity, png)
+    await count_picture(deps, identity, png)
     others = [int(i["dhash"], 16) for i in have]
     checks = await asyncio.to_thread(pictures.check, img, others)
     row = store.add_item(
@@ -295,7 +265,7 @@ class CaptionManager:
         ]  # fmt: skip
         if not wanted:
             return 0
-        caps = RouteGuard(self._deps.state, PRODUCT_ID).caps
+        caps = RouteUsage(self._deps.state, PRODUCT_ID).caps
         if caps is None:
             raise Refused(
                 "no_vision_model",
@@ -375,8 +345,6 @@ def ready_to_train(dataset: dict[str, Any], items: list[dict[str, Any]]) -> str 
     """What is missing before a run, in the sentence the person is shown; None when nothing is."""
     if len(items) < MIN_PICTURES:
         return f"Add at least {MIN_PICTURES} pictures. 15 to 25 good ones is plenty."
-    if not dataset["rights"]:
-        return "Say whose it is first."
     if not dataset["trigger_word"]:
         return "Choose the magic word first."
     if any(i["caption_state"] not in ("done", "edited") for i in items):
@@ -424,11 +392,6 @@ class RunManager:
         items = store.list_items(identity.tenant_id, identity.user_id, dataset_id)
         if why := ready_to_train(dataset, items):
             raise Refused("not_ready_to_train", why)
-        guard = RouteGuard(state, PRODUCT_ID)
-        if refusal := await guard.over_quota(
-            identity, EV_RUN, "train_runs_per_user_per_day", "training runs"
-        ):
-            raise Refused(*refusal)
         fit = engine.fit()
         if fit["verdict"] == "too_big":
             raise Refused("too_big", fit["reason"])
@@ -523,7 +486,7 @@ class RunManager:
             await folder_saved(self._deps.state, identity, "runs", run_id, ("samples",))
             model = await self._keep(identity, dataset, items, row, result)
             store.finish_run(run_id, "done", elapsed_s=result.seconds, model_id=model["id"])
-            await RouteGuard(self._deps.state, PRODUCT_ID).record(
+            await RouteUsage(self._deps.state, PRODUCT_ID).record(
                 identity, EV_RUN, 1, "runs", steps=row["steps"], seconds=result.seconds,
                 preview=bool(row["preview"]),
             )  # fmt: skip
@@ -549,14 +512,13 @@ class RunManager:
         """The adapter becomes a model with its card (ADR-0073 decision 9)."""
         store = store_for(self._deps.state)
         card = {
-            "base": row["base"], "base_title": trainer.BASE_TITLE, "licence": trainer.BASE_LICENCE,
+            "base": row["base"], "base_title": trainer.BASE_TITLE,
             "engine": result.engine, "preview": bool(row["preview"]), "note": result.note,
             "dataset": {"name": dataset["name"], "kind": dataset["kind"], "pictures": len(items),
                         "hash": dataset_hash(items)},
             "settings": row["settings"], "steps": row["steps"], "seconds": round(result.seconds, 1),
             "peak_memory_gb": round(result.peak_bytes / 1024**3, 1) if result.peak_bytes else None,
             "trigger_word": dataset["trigger_word"],
-            "statement": STATEMENTS.get(dataset["rights"], ""),
             "evaluation": {"passed": None, "note": "Not evaluated yet."},
             "trained_at": datetime.now(UTC).isoformat(timespec="seconds"),
         }  # fmt: skip

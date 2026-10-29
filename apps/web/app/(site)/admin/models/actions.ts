@@ -1,15 +1,14 @@
 "use server";
 
 import { apiSend } from "@/lib/api";
-import type { ModelUpdated, TestOutcome } from "@wasifyai/contracts";
+import type { TestOutcome } from "@wasifyai/contracts";
 import { revalidatePath } from "next/cache";
 
 export type FormState =
   | { status: "idle" }
   | { status: "tested"; outcome: TestOutcome }
-  | { status: "saved"; checks: string }
+  | { status: "saved" }
   | { status: "reset" }
-  | { status: "rejected"; message: string; failures: string[] }
   | { status: "error"; message: string };
 
 const ALIAS = /^[a-z0-9][a-z0-9-]{0,40}$/;
@@ -22,14 +21,6 @@ function text(form: FormData, name: string): string {
 /** Reasons the API gives for refusing a request, in words for the form. */
 function problem(status: number, data: unknown): FormState {
   const detail = (data as { detail?: unknown } | null)?.detail;
-  if (status === 409 && detail && typeof detail === "object") {
-    const d = detail as { message?: string; failures?: string[] };
-    return {
-      status: "rejected",
-      message: d.message ?? "The new model did not pass the checks.",
-      failures: d.failures ?? [],
-    };
-  }
   if (status === 401) return { status: "error", message: "Your session ended. Sign in again." };
   if (status === 403) return { status: "error", message: "Only admins can change models." };
   return {
@@ -72,7 +63,7 @@ export async function submitModel(
     const { status, data } = await apiSend("PUT", path, binding);
     if (status !== 200) return problem(status, data);
     revalidatePath("/admin/models");
-    return { status: "saved", checks: (data as ModelUpdated).checks };
+    return { status: "saved" };
   }
   return { status: "error", message: "Unknown action." };
 }

@@ -1,6 +1,7 @@
 # ADR-0025: Model access configuration (local by default, admin-configurable)
 
 - **Status:** Accepted (2026-10-08). The LiteLLM mechanism in decision 2 is subject to a spike; see Follow-ups
+- **Superseded in part:** by ADR-0094 (2026-10-29): the product checks (canaries) before an alias changes, and the protected aliases, are removed.
 - **Date:** 2026-10-08
 - **Replaces:** the earlier draft "Hosted inference: no GPU in the cloud or home lab" (never accepted)
 

@@ -38,8 +38,7 @@ SECTIONS = {
     ),
     "lipsync": (
         "Lip sync",
-        "A still picture says a sentence. Watch the mouth against the words, and look for the "
-        "“AI-generated” mark in the bottom-left corner.",
+        "A still picture says a sentence. Watch the mouth against the words.",
     ),
     "dub": (
         "Dubbing",

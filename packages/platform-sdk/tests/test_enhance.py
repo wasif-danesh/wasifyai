@@ -13,7 +13,6 @@ from wasifyai_platform_sdk import (
     InMemoryUsageRecorder,
     ProviderDeps,
     RouteDeps,
-    RunError,
     ScopedStorage,
     build_capabilities,
     build_enhance_router,
@@ -22,7 +21,7 @@ from wasifyai_platform_sdk import (
     memory_storage,
     new_upload,
 )
-from wasifyai_platform_sdk.enhance import EnhanceRefused, looks_like_working, strip_thinking
+from wasifyai_platform_sdk.enhance import looks_like_working, strip_thinking
 
 
 def who(x_user: str = Header("u1")) -> Identity:
@@ -36,7 +35,7 @@ def png() -> bytes:
 
 
 class Rig:
-    def __init__(self, tmp_path, enhance=None, describe=None, guard=None, per_hour=40):
+    def __init__(self, tmp_path, enhance=None, describe=None, per_hour=40):
         d = tmp_path / "demo"
         d.mkdir()
         (d / "product.yaml").write_text(
@@ -65,13 +64,6 @@ class Rig:
         self.storage = ScopedStorage(memory_storage())
         deps = ProviderDeps(tmp_path, usage=self.usage, storage=self.storage)
         self.caps = build_capabilities(load_product_config(tmp_path, "demo", environ={}), deps)
-        self.guarded: list[tuple[str, str, bytes | None]] = []
-
-        async def default_guard(caps, kind, text, picture):
-            self.guarded.append((kind, text, picture))
-            if "BAD" in text:
-                raise EnhanceRefused("I can't help with that.")
-
         app = FastAPI()
         app.state.services = EngineServices()
         app.state.services.caps = {"demo": self.caps}
@@ -81,7 +73,7 @@ class Rig:
         deps_r = RouteDeps(app.state.services, who)
         loader = {"p_text": "TEXT SYSTEM", "p_edit": "EDIT SYSTEM"}.__getitem__
         app.include_router(
-            build_enhance_router(deps_r, "demo", loader, guard or default_guard),
+            build_enhance_router(deps_r, "demo", loader),
             prefix="/products/demo",
         )
         self.uploads = app.state.services.uploads
@@ -135,7 +127,6 @@ def test_a_text_prompt_is_rewritten_wrapped_and_counted(rig):
     assert r.json() == {"prompt": "A vivid red fox in snow.", "changed": True}
     assert rig.text_model().prompts == ["<user_text>\nfox\n</user_text>"]
     assert [e.kind for e in rig.usage.events if e.kind == "prompt.enhanced"] == ["prompt.enhanced"]
-    assert rig.guarded == [("text_to_x", "fox", None)]
 
 
 def test_the_users_words_are_data_not_instructions(rig):
@@ -160,21 +151,6 @@ def test_bad_requests_are_422(rig):
     assert rig.post({"kind": "Bad Kind", "prompt": "x"}).status_code == 422
 
 
-def test_the_guardrail_refuses_with_its_fixed_text_and_nothing_is_written(rig):
-    r = rig.post({"kind": "text_to_x", "prompt": "BAD thing"})
-    assert r.status_code == 422 and r.json()["detail"] == "I can't help with that."
-    assert rig.text_model().prompts == []
-
-
-def test_a_model_that_cannot_answer_is_503_with_a_friendly_message(tmp_path):
-    async def broken(caps, kind, text, picture):
-        raise RunError("moderation_unavailable", "We couldn't check your request.", retryable=True)
-
-    rig = Rig(tmp_path, guard=broken)
-    r = rig.post({"kind": "text_to_x", "prompt": "fox"})
-    assert r.status_code == 503 and r.json()["detail"] == "We couldn't check your request."
-
-
 def test_an_hourly_limit_is_429(tmp_path):
     rig = Rig(tmp_path, per_hour=2)
     codes = [rig.post({"kind": "text_to_x", "prompt": "fox"}).status_code for _ in range(3)]
@@ -191,8 +167,6 @@ async def test_a_picture_kind_describes_the_picture_first(rig):
     describe_call, sent = rig.text_model().prompts  # one fake model serves both capabilities
     assert "<picture_description>\nA cat asleep on a sofa.\n</picture_description>" in sent
     assert sent.endswith("<user_text>\nmake it dusk\n</user_text>")
-    kind, text, picture = rig.guarded[0]
-    assert (kind, text) == ("edit_x", "make it dusk") and picture[:8] == b"\x89PNG\r\n\x1a\n"
     assert describe_call[0] == "Describe this picture." and len(describe_call) == 2
 
 

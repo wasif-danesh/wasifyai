@@ -30,21 +30,18 @@ function component(over: Partial<BuilderComponent> = {}): BuilderComponent {
           name: "Node.js",
           version: "22.23.1",
           bytes: 50_067_502,
-          licence: "MIT",
           source: "nodejs.org",
         },
         {
           name: "Chrome headless shell",
           version: "152",
           bytes: 97_532_843,
-          licence: "Chromium",
           source: "googleapis.com",
         },
         {
           name: "HyperFrames and GSAP",
           version: "0.8.171",
           bytes: 140_000_000,
-          licence: "Apache-2.0",
           source: "registry.npmjs.org",
         },
       ],
@@ -267,7 +264,7 @@ afterEach(() => {
 });
 
 describe("setting up Motion graphics", () => {
-  it("shows every part with its size and licence, and sets up with the size that was shown", async () => {
+  it("shows every part with its size, and sets up with the size that was shown", async () => {
     const a = api({
       component: vi.fn().mockResolvedValue(component()),
       install: vi.fn().mockResolvedValue(
@@ -290,7 +287,7 @@ describe("setting up Motion graphics", () => {
     for (const name of ["Node.js", "Chrome headless shell", "HyperFrames and GSAP"]) {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
-    expect(screen.getByText(/MIT · from nodejs\.org|50 MB · MIT/)).toBeInTheDocument();
+    expect(screen.getByText(/· from nodejs\.org/)).toBeInTheDocument();
     expect(
       screen.getByText(
         "A video can reach nothing outside its own folder. Nothing is sent anywhere while it runs.",

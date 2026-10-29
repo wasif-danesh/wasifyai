@@ -255,13 +255,12 @@ class Model3dInstaller:
             "bytes": self.total_bytes if self.supported else 0,
             "parts": [
                 {"name": "3D engine (pixal3d.cpp)", "version": p.binary_release,
-                 "bytes": p.binary_size, "licence": "MIT", "source": "github.com"},
+                 "bytes": p.binary_size, "source": "github.com"},
                 {"name": "Pixal3D models", "version": "single view, Q8_0",
                  "bytes": sum(f.size for f in p.sv_files),
-                 "licence": "MIT, and the DINOv3 licence for its image encoder (Built with DINOv3)",
                  "source": "huggingface.co"},
                 {"name": "Cut-out model (BiRefNet)", "version": "Q8_0",
-                 "bytes": sum(f.size for f in p.matte_files), "licence": "MIT",
+                 "bytes": sum(f.size for f in p.matte_files),
                  "source": "huggingface.co"},
             ],
             "found": {"path": str(found.root)}
@@ -354,7 +353,7 @@ class Model3dInstaller:
                        self._root, {}, 60)  # fmt: skip
         await asyncio.to_thread(write_notices, self._root)
 
-        entry = ModelEntry("model3d", "wasifyai-model3d", "3D", "", "", "", 0, ())
+        entry = ModelEntry("model3d", "wasifyai-model3d", "3D", "", "", 0, ())
         models = self._root / "models"
         for folder, files in ((p.sv_folder, p.sv_files), (p.matte_folder, p.matte_files)):
             mf = [ModelFile(folder, f.name, f.url, f.size, f.sha256) for f in files]

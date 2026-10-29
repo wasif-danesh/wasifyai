@@ -1,21 +1,16 @@
 """The search model through the gateway, the usage it records, and what one person may hold."""
 
 import asyncio
-import io
 import json
 
 import httpx
 import pytest
-from fastapi import FastAPI, Header
-from fastapi.testclient import TestClient
 from notebooks_rig import SPEC, FakeReader, HashEmbedder, pg_dsn
 from wasifyai_notebooks.components import GatewayComponents
 from wasifyai_notebooks.embedding import EmbedError, GatewayEmbedder, Purpose, embed_counted
 from wasifyai_notebooks.files import ObjectFiles, original_key
 from wasifyai_notebooks.ingest import IngestWorker
-from wasifyai_notebooks.quotas import Limits, QuotaExceeded, check_new_notebook, check_new_source
-from wasifyai_notebooks.routes import Runtime, build_routes
-from wasifyai_platform_sdk import EngineServices, Identity, RouteDeps, memory_storage
+from wasifyai_platform_sdk import memory_storage
 
 T, U = "t1", "u1"
 DIM = SPEC.dimension
@@ -145,106 +140,6 @@ async def test_a_text_without_spaces_is_cut_read_and_its_tokens_are_recorded(new
                 (T,),
             )
         assert row is not None and row[0] and row[1] == "tokens"
-
-
-def test_the_limits_stop_a_person_at_their_notebooks_sources_and_bytes(new_store):
-    store = new_store(dimension=DIM, embedder_id="e")
-    limits = Limits(notebooks=2, sources_per_notebook=2, bytes=1000)
-    a = store.create_notebook(T, U, "a")
-    check_new_notebook(limits, store, T, U)  # one of two held
-    store.create_notebook(T, U, "b")
-    with pytest.raises(QuotaExceeded, match="2 notebooks"):
-        check_new_notebook(limits, store, T, U)
-    check_new_notebook(limits, store, T, "someone-else")  # another person has their own
-
-    store.add_note(T, U, a["id"], title="n1", content="x" * 400)
-    check_new_source(limits, store, T, U, a["id"], 100)
-    store.add_note(T, U, a["id"], title="n2", content="y" * 400)
-    with pytest.raises(QuotaExceeded, match="at most 2 sources"):
-        check_new_source(limits, store, T, U, a["id"], 1)
-    c = store.create_notebook(T, "u3", "c")
-    store.add_note(T, "u3", c["id"], title="n", content="z" * 900)
-    with pytest.raises(QuotaExceeded, match="MB|GB"):
-        check_new_source(limits, store, T, "u3", c["id"], 200)  # 900 + 200 > 1000
-    check_new_source(limits, store, T, "u3", c["id"], 100)  # exactly 1000 fits
-    assert store.usage(T, U) == {"notebooks": 2, "sources": 2, "bytes": 800}
-    assert not Limits()  # no limits: nothing applies
-    check_new_source(Limits(), store, T, U, a["id"], 10**9)
-
-
-class Caps:
-    def __init__(self, quotas, on=True):
-        self.config = type("C", (), {"quotas": quotas})()
-        self._on = on
-
-    async def safeguards_on(self):
-        return self._on
-
-
-def quota_app(tmp_path, caps):
-    from notebooks_rig import FakeComponents
-    from wasifyai_notebooks.store import NotebookStore
-
-    store = NotebookStore.in_folder(tmp_path / "nb", dimension=SPEC.dimension, embedder_id=SPEC.id)
-    comps = FakeComponents(tmp_path)
-    files, tmp = tmp_path / "nb" / "files", tmp_path / "nb" / "tmp"
-    files.mkdir(parents=True)
-    tmp.mkdir()
-    worker = IngestWorker(store, comps, FakeReader(), files, tokenizer_factory=lambda: "word")
-    runtime = Runtime(store, comps, worker, files, tmp, reads_sources=False)
-
-    state = EngineServices(caps={"wasifyai-notebooks": caps} if caps is not None else {})
-
-    async def identity(x_user: str = Header("u1"), x_tenant: str = Header("t1")) -> Identity:
-        return Identity(x_tenant, x_user)
-
-    app = FastAPI()
-    app.include_router(
-        build_routes(RouteDeps(state, identity), runtime), prefix="/products/wasifyai-notebooks"
-    )
-    return app
-
-
-def upload(c, nid, name, data):
-    return c.post(
-        f"notebooks/{nid}/documents/upload", files=[("files", (name, io.BytesIO(data)))]
-    ).json()
-
-
-def test_the_routes_refuse_what_is_over_the_limits_only_while_safeguards_are_on(tmp_path):
-    quotas = {"notebooks_per_user": 1, "sources_per_notebook": 2, "bytes_per_user": 120}
-    app = quota_app(tmp_path, Caps(quotas))
-    with TestClient(app) as c:
-        c.base_url = c.base_url.join("/products/wasifyai-notebooks/")
-        nb = c.post("notebooks", json={}).json()
-        refused = c.post("notebooks", json={})
-        assert refused.status_code == 429 and "1 notebooks" in refused.json()["detail"]
-
-        assert (
-            c.post(
-                f"notebooks/{nb['id']}/documents", json={"title": "n", "content": "a" * 50}
-            ).status_code
-            == 201
-        )
-        big = c.post(f"notebooks/{nb['id']}/documents", json={"title": "m", "content": "b" * 90})
-        assert big.status_code == 429 and "your" in big.json()["detail"]
-
-        # an upload says which files it took and which went over, instead of failing whole
-        got = upload(c, nb["id"], "a.txt", b"first words here " * 2)
-        assert [d["title"] for d in got["created"]] == ["a.txt"]
-        again = upload(c, nb["id"], "b.txt", b"second words " * 2)
-        assert again["created"] == [] and "at most 2 sources" in again["rejected"][0]["reason"]
-
-
-def test_the_limits_do_not_apply_with_the_safeguards_off_or_without_configuration(tmp_path):
-    for caps in (Caps({"notebooks_per_user": 1}, on=False), Caps({}), None):
-        sub = tmp_path / f"c{id(caps)}"
-        sub.mkdir()
-        app = quota_app(sub, caps)
-        with TestClient(app) as c:
-            c.base_url = c.base_url.join("/products/wasifyai-notebooks/")
-            assert c.post("notebooks", json={}).status_code == 201
-            assert c.post("notebooks", json={}).status_code == 201
 
 
 def test_the_worker_asks_for_a_gateway_or_model_files():

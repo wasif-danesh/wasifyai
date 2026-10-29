@@ -330,7 +330,7 @@ class VoiceStore:
     @staticmethod
     def _voice(r: Any) -> dict[str, Any]:
         d = dict(r)
-        d["consent"] = json.loads(d["consent"])
+        d.pop("consent", None)  # a column of older versions, no longer used
         return d
 
     def reference_path(self, voice_id: str) -> Path:
@@ -342,18 +342,16 @@ class VoiceStore:
     def add_voice(
         self, tenant: str, user: str, *, kind: str, name: str, description: str = "",
         reference_key: str | None = None, reference_text: str = "",
-        reference_seconds: float | None = None, consent: dict[str, Any] | None = None,
-        voice_id: str | None = None,
+        reference_seconds: float | None = None, voice_id: str | None = None,
     ) -> dict[str, Any]:  # fmt: skip
         vid, stamp = voice_id or new_id(), now()
         with self._connect() as db:
             db.execute(
                 "INSERT INTO voices(id, tenant_id, user_id, name, kind, description, "
-                "reference_key, reference_text, reference_seconds, consent, created_at, "
-                "updated_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                "reference_key, reference_text, reference_seconds, created_at, updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (vid, tenant, user, name, kind, description, reference_key, reference_text,
-                 reference_seconds, json.dumps(consent or {}), stamp, stamp),
+                 reference_seconds, stamp, stamp),
             )  # fmt: skip
         return self.get_voice(tenant, user, vid)
 
@@ -520,25 +518,24 @@ class VoiceStore:
     def _clip(r: Any) -> dict[str, Any]:
         d = dict(r)
         d["voice"] = json.loads(d["voice"])
-        d["consent"] = json.loads(d["consent"])
+        d.pop("consent", None)  # a column of older versions, no longer used
         d["favourite"] = bool(d["favourite"])
         return d
 
     def add_clip(
         self, tenant: str, user: str, *, title: str, model_id: str, picture_key: str,
         video_key: str, voice: dict[str, Any], script: str, seconds: float, fps: int,
-        width: int, height: int, consent: dict[str, Any], load_s: float, elapsed_s: float,
+        width: int, height: int, load_s: float, elapsed_s: float,
         clip_id: str | None = None,
     ) -> dict[str, Any]:  # fmt: skip
         cid, stamp = clip_id or new_id(), now()
         with self._connect() as db:
             db.execute(
                 "INSERT INTO clips(id, tenant_id, user_id, title, model_id, picture_key, "
-                "video_key, voice, script, seconds, fps, width, height, consent, load_s, "
-                "elapsed_s, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "video_key, voice, script, seconds, fps, width, height, load_s, elapsed_s, "
+                "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (cid, tenant, user, title, model_id, picture_key, video_key, json.dumps(voice),
-                 script, seconds, fps, width, height, json.dumps(consent), load_s, elapsed_s,
-                 stamp, stamp),
+                 script, seconds, fps, width, height, load_s, elapsed_s, stamp, stamp),
             )  # fmt: skip
         return self.get_clip(tenant, user, cid)
 

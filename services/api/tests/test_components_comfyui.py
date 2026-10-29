@@ -73,7 +73,7 @@ class Tools:
 
 def component(tmp_path: Path, body: bytes, tools: Tools, bundle_dir: Path | None = None):
     pin = Archive(URL, len(body), hashlib.sha256(body).hexdigest(), "tar.gz", strip=1)
-    pins = Pins("comfyui", "Image engine (ComfyUI)", "0.40.0", "GPL-3.0", "", 1000, pin,
+    pins = Pins("comfyui", "Image engine (ComfyUI)", "0.40.0", "", 1000, pin,
                 {"lock": f"comfyui/requirements-{TRIPLE}.lock"})  # fmt: skip
     client = lambda: httpx.AsyncClient(  # noqa: E731
         transport=httpx.MockTransport(lambda r: httpx.Response(200, content=body))

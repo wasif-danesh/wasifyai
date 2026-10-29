@@ -139,7 +139,6 @@ class Model3dService:
             "fit": self.fit() if found is not None else None,
             "about": {
                 "built_with": "Built with DINOv3",
-                "licence": "Models: MIT, and the DINOv3 licence for the image encoder.",
                 "where": "Everything runs on this computer; nothing is sent anywhere.",
             },
         }

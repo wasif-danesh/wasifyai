@@ -74,11 +74,7 @@ export function Choose({ c }: { c: Choosing }) {
                     </span>
                   ) : null}
                 </span>
-                <span className={hint}>
-                  {b.can_teach
-                    ? [b.licence, "on this computer"].filter(Boolean).join(", ")
-                    : b.reason}
-                </span>
+                <span className={hint}>{b.can_teach ? "on this computer" : b.reason}</span>
               </span>
             </label>
           ))}

@@ -31,8 +31,6 @@ class ModelRow(BaseModel):
     title: str
     state: str
     bytes_missing: int
-    licence: str
-    commercial_use: str
     tasks: list[str]
     engine: str
     runtime_ready: bool
@@ -83,8 +81,7 @@ async def _audit(request: Request, who: Identity, action: str, target: str, **de
 def _model(m: dict[str, Any]) -> ModelRow:
     return ModelRow(
         id=m["id"], title=m.get("title", m["id"]), state=str(m.get("state", "")),
-        bytes_missing=int(m.get("bytes_missing") or 0), licence=str(m.get("licence", "")),
-        commercial_use=str(m.get("commercial_use", "unreviewed")),
+        bytes_missing=int(m.get("bytes_missing") or 0),
         tasks=[str(t) for t in m.get("tasks", [])], engine=str(m.get("engine", "")),
         runtime_ready=bool(m.get("runtime_ready", False)),
     )  # fmt: skip

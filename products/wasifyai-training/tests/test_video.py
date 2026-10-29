@@ -43,9 +43,7 @@ def add_clip(rig, dataset_id: str, data: bytes, headers=None):
     )
 
 
-def video_set(
-    rig, tmp_path, pictures: int = 5, clips_n: int = 3, word: str = "marlo", rights: str = "drawing"
-) -> dict:
+def video_set(rig, tmp_path, pictures: int = 5, clips_n: int = 3, word: str = "marlo") -> dict:
     ds = new_dataset(rig, family="video")
     for n in range(pictures):
         assert (
@@ -56,12 +54,7 @@ def video_set(
         assert add_clip(rig, ds["id"], clip_bytes(tmp_path, "testsrc2", 3.0 + n)).status_code == 201
     assert rig.post(f"{BASE}/datasets/{ds['id']}/captions").status_code == 202
     wait(rig, f"/datasets/{ds['id']}", lambda d: not d["writing"])
-    assert (
-        rig.patch(
-            f"{BASE}/datasets/{ds['id']}", json={"trigger_word": word, "rights": rights}
-        ).status_code
-        == 200
-    )
+    assert rig.patch(f"{BASE}/datasets/{ds['id']}", json={"trigger_word": word}).status_code == 200
     return rig.get(f"{BASE}/datasets/{ds['id']}").json()
 
 
@@ -168,12 +161,8 @@ def test_a_set_says_what_is_missing_before_a_run(rig, tmp_path):
         .json()["missing"]
         .startswith("Add at least 8 pictures or clips")
     )
-    full = video_set(rig, tmp_path, rights="")
-    assert (
-        full["missing"] == "Say whose it is first." and full["clips"] == 3 and full["pictures"] == 8
-    )
-    refused = rig.post(f"{BASE}/runs", json={"dataset_id": full["id"]})
-    assert refused.status_code == 409 and "whose it is" in refused.json()["detail"]["message"]
+    full = video_set(rig, tmp_path)
+    assert full["missing"] is None and full["clips"] == 3 and full["pictures"] == 8
 
 
 def run_to_end(rig, dataset_id: str) -> dict:
@@ -204,7 +193,9 @@ def test_a_run_leaves_a_model_with_its_card_and_publishes_the_look(rig, tmp_path
         "last": 0.5,
     }
     assert (
-        card["peak_memory_gb"] == 9.0 and card["engine"] == "fake-diffusers" and card["statement"]
+        card["peak_memory_gb"] == 9.0
+        and card["engine"] == "fake-diffusers"
+        and "statement" not in card
     )
     assert "look at it" in card["evaluation"]["note"]
     # the engine was given the pictures and the clips, with the magic word first in every description
@@ -260,7 +251,7 @@ def test_only_one_model_is_taught_at_a_time_across_every_kind(rig, tmp_path):
         add_picture(rig, pics["id"], png(noise((60 + n * 20, 90, 200 - n * 10))))
     rig.post(f"{BASE}/datasets/{pics['id']}/captions")
     wait(rig, f"/datasets/{pics['id']}", lambda d: not d["writing"])
-    rig.patch(f"{BASE}/datasets/{pics['id']}", json={"trigger_word": "zorvik", "rights": "drawing"})
+    rig.patch(f"{BASE}/datasets/{pics['id']}", json={"trigger_word": "zorvik"})
     assert rig.post(f"{BASE}/runs", json={"dataset_id": pics["id"]}).status_code == 409
     rig.post(f"{BASE}/runs/{first['id']}/cancel")
     wait(rig, f"/runs/{first['id']}", lambda r: r["status"] != "working")

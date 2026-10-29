@@ -184,7 +184,6 @@ export function AssistantHome({
       fetchModel: NonNullable<typeof getSpeechModel>,
     ): MicSetup & { languages: string[] } => ({
       title: model.title,
-      licence: model.licence,
       from: model.from,
       languages: model.languages,
       bytes: model.bytes + runtimeBytes,
@@ -229,7 +228,6 @@ export function AssistantHome({
     if (!r || !api) return undefined;
     return {
       title: r.title,
-      licence: r.licence,
       from: r.from,
       bytes: r.bytes,
       run: async (onProgress: (fraction: number | null) => void) => {

@@ -48,7 +48,7 @@
 | [0044](0044-lip-sync.md) | Lip Sync (MuseTalk; character image plus voice, song or script; safety policy) | Accepted |
 | [0045](0045-ui-components.md) | UI components for forms and data grids (shadcn/ui, TanStack Table) | Accepted |
 | [0046](0046-product-side-panel.md) | Product side panel (navigation inside a product) | Accepted |
-| [0047](0047-safeguards-switch.md) | A system-wide safeguards switch (Admin on/off) | Accepted |
+| [0047](0047-safeguards-switch.md) | A system-wide safeguards switch (Admin on/off) | Superseded by 0094 |
 | [0048](0048-monitoring-and-alerting.md) | Monitoring and alerting (Prometheus stack in cluster, Telegram, external heartbeat) | Accepted |
 | [0049](0049-data-inspection-tools.md) | Redis and Postgres viewers in every environment | Accepted |
 | [0050](0050-langfuse-llm-observability.md) | LLM observability, analytics and cost tracking with Langfuse | Accepted |
@@ -93,5 +93,7 @@
 | [0091](0091-styles-in-the-image-screens.md) | Styles (LoRAs) in the image screens: add, check, stack and reuse them (Unsloth's features as ideas, nothing copied) | Accepted (2026-10-25; nothing built, S0 waits for the owner) |
 | [0092](0092-principals-scopes-and-the-secret-store.md) | Principals, scopes and the secret store: who is calling, what they may do, where keys live (stages F3 and F4 of the 2026-10-27 plan; API keys were dropped on 2026-10-28) | Proposed (F3 and F4 built 2026-10-27) |
 | [0093](0093-one-shell-one-make-screen.md) | One shell and one make screen for every product: the UI audit of 2026-10-27 and its plan (`docs/ui-improvement-plan.md`, stages U0 to U12) | Proposed (nothing built) |
+| [0094](0094-no-safeguards-marks-or-licence-data-in-v1.md) | No safeguards, marks, consent gates, terms or licence data in v1 | Accepted (2026-10-29) |
+| [0095](0095-own-provider-keys-per-product.md) | The person's own provider keys, one per product (mockup `docs/spikes/own-keys-mockup.html`) | Proposed (K1 waits for the mockup) |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

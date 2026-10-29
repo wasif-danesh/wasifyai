@@ -48,7 +48,7 @@ def alone(monkeypatch: pytest.MonkeyPatch):
 
 def test_the_pins_name_every_file_with_a_size_and_a_checksum():
     p = ls.load_language_pins()
-    assert p.base_repo == "mlx-community/Qwen3-0.6B-4bit" and p.base_licence == "Apache-2.0"
+    assert p.base_repo == "mlx-community/Qwen3-0.6B-4bit"
     assert len(p.base_revision) == 40 and p.tool_version == "0.31.3"
     names = {f.path for f in p.base_files}
     assert {"config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json"} <= names
@@ -155,7 +155,7 @@ def test_the_plan_says_what_it_would_fetch_and_nothing_that_is_already_there(tmp
     plan = setup.plan()
     assert plan["bytes"] == 1000 + 24 + 300 + 120 == setup.missing_bytes()
     assert {p["name"] for p in plan["parts"]} == {"Trainer (mlx-lm)", "Qwen3 0.6B (4-bit)"}
-    assert all(p["licence"] and p["source"] for p in plan["parts"])
+    assert all(p["source"] for p in plan["parts"])
     write_model(ls.component_root(tmp_path) / "models" / setup.pins.base_id)
     assert setup.missing_bytes() == 1000  # the model is there: only the trainer
     assert [p["have"] for p in setup.plan()["parts"]] == [False, True]
@@ -263,7 +263,7 @@ def other_spec() -> ls.BaseSpec:
     main = ls.main_spec(small_pins(), None)
     return ls.BaseSpec(
         id="qwen3-test-4bit", title="Qwen3 test", repo="acme/qwen3-test", revision="r" * 40,
-        licence="Apache-2.0", source="huggingface.co", folder="qwen3-test-4bit",
+        source="huggingface.co", folder="qwen3-test-4bit",
         files=tuple(
             ts.BaseFile(p, len(d), hashlib.sha256(d).hexdigest()) for p, d in OTHER.items()
         ),
@@ -305,7 +305,7 @@ def test_the_pins_of_the_larger_models_name_every_file_and_a_chat_copy_of_each()
     found = ls.load_more_bases()
     assert [b.id for b in found] == ["qwen3-1.7b-4bit", "qwen3-4b-4bit"]
     for b in found:
-        assert b.licence == "Apache-2.0" and b.repo.startswith("mlx-community/Qwen3-")
+        assert b.repo.startswith("mlx-community/Qwen3-")
         assert len(b.revision) == 40 and all(len(f.sha256) == 64 for f in b.files)
         assert {"config.json", "model.safetensors", "tokenizer.json"} <= {f.path for f in b.files}
         assert len(b.chat.sha256) == 64 and b.chat.file.endswith(".gguf")

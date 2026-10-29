@@ -100,7 +100,7 @@ Key properties:
 
 A product is a folder under `products/` containing:
 
-- `product.yaml`: ID, capability bindings, quotas, feature flags
+- `product.yaml`: ID, capability bindings, uploads, Enhance kinds, settings
 - `graphs/`: LangGraph graphs, registered with the API at startup
 - `prompts/`: versioned prompt templates
 - `workflows/`: ComfyUI API-format workflow JSON plus `*.map.yaml` input/output maps
@@ -172,7 +172,7 @@ library. The checklist is in ADR-0041 ("A rule for everything built later").
 | Auth | Identity resolved on every request (stub in dev); Auth.js in Next.js, the BFF signs a short-lived JWT that FastAPI validates (ADR-0030); optional central OIDC (Keycloak / Authentik) later |
 | Billing | `usage_events` table: tokens, GPU seconds, jobs per tenant and user |
 | Observability | OpenTelemetry instrumentation, structured JSON logs with trace IDs; Langfuse for LLM traces; Prometheus / Grafana / Loki later |
-| Quotas | Usage events + per-product limits in `product.yaml` |
+| Usage | Usage events (no per-person limits, ADR-0094) |
 
 ## Security baseline
 

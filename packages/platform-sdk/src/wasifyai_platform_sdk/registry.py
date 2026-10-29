@@ -1,7 +1,6 @@
 """Graph registry: products register graph builders; the API exposes them generically."""
 
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from collections.abc import Callable
 from importlib.metadata import entry_points
 from typing import Any
 
@@ -15,29 +14,15 @@ from wasifyai_platform_sdk.search import IndexSourceFactory
 GraphBuilder = Callable[[Capabilities, Any], Any]
 
 
-@dataclass
-class CheckResult:
-    """What a product's model check found: `failures` are short, safe-to-show sentences."""
-
-    passed: bool
-    failures: list[str] = field(default_factory=list)
-    ran: int = 0
-
-
 # () -> the actions a product declares (ADR-0068), and the kinds of creation it keeps
 ActionProvider = Callable[[], list[Action]]
 LibraryProvider = Callable[[], list[LibraryKind]]
-
-# check(caps) -> CheckResult, run with capabilities bound to a candidate model (ADR-0025). A product
-# registers one for a capability whose model must be vetted before an admin can change it.
-ModelCheck = Callable[[Capabilities], Awaitable[CheckResult]]
 
 
 class GraphRegistry:
     def __init__(self) -> None:
         self._builders: dict[str, GraphBuilder] = {}
         self._routes: dict[str, RouteFactory] = {}
-        self._checks: dict[tuple[str, str], ModelCheck] = {}
         self._sources: dict[str, IndexSourceFactory] = {}
         self._actions: dict[str, ActionProvider] = {}
         self._library: dict[str, LibraryProvider] = {}
@@ -75,13 +60,6 @@ class GraphRegistry:
 
     def library_providers(self) -> dict[str, LibraryProvider]:
         return dict(self._library)
-
-    def add_check(self, product_id: str, capability: str, check: ModelCheck) -> None:
-        """Vet any model that is about to serve `capability` (for example `text.moderate`)."""
-        self._checks[(product_id, capability)] = check
-
-    def checks(self) -> dict[tuple[str, str], ModelCheck]:
-        return dict(self._checks)
 
     def route_factories(self) -> dict[str, RouteFactory]:
         return dict(self._routes)

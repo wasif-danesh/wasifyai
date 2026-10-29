@@ -25,12 +25,11 @@ const model = (over: Partial<VoiceModelInfo> = {}) =>
   ({
     id: "parakeet-tdt-0.6b-v3",
     title: "Parakeet TDT 0.6B v3",
-    licence: "CC-BY-4.0",
     tasks: ["transcribe"],
     recommended: ["transcribe"],
-    licence_evidence: "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     state: "ready",
     bytes_missing: 0,
+    source: "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     ...over,
   }) as VoiceModelInfo;
 const runtime = (installed: boolean): AudioRuntime => ({
@@ -110,7 +109,7 @@ describe("the home screen", () => {
     expect(screen.queryByRole("button", { name: /^Mic/ })).toBeNull();
   });
 
-  it("offers the missing model with its size and licence, asks nothing until the button is pressed, then sets up", async () => {
+  it("offers the missing model with its size, asks nothing until the button is pressed, then sets up", async () => {
     let installed = false;
     let have = false;
     const voice = voiceThat(
@@ -130,7 +129,7 @@ describe("the home screen", () => {
     await user.click(await screen.findByRole("button", { name: /^Mic/ }));
     const card = await screen.findByRole("region", { name: "Set up dictation" });
     expect(card).toHaveTextContent("Parakeet TDT 0.6B v3");
-    expect(card).toHaveTextContent("CC-BY-4.0");
+    expect(card).not.toHaveTextContent("CC-BY");
     expect(card).toHaveTextContent("huggingface.co");
     expect(card).toHaveTextContent("956 MB"); // the model and the 40 MB runtime
     expect(voice.installRuntime).not.toHaveBeenCalled(); // nothing is fetched before the click

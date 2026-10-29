@@ -100,9 +100,7 @@ class Engine:
             raise NoFace
         return x1, top, x2, y2
 
-    def generate(
-        self, picture: bytes, voice_path: str, fps: int = 25, batch: int = 8, mark: str = ""
-    ) -> bytes:
+    def generate(self, picture: bytes, voice_path: str, fps: int = 25, batch: int = 8) -> bytes:
         with self._lock, torch.no_grad():
             self.load()
             frame = cv2.imdecode(np.frombuffer(picture, np.uint8), cv2.IMREAD_COLOR)
@@ -142,7 +140,6 @@ class Engine:
                 enc = subprocess.Popen(
                     [_ffmpeg(), "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "bgr24",
                      "-s", f"{w}x{h}", "-r", str(fps), "-i", "-", "-i", voice_path,
-                     *(["-metadata", f"comment={mark} (lip sync, MuseTalk)"] if mark else []),
                      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-c:a", "aac",
                      "-shortest", str(mp4)],
                     stdin=subprocess.PIPE,
@@ -158,8 +155,6 @@ class Engine:
                             mode="jaw",
                             fp=self.parser,
                         )
-                        if mark:
-                            out = stamp(out, mark)
                         enc.stdin.write(np.ascontiguousarray(out).tobytes())
                 finally:
                     enc.stdin.close()
@@ -169,27 +164,6 @@ class Engine:
             if self.device == "mps":
                 torch.mps.empty_cache()
             return data
-
-
-def stamp(frame: np.ndarray, text: str) -> np.ndarray:
-    """A small label in the bottom-left corner, on a dark plate so it reads on any picture. The
-    frame is changed in place when it can be, and returned."""
-    if not frame.flags.c_contiguous or not frame.flags.writeable:
-        frame = np.ascontiguousarray(frame).copy()  # OpenCV draws only on its own kind of array
-    h, w = frame.shape[:2]
-    scale = max(0.45, min(w, h) / 900)
-    thick = max(1, round(scale * 2))
-    (tw, th), base = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, thick)
-    pad = max(4, th // 2)
-    x1, y1 = pad, max(0, h - th - base - 3 * pad)
-    x2, y2 = min(w, x1 + tw + 2 * pad), min(h, y1 + th + base + 2 * pad)
-    roi = frame[y1:y2, x1:x2]
-    frame[y1:y2, x1:x2] = (roi * 0.35).astype(np.uint8)
-    cv2.putText(
-        frame, text, (x1 + pad, y2 - pad - base), cv2.FONT_HERSHEY_SIMPLEX, scale,
-        (255, 255, 255), thick, cv2.LINE_AA,
-    )  # fmt: skip
-    return frame
 
 
 def _ffmpeg() -> str:

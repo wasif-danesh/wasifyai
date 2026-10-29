@@ -24,7 +24,7 @@ from wasifyai_api.desktop_discovery import (
     scan_folders,
 )
 from wasifyai_api.desktop_models import ModelEntry, ModelFile, ModelsService
-from wasifyai_api.safeguards import InMemorySettingsStore
+from wasifyai_api.settings_store import InMemorySettingsStore
 
 MB = 1_000_000
 
@@ -83,7 +83,7 @@ def test_a_gguf_header_tells_what_it_is_without_reading_the_tokenizer(tmp_path):
     h = read_gguf(gguf(tmp_path / "m.gguf", arch="qwen2", name="Qwen2 7B", ftype=15))
     assert h is not None
     assert (h.kind, h.family, h.quant, h.name) == ("language", "qwen2", "Q4_K_M", "Qwen2 7B")
-    assert h.licence == "apache-2.0" and h.context == 8192 and h.tensors == 3
+    assert h.context == 8192 and h.tensors == 3
 
 
 @pytest.mark.parametrize(
@@ -265,7 +265,7 @@ def test_a_folder_that_asks_for_permission_waits_until_it_is_added(tmp_path):
 
 def entry(folder: str, name: str, size: int) -> ModelEntry:
     f = ModelFile(folder, name, "https://example.test/x", size, "0" * 64)
-    return ModelEntry("demo", "wasifyai-image", "Demo image model", "Apache-2.0", "x", "", 8, (f,))
+    return ModelEntry("demo", "wasifyai-image", "Demo image model", "x", "", 8, (f,))
 
 
 def found(path: Path, kind="diffusion", **kw) -> Found:

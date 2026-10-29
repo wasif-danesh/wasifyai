@@ -24,12 +24,10 @@ def test_the_product_config_loads_and_binds_every_mode():
     assert cfg.capabilities["video.generate"].workflow == "ltx-video-2b-t2v"
     assert cfg.capabilities["video.animate"].workflow == "ltx-video-2b-i2v"
     assert cfg.capabilities["video.extend"].workflow == "ltx-video-2b-extend"
-    assert cfg.capabilities["text.moderate"].model == "moderator"
+    assert "text.moderate" not in cfg.capabilities
     assert cfg.capabilities["text.enhance"].model == "prompt-enhancer"
-    for name in ("text.moderate_image", "text.describe_image"):
-        assert cfg.capabilities[name].model == "multimodal"
-        assert cfg.capabilities[name].inputs == ["text", "image"]
-    assert cfg.quotas == {"videos_per_user_per_day": 5, "renders_per_user_per_day": 10}
+    assert cfg.capabilities["text.describe_image"].model == "multimodal"
+    assert cfg.capabilities["text.describe_image"].inputs == ["text", "image"]
     assert cfg.uploads["image"].max_bytes == 10 * 1024 * 1024
     assert (
         cfg.enhance["image_to_video"].needs_picture
@@ -51,7 +49,6 @@ def test_the_sampler_is_fully_wired_and_the_clip_is_saved_as_video(name):
         assert required in sampler, required
     wf = Workflow.load(WORKFLOWS, name)
     assert wf.map.outputs["video"].type == "video" and graph["81"]["class_type"] == "SaveVideo"
-    assert wf.map.licence and "Open RAIL-M" in wf.map.licence
 
 
 def test_the_text_workflow_takes_a_size_and_a_length():

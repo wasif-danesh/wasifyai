@@ -4,8 +4,8 @@ and the files beside it, in the app's own data folder; on the web the same table
 schema (`training`) and the files in object storage (`files.py`). One store class on either database
 (stage J2: `wasifyai_platform_sdk.sqlstore`).
 
-Every query is scoped by tenant and user. A **dataset** is pictures with a kind, a name, a magic word and
-the person's statement of rights; an **item** is one picture with its checks and its written caption; a
+Every query is scoped by tenant and user. A **dataset** is pictures with a kind, a name and a magic
+word; an **item** is one picture with its checks and its written caption; a
 **run** is one go at training a dataset; a **model** is what a finished run leaves, with its card. On the
 desktop a run left `working` by a process that is gone is paused (or failed) when the store opens; on the
 web a restarted service fails it and stops its worker job (`runs_left_working`)."""
@@ -26,11 +26,6 @@ LEFT_PAUSED = "It was paused when the app closed. You can pick it up where it st
 LEFT_RUNNING_WEB = "It was stopped when the service restarted. Start it again."
 KINDS = ("character", "style", "object")
 FAMILIES = ("image", "video")  # what a set of pictures (and clips) teaches
-RIGHTS = ("mine", "permission", "drawing", "artwork")
-WRITING_RIGHTS = (
-    "mine",
-    "permission",
-)  # whose the examples are: the text is the person's own writing
 QUALITIES = ("quick", "better")
 DECISION_KINDS = ("yes_no", "category", "score")
 
@@ -272,12 +267,10 @@ class TrainingStore:
         return [dict(r) for r in rows]
 
     def update_dataset(self, tenant: str, user: str, item: str, **fields: str) -> dict[str, Any]:
-        allowed = {"kind", "name", "trigger_word", "rights"}
+        allowed = {"kind", "name", "trigger_word"}
         sets = {k: v for k, v in fields.items() if k in allowed}
         if "kind" in sets and sets["kind"] not in KINDS:
             raise ValueError("kind")
-        if "rights" in sets and sets["rights"] not in (*RIGHTS, ""):
-            raise ValueError("rights")
         if sets:
             cols = ", ".join(f"{k} = ?" for k in sets)
             n = self._exec(
@@ -540,11 +533,9 @@ class TrainingStore:
     def update_writing_set(
         self, tenant: str, user: str, item: str, **fields: str
     ) -> dict[str, Any]:
-        sets = {k: v for k, v in fields.items() if k in {"name", "quality", "base", "rights"}}
+        sets = {k: v for k, v in fields.items() if k in {"name", "quality", "base"}}
         if "quality" in sets and sets["quality"] not in QUALITIES:
             raise ValueError("quality")
-        if "rights" in sets and sets["rights"] not in (*WRITING_RIGHTS, ""):
-            raise ValueError("rights")
         if "name" in sets:
             sets["name"] = sets["name"].strip()[:60]
         if sets:
@@ -629,15 +620,12 @@ class TrainingStore:
             "high",
             "quality",
             "base",
-            "rights",
         }
         sets = {k: v for k, v in fields.items() if k in keys}
         if "quality" in sets and sets["quality"] not in QUALITIES:
             raise ValueError("quality")
         if "kind" in sets and sets["kind"] not in DECISION_KINDS:
             raise ValueError("kind")
-        if "rights" in sets and sets["rights"] not in (*WRITING_RIGHTS, ""):
-            raise ValueError("rights")
         for k, limit in (("name", 60), ("question", 300), ("low", 200), ("high", 200)):
             if k in sets:
                 sets[k] = str(sets[k]).strip()[:limit]

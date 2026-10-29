@@ -58,7 +58,7 @@ Video, Voice and Music open one at a time with their tools under them, and Motio
 Train models and Model hub follow. The magnifier in the menu goes: search is ⌘K and the box in the bar, and it opens
 the Library. "Your images", "Your videos" and "Your music" stay as items of their groups until stage U8 replaces
 them with the one Library and each screen's recent strip. Voices stays a page until U5 makes it a panel in Text to
-speech. The names (decision 1) are untouched.
+speech. The menu's names stay as they are (decision 1).
 
 ### The top bar
 
@@ -145,8 +145,8 @@ its flow (say it, check the form, make it) and drops its own typeface and left c
 
 **Models and the picker.** Before: a table that clips its Use button and wraps the licence into four lines, a
 hash as a name, a popover over the form. After: the picker is a dialog (the ADR-0086 one) with the same rows as
-the Models page; the Models table gets a Name column with display names (a hash is a tooltip), a one-line licence
-chip, and a readiness dot that the bar button shares; Advanced stays as it is.
+the Models page; the Models table gets a Name column with display names (a hash is a tooltip) and a
+readiness dot that the bar button shares; Advanced stays as it is.
 
 **Settings.** Before: nine sections on one page, one Save button, native controls. After: grouped as General
 (the person's name, the theme, updates) · Models (engines, finding, browsing, the token) · Privacy and sharing
@@ -193,7 +193,7 @@ Each stage is a few days, ships on its own, and is checked the same way: the moc
 | **U8 Library** | 4 | My creations as the one library: filters, sort, multi-select, the `CreationDetail` view with actions; the "Your …" pages removed and their routes redirected; the kinds that were missing added | the creations tests; every "Your …" link gone; detail from every card |
 | **U9 Home and chat** | 3 | quick starts, Running now, Recent on the home; three pills and a "+" menu; the Explore page moved out of the app as a marketing page; the pill and card words; display names on the model button; progress in a job card | the readme pictures regenerated; the chat specs |
 | **U10 Notebooks, Teach, 3D, Motion** | 4 | the grouped Studio, outputs as cards, renaming in place; the honest front doors with Back in the bar; the stepper and run pages; Motion graphics on the frame | the notebook and training tests; the window |
-| **U11 Settings and Models** | 3 | grouped settings with a list and search, settings that save as they change, "What this computer can do"; display names, a licence chip and readiness dots in Models | the window |
+| **U11 Settings and Models** | 3 | grouped settings with a list and search, settings that save as they change, "What this computer can do"; display names and readiness dots in Models (the licence chip was removed 2026-10-29, ADR-0094) | the window |
 | **U12 Polish and access** | 3 | focus order, labels and contrast on every screen in both themes; reduced motion; forced colours; the final picture pass | an accessibility checker (decision 4), a keyboard-only walk of every screen, the pictures |
 
 **Built:** U0 on 2026-10-27 (the seven fixes: `Model3d.tsx`, `minutesText` in `voice/format.ts`, the window's
@@ -218,8 +218,8 @@ groups back), `SearchPalette` (⌘K: any tool by name, a creation by what it is 
 for the action ids), `useTheme` and `ThemeButton` shared by both apps; the desktop's `Shell.tsx` and the web's
 `WebShell.tsx` use them, the web's `TopBar`, breadcrumb and `CommandMenu` are gone, the desktop's `TitleBar` is
 gone; `PageHeader` claims the bar's title only when it carries one (`title`), so the Images, Video, voice, 3D and
-chat screens keep the group's name as the title and put only the model button in the bar. The menu's names are
-untouched (decision 1). The tray lists the engine's running actions on the desktop and the
+chat screens keep the group's name as the title and put only the model button in the bar. The menu's names stay
+as they are (decision 1). The tray lists the engine's running actions on the desktop and the
 clips being made on the web (the web has no `/actions/jobs` yet). Checked with the menu walk, the shared-screens
 layout checks (one bar height on every screen), the unit tests of both shells and the pictures taken again.
 
@@ -278,7 +278,7 @@ transcript in the window (`ui-audit.sh light speech-make`: Kokoro 82M, the wavef
 "Make a voice", then Parakeet TDT 0.6B v3 writing the same words with their times; pictures `speech-voices`,
 `speech-made`, `speech-make-a-voice`, `transcript-made`). Not in this stage: a voice preview that is not kept as a
 speech (it needs an engine route: an owner decision), the Voices page leaving the menu (it is now also the "Make a
-voice" dialog; the menu's names are decision 1), and the strips reading the one Library (U8).
+voice" dialog; the menu's names stay as they are, decision 1), and the strips reading the one Library (U8).
 
 **Built:** U6 on 2026-10-28: Dub a recording, Audiobook and Lip sync on the `MakeScreen` with the `Stepper` in the
 ask column (`voice/DubbingWorkspace.tsx`, `AudiobookWorkspace.tsx`, `LipSyncWorkspace.tsx`; mounted by `MakeFrame`).
@@ -447,8 +447,7 @@ recent strips have one source.
 
 ## What needs an owner decision
 
-1. **Names.** "Pictures" for Images, "Speech" and "Studio" for the eight voice tools, "Teach" for Train models,
-   "Models" for Model hub. The design guide already says picture and Teach; the menu does not.
+1. ~~Menu names~~ Decided 2026-10-29 (owner): no changes; the menu keeps its names.
 2. ~~Removing the per-product libraries~~ Decided 2026-10-28 (owner): yes. "Your images", "Your videos" and
    "Your music" go; My creations is the one Library, each make screen keeps its recent strip with See all to the
    Library filtered to its kind, the old addresses redirect, and Your music's own jobs (add a recording, send a
@@ -458,8 +457,8 @@ recent strips have one source.
    (MPL-2.0), a test-only dependency of the web app, pinned; it never ships. Stage U12.
 5. ~~The web's Explore page~~ Decided 2026-10-28 (owner): kept, as a marketing page outside the app (the site's
    layout, no side menu item); the app's home still gets the quick starts. Stage U9.
-6. **Mockup review before each stage**: the owner looks at the HTML mockup and says go; or the stages run on their
-   own and the owner reviews the built screen.
+6. ~~Mockup review before each stage~~ Decided 2026-10-29 (owner): a mockup before each stage. The owner looks at
+   the HTML mockup and says go; then the stage is built.
 7. ~~The chat box's pills~~ Decided 2026-10-28 (owner): three pills (Attach, Mic, and the approval mode as "Ask me
    first" / "Just do it") and a "+" menu (Thinking, Search, Servers; Servers only once a server is connected).
    Stage U9.

@@ -18,15 +18,14 @@ from typing import Any
 from wasifyai_platform_sdk import (
     Identity,
     RouteDeps,
-    RouteGuard,
+    RouteUsage,
     RunContext,
-    RunError,
     search_text,
     set_context,
 )
 from wasifyai_platform_sdk.context import reset_context
 
-from wasifyai_model3d import guardrail, pictures
+from wasifyai_model3d import pictures
 from wasifyai_model3d.blobs import LocalBlobs
 from wasifyai_model3d.store import Model3dStore, NotFound
 
@@ -190,40 +189,15 @@ class JobManager:
             raise Refused("not_ready", not_ready(engine))
         if self.busy(identity):
             raise Refused("busy", "A 3D model is being worked on. Wait for it to finish.")
-        await self._allowed_picture(identity, picture)
+        await self._count_picture(identity, picture)
         row = store.get_input(identity.tenant_id, identity.user_id, input_id)
         await blobs.put(identity, "inputs", input_id, "picture.png", picture)
         self._begin(identity, "input", input_id, self._prepare(identity, row, engine, store, blobs))
         return row
 
-    async def _allowed_picture(self, identity: Identity, picture: bytes) -> None:
-        """The day's limit, then the picture check: both only while the safeguards are on (P6).
-        The check fails closed, and the picture is not kept when it is refused."""
-        guard = RouteGuard(self._deps.state, PRODUCT_ID)
-        if refusal := await guard.over_quota(
-            identity, EV_PICTURE, "pictures_per_user_per_day", "pictures"
-        ):
-            raise Refused(*refusal)
-        if await guard.on():
-            caps = guard.caps
-            unavailable = Refused(
-                "moderation_unavailable",
-                "We couldn't check your picture right now. Please try again.",
-            )
-            if caps is None:
-                raise unavailable
-            token = set_context(RunContext(identity.tenant_id, PRODUCT_ID, identity.user_id))
-            try:
-                verdict = await guardrail.judge_picture(caps, picture)
-            except RunError as e:
-                raise Refused(e.code, e.message) from None
-            except Exception:  # no moderator bound, or the gateway is down: nothing is let through
-                log.exception("the 3D picture check failed")
-                raise unavailable from None
-            finally:
-                reset_context(token)
-            if not verdict.allowed:
-                raise Refused(verdict.category, guardrail.refusal_message(verdict.category))
+    async def _count_picture(self, identity: Identity, picture: bytes) -> None:
+        """Counts the picture as used (usage only: nothing is checked or refused)."""
+        guard = RouteUsage(self._deps.state, PRODUCT_ID)
         await guard.record(identity, EV_PICTURE, 1, "pictures")
 
     async def _prepare(
@@ -307,12 +281,7 @@ class JobManager:
             raise Refused("not_checked", "The picture is still being looked at.")
         if any(c["level"] == "stop" for c in source["checks"]):
             raise Refused("unusable", "That picture cannot be made into a model. Try another.")
-        recipe = {"detail": detail, "seed": seed, "engine": "pixal3d-cpp-sv", "resolution": 1024,
-                  "licence": "conditional: Built with DINOv3"}  # fmt: skip
-        if refusal := await RouteGuard(state, PRODUCT_ID).over_quota(
-            identity, EV_MODEL, "models_per_user_per_day", "3D models"
-        ):
-            raise Refused(*refusal)
+        recipe = {"detail": detail, "seed": seed, "engine": "pixal3d-cpp-sv", "resolution": 1024}
         row = store.add_model(
             identity.tenant_id, identity.user_id, title=title.strip() or "3D model",
             prompt=prompt.strip(), input_id=input_id, detail=detail, seed=seed, recipe=recipe,
@@ -379,7 +348,7 @@ class JobManager:
             store.finish_model(
                 item, "done", elapsed_s=res.seconds, peak_gb=res.peak_gb, glb_bytes=size
             )
-            await RouteGuard(self._deps.state, PRODUCT_ID).record(
+            await RouteUsage(self._deps.state, PRODUCT_ID).record(
                 identity, EV_MODEL, 1, "models", detail=row["detail"], seconds=res.seconds
             )
         except asyncio.CancelledError:

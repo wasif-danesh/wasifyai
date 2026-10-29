@@ -159,14 +159,11 @@ async def test_voices_are_described_listed_cloned_and_used(tmp_path, ctx):  # no
     assert (bad.status, bad.code) == ("refused", "bad_description")
 
     sid = await a_speech(h, LONG)
-    params = {"source_kind": "speech", "source_id": sid, "name": "Me", "voice_is": "own"}
-    needs = await h.go("voice.clone", params)  # a person's word comes first, every time
-    assert needs.status == "needs_approval" and "my own voice" in needs.text
-    assert h.store.list_voices("t1", "u1", "clone") == []
-    cloned = await h.go("voice.clone", params, person_approved=True)
+    params = {"source_kind": "speech", "source_id": sid, "name": "Me"}
+    cloned = await h.go("voice.clone", params)  # nothing is asked about whose voice it is
     assert cloned.ok and cloned.output["kind"] == "clone"
     saved = h.store.get_voice("t1", "u1", cloned.output["voice_id"])
-    assert saved["consent"]["basis"] == "own"  # the record travels with the voice
+    assert "consent" not in saved
 
     listed = await h.go("voice.list", {})
     assert {v["kind"] for v in listed.output["voices"]} == {"design", "clone"}
@@ -194,7 +191,7 @@ async def test_a_voice_is_changed_and_words_are_edited(tmp_path, ctx):  # noqa: 
     h = Harness(tmp_path)
     await library_track(h.rig, rate=22050, channels=1)
     sid = await a_speech(h, LONG)
-    params = {"source_kind": "speech", "source_id": sid, "name": "Ann", "voice_is": "permission"}
+    params = {"source_kind": "speech", "source_id": sid, "name": "Ann"}
     voice = (await h.go("voice.clone", params, person_approved=True)).output["voice_id"]
 
     r = await h.go(
@@ -321,25 +318,20 @@ async def test_a_book_is_planned_then_read_one_track_per_chapter(tmp_path, ctx):
 # ---- lip sync ---------------------------------------------------------------------------------
 
 
-async def test_a_picture_talks_only_after_the_person_gives_their_word(tmp_path, ctx):  # noqa: F811
+async def test_a_picture_talks_without_being_asked_whose_it_is(tmp_path, ctx):  # noqa: F811
     h = Harness(tmp_path)
-    params = {"image_id": "img1", "text": "Welcome to the show, everybody.", "picture_is": "drawn"}
-    asked = await h.go("lipsync.make", params)
-    assert asked.status == "needs_approval" and "AI-generated" in asked.text
-    assert h.engine.lipsynced == [] and h.host.runs == []
-
+    params = {"image_id": "img1", "text": "Welcome to the show, everybody."}
     r = await h.go("lipsync.make", params, person_approved=True)
     assert r.ok, r.text
     assert set(r.output) == {"clip_id", "title", "seconds", "uri"}
+    assert "AI-generated" not in r.text
     clip = h.store.get_clip("t1", "u1", r.output["clip_id"])
-    assert clip["consent"]["picture"] == "drawn" and clip["consent"]["voice"] == "generated"
-    assert clip["consent"]["mark"] == "AI-generated"
+    assert "consent" not in clip
 
     for bad in (
-        {"image_id": "img1", "picture_is": "drawn"},  # neither words nor a recording
-        {"image_id": "img1", "text": "x", "source_id": "s", "source_kind": "track",
-         "picture_is": "drawn"},  # both
-        {"image_id": "img1", "source_id": "s", "source_kind": "track", "picture_is": "drawn"},
+        {"image_id": "img1"},  # neither words nor a recording
+        {"image_id": "img1", "text": "x", "source_id": "s", "source_kind": "track"},  # both
+        {"image_id": "img1", "source_id": "s"},  # a recording without its kind
     ):  # fmt: skip
         again = await h.go("lipsync.make", bad, person_approved=True)
         assert (again.status, again.code) == ("refused", "invalid_input"), bad

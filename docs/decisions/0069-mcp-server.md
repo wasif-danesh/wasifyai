@@ -3,6 +3,8 @@
 - **Status:** Accepted (2026-10-18, by the owner), together with the new dependencies it names. Amended 2026-10-27 with
   what spike S1 measured (section "Amendment after spike S1" below); the decisions stand, the sentences marked
   *amended* are read with it. Stage M1 has not started.
+- **Owner answer (2026-10-29):** the launcher's name `wasify-mcp` is frozen: people's MCP configs depend on it, so it
+  is not renamed.
 - **Date:** 2026-10-18
 - **Depends on:** ADR-0068 (action catalogue), ADR-0056 (one engine, two shells; one memory slot), ADR-0047
   (safeguards), ADR-0066 (voice product; consent), ADR-0041 (search), ADR-0061 (how outside code enters).

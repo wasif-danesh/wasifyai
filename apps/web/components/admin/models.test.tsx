@@ -30,7 +30,6 @@ const model = (over: Partial<ModelView> = {}): ModelView => ({
   alias: "lyrics-writer",
   purpose: "Writes lyrics",
   kind: "chat",
-  protected: false,
   source: "default",
   provider: "ollama",
   model: "gemma4:e4b",
@@ -80,34 +79,16 @@ describe("submitModel (the server action)", () => {
     expect(JSON.stringify(out)).not.toContain(KEY);
   });
 
-  it("saves, and reports that the checks passed", async () => {
-    apiSend.mockResolvedValue({ status: 200, data: { model: {}, checks: "passed" } });
+  it("saves", async () => {
+    apiSend.mockResolvedValue({ status: 200, data: { model: {} } });
     const { submitModel } = await import("../../app/(site)/admin/models/actions");
     const out = await submitModel(
-      "moderator",
+      "multimodal",
       { status: "idle" },
       form({ ...fields, intent: "save" }),
     );
-    expect(apiSend.mock.calls[0].slice(0, 2)).toEqual(["PUT", "/admin/models/moderator"]);
-    expect(out).toEqual({ status: "saved", checks: "passed" });
-  });
-
-  it("shows why the API refused a model that failed the checks", async () => {
-    apiSend.mockResolvedValue({
-      status: 409,
-      data: { detail: { message: "the product's checks failed", failures: ["cv: allowed"] } },
-    });
-    const { submitModel } = await import("../../app/(site)/admin/models/actions");
-    const out = await submitModel(
-      "moderator",
-      { status: "idle" },
-      form({ ...fields, intent: "save" }),
-    );
-    expect(out).toEqual({
-      status: "rejected",
-      message: "the product's checks failed",
-      failures: ["cv: allowed"],
-    });
+    expect(apiSend.mock.calls[0].slice(0, 2)).toEqual(["PUT", "/admin/models/multimodal"]);
+    expect(out).toEqual({ status: "saved" });
   });
 
   it.each([
@@ -164,9 +145,9 @@ describe("ModelForm", () => {
     expect(screen.getByRole("button", { name: "Reset to default" })).toBeInTheDocument();
   });
 
-  it("has no reset for a default binding, and warns before changing the moderator", async () => {
-    await renderForm(model({ protected: true }));
+  it("has no reset for a default binding, and runs no checks on a new model", async () => {
+    await renderForm(model());
     expect(screen.queryByRole("button", { name: "Reset to default" })).not.toBeInTheDocument();
-    expect(screen.getByText(/runs the guardrail test cases/)).toBeInTheDocument();
+    expect(screen.queryByText(/guardrail/)).not.toBeInTheDocument();
   });
 });

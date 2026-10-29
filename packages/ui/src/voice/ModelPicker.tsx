@@ -8,12 +8,12 @@ import { Spinner } from "../components/spinner";
 import { ModelSelect, groupOfTask, useChoicesFor } from "../models";
 import { formatBytes } from "../notebook/format";
 import { PageHeader } from "../window-bar";
-import { COMMERCIAL_TEXT, costLine, modelOption, stateText } from "./format";
+import { costLine, modelOption, stateText } from "./format";
 
 /**
  * The model list for a task, built from the engine's descriptors (ADR-0066): every model it knows is
- * there, with whether it can be used now, and a line under the list says what the chosen one is, what
- * it costs and which licence its weights carry. A model that is not for commercial use says so.
+ * there, with whether it can be used now, and a line under the list says what the chosen one is and what
+ * it costs.
  */
 export function ModelPicker({
   models,
@@ -67,7 +67,6 @@ export function ModelPicker({
       </PageHeader>
     );
   }
-  const warn = chosen && (chosen.commercial_use === "no" || chosen.commercial_use === "unreviewed");
   return (
     <div className="grid gap-2">
       <Label htmlFor={`model-${task}`}>Model</Label>
@@ -80,29 +79,11 @@ export function ModelPicker({
       />
       {chosen ? (
         <div className="grid gap-1 text-muted-foreground text-sm" data-testid="model-details">
-          <p>
-            {chosen.licence}. {costLine(chosen)}
-          </p>
+          <p>{costLine(chosen)}</p>
           {chosen.engine === "remote" ? (
             <p>Hosted: what you give this model is sent to its provider to be processed.</p>
           ) : null}
           <p className="flex flex-wrap items-center gap-2">
-            <span
-              className={cn(
-                "rounded-full border px-2 py-0.5 text-xs",
-                warn ? "border-warn/40 bg-warn/10 text-foreground" : "border-ok/30",
-              )}
-            >
-              {COMMERCIAL_TEXT[chosen.commercial_use]}
-            </span>
-            <a
-              className="underline underline-offset-4"
-              href={chosen.licence_evidence}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Licence
-            </a>
             {chosen.state !== "ready" ? (
               <output>
                 {stateText(chosen)}

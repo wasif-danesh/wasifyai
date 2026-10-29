@@ -1,5 +1,4 @@
 workflow: ltx-video-2b-t2v.json
-licence: "LTX-Video 2B v0.9.5: Open RAIL-M (March 2025), commercial use allowed with use restrictions that must reach users (ADR-0037). Later LTX weights use a different licence; do not swap them in without a new check"
 notes: >
   Text to video. Built from ComfyUI's official template ltxv_text_to_video (v0.9.5 weights) and run
   for real on Apple silicon: it needs the diffusion model in fp32, so the worker sends video jobs to a

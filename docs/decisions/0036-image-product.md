@@ -1,6 +1,7 @@
 # ADR-0036: The image product: text to image and image to image
 
 - **Status:** Accepted
+- **Superseded in part:** by ADR-0094 (2026-10-29): the image guardrail and the daily limit are removed.
 - **Date:** 2026-10-08
 
 ## Context

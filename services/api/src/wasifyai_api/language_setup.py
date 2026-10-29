@@ -66,7 +66,6 @@ class ChatPins:
     file: str
     size: int
     sha256: str
-    licence: str
     source: str
     folder: str
 
@@ -78,7 +77,7 @@ def load_chat_pins(path: Path | None = None) -> ChatPins:
     return ChatPins(
         id=raw["id"], title=raw["title"], repo=raw["repo"], revision=raw["revision"],
         file=raw["file"], size=int(raw["size"]), sha256=str(raw["sha256"]).lower(),
-        licence=raw["licence"], source=raw["source"], folder=raw["folder"],
+        source=raw["source"], folder=raw["folder"],
     )  # fmt: skip
 
 
@@ -91,7 +90,6 @@ class BaseSpec:
     title: str
     repo: str
     revision: str
-    licence: str
     source: str
     folder: str
     files: tuple[BaseFile, ...]
@@ -109,7 +107,7 @@ def _chat_pins(raw: dict[str, Any]) -> ChatPins:
     return ChatPins(
         id=raw["id"], title=raw["title"], repo=raw["repo"], revision=raw["revision"],
         file=raw["file"], size=int(raw["size"]), sha256=str(raw["sha256"]).lower(),
-        licence=raw["licence"], source=raw["source"], folder=raw["folder"],
+        source=raw["source"], folder=raw["folder"],
     )  # fmt: skip
 
 
@@ -129,7 +127,6 @@ def load_more_bases(path: Path | None = None) -> list[BaseSpec]:
                 title=b["title"],
                 repo=b["repo"],
                 revision=b["revision"],
-                licence=b["licence"],
                 source=b["source"],
                 folder=b["folder"],
                 files=tuple(files),
@@ -143,7 +140,7 @@ def main_spec(pins: Pins | None = None, chat: ChatPins | None = None) -> BaseSpe
     p = pins or load_language_pins()
     return BaseSpec(
         id=p.base_id, title=p.base_title, repo=p.base_repo, revision=p.base_revision,
-        licence=p.base_licence, source="huggingface.co", folder=p.base_folder,
+        source="huggingface.co", folder=p.base_folder,
         files=p.base_files, chat=chat or load_chat_pins(), main=True,
     )  # fmt: skip
 
@@ -291,12 +288,12 @@ class LanguageSetup(TrainingSetup):
                 {
                     "name": "Trainer (mlx-lm)", "version": p.tool_version,
                     "bytes": 0 if tool else p.packages_bytes, "have": tool is not None,
-                    "licence": p.tool_licence, "source": "pypi.org",
+                    "source": "pypi.org",
                 },
                 {
                     "name": p.base_title, "version": "the writing model it learns on",
                     "bytes": 0 if base else p.base_bytes, "have": base is not None,
-                    "licence": p.base_licence, "source": "huggingface.co",
+                    "source": "huggingface.co",
                 },
             ],
         }  # fmt: skip
@@ -364,7 +361,6 @@ class LanguageSetup(TrainingSetup):
             row: dict[str, Any] = {
                 "id": spec.id,
                 "title": spec.title,
-                "licence": spec.licence,
                 "source": spec.source,
                 "main": spec.main,
                 "problem": self.problem() if not self.supported else None,
@@ -415,7 +411,7 @@ class LanguageSetup(TrainingSetup):
         key = (spec.id, part)
         if part == "chat":
             c = spec.chat
-            entry = ModelEntry(c.id, "wasifyai-training", c.title, c.licence, "", "", 0, ())
+            entry = ModelEntry(c.id, "wasifyai-training", c.title, "", "", 0, ())
             files = [
                 ModelFile(
                     c.folder,
@@ -427,9 +423,7 @@ class LanguageSetup(TrainingSetup):
             ]
             target, size, say = self.root / "chat", c.size, "Getting the model for chat"
         else:
-            entry = ModelEntry(
-                spec.id, "wasifyai-training", spec.title, spec.licence, "", "", 0, ()
-            )
+            entry = ModelEntry(spec.id, "wasifyai-training", spec.title, "", "", 0, ())
             files = [
                 ModelFile(
                     "/".join([spec.folder, *Path(f.path).parent.parts]),

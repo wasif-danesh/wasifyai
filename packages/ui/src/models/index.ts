@@ -11,4 +11,4 @@ export {
 } from "./context";
 export { COPY, type Copy, displayName, hostOf, plainFor } from "./copy";
 export { ComputerCanDo } from "./CanDo";
-export { LicenceChip, ReadyDot, type Readiness, readinessOf } from "./marks";
+export { ReadyDot, type Readiness, readinessOf } from "./marks";

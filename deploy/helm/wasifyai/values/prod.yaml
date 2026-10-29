@@ -3,9 +3,6 @@
 image:
   pullPolicy: IfNotPresent
 
-safeguards:
-  forceOn: true
-
 api:
   replicas: 2
 web:

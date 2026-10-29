@@ -97,7 +97,6 @@ export type AttachOptions = {
 export type PictureReader = {
   state: "available" | "downloading";
   title: string;
-  licence: string;
   from: string;
   bytes: number;
   download?: { status: string; bytes_done: number; bytes_total: number; error: string };

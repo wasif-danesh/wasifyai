@@ -9,7 +9,6 @@ import type {
   Said,
   TrainedModel,
   TrainingApi,
-  WritingRights,
 } from "@wasifyai/client";
 import { Plus, Trash2 } from "lucide-react";
 import { type ReactNode, useId, useMemo, useState } from "react";
@@ -29,11 +28,6 @@ import { useTrainingSetup } from "./use-setup";
 
 const SELECT =
   "flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30";
-
-const RIGHTS: { id: WritingRights; label: string }[] = [
-  { id: "mine", label: "They are mine" },
-  { id: "permission", label: "I have permission to use them" },
-];
 
 const KINDS: { id: DecisionKind; label: string; note: string }[] = [
   { id: "yes_no", label: "Yes or no", note: "Is this review positive?" },
@@ -746,23 +740,6 @@ function Editor({ w, api, pollMs }: { w: DecideHook; api: TrainingApi; pollMs?: 
             ) : null}
           </>
         ) : null}
-        <fieldset className={cn(field, "m-0 border-0 p-0")}>
-          <legend className={cn(fieldLabel, "mb-1.5")}>Whose are these texts?</legend>
-          <div className={chips}>
-            {RIGHTS.map((r) => (
-              <Chip
-                key={r.id}
-                aria-pressed={set.rights === r.id}
-                onClick={() => void w.patch({ rights: r.id })}
-              >
-                {r.label}
-              </Chip>
-            ))}
-          </div>
-          <p className={hint}>
-            Use this to sort and flag things, not to decide about a person's job, credit or safety.
-          </p>
-        </fieldset>
         <details className="rounded-lg border px-3 py-2">
           <summary className="cursor-pointer font-semibold">
             Choose the model and method

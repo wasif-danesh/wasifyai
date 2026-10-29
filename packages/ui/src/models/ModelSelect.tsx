@@ -49,13 +49,6 @@ export function timeText(bytes: number): string {
       : `about ${minutes} minutes`;
 }
 
-export const COMMERCIAL: Record<ModelChoice["commercial"], string> = {
-  yes: "Commercial use allowed",
-  conditional: "Commercial use with conditions",
-  no: "Not for commercial use",
-  unreviewed: "Licence not reviewed",
-};
-
 function stateLine(c: ModelChoice): string {
   if (c.state === "ready") return c.chosen ? "In use" : "On this computer";
   if (c.state === "too_big") return "Too big for this computer";
@@ -307,7 +300,7 @@ export function ModelSelect({
   );
 }
 
-/** "To use this we need to download it": in words, with what will be fetched, the licence and whether it fits. */
+/** "To use this we need to download it": in words, with what will be fetched and whether it fits. */
 export function GetModelDialog({
   place = "device",
   choice,
@@ -357,24 +350,7 @@ export function GetModelDialog({
           {choice.from ? `It is downloaded from ${choice.from}. ` : ""}
           {place === "service"
             ? "It is downloaded onto the worker and runs there, for everyone who uses this service. "
-            : "It runs on this computer; nothing you make is sent away. "}
-          {COMMERCIAL[choice.commercial]}
-          {choice.licenceUrl ? (
-            <>
-              {" "}
-              (
-              <a
-                className="underline underline-offset-4"
-                href={choice.licenceUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                licence
-              </a>
-              )
-            </>
-          ) : null}
-          .
+            : "It runs on this computer; nothing you make is sent away."}
         </p>
         <p className="m-0 text-muted-foreground">
           It downloads in the background: you can keep using the app and see how far it is at the

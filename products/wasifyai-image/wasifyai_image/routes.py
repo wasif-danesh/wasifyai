@@ -21,7 +21,6 @@ from wasifyai_platform_sdk import (
 )
 
 from wasifyai_image import prompts
-from wasifyai_image.guardrail import enhance_guard
 from wasifyai_image.images import ImageRecord, ImageStore, image_store
 
 PRODUCT_ID = "wasifyai-image"
@@ -86,7 +85,7 @@ def save_copy(folder: Path, stem: str, ext: str, data: bytes) -> Path:
 def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
     """`store` is injectable for tests; production reads the shared database."""
     router = APIRouter(tags=[PRODUCT_ID])
-    router.include_router(build_enhance_router(deps, PRODUCT_ID, prompts.load, enhance_guard))
+    router.include_router(build_enhance_router(deps, PRODUCT_ID, prompts.load))
 
     def images() -> ImageStore:
         return store or image_store(deps.engine)

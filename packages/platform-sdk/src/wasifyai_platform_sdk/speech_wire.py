@@ -71,7 +71,8 @@ def speech_edit_request(d: dict[str, Any]) -> SpeechEditRequest:
 
 
 def lipsync_request(d: dict[str, Any]) -> LipSyncRequest:
-    return LipSyncRequest(**d)
+    # a job queued by an older engine may still carry `consent` and `mark`: they are not used now
+    return LipSyncRequest(fps=int(d["fps"]), voice_seconds=float(d["voice_seconds"]))
 
 
 # ---- results: the audio or video is a file, the rest is `meta` ---------------------------------

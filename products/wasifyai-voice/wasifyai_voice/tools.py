@@ -5,8 +5,8 @@ recording sound like another voice, change words in a recording.
 Each tool reads a recording the person already has in the library (a track, or a speech), makes a
 copy at the rate its model reads, runs the model, and keeps every result as a track whose
 `parent_id` points at the recording it came from, so the library shows where it came from and
-search finds it. A voice is changed only into a saved voice made from a recording (it carries the
-consent record, ADR-0044), never into a file the run was handed."""
+search finds it. A voice is changed only into a saved voice made from a recording, never into a
+file the run was handed."""
 
 import asyncio
 import logging
@@ -16,8 +16,6 @@ from typing import Any
 
 from langgraph.config import get_stream_writer
 from wasifyai_platform_sdk import (
-    LIPSYNC_PICTURE,
-    LIPSYNC_VOICE,
     Capabilities,
     RunError,
     VoiceEngineError,
@@ -32,8 +30,8 @@ from wasifyai_platform_sdk import (
 
 from wasifyai_voice import audio_input
 from wasifyai_voice.runtime import store_for
-from wasifyai_voice.safeguards import CLIPS, TOOLS, Guard, metered
-from wasifyai_voice.store import NotFound, new_id, now
+from wasifyai_voice.store import NotFound, new_id
+from wasifyai_voice.usage import TOOLS, metered
 
 log = logging.getLogger(__name__)
 
@@ -68,7 +66,6 @@ class Kit:
     at_rate: Callable[[Source, int, int], Awaitable[tuple[Path, float]]]
     keep: Callable[..., Awaitable[dict[str, Any]]]
     failed: Callable[[VoiceEngineError], RunError]
-    guard: Guard
 
 
 def build_tools(
@@ -76,7 +73,6 @@ def build_tools(
     app_state: Any,
     engine: Callable[[], Any],
     refuse_with: Refuse,
-    guard: Guard,
 ) -> dict[str, Any]:
     async def load_source(state: dict[str, Any]) -> Source:
         """The recording a run was pointed at: `source_track` or `source_speech`."""
@@ -268,7 +264,7 @@ def build_tools(
             model_id=model.id, options=req.options, seed=req.seed, parent=source.track_id,
             edit={
                 "action": "convert", "voice_id": voice["id"], "voice": name,
-                "consent": (voice.get("consent") or {}).get("basis", ""), "from": source.kind,
+                "from": source.kind,
             },
             load_s=result.load_s, elapsed_s=result.elapsed_s,
         )  # fmt: skip
@@ -290,8 +286,6 @@ def build_tools(
             raise failed(e) from None
         except SourceMissing as e:
             return refuse_with("unknown_source", e.message)
-        if refusal := await guard.words(str(state.get("text", ""))):  # the words that will be said
-            return refuse_with(*refusal)
         clip = None
         try:
             clip, seconds = await at_rate(source, int(model.speech_edit["input_rate"]), 1)
@@ -345,18 +339,6 @@ def build_tools(
         except (NotFound, FileNotFoundError):
             return refuse_with("unknown_picture", "Choose a picture first.")
         script = " ".join(str(state.get("text", "")).split())
-        voice_basis = "generated" if script else state.get("voice_basis")
-        # the person's word comes before any work is done, speech included
-        if state.get("picture_basis") not in LIPSYNC_PICTURE or voice_basis not in LIPSYNC_VOICE:
-            return refuse_with(
-                "consent_required",
-                "Say what the picture is and whose voice this is before a video is made.",
-            )
-        # ADR-0047, before any work: the daily limit, the picture, and the words that will be said
-        if refusal := await guard.over_limit(CLIPS):
-            return refuse_with(*refusal)
-        if refusal := await guard.picture(png) or await guard.words(script):
-            return refuse_with(*refusal)
         say: dict[str, Any] | None = None
         source: Source | None = None
         if script:  # words are made into speech here, so the voice is never somebody's recording
@@ -376,29 +358,10 @@ def build_tools(
                 source = await load_source(state)
             except SourceMissing as e:
                 return refuse_with("unknown_source", e.message)
-            if await guard.on():  # the words of a recording are said by the face: read them first
-                try:
-                    heard, _ = await audio_input.at_rate(source.wav, "voice.wav", 16000, 1)
-                    said = await eng.transcribe(eng.resolve("transcribe", None), heard, {})
-                except (audio_input.AudioInputError, VoiceEngineError):
-                    raise RunError(
-                        "moderation_unavailable",
-                        "We couldn't check what the recording says right now. Please try again.",
-                        retryable=True,
-                    ) from None
-                if refusal := await guard.words(said.text):
-                    return refuse_with(*refusal)
-        if voice_basis == "generated" and source.kind != "speech":
-            # only speech made here from words is "generated"; a track may be somebody's recording
-            return refuse_with(
-                "consent_required",
-                "That recording was not made here from words. Say it is your own voice, or that "
-                "you have permission to use it.",
-            )
         pic = voice_wav = None
         try:
             voice_audio, seconds = await audio_input.at_rate(source.wav, "voice.wav", 16000, 1)
-            req = check_lipsync(model, seconds, state.get("picture_basis"), voice_basis)
+            req = check_lipsync(model, seconds)
             pic = await scratch_file(png, ".png")
             voice_wav = await scratch_file(voice_audio)
             write(
@@ -440,11 +403,6 @@ def build_tools(
             or (script or source.title)[:60]
             or "Talking video"
         )
-        consent = {
-            **req.consent, "mark": req.mark, "accepted_at": now(),
-            "picture_statement": LIPSYNC_PICTURE[req.consent["picture"]],
-            "voice_statement": LIPSYNC_VOICE[req.consent["voice"]],
-        }  # fmt: skip
         voice_ref = (
             {"kind": "speech", "id": speech_id}
             if speech_id
@@ -453,7 +411,7 @@ def build_tools(
         store.add_clip(
             ctx.tenant_id, ctx.user_id, title=title, model_id=model.id, picture_key=picture["key"],
             video_key=video_key, voice=voice_ref, script=script, seconds=round(result.seconds, 2),
-            fps=result.fps, width=result.width, height=result.height, consent=consent,
+            fps=result.fps, width=result.width, height=result.height,
             load_s=round(result.load_s, 2), elapsed_s=round(result.elapsed_s, 2), clip_id=clip_id,
         )  # fmt: skip
         store.delete_picture(
@@ -462,8 +420,7 @@ def build_tools(
         await caps.index_creation("lipsync", clip_id, f"{title}. {script}")
         await caps.record_usage(
             CLIP_CREATED, 1, "clips", clip_id=clip_id, model=model.id,
-            seconds=round(result.seconds, 2), picture=req.consent["picture"],
-            voice=req.consent["voice"],
+            seconds=round(result.seconds, 2),
         )  # fmt: skip
         return {
             "clip_id": clip_id, "title": title, "video_url": await caps.storage.url(video_key),
@@ -477,11 +434,10 @@ def build_tools(
         at_rate=at_rate,
         keep=keep,
         failed=failed,
-        guard=guard,
     )
 
     def limited(name: str, node: Any) -> Any:
-        return metered(caps, guard, refuse_with, TOOLS, node, tool=name)
+        return metered(caps, TOOLS, node, tool=name)
 
     return {
         "separate": limited("separate", separate),

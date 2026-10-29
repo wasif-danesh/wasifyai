@@ -12,16 +12,12 @@ const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
 const kokoro = {
   id: "kokoro-82m",
   title: "Kokoro 82M",
-  licence: "Apache-2.0",
   engine: "audiocpp",
   family: "kokoro_tts",
   tasks: ["speak"],
   recommended: ["speak"],
   languages: ["en-us"],
   sample_rate: 24000,
-  commercial_use: "yes",
-  licence_evidence: "https://example.test",
-  reviewed: "2026-10-16",
   measured: { platform: "darwin-arm64", speed_x: 8.6, memory_gb: null, load_s: null },
   voices: [
     { id: "af_heart", label: "Heart", language: "en-us", gender: "female" },

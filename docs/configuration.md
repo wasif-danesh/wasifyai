@@ -6,7 +6,7 @@ There are three kinds of configuration. Each has one home.
 |---|---|---|---|
 | **Secrets** | OAuth client secrets, DB passwords, API keys, `AUTH_SECRET`, `LITELLM_SALT_KEY`, `MEDIA_SECRETS_KEY` | `.env` (gitignored); keys listed in `.env.example` | Kubernetes Secret from External Secrets or SOPS |
 | **Environment wiring** | `OLLAMA_BASE_URL`, `COMFYUI_BASE_URL`, `LITELLM_BASE_URL`, `DATABASE_URL`, bucket name | `.env` + `compose.yaml` | Helm values → ConfigMap |
-| **Product config** | Model bindings, workflow choice, prompts, quotas | `products/<id>/product.yaml` (in Git) | Same file, baked into the image |
+| **Product config** | Model bindings, workflow choice, prompts | `products/<id>/product.yaml` (in Git) | Same file, baked into the image |
 
 Application code reads secrets and wiring only through `pydantic-settings`, and product
 config only through the validated product config model. Code never knows where a value
@@ -20,7 +20,6 @@ came from.
 | `AUTH_SECRET` | web | Auth.js cookie encryption |
 | `API_AUTH_SECRET` | api, web | Shared secret (at least 32 bytes) for the BFF-to-API token; the API refuses to start in `jwt` mode without it |
 | `AUTH_<PROVIDER>_ID` / `_SECRET` | web | One OAuth app per provider and environment (see `apps/web/README.md`) |
-| `SAFEGUARDS_FORCE_ON` | api | `true` in production (Helm `safeguards.forceOn`): moderation and quotas always apply and Admin > Safeguards is read-only. Unset elsewhere: off by default, an admin switches it (ADR-0047) |
 | `MAX_JOBS_PER_USER` | api | How many jobs a person may have in the line at once, across everything (pictures, clips, speech, music, 3D, Motion graphics, training); Helm `jobs.maxPerUser`, 1 on the web. 0 or unset: no limit. Admins are never limited, nor is the desktop (ADR-0088) |
 | `ADMIN_EMAILS` | api | Comma-separated; only a verified email becomes admin |
 | `WASIFYAI_MCP_LAUNCHER` | api | The path of the `wasify-mcp` launcher (the shell sets it); Settings > Other apps shows it in the commands to paste (ADR-0069) |
@@ -63,15 +62,13 @@ Graphs request capabilities. Config binds them to providers.
 # products/wasifyai-image/product.yaml
 id: wasifyai-image
 capabilities:
-  text.moderate:
+  text.enhance:
     provider: litellm
-    model: moderator              # a LiteLLM alias, not a raw model name
+    model: prompt-enhancer        # a LiteLLM alias, not a raw model name
   image.generate:
     provider: comfyui
     workflow: flux2-klein-4b
     defaults: { width: 1024, height: 1024 }
-quotas:
-  images_per_user_per_day: 20
 ```
 
 A product that accepts user pictures opts in with `uploads: { image: { max_bytes: 10485760 } }` (ADR-0035) and
@@ -158,7 +155,7 @@ interface applies (`obstore`); the adapter for each is a constructor in
 
 ### LiteLLM aliases
 
-An alias (`default-chat`, `lyrics-writer`, `prompt-enhancer`, `creation-embedder`, `moderator`, `moderator-nothink`, `multimodal`,
+An alias (`default-chat`, `lyrics-writer`, `prompt-enhancer`, `creation-embedder`, `multimodal`,
 `embedder`) maps to a real model. Changing the underlying LLM never touches product config
 ([ADR-0025](decisions/0025-model-access-configuration.md)).
 
@@ -170,8 +167,6 @@ An alias (`default-chat`, `lyrics-writer`, `prompt-enhancer`, `creation-embedder
   hosted providers, an API key. They apply to new requests at once. "Reset" returns to the default.
 - **Keys** are write-only: the model gateway stores them encrypted with `LITELLM_SALT_KEY` (set it once
   and never change it, or the saved keys become unreadable). They are never shown, logged or audited.
-- **The moderator is protected.** Saving a new model for it first runs the product's guardrail test
-  cases on the candidate (about half a minute) and only changes it if every must-refuse case is refused.
 - LiteLLM keeps its tables in the `litellm` schema of the platform Postgres; `litellm.yaml` /
   the Helm ConfigMap hold settings only.
 

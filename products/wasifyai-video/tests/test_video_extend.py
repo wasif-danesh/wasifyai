@@ -5,10 +5,10 @@ from typing import Any
 
 import pytest
 from test_video_graph import Story, exists  # noqa: I001
-from video_rig import frame_count, make_rig, mp4, verdict
+from video_rig import frame_count, make_rig, mp4
 from wasifyai_platform_sdk import JobFailed, RunError, object_key
 from wasifyai_video.schemas import LENGTHS, OVERLAP_FRAMES
-from wasifyai_video.videos import FixedQuota, InMemoryVideoStore, VideoRecord, join_clips
+from wasifyai_video.videos import InMemoryVideoStore, VideoRecord, join_clips
 
 NEW = LENGTHS[5]  # the new part of a five second extension
 
@@ -133,30 +133,14 @@ async def test_it_says_what_is_missing(tmp_path, ctx):
     assert rig.sink.submitted == [] and rig.asked() == []
 
 
-async def test_the_words_are_checked_and_a_refusal_copies_nothing(tmp_path, ctx):
-    rig = make_rig(tmp_path, moderate=[verdict(False, "hate", "no")])
-    store = InMemoryVideoStore()
-    vid = await make_source(rig, store)
-    s = await start(rig, store, vid)
-    assert s.state["status"] == "refused" and s.state["refusal"]["code"] == "hate"
-    assert rig.sink.submitted == [] and len(store.videos) == 1
-    assert len(rig.word_checks()) == 1
-
-
-async def test_one_clip_at_a_time_and_the_daily_limit_apply_to_extending_too(tmp_path, ctx):
+async def test_one_clip_at_a_time_applies_to_extending_too(tmp_path, ctx):
     rig, store = make_rig(tmp_path), InMemoryVideoStore()
     vid = await make_source(rig, store)
     other = await make_source(rig, store, status="working", vid="busy-1")
     assert other
     s = await start(rig, store, vid)
     assert s.state["refusal"]["code"] == "busy"
-    rig2, store2 = make_rig(tmp_path / "b"), InMemoryVideoStore()
-    vid2 = await make_source(rig2, store2)
-    s2 = await Story(rig2, videos=store2, quota=FixedQuota(5)).start(
-        {"mode": "extend", "prompt": "x", "source_id": vid2}
-    )
-    assert s2.state["refusal"]["code"] == "quota_exceeded"
-    assert rig.sink.submitted == [] and rig2.sink.submitted == []
+    assert rig.sink.submitted == []
 
 
 async def test_a_failed_job_fails_the_row_and_deletes_the_copy(tmp_path, ctx):
@@ -213,7 +197,7 @@ async def test_a_video_the_person_added_can_be_carried_on_whatever_its_length(tm
     assert job.prompt["from_frame"] == 24 - OVERLAP_FRAMES
     temp = object_key("t1", "wasifyai-video", "u1", job.prompt["video_key"])
     assert frame_count(await rig.raw.get(temp)) == 24  # only the end goes to the engine
-    assert len(rig.picture_checks()) == 1  # its last frame was looked at, as a picture is
+    assert rig.asked() == []  # nothing judges what the person added
     await s.finish_job(data=mp4(frames=NEW))
     row = next(v for v in store.videos if v.id == s.state["video_id"])
     assert (row.mode, row.frames) == ("extend", 191 + NEW)
@@ -222,17 +206,8 @@ async def test_a_video_the_person_added_can_be_carried_on_whatever_its_length(tm
     assert not await exists(rig, job.prompt["video_key"])
 
 
-async def test_an_added_clip_that_the_moderator_refuses_is_not_carried_on(tmp_path, ctx):
-    rig = make_rig(tmp_path, moderate_image=[verdict(False, "minors")])
-    store = InMemoryVideoStore()
-    vid = await make_source(rig, store, frames=49, mode="import")
-    s = await start(rig, store, vid)
-    assert s.state["status"] == "refused" and s.state["refusal"]["code"] == "minors"
-    assert rig.sink.submitted == [] and len(store.videos) == 1
-
-
 async def test_a_clip_the_model_made_is_not_looked_at_again(tmp_path, ctx):
     rig, store = make_rig(tmp_path), InMemoryVideoStore()
     vid = await make_source(rig, store, frames=49, mode="text")
     await start(rig, store, vid)
-    assert rig.picture_checks() == []
+    assert rig.asked() == []

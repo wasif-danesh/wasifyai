@@ -106,13 +106,12 @@ from wasifyai_api.mcp_server.fixed_port import FixedPort
 from wasifyai_api.mcp_server.runtime_file import Launcher, remove_runtime_file
 from wasifyai_api.media_access import MediaAccess, media_capabilities_from
 from wasifyai_api.model_access import ModelAccess, load_defaults
-from wasifyai_api.model_checks import RegistryCheckRunner
 from wasifyai_api.rag import DIMENSIONS, RagService
 from wasifyai_api.routes import HEARTBEAT_S
 from wasifyai_api.run_tracing import Langfuse
 from wasifyai_api.runs import RunManager
-from wasifyai_api.safeguards import KEY, InMemorySettingsStore, PostgresSettingsStore, Safeguards
 from wasifyai_api.services import ApiServices
+from wasifyai_api.settings_store import InMemorySettingsStore, PostgresSettingsStore
 from wasifyai_api.tool_host import ApiToolHost
 from wasifyai_api.uploads import sweep_forever
 from wasifyai_api.users import CachedUsers, PostgresUserStore, UserStore
@@ -153,7 +152,6 @@ class Injected:
     search_limiter: UploadLimiter | None = None
     creation_embedder: Embedder | None = None
     index_store: IndexStore | None = None
-    safeguards: Safeguards | None = None
 
     @property
     def test_app(self) -> bool:
@@ -279,7 +277,7 @@ async def _shared(
     desktop: Desktop | None,
     enabled: Callable[[list[str]], list[str]],
 ) -> _Running:
-    """What every deployment has: the database, the lines and their policy, storage, safeguards,
+    """What every deployment has: the database, the lines and their policy, storage,
     secrets, models, the catalogue and its MCP server, search and the stores of people's files."""
     reg = given.registry
     assert reg is not None
@@ -328,11 +326,6 @@ async def _shared(
         if injected
         else (desktop.settings_store if desktop else PostgresSettingsStore(db))
     )
-    # ADR-0047: off by default, forced on by SAFEGUARDS_FORCE_ON. Tests start with it on.
-    s.safeguards = given.safeguards or Safeguards(
-        InMemorySettingsStore({KEY: True}) if injected else settings_store,
-        settings.safeguards_force_on,
-    )
     # keys and tokens (ADR-0092): the desktop's keychain or file; on the web the `secrets`
     # table under MEDIA_SECRETS_KEY, with what External Secrets put in the environment behind
     secrets: SecretStore
@@ -346,7 +339,6 @@ async def _shared(
         )
     s.secrets = secrets
     deps = ProviderDeps(
-        safeguards=s.safeguards.enabled,
         products_dir=pdir,
         usage=recorder,
         job_sink=sink,
@@ -371,9 +363,7 @@ async def _shared(
             models = ModelAccess(InMemoryModelBackend(), defaults)
         else:
             models = ModelAccess(
-                LiteLLMBackend(settings.litellm_base_url, settings.litellm_api_key),
-                defaults,
-                RegistryCheckRunner(reg, pdir, deps, settings.product_env),
+                LiteLLMBackend(settings.litellm_base_url, settings.litellm_api_key), defaults
             )
             r.background.append(asyncio.create_task(_seed_models(models)))
     s.models = models

@@ -12,13 +12,11 @@ def rows(n: int) -> list[dict[str, str]]:
     return [{"ask": f"Question {i}?", "answer": f"My answer {i}. - Wasi"} for i in range(n)]
 
 
-def make_set(rig, n: int = 30, rights: str = "mine", name: str = "My replies") -> dict:
+def make_set(rig, n: int = 30, name: str = "My replies") -> dict:
     s = rig.post(f"{W}/sets", json={"name": name})
     assert s.status_code == 201, s.text
     sid = s.json()["id"]
     assert rig.put(f"{W}/sets/{sid}/examples", json={"rows": rows(n)}).status_code == 200
-    if rights:
-        assert rig.patch(f"{W}/sets/{sid}", json={"rights": rights}).status_code == 200
     return rig.get(f"{W}/sets/{sid}").json()
 
 
@@ -44,15 +42,14 @@ def test_a_set_keeps_its_examples_and_says_what_is_missing(rig):
     assert s["missing"].startswith("Add at least 10 examples")
     sid = s["id"]
     put = rig.put(f"{W}/sets/{sid}/examples", json={"rows": rows(12)}).json()
-    assert put["examples"] == 12 and put["missing"] == "Say whose these examples are first."
+    assert put["examples"] == 12 and put["missing"] is None  # nothing is asked about whose they are
     assert put["rows"][0] == {"ask": "Question 0?", "answer": "My answer 0. - Wasi"}
-    done = rig.patch(f"{W}/sets/{sid}", json={"rights": "mine", "quality": "better"}).json()
+    done = rig.patch(f"{W}/sets/{sid}", json={"quality": "better"}).json()
     assert done["missing"] is None and done["quality"] == "better"
     assert done["plan"]["held_back"] == 2 and done["plan"]["steps"] == language.steps_for(
         10, "better"
     )
     assert rig.patch(f"{W}/sets/{sid}", json={"quality": "best"}).status_code == 422
-    assert rig.patch(f"{W}/sets/{sid}", json={"rights": "theirs"}).status_code == 422
     assert rig.patch(f"{W}/sets/{sid}", json={"base": "gpt"}).status_code == 422
 
 
@@ -71,12 +68,6 @@ def test_a_run_refuses_what_is_not_ready_in_words(rig):
     few = make_set(rig, n=5)
     refused = rig.post(f"{W}/sets/{few['id']}/runs")
     assert refused.status_code == 422 and "at least 10" in refused.json()["detail"]["message"]
-    nobody = make_set(rig, n=30, rights="")
-    refused = rig.post(f"{W}/sets/{nobody['id']}/runs")
-    assert (
-        refused.status_code == 422
-        and "whose these examples are" in refused.json()["detail"]["message"]
-    )
 
 
 def test_a_run_leaves_a_model_with_the_answers_before_and_after_and_a_mark(rig):
@@ -95,7 +86,7 @@ def test_a_run_leaves_a_model_with_the_answers_before_and_after_and_a_mark(rig):
     assert len(card["answers"]) == 3
     one = card["answers"][0]
     assert one["before"].startswith("original: ") and one["after"].endswith("- Wasi")
-    assert card["statement"]  # the person's statement of whose they are travels with the model
+    assert "statement" not in card
 
 
 def test_a_model_that_barely_learnt_is_marked_did_not_pass_but_is_kept(rig):
@@ -356,7 +347,7 @@ def test_the_choice_lists_every_base_and_says_which_are_on_this_computer(rig, tm
     assert rows["qwen3-0.6b-4bit"]["installed"] is True and rows["qwen3-0.6b-4bit"]["recommended"]
     for other in ("qwen3-1.7b-4bit", "qwen3-4b-4bit"):
         assert rows[other]["installed"] is False and rows[other]["can_teach"] is True
-        assert rows[other]["licence"] == "Apache-2.0" and not rows[other]["recommended"]
+        assert not rows[other]["recommended"]
         methods = {m["id"]: m["can"] for m in rows[other]["methods"]}
         assert methods == {"lora": False, "qlora": True, "full": False}
 

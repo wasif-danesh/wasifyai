@@ -33,7 +33,6 @@ export type MediaView = components["schemas"]["MediaView"];
 export type MediaBackend = components["schemas"]["BackendView"];
 export type MediaField = components["schemas"]["FieldView"];
 export type MediaTestOutcome = components["schemas"]["MediaTestOutcome"];
-export type SafeguardsStatus = components["schemas"]["SafeguardsStatus"];
 
 // wasifyai-image's read API and the upload endpoint
 export type ImageSummary = components["schemas"]["ImageSummary"];

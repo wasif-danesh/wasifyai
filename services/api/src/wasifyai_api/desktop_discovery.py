@@ -40,8 +40,8 @@ from wasifyai_api.desktop_fit import (
 )
 from wasifyai_api.desktop_models import ModelEntry, ModelsService
 from wasifyai_api.identity import get_identity
-from wasifyai_api.safeguards import SettingsStore
 from wasifyai_api.services import services_of
+from wasifyai_api.settings_store import SettingsStore
 
 log = logging.getLogger(__name__)
 
@@ -99,7 +99,6 @@ class Header:
     family: str = ""
     quant: str = ""
     name: str = ""
-    licence: str = ""
     context: int = 0
     tensors: int = -1  # GGUF only: 0 means a vocabulary file, not a model
     layers: int = 0
@@ -155,7 +154,7 @@ def _head_dim(meta: dict[str, Any], arch: str) -> int:
 
 
 def read_gguf(path: Path) -> Header | None:
-    """Architecture, name, quantisation and licence from a GGUF header; None when it is not one."""
+    """Architecture, name and quantisation from a GGUF header; None when it is not one."""
     try:
         with path.open("rb") as f:
             if f.read(4) != b"GGUF":
@@ -183,7 +182,6 @@ def read_gguf(path: Path) -> Header | None:
         family=family,
         quant=FTYPES.get(ftype, "") if isinstance(ftype, int) else "",
         name=str(meta.get("general.name") or ""),
-        licence=str(meta.get("general.license") or ""),
         context=int(meta.get(f"{arch}.context_length") or 0) if arch else 0,
         tensors=int(n_tensors),
         layers=int(meta.get(f"{arch}.block_count") or 0) if arch else 0,
@@ -303,7 +301,6 @@ def read_safetensors(path: Path) -> Header:
     return Header(
         kind=kind, family=family, quant=quant,
         name=str(meta.get("modelspec.title") or meta.get("name") or ""),
-        licence=str(meta.get("modelspec.license") or ""),
     )  # fmt: skip
 
 
@@ -338,7 +335,6 @@ class Found:
     path: str
     tool: str
     tool_title: str
-    licence: str = ""
     state: str = "later"  # ready, can_use, later, unsupported
     reason: str = ""
     use_root: str | None = None  # the folder `can_use` would add
@@ -486,7 +482,7 @@ def _file_item(
         id=_item_id(str(first)), name=display or _clean_name(first, h), kind=h.kind,
         family=h.family,
         format=fmt, quant=h.quant, size=size, path=str(first), tool=tool.id,
-        tool_title=tool.title, licence=h.licence, needs_gb=round(size * 1.15 / 1e9, 1),
+        tool_title=tool.title, needs_gb=round(size * 1.15 / 1e9, 1),
         layers=h.layers, kv_heads=h.kv_heads, head_dim=h.head_dim, context=h.context,
     )  # fmt: skip
 
@@ -532,7 +528,7 @@ def _scan_ollama(root: Path, tool: Tool, budget: Budget) -> list[Found]:
                 id=_item_id(str(blob)), name=name,
                 kind=h.kind if h.kind != "unknown" else "language",
                 family=h.family, format="gguf", quant=h.quant, size=size, path=str(blob),
-                tool=tool.id, tool_title=tool.title, licence=h.licence,
+                tool=tool.id, tool_title=tool.title,
                 needs_gb=round(size * 1.15 / 1e9, 1),
                 layers=h.layers, kv_heads=h.kv_heads, head_dim=h.head_dim, context=h.context,
             )

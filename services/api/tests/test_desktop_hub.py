@@ -28,8 +28,8 @@ from wasifyai_api.desktop_hub import (
 )
 from wasifyai_api.desktop_models import DownloadManager, ModelsService
 from wasifyai_api.identity import get_identity
-from wasifyai_api.safeguards import InMemorySettingsStore
 from wasifyai_api.services import ApiServices
+from wasifyai_api.settings_store import InMemorySettingsStore
 from wasifyai_platform_sdk import Identity
 
 COMMIT = "a" * 40
@@ -213,9 +213,7 @@ async def test_search_keeps_what_the_app_can_run_and_names_the_rest(tmp_path):
         "acme/Demo-GGUF"
     ]  # the embedding model and the non-GGUF go
     item = out["items"][0]
-    assert (
-        item["runnable"] is True and item["license"] == "apache-2.0" and item["downloads"] == 1000
-    )
+    assert item["runnable"] is True and "license" not in item and item["downloads"] == 1000
     emb = await hub.search("embed", capability="embedding")
     assert [i["id"] for i in emb["items"]] == ["acme/Embed-GGUF"]
 
@@ -241,11 +239,11 @@ async def test_an_answer_is_cached_and_an_offline_hub_still_answers(tmp_path):
     assert out["stale"] is True and out["items"]
 
 
-async def test_a_repository_comes_with_its_variants_licence_and_template(tmp_path):
+async def test_a_repository_comes_with_its_variants_and_template(tmp_path):
     hub, _ = make(tmp_path, [])
     await hub.set_enabled(True)
     d = await hub.detail("acme/Demo-GGUF")
-    assert d["commit"] == COMMIT and d["license"] == "apache-2.0" and d["runnable"] is True
+    assert d["commit"] == COMMIT and "license" not in d and d["runnable"] is True
     assert (d["architecture"], d["context_length"], d["has_chat_template"]) == ("llama", 8192, True)
     assert [v["quant"] for v in d["variants"]] == ["", "Q4_K_M", "Q8_0"]
     with pytest.raises(HubError) as e:
@@ -264,7 +262,7 @@ async def test_the_confirmed_files_are_fetched_checked_and_placed_in_the_app_fol
     hub, models = make(tmp_path, calls)
     await hub.set_enabled(True)
     entry = await hub.build_download("acme/Demo-GGUF", ["Demo-Q4_K_M.gguf"], len(SMALL))
-    assert entry.id == "hub:acme/Demo-GGUF" and entry.licence == "apache-2.0"
+    assert entry.id == "hub:acme/Demo-GGUF"
     (f,) = entry.files
     assert f.url == f"https://huggingface.co/acme/Demo-GGUF/resolve/{COMMIT}/Demo-Q4_K_M.gguf"
     assert f.folder == "language/acme--Demo-GGUF" and f.sha256 == sha(SMALL)

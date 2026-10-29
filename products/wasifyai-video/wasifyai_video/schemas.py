@@ -1,9 +1,7 @@
-"""The run's input contract and the structured output of the guardrail."""
+"""The run's input contract."""
 
 import re
 from typing import Any, Literal
-
-from pydantic import BaseModel
 
 MAX_PROMPT_CHARS = 500
 Mode = Literal["text", "image", "extend"]
@@ -64,40 +62,3 @@ def check_looks(raw: object) -> tuple[list[dict[str, Any]], str]:
         seen.add(name)
         out.append({"name": name, "weight": round(float(weight), 2)})
     return out, ""
-
-
-CATEGORIES = [
-    "ok",
-    "sexual_content",
-    "minors",
-    "graphic_violence",
-    "hate",
-    "real_person_misuse",
-    "disallowed_content",
-]
-
-
-class Moderation(BaseModel):
-    allowed: bool
-    category: Literal[
-        "ok",
-        "sexual_content",
-        "minors",
-        "graphic_violence",
-        "hate",
-        "real_person_misuse",
-        "disallowed_content",
-    ]
-    reason: str = ""
-
-
-MODERATION_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "allowed": {"type": "boolean"},
-        "category": {"type": "string", "enum": CATEGORIES},
-        "reason": {"type": "string"},
-    },
-    "required": ["allowed", "category", "reason"],
-    "additionalProperties": False,
-}

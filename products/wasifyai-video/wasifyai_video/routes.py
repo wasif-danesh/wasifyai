@@ -27,7 +27,6 @@ from wasifyai_platform_sdk import (
 
 from wasifyai_video import prompts
 from wasifyai_video.builder.routes import build_builder_routes
-from wasifyai_video.guardrail import enhance_guard
 from wasifyai_video.index import index_text
 from wasifyai_video.schemas import FPS
 from wasifyai_video.videos import (
@@ -104,7 +103,7 @@ def save_copy(folder: Path, stem: str, ext: str, data: bytes) -> Path:
 def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
     """`store` is injectable for tests; production reads the shared database."""
     router = APIRouter(tags=[PRODUCT_ID])
-    router.include_router(build_enhance_router(deps, PRODUCT_ID, prompts.load, enhance_guard))
+    router.include_router(build_enhance_router(deps, PRODUCT_ID, prompts.load))
     router.include_router(build_builder_routes(deps))  # Motion graphics (ADR-0077), desktop only
 
     def videos() -> VideoStore:

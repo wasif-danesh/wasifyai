@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 import pytest
-from wasifyai_api.safeguards import InMemorySettingsStore
+from wasifyai_api.settings_store import InMemorySettingsStore
 from wasifyai_api.web_search import KEY, WebService, consent_text, load_or_create_key
 from wasifyai_platform_sdk import (
     FileSecretStore,

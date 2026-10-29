@@ -66,13 +66,7 @@ export function webRow(
     [state, unavailableReason] = ["unavailable", "This worker cannot run lip sync."];
   } else if (!isAdmin) [state, unavailableReason] = ["unavailable", ASK_AN_ADMIN];
   const isRecommended = tasks.some((t) => m.recommended.includes(t as never));
-  const tier =
-    COPY[m.id]?.tier ??
-    (m.commercial_use === "no" || m.commercial_use === "unreviewed"
-      ? "advanced"
-      : isRecommended
-        ? "recommended"
-        : "also");
+  const tier = COPY[m.id]?.tier ?? (isRecommended ? "recommended" : "also");
   const engineMissing = needsEngine && lipsync && !lipsync.installed;
   return {
     id: m.id,
@@ -86,9 +80,6 @@ export function webRow(
     engineName: engineMissing ? "The lip sync engine" : null,
     fit: null,
     fitReason: null,
-    licence: m.licence,
-    commercial: m.commercial_use,
-    licenceUrl: m.licence_evidence || null,
     source: "app",
     unavailableReason,
   };

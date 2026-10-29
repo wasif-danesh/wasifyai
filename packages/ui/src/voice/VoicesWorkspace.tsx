@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  type ConsentBasis,
-  type ParsedEvent,
-  type SavedVoice,
-  type VoiceApi,
-  makeSpeech,
-} from "@wasifyai/client";
+import { type ParsedEvent, type SavedVoice, type VoiceApi, makeSpeech } from "@wasifyai/client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../components/button";
 import { Modal } from "../components/dialog";
@@ -14,11 +8,6 @@ import { Label } from "../components/label";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
 import { clock } from "./format";
-
-export const CONSENT_TEXT: Record<ConsentBasis, string> = {
-  own: "This is my own voice.",
-  permission: "I have the permission of the person whose voice this is.",
-};
 
 const EXAMPLES = [
   "A deep, calm older man with a slow British accent",
@@ -39,8 +28,7 @@ export type VoicesWorkspaceProps = {
 
 /**
  * Voices of your own: described in words, or cloned from a short recording. A voice is not tied to
- * one model: it is spoken by any model that can do that (Text to speech lists them). A cloned voice
- * asks whose voice it is, and keeps the answer.
+ * one model: it is spoken by any model that can do that (Text to speech lists them).
  */
 export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps) {
   const [voices, setVoices] = useState<SavedVoice[]>([]);
@@ -52,7 +40,6 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [said, setSaid] = useState("");
-  const [consent, setConsent] = useState<ConsentBasis | null>(null);
   const [trying, setTrying] = useState<string | null>(null);
   const [heard, setHeard] = useState<Record<string, string>>({});
   // the app window cannot show window.prompt: the app's own dialog asks for the words
@@ -81,14 +68,13 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
     try {
       if (mode === "design") {
         await api.designVoice(name.trim(), description.trim());
-      } else if (file && consent) {
-        await api.cloneVoice(file, name.trim(), consent, said.trim() || undefined);
+      } else if (file) {
+        await api.cloneVoice(file, name.trim(), said.trim() || undefined);
       }
       setName("");
       setDescription("");
       setFile(null);
       setSaid("");
-      setConsent(null);
       await load();
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "That voice could not be saved.");
@@ -130,8 +116,7 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
   }
 
   const ready =
-    name.trim().length > 0 &&
-    (mode === "design" ? description.trim().length >= 3 : file !== null && consent !== null);
+    name.trim().length > 0 && (mode === "design" ? description.trim().length >= 3 : file !== null);
 
   return (
     <div className="mx-auto grid w-full min-w-0 max-w-3xl gap-6">
@@ -215,20 +200,6 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
                 onChange={(e) => setSaid(e.target.value)}
               />
             </div>
-            <fieldset className="grid gap-2 border-0 p-0">
-              <legend className="mb-1 font-medium text-sm">Whose voice is it?</legend>
-              {(Object.keys(CONSENT_TEXT) as ConsentBasis[]).map((b) => (
-                <label key={b} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="consent"
-                    checked={consent === b}
-                    onChange={() => setConsent(b)}
-                  />
-                  {CONSENT_TEXT[b]}
-                </label>
-              ))}
-            </fieldset>
           </>
         )}
         <div className="flex flex-wrap items-center gap-3">
@@ -278,9 +249,6 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
                         Change the words
                       </button>
                     </p>
-                    {v.consent.statement ? (
-                      <p className="text-muted-foreground text-xs">{v.consent.statement}</p>
-                    ) : null}
                   </>
                 )}
                 {heard[v.id] ? (

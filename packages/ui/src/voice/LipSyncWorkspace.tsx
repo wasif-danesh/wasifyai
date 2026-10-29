@@ -6,9 +6,7 @@ import {
   type Clip,
   type LipSyncEngine,
   type ParsedEvent,
-  type PictureBasis,
   type VoiceApi,
-  type VoiceBasis,
   makeClip,
 } from "@wasifyai/client";
 import { Film, Pencil, Save, Trash2, UserRound } from "lucide-react";
@@ -19,7 +17,6 @@ import { ConfirmDialog, NameDialog } from "../components/dialog";
 import { Label } from "../components/label";
 import { MakeScreen } from "../components/make-screen";
 import { Bar } from "../components/progress-bar";
-import { RadioGroup } from "../components/radio-group";
 import { type RecentItem, RecentStrip } from "../components/recent-strip";
 import { Segmented } from "../components/segmented";
 import { Spinner } from "../components/spinner";
@@ -34,20 +31,6 @@ import { type Library, SourcePicker } from "./SourcePicker";
 import { clock, minutesText, pickModel, stepProgress } from "./format";
 import { useElapsed } from "./use-elapsed";
 import { useVoiceModels } from "./use-voice-models";
-
-export const PICTURE_TEXT: Record<PictureBasis, string> = {
-  drawn: "This picture is a drawing, painting or other artwork, not a photograph of a person.",
-  own: "This is a picture of me.",
-  permission: "This is a picture of someone who has given me permission to use it.",
-};
-
-export const VOICE_TEXT: Record<VoiceBasis, string> = {
-  generated: "The voice was made on this computer from words (text to speech).",
-  own: "This is my own voice.",
-  permission: "The person whose voice this is has given me permission to use it.",
-};
-
-export const MARK = "AI-generated";
 
 export type LipSyncWorkspaceProps = {
   api: VoiceApi;
@@ -151,10 +134,8 @@ const STEPS = ["Picture", "Voice", "Make"];
 
 /**
  * Talking videos on the one make screen (ADR-0093, stage U6): a picture and a voice make a video of the face
- * saying it. The steps are in the ask column: the picture and what it is, then the voice and whose it is; the
- * stage shows the face with that answer before anything is made, the progress while it is, and the video after.
- * The answer is kept with the video, and every video carries a visible "AI-generated" mark that cannot be turned
- * off (ADR-0044).
+ * saying it. The steps are in the ask column: the picture, then the voice; the stage shows the face before
+ * anything is made, the progress while it is, and the video after.
  */
 export function LipSyncWorkspace({
   api,
@@ -169,11 +150,9 @@ export function LipSyncWorkspace({
   const [engine, setEngine] = useState<LipSyncEngine | null>(null);
   const [modelId, setModelId] = useState<string | null>(initialModel ?? null);
   const [picture, setPicture] = useState<AddedPicture | null>(null);
-  const [pictureBasis, setPictureBasis] = useState<PictureBasis | null>(null);
   const [voiceFrom, setVoiceFrom] = useState<"words" | "recording">("words");
   const [words, setWords] = useState("");
   const [source, setSource] = useState<AudioSource | null>(null);
-  const [voiceBasis, setVoiceBasis] = useState<VoiceBasis | null>(null);
   const [library, setLibrary] = useState<Library>({ tracks: [], speeches: [] });
   const [clips, setClips] = useState<Clip[] | null>(null);
   const [shownId, setShownId] = useState<string | null>(null);
@@ -225,19 +204,10 @@ export function LipSyncWorkspace({
     return () => clearInterval(id);
   }, [installing, loadEngine, reload]);
 
-  // words are always made here; a recording is only "made here" when it is a speech from the library
-  const voiceChoices: VoiceBasis[] =
-    voiceFrom === "words"
-      ? ["generated"]
-      : source?.kind === "speech"
-        ? ["generated", "own", "permission"]
-        : ["own", "permission"];
-  const basis = voiceFrom === "words" ? "generated" : voiceBasis;
-  const basisOk = basis !== null && voiceChoices.includes(basis);
   const voiceReady = voiceFrom === "words" ? words.trim().length >= 2 : source !== null;
-  const pictureOk = picture !== null && pictureBasis !== null;
-  const canMake = ready && pictureOk && basisOk && voiceReady;
-  const current = !pictureOk ? 0 : !voiceReady || !basisOk ? 1 : 2;
+  const pictureOk = picture !== null;
+  const canMake = ready && pictureOk && voiceReady;
+  const current = !pictureOk ? 0 : !voiceReady ? 1 : 2;
 
   async function addPicture(file: File) {
     setProblem(null);
@@ -255,14 +225,13 @@ export function LipSyncWorkspace({
       const t = await api.importTrack(file);
       setLibrary((l) => ({ ...l, tracks: [t, ...l.tracks] }));
       setSource({ kind: "track", id: t.id });
-      setVoiceBasis(null);
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "That recording could not be added.");
     }
   }
 
   async function make() {
-    if (!chosen || !picture || !pictureBasis || !basis || working) return;
+    if (!chosen || !picture || working) return;
     setProblem(null);
     setNote(null);
     setStep("Starting");
@@ -273,8 +242,6 @@ export function LipSyncWorkspace({
         runs,
         {
           picture: picture.id,
-          pictureBasis,
-          voiceBasis: basis,
           model: chosen.id,
           ...(voiceFrom === "words" ? { text: words } : { source: source ?? undefined }),
         },
@@ -287,7 +254,6 @@ export function LipSyncWorkspace({
         setClips(list);
         setShownId(list.find((c) => !before.has(c.id))?.id ?? list[0]?.id ?? null);
         setPicture(null);
-        setPictureBasis(null);
       } else {
         setProblem(r.message);
       }
@@ -399,12 +365,8 @@ export function LipSyncWorkspace({
                 <span className="text-foreground">
                   {shown.title}{" "}
                   <span className="text-muted-foreground text-xs">
-                    {clock(shown.seconds)} · {shown.width}×{shown.height} · marked {MARK}
+                    {clock(shown.seconds)} · {shown.width}×{shown.height}
                   </span>
-                </span>
-                <span className="text-xs">
-                  {shown.consent.picture ? PICTURE_TEXT[shown.consent.picture] : ""}{" "}
-                  {shown.consent.voice ? VOICE_TEXT[shown.consent.voice] : ""}
                 </span>
                 {note ? <output className="text-sm">{note}</output> : null}
                 {problem ? (
@@ -426,26 +388,17 @@ export function LipSyncWorkspace({
                   className="max-h-[calc(100dvh-24rem)] rounded-lg object-contain"
                 />
               ),
-              caption: (
-                <div className="grid gap-1">
-                  <span>
-                    {pictureBasis
-                      ? PICTURE_TEXT[pictureBasis]
-                      : "Say what this picture is, on the left."}
-                  </span>
-                  {problem ? (
-                    <p role="alert" className="m-0 text-destructive text-sm">
-                      {problem}
-                    </p>
-                  ) : null}
-                </div>
-              ),
+              caption: problem ? (
+                <p role="alert" className="m-0 text-destructive text-sm">
+                  {problem}
+                </p>
+              ) : undefined,
             }
           : {
               kind: "empty",
               icon: UserRound,
               title: "The face appears here.",
-              text: "Choose a picture of a face on the left, say what it is, then give it words or a recording.",
+              text: "Choose a picture of a face on the left, then give it words or a recording.",
             };
 
   const recent: RecentItem[] = (clips ?? []).slice(0, 24).map((c) => ({
@@ -513,16 +466,6 @@ export function LipSyncWorkspace({
               <p className="m-0 text-muted-foreground text-xs">
                 A front-facing face works best. Photos are cleaned of location and camera data.
               </p>
-              <RadioGroup
-                label="What the picture is"
-                value={pictureBasis ?? undefined}
-                disabled={working}
-                onValueChange={(b) => setPictureBasis(b as PictureBasis)}
-                options={(Object.keys(PICTURE_TEXT) as PictureBasis[]).map((b) => ({
-                  value: b,
-                  label: PICTURE_TEXT[b],
-                }))}
-              />
             </section>
 
             <section className="grid gap-3" aria-label="The voice">
@@ -530,10 +473,7 @@ export function LipSyncWorkspace({
               <Segmented
                 label="Where the voice comes from"
                 value={voiceFrom}
-                onValueChange={(v) => {
-                  setVoiceFrom(v as "words" | "recording");
-                  setVoiceBasis(null);
-                }}
+                onValueChange={(v) => setVoiceFrom(v as "words" | "recording")}
                 options={[
                   { value: "words", label: "Words to say" },
                   { value: "recording", label: "A recording" },
@@ -551,37 +491,19 @@ export function LipSyncWorkspace({
                     placeholder="Good evening, and welcome."
                     onChange={(e) => setWords(e.target.value)}
                   />
-                  <p className="m-0 text-sm">{VOICE_TEXT.generated}</p>
                 </div>
               ) : (
-                <>
-                  <SourcePicker
-                    id="lipsync-recording"
-                    label="Which recording?"
-                    library={library}
-                    value={source}
-                    disabled={working}
-                    onAdd={(f) => void addRecording(f)}
-                    onChange={(next) => {
-                      setSource(next);
-                      setVoiceBasis(null);
-                    }}
-                  />
-                  <RadioGroup
-                    label="Whose voice it is"
-                    value={voiceBasis ?? undefined}
-                    disabled={working}
-                    onValueChange={(b) => setVoiceBasis(b as VoiceBasis)}
-                    options={voiceChoices.map((b) => ({ value: b, label: VOICE_TEXT[b] }))}
-                  />
-                </>
+                <SourcePicker
+                  id="lipsync-recording"
+                  label="Which recording?"
+                  library={library}
+                  value={source}
+                  disabled={working}
+                  onAdd={(f) => void addRecording(f)}
+                  onChange={setSource}
+                />
               )}
             </section>
-
-            <p className="m-0 rounded-md border bg-muted/40 p-3 text-sm">
-              Every video is marked "{MARK}" in the corner and in its file. The mark cannot be
-              turned off. Your answers above are kept with the video.
-            </p>
           </>
         }
         action={

@@ -1,5 +1,4 @@
 workflow: flux2-klein-4b-edit.json
-licence: "Apache-2.0 per the FLUX.2 [klein] 4B model card (ADR-0019). The 9B variant is licensed differently and is not used"
 notes: >
   Image to image: one reference picture and an instruction. Built from ComfyUI's official template
   image_flux2_klein_image_edit_4b_distilled (single reference): the picture is scaled to about one

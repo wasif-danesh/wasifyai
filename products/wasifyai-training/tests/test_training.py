@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from training_rig import (
     BASE,
-    Safeguards,
     add_picture,
     blurry,
     jpeg,
@@ -40,18 +39,16 @@ def test_the_status_says_it_is_a_preview_and_what_a_run_asks_for(rig):
     assert s["steps"] == {"character": 200, "style": 250, "object": 150}
 
 
-def test_a_dataset_has_a_kind_a_name_a_magic_word_and_a_statement_of_rights(rig):
+def test_a_dataset_has_a_kind_a_name_and_a_magic_word(rig):
     ds = new_dataset(rig)
     assert ds["kind"] == "character" and ds["name"] == "Marlo" and ds["pictures"] == 0
     bad = rig.post(f"{BASE}/datasets", json={"kind": "dragon"})
     assert bad.status_code == 422 and bad.json()["detail"]["code"] == "bad_kind"
-    r = rig.patch(f"{BASE}/datasets/{ds['id']}", json={"trigger_word": "Zorbak", "rights": "mine"})
-    assert r.json()["trigger_word"] == "zorbak" and r.json()["rights"] == "mine"
+    r = rig.patch(f"{BASE}/datasets/{ds['id']}", json={"trigger_word": "Zorbak"})
+    assert r.json()["trigger_word"] == "zorbak"
     for word in ("dog", "no", "has space", "x" * 20, "marlo1"):
         r = rig.patch(f"{BASE}/datasets/{ds['id']}", json={"trigger_word": word})
         assert r.status_code == 422 and r.json()["detail"]["code"] == "bad_word", word
-    r = rig.patch(f"{BASE}/datasets/{ds['id']}", json={"rights": "whatever"})
-    assert r.status_code == 422 and r.json()["detail"]["code"] == "bad_rights"
 
 
 def test_each_picture_is_checked_in_words_as_it_arrives(rig):
@@ -177,9 +174,7 @@ def test_a_run_says_what_is_missing_before_it_starts(rig):
     def why() -> str:
         return rig.post(f"{BASE}/runs", json={"dataset_id": ds["id"]}).json()["detail"]["message"]
 
-    assert why() == "Say whose it is first."
-    rig.patch(f"{BASE}/datasets/{ds['id']}", json={"rights": "mine"})
-    assert why() == "Choose the magic word first."
+    assert why() == "Choose the magic word first."  # nothing is asked about whose it is
     rig.patch(f"{BASE}/datasets/{ds['id']}", json={"trigger_word": "marlo"})
     assert why() == "Write the descriptions first."
 
@@ -207,8 +202,8 @@ def test_a_run_goes_through_its_steps_and_leaves_a_model_with_its_card(rig):
     )
     card = model["card"]
     assert card["dataset"]["pictures"] == 8 and card["trigger_word"] == "marlo"
-    assert card["statement"] == "It's a drawing, a character or an animal"
-    assert card["licence"] == "Apache-2.0" and card["preview"] is True and card["steps"] == 200
+    assert "statement" not in card and "licence" not in card
+    assert card["preview"] is True and card["steps"] == 200
     assert "not a trained model" in card["note"]
     file = rig.get(f"{BASE}/models/{model['id']}/file")
     assert file.status_code == 200 and "marlo.safetensors" in file.headers["content-disposition"]
@@ -282,48 +277,21 @@ def test_the_trained_models_are_a_kind_of_creation_in_the_database_search_reads(
     assert db.execute("SELECT name, trigger_word FROM models").fetchall() == [("Marlo", "marlo")]
 
 
-# ---- safeguards and usage (ADR-0047) ---------------------------------------------------------
+# ---- usage ------------------------------------------------------------------------------------
 
 
-def test_while_the_safeguards_are_on_a_picture_the_moderator_refuses_is_not_kept(rig):
-    Safeguards(rig.app_state, rig.vision)
-    rig.vision.verdict = "sexual_content"
-    ds = new_dataset(rig)
-    r = add_picture(rig, ds["id"])
-    assert r.status_code == 409 and r.json()["detail"]["code"] == "sexual_content"
-    assert "nudity or sexual content" in r.json()["detail"]["message"]
-    assert rig.get(f"{BASE}/datasets/{ds['id']}").json()["pictures"] == 0
-    assert rig.app_state.usage.events == []
-
-
-def test_with_no_moderator_no_picture_is_taken_while_the_safeguards_are_on(rig):
-    Safeguards(rig.app_state, rig.vision)
-    rig.app_state.caps = {}
-    r = add_picture(rig, new_dataset(rig)["id"])
-    assert r.status_code == 409 and r.json()["detail"]["code"] == "moderation_unavailable"
-
-
-def test_pictures_and_runs_are_counted_and_the_daily_limits_stop_the_next(rig, monkeypatch):
-    on = Safeguards(
-        rig.app_state,
-        rig.vision,
-        {"train_pictures_per_user_per_day": 9, "train_runs_per_user_per_day": 1},
-    )
-    on.counted(monkeypatch)
+def test_pictures_and_runs_are_counted_and_nothing_limits_the_next(rig):
     ds = ready_dataset(rig)
     run = rig.post(f"{BASE}/runs", json={"dataset_id": ds["id"]}).json()
     wait(rig, f"/runs/{run['id']}", lambda r: r["status"] != "working")
     events = [(e.kind, e.quantity, e.unit) for e in rig.app_state.usage.events]
     assert events.count(("train.picture", 1, "pictures")) == 8
     assert ("train.run", 1, "runs") in events
-    on.used = {"train.run": 1, "train.picture": 9}
     again = rig.post(f"{BASE}/runs", json={"dataset_id": ds["id"]})
-    assert again.status_code == 409 and again.json()["detail"]["code"] == "quota_exceeded"
-    assert "limit of 1 training runs" in again.json()["detail"]["message"]
-    assert add_picture(rig, ds["id"]).json()["detail"]["code"] == "quota_exceeded"
+    assert again.status_code == 202, again.text
 
 
-def test_with_the_safeguards_off_nothing_is_checked_but_usage_is_still_recorded(rig):
+def test_a_picture_is_never_checked_but_its_usage_is_recorded(rig):
     ds = new_dataset(rig)
     assert add_picture(rig, ds["id"]).status_code == 201
     assert [e.kind for e in rig.app_state.usage.events] == ["train.picture"]

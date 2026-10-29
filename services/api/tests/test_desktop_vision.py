@@ -11,7 +11,6 @@ def test_the_shelf_names_an_exact_file_with_a_checksum_for_the_default_model():
     (entry,) = [e for e in shelf if e.id == "qwen3.5-9b"]
     assert entry.size == 918_166_080 and len(entry.sha256) == 64
     assert entry.url.startswith("https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/")
-    assert entry.licence == "Apache-2.0"
     assert any(m in "qwen3.5-9b-q4_k_m.gguf" for m in entry.match)
 
 

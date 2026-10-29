@@ -66,7 +66,8 @@ The owner is not happy with the look and feel or the flows, and wants the app ad
 
 ## Open questions
 
-The owner decisions in the plan: names and mockup review per stage. The accessibility checker was accepted (owner, 2026-10-28): `@axe-core/playwright`, test only. The menu
+The owner decisions in the plan are answered: the menu keeps its names, and every stage starts with a mockup the
+owner approves (owner, 2026-10-29). The accessibility checker was accepted (owner, 2026-10-28): `@axe-core/playwright`, test only. The menu
 without groups was tried and decided against (2026-10-28). The per-product libraries go (owner, 2026-10-28):
 decision 5 above stands as written. The web's Explore page stays as a marketing page outside the app, and the chat
 box has three pills and a "+" menu (owner, 2026-10-28).

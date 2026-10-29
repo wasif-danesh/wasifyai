@@ -171,8 +171,6 @@ class ReaderInstaller:
         return {
             "id": "docling",
             "size_bytes": self.total_bytes,
-            "licences": "Docling MIT; layout model Apache-2.0; tables CDLA-Permissive-2.0; "
-            "text recognition Apache-2.0",
             "source": "PyPI and Hugging Face / ModelScope (once, on your request)",
             "needs_free_bytes": MIN_FREE_BYTES,
         }

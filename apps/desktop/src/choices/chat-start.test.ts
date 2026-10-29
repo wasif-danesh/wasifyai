@@ -14,9 +14,6 @@ const c = (over: Partial<ModelChoice>): ModelChoice => ({
   engineName: null,
   fit: null,
   fitReason: null,
-  licence: "",
-  commercial: "yes",
-  licenceUrl: null,
   source: "app",
   ...over,
 });

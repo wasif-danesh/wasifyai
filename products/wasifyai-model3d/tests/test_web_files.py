@@ -3,7 +3,6 @@ engine, not folders on this computer. The same routes and job manager as the des
 stand-in engine, a store and memory storage."""
 
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
@@ -218,81 +217,23 @@ def manager(web):
 # ---- safeguards and usage (P6) --------------------------------------------------------------
 
 
-class Safeguards:
-    """The safeguards on, a picture moderator that answers as told, and the usage recorded."""
-
-    def __init__(self, state, *, category="ok", quota=None):
-        self.category, self.used, self.seen = category, {}, 0
-        outer = self
-
-        class On:
-            async def enabled(self) -> bool:
-                return True
-
-        class Text:
-            async def complete(self, name, system, user, schema=None):
-                outer.seen += 1
-                ok = outer.category == "ok"
-                return (
-                    f'{{"allowed": {str(ok).lower()}, "category": "{outer.category}", '
-                    '"reason": "x"}'
-                )
-
-        state.safeguards = On()
-        state.caps = {
-            "wasifyai-model3d": SimpleNamespace(
-                text=Text(), db=object(), config=SimpleNamespace(quotas=quota or {})
-            )
-        }
-        state.usage = InMemoryUsageRecorder()
-
-    def counted(self, monkeypatch) -> None:
-        async def used(db, tenant, product, user, kind, since):
-            return self.used.get(kind, 0)
-
-        monkeypatch.setattr("wasifyai_platform_sdk.route_guard.sum_usage", used)
-
-
 def upload(web):
     return web.post(f"{BASE}/inputs?name=a.png", content=photo())
 
 
-def test_while_the_safeguards_are_on_a_picture_of_a_real_person_is_refused_and_not_kept(web):
-    on = Safeguards(web.app_state, category="real_person_photo")
-    r = upload(web)
-    assert r.status_code == 409 and r.json()["detail"]["code"] == "real_person_photo"
-    assert "photograph of a real person" in r.json()["detail"]["message"]
-    assert on.seen == 1
-    assert web.app_state.model3d.matted == []  # nothing was cut out
-    assert web.app_state.model3d_store.working_inputs() == []  # no row is left working
-
-
-def test_without_a_moderator_no_picture_is_taken_while_the_safeguards_are_on(web):
-    Safeguards(web.app_state)
-    web.app_state.caps = {}
-    r = upload(web)
-    assert r.status_code == 409 and r.json()["detail"]["code"] == "moderation_unavailable"
-
-
-def test_pictures_and_models_are_counted_and_the_daily_limits_stop_the_next(web, monkeypatch):
-    on = Safeguards(
-        web.app_state, quota={"models_per_user_per_day": 1, "pictures_per_user_per_day": 3}
-    )
-    on.counted(monkeypatch)
+def test_pictures_and_models_are_counted_and_nothing_limits_the_next(web):
+    web.app_state.usage = InMemoryUsageRecorder()
     pic = ready_picture(web)
     started = make(web, pic["id"])
     assert started.status_code == 202, started.text
     wait(web, f"/models/{started.json()['id']}", lambda r: r["status"] == "done")
     events = [(e.kind, e.quantity, e.unit) for e in web.app_state.usage.events]
     assert events == [("model3d.picture", 1, "pictures"), ("model3d.model", 1, "models")]
-    on.used = {"model3d.model": 1, "model3d.picture": 3}
     again = make(web, pic["id"])
-    assert again.status_code == 409 and again.json()["detail"]["code"] == "quota_exceeded"
-    assert "limit of 1 3D models" in again.json()["detail"]["message"]
-    assert upload(web).json()["detail"]["code"] == "quota_exceeded"
+    assert again.status_code == 202, again.text
 
 
-def test_with_the_safeguards_off_nothing_is_checked_but_usage_is_still_recorded(web):
+def test_a_picture_is_never_checked_but_its_usage_is_recorded(web):
     web.app_state.usage = InMemoryUsageRecorder()
     pic = ready_picture(web)
     assert pic["status"] == "ready"

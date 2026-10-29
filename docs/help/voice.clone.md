@@ -15,20 +15,17 @@ Save a voice copied from a short recording, to speak in it later.
 
 1. Open **Voice › Voices**, or choose **Make a voice** under the voice list in **Voice › Text to speech**.
 2. Choose to copy a voice and pick a recording.
-3. Say whose voice it is: yours, or someone who agreed.
-4. Save.
+3. Save.
 
 ## Fields
 
 - `source_kind`: track or speech.
 - `source_id`: The recording.
 - `name`: A name.
-- `voice_is`: own or permission.
 
 ## Limits
 
 - A few seconds up to 30 seconds of one person speaking clearly.
-- Always needs your word in the app window.
 
 ## Needs
 
@@ -41,4 +38,3 @@ Save a voice copied from a short recording, to speak in it later.
 ## Problems
 
 - **Too short** Use a recording of at least a few seconds.
-- **Needs your word** Approve in the app window; the question names whose voice it is.

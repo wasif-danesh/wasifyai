@@ -36,7 +36,6 @@ class Pins:
     id: str
     title: str
     version: str
-    licence: str
     source: str
     min_free_bytes: int
     archive: Archive | None
@@ -73,13 +72,12 @@ def load_manifest(platform: str | None = None, folder: Path = MANIFESTS) -> Mani
     raw = yaml.safe_load(path.read_text()) or {}
     if raw.get("schema") != 1:
         raise ValueError(f"{path.name}: unknown schema")
-    known = {"title", "version", "licence", "source", "min_free_bytes", "archive"}
+    known = {"title", "version", "source", "min_free_bytes", "archive"}
     components = {
         cid: Pins(
             cid,
             str(c["title"]),
             str(c["version"]),
-            str(c.get("licence", "")),
             str(c.get("source", "")),
             int(c.get("min_free_bytes", 0)),
             _archive(c.get("archive")),

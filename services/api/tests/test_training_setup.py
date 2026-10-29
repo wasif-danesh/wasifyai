@@ -50,9 +50,7 @@ def alone(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
 def test_the_pins_name_every_file_with_a_size_and_a_checksum():
     p = ts.load_pins()
-    assert (
-        p.base_repo == "black-forest-labs/FLUX.2-klein-base-4B" and p.base_licence == "Apache-2.0"
-    )
+    assert p.base_repo == "black-forest-labs/FLUX.2-klein-base-4B"
     assert len(p.base_files) == 19
     assert 15e9 < p.base_bytes < 17e9
     assert all(len(f.sha256) == 64 for f in p.base_files)
@@ -159,7 +157,7 @@ def test_the_plan_says_what_it_would_fetch_and_nothing_that_is_already_there(tmp
     plan = setup.plan()
     assert plan["bytes"] == 1000 + 8 + 300 + 200 + 100 == setup.missing_bytes()
     assert {p["name"] for p in plan["parts"]} == {"Trainer (mflux)", "FLUX.2 klein base 4B"}
-    assert all(p["licence"] and p["source"] for p in plan["parts"])
+    assert all(p["source"] for p in plan["parts"])
     write_base(ts.component_root(tmp_path) / "models" / setup.pins.base_folder)
     assert setup.missing_bytes() == 1000  # the model is there: only the trainer
     assert [p["have"] for p in setup.plan()["parts"]] == [False, True]

@@ -1,11 +1,10 @@
 # The models this product can use, and where they come from (ADR-0059, docs/phase2-stage-a-plan.md).
 # The desktop app lists them in its Models panel and downloads a file only after a click that has
-# shown the file names, sizes, source and licence. Every file is pinned by size and SHA-256; the
+# shown the file names, sizes and source. Every file is pinned by size and SHA-256; the
 # URLs name a commit of the repository, so they cannot change under the pin.
 models:
   - id: flux2-klein-4b
     title: FLUX.2 klein 4B
-    licence: Apache-2.0
     source: https://huggingface.co/Comfy-Org/flux2-klein-4B
     note: Text to image and image editing. Needs about 24 GB of memory.
     approx_ram_gb: 24

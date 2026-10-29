@@ -10,7 +10,6 @@ REPO_PRODUCTS = Path(__file__).resolve().parents[3] / "products"
 def test_loads_and_validates(products):
     cfg = load_product_config(products, "demo", environ={})
     assert cfg.capabilities["video.generate"].workflow == "tiny"
-    assert cfg.quotas == {"songs_per_user_per_day": 10}
     assert cfg.settings["audio_format"] == "mp3"
 
 
@@ -27,11 +26,11 @@ def test_env_file_overlay_wins_over_base(products):
 def test_env_var_overrides_win_over_files(products):
     env = {
         "DEMO__CAPABILITIES__VIDEO_GENERATE__DEFAULTS__DURATION_S": "15",
-        "DEMO__QUOTAS__SONGS_PER_USER_PER_DAY": "3",
+        "DEMO__SETTINGS__AUDIO_FORMAT": "wav",
     }
     cfg = load_product_config(products, "demo", environ=env)
     assert cfg.capabilities["video.generate"].defaults["duration_s"] == 15
-    assert cfg.quotas["songs_per_user_per_day"] == 3
+    assert cfg.settings["audio_format"] == "wav"
 
 
 def test_reports_every_problem_at_once(products):

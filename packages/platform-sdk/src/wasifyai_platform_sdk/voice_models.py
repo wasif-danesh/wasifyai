@@ -1,10 +1,9 @@
 """Speech, music and avatar models as data (ADR-0066).
 
-A model is a *descriptor*: what it can do, what it needs, what it costs, and which licence its
-weights carry. The window builds its model dropdown from descriptors, and the engine validates
-every request against the descriptor before anything is sent to the runtime, because the runtime
-answers a user's mistake with an HTTP 500 and may silently ignore an option it does not know
-(V0, VoxCPM2).
+A model is a *descriptor*: what it can do, what it needs and what it costs. The window builds its
+model dropdown from descriptors, and the engine validates every request against the descriptor
+before anything is sent to the runtime, because the runtime answers a user's mistake with an HTTP
+500 and may silently ignore an option it does not know (V0, VoxCPM2).
 
     parse_voice_model(...)   a `voice:` block of a product's `models.yaml` -> VoiceModel
     check_speak(...)         a Speak request, validated against the model
@@ -28,7 +27,6 @@ TASKS = (
     "transcribe",
     "lipsync",
 )
-COMMERCIAL = ("yes", "conditional", "no", "unreviewed")
 OPTION_TYPES = ("bool", "int", "float", "enum", "string")
 ENGINES = ("audiocpp", "comfyui", "sidecar", "llamacpp", "remote")
 
@@ -109,7 +107,6 @@ class Measured:
 class VoiceModel:
     id: str
     title: str
-    licence: str  # SPDX-like name of the weights' licence, from the catalogue entry
     engine: str
     family: str
     package: str  # the audio.cpp spec package this is (one family holds several kinds of model)
@@ -118,9 +115,6 @@ class VoiceModel:
     recommended: tuple[str, ...]
     languages: tuple[str, ...]
     sample_rate: int
-    commercial_use: str
-    licence_evidence: str
-    reviewed: str
     measured: Measured = field(default_factory=Measured)
     voices: tuple[VoiceInfo, ...] = ()
     default_voice: str | None = None
@@ -139,11 +133,10 @@ class VoiceModel:
 
     def public(self) -> dict[str, Any]:
         return {
-            "id": self.id, "title": self.title, "licence": self.licence, "engine": self.engine,
+            "id": self.id, "title": self.title, "engine": self.engine,
             "family": self.family, "package": self.package, "tasks": list(self.tasks),
             "recommended": list(self.recommended), "languages": list(self.languages),
-            "sample_rate": self.sample_rate, "commercial_use": self.commercial_use,
-            "licence_evidence": self.licence_evidence, "reviewed": self.reviewed,
+            "sample_rate": self.sample_rate,
             "measured": self.measured.public(),
             "voices": [v.public() for v in self.voices], "default_voice": self.default_voice,
             "options": [o.public() for o in self.options],
@@ -182,7 +175,7 @@ def _option(raw: dict[str, Any], model: str) -> OptionSpec:
     )  # fmt: skip
 
 
-def parse_voice_model(entry_id: str, title: str, licence: str, raw: dict[str, Any]) -> VoiceModel:
+def parse_voice_model(entry_id: str, title: str, raw: dict[str, Any]) -> VoiceModel:
     """A `voice:` block of `models.yaml`. Raises ValueError that names the model and the problem,
     so a bad catalogue stops at startup with every cause in the message."""
     if not _ID.match(entry_id):
@@ -196,14 +189,6 @@ def parse_voice_model(entry_id: str, title: str, licence: str, raw: dict[str, An
     recommended = _tuple_of(raw.get("recommended"), TASKS, "recommended task", entry_id)
     if not set(recommended) <= set(tasks):
         raise ValueError(f"{entry_id}: recommended for a task it does not do")
-    commercial = str(raw.get("commercial_use", "unreviewed"))
-    if commercial not in COMMERCIAL:
-        raise ValueError(f"{entry_id}: commercial_use must be one of {COMMERCIAL}")
-    if recommended and commercial != "yes":
-        # ADR-0066 decision 4: never the default or the recommendation unless commercially usable
-        raise ValueError(f"{entry_id}: only a model with commercial_use: yes can be recommended")
-    if not str(raw.get("licence_evidence", "")).startswith("https://"):
-        raise ValueError(f"{entry_id}: licence_evidence must be an https URL")
     voices = tuple(
         VoiceInfo(str(v["id"]), str(v.get("label") or v["id"]), str(v.get("language", "")),
                   str(v.get("gender", "")))
@@ -230,12 +215,11 @@ def parse_voice_model(entry_id: str, title: str, licence: str, raw: dict[str, An
     _check_tool_rules(entry_id, tasks, separate, convert, speech_edit)
     _check_lipsync_rules(entry_id, engine, tasks, lipsync)
     return VoiceModel(
-        id=entry_id, title=title, licence=licence, engine=engine, family=str(raw["family"]),
+        id=entry_id, title=title, engine=engine, family=str(raw["family"]),
         package=str(raw["package"]), server_task=str(raw.get("server_task", "tts")),
         tasks=tasks, recommended=recommended,
         languages=tuple(str(x) for x in raw.get("languages") or ()),
-        sample_rate=int(raw.get("sample_rate", 0)), commercial_use=commercial,
-        licence_evidence=str(raw["licence_evidence"]), reviewed=str(raw.get("reviewed", "")),
+        sample_rate=int(raw.get("sample_rate", 0)),
         measured=Measured(
             str(m.get("platform", "")), m.get("speed_x"), m.get("memory_gb"), m.get("load_s")
         ),
@@ -374,22 +358,9 @@ def _check_tool_rules(
             raise ValueError(f"{entry_id}: a tool needs max_source_s (1 to {MAX_TOOL_SOURCE_S:g})")
 
 
-LIPSYNC_PICTURE = {
-    "drawn": "This picture is a drawing, painting or other artwork, not a photograph of a person.",
-    "own": "This is a picture of me.",
-    "permission": "This is a picture of someone who has given me permission to use it.",
-}
-LIPSYNC_VOICE = {
-    "generated": "The voice was made on this computer from words (text to speech).",
-    "own": "This is my own voice.",
-    "permission": "The person whose voice this is has given me permission to use it.",
-}
-MARK_TEXT = "AI-generated"  # drawn on every frame of a lip sync video and written into its metadata
-
-
 def _check_lipsync_rules(entry_id: str, engine: str, tasks: tuple[str, ...], lipsync: dict) -> None:
     """What a lip sync model declares: the longest voice and the largest picture it takes, the frame
-    rate, and that the visible mark is not optional (ADR-0044, ADR-0066 decision 8)."""
+    rate (ADR-0044, ADR-0066 decision 8)."""
     if ("lipsync" in tasks) != bool(lipsync):
         raise ValueError(f"{entry_id}: a lipsync model declares `lipsync` rules, and only it does")
     if not lipsync:
@@ -402,10 +373,6 @@ def _check_lipsync_rules(entry_id: str, engine: str, tasks: tuple[str, ...], lip
         raise ValueError(f"{entry_id}: lipsync.max_side must be 256 to 2048")
     if not 5 <= int(lipsync.get("fps", 0)) <= 60:
         raise ValueError(f"{entry_id}: lipsync.fps must be 5 to 60")
-    if lipsync.get("mark") != "required":
-        raise ValueError(
-            f"{entry_id}: lipsync.mark must be `required`: the mark cannot be left off"
-        )
 
 
 # ---- validating a request ----------------------------------------------------------------------
@@ -843,33 +810,18 @@ def check_speech_edit(
 
 @dataclass(frozen=True)
 class LipSyncRequest:
-    consent: dict[str, str]  # what the person said about the picture and the voice
     fps: int
     voice_seconds: float
-    mark: str
 
 
 def check_lipsync(
     model: VoiceModel,
     voice_seconds: float,
-    picture_basis: str | None,
-    voice_basis: str | None,
     options: dict[str, Any] | None = None,
 ) -> LipSyncRequest:
-    """A lip sync request: a voice of a length the model takes, and the person's word about whose
-    picture and whose voice these are. Without that word it is refused, whatever the model is."""
+    """A lip sync request: a voice of a length the model takes."""
     if "lipsync" not in model.tasks:
         raise VoiceRequestError("wrong_task", f"{model.title} does not make talking videos.")
-    if picture_basis not in LIPSYNC_PICTURE:
-        raise VoiceRequestError(
-            "consent_required",
-            "Say what the picture is: a drawing, a picture of you, or of someone who agreed.",
-        )
-    if voice_basis not in LIPSYNC_VOICE:
-        raise VoiceRequestError(
-            "consent_required",
-            "Say whose voice this is: made here from words, yours, or one you may use.",
-        )
     if not voice_seconds or voice_seconds != voice_seconds or voice_seconds < 1:
         raise VoiceRequestError("too_short", "That voice is under one second.")
     if voice_seconds > float(model.lipsync["max_voice_s"]):
@@ -879,10 +831,7 @@ def check_lipsync(
             "minutes. Use a shorter one.",
         )
     check_options(model, options)
-    return LipSyncRequest(
-        {"picture": picture_basis, "voice": voice_basis},
-        int(model.lipsync["fps"]), voice_seconds, MARK_TEXT,
-    )  # fmt: skip
+    return LipSyncRequest(int(model.lipsync["fps"]), voice_seconds)
 
 
 def check_transcribe(model: VoiceModel, options: dict[str, Any] | None) -> dict[str, Any]:

@@ -2,7 +2,7 @@
 
 The aliases and their defaults are in model_defaults.yaml. LiteLLM stores the live bindings (and
 encrypts the API keys); this module seeds the defaults, shows the current state without secrets,
-changes a binding after the product's checks pass, and tests one."""
+changes a binding, and tests one."""
 
 import ipaddress
 import logging
@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 from urllib.parse import urlsplit
 
 import yaml
@@ -61,12 +61,6 @@ class ModelAccessError(Exception):
     """A request that cannot be accepted; the message is meant for the admin."""
 
 
-class CanaryFailed(ModelAccessError):
-    def __init__(self, failures: list[str]):
-        super().__init__("the product's checks failed for this model")
-        self.failures = failures
-
-
 class Binding(BaseModel):
     provider: str
     model: str
@@ -78,7 +72,6 @@ class ModelView(BaseModel):
     alias: str
     purpose: str
     kind: str
-    protected: bool
     source: str  # "default", "custom" or "missing" (not seeded yet)
     provider: str | None
     model: str | None
@@ -101,12 +94,6 @@ class TestOutcome(BaseModel):
     latency_ms: int
     sample: str = ""
     error: str = ""
-
-
-class CheckRunner(Protocol):
-    async def run(self, alias: str, candidate: str) -> list[str]:
-        """Run every check for products that use `alias`, against `candidate`; return failures."""
-        ...
 
 
 def load_defaults(substitutions: dict[str, str], path: Path = DEFAULTS_FILE) -> dict[str, dict]:
@@ -204,12 +191,10 @@ class ModelAccess:
         self,
         backend: ModelBackend,
         defaults: dict[str, dict],
-        checks: CheckRunner | None = None,
         now: Callable[[], str] = _now,
     ):
         self._backend = backend
         self._defaults = defaults
-        self._checks = checks
         self._now = now
 
     @staticmethod
@@ -278,7 +263,7 @@ class ModelAccess:
             views.append(
                 ModelView(
                     alias=alias, purpose=spec["purpose"], kind=spec["kind"],
-                    protected=bool(spec.get("protected")), source=meta.get("source", "missing"),
+                    source=meta.get("source", "missing"),
                     provider=meta.get("provider"), model=meta.get("model"),
                     api_base=meta.get("api_base"),
                     key_set=bool(meta.get("key_set")), updated_by=meta.get("updated_by"),
@@ -292,25 +277,14 @@ class ModelAccess:
             raise ModelAccessError(f"unknown alias {alias!r}")
         return self._defaults[alias]
 
-    async def set(self, alias: str, binding: Binding, actor: str) -> tuple[ModelView, str]:
-        """Point `alias` at a new provider and model. Returns the view and the canary outcome
-        ("passed" or "none" when no product has a check for this alias)."""
+    async def set(self, alias: str, binding: Binding, actor: str) -> ModelView:
+        """Point `alias` at a new provider and model."""
         spec = self._spec(alias)
         binding = validate_binding(binding)
         params = build_params(spec, binding, spec["kind"])
-        outcome = "none"
-        if self._checks is not None:
-            candidate = await self._add_candidate(alias, params, spec)
-            try:
-                failures = await self._checks.run(alias, candidate)
-            finally:
-                await self._backend.delete(candidate)
-            if failures:
-                raise CanaryFailed(failures)
-            outcome = "passed" if spec.get("protected") else "none"
         info = self._info(alias, "custom", params, params["api_key"] != NO_KEY, actor)
         await self._backend.update(self.model_id(alias), params, info)
-        return next(v for v in await self.list() if v.alias == alias), outcome
+        return next(v for v in await self.list() if v.alias == alias)
 
     async def reset(self, alias: str, actor: str) -> ModelView:
         spec = self._spec(alias)

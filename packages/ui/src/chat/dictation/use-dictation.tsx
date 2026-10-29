@@ -11,7 +11,6 @@ import { MAX_RECORD_SECONDS, type Recorder, type Recording, micProblem } from ".
 /** Getting dictation ready when there is no speech model yet: what it is, where from, how big, and the one click. */
 export type MicSetup = {
   title: string;
-  licence: string;
   /** the host the model comes from */
   from: string;
   /** everything that would be downloaded, in bytes */
@@ -262,7 +261,7 @@ export function useDictation(
         <p className="font-medium">Set up dictation</p>
         <p className="text-muted-foreground">
           Dictation writes down what you say with a speech model that runs on this computer, so your
-          voice is not sent anywhere and is not kept. It needs {s.title} ({s.licence})
+          voice is not sent anywhere and is not kept. It needs {s.title}
           {s.from ? `, from ${s.from}` : ""}: {formatBytes(s.bytes)} to download once.
         </p>
         {setup.working ? (

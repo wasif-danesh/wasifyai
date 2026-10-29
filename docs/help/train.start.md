@@ -9,8 +9,8 @@ Action: `train.start`
 
 ## What it is for
 
-Teach the image model something of your own from your pictures: a character, a pet, a person (with their
-agreement), your art style or an object. You only add pictures. The app checks each one, writes a
+Teach the image model something of your own from your pictures: a character, a pet, a person, your art
+style or an object. You only add pictures. The app checks each one, writes a
 description of each, suggests a magic word, and teaches the model. Then writing the magic word in a prompt
 draws it. The set of pictures is made on the **Train models** screen; an agent starts the run on a set that is ready.
 While the trainer is a preview, the run does everything except learn, and says so.
@@ -21,7 +21,7 @@ While the trainer is a preview, the run does everything except learn, and says s
 2. Add pictures: 15 to 25 good ones is plenty, at least 8. Each is marked Good, Too small, Blurry or Looks like
    a copy; remove what you do not want, or choose Remove the ones with a problem.
 3. Say what it is (a character, a style or an object), give it a name, choose one of the three magic words (or
-   type your own) and say whose it is.
+   type your own).
 4. Read the descriptions the app wrote; change any, or choose Describe again.
 5. Leave **Choose the model and method** closed to use the recommendation (FLUX.2 klein base 4B, as a small
    adapter). Open it to see every model on this computer and how each can be taught, with the reason beside
@@ -32,8 +32,8 @@ While the trainer is a preview, the run does everything except learn, and says s
 
 ## Fields
 
-- `dataset_id`: The set of pictures to teach from. It must have at least 8 pictures, a description for each, a
-  magic word and the statement of whose it is.
+- `dataset_id`: The set of pictures to teach from. It must have at least 8 pictures, a description for each and a
+  magic word.
 - `base`: Optional. The model to teach. Leave it out for the recommended one (FLUX.2 klein base 4B).
 - `method`: Optional. `lora` (a small adapter, the recommended and only method for pictures), `qlora` (less
   memory, for writing models) or `full` (teach all of it, Advanced). A method the model cannot use is refused
@@ -42,11 +42,7 @@ While the trainer is a preview, the run does everything except learn, and says s
 ## Limits
 
 - One run at a time: a run holds most of the GPU and the one big-model slot, so other models are put away.
-- Pictures of a real person need the person's agreement: you are asked whose it is, and the answer is kept with
-  the model.
-- The descriptions are in English. Pictures are checked by the safeguards when they are on, and a picture they
-  refuse is not kept.
-- Daily limits apply while the safeguards are on: 3 runs and 200 pictures a day.
+- The descriptions are in English.
 
 ## Needs
 
@@ -69,7 +65,6 @@ the desktop only for now.
 
 - **Add at least 8 pictures** Add more, 15 to 25 good ones is plenty.
 - **Write the descriptions first** Choose Write the descriptions on the screen.
-- **Say whose it is first** Choose one of the statements on the Check step.
 - **A model is being taught** Wait for it to finish or stop it.
 - **This model cannot be taught yet** Choose the recommended model, or leave the choice closed.
 - **You've reached today's limit** Try again tomorrow.
@@ -96,10 +91,9 @@ answers got closer to yours.
    good start.
 4. Read the check. It leaves out empty and repeated rows, and warns about very long answers and about anything
    that looks like an email address, a phone number or a card number.
-5. Say whose the examples are (you wrote them, or you have permission).
-6. Choose Teach it. It takes about a minute on a Mac and chat and image making pause.
-7. The result is in My models. Ask both the original and your taught model something new with Ask both.
-8. To chat with it, choose **Use in chat** under the result (or under it in My models). The first time the app asks to
+5. Choose Teach it. It takes about a minute on a Mac and chat and image making pause.
+6. The result is in My models. Ask both the original and your taught model something new with Ask both.
+7. To chat with it, choose **Use in chat** under the result (or under it in My models). The first time the app asks to
    download the same model in the form the chat engine runs (shown first). Choose **Back to my chat model** to
    return to the model chat used before.
 
@@ -111,7 +105,7 @@ nothing is fetched until you press it.
 ### Fields
 
 - `set_id`: Instead of `dataset_id`: the set of examples to teach a language model from. It needs at least 10
-  examples and the statement of whose they are.
+  examples.
 
 ### Limits
 
@@ -119,7 +113,6 @@ nothing is fetched until you press it.
 - The models it is taught on are small (Qwen3 0.6B, 1.7B or 4B, 4-bit): they copy how the examples answer and can
   still answer wrongly about facts.
 - Examples in English work best; the base model reads other languages but this has not been measured.
-- Daily limits apply while the safeguards are on, the same as pictures.
 
 ### Needs
 
@@ -132,7 +125,6 @@ nothing is fetched until you press it.
 ### Problems
 
 - **Add at least 10 examples** Add more questions and answers; 50 or more is better.
-- **Say whose these examples are first** Choose one of the two statements on the Check step.
 - **A model is being taught** Wait for it to finish or stop it.
 - **Training is not set up on this computer yet** Choose Download and set up on the Train screen.
 
@@ -156,7 +148,7 @@ it had not seen, beside a plain word counter, where it went wrong, and whether i
    right answer for each, or paste two columns from a spreadsheet. At least 20 are needed; 60 or more is a good start.
 4. Read the check: it leaves out empty and repeated rows and rows whose answer is not one of the options, and warns
    about thin or lopsided answers, texts that appear twice with different answers, long texts and personal data.
-5. Say whose the texts are, and choose Teach it. It takes a minute or two on a Mac; chat and image making pause.
+5. Choose Teach it. It takes a minute or two on a Mac; chat and image making pause.
 6. Read the report, then choose **Try it** or **Sort a list**. The model is kept in My models, about 840 MB.
 
 To use the model for many languages or to take more care, open **Choose the model and method** (closed by default).
@@ -165,7 +157,7 @@ All of the model is taught; it is not taught as a small adapter.
 ### Fields
 
 - `decision_set_id`: Instead of `dataset_id`: the set of texts and answers to teach a decision model from. It needs the
-  question, at least 20 examples with at least two different answers, and the statement of whose they are.
+  question and at least 20 examples with at least two different answers.
 
 ### Limits
 
@@ -185,7 +177,6 @@ All of the model is taught; it is not taught as a small adapter.
 
 - **Add at least 20 examples** Add more texts with their answers; 60 or more is better.
 - **Every example has the same answer** Add examples with the other answers too.
-- **Say whose these texts are first** Choose one of the two statements on the Check step.
 - **A model is being taught** Wait for it to finish or stop it.
 
 ---
@@ -208,23 +199,22 @@ expect a face to come back exactly; a style or a motion works best.
    computer: if it is not, the screen says so and where to get it (**Select video model** on a Video screen).
 3. Add pictures and short clips: a few pictures and 5 to 15 clips of 2 to 10 seconds is plenty, at least 8 in all.
    Each is marked Good, Too short, Too small, Too dark, Blurry, Still or Looks like a copy.
-4. Say what it is, give it a name, choose the magic word and say whose it is, and read the descriptions.
+4. Say what it is, give it a name, choose the magic word, and read the descriptions.
 5. Choose Teach it. It takes about half an hour on a Mac with 64 GB, and chat, image and video making pause.
 6. The result is in My models. Choose it on a Video screen under **My looks** (up to two at once, each with its own
    strength; 1.5 is a good start).
 
 ### Fields
 
-- `dataset_id`: The set made for video. It must have at least 8 pictures or clips, a description for each, a magic
-  word and the statement of whose they are. `base` and `method` can be left out (LTX-Video 2B, as a small adapter).
+- `dataset_id`: The set made for video. It must have at least 8 pictures or clips, a description for each and a
+  magic word. `base` and `method` can be left out (LTX-Video 2B, as a small adapter).
 
 ### Limits
 
 - One run at a time, across every kind of model.
 - The video model taught is LTX-Video 2B 0.9.5 only: a look made for it does not work with another video model.
 - A run needs about 10 GB of free memory for clips at 768 by 512; a Mac with 16 GB has not been tried.
-- The descriptions are in English. The same safeguards as pictures apply, and a picture or a frame they refuse is not
-  kept.
+- The descriptions are in English.
 
 ### Needs
 

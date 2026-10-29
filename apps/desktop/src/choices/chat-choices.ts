@@ -28,12 +28,6 @@ export const folderOf = (repo: string) => `language/${repo.replace("/", "--")}`;
 
 const isFrom = (f: FoundModel, repo: string) => f.path.replace(/\\/g, "/").includes(folderOf(repo));
 
-export function commercialOf(licence: string): ModelChoice["commercial"] {
-  if (/apache|mit\b|bsd/i.test(licence)) return "yes";
-  if (/llama|gemma|openrail|community/i.test(licence)) return "conditional";
-  return "unreviewed";
-}
-
 /** How a model of `needGb` of memory sits on a computer with `memoryBytes`: a guess; the engine decides on download. */
 export function fitOf(needGb: number, memoryBytes: number | null): ModelChoice["fit"] {
   if (memoryBytes === null) return null;
@@ -79,9 +73,6 @@ function rows(
       ...engineFields,
       fit: f.fit?.verdict ?? null,
       fitReason: f.fit?.reason ?? null,
-      licence: f.licence || "unknown",
-      commercial: commercialOf(f.licence),
-      licenceUrl: null,
       source: f.tool === "app" ? "app" : "found",
       sizeBytes: f.size,
       removable: f.tool === "app",
@@ -102,9 +93,6 @@ function rows(
       engineName: null,
       fit: null,
       fitReason: null,
-      licence: "unknown",
-      commercial: "unreviewed",
-      licenceUrl: null,
       source: "server",
     });
   }
@@ -123,9 +111,6 @@ function rows(
       ...engineFields,
       fit,
       fitReason: fit === "too_big" ? `It needs about ${item.memoryGb} GB of memory.` : null,
-      licence: item.licence,
-      commercial: commercialOf(item.licence),
-      licenceUrl: null,
       source: "app",
       from: "huggingface.co",
     });

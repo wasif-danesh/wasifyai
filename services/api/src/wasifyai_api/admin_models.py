@@ -12,7 +12,6 @@ from wasifyai_api.identity import Identity, require_admin
 from wasifyai_api.litellm_admin import BackendError
 from wasifyai_api.model_access import (
     Binding,
-    CanaryFailed,
     ModelAccess,
     ModelAccessError,
     ModelView,
@@ -31,7 +30,6 @@ class ModelList(BaseModel):
 
 class ModelUpdated(BaseModel):
     model: ModelView
-    checks: str  # "passed" when the product's checks ran and passed, otherwise "none"
 
 
 def _models(request: Request) -> ModelAccess:
@@ -70,18 +68,13 @@ async def set_model(
     alias: str, binding: Binding, request: Request, who: Identity = Depends(require_admin)
 ) -> ModelUpdated:
     try:
-        view, checks = await _models(request).set(alias, binding, who.user_id)
-    except CanaryFailed as exc:
-        await _audit(
-            request, who, "admin.model.rejected", alias, **_describe(binding), failures=exc.failures
-        )
-        raise HTTPException(409, {"message": str(exc), "failures": exc.failures}) from exc
+        view = await _models(request).set(alias, binding, who.user_id)
     except ModelAccessError as exc:
         raise HTTPException(422, str(exc)) from exc
     except BackendError as exc:
         raise HTTPException(502, str(exc)) from exc
-    await _audit(request, who, "admin.model.update", alias, **_describe(binding), checks=checks)
-    return ModelUpdated(model=view, checks=checks)
+    await _audit(request, who, "admin.model.update", alias, **_describe(binding))
+    return ModelUpdated(model=view)
 
 
 @router.post("/{alias}/test", response_model=TestOutcome)

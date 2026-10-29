@@ -387,7 +387,6 @@ describe("a saved message with attachments", () => {
 describe("the picture reader", () => {
   const reader = (run: (onProgress: (fraction: number | null) => void) => Promise<void>) => ({
     title: "Qwen3.5 9B picture reader",
-    licence: "Apache-2.0",
     from: "huggingface.co",
     bytes: 918_166_080,
     run,
@@ -409,9 +408,7 @@ describe("the picture reader", () => {
     // the document goes up at once; the picture waits, and nothing was uploaded for it
     expect(base.upload).toHaveBeenCalledTimes(1);
     const { container } = render(<div>{result.current.notice}</div>);
-    expect(container).toHaveTextContent(
-      "Qwen3.5 9B picture reader (Apache-2.0), from huggingface.co",
-    );
+    expect(container).toHaveTextContent("Qwen3.5 9B picture reader, from huggingface.co");
     expect(container).toHaveTextContent("918 MB");
     expect(container).toHaveTextContent("your pictures are not sent anywhere");
 
@@ -469,7 +466,6 @@ describe("the picture reader", () => {
       picture_reader: {
         state: "available",
         title: "Demo reader",
-        licence: "Apache-2.0",
         from: "huggingface.co",
         bytes: 1_000_000,
       },
@@ -486,7 +482,6 @@ describe("the picture reader", () => {
           picture_reader: {
             state: "available",
             title: "Demo reader",
-            licence: "Apache-2.0",
             from: "huggingface.co",
             bytes: 1_000_000,
           },
@@ -498,7 +493,6 @@ describe("the picture reader", () => {
       {
         state: "downloading",
         title: "t",
-        licence: "l",
         from: "f",
         bytes: 1,
         download: { status: "running", bytes_done: 5, bytes_total: 10, error: "" },

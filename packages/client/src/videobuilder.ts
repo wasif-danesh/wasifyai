@@ -9,7 +9,6 @@ export type ComponentPart = {
   name: string;
   version: string;
   bytes: number;
-  licence: string;
   source: string;
 };
 

@@ -8,10 +8,7 @@ person's to pick; nothing here names one except the separator that gives a clean
                  translate each line
     dub:         the person's script -> speak each line (in the speaker's own voice, a saved
                  voice, or a built-in one) -> fit each line to its time -> mix over the
-                 background -> a track
-
-Copying the speaker's voice needs the person's word that it is theirs or that they have permission
-(the same consent as a saved cloned voice); that word is kept with the dub."""
+                 background -> a track"""
 
 import asyncio
 import logging
@@ -34,11 +31,11 @@ from wasifyai_platform_sdk import (
     require_context,
 )
 
-from wasifyai_voice import audio_input, consent, dubbing
+from wasifyai_voice import audio_input, dubbing
 from wasifyai_voice.runtime import store_for
-from wasifyai_voice.safeguards import DUBS, metered
 from wasifyai_voice.store import NotFound
 from wasifyai_voice.tools import Kit, Refuse, Source, SourceMissing
+from wasifyai_voice.usage import DUBS, metered
 
 log = logging.getLogger(__name__)
 
@@ -259,17 +256,7 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
             return refuse_with(e.code, str(e))
         except SourceMissing as e:
             return refuse_with("unknown_source", e.message)
-        # ADR-0047: the words that will be said in the other language are moderated before speaking
-        if refusal := await kit.guard.words(*(s.text for s in lines), kind="dubbed lines"):
-            return refuse_with(*refusal)
         voice_from = str(state.get("voice_from") or "builtin")
-        basis = state.get("speaker_basis")
-        if voice_from == "speaker" and basis not in consent.STATEMENTS:
-            return refuse_with(
-                "consent_required",
-                "Copying the speaker's voice needs your word that it is your own voice, or that "
-                "you have permission to use it.",
-            )
         work = Path(tempfile.mkdtemp(prefix="dub-", dir=await _scratch_root()))
         try:
             speak = await _voice(voice_from, state, language, lines, work)
@@ -304,7 +291,6 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
             edit={
                 "action": "dub", "language": dubbing.base(language), "voice_from": voice_from,
                 "voice": speak.label, "segments": [s.public() for s in lines], "fit": stats,
-                "consent": consent.record(str(basis)) if voice_from == "speaker" else None,
                 "from": source.kind,
             },
             load_s=0.0, elapsed_s=stats["elapsed_s"],
@@ -455,9 +441,5 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
         with wave.open(io.BytesIO(wav)) as w:
             return w.getnframes() / float(w.getframerate())
 
-    # the script costs a transcription and a separation, so it stops at the limit too; a dub is
-    # counted once it is made
-    return {
-        "dub_script": metered(caps, kit.guard, refuse_with, DUBS, dub_script, count=False),
-        "dub": metered(caps, kit.guard, refuse_with, DUBS, dub),
-    }
+    # a dub is counted once it is made
+    return {"dub_script": dub_script, "dub": metered(caps, DUBS, dub)}

@@ -388,11 +388,6 @@
       },
       "Body_create_clone_products_wasifyai_voice_voices_clone_post": {
         "properties": {
-          "consent": {
-            "default": "",
-            "title": "Consent",
-            "type": "string"
-          },
           "file": {
             "contentMediaType": "application/octet-stream",
             "title": "File",
@@ -1021,18 +1016,6 @@
             ],
             "title": "Name"
           },
-          "rights": {
-            "anyOf": [
-              {
-                "maxLength": 12,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rights"
-          },
           "trigger_word": {
             "anyOf": [
               {
@@ -1187,18 +1170,6 @@
               }
             ],
             "title": "Question"
-          },
-          "rights": {
-            "anyOf": [
-              {
-                "maxLength": 20,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rights"
           }
         },
         "title": "DecisionSetPatch",
@@ -1825,11 +1796,6 @@
             "title": "Id",
             "type": "string"
           },
-          "licence": {
-            "default": "",
-            "title": "Licence",
-            "type": "string"
-          },
           "plain": {
             "title": "Plain",
             "type": "string"
@@ -2101,12 +2067,6 @@
             "maxLength": 1000,
             "title": "Prompt",
             "type": "string"
-          },
-          "rights": {
-            "default": false,
-            "description": "The person says they may use the picture.",
-            "title": "Rights",
-            "type": "boolean"
           },
           "seed": {
             "default": 42,
@@ -2427,20 +2387,12 @@
             "title": "Bytes Missing",
             "type": "integer"
           },
-          "commercial_use": {
-            "title": "Commercial Use",
-            "type": "string"
-          },
           "engine": {
             "title": "Engine",
             "type": "string"
           },
           "id": {
             "title": "Id",
-            "type": "string"
-          },
-          "licence": {
-            "title": "Licence",
             "type": "string"
           },
           "runtime_ready": {
@@ -2468,8 +2420,6 @@
           "title",
           "state",
           "bytes_missing",
-          "licence",
-          "commercial_use",
           "tasks",
           "engine",
           "runtime_ready"
@@ -2479,17 +2429,12 @@
       },
       "ModelUpdated": {
         "properties": {
-          "checks": {
-            "title": "Checks",
-            "type": "string"
-          },
           "model": {
             "$ref": "#/components/schemas/ModelView"
           }
         },
         "required": [
-          "model",
-          "checks"
+          "model"
         ],
         "title": "ModelUpdated",
         "type": "object"
@@ -2529,10 +2474,6 @@
               }
             ],
             "title": "Model"
-          },
-          "protected": {
-            "title": "Protected",
-            "type": "boolean"
           },
           "provider": {
             "anyOf": [
@@ -2581,7 +2522,6 @@
           "alias",
           "purpose",
           "kind",
-          "protected",
           "source",
           "provider",
           "model",
@@ -3209,37 +3149,6 @@
           }
         },
         "title": "RunRequest",
-        "type": "object"
-      },
-      "SafeguardsIn": {
-        "properties": {
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "enabled"
-        ],
-        "title": "SafeguardsIn",
-        "type": "object"
-      },
-      "SafeguardsStatus": {
-        "properties": {
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          },
-          "forced": {
-            "title": "Forced",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "enabled",
-          "forced"
-        ],
-        "title": "SafeguardsStatus",
         "type": "object"
       },
       "SaveTo": {
@@ -4609,18 +4518,6 @@
               }
             ],
             "title": "Quality"
-          },
-          "rights": {
-            "anyOf": [
-              {
-                "maxLength": 20,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rights"
           }
         },
         "title": "WritingSetPatch",
@@ -5256,66 +5153,6 @@
           }
         },
         "summary": "Test Model",
-        "tags": [
-          "admin"
-        ]
-      }
-    },
-    "/admin/safeguards": {
-      "get": {
-        "operationId": "get_safeguards_admin_safeguards_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SafeguardsStatus"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get Safeguards",
-        "tags": [
-          "admin"
-        ]
-      },
-      "put": {
-        "operationId": "set_safeguards_admin_safeguards_put",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SafeguardsIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SafeguardsStatus"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Set Safeguards",
         "tags": [
           "admin"
         ]

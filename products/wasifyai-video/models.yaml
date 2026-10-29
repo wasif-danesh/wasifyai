@@ -1,17 +1,15 @@
 # The models this product can use, and where they come from (ADR-0059, ADR-0037).
 # The desktop app lists them in its Models panel and downloads a file only after a click that has
-# shown the file names, sizes, source and licence. Every file is pinned by size and SHA-256; the
+# shown the file names, sizes and source. Every file is pinned by size and SHA-256; the
 # URLs name a commit of the repository, so they cannot change under the pin.
 models:
   - id: ltx-video-2b
     title: LTX-Video 2B (0.9.5)
-    licence: OpenRAIL-M (commercial use allowed; its use restrictions pass on to what you make)
     source: https://huggingface.co/Lightricks/LTX-Video
     note: >-
       Text to video and picture to video, clips of 2 or 5 seconds. A small model: a 2 second clip
       takes about a minute and a 5 second one about 4 minutes on an Apple-silicon Mac with 64 GB
-      (measured). Needs about 14 GB of memory. Later LTX versions need a paid licence above USD 10M
-      annual revenue, so this one is pinned (ADR-0037).
+      (measured). Needs about 14 GB of memory.
     approx_ram_gb: 14
     files:
       - folder: checkpoints

@@ -178,9 +178,7 @@ export function Model3d({
                 ) : (
                   <ModelAbout m={m} />
                 )}
-                <p className={hint}>
-                  {state.component.about.built_with}. {state.component.about.licence}
-                </p>
+                <p className={hint}>{state.component.about.built_with}.</p>
               </>
             }
             action={
@@ -272,7 +270,7 @@ function SetupCard({
               <strong>{p.name}</strong> <span className="text-muted-foreground">{p.version}</span>
             </span>
             <span className="text-muted-foreground tabular-nums">
-              {gigabytes(p.bytes)} · {p.licence} · from {p.source}
+              {gigabytes(p.bytes)} · from {p.source}
             </span>
           </li>
         ))}
@@ -426,17 +424,13 @@ const TONE: Record<PictureCheck["level"], string> = {
   stop: "text-destructive",
 };
 
-type Check = { title: string; detail: Detail; rights: boolean };
-const NEW_CHECK: Check = { title: "", detail: "standard", rights: false };
+type Check = { title: string; detail: Detail };
+const NEW_CHECK: Check = { title: "", detail: "standard" };
 
 function canMakeNow(m: Hook, check: Check) {
   const { input, status, busyWith } = m.state;
   return Boolean(
-    input?.can_go_on &&
-      check.rights &&
-      status?.fit?.verdict !== "too_big" &&
-      !status?.busy &&
-      busyWith !== "make",
+    input?.can_go_on && status?.fit?.verdict !== "too_big" && !status?.busy && busyWith !== "make",
   );
 }
 
@@ -494,7 +488,7 @@ function CheckStage({ m }: { m: Hook }) {
   );
 }
 
-/** What was found in the picture, and the name, detail and statement of rights for the model. */
+/** What was found in the picture, and the name and detail for the model. */
 function CheckAsk({
   m,
   form,
@@ -508,7 +502,6 @@ function CheckAsk({
 }) {
   const { input } = m.state;
   const titleId = useId();
-  const rightsId = useId();
   if (!input) return null;
   return (
     <section className="grid gap-4" aria-label="Check the picture">
@@ -553,7 +546,6 @@ function CheckAsk({
                 title: check.title.trim(),
                 prompt: "",
                 detail: check.detail,
-                rights: check.rights,
               });
             }
           }}
@@ -586,18 +578,6 @@ function CheckAsk({
             </div>
             <p className={hint}>{DETAILS.find((d) => d.id === check.detail)?.note}</p>
           </fieldset>
-          <div className="flex items-start gap-2.5">
-            <input
-              id={rightsId}
-              type="checkbox"
-              className="mt-1 size-4"
-              checked={check.rights}
-              onChange={(e) => setCheck({ ...check, rights: e.target.checked })}
-            />
-            <label htmlFor={rightsId}>
-              I may use this picture, and it is not a photo of a real person who has not agreed.
-            </label>
-          </div>
           <p className={hint}>
             It takes about 5 to 25 minutes, depending on how detailed the object is, and about 19 GB
             of memory. You can leave this screen while it works.

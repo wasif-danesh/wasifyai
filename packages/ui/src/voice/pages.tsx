@@ -403,8 +403,8 @@ export function LipSyncPage(p: VoicePageProps) {
         runs={p.runs}
         lead={device(
           p,
-          "Make the face in a picture say your words or a recording. It runs on this computer, and every video is marked as AI-generated.",
-          "Make the face in a picture say your words or a recording. Every video is marked as AI-generated.",
+          "Make the face in a picture say your words or a recording. It runs on this computer.",
+          "Make the face in a picture say your words or a recording.",
         )}
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}

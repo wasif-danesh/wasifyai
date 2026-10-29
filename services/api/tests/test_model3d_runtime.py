@@ -196,8 +196,7 @@ def test_the_plan_names_every_download_with_its_size_licence_and_source(tmp_path
     )
     names = {p["name"] for p in plan["parts"]}
     assert names == {"3D engine (pixal3d.cpp)", "Pixal3D models", "Cut-out model (BiRefNet)"}
-    assert any("Built with DINOv3" in p["licence"] for p in plan["parts"])
-    assert all(p["licence"] and p["source"] for p in plan["parts"])
+    assert all(p["source"] for p in plan["parts"])
 
 
 async def test_it_installs_after_the_size_was_confirmed_and_only_then_is_installed(

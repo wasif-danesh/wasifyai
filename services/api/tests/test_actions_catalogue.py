@@ -190,7 +190,7 @@ def test_effects_and_flags_are_what_the_adr_says(catalogue):
     by = {a.id: a for a in catalogue}
     assert {a.id for a in catalogue if a.effect == "destroy"} == {"library.delete"}
     consent = {a.id for a in catalogue if "needs_consent" in a.flags}
-    assert consent == {"voice.clone", "lipsync.make", "models.download"}
+    assert consent == {"models.download"}  # the person approves a large download; nothing else
     for a in catalogue:
         assert (a.effect == "read") or a.effect in ("make", "change", "destroy")
         if a.private:

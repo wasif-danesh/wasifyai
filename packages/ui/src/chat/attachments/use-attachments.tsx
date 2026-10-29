@@ -42,7 +42,6 @@ export type AttachControl = {
   /** present while the model lacks its picture reader and the app can get it: a picture then opens a card that offers it */
   pictureReader?: {
     title: string;
-    licence: string;
     /** the host it comes from */
     from: string;
     bytes: number;
@@ -284,9 +283,9 @@ export function useAttachments(control: AttachControl | undefined) {
       >
         <p className="font-medium">Get the picture reader</p>
         <p className="text-muted-foreground">
-          To look at pictures this chat model needs its picture reader: {offer.title} (
-          {offer.licence}){offer.from ? `, from ${offer.from}` : ""}, {formatBytes(offer.bytes)} to
-          download once. It runs on this computer, so your pictures are not sent anywhere.
+          To look at pictures this chat model needs its picture reader: {offer.title}
+          {offer.from ? `, from ${offer.from}` : ""}, {formatBytes(offer.bytes)} to download once.
+          It runs on this computer, so your pictures are not sent anywhere.
         </p>
         {reader.state === "working" ? (
           <div className="grid gap-1">

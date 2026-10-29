@@ -11,7 +11,7 @@ import type {
   VoiceModelInfo,
 } from "@wasifyai/client";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { LipSyncWorkspace, MARK, PICTURE_TEXT, VOICE_TEXT } from "./LipSyncWorkspace";
+import { LipSyncWorkspace } from "./LipSyncWorkspace";
 
 const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
   ({ event, data: { run_id: "r1", seq: 1, ...data } }) as unknown as ParsedEvent;
@@ -19,16 +19,12 @@ const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
 const model = (over: Partial<VoiceModelInfo> = {}): VoiceModelInfo => ({
   id: "musetalk-v15",
   title: "MuseTalk 1.5",
-  licence: "MIT",
   engine: "sidecar",
   family: "musetalk",
   tasks: ["lipsync"],
   recommended: ["lipsync"],
   languages: ["multi"],
   sample_rate: 0,
-  commercial_use: "yes",
-  licence_evidence: "https://huggingface.co/TMElyralab/MuseTalk",
-  reviewed: "2026-10-16",
   measured: { platform: "darwin-arm64", speed_x: 0.2, memory_gb: 11.8, load_s: null },
   voices: [],
   default_voice: null,
@@ -94,7 +90,6 @@ const clip = (over: Partial<Clip> = {}): Clip => ({
   fps: 25,
   width: 300,
   height: 446,
-  consent: { picture: "drawn", voice: "generated", mark: MARK },
   favourite: false,
   load_s: 0,
   elapsed_s: 30,
@@ -174,64 +169,51 @@ async function chooseRecording(name: RegExp) {
 }
 
 describe("making a talking video", () => {
-  it("needs the picture, what it is, and the words before it can be made, and says the mark is always there", async () => {
+  it("needs only the picture and the words before it can be made, and asks nothing about them", async () => {
     render(<LipSyncWorkspace api={api()} runs={runsThat([])} />);
-    expect(await screen.findByText(/cannot be turned off/)).toBeTruthy();
+    await screen.findByRole("heading", { name: "The picture" });
+    expect(screen.queryByText(/AI-generated/)).toBeNull();
     expect(makeButton().disabled).toBe(true);
     await addFace();
+    expect(makeButton().disabled).toBe(true); // no words yet
     await userEvent.type(screen.getByLabelText("What should it say?"), "Good evening, everyone.");
-    expect(makeButton().disabled).toBe(true); // the picture's kind is still not said
-    await userEvent.click(screen.getByRole("radio", { name: PICTURE_TEXT.drawn }));
     expect(makeButton().disabled).toBe(false);
+    expect(screen.queryByRole("radio", { name: /picture of me|own voice/ })).toBeNull();
   });
 
-  it("sends words with the picture and what was said about it, then lists the new video", async () => {
+  it("sends words with the picture, then lists the new video", async () => {
     const runs = runsThat([ev("node", { label: "Speaking" }), finished]);
     const clips = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([clip()]);
     render(<LipSyncWorkspace api={api({ clips })} runs={runs} />);
     await addFace();
     await userEvent.type(screen.getByLabelText("What should it say?"), "Good evening, everyone.");
-    await userEvent.click(screen.getByRole("radio", { name: PICTURE_TEXT.own }));
     await userEvent.click(makeButton());
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
     expect(runs.startRun.mock.calls[0]?.[1]).toEqual({
       task: "lipsync",
       picture: "p1",
-      picture_basis: "own",
-      voice_basis: "generated",
       text: "Good evening, everyone.",
       model: "musetalk-v15",
     });
-    // the new video plays on the stage with what was said about it
+    // the new video plays on the stage
     const stage = screen.getByRole("region", { name: "Result" });
     await waitFor(() => expect(stage.textContent).toContain("Mona says hello"));
     expect(stage.querySelector("video")).toHaveAttribute("src", "http://x/c.mp4");
-    expect(stage.textContent).toContain(PICTURE_TEXT.drawn);
-    expect(stage.textContent).toContain(VOICE_TEXT.generated);
   });
 
-  it("asks whose voice a recording is, and 'made here' is only offered for speech made here", async () => {
+  it("makes a video from any recording, without asking whose voice it is", async () => {
     const runs = runsThat([finished]);
     render(<LipSyncWorkspace api={api()} runs={runs} />);
     await addFace();
-    await userEvent.click(screen.getByRole("radio", { name: PICTURE_TEXT.drawn }));
     await userEvent.click(screen.getByRole("radio", { name: "A recording" }));
     await chooseRecording(/^My recording/);
-    expect(screen.queryByRole("radio", { name: VOICE_TEXT.generated })).toBeNull();
-    expect(makeButton().disabled).toBe(true);
-    await userEvent.click(screen.getByRole("radio", { name: VOICE_TEXT.permission }));
     expect(makeButton().disabled).toBe(false);
     await chooseRecording(/^Hello there/);
-    expect(screen.getByRole("radio", { name: VOICE_TEXT.generated })).toBeTruthy();
-    expect(makeButton().disabled).toBe(true); // the answer was reset with the recording
-    await userEvent.click(screen.getByRole("radio", { name: VOICE_TEXT.generated }));
     await userEvent.click(makeButton());
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
     expect(runs.startRun.mock.calls[0]?.[1]).toEqual({
       task: "lipsync",
       picture: "p1",
-      picture_basis: "drawn",
-      voice_basis: "generated",
       source_speech: "s1",
       model: "musetalk-v15",
     });
@@ -259,7 +241,6 @@ describe("making a talking video", () => {
     render(<LipSyncWorkspace api={api()} runs={runs} />);
     await addFace();
     await userEvent.type(screen.getByLabelText("What should it say?"), "Hello there.");
-    await userEvent.click(screen.getByRole("radio", { name: PICTURE_TEXT.drawn }));
     await userEvent.click(makeButton());
     expect((await screen.findByRole("alert")).textContent).toContain("front-facing");
   });
@@ -356,19 +337,18 @@ describe("the lip sync engine and the videos", () => {
 });
 
 describe("after a video is made", () => {
-  it("clears what the picture was, so the next picture is asked about afresh", async () => {
+  it("clears the picture, so the next video starts from a new one", async () => {
     const runs = runsThat([finished]);
     const clips = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([clip()]);
     render(<LipSyncWorkspace api={api({ clips })} runs={runs} />);
     await addFace();
     await userEvent.type(screen.getByLabelText("What should it say?"), "Good evening.");
-    await userEvent.click(screen.getByRole("radio", { name: PICTURE_TEXT.drawn }));
     await userEvent.click(makeButton());
     await waitFor(() =>
       expect(screen.getByRole("region", { name: "Result" }).textContent).toContain(
         "Mona says hello",
       ),
     );
-    expect(screen.getByRole("radio", { name: PICTURE_TEXT.drawn })).not.toBeChecked();
+    expect(makeButton().disabled).toBe(true); // a new picture is needed
   });
 });

@@ -8,7 +8,7 @@ import { actions, hint, panel } from "../styles";
 
 /**
  * "Set up training": the trainer and the picture model it learns on are not in the app. What will be fetched, how
- * large, whose licence and from where is shown first; nothing is fetched until the button is pressed, and the button
+ * large and from where is shown first; nothing is fetched until the button is pressed, and the button
  * repeats the size. A set up that stops continues where it stopped.
  */
 export function SetupCard({
@@ -45,8 +45,7 @@ export function SetupCard({
               <strong>{p.name}</strong> <span className="text-muted-foreground">{p.version}</span>
             </span>
             <span className="text-muted-foreground tabular-nums">
-              {p.have ? "Already on this computer" : `${gigabytes(p.bytes)}`} · {p.licence} · from{" "}
-              {p.source}
+              {p.have ? "Already on this computer" : `${gigabytes(p.bytes)}`} · from {p.source}
             </span>
           </li>
         ))}

@@ -19,7 +19,6 @@ const STATUS = {
   min_pictures: 8,
   max_pictures: 100,
   kinds: ["character", "style", "object"],
-  statements: { mine: "", permission: "", drawing: "", artwork: "" },
   base: "flux2-klein-base-4b",
   steps: { character: 200, style: 250, object: 150 },
   estimates: { character: "", style: "", object: "" },
@@ -40,7 +39,6 @@ const OFFER: TrainingSetupState = {
         version: "0.22.0",
         bytes: 1_100_000_000,
         have: false,
-        licence: "MIT",
         source: "pypi.org",
       },
       {
@@ -48,7 +46,6 @@ const OFFER: TrainingSetupState = {
         version: "the picture model it learns on",
         bytes: 15_980_000_000,
         have: false,
-        licence: "Apache-2.0",
         source: "huggingface.co",
       },
     ],
@@ -71,7 +68,7 @@ function api(setup: () => Promise<TrainingSetupState>, extra: Partial<TrainingAp
 }
 
 describe("Set up training", () => {
-  it("shows what will be fetched, how large and whose licence, before anything is", async () => {
+  it("shows what will be fetched and how large, before anything is", async () => {
     render(<Train api={api(async () => OFFER)} pollMs={10} />);
     // shown when the card's Set up asks for it (ADR-0093 U10)
     await userEvent.click(
@@ -79,8 +76,9 @@ describe("Set up training", () => {
     );
     expect(await screen.findByText("Set up training")).toBeTruthy();
     expect(screen.getByText("Trainer (mflux)")).toBeTruthy();
-    expect(screen.getByText(/MIT · from pypi\.org/)).toBeTruthy();
-    expect(screen.getByText(/Apache-2\.0 · from huggingface\.co/)).toBeTruthy();
+    expect(screen.getAllByText(/· from pypi\.org/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/· from huggingface\.co/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/MIT|Apache/)).toBeNull();
     expect(
       screen.getByText(/about 20\.\d GB of free disk space|about 20 GB of free disk space/),
     ).toBeTruthy();

@@ -1,5 +1,4 @@
 workflow: solid-image.json
-licence: "No model: a solid colour made by core ComfyUI nodes, for checking the ComfyUI pod and the worker path"
 notes: >
   Used by the kind overlay (PRODUCT_ENV=kind) to prove that the ComfyUI container starts, that the worker reaches it
   and gets a file back, on a machine with no GPU and no models. The prompt, seed and steps are accepted and ignored.

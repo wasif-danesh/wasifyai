@@ -232,9 +232,7 @@ def test_the_decision_models_are_taught_as_a_whole_and_say_why_not_as_an_adapter
 # ---- the sets and runs, through the routes -------------------------------------------------------
 
 
-def make_set(
-    rig, n: int = 60, rights: str = "mine", name: str = "Messages", kind: str = "category"
-) -> dict:
+def make_set(rig, n: int = 60, name: str = "Messages", kind: str = "category") -> dict:
     s = rig.post(f"{D}/sets", json={"name": name})
     assert s.status_code == 201, s.text
     sid = s.json()["id"]
@@ -245,8 +243,6 @@ def make_set(
         for i in range(n)
     ]
     assert rig.put(f"{D}/sets/{sid}/examples", json={"rows": rows}).status_code == 200
-    if rights:
-        assert rig.patch(f"{D}/sets/{sid}", json={"rights": rights}).status_code == 200
     return rig.get(f"{D}/sets/{sid}").json()
 
 
@@ -288,7 +284,6 @@ def test_a_set_keeps_its_question_and_examples_and_says_what_is_missing(rig):
     )
     assert rig.patch(f"{D}/sets/{sid}", json={"kind": "maybe"}).status_code == 422
     assert rig.patch(f"{D}/sets/{sid}", json={"quality": "best"}).status_code == 422
-    assert rig.patch(f"{D}/sets/{sid}", json={"rights": "theirs"}).status_code == 422
     assert rig.patch(f"{D}/sets/{sid}", json={"base": "gpt"}).status_code == 422
     yes = rig.patch(f"{D}/sets/{sid}", json={"kind": "yes_no"}).json()
     assert yes["answers"] == [
@@ -312,12 +307,6 @@ def test_a_run_refuses_what_is_not_ready_in_words(rig):
     few = make_set(rig, n=8)
     refused = rig.post(f"{D}/sets/{few['id']}/runs")
     assert refused.status_code == 422 and "at least 20" in refused.json()["detail"]["message"]
-    nobody = make_set(rig, rights="")
-    refused = rig.post(f"{D}/sets/{nobody['id']}/runs")
-    assert (
-        refused.status_code == 422
-        and "whose these texts are" in refused.json()["detail"]["message"]
-    )
 
 
 def test_a_run_leaves_a_model_with_a_report_and_a_mark(rig):
@@ -336,7 +325,7 @@ def test_a_run_leaves_a_model_with_a_report_and_a_mark(rig):
     assert "right 12 times (100 percent)" in card["evaluation"]["note"]
     peek = card["peek"][0]
     assert peek["before"]["confidence"] == 0.4 and peek["after"]["confidence"] == 0.95
-    assert card["statement"]  # the person's statement of whose they are travels with the model
+    assert "statement" not in card
 
 
 def test_a_failed_run_says_so_and_a_stopped_one_keeps_nothing(rig):
@@ -367,7 +356,6 @@ def test_only_one_run_at_a_time_across_pictures_writing_and_deciding(rig):
     writing = rig.post(f"{BASE}/writing/sets", json={"name": "W"}).json()["id"]
     rows = [{"ask": f"Q{i}?", "answer": f"A{i}"} for i in range(12)]
     rig.put(f"{BASE}/writing/sets/{writing}/examples", json={"rows": rows})
-    rig.patch(f"{BASE}/writing/sets/{writing}", json={"rights": "mine"})
     assert rig.post(f"{BASE}/writing/sets/{writing}/runs").status_code == 409
     rig.post(f"{BASE}/runs/{first['id']}/cancel")
     wait(rig, f"/runs/{first['id']}", lambda r: r["status"] != "working")

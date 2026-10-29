@@ -65,7 +65,7 @@ describe("the 3D client", () => {
   it("makes a model, follows it, stops it, makes it again, renames it and deletes it", async () => {
     const { transport, calls } = fake(() => json({ id: "m1", status: "working" }));
     const api = createModel3dApi(transport);
-    await api.make({ input_id: "p1", title: "Frog", detail: "light", seed: 3, rights: true });
+    await api.make({ input_id: "p1", title: "Frog", detail: "light", seed: 3 });
     await api.get("m1");
     await api.cancel("m1");
     await api.again("m1");
@@ -84,7 +84,6 @@ describe("the 3D client", () => {
       title: "Frog",
       detail: "light",
       seed: 3,
-      rights: true,
     });
     expect(JSON.parse(String(calls[4]?.init?.body))).toEqual({ title: "Green frog" });
   });
@@ -132,7 +131,7 @@ describe("the 3D client", () => {
       ),
     );
     const err = await createModel3dApi(refused.transport)
-      .make({ input_id: "p1", rights: true })
+      .make({ input_id: "p1" })
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(HttpError);
     expect((err as HttpError).status).toBe(409);

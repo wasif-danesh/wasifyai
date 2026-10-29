@@ -8,7 +8,7 @@ import { formatBytes } from "../notebook/format";
 import { GetModelDialog } from "./ModelSelect";
 import { useChoicesChanged, useChoicesFor, useChoicesVersion } from "./context";
 import { displayName } from "./copy";
-import { LicenceChip, ReadyDot, readinessOf } from "./marks";
+import { ReadyDot, readinessOf } from "./marks";
 import { GROUPS, type GroupId, type ModelChoice } from "./types";
 import { useModelChoices } from "./use-model-choices";
 
@@ -165,9 +165,6 @@ function GroupTable({ group, place }: { group: GroupId; place: Place }) {
                   Size
                 </th>
                 <th scope="col" className={head}>
-                  Licence
-                </th>
-                <th scope="col" className={head}>
                   {place === "service" ? "On the worker" : "Status"}
                 </th>
                 <th scope="col" className={head}>
@@ -195,9 +192,6 @@ function GroupTable({ group, place }: { group: GroupId; place: Place }) {
                       </div>
                     </th>
                     <td className="whitespace-nowrap px-4 py-3">{sizeText(c)}</td>
-                    <td className="px-4 py-3">
-                      <LicenceChip choice={c} />
-                    </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <span
                         className={cn(
@@ -285,7 +279,7 @@ const groupLabel = (id: GroupId) => GROUPS.find((g) => g.id === id)?.title ?? id
 
 /**
  * The Models page: one tab for each group, named for what a person wants to do, and under it a table of the models with
- * their size, licence and state and one action each (ADR-0089; it replaces the cards of ADR-0086). Groups with no picker
+ * their size and state and one action each (ADR-0089; it replaces the cards of ADR-0086). Groups with no picker
  * in this app (the web serves only some) have no tab. What only an expert needs (model folders, files other tools left,
  * Hugging Face) goes in `advanced`, under the table.
  */

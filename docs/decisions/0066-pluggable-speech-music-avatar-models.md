@@ -1,6 +1,7 @@
 # ADR-0066: Speech, music and lip sync run any model the person picks: descriptors, engine adapters and one dropdown
 
 - **Status:** Accepted (2026-10-16), with the owner's answers at the end.
+- **Superseded in part:** by ADR-0094 (2026-10-29): the AI-generated mark, the consent records and the licence fields are removed.
 - **Date:** 2026-10-16
 - **Depends on:** ADR-0056 (one engine, two shells), ADR-0061 (how outside code enters), ADR-0062 (engines per
   capability; rule 2 no second heavy Python environment, rule 4 single resident model), ADR-0063 and ADR-0064

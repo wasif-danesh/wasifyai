@@ -4,19 +4,17 @@ The "worker" is the test itself, resuming the graph with a job result."""
 from typing import Any
 
 import pytest
-from image_rig import make_rig, png, put_upload, verdict
+from image_rig import make_rig, png, put_upload
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 from wasifyai_image.graphs.image import build_image_graph
-from wasifyai_image.images import FixedQuota, InMemoryImageStore
+from wasifyai_image.images import InMemoryImageStore
 from wasifyai_image.schemas import SIZES
 from wasifyai_platform_sdk import (
-    Image,
     JobError,
     JobFailed,
     JobOutput,
     JobResult,
-    RunError,
     object_key,
 )
 
@@ -26,12 +24,10 @@ CONFIG: Any = {"configurable": {"thread_id": "th-1"}}
 class Story:
     """Drives a run: start it, play the media worker."""
 
-    def __init__(self, rig, quota=None):
+    def __init__(self, rig):
         self.rig = rig
         self.images = InMemoryImageStore()
-        self.graph = build_image_graph(
-            rig.caps, InMemorySaver(), self.images, rig.uploads, quota or FixedQuota(0)
-        )
+        self.graph = build_image_graph(rig.caps, InMemorySaver(), self.images, rig.uploads)
         self.state: dict = {}
 
     async def start(self, input: Any):
@@ -111,7 +107,7 @@ async def test_the_size_defaults_to_square(tmp_path, ctx):
 async def test_text_mode_never_touches_uploads_or_the_picture_model(tmp_path, ctx):
     rig = make_rig(tmp_path)
     await Story(rig).start({"mode": "text", "prompt": "a fox", "image_key": "uploads/nope.png"})
-    assert rig.picture_checks() == []  # no picture to look at
+    assert rig.asked() == []  # nothing judges the words
     assert rig.sink.submitted[0].capability == "image.generate"
     assert "image_key" not in rig.sink.submitted[0].prompt
 
@@ -126,10 +122,7 @@ async def test_image_to_image_edits_the_users_picture_and_then_forgets_it(tmp_pa
     job = rig.sink.submitted[0]
     assert job.capability == "image.edit"
     assert job.prompt["prompt"] == "make it dusk" and job.prompt["image_key"] == up.key
-    # both the words and the picture were checked, and the picture reached the model as an image
-    assert len(rig.word_checks()) == 1 and len(rig.picture_checks()) == 1
-    parts = rig.picture_checks()[0]
-    assert any(isinstance(p, Image) and p.media_type == "image/jpeg" for p in parts)
+    assert rig.asked() == []  # nothing judges the words or the picture
     assert await exists(rig, up.key)  # still there while the job runs
 
     await s.finish_job()
@@ -175,66 +168,6 @@ async def test_another_users_upload_cannot_be_used(tmp_path, ctx):
 
 
 @pytest.mark.parametrize(
-    "category",
-    [
-        "sexual_content",
-        "minors",
-        "graphic_violence",
-        "hate",
-        "real_person_misuse",
-        "disallowed_content",
-    ],
-)
-async def test_a_refused_description_stops_before_any_generation(tmp_path, ctx, category):
-    rig = make_rig(tmp_path, moderate=[verdict(False, category, "SECRET-REASON")])
-    s = await Story(rig).start({"mode": "text", "prompt": "something unsuitable"})
-    assert s.state["status"] == "refused" and s.state["refusal"]["code"] == category
-    assert s.state["refusal"]["message"] and "SECRET-REASON" not in s.state["refusal"]["message"]
-    assert rig.sink.submitted == [] and s.images.images == []
-    assert not [e for e in rig.usage.events if e.kind == "image.created"]
-
-
-async def test_a_refused_edit_instruction_deletes_the_picture(tmp_path, ctx):
-    rig = make_rig(tmp_path, moderate=[verdict(False, "sexual_content")])
-    up = await put_upload(rig)
-    s = await Story(rig).start({"mode": "image", "prompt": "make him naked", "image_key": up.key})
-    assert s.state["status"] == "refused" and rig.sink.submitted == []
-    assert rig.picture_checks() == []  # the words were enough
-    assert not await exists(rig, up.key)  # a refused request leaves nothing behind
-
-
-async def test_a_picture_the_model_refuses_stops_the_run_and_is_deleted(tmp_path, ctx):
-    rig = make_rig(tmp_path, moderate_image=[verdict(False, "minors", "SECRET")])
-    up = await put_upload(rig)
-    s = await Story(rig).start({"mode": "image", "prompt": "make it dusk", "image_key": up.key})
-    assert s.state["status"] == "refused" and s.state["refusal"]["code"] == "minors"
-    assert "SECRET" not in s.state["refusal"]["message"] and rig.sink.submitted == []
-    assert not await exists(rig, up.key)
-
-
-async def test_a_contradictory_verdict_is_a_refusal(tmp_path, ctx):
-    rig = make_rig(
-        tmp_path, moderate=[verdict(True, "sexual_content")]
-    )  # "allowed" but names a violation
-    s = await Story(rig).start({"mode": "text", "prompt": "x"})
-    assert s.state["status"] == "refused" and s.state["refusal"]["code"] == "sexual_content"
-
-
-async def test_an_unusable_verdict_fails_closed(tmp_path, ctx):
-    rig = make_rig(tmp_path, moderate=["not json", "still not json"])
-    with pytest.raises(RunError) as caught:
-        await Story(rig).start({"mode": "text", "prompt": "a fox"})
-    assert caught.value.code == "moderation_unavailable" and caught.value.retryable
-    assert rig.sink.submitted == []
-
-
-async def test_one_bad_answer_is_retried(tmp_path, ctx):
-    rig = make_rig(tmp_path, moderate=["oops", verdict()])
-    s = await Story(rig).start({"mode": "text", "prompt": "a fox"})
-    assert s.waiting and rig.sink.submitted  # allowed on the second try
-
-
-@pytest.mark.parametrize(
     ("data", "fragment"),
     [
         ({"mode": "text", "prompt": ""}, "describe the image"),
@@ -261,24 +194,6 @@ async def test_control_characters_in_the_prompt_are_removed(tmp_path, ctx):
 
 
 # ---- the daily limit ---------------------------------------------------------------------
-
-
-async def test_the_daily_limit_stops_a_request_before_any_model_is_used(tmp_path, ctx):
-    rig = make_rig(tmp_path, quotas={"images_per_user_per_day": 3})
-    up = await put_upload(rig)
-    s = await Story(rig, FixedQuota(3)).start(
-        {"mode": "image", "prompt": "make it dusk", "image_key": up.key}
-    )
-    assert s.state["status"] == "refused" and s.state["refusal"]["code"] == "quota_exceeded"
-    assert "limit of 3 images" in s.state["refusal"]["message"]
-    assert rig.asked() == [] and rig.sink.submitted == []
-    assert not await exists(rig, up.key)  # and the picture is not kept
-
-
-async def test_under_the_limit_is_fine(tmp_path, ctx):
-    rig = make_rig(tmp_path, quotas={"images_per_user_per_day": 3})
-    s = await Story(rig, FixedQuota(2)).start({"mode": "text", "prompt": "a fox"})
-    assert s.waiting and len(rig.sink.submitted) == 1
 
 
 # ---- recipes (stage B) -------------------------------------------------------------------

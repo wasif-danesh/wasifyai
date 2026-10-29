@@ -2,6 +2,8 @@
 
 - **Status:** Accepted (2026-10-18, by the owner). **The switch of each alias waits for the checks below**; until a
   check passes, that alias stays as ADR-0018 left it.
+- **Owner answer (2026-10-29):** decision 3 holds on every platform: a Mac, Windows or Linux computer that cannot run
+  Qwen3.5-9B uses Gemma 4 E4B.
 - **Date:** 2026-10-18
 - **Supersedes:** the default-model decision of ADR-0018 (Gemma 4 E4B for every chat alias), and the Gemma 4 E4B
   routing of the `multimodal` alias in ADR-0020 and the default text alias note in ADR-0060, once the checks pass.

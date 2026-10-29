@@ -6,7 +6,6 @@ export type InUseModel = {
   title: string;
   plain: string;
   ready: boolean;
-  licence: string;
 };
 
 export type InUse = { chat: InUseModel[]; images: InUseModel[]; video: InUseModel[] };

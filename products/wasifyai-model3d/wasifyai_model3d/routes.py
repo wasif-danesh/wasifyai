@@ -41,7 +41,6 @@ class MakeIn(BaseModel):
     prompt: str = Field("", max_length=1000)
     detail: str = Field("standard", max_length=12)
     seed: int = Field(42, ge=0, le=2**31 - 1)
-    rights: bool = Field(False, description="The person says they may use the picture.")
 
 
 class RenameIn(BaseModel):
@@ -63,7 +62,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             raise HTTPException(404, str(e)) from None
 
     def refuse(e: Refused) -> HTTPException:
-        status = 422 if e.code in ("bad_detail", "bad_seed", "unusable", "no_rights") else 409
+        status = 422 if e.code in ("bad_detail", "bad_seed", "unusable") else 409
         return HTTPException(status, {"code": e.code, "message": e.message})
 
     def model_out(row: dict[str, Any], identity: Identity) -> dict[str, Any]:
@@ -177,13 +176,6 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         body: MakeIn, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
         guard()
-        if not body.rights:
-            raise HTTPException(
-                422,
-                {"code": "no_rights", "message": (
-                    "Say that you may use this picture, and that it is not a photo of a real "
-                    "person who has not agreed.")},
-            )  # fmt: skip
         try:
             row = await manager_for(deps).start(
                 identity, body.input_id, title=body.title, prompt=body.prompt,

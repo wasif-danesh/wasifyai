@@ -1,6 +1,7 @@
 # ADR-0038: Prompt enhancement for every product
 
 - **Status:** Accepted
+- **Superseded in part:** by ADR-0094 (2026-10-29): the Enhance guard is removed.
 - **Date:** 2026-10-08
 
 ## Context

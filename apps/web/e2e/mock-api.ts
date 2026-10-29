@@ -44,16 +44,12 @@ const VOICE_TASKS = [
 const VOICE_MODEL = (task: string) => ({
   id: `hosted-${task}`,
   title: `Model for ${task}`,
-  licence: "provider terms",
   engine: "remote",
   family: "hosted",
   tasks: [task],
   recommended: [task],
   languages: ["en"],
   sample_rate: 24000,
-  commercial_use: "yes",
-  licence_evidence: "https://openrouter.ai/terms",
-  reviewed: "2026-10-18",
   measured: { platform: "hosted", speed_x: null, memory_gb: null, load_s: null },
   voices: [{ id: "alloy", label: "Alloy", language: "en", gender: "female" }],
   default_voice: "alloy",
@@ -185,10 +181,9 @@ export async function mockApi(
         title: "FLUX.2 klein 4B",
         plain: "Set up on this service by an admin.",
         ready: true,
-        licence: "Apache-2.0",
       };
       return json(route, {
-        chat: [{ ...flux, id: "default-chat", title: "gemma4:e4b", licence: "" }],
+        chat: [{ ...flux, id: "default-chat", title: "gemma4:e4b" }],
         images: [flux],
         video: [{ ...flux, id: "wasifyai-video:0", title: "LTX-Video 2B" }],
       });

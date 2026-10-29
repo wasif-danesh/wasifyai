@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from wasifyai_platform_sdk import Identity, RouteDeps, RouteGuard, RunContext, set_context
+from wasifyai_platform_sdk import Identity, RouteDeps, RouteUsage, RunContext, set_context
 from wasifyai_platform_sdk.context import reset_context
 
 from wasifyai_training import bases, language
@@ -23,7 +23,6 @@ from wasifyai_training.language import LanguageJob, Stopped
 from wasifyai_training.runtime import (
     EV_RUN,
     PRODUCT_ID,
-    STATEMENTS,
     NotAvailable,
     Refused,
     add_to_search,
@@ -140,11 +139,6 @@ class WritingRunManager:
         )
         if why := missing(row, examples):
             raise Refused("not_ready_to_train", why)
-        guard = RouteGuard(state, PRODUCT_ID)
-        if refusal := await guard.over_quota(
-            identity, EV_RUN, "train_runs_per_user_per_day", "training runs"
-        ):
-            raise Refused(*refusal)
         fit = engine.fit(chosen.need_gb)
         if fit["verdict"] == "too_big":
             raise Refused("too_big", fit["reason"])
@@ -201,7 +195,7 @@ class WritingRunManager:
             model = await self._keep(identity, row, examples, run, result, questions, before, after)
             store.finish_run(run_id, "done", elapsed_s=result.seconds, model_id=model["id"])
             self._teaching = False
-            await RouteGuard(self._deps.state, PRODUCT_ID).record(
+            await RouteUsage(self._deps.state, PRODUCT_ID).record(
                 identity,
                 EV_RUN,
                 1,
@@ -233,7 +227,7 @@ class WritingRunManager:
         adapter = result.adapter / "adapters.safetensors"
         card = {
             "kind": KIND, "base": run["base"], "base_title": d.title if d else run["base"],
-            "licence": d.licence if d else "", "engine": result.engine, "preview": False,
+            "engine": result.engine, "preview": False,
             "dataset": {"name": row["name"], "kind": KIND, "examples": len(examples),
                         "hash": set_hash(examples)},
             "settings": run["settings"], "steps": run["steps"], "seconds": round(result.seconds, 1),
@@ -242,7 +236,6 @@ class WritingRunManager:
                      "last_train": result.last_train},
             "answers": [{"question": q, "before": b, "after": a}
                         for q, b, a in zip(questions, before, after, strict=True)],
-            "statement": STATEMENTS.get(row["rights"], ""),
             "evaluation": evaluation_of(result.first_val, result.last_val, len(valid)),
             "trained_at": datetime.now(UTC).isoformat(timespec="seconds"),
         }  # fmt: skip
@@ -273,8 +266,6 @@ def missing(row: dict[str, Any], examples: list[language.Example]) -> str | None
     """What is missing before a run, in the sentence the person is shown; None when nothing is."""
     if why := language.blocker(examples):
         return why
-    if not row["rights"]:
-        return "Say whose these examples are first."
     return None
 
 

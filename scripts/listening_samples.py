@@ -484,13 +484,11 @@ def lipsync(rig: Rig, ctx: dict[str, Any], face: Path | None) -> None:
         task="lipsync",
         picture=pic["id"],
         text="Good evening, everyone. Thank you for coming tonight. It is a pleasure to be here.",
-        picture_basis="drawn",
-        voice_basis="generated",
         title="Lip sync sample",
     )
     clip = rig.get(f"/products/wasifyai-voice/clips/{out['clip_id']}/download").content
     rig.add(P, "lipsync", "Lip sync: a picture says a sentence", rig.save("lipsync-sample.mp4", clip),
-            "Does the mouth move with the words (not early, not late)? Is the rest of the face stable? Is the 'AI-generated' mark visible in the bottom-left corner all the way through? The head stays still: that is how this model works.",
+            "Does the mouth move with the words (not early, not late)? Is the rest of the face stable? The head stays still: that is how this model works.",
             model="musetalk-v15", seconds=out["seconds"], work_s=round(dt, 1))  # fmt: skip
     rig.post("/desktop/lipsync/stop")
 

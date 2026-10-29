@@ -579,7 +579,7 @@ class AudioEngine:
             missing = 0 if files else e.total_bytes
             out.append(
                 {**m.public(), "state": state, "files_ready": files, "runtime_ready": runtime,
-                 "bytes_missing": missing}
+                 "bytes_missing": missing, "source": e.source}
             )  # fmt: skip
         return out
 
@@ -889,7 +889,7 @@ class AudioEngine:
     async def lipsync(
         self, model: VoiceModel, req: LipSyncRequest, picture: Path, voice: Path
     ) -> LipSyncResult:
-        """A video of the face in the picture saying the voice. The sidecar draws the mark."""
+        """A video of the face in the picture saying the voice."""
         if "lipsync" not in model.tasks:
             raise VoiceEngineError("wrong_task", f"{model.title} does not make talking videos.")
         sidecar = self.lipsync_sidecar

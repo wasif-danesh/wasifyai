@@ -27,25 +27,16 @@ const STATUS: WritingStatus = {
   place: "device",
   min_examples: 10,
   good_examples: 50,
-  rights: ["mine", "permission"],
   qualities: ["quick", "better"],
   choices: { family: "language", default_base: "q", default_method: "qlora", bases: [] },
   in_chat: null,
   bases: [],
 };
 
-function planFor(
-  rows: WritingExample[],
-  rights: string,
-  baseMissing: string | null = null,
-): WritingPlan {
+function planFor(rows: WritingExample[], baseMissing: string | null = null): WritingPlan {
   const n = rows.length;
   const missing =
-    n < 10
-      ? `Add at least 10 examples. You have ${n}. 50 or more is better.`
-      : rights === ""
-        ? "Say whose these examples are first."
-        : baseMissing;
+    n < 10 ? `Add at least 10 examples. You have ${n}. 50 or more is better.` : baseMissing;
   return {
     examples: n,
     dropped: [],
@@ -82,7 +73,6 @@ const MODEL: TrainedModel = {
   created_at: "",
   card: {
     base_title: "Qwen3 0.6B",
-    licence: "Apache-2.0",
     engine: "mlx-lm",
     preview: false,
     note: "",
@@ -90,7 +80,6 @@ const MODEL: TrainedModel = {
     steps: 30,
     seconds: 9,
     trigger_word: "",
-    statement: "",
     evaluation: {
       passed: true,
       note: "On 2 answers it had not seen, it got 52 percent closer to your answers.",
@@ -122,7 +111,6 @@ const OFFER: TrainingSetupState = {
         version: "0.31.3",
         bytes: 64_300_000,
         have: false,
-        licence: "MIT",
         source: "pypi.org",
       },
       {
@@ -130,7 +118,6 @@ const OFFER: TrainingSetupState = {
         version: "the writing model it learns on",
         bytes: 351_400_000,
         have: false,
-        licence: "Apache-2.0",
         source: "huggingface.co",
       },
     ],
@@ -154,15 +141,14 @@ function fake(
     ...s,
     examples: rows.length,
     rows,
-    plan: planFor(rows, s.rights, opts.baseMissing?.(s.base) ?? null),
-    missing: planFor(rows, s.rights, opts.baseMissing?.(s.base) ?? null).missing,
+    plan: planFor(rows, opts.baseMissing?.(s.base) ?? null),
+    missing: planFor(rows, opts.baseMissing?.(s.base) ?? null).missing,
   });
   const base = (): WritingSet => ({
     id: "s".repeat(32),
     name: "",
     quality: "quick",
     base: "",
-    rights: "",
     created_at: "",
     examples: 0,
     missing: null,
@@ -293,12 +279,8 @@ describe("Writing", () => {
       await user.type(screen.getByLabelText("What it is asked, example 1"), "Gone?");
       await user.click(screen.getByRole("button", { name: "Remove example 1" }));
       await typed(user, 10);
-      // rights are asked for: nothing starts until they are said
-      await waitFor(
-        () => expect(screen.getByText("Say whose these examples are first.")).toBeTruthy(),
-        { timeout: 3000 },
-      );
-      await user.click(screen.getByRole("button", { name: "I wrote these" }));
+      // nothing is asked about whose the examples are
+      expect(screen.queryByText(/Whose are these/)).toBeNull();
       await waitFor(
         () =>
           expect(
@@ -354,7 +336,6 @@ describe("Writing", () => {
     await user.paste(rows);
     await user.click(screen.getByRole("button", { name: /Add 12 pasted rows/ }));
     expect(await screen.findByLabelText("What it is asked, example 12")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "I have permission to use them" }));
     await waitFor(
       () =>
         expect(
@@ -417,7 +398,6 @@ const base = (
 ): LanguageBase => ({
   id,
   title,
-  licence: "Apache-2.0",
   source: "huggingface.co",
   main: id === "qwen3-0.6b-4bit",
   problem: null,
@@ -476,7 +456,7 @@ describe("Chat with it", () => {
     render(<ChatWithIt model={MODEL} api={api} pollMs={10} />);
     expect(await screen.findByText(/the same model in the form its chat engine runs/)).toBeTruthy();
     expect(
-      screen.getByText(/Qwen3 0.6B for chat \(8-bit\), 639 MB, Apache-2.0, from huggingface.co/),
+      screen.getByText(/Qwen3 0.6B for chat \(8-bit\), 639 MB, from huggingface.co/),
     ).toBeTruthy();
     expect(api.installLanguagePart).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: /Download \(639 MB\) and use in chat/ }));
@@ -515,7 +495,6 @@ describe("Chat with it", () => {
 const ROW = (id: string, title: string, installed: boolean, recommended = false) => ({
   id,
   title,
-  licence: "Apache-2.0",
   engine: "mlx-lm",
   recommended,
   can_teach: true,
@@ -589,7 +568,6 @@ describe("Which model?", () => {
       await user.click(screen.getByLabelText(/Two columns/));
       await user.paste(Array.from({ length: 12 }, (_, i) => `Q${i}?\tA${i}`).join("\n"));
       await user.click(screen.getByRole("button", { name: /Add 12 pasted rows/ }));
-      await user.click(await screen.findByRole("button", { name: "I wrote these" }));
       expect(await screen.findByText("Which model?")).toBeTruthy();
       expect((screen.getByLabelText("Qwen3 0.6B") as HTMLInputElement).checked).toBe(true);
       expect(screen.getByText(/Measured here: 70 steps in 13 s/)).toBeTruthy();

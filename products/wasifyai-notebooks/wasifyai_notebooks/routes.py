@@ -32,12 +32,6 @@ from wasifyai_notebooks import hardening
 from wasifyai_notebooks.components import Unavailable
 from wasifyai_notebooks.files import FileStore, artifact_key, original_key
 from wasifyai_notebooks.overview import AUDIO_FILE, NotPossible, Voicer, choose_voices
-from wasifyai_notebooks.quotas import (
-    QuotaExceeded,
-    active_limits,
-    check_new_notebook,
-    check_new_source,
-)
 from wasifyai_notebooks.reader_install import InstallError
 from wasifyai_notebooks.retrieval import retrieve
 from wasifyai_notebooks.runtime import NotAvailable, Runtime, runtime_for
@@ -189,8 +183,6 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
             raise HTTPException(404, str(e)) from None
         except Conflict as e:
             raise HTTPException(409, str(e)) from None
-        except QuotaExceeded as e:
-            raise HTTPException(429, str(e)) from None
 
     # ---- components ------------------------------------------------------------------------
 
@@ -225,9 +217,6 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
         body: NewNotebook, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
         r = rt()
-        limits = await active_limits(deps.state)
-        if limits:
-            await call(check_new_notebook, limits, r.store, identity.tenant_id, identity.user_id)
         made = await call(
             r.store.create_notebook, identity.tenant_id, identity.user_id, body.title.strip()
         )
@@ -322,12 +311,6 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
         nid: str, body: NewNote, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
         r = rt()
-        limits = await active_limits(deps.state)
-        if limits:
-            await call(
-                check_new_source, limits, r.store, identity.tenant_id, identity.user_id, nid,
-                len(body.content.encode()),
-            )  # fmt: skip
         doc = await call(
             r.store.add_note, identity.tenant_id, identity.user_id, nid,
             title=body.title.strip(), content=body.content, folder_id=body.folder_id,
@@ -348,8 +331,6 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
             raise HTTPException(404, "notebook not found")
         priority = BULK if len(files) > BULK_AFTER else INTERACTIVE
         fs = r.files_for(identity.tenant_id, identity.user_id)
-        limits = await active_limits(deps.state)
-        taken_bytes = 0
         created: list[dict[str, Any]] = []
         duplicates: list[dict[str, Any]] = []
         rejected: list[dict[str, str]] = []
@@ -363,17 +344,6 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
                         f"The file is larger than {hardening.MAX_BYTES // (1024 * 1024)} MB."
                     )
                 checked = await asyncio.to_thread(hardening.check_file, temp, name)
-                if limits:
-                    try:
-                        await call(
-                            check_new_source, limits, r.store, identity.tenant_id,
-                            identity.user_id, nid, size, adding=len(created),
-                            adding_bytes=taken_bytes,
-                        )  # fmt: skip
-                    except HTTPException as e:
-                        if e.status_code != 429:
-                            raise
-                        raise hardening.Refused(str(e.detail)) from None
                 from wasifyai_notebooks.store import new_id
 
                 did = new_id()
@@ -396,7 +366,6 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
                     duplicates.append(doc)
                 else:
                     created.append(doc)
-                    taken_bytes += size
             except hardening.Refused as e:
                 rejected.append({"name": name, "reason": str(e)})
             finally:

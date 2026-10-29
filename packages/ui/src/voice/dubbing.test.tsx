@@ -10,19 +10,16 @@ import type {
   VoiceModelInfo,
 } from "@wasifyai/client";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { DubbingWorkspace, SPEAKER_TEXT } from "./DubbingWorkspace";
+import { DubbingWorkspace } from "./DubbingWorkspace";
 
 const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
   ({ event, data: { run_id: "r1", seq: 1, ...data } }) as unknown as ParsedEvent;
 
 const base = {
-  licence: "Apache-2.0",
   engine: "audiocpp",
   family: "x",
   sample_rate: 24000,
   commercial_use: "yes" as const,
-  licence_evidence: "https://example.test",
-  reviewed: "2026-10-16",
   measured: { platform: "darwin-arm64", speed_x: 3, memory_gb: null, load_s: null },
   default_voice: null,
   options: [],
@@ -66,7 +63,7 @@ const track = (): Track =>
 const speech = (): Speech =>
   ({ id: "s1", text: "Hello", seconds: 3, audio_url: "http://x/s.wav" }) as Speech;
 const voice = (over: Partial<SavedVoice> = {}): SavedVoice =>
-  ({ id: "v1", name: "Ann", kind: "clone", consent: { basis: "own" }, ...over }) as SavedVoice;
+  ({ id: "v1", name: "Ann", kind: "clone", ...over }) as SavedVoice;
 
 function api(over: Record<string, unknown> = {}): VoiceApi {
   return {
@@ -175,10 +172,7 @@ describe("dubbing a recording", () => {
     await userEvent.clear(line);
     await userEvent.type(line, "Muy buenas noches.");
     await toVoice();
-    expect(make().disabled).toBe(true); // the speaker's voice is the default and nobody said whose it is
-    expect(screen.getByText(/Say whose voice it is to copy it/)).toBeTruthy();
-    await userEvent.click(screen.getByRole("radio", { name: SPEAKER_TEXT.own }));
-    expect(make().disabled).toBe(false);
+    expect(make().disabled).toBe(false); // the speaker's voice is the default; nothing is asked about it
     await userEvent.click(make());
     await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(2));
     expect(runs.startRun.mock.calls[1]?.[1]).toEqual({
@@ -190,7 +184,6 @@ describe("dubbing a recording", () => {
         { start: 2.5, end: 6, source: "Thank you for coming.", text: "Gracias por venir." },
       ],
       voice_from: "speaker",
-      speaker_basis: "own",
       model: "qwen3-tts-0.6b-base",
       vocals_track: "v-track",
       background_track: "b-track",
@@ -218,11 +211,10 @@ describe("dubbing a recording", () => {
     expect(next.disabled).toBe(true);
     await userEvent.type(screen.getByLabelText("Line 2"), "Gracias.");
     await toVoice();
-    await userEvent.click(screen.getByRole("radio", { name: SPEAKER_TEXT.permission }));
     await userEvent.click(make());
     await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(2));
     const sent = runs.startRun.mock.calls[1]?.[1] as Record<string, unknown>;
-    expect(sent.speaker_basis).toBe("permission");
+    expect(sent.speaker_basis).toBeUndefined();
     expect(sent.background_track).toBeUndefined();
   });
 

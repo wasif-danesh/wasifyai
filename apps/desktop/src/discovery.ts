@@ -33,7 +33,6 @@ export type FoundModel = {
   path: string;
   tool: string;
   tool_title: string;
-  licence: string;
   state: FoundState;
   reason: string;
   use_root: string | null;

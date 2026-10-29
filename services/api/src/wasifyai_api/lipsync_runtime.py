@@ -8,10 +8,7 @@
 The weights are catalogue entries (`musetalk-v15` in the voice product's `models.yaml`), fetched in
 Models after the person has seen their size; the sidecar lays them out the way MuseTalk reads them
 when it starts. A copy set up by hand (`WASIFYAI_MUSETALK_HOME`, with `src/` and `venv/`) is used as
-it is, for development.
-
-Every video carries a visible mark and a metadata note; the mark is drawn by the server on each
-frame and cannot be switched off from here (ADR-0044)."""
+it is, for development."""
 
 import asyncio
 import contextlib
@@ -487,7 +484,7 @@ class LipSyncSidecar:
             async with httpx.AsyncClient(timeout=httpx.Timeout(30, read=wait)) as http:
                 r = await http.post(
                     f"{url}/v1/lipsync",
-                    data={"fps": str(req.fps), "mark": req.mark},
+                    data={"fps": str(req.fps)},
                     files={"image": ("face.png", pic, "image/png"),
                            "audio": ("voice.wav", wav, "audio/wav")},
                 )  # fmt: skip

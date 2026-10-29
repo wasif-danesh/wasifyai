@@ -165,4 +165,3 @@ def test_the_worker_builds_the_chat_model_from_the_products_own_configuration(tm
     caps = capabilities_for(setup, {"PRODUCTS_DIR": str(products)})
     assert caps.config is not None and caps.config.id == "wasifyai-notebooks"
     assert "chat" in caps.text._bound  # the same binding a run of the graph uses
-    assert caps.config.quotas["notebooks_per_user"] == 50

@@ -4,6 +4,7 @@
   both models run on a Mac: they do, and the first draft was wrong to say they did not. A maturity check
   remains (decision 4). **Priority decided by the owner the same
   day: Pixal3D first; TRELLIS.2 is not offered in v1 and gets no spike** (decision 5).
+- **Superseded in part:** by ADR-0094 (2026-10-29): the picture check, the "I may use this picture" statement and the daily limits are removed.
 - **Date:** 2026-10-18
 - **Depends on:** ADR-0066 (a native runtime run as a managed component: the model for this one), ADR-0056 (one
   slot; llama.cpp managed), ADR-0063 (will it fit?), ADR-0073 (tiers; model cards; simplicity rules), ADR-0058 (the

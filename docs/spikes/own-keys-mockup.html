@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your keys: mockup</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: light-dark(oklch(97% 0.004 250), oklch(15% 0.012 255));
+    --surface: light-dark(oklch(100% 0 0), oklch(20% 0.014 255));
+    --surface-2: light-dark(oklch(95.5% 0.006 250), oklch(25% 0.016 255));
+    --text: light-dark(oklch(21% 0.02 255), oklch(95% 0.006 250));
+    --muted: light-dark(oklch(49% 0.02 255), oklch(70% 0.016 255));
+    --border: light-dark(oklch(90% 0.01 250), oklch(32% 0.018 255));
+    --accent: light-dark(oklch(50% 0.17 258), oklch(76% 0.12 250));
+    --accent-soft: color-mix(in oklch, var(--accent) 14%, transparent);
+    --on-accent: light-dark(oklch(99% 0 0), oklch(19% 0.04 250));
+    --ok: light-dark(oklch(52% 0.13 155), oklch(74% 0.14 155));
+    --warn: light-dark(oklch(58% 0.14 70), oklch(80% 0.14 80));
+    --bad: light-dark(oklch(55% 0.2 25), oklch(72% 0.17 25));
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); }
+  .note { max-width: 980px; margin: 18px auto 0; padding: 0 16px; color: var(--muted); font-size: 13px; }
+  .win { max-width: 980px; margin: 12px auto 40px; border: 1px solid var(--border); border-radius: 14px;
+         overflow: hidden; background: var(--surface); display: grid; grid-template-columns: 220px 1fr; }
+  @media (max-width: 720px) { .win { grid-template-columns: 1fr; } .side { display: none; } }
+  .side { border-right: 1px solid var(--border); padding: 16px 10px; background: var(--surface-2); }
+  .side a { display: block; padding: 6px 10px; border-radius: 8px; color: var(--text); text-decoration: none; }
+  .side a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  main { padding: 20px 24px 28px; display: grid; gap: 16px; min-width: 0; }
+  h1 { margin: 0; font-size: 20px; }
+  .lead { margin: 2px 0 0; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+  .state { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.ok { background: var(--ok); } .dot.here { background: var(--muted); } .dot.bad { background: var(--bad); }
+  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px;
+         padding: 5px 12px; font: inherit; cursor: pointer; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn.link { border: 0; background: none; color: var(--accent); padding: 0; }
+  .edit { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+          display: grid; gap: 12px; }
+  .edit h2 { margin: 0; font-size: 15px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  input, select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+                  border-radius: 8px; padding: 7px 10px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+  .seg span { padding: 5px 14px; font-size: 13px; }
+  .seg .on { background: var(--accent); color: var(--on-accent); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .ok-text { color: var(--ok); font-size: 13px; }
+  .hint { color: var(--muted); font-size: 12.5px; margin: 0; }
+  .bar { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .model { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 8px;
+           padding: 4px 10px; font-size: 13px; background: var(--surface-2); }
+</style>
+</head>
+<body>
+<p class="note">Mockup for ADR-0095 (not built). Settings › Your keys on the desktop; the web shows the same page,
+with "With my key" as the default. The bar on the right of each make screen says where its product runs.</p>
+
+<div class="win">
+  <nav class="side" aria-label="Settings">
+    <a href="#">General</a>
+    <a href="#">Models and storage</a>
+    <a href="#" class="on">Your keys</a>
+    <a href="#">Other apps (MCP)</a>
+    <a href="#">Hugging Face token</a>
+    <a href="#">Advanced</a>
+  </nav>
+  <main>
+    <header>
+      <h1>Your keys</h1>
+      <p class="lead">Each product can run on this computer or with your own provider key. A key is kept in this
+        computer's keychain, used only by its product, and never shown again.</p>
+    </header>
+
+    <table aria-label="Products and their keys">
+      <thead><tr><th scope="col">Product</th><th scope="col">Runs</th><th scope="col">Provider and model</th><th scope="col"></th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Chat and writing</th>
+          <td><span class="state"><span class="dot ok"></span>With my key</span></td>
+          <td>OpenRouter · Claude Sonnet</td>
+          <td><button class="btn">Change</button></td></tr>
+        <tr><th scope="row">Images</th>
+          <td><span class="state"><span class="dot ok"></span>With my key</span></td>
+          <td>fal.ai · FLUX.2</td>
+          <td><button class="btn">Change</button></td></tr>
+        <tr><th scope="row">Video</th>
+          <td><span class="state"><span class="dot bad"></span>Key not working</span></td>
+          <td>fal.ai · LTX-Video<br><span class="hint">fal.ai said: the key was rejected.</span></td>
+          <td><button class="btn">Fix</button></td></tr>
+        <tr><th scope="row">Voice</th>
+          <td><span class="state"><span class="dot here"></span>On this computer</span></td>
+          <td>Kokoro 82M</td>
+          <td><button class="btn">Use my key</button></td></tr>
+        <tr><th scope="row">3D</th>
+          <td><span class="state"><span class="dot here"></span>On this computer</span></td>
+          <td>Pixal3D</td>
+          <td><button class="btn">Use my key</button></td></tr>
+      </tbody>
+    </table>
+
+    <section class="edit" aria-label="Voice: use my key">
+      <h2>Voice</h2>
+      <div class="seg" role="radiogroup" aria-label="Where Voice runs">
+        <span>On this computer</span><span class="on">With my key</span>
+      </div>
+      <div class="grid">
+        <label>Provider
+          <select><option>fal.ai</option></select></label>
+        <label>Model
+          <select><option>Kokoro (speech)</option><option>MuseTalk (lip sync)</option></select></label>
+        <label>Key
+          <input type="password" placeholder="Paste your fal.ai key" autocomplete="off"></label>
+      </div>
+      <div class="row">
+        <button class="btn link">Use the same key as Images</button>
+      </div>
+      <p class="hint">What you make with Voice is sent to fal.ai with this key. Their terms and prices apply.</p>
+      <div class="row">
+        <button class="btn">Test</button>
+        <span class="ok-text">It answered in 840 ms. Nothing is saved yet.</span>
+      </div>
+      <div class="row">
+        <button class="btn primary">Save</button>
+        <button class="btn">Cancel</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<p class="note">The model button on a make screen, with a key:</p>
+<div class="win" style="grid-template-columns: 1fr;">
+  <div class="bar"><span class="model">FLUX.2 · with your key · fal.ai</span></div>
+  <main><p class="hint">Create images. The picture is made by fal.ai with your key and saved to your library.</p></main>
+</div>
+</body>
+</html>

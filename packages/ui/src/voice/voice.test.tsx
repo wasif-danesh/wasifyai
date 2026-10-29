@@ -25,16 +25,12 @@ const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
 const model = (over: Partial<VoiceModelInfo> = {}): VoiceModelInfo => ({
   id: "kokoro-82m",
   title: "Kokoro 82M",
-  licence: "Apache-2.0",
   engine: "audiocpp",
   family: "kokoro_tts",
   tasks: ["speak"],
   recommended: ["speak"],
   languages: ["en-us"],
   sample_rate: 24000,
-  commercial_use: "yes",
-  licence_evidence: "https://huggingface.co/hexgrad/Kokoro-82M",
-  reviewed: "2026-10-16",
   measured: { platform: "darwin-arm64", speed_x: 8.6, memory_gb: 0.9, load_s: 4.7 },
   voices: [
     { id: "af_heart", label: "Heart", language: "en-us", gender: "female" },
@@ -151,10 +147,10 @@ describe("the model list", () => {
   it("names the recommended model, and says what a model that cannot be used yet needs", () => {
     const a = model();
     const b = model({ id: "vox", title: "VoxCPM2", recommended: [], state: "can_install" });
-    const c = model({ id: "nc", title: "NC", recommended: [], commercial_use: "no" });
+    const c = model({ id: "nc", title: "NC", recommended: [] });
     expect(modelOption(a, "speak")).toBe("Kokoro 82M (recommended)");
     expect(modelOption(b, "speak")).toBe("VoxCPM2 (not on this computer yet)");
-    expect(modelOption(c, "speak")).toBe("NC (not for commercial use)");
+    expect(modelOption(c, "speak")).toBe("NC"); // nothing is said about licences
     expect(pickModel([b, a], "speak")?.id).toBe("kokoro-82m");
     expect(pickModel([b, a], "speak", "vox")?.id).toBe("vox");
     expect(pickModel([], "speak")).toBeNull();
@@ -230,10 +226,11 @@ describe("text to speech", () => {
     expect(screen.getByText(/190 MB/)).toBeInTheDocument();
   });
 
-  it("warns plainly about a model that is not for commercial use", async () => {
-    const models = vi.fn(async () => [model({ commercial_use: "no", recommended: [] })]);
+  it("says nothing about the licence of a model", async () => {
+    const models = vi.fn(async () => [model({ recommended: [] })]);
     render(<SpeakWorkspace api={api({ models })} runs={runsThat([])} />);
-    expect(await screen.findByText("Not for commercial use")).toBeInTheDocument();
+    await screen.findByTestId("model-details");
+    expect(screen.queryByText(/commercial|licence/i)).toBeNull();
   });
 
   it("plays a voice heard before, and makes a sample of one never heard", async () => {
@@ -457,7 +454,6 @@ const saved = (over: Partial<SavedVoice> = {}): SavedVoice => ({
   description: "a deep, calm man",
   reference_text: "",
   reference_seconds: null,
-  consent: {},
   created_at: "2026-10-16T10:00:00Z",
   updated_at: "2026-10-16T10:00:00Z",
   ...over,
@@ -481,7 +477,7 @@ describe("your own voices", () => {
     expect(await screen.findByText("a deep, calm man")).toBeInTheDocument();
   });
 
-  it("will not save a cloned voice until it is said whose voice it is", async () => {
+  it("saves a cloned voice without asking whose voice it is", async () => {
     const cloneVoice = vi.fn(async () => saved({ kind: "clone" }));
     const user = userEvent.setup();
     render(<VoicesWorkspace api={api({ cloneVoice })} runs={runsThat([])} />);
@@ -489,20 +485,12 @@ describe("your own voices", () => {
     await user.type(screen.getByLabelText("Name"), "Me");
     await user.upload(screen.getByLabelText(/A recording of the voice/), new File(["x"], "me.wav"));
     await user.type(screen.getByLabelText("What is said in the recording"), "the words I say");
+    expect(screen.queryByText(/permission of the person/)).toBeNull();
     const save = screen.getByRole("button", { name: "Save voice" });
-    expect(save).toBeDisabled();
-    await user.click(
-      screen.getByLabelText("I have the permission of the person whose voice this is."),
-    );
     expect(save).toBeEnabled();
     await user.click(save);
-    const call = cloneVoice.mock.calls[0] as unknown as [File, string, string, string];
-    expect([call[0].name, call[1], call[2], call[3]]).toEqual([
-      "me.wav",
-      "Me",
-      "permission",
-      "the words I say",
-    ]);
+    const call = cloneVoice.mock.calls[0] as unknown as [File, string, string];
+    expect([call[0].name, call[1], call[2]]).toEqual(["me.wav", "Me", "the words I say"]);
   });
 
   it("plays a sample of a voice, and passes on what the engine says when it cannot", async () => {
@@ -524,18 +512,16 @@ describe("your own voices", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Get it in the Model hub.");
   });
 
-  it("shows a cloned voice with its recording, its words and what was said about whose it is", async () => {
+  it("shows a cloned voice with its recording and its words", async () => {
     const v = saved({
       kind: "clone",
       reference_text: "the words I say",
       reference_seconds: 65,
       reference_url: "http://x/ref.wav",
-      consent: { basis: "own", statement: "This is my own voice." },
     });
     render(<VoicesWorkspace api={api({ voices: vi.fn(async () => [v]) })} runs={runsThat([])} />);
     expect(await screen.findByText("cloned, 1:05")).toBeInTheDocument();
     expect(screen.getByText(/the words I say/)).toBeInTheDocument();
-    expect(screen.getByText("This is my own voice.")).toBeInTheDocument();
   });
 
   it("changes a recording's words in a box of the page, never with window.prompt", async () => {
@@ -649,7 +635,6 @@ const stable = () =>
     title: "Stable Audio 3 Small (music)",
     tasks: ["music"],
     recommended: [],
-    commercial_use: "conditional",
     voices: [],
     default_voice: null,
     options: [],
@@ -713,7 +698,6 @@ describe("music", () => {
     await user.click(await screen.findByRole("option", { name: /Stable Audio 3 Small \(music\)/ }));
     expect(screen.queryByLabelText(/Lyrics/)).not.toBeInTheDocument();
     expect(screen.getByText("This model makes music without singing.")).toBeInTheDocument();
-    expect(screen.getByText("Commercial use with conditions")).toBeInTheDocument();
   });
 
   it("leaves the singing out on request", async () => {

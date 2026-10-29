@@ -6,11 +6,11 @@ from typing import Any
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
-from video_rig import make_rig, mp4, put_upload, verdict
+from video_rig import make_rig, mp4, put_upload
 from wasifyai_platform_sdk import JobError, JobFailed, JobOutput, JobResult, RunError, object_key
 from wasifyai_video.graphs.video import build_video_graph
 from wasifyai_video.schemas import LENGTHS, SHAPES
-from wasifyai_video.videos import FixedQuota, InMemoryVideoStore, VideoRecord
+from wasifyai_video.videos import InMemoryVideoStore, VideoRecord
 
 CONFIG: Any = {"configurable": {"thread_id": "th-1"}}
 
@@ -18,12 +18,10 @@ CONFIG: Any = {"configurable": {"thread_id": "th-1"}}
 class Story:
     """Drives a run: start it, play the media worker."""
 
-    def __init__(self, rig, quota=None, videos=None):
+    def __init__(self, rig, videos=None):
         self.rig = rig
         self.videos = videos or InMemoryVideoStore()
-        self.graph = build_video_graph(
-            rig.caps, InMemorySaver(), self.videos, rig.uploads, quota or FixedQuota(0)
-        )
+        self.graph = build_video_graph(rig.caps, InMemorySaver(), self.videos, rig.uploads)
         self.state: dict = {}
 
     async def start(self, input: Any):
@@ -134,7 +132,7 @@ async def test_image_to_video_uses_the_picture_and_deletes_it_afterwards(tmp_pat
         not await exists(rig, up.key)
         and await rig.uploads.find("t1", "wasifyai-video", "u1", up.key) is None
     )
-    assert len(rig.picture_checks()) == 1  # the model looked at the picture
+    assert rig.asked() == []  # nothing judges the picture
 
 
 async def test_a_missing_or_foreign_picture_is_refused_up_front(tmp_path, ctx):
@@ -174,31 +172,6 @@ async def test_bad_input_is_refused_before_any_model_is_asked(tmp_path, ctx, inp
     assert rig.sink.submitted == [] and rig.asked() == [] and s.videos.videos == []
 
 
-async def test_an_unsafe_description_is_refused_with_the_fixed_text(tmp_path, ctx):
-    rig = make_rig(tmp_path, moderate=[verdict(False, "sexual_content", "nope")])
-    s = await Story(rig).start({"mode": "text", "prompt": "something unsafe"})
-    assert s.state["status"] == "refused"
-    assert s.state["refusal"]["code"] == "sexual_content"
-    assert "nudity" in s.state["refusal"]["message"] and "nope" not in s.state["refusal"]["message"]
-    assert rig.sink.submitted == [] and s.videos.videos == []
-
-
-async def test_an_unsafe_picture_is_refused_and_the_upload_is_deleted(tmp_path, ctx):
-    rig = make_rig(tmp_path, moderate_image=[verdict(False, "minors")])
-    up = await put_upload(rig)
-    s = await Story(rig).start({"mode": "image", "prompt": "he smiles", "image_key": up.key})
-    assert s.state["status"] == "refused" and s.state["refusal"]["code"] == "minors"
-    assert not await exists(rig, up.key) and rig.sink.submitted == []
-
-
-async def test_a_moderator_that_cannot_answer_fails_closed(tmp_path, ctx):
-    rig = make_rig(tmp_path, moderate=["garbage"])
-    with pytest.raises(RunError) as e:
-        await Story(rig).start({"mode": "text", "prompt": "a fox"})
-    assert e.value.code == "moderation_unavailable" and e.value.retryable
-    assert rig.sink.submitted == []
-
-
 async def test_only_one_clip_is_made_at_a_time(tmp_path, ctx):
     rig = make_rig(tmp_path)
     store = InMemoryVideoStore()
@@ -229,16 +202,6 @@ async def test_only_one_clip_is_made_at_a_time(tmp_path, ctx):
     )
     s2 = await Story(rig, videos=other).start({"mode": "text", "prompt": "a fox"})
     assert s2.state.get("status") != "refused" and len(rig.sink.submitted) == 1
-
-
-async def test_the_daily_quota_is_checked_before_any_model_is_asked(tmp_path, ctx):
-    rig = make_rig(tmp_path)
-    s = await Story(rig, quota=FixedQuota(5)).start({"mode": "text", "prompt": "a fox"})
-    assert (
-        s.state["refusal"]["code"] == "quota_exceeded"
-        and "limit of 5 videos" in s.state["refusal"]["message"]
-    )
-    assert rig.asked() == [] and rig.sink.submitted == []
 
 
 # ---- failures ----------------------------------------------------------------------------

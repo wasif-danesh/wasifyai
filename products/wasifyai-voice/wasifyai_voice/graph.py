@@ -37,7 +37,6 @@ from wasifyai_platform_sdk import (
 from wasifyai_voice.book import build_book
 from wasifyai_voice.dub import build_dub
 from wasifyai_voice.runtime import NotAvailable, engine_for, store_for
-from wasifyai_voice.safeguards import SONGS, SPEECHES, Guard
 from wasifyai_voice.store import NotFound, new_id
 from wasifyai_voice.tools import build_tools
 
@@ -65,8 +64,6 @@ class SpeakState(TypedDict, total=False):
     old_text: str  # speech_edit: what the recording says now; `text` is what it should say
     tracks: list[dict[str, Any]]  # the audio tools: every track made
     picture: str  # lipsync: the id of an added picture
-    picture_basis: str  # lipsync: what the person said the picture is
-    voice_basis: str  # lipsync: whose voice they said it is (a script is always `generated`)
     clip_id: str
     video_url: str
     language: str  # dubbing: the language to dub into
@@ -75,7 +72,6 @@ class SpeakState(TypedDict, total=False):
     ]  # dubbing: the script, a line with its times, words and translation
     background: bool  # dub_script: separate the voice from the background first
     voice_from: str  # dub: speaker | saved | builtin
-    speaker_basis: str  # dub: the person's word about copying the speaker's voice
     vocals_track: str
     background_track: str
     transcribe_model: str
@@ -157,25 +153,7 @@ def build_speak(caps: Capabilities, checkpointer: Any):
     def refuse_with(code: str, message: str) -> SpeakState:
         return {"status": "refused", "refusal": {"code": code, "message": message}}
 
-    guard = Guard(caps)  # ADR-0047: moderation and daily limits, only while the safeguards are on
-
-    async def blocked(
-        texts: list[str], meter: Any = None, kind: str = "text to read aloud"
-    ) -> SpeakState | None:
-        """A refusal when the daily limit is reached or the moderator will not allow the words."""
-        refusal = (await guard.over_limit(meter) if meter else None) or await guard.words(
-            *texts, kind=kind
-        )
-        return refuse_with(*refusal) if refusal else None
-
     async def check_request(state: SpeakState) -> SpeakState:
-        out = await check_speech_request(state)
-        if out.get("status") == "refused":
-            return out
-        # before any model work; the description of a designed voice is words the model will follow
-        return await blocked([out.get("text", ""), out.get("description", "")], SPEECHES) or out
-
-    async def check_speech_request(state: SpeakState) -> SpeakState:
         get_stream_writer()(
             {"type": "node", "node": "check_request", "status": "started", "label": "Checking"}
         )
@@ -240,8 +218,6 @@ def build_speak(caps: Capabilities, checkpointer: Any):
         return {}
 
     async def speak(state: SpeakState) -> SpeakState:
-        if refusal := await guard.over_limit(SPEECHES):  # again, right before the model is used
-            raise RunError(*refusal)
         eng = engine()
         get_stream_writer()(
             {"type": "node", "node": "speak", "status": "started", "label": "Making the speech"}
@@ -292,13 +268,6 @@ def build_speak(caps: Capabilities, checkpointer: Any):
     # ---- music ---------------------------------------------------------------------------
 
     async def check_music_request(state: SpeakState) -> SpeakState:
-        out = await check_music_input(state)
-        if out.get("status") == "refused":
-            return out
-        words = [out.get("text", ""), out.get("lyrics") or ""]
-        return await blocked(words, SONGS, "description of music or song lyrics") or out
-
-    async def check_music_input(state: SpeakState) -> SpeakState:
         get_stream_writer()(
             {"type": "node", "node": "check_request", "status": "started", "label": "Checking"}
         )
@@ -328,8 +297,6 @@ def build_speak(caps: Capabilities, checkpointer: Any):
         return "refuse" if state.get("status") == "refused" else "make_music"
 
     async def make_music(state: SpeakState) -> SpeakState:
-        if refusal := await guard.over_limit(SONGS):
-            raise RunError(*refusal)
         eng = engine()
         get_stream_writer()(
             {"type": "node", "node": "make_music", "status": "started", "label": "Making the music"}
@@ -383,10 +350,6 @@ def build_speak(caps: Capabilities, checkpointer: Any):
                 "label": "Changing the music",
             }
         )
-        if stopped := await blocked(
-            [str(state.get("text", ""))], SONGS, "description of music or song lyrics"
-        ):
-            return stopped
         ctx = require_context()
         store = store_for(app_state)
         try:
@@ -461,11 +424,6 @@ def build_speak(caps: Capabilities, checkpointer: Any):
         idea = " ".join(str(state.get("text", "")).split())[:500]
         if len(idea) < 3:
             return refuse_with("description_too_short", "Say what the song is about.")
-        style_hint = " ".join(str(state.get("style", "")).split())[:200]
-        if stopped := await blocked(
-            [idea, style_hint], None, "description of music or song lyrics"
-        ):
-            return stopped
         seconds = float(state.get("duration") or 60)
         lines = int(max(8, min(40, round(seconds / 4))))
         style = " ".join(str(state.get("style", "")).split())[:200]
@@ -502,7 +460,7 @@ def build_speak(caps: Capabilities, checkpointer: Any):
             "lyrics_failed", "The words could not be written. Try again.", retryable=True
         )
 
-    tools = build_tools(caps, app_state, engine, refuse_with, guard)
+    tools = build_tools(caps, app_state, engine, refuse_with)
     dubs = build_dub(caps, app_state, engine, refuse_with, tools["kit"])
     books = build_book(caps, app_state, engine, refuse_with, tools["kit"])
 

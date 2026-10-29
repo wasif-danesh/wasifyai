@@ -3,6 +3,7 @@
 - **Status:** Accepted (2026-10-16). The E0 gate (spike S1 to S6, `docs/spikes/surfsense-investigation.md`
   section 9) **passed the same day**: decisions 7, 8 and 9 are confirmed and decision 10 was corrected by the
   measurements (below). Supersedes ADR-0060.
+- **Superseded in part:** by ADR-0094 (2026-10-29): the notebook size limits are removed.
 - **Date:** 2026-10-16
 - **Depends on:** ADR-0017 (storage), ADR-0035 (upload hardening), ADR-0041 (creations are searchable), ADR-0056
   (one engine, two shells; slot manager), ADR-0057 (assistant), ADR-0061 (how outside code enters),

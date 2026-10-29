@@ -34,7 +34,6 @@ class ProjectorEntry:
     id: str
     match: tuple[str, ...]
     title: str
-    licence: str
     source: str
     url: str
     name: str
@@ -54,7 +53,7 @@ def load_shelf(path: Path = SHELF) -> list[ProjectorEntry]:
         out.append(
             ProjectorEntry(
                 id=p["id"], match=tuple(str(m).lower() for m in p["match"]), title=p["title"],
-                licence=p["licence"], source=p["source"], url=p["url"], name=p["name"],
+                source=p["source"], url=p["url"], name=p["name"],
                 size=int(p["size"]), sha256=sha,
             )
         )  # fmt: skip
@@ -95,7 +94,7 @@ class VisionService:
         f = ModelFile(f"{FOLDER}/{entry.id}", entry.name, entry.url, entry.size, entry.sha256)
         model = ModelEntry(
             id=f"projector:{entry.id}", product_id=PRODUCT_ID, title=entry.title,
-            licence=entry.licence, source=entry.source, note="", approx_ram_gb=0, files=(f,),
+            source=entry.source, note="", approx_ram_gb=0, files=(f,),
         )  # fmt: skip
         return model, f
 
@@ -121,7 +120,7 @@ class VisionService:
     @staticmethod
     def _about(entry: ProjectorEntry) -> dict[str, Any]:
         return {
-            "title": entry.title, "licence": entry.licence, "from": entry.source,
+            "title": entry.title, "from": entry.source,
             "bytes": entry.size,
         }  # fmt: skip
 

@@ -44,7 +44,6 @@ const CHOICES: TrainChoices = {
     {
       id: "base-a",
       title: "Base A",
-      licence: "Apache-2.0",
       engine: "mflux",
       recommended: true,
       can_teach: true,
@@ -55,7 +54,6 @@ const CHOICES: TrainChoices = {
     {
       id: "base-b",
       title: "Base B",
-      licence: "Apache-2.0",
       engine: "mflux",
       recommended: false,
       can_teach: true,
@@ -66,7 +64,6 @@ const CHOICES: TrainChoices = {
     {
       id: "",
       title: "Some other picture model",
-      licence: "",
       engine: "",
       recommended: false,
       can_teach: false,
@@ -89,12 +86,6 @@ const STATUS: TrainStatus = {
   min_pictures: 3,
   max_pictures: 100,
   kinds: ["character", "style", "object"],
-  statements: {
-    mine: "It's me",
-    permission: "I have permission",
-    drawing: "It's a drawing, a character or an animal",
-    artwork: "It's my own artwork",
-  },
   base: "flux2-klein-base-4b",
   steps: { character: 200, style: 250, object: 150 },
   estimates: {
@@ -133,13 +124,11 @@ function fake(over: Partial<TrainStatus> = {}, videoOver: Partial<VideoTrainStat
     const missing =
       items.length < min
         ? `Add at least ${min} pictures. 15 to 25 good ones is plenty.`
-        : !d.rights
-          ? "Say whose it is first."
-          : !d.trigger_word
-            ? "Choose the magic word first."
-            : items.some((i) => !["done", "edited"].includes(i.caption_state))
-              ? "Write the descriptions first."
-              : null;
+        : !d.trigger_word
+          ? "Choose the magic word first."
+          : items.some((i) => !["done", "edited"].includes(i.caption_state))
+            ? "Write the descriptions first."
+            : null;
     return {
       ...d,
       pictures: items.length,
@@ -161,7 +150,6 @@ function fake(over: Partial<TrainStatus> = {}, videoOver: Partial<VideoTrainStat
         kind,
         name,
         trigger_word: "",
-        rights: "",
         created_at: "",
         pictures: 0,
         missing: null,
@@ -431,7 +419,6 @@ function fake(over: Partial<TrainStatus> = {}, videoOver: Partial<VideoTrainStat
           created_at: "",
           card: {
             base_title: "FLUX.2 klein base 4B",
-            licence: "Apache-2.0",
             engine: "preview",
             preview: true,
             note: "A preview: this file is not a trained model.",
@@ -439,7 +426,6 @@ function fake(over: Partial<TrainStatus> = {}, videoOver: Partial<VideoTrainStat
             steps: 200,
             seconds: 5,
             trigger_word: "marlo",
-            statement: "x",
             evaluation: { passed: null, note: "" },
             trained_at: "",
           },
@@ -543,8 +529,7 @@ describe("Train", () => {
     // nothing can be taught yet, and the screen says what is missing
     const teach = await screen.findByRole("button", { name: "Teach it" });
     expect((teach as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText("Say whose it is first.")).toBeTruthy();
-    await user.click(screen.getByLabelText("It's a drawing, a character or an animal"));
+    expect(screen.queryByText(/Whose is it/)).toBeNull(); // nothing is asked about whose it is
     expect(await screen.findByText("Choose the magic word first.")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "marlo" }));
     expect(await screen.findByText("Write the descriptions first.")).toBeTruthy();
@@ -562,7 +547,7 @@ describe("Train", () => {
     expect(await screen.findByAltText("Sample step-0050.png")).toBeTruthy();
   });
 
-  /** Pictures in, rights and word chosen, descriptions written: the Teach it button is ready. */
+  /** Pictures in, word chosen, descriptions written: the Teach it button is ready. */
   async function readyToTeach(user: ReturnType<typeof userEvent.setup>, api: TrainingApi) {
     render(<Train api={api} pollMs={10} />);
     await user.click(await screen.findByRole("button", { name: "Start" }));
@@ -572,7 +557,6 @@ describe("Train", () => {
       file("c.png"),
     ]);
     await user.click(await screen.findByRole("button", { name: "Next" }));
-    await user.click(await screen.findByLabelText("It's a drawing, a character or an animal"));
     await user.click(await screen.findByRole("button", { name: "marlo" }));
     await user.click(await screen.findByRole("button", { name: /Write the descriptions \(3\)/ }));
     await waitFor(() =>
@@ -666,7 +650,6 @@ describe("Train", () => {
       file("c.png"),
     ]);
     await user.click(await screen.findByRole("button", { name: "Next" }));
-    await user.click(screen.getByLabelText("It's me"));
     await user.click(await screen.findByRole("button", { name: "marlo" }));
     await user.click(await screen.findByRole("button", { name: /Write the descriptions/ }));
     await waitFor(() =>
@@ -699,7 +682,6 @@ describe("Train", () => {
         created_at: "",
         card: {
           base_title: "FLUX.2 klein base 4B",
-          licence: "Apache-2.0",
           engine: "preview",
           preview: true,
           note: "",
@@ -707,7 +689,6 @@ describe("Train", () => {
           steps: 200,
           seconds: 5,
           trigger_word: "marlo",
-          statement: "x",
           evaluation: { passed: null, note: "" },
           trained_at: "",
         },
@@ -762,7 +743,6 @@ describe("Train", () => {
       file("c.png"),
     ]);
     await user.click(await screen.findByRole("button", { name: "Next" }));
-    await user.click(await screen.findByLabelText("It's a drawing, a character or an animal"));
     await user.click(await screen.findByRole("button", { name: "marlo" }));
     await user.click(await screen.findByRole("button", { name: /Write the descriptions \(3\)/ }));
     await waitFor(() =>
@@ -787,7 +767,6 @@ describe("Train", () => {
       file("c.png"),
     ]);
     await user.click(await screen.findByRole("button", { name: "Next" }));
-    await user.click(await screen.findByLabelText("It's a drawing, a character or an animal"));
     await user.click(await screen.findByRole("button", { name: "marlo" }));
     await user.click(await screen.findByRole("button", { name: /Write the descriptions \(3\)/ }));
     await waitFor(() =>
@@ -836,7 +815,6 @@ describe("Train", () => {
     expect(screen.getByText(/4 pictures and clips\./)).toBeTruthy();
     await user.click(await screen.findByRole("button", { name: "Next" }));
     expect(await screen.findByText(/in a video prompt, the app makes your/)).toBeTruthy();
-    await user.click(await screen.findByLabelText("It's a drawing, a character or an animal"));
     await user.click(await screen.findByRole("button", { name: "marlo" }));
     await user.click(await screen.findByRole("button", { name: /Write the descriptions \(4\)/ }));
     await waitFor(() =>
@@ -894,7 +872,6 @@ describe("Train", () => {
             version: "0.42.0",
             bytes: 181_700_000,
             have: false,
-            licence: "Apache-2.0 and BSD-3-Clause",
             source: "pypi.org",
           },
         ],

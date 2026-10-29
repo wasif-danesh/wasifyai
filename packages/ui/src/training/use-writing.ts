@@ -7,7 +7,6 @@ import type {
   WritingExample,
   WritingPlan,
   WritingQuality,
-  WritingRights,
   WritingSet,
   WritingStatus,
 } from "@wasifyai/client";
@@ -173,7 +172,6 @@ export function useWriting(api: TrainingApi, pollMs = 1500) {
     async (change: {
       name?: string;
       quality?: WritingQuality;
-      rights?: WritingRights;
       base?: string;
     }) => {
       const id = state.current?.id;

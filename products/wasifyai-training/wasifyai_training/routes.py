@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from wasifyai_platform_sdk import (
     Identity,
     RouteDeps,
-    RouteGuard,
+    RouteUsage,
     RunContext,
     RunError,
     set_context,
@@ -27,7 +27,6 @@ from wasifyai_training.decisions import manager_for as decision_manager_for
 from wasifyai_training.runtime import (
     MAX_PICTURES,
     MIN_PICTURES,
-    STATEMENTS,
     NotAvailable,
     Refused,
     add_picture,
@@ -45,7 +44,7 @@ from wasifyai_training.runtime import (
     word_problem,
     words_of,
 )
-from wasifyai_training.store import FAMILIES, KINDS, RIGHTS, NotFound
+from wasifyai_training.store import FAMILIES, KINDS, NotFound
 from wasifyai_training.video import add_clip, ready_to_teach
 from wasifyai_training.video import estimate_words as video_estimate
 from wasifyai_training.video import manager_for as video_manager_for
@@ -70,7 +69,6 @@ class DatasetPatch(BaseModel):
     kind: str | None = Field(None, max_length=12)
     name: str | None = Field(None, max_length=60)
     trigger_word: str | None = Field(None, max_length=60)
-    rights: str | None = Field(None, max_length=12)
 
 
 class ItemPatch(BaseModel):
@@ -125,7 +123,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             raise HTTPException(404, str(e)) from None
 
     def refuse(e: Refused) -> HTTPException:
-        status = 422 if e.code in ("bad_picture", "bad_kind", "bad_rights", "bad_word") else 409
+        status = 422 if e.code in ("bad_picture", "bad_kind", "bad_word") else 409
         return HTTPException(status, {"code": e.code, "message": e.message})
 
     def dataset_or_404(identity: Identity, item: str) -> dict[str, Any]:
@@ -230,7 +228,6 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             "min_pictures": MIN_PICTURES,
             "max_pictures": MAX_PICTURES,
             "kinds": list(KINDS),
-            "statements": STATEMENTS,
             "base": getattr(engine, "base", trainer.BASE),
             "steps": trainer.PRESETS,
             "estimates": {k: trainer.estimate_words(v, k) for k, v in trainer.PRESETS.items()},
@@ -305,10 +302,6 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         fields = body.model_dump(exclude_none=True)
         if "kind" in fields and fields["kind"] not in KINDS:
             raise HTTPException(422, {"code": "bad_kind", "message": "That is not a kind."})
-        if "rights" in fields and fields["rights"] not in (*RIGHTS, ""):
-            raise HTTPException(
-                422, {"code": "bad_rights", "message": "Choose one of the statements."}
-            )
         if "trigger_word" in fields:
             word = fields["trigger_word"].strip().lower()
             if word and not magic.valid(word):
@@ -547,7 +540,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
                 422, {"code": "bad_picture", "message": "That picture is too big to check."}
             )
         data = await request.body()
-        caps = RouteGuard(deps.state, PRODUCT_ID).caps
+        caps = RouteUsage(deps.state, PRODUCT_ID).caps
         if caps is None:
             raise HTTPException(
                 409,

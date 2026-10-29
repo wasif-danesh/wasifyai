@@ -40,7 +40,6 @@ class LoraChain(BaseModel):
 
 class WorkflowMap(BaseModel):
     workflow: str
-    licence: str | None = None
     notes: str | None = None
     models: list[str] = Field(default_factory=list)
     # One input may drive several nodes (e.g. a duration read by both the encoder and the latent):

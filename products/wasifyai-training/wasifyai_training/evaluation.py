@@ -25,7 +25,7 @@ from typing import Any
 from PIL import Image as PILImage
 from wasifyai_platform_sdk import Capabilities, Image, RunError
 
-from wasifyai_training import guardrail
+from wasifyai_training import vision
 
 SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -144,12 +144,12 @@ async def judge(
     if not refs:
         raise RunError("no_references", "This model has no pictures to compare with.")
     cand = await asyncio.to_thread(small, candidate)
-    user: list[Any] = [guardrail.prompt("judge_request")]
+    user: list[Any] = [vision.prompt("judge_request")]
     user += [Image.from_bytes(r, "image/jpeg") for r in refs]
     user.append(Image.from_bytes(cand, "image/jpeg"))
     try:
         raw = await caps.text.complete(
-            "judge_image", guardrail.prompt(PROMPT.get(kind, "judge_object")), user, schema=SCHEMA
+            "judge_image", vision.prompt(PROMPT.get(kind, "judge_object")), user, schema=SCHEMA
         )
         data = json.loads(raw)
         return {"same": bool(data["same"]), "reason": str(data.get("reason", ""))[:200]}

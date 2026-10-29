@@ -1,6 +1,5 @@
 """The Speak graph on a fake engine: refusals in words, errors with codes, the speech kept."""
 
-import json
 from typing import Any
 
 import pytest
@@ -35,56 +34,26 @@ def ctx():
     reset_context(token)
 
 
-def verdict(allowed: bool = True, category: str = "ok") -> str:
-    return json.dumps({"allowed": allowed, "category": category, "reason": ""})
-
-
 class Rig:
-    """The graph over a fake engine. The safeguards are off unless asked for (the desktop's
-    default); with them on, `moderate` and `picture` script the two moderators and `used` the
-    day's count."""
+    """The graph over a fake engine."""
 
     def __init__(
         self,
         tmp_path,
         engine: FakeEngine | None = None,
         turns=None,
-        safeguards: bool = False,
-        moderate: list[str] | None = None,
-        picture: list[str] | None = None,
-        quotas: dict[str, int] | None = None,
-        used: int = 0,
     ):
         d = tmp_path / "products" / "wasifyai-voice"
         d.mkdir(parents=True)
         caps = {"text.chat": {"provider": "fake", "defaults": {"turns": turns}}} if turns else {}
-        caps["text.moderate"] = {
-            "provider": "fake",
-            "defaults": {"replies": moderate or [verdict()]},
-        }
-        caps["text.moderate_image"] = {
-            "provider": "fake",
-            "inputs": ["text", "image"],
-            "defaults": {"replies": picture or [verdict()]},
-        }
         (d / "product.yaml").write_text(
-            yaml.safe_dump({"id": "wasifyai-voice", "capabilities": caps, "quotas": quotas or {}})
+            yaml.safe_dump({"id": "wasifyai-voice", "capabilities": caps})
         )
         config = load_product_config(tmp_path / "products", "wasifyai-voice")
         self.usage = InMemoryUsageRecorder()
-
-        async def on() -> bool:
-            return safeguards
-
         self.caps = build_capabilities(
-            config,
-            ProviderDeps(products_dir=tmp_path / "products", usage=self.usage, safeguards=on),
+            config, ProviderDeps(products_dir=tmp_path / "products", usage=self.usage)
         )
-
-        async def used_today(meter: Any) -> int:
-            return used
-
-        self.caps.extras["quota_used"] = used_today
         self.engine = engine or FakeEngine()
         self.state = app_state(tmp_path, self.engine)
         self.caps.extras["app_state"] = self.state
@@ -101,10 +70,6 @@ class Rig:
         self.caps.indexer = Indexer()
         self.graph: Any = build_speak(self.caps, InMemorySaver())
         self._n = 0
-
-    @property
-    def moderator_prompts(self) -> list[Any]:  # what the words moderator was asked to judge
-        return self.caps.text._bound["moderate"][1].prompts  # pyright: ignore[reportAttributeAccessIssue]
 
     @property
     def model(self) -> Any:  # the scripted text provider keeps what it was sent in `chats`
@@ -219,7 +184,7 @@ def saved_clone(rig, text="the words said", seconds=5.0):
     store = store_for(rig.state)
     v = store.add_voice(
         "t1", "u1", kind="clone", name="Me", reference_key="voice/x.wav", reference_text=text,
-        reference_seconds=seconds, consent={"basis": "own"}, voice_id="c1",
+        reference_seconds=seconds, voice_id="c1",
     )  # fmt: skip
     path = store.reference_path("c1")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -560,7 +525,7 @@ async def a_clone(rig, name="Ann", kind="clone"):
     v = store.add_voice(
         "t1", "u1", kind=kind, name=name, description="warm" if kind == "design" else "",
         reference_key="voice/v1.wav" if kind == "clone" else None, reference_text="hi there",
-        reference_seconds=4.0, consent={"basis": "own", "statement": "mine"}, voice_id="v1",
+        reference_seconds=4.0, voice_id="v1",
     )  # fmt: skip
     if kind == "clone":
         from voice_rig import wav
@@ -571,7 +536,7 @@ async def a_clone(rig, name="Ann", kind="clone"):
     return v
 
 
-async def test_a_recording_is_changed_to_a_saved_voice_and_the_consent_travels(tmp_path, ctx):
+async def test_a_recording_is_changed_to_a_saved_voice(tmp_path, ctx):
     rig = Rig(tmp_path)
     await library_track(rig, rate=22050, channels=1)
     await a_clone(rig)
@@ -585,7 +550,7 @@ async def test_a_recording_is_changed_to_a_saved_voice_and_the_consent_travels(t
     saved = store_for(rig.state).get_track("t1", "u1", final["track_id"])
     assert saved["mode"] == "converted" and saved["parent_id"] == "song"
     assert saved["edit"] == {
-        "action": "convert", "voice_id": "v1", "voice": "Ann", "consent": "own", "from": "track",
+        "action": "convert", "voice_id": "v1", "voice": "Ann", "from": "track",
     }  # fmt: skip
     assert rig.indexed[-1][0] == "track" and "Ann" in rig.indexed[-1][2]
 
@@ -678,24 +643,20 @@ async def a_picture(rig, picture_id="pic1"):
     )
 
 
-async def test_a_picture_and_a_recording_make_a_clip_that_remembers_what_was_agreed(tmp_path, ctx):
+async def test_a_picture_and_a_recording_make_a_clip(tmp_path, ctx):
     rig = Rig(tmp_path)
     await library_track(rig, rate=16000, channels=1, seconds=3.0)
     await a_picture(rig)
     final, events = await rig.run(
-        task="lipsync", picture="pic1", source_track="song", picture_basis="drawn",
-        voice_basis="own", title="Hello",
+        task="lipsync", picture="pic1", source_track="song", title="Hello",
     )  # fmt: skip
     assert final["status"] == "done" and final["title"] == "Hello" and final["seconds"] == 3.0
     model_id, req, voice_facts, _ = rig.engine.lipsynced[0]
     assert model_id == "musetalk-v15" and voice_facts == (16000, 1)
-    assert req.fps == 25 and req.mark == "AI-generated" and req.consent == {
-        "picture": "drawn", "voice": "own",
-    }  # fmt: skip
+    assert req.fps == 25 and not hasattr(req, "mark")
     store = store_for(rig.state)
     clip = store.get_clip("t1", "u1", final["clip_id"])
-    assert clip["consent"]["picture"] == "drawn" and clip["consent"]["mark"] == "AI-generated"
-    assert "drawing" in clip["consent"]["picture_statement"]
+    assert "consent" not in clip
     assert clip["voice"] == {"kind": "track", "id": "song"} and clip["picture_key"].endswith(
         "pic1.png"
     )
@@ -710,18 +671,16 @@ async def test_a_picture_and_a_recording_make_a_clip_that_remembers_what_was_agr
     assert not list((store.root / "tmp").glob("*"))  # the scratch copies are gone
 
 
-async def test_a_script_is_spoken_here_so_the_voice_is_never_somebody_elses(tmp_path, ctx):
+async def test_a_script_is_spoken_here_and_kept_as_a_speech(tmp_path, ctx):
     rig = Rig(tmp_path)
     await a_picture(rig)
     final, events = await rig.run(
         task="lipsync", picture="pic1", text="Welcome to the show, everybody.",
-        picture_basis="own", voice_basis="permission",
     )  # fmt: skip
     assert final["status"] == "done"
     assert rig.engine.spoken[0][1] == "Welcome to the show, everybody."
     store = store_for(rig.state)
     clip = store.get_clip("t1", "u1", final["clip_id"])
-    assert clip["consent"]["voice"] == "generated"  # whatever was ticked, words are made here
     assert clip["script"] == "Welcome to the show, everybody."
     assert clip["voice"]["kind"] == "speech"
     assert store.get_speech("t1", "u1", clip["voice"]["id"])["text"].startswith("Welcome")
@@ -731,42 +690,18 @@ async def test_a_script_is_spoken_here_so_the_voice_is_never_somebody_elses(tmp_
     ]  # fmt: skip
 
 
-@pytest.mark.parametrize(
-    "extra, code",
-    [
-        ({}, "consent_required"),
-        ({"picture_basis": "drawn"}, "consent_required"),
-        ({"picture_basis": "stolen", "voice_basis": "own"}, "consent_required"),
-        ({"picture_basis": "drawn", "voice_basis": "generated"}, "consent_required"),
-    ],
-)
-async def test_without_the_persons_word_about_the_picture_and_voice_nothing_is_made(
-    tmp_path, ctx, extra, code
-):
-    rig = Rig(tmp_path)
-    await library_track(rig, rate=16000, channels=1)
-    await a_picture(rig)
-    final, _ = await rig.run(task="lipsync", picture="pic1", source_track="song", **extra)
-    # a track was not made from words here, so "generated" is not something to claim for it
-    assert final["refusal"]["code"] == code and rig.engine.lipsynced == []
-
-
 async def test_a_missing_picture_or_voice_or_a_voice_that_is_too_long_is_refused(tmp_path, ctx):
     rig = Rig(tmp_path)
     final, _ = await rig.run(
-        task="lipsync", picture="nope", source_track="song", picture_basis="drawn",
-        voice_basis="own",
+        task="lipsync", picture="nope", source_track="song",
     )  # fmt: skip
     assert final["refusal"]["code"] == "unknown_picture"
     await a_picture(rig)
     final, _ = await rig.run(
-        task="lipsync", picture="pic1", source_track="nope", picture_basis="drawn",
-        voice_basis="own",
+        task="lipsync", picture="pic1", source_track="nope",
     )  # fmt: skip
     assert final["refusal"]["code"] == "unknown_source"
-    final, _ = await rig.run(
-        task="lipsync", picture="pic1", picture_basis="drawn", voice_basis="own"
-    )  # no voice at all
+    final, _ = await rig.run(task="lipsync", picture="pic1")  # no voice at all
     assert final["refusal"]["code"] == "unknown_source"
     assert rig.engine.lipsynced == []
 
@@ -780,8 +715,7 @@ async def test_the_engine_failing_ends_the_run_and_keeps_the_picture_for_another
     rig.engine.fail_with = VoiceEngineError("no_face", "No clear face was found in the picture.")
     with pytest.raises(RunError) as e:
         await rig.run(
-            task="lipsync", picture="pic1", source_track="song", picture_basis="drawn",
-            voice_basis="own",
+            task="lipsync", picture="pic1", source_track="song",
         )  # fmt: skip
     assert e.value.code == "no_face"
     assert store_for(rig.state).get_picture("t1", "u1", "pic1")["id"] == "pic1"

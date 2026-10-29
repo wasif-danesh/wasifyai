@@ -1,5 +1,4 @@
 workflow: flux2-klein-4b-reference.json
-licence: "Apache-2.0 per the FLUX.2 [klein] 4B model card (ADR-0019). The 9B variant is licensed differently and is not used"
 notes: >
   Two reference pictures and a prompt make a new picture at a size the person chooses ("the cat from the
   first picture sitting on the chair from the second picture"). The Edit workflow's mechanism with a second

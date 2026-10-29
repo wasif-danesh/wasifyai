@@ -1,4 +1,4 @@
-import type { CommercialUse, ModelState, VoiceInfo, VoiceModelInfo } from "@wasifyai/client";
+import type { ModelState, VoiceInfo, VoiceModelInfo } from "@wasifyai/client";
 
 /** "1:05", "0:07": a length as a person reads it. */
 export function clock(seconds: number): string {
@@ -13,13 +13,6 @@ export const STATE_TEXT: Record<ModelState, string> = {
   not_available: "Not available on this computer",
 };
 
-export const COMMERCIAL_TEXT: Record<CommercialUse, string> = {
-  yes: "Commercial use allowed",
-  conditional: "Commercial use with conditions",
-  no: "Not for commercial use",
-  unreviewed: "Licence not reviewed",
-};
-
 /** What a model's state means for this model: a model on the image engine needs that, not speech. */
 export function stateText(m: VoiceModelInfo): string {
   if (m.state === "needs_runtime" && m.engine === "comfyui") return "Needs the image engine";
@@ -31,8 +24,6 @@ export function stateText(m: VoiceModelInfo): string {
 export function modelOption(m: VoiceModelInfo, task: string): string {
   const tags = [m.recommended.includes(task as never) ? "recommended" : null];
   if (m.engine === "remote") tags.push("hosted");
-  if (m.commercial_use === "no" || m.commercial_use === "unreviewed")
-    tags.push("not for commercial use");
   if (m.state !== "ready") tags.push(stateText(m).toLowerCase());
   const shown = tags.filter(Boolean);
   return shown.length ? `${m.title} (${shown.join(", ")})` : m.title;

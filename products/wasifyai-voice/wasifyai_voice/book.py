@@ -25,9 +25,9 @@ from wasifyai_platform_sdk import (
 
 from wasifyai_voice import audiobook
 from wasifyai_voice.runtime import store_for
-from wasifyai_voice.safeguards import BOOKS, metered
 from wasifyai_voice.store import NotFound
 from wasifyai_voice.tools import Kit, Refuse
+from wasifyai_voice.usage import BOOKS, metered
 
 log = logging.getLogger(__name__)
 
@@ -102,8 +102,6 @@ def build_book(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Ref
                     "A single track of the whole book is for books up to about two hours. "
                     "Leave it out, and every chapter is kept as its own track.",
                 )
-            if refusal := await kit.guard.words(*(c.text for c in chapters), title):
-                return refuse_with(*refusal)  # ADR-0047: before any chapter is spoken
             model, label, call = await voice_for(state)
         except audiobook.BookError as e:
             return refuse_with(e.code, str(e))
@@ -176,14 +174,4 @@ def build_book(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Ref
         return sum(len(str(c.get("text", ""))) for c in chapters if isinstance(c, dict))
 
     # counted in characters of text, which is what a hosted voice bills by
-    return {
-        "audiobook": metered(
-            caps,
-            kit.guard,
-            refuse_with,
-            BOOKS,
-            audiobook_node,
-            amount=characters,
-            unit="characters",
-        )
-    }
+    return {"audiobook": metered(caps, BOOKS, audiobook_node, amount=characters, unit="characters")}

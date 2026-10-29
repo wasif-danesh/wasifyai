@@ -280,7 +280,6 @@ describe("read aloud on the chat", () => {
     const k = control({
       setup: {
         title: "Kokoro 82M",
-        licence: "Apache-2.0",
         from: "huggingface.co",
         bytes: 189_549_408,
         languages: ["en-US", "en-GB"],
@@ -292,7 +291,7 @@ describe("read aloud on the chat", () => {
     await user.click(await screen.findByRole("button", { name: "Read this reply aloud" }));
     const card = await screen.findByRole("region", { name: "Set up read aloud" });
     expect(card).toHaveTextContent("Kokoro 82M");
-    expect(card).toHaveTextContent("Apache-2.0");
+    expect(card).not.toHaveTextContent("Apache");
     expect(card).toHaveTextContent("huggingface.co");
     expect(card).toHaveTextContent("190 MB");
     expect(card).toHaveTextContent(/English/);
@@ -314,7 +313,6 @@ describe("read aloud on the chat", () => {
     const k = control({
       setup: {
         title: "Kokoro 82M",
-        licence: "Apache-2.0",
         from: "",
         bytes: 1,
         run: async () => {

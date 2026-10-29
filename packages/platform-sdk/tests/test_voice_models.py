@@ -22,8 +22,7 @@ def raw(**over):
     base = {
         "engine": "audiocpp", "family": "kokoro_tts", "package": "kokoro_82m_q8_0",
         "server_task": "tts", "tasks": ["speak"], "recommended": ["speak"],
-        "languages": ["en-us"], "sample_rate": 24000, "commercial_use": "yes",
-        "licence_evidence": "https://huggingface.co/hexgrad/Kokoro-82M", "reviewed": "2026-10-16",
+        "languages": ["en-us"], "sample_rate": 24000,
         "voices": [{"id": "af_heart", "label": "Heart"}, {"id": "am_adam", "label": "Adam"}],
         "default_voice": "af_heart",
         "options": [
@@ -38,7 +37,7 @@ def raw(**over):
 
 
 def model(**over):
-    return parse_voice_model("kokoro-82m", "Kokoro 82M", "Apache-2.0", raw(**over))
+    return parse_voice_model("kokoro-82m", "Kokoro 82M", raw(**over))
 
 
 def test_a_good_descriptor_parses_and_is_public():
@@ -46,7 +45,7 @@ def test_a_good_descriptor_parses_and_is_public():
     adam = m.voice("am_adam")
     assert m.recommended == ("speak",) and adam is not None and adam.label == "Adam"
     pub = m.public()
-    assert pub["commercial_use"] == "yes" and pub["options"][0]["max"] == 2.0
+    assert "commercial_use" not in pub and "licence" not in pub and pub["options"][0]["max"] == 2.0
 
 
 @pytest.mark.parametrize(
@@ -56,10 +55,6 @@ def test_a_good_descriptor_parses_and_is_public():
         ({"tasks": ["sing"]}, "unknown task"),
         ({"tasks": []}, "at least one task"),
         ({"recommended": ["transcribe"]}, "does not do"),
-        ({"commercial_use": "no"}, "only a model with commercial_use: yes"),
-        ({"commercial_use": "unreviewed"}, "only a model with commercial_use: yes"),
-        ({"commercial_use": "maybe"}, "commercial_use must be"),
-        ({"licence_evidence": "http://x"}, "https URL"),
         ({"default_voice": "zz"}, "default_voice"),
         ({"default_voice": None}, "needs a default_voice"),
         ({"options": [{"name": "x", "type": "enum"}]}, "needs values"),
@@ -70,11 +65,6 @@ def test_a_good_descriptor_parses_and_is_public():
 def test_a_bad_descriptor_names_its_problem(over, message):
     with pytest.raises(ValueError, match=message):
         model(**over)
-
-
-def test_a_non_commercial_model_may_be_listed_but_not_recommended():
-    m = model(commercial_use="no", recommended=[])
-    assert m.commercial_use == "no" and m.recommended == ()
 
 
 def test_speak_uses_the_default_voice_and_cleans_the_text():
@@ -391,7 +381,7 @@ def tool(kind: str, **over):
     }[kind]  # fmt: skip
     base = {"tasks": [kind], "recommended": [], "server_task": "sep", "voices": [],
             "default_voice": None, "options": [], **rules}  # fmt: skip
-    return parse_voice_model(f"{kind}-model", "A model", "MIT", raw(**{**base, **over}))
+    return parse_voice_model(f"{kind}-model", "A model", raw(**{**base, **over}))
 
 
 @pytest.mark.parametrize(
@@ -495,7 +485,7 @@ def test_an_edit_request_is_checked_before_it_is_tagged():
 
 
 def lipsync_rules(**over):
-    return {"max_voice_s": 300, "max_side": 768, "fps": 25, "mark": "required", **over}
+    return {"max_voice_s": 300, "max_side": 768, "fps": 25, **over}
 
 
 def talker(**over):
@@ -504,7 +494,7 @@ def talker(**over):
         "server_task": "lipsync", "voices": [], "default_voice": None, "options": [],
         "lipsync": lipsync_rules(),
     }  # fmt: skip
-    return parse_voice_model("musetalk", "MuseTalk", "MIT", raw(**{**base, **over}))
+    return parse_voice_model("musetalk", "MuseTalk", raw(**{**base, **over}))
 
 
 @pytest.mark.parametrize(
@@ -515,11 +505,9 @@ def talker(**over):
         ({"lipsync": lipsync_rules(max_voice_s=1)}, "max_voice_s"),
         ({"lipsync": lipsync_rules(max_side=64)}, "max_side"),
         ({"lipsync": lipsync_rules(fps=1)}, "fps"),
-        ({"lipsync": lipsync_rules(mark="optional")}, "cannot be left off"),
-        ({"lipsync": {"max_voice_s": 60, "max_side": 768, "fps": 25}}, "cannot be left off"),
     ],
 )
-def test_a_lip_sync_model_declares_its_limits_and_that_the_mark_is_not_optional(over, message):
+def test_a_lip_sync_model_declares_its_limits(over, message):
     with pytest.raises(ValueError, match=message):
         talker(**over)
 
@@ -530,19 +518,14 @@ def test_only_a_lip_sync_model_declares_lip_sync_rules():
     assert talker().public()["lipsync"]["fps"] == 25
 
 
-def test_a_lip_sync_request_needs_the_persons_word_and_a_voice_the_model_takes():
+def test_a_lip_sync_request_needs_only_a_voice_the_model_takes():
     m = talker()
-    ok = check_lipsync(m, 12.5, "drawn", "own")
-    assert ok.consent == {"picture": "drawn", "voice": "own"} and ok.mark == "AI-generated"
+    ok = check_lipsync(m, 12.5)
     assert ok.fps == 25 and ok.voice_seconds == 12.5
-    for picture, voice in ((None, "own"), ("drawn", None), ("real", "own"), ("own", "mine")):
-        with pytest.raises(VoiceRequestError) as e:
-            check_lipsync(m, 10, picture, voice)
-        assert e.value.code == "consent_required"
     for seconds, code in ((0.3, "too_short"), (301, "too_long"), (float("nan"), "too_short")):
         with pytest.raises(VoiceRequestError) as e:
-            check_lipsync(m, seconds, "own", "own")
+            check_lipsync(m, seconds)
         assert e.value.code == code
     with pytest.raises(VoiceRequestError) as e:
-        check_lipsync(model(), 10, "own", "own")
+        check_lipsync(model(), 10)
     assert e.value.code == "wrong_task"

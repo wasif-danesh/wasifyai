@@ -1,8 +1,8 @@
 # ruff: noqa: E501  (the sentences shown to people are easier to read on one line)
 """Teach the video model: the runs of a set of pictures and clips (ADR-0073, video amendment).
 
-A set is the same thing as for pictures (pictures, descriptions written by the app, a magic word, a
-statement of whose it is) and may also hold short clips; a set made for video (`family` "video") is
+A set is the same thing as for pictures (pictures, descriptions written by the app, a magic word) and
+may also hold short clips; a set made for video (`family` "video") is
 taught to the video model, LTX-Video 2B, by a LoRA. A run turns the set into a job (`VideoJob`) for the
 engine behind `state.video_training`, keeps the adapter as a model with its card, and **publishes** it to
 where the video engine reads it: the key names ComfyUI's LTXV loader uses, in the models' `loras` folder
@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from wasifyai_platform_sdk import Identity, RouteDeps, RouteGuard, RunContext, set_context
+from wasifyai_platform_sdk import Identity, RouteDeps, RouteUsage, RunContext, set_context
 from wasifyai_platform_sdk.context import reset_context
 
 from wasifyai_training import bases, captions
@@ -31,7 +31,6 @@ from wasifyai_training.runtime import (
     EV_RUN,
     MAX_PICTURES,
     PRODUCT_ID,
-    STATEMENTS,
     NotAvailable,
     Refused,
     add_to_search,
@@ -172,8 +171,6 @@ def ready_to_teach(dataset: dict[str, Any], items: list[dict[str, Any]]) -> str 
     """What is missing before a run, in the sentence the person is shown; None when nothing is."""
     if len(items) < MIN_ITEMS:
         return f"Add at least {MIN_ITEMS} pictures or clips. 15 to 30 good ones is plenty."
-    if not dataset["rights"]:
-        return "Say whose it is first."
     if not dataset["trigger_word"]:
         return "Choose the magic word first."
     if any(i["caption_state"] not in ("done", "edited") for i in items):
@@ -231,11 +228,6 @@ class VideoRunManager:
         items = store.list_items(identity.tenant_id, identity.user_id, dataset_id)
         if why := ready_to_teach(dataset, items):
             raise Refused("not_ready_to_train", why)
-        guard = RouteGuard(state, PRODUCT_ID)
-        if refusal := await guard.over_quota(
-            identity, EV_RUN, "train_runs_per_user_per_day", "training runs"
-        ):
-            raise Refused(*refusal)
         plan = plan_of(items)
         fit = engine.fit(chosen.need_gb)
         if fit["verdict"] == "too_big":
@@ -297,7 +289,7 @@ class VideoRunManager:
             model = await self._keep(identity, dataset, items, run, plan, result)
             store.finish_run(run_id, "done", elapsed_s=result.seconds, model_id=model["id"])
             self._teaching = False
-            await RouteGuard(self._deps.state, PRODUCT_ID).record(
+            await RouteUsage(self._deps.state, PRODUCT_ID).record(
                 identity, EV_RUN, 1, "runs", steps=run["steps"], seconds=result.seconds, preview=False,
             )  # fmt: skip
             await add_to_search(self._deps.state, identity, model["id"], words_of(model))
@@ -322,14 +314,14 @@ class VideoRunManager:
         d = bases.descriptor(run["base"])
         card = {
             "family": FAMILY, "base": run["base"], "base_title": d.title if d else run["base"],
-            "licence": d.licence if d else "", "engine": result.engine, "preview": False, "note": result.note,
+            "engine": result.engine, "preview": False, "note": result.note,
             "dataset": {"name": dataset["name"], "kind": dataset["kind"], "pictures": plan["pictures"],
                         "clips": plan["clips"], "hash": dataset_hash(items)},
             "settings": run["settings"], "steps": run["steps"], "seconds": round(result.seconds, 1),
             "size": [plan["width"], plan["height"]],
             "peak_memory_gb": round(result.peak_bytes / 1024**3, 1) if result.peak_bytes else None,
             "loss": {"first": result.loss_first, "last": result.loss_last},
-            "trigger_word": dataset["trigger_word"], "statement": STATEMENTS.get(dataset["rights"], ""),
+            "trigger_word": dataset["trigger_word"],
             "evaluation": {"passed": None, "note": "Not checked yet: make a video with it and look at it."},
             "trained_at": datetime.now(UTC).isoformat(timespec="seconds"),
         }  # fmt: skip
@@ -384,7 +376,7 @@ async def add_clip(
 ) -> dict[str, Any]:
     """Look at a clip, say what is wrong with it in words, keep it. Raises `Refused`."""
     from wasifyai_training import clips, pictures
-    from wasifyai_training.runtime import allowed_picture
+    from wasifyai_training.runtime import count_picture
 
     store = store_for(deps.state)
     dataset = store.get_dataset(identity.tenant_id, identity.user_id, dataset_id)  # the owner only
@@ -414,7 +406,7 @@ async def add_clip(
         except clips.BadClip as e:
             raise Refused("bad_picture", str(e)) from None
         png = await asyncio.to_thread(pictures.to_png, middle)
-        await allowed_picture(deps, identity, png)
+        await count_picture(deps, identity, png)
         others = [int(i["dhash"], 16) for i in have]
         checks = await asyncio.to_thread(clips.check, info, middle, others_in_clip, others)
         row = store.add_item(

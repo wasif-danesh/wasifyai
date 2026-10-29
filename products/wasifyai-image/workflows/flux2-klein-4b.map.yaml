@@ -1,10 +1,8 @@
 workflow: flux2-klein-4b.json
-licence: "Apache-2.0 per the FLUX.2 [klein] 4B model card (ADR-0019). The 9B variant is licensed differently and is not used"
 notes: >
   Text to image. The same workflow as the song covers, with a size: executed against
   ComfyUI 0.39, 1024x1024 in about 25 s. It matches the official ComfyUI template (4 steps, cfg 1).
-  The VAE comes from the Comfy-Org/flux2-klein repo (Apache-2.0); the template points at the
-  flux2-dev VAE, which carries a non-commercial label, so do not swap it in.
+  The VAE comes from the Comfy-Org/flux2-klein repo.
 models:
   - diffusion_models/flux-2-klein-4b.safetensors
   - text_encoders/qwen_3_4b.safetensors

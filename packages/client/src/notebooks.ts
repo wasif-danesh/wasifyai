@@ -192,7 +192,6 @@ export type ReaderSetup =
       offer: {
         id: string;
         size_bytes: number;
-        licences: string;
         source: string;
         needs_free_bytes: number;
       };

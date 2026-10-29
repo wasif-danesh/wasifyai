@@ -71,8 +71,6 @@ class Settings(BaseSettings):
     search_reconcile_every_s: int = 300
     search_reconcile_batch: int = 200  # items embedded per check: about 3 seconds of work
 
-    # ADR-0047: true in production: the safeguards are always on and the admin cannot turn them off.
-    safeguards_force_on: bool = False
     # ADR-0088: how many jobs one person may have in the line at once, across everything (pictures,
     # clips, speech, music, 3D, Motion graphics, training). 0 means no limit; the desktop is never
     # limited. The Helm values set 1 (`jobs.maxPerUser`).

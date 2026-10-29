@@ -12,7 +12,6 @@ export type TrainFamily = "image" | "video";
 
 /** What a trained model is: pictures of one of the three kinds, or how a person writes. */
 export type TrainedKind = TrainKind | "writing" | "decision";
-export type Statement = "mine" | "permission" | "drawing" | "artwork";
 
 export type TrainPreflight = {
   ok: boolean;
@@ -40,8 +39,6 @@ export type TrainStatus = {
   min_pictures: number;
   max_pictures: number;
   kinds: TrainKind[];
-  /** the words of each statement of rights, by its key */
-  statements: Record<Statement, string>;
   base: string;
   steps: Record<TrainKind, number>;
   /** "About 25 minutes", by kind */
@@ -87,7 +84,6 @@ export type TrainBase = {
   /** empty for a model with no descriptor: it is listed, not offered */
   id: string;
   title: string;
-  licence: string;
   engine: string;
   recommended: boolean;
   can_teach: boolean;
@@ -135,7 +131,6 @@ export type TrainDataset = {
   kind: TrainKind;
   name: string;
   trigger_word: string;
-  rights: Statement | "";
   created_at: string;
   pictures: number;
   /** a video set: how many of its items are clips */
@@ -206,7 +201,6 @@ export type CheckStep = {
 export type WritingAnswer = { question: string; before: string; after: string };
 
 export type WritingQuality = "quick" | "better";
-export type WritingRights = "mine" | "permission";
 
 export type WritingExample = { ask: string; answer: string };
 
@@ -232,7 +226,6 @@ export type WritingSet = {
   name: string;
   quality: WritingQuality;
   base: string;
-  rights: WritingRights | "";
   created_at: string;
   examples: number;
   missing: string | null;
@@ -261,7 +254,6 @@ export type LanguagePart = {
 export type LanguageBase = {
   id: string;
   title: string;
-  licence: string;
   source: string;
   /** set up with the trainer, not fetched on its own */
   main: boolean;
@@ -280,7 +272,6 @@ export type WritingStatus = {
   place: "device" | "service";
   min_examples: number;
   good_examples: number;
-  rights: WritingRights[];
   qualities: WritingQuality[];
   choices: TrainChoices;
   /** the taught model chat answers with now, if any */
@@ -337,7 +328,6 @@ export type DecisionSet = {
   high: string;
   quality: WritingQuality;
   base: string;
-  rights: WritingRights | "";
   created_at: string;
   examples: number;
   missing: string | null;
@@ -362,7 +352,6 @@ export type DecisionPatch = {
   high?: string;
   quality?: WritingQuality;
   base?: string;
-  rights?: WritingRights;
 };
 
 export type DecisionStatus = {
@@ -380,7 +369,6 @@ export type DecisionStatus = {
   /** the fewest, the most and the usual number of levels of a score */
   levels: [number, number, number];
   kinds: DecisionKind[];
-  rights: WritingRights[];
   qualities: WritingQuality[];
   choices: TrainChoices;
   bases: DecisionBase[];
@@ -390,7 +378,6 @@ export type DecisionStatus = {
 export type DecisionBase = {
   id: string;
   title: string;
-  licence: string;
   source: string;
   main: boolean;
   problem: string | null;
@@ -440,7 +427,6 @@ export type TrainedModel = {
   adapter_bytes: number | null;
   card: {
     base_title: string;
-    licence: string;
     engine: string;
     preview: boolean;
     note: string;
@@ -471,21 +457,19 @@ export type TrainedModel = {
     published?: { lora_name: string } | null;
     /** a video model: "video"; pictures leave it out */
     family?: TrainFamily;
-    statement: string;
     evaluation: TrainEvaluation;
     trained_at: string;
   };
   created_at: string;
 };
 
-/** One thing the setup fetches: what it is, how large, and whose licence it carries. */
+/** One thing the setup fetches: what it is, how large, and from where. */
 export type TrainingSetupPart = {
   name: string;
   version: string;
   bytes: number;
   /** already on this computer: it is not fetched again */
   have: boolean;
-  licence: string;
   source: string;
 };
 
@@ -538,7 +522,7 @@ export type TrainingApi = {
   dataset(id: string): Promise<TrainDataset>;
   updateDataset(
     id: string,
-    change: Partial<Pick<TrainDataset, "kind" | "name" | "trigger_word" | "rights">>,
+    change: Partial<Pick<TrainDataset, "kind" | "name" | "trigger_word">>,
   ): Promise<TrainDataset>;
   removeDataset(id: string): Promise<void>;
   addPicture(datasetId: string, picture: Blob, name?: string): Promise<TrainPicture>;
@@ -581,7 +565,7 @@ export type TrainingApi = {
   writingSet(id: string): Promise<WritingSet>;
   updateWritingSet(
     id: string,
-    patch: { name?: string; quality?: WritingQuality; base?: string; rights?: WritingRights },
+    patch: { name?: string; quality?: WritingQuality; base?: string },
   ): Promise<WritingSet>;
   /** Replace the examples of a set with these rows. */
   setExamples(id: string, rows: WritingExample[]): Promise<WritingSet>;

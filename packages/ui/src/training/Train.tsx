@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  type Statement,
   type TrainDataset,
   type TrainKind,
   type TrainPicture,
@@ -608,13 +607,12 @@ function ModelCard({
       </div>
       {m.kind === "writing" ? (
         <p className={hint}>
-          Taught from {m.card.dataset.examples ?? 0} examples · {m.card.base_title} ·{" "}
-          {m.card.licence}.
+          Taught from {m.card.dataset.examples ?? 0} examples · {m.card.base_title}.
         </p>
       ) : m.kind === "decision" ? (
         <p className={hint}>
           Answers “{m.card.question?.text ?? ""}” · taught from {m.card.dataset.examples ?? 0}{" "}
-          examples · {m.card.base_title} · {m.card.licence}.
+          examples · {m.card.base_title}.
         </p>
       ) : (
         <>
@@ -625,7 +623,7 @@ function ModelCard({
           <p className={hint}>
             {KIND_LABEL[m.kind].title}, {m.card.dataset.pictures}{" "}
             {m.card.family === "video" ? "pictures and clips" : "pictures"}, {m.card.steps} steps,{" "}
-            {m.card.base_title} · {m.card.licence}.{m.card.note ? ` ${m.card.note}` : ""}
+            {m.card.base_title}.{m.card.note ? ` ${m.card.note}` : ""}
           </p>
         </>
       )}
@@ -895,7 +893,6 @@ function CheckStep({
   const ownId = useId();
   const items = d.items ?? [];
   const suggestions = d.suggestions ?? [];
-  const statements = status?.statements ?? ({} as Record<Statement, string>);
   const waiting = items.filter(
     (i) => i.caption_state === "none" || i.caption_state === "failed",
   ).length;
@@ -980,26 +977,6 @@ function CheckStep({
           ) : (
             "Choose one."
           )}
-        </p>
-      </fieldset>
-
-      <fieldset className={cn(field, "m-0 border-0 p-0")}>
-        <legend className={cn(fieldLabel, "mb-1.5")}>Whose is it?</legend>
-        <div className="grid gap-1.5">
-          {(Object.keys(statements) as Statement[]).map((s) => (
-            <label key={s} className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="rights"
-                checked={d.rights === s}
-                onChange={() => void t.change({ rights: s })}
-              />
-              {statements[s]}
-            </label>
-          ))}
-        </div>
-        <p className={hint}>
-          A picture of a real person needs their agreement. Your answer is kept with the model.
         </p>
       </fieldset>
 

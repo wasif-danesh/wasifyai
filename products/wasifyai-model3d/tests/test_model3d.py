@@ -292,7 +292,7 @@ def ready_picture(rig, data=None) -> dict[str, Any]:
 
 
 def make(rig, input_id: str, **body: Any):
-    body = {"input_id": input_id, "rights": True, **body}
+    body = {"input_id": input_id, **body}
     return rig.post(f"{BASE}/models", json=body)
 
 
@@ -344,11 +344,10 @@ def test_a_warning_does_not_stop_the_person_it_is_told(rig):
     assert make(rig, row["id"]).status_code == 202
 
 
-def test_a_model_needs_the_person_to_say_they_may_use_the_picture(rig):
+def test_a_model_is_made_without_asking_whether_the_picture_may_be_used(rig):
     row = ready_picture(rig)
     r = rig.post(f"{BASE}/models", json={"input_id": row["id"]})
-    assert r.status_code == 422 and r.json()["detail"]["code"] == "no_rights"
-    assert "not a photo of a real person" in r.json()["detail"]["message"]
+    assert r.status_code == 202, r.text
 
 
 def test_a_model_is_made_with_progress_and_becomes_a_creation_the_library_can_find(rig):
@@ -367,7 +366,7 @@ def test_a_model_is_made_with_progress_and_becomes_a_creation_the_library_can_fi
     assert done["status"] == "done" and done["progress"] == 1 and done["glb_bytes"] == 5
     assert done["elapsed_s"] == 611.0 and done["peak_gb"] == 18.7 and done["live"] is False
     assert done["recipe"]["detail"] == "detailed" and done["recipe"]["seed"] == 7
-    assert done["recipe"]["licence"].endswith("Built with DINOv3")
+    assert "licence" not in done["recipe"]
     glb = rig.get(f"{BASE}/models/{started['id']}/file")
     assert glb.content == b"glTF7" and glb.headers["content-type"] == "model/gltf-binary"
     assert 'filename="frog-mug.glb"' in glb.headers["content-disposition"]

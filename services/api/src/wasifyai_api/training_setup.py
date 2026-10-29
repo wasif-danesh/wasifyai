@@ -89,13 +89,11 @@ class BaseFile:
 @dataclass(frozen=True)
 class Pins:
     tool_version: str
-    tool_licence: str
     packages_bytes: int
     base_id: str
     base_title: str
     base_repo: str
     base_revision: str
-    base_licence: str
     base_folder: str
     base_files: tuple[BaseFile, ...]
     digest: str  # of the pins: what an install records, so a changed pin asks for a new one
@@ -123,13 +121,11 @@ def load_pins(path: Path | None = None, part: str = PART) -> Pins:
         files.append(BaseFile(f["path"], int(f["size"]), str(f["sha256"]).lower()))
     return Pins(
         tool_version=str(tool["version"]),
-        tool_licence=str(tool["licence"]),
         packages_bytes=int(tool["packages_bytes"]),
         base_id=str(base["id"]),
         base_title=str(base["title"]),
         base_repo=str(base["repo"]),
         base_revision=str(base["revision"]),
-        base_licence=str(base["licence"]),
         base_folder=str(base["folder"]),
         base_files=tuple(files),
         digest=pins_digest(raw),
@@ -296,12 +292,12 @@ class TrainingSetup:
                 {
                     "name": "Trainer (mflux)", "version": p.tool_version,
                     "bytes": 0 if tool else p.packages_bytes, "have": tool is not None,
-                    "licence": p.tool_licence, "source": "pypi.org",
+                    "source": "pypi.org",
                 },
                 {
                     "name": p.base_title, "version": "the picture model it learns on",
                     "bytes": 0 if base else p.base_bytes, "have": base is not None,
-                    "licence": p.base_licence, "source": "huggingface.co",
+                    "source": "huggingface.co",
                 },
             ],
         }  # fmt: skip
@@ -438,9 +434,7 @@ class TrainingSetup:
     async def _get_base(self, before: int) -> None:
         """The model's files, through the resumable, hash-checked downloader."""
         p = self.pins
-        entry = ModelEntry(
-            p.base_id, "wasifyai-training", p.base_title, p.base_licence, "", "", 0, ()
-        )
+        entry = ModelEntry(p.base_id, "wasifyai-training", p.base_title, "", "", 0, ())
         files = []
         for f in p.base_files:
             folder = "/".join([p.base_folder, *Path(f.path).parent.parts])

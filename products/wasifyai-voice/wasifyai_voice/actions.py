@@ -2,8 +2,8 @@
 """What the voice product can do, for the action catalogue (ADR-0068): speech, saved voices, music,
 the audio tools, dubbing, audiobooks, lip sync, and the kinds of creation it keeps.
 
-Most actions are child runs of the product's graph (`task` in the graph input), so its checks,
-safeguards, quotas and queue are the ones the screens use. A few are direct functions on the
+Most actions are child runs of the product's graph (`task` in the graph input), so its checks
+and queue are the ones the screens use. A few are direct functions on the
 product's own store, the way its routes are (transcribing a recording of the library, saving a
 voice). Adding an action is adding to `actions()`."""
 
@@ -40,7 +40,7 @@ from wasifyai_platform_sdk.media_upload import process_audio
 from wasifyai_platform_sdk.uploads import UploadError
 from wasifyai_platform_sdk.voice_models import MAX_DESCRIPTION_CHARS, MAX_SPEAK_CHARS
 
-from wasifyai_voice import audio_input, audiobook, consent, dubbing, export, reference
+from wasifyai_voice import audio_input, audiobook, dubbing, export, reference
 from wasifyai_voice.runtime import PRODUCT_ID, NotAvailable, engine_for, store_for
 from wasifyai_voice.store import NotFound, VoiceStore, new_id
 
@@ -50,7 +50,6 @@ TRANSCRIPT_INDEX_CHARS = 2000
 OUTPUT_TEXT_CHARS = 2000  # how much of a transcript an action returns: a model reads it
 PICTURE_MAX_SIDE = 1024
 SourceKind = Literal["track", "speech"]
-Basis = Literal["own", "permission"]
 
 
 class Strict(BaseModel):
@@ -446,10 +445,6 @@ async def _voice_design(p: DesignIn, ctx: ActionContext) -> Outcome:
 
 class CloneIn(SourceIn):
     name: str = Field(min_length=1, max_length=100)
-    voice_is: Basis = Field(
-        description="Whose voice it is: 'own' (the person's own voice) or 'permission' (someone "
-        "who agreed)."
-    )  # fmt: skip
     reference_text: str = Field(
         "", max_length=1000, description="What the recording says, if known."
     )
@@ -473,7 +468,7 @@ async def _voice_clone(p: CloneIn, ctx: ActionContext) -> Outcome:
     v = await asyncio.to_thread(
         store.add_voice, ctx.actor.tenant_id, ctx.actor.user_id, kind="clone",
         name=p.name.strip(), reference_key=key, reference_text=" ".join(p.reference_text.split()),
-        reference_seconds=round(seconds, 2), consent=consent.record(p.voice_is), voice_id=vid,
+        reference_seconds=round(seconds, 2), voice_id=vid,
     )  # fmt: skip
     await _reindex(
         ctx, "voice", v["id"], search_text(v["name"], v["description"] or "cloned voice")
@@ -771,14 +766,6 @@ class LipSyncIn(Strict):
     source_kind: SourceKind | None = Field(None, description="Or a recording of the library.")
     source_id: str | None = Field(None, max_length=64)
     voice: str | None = Field(None, max_length=100, description="A built-in voice for the words.")
-    picture_is: Literal["drawn", "own", "permission"] = Field(
-        description="What the picture is: 'drawn' (artwork), 'own' (the person) or 'permission' "
-        "(someone who agreed)."
-    )  # fmt: skip
-    voice_is: Literal["generated", "own", "permission"] | None = Field(
-        None,
-        description="For a recording: whose voice: 'own' or 'permission'. Words are 'generated'.",
-    )
     title: str | None = Field(None, max_length=120)
     model: str | None = Field(None, max_length=100)
 
@@ -788,8 +775,6 @@ class LipSyncIn(Strict):
             raise ValueError("Give either text for the face to say, or a recording (source_id).")
         if self.source_id and not self.source_kind:
             raise ValueError("Say whether the recording is a track or a speech (source_kind).")
-        if self.source_id and self.voice_is not in ("own", "permission"):
-            raise ValueError("For a recording, say whose voice it is: 'own' or 'permission'.")
         return self
 
 
@@ -818,15 +803,14 @@ async def _lipsync_input(p: LipSyncIn, ctx: ActionContext) -> dict[str, Any]:
         _store(ctx).add_picture, ctx.actor.tenant_id, ctx.actor.user_id, key=key,
         width=clean.width, height=clean.height, picture_id=pid,
     )  # fmt: skip
-    graph: dict[str, Any] = {"task": "lipsync", "picture": pid, "picture_basis": p.picture_is}
+    graph: dict[str, Any] = {"task": "lipsync", "picture": pid}
     if p.text:
         graph["text"] = p.text
-        graph["voice_basis"] = "generated"
         if p.voice:
             graph["voice"] = p.voice
     else:
         assert p.source_kind and p.source_id
-        graph |= _source(p.source_kind, p.source_id) | {"voice_basis": p.voice_is}
+        graph |= _source(p.source_kind, p.source_id)
     return graph | _clean({"title": p.title, "model": p.model})
 
 
@@ -846,21 +830,12 @@ def _lipsync_result(outputs: dict[str, Any], p: LipSyncIn) -> Outcome | None:
     return Outcome.ok(
         {"clip_id": outputs["clip_id"], "title": title, "seconds": secs,
          "uri": _uri("lipsync", outputs["clip_id"])},
-        f'The talking video "{title}" was made ({secs:.0f} seconds), marked as AI-generated, and '
-        "saved to the library.",
+        f'The talking video "{title}" was made ({secs:.0f} seconds) and saved to the library.',
     )  # fmt: skip
 
 
 # ---- the catalogue ----------------------------------------------------------------------------
 
-_CLONE_CONSENT = (
-    "I confirm this is my own voice, or that I have the permission of the person whose voice it is."
-)
-_LIPSYNC_CONSENT = (
-    "I confirm I may use this picture and this voice: the picture is artwork, a picture of me, or "
-    "of someone who agreed; the voice is made here from words, my own, or one I have permission "
-    "to use. The video is marked as AI-generated."
-)
 HERE = need_product(PRODUCT_ID)
 SAMPLE_ID = "0b7c1f9e-0000-4000-8000-000000000000"  # for the examples
 SAMPLE_VOICE = "5c1d0e2a-0000-4000-8000-000000000000"
@@ -928,14 +903,13 @@ def actions() -> list[Action]:
             summary="Save a voice cloned from a recording.",
             description=(
                 "Save a voice cloned from a recording of the library (2 to 30 seconds of one "
-                "person speaking clearly). It needs the person's word, in the app window, that "
-                "the voice is their own or that they have permission. Returns the voice id."
+                "person speaking clearly). Returns the voice id."
             ),
             input=CloneIn, output=VoiceOut,
             examples=({"source_kind": "speech", "source_id": SAMPLE_ID,
-                       "name": "My voice", "voice_is": "own"},),
-            effect="make", flags=("needs_consent", "private"), requires=(HERE,), product=PRODUCT_ID,
-            consent=_CLONE_CONSENT, bind=CallBinding(_voice_clone, check=_check_source),
+                       "name": "My voice"},),
+            effect="make", flags=("private",), requires=(HERE,), product=PRODUCT_ID,
+            bind=CallBinding(_voice_clone, check=_check_source),
             ui="voice.voices",
         ),
         Action(
@@ -1069,15 +1043,14 @@ def actions() -> list[Action]:
             summary="Make a picture talk.",
             description=(
                 "Make a picture of the library talk: a video of the face saying words (made into "
-                "speech here) or a recording. The video is always marked AI-generated. It needs "
-                "the person's word, in the app window, about the picture and the voice."
+                "speech here) or a recording."
             ),
             input=LipSyncIn, output=ClipOut,
             examples=({"image_id": SAMPLE_ID,
-                       "text": "Hello, I am your guide.", "picture_is": "drawn"},),
-            effect="make", flags=("needs_consent", "costly", "private"),
+                       "text": "Hello, I am your guide."},),
+            effect="make", flags=("costly", "private"),
             requires=(HERE, need_model("lipsync")), long=True, product=PRODUCT_ID,
-            consent=_LIPSYNC_CONSENT, ui="voice.lipsync",
+            ui="voice.lipsync",
             bind=_run("talking video", _lipsync_input, _lipsync_result, _lipsync_check),
         ),
     ]  # fmt: skip

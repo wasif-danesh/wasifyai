@@ -31,7 +31,6 @@ const STATUS: DecisionStatus = {
   max_options: 12,
   levels: [3, 10, 5],
   kinds: ["yes_no", "category", "score"],
-  rights: ["mine", "permission"],
   qualities: ["quick", "better"],
   choices: {
     family: "decision",
@@ -48,20 +47,13 @@ const said = (answer: string, confidence: number): Said => ({
   shares: { [answer]: confidence, other: 1 - confidence },
 });
 
-function planFor(
-  rows: DecisionExample[],
-  rights: string,
-  answers: string[],
-  problem: string | null,
-): DecisionPlan {
+function planFor(rows: DecisionExample[], answers: string[], problem: string | null): DecisionPlan {
   const n = rows.length;
   const missing = problem
     ? problem
     : n < 20
       ? `Add at least 20 examples. You have ${n}. 60 or more is better.`
-      : rights === ""
-        ? "Say whose these texts are first."
-        : null;
+      : null;
   return {
     examples: n,
     dropped: [],
@@ -94,7 +86,6 @@ const MODEL: TrainedModel = {
   created_at: "",
   card: {
     base_title: "Laya",
-    licence: "Apache-2.0",
     engine: "laya",
     preview: false,
     note: "",
@@ -102,7 +93,6 @@ const MODEL: TrainedModel = {
     steps: 20,
     seconds: 40,
     trigger_word: "",
-    statement: "",
     evaluation: {
       passed: true,
       note: "On 12 texts it had not seen, it was right 11 times (92 percent). Counting words alone was right 9 times (75 percent).",
@@ -161,7 +151,6 @@ const OFFER: TrainingSetupState = {
         version: "0.4.15",
         bytes: 167_600_000,
         have: false,
-        licence: "Apache-2.0",
         source: "pypi.org",
       },
       {
@@ -169,7 +158,6 @@ const OFFER: TrainingSetupState = {
         version: "the model it learns on",
         bytes: 846_195_574,
         have: false,
-        licence: "Apache-2.0",
         source: "huggingface.co",
       },
     ],
@@ -198,7 +186,7 @@ function fake(
         : null;
   const view = (s: DecisionSet): DecisionSet => {
     const answers = answersOf(s);
-    const plan = planFor(rows, s.rights, answers, problemOf(s));
+    const plan = planFor(rows, answers, problemOf(s));
     return {
       ...s,
       examples: rows.length,
@@ -220,7 +208,6 @@ function fake(
     high: "",
     quality: "quick",
     base: "",
-    rights: "",
     created_at: "",
     examples: 0,
     missing: null,
@@ -405,7 +392,7 @@ describe("Decide", () => {
   });
 
   it(
-    "pastes examples in, says whose they are, teaches, follows the run and shows the report",
+    "pastes examples in, teaches, follows the run and shows the report",
     { timeout: 30_000 },
     async () => {
       const user = userEvent.setup();
@@ -424,8 +411,7 @@ describe("Decide", () => {
       await user.paste(lines);
       await user.click(screen.getByRole("button", { name: /Add 24 pasted rows/ }));
       expect(await screen.findByLabelText("The text, example 24")).toBeTruthy();
-      expect(await screen.findByText("Say whose these texts are first.")).toBeTruthy();
-      await user.click(screen.getByRole("button", { name: "They are mine" }));
+      expect(screen.queryByText(/Whose are these/)).toBeNull();
       await waitFor(
         () =>
           expect(
@@ -459,7 +445,6 @@ describe("Decide", () => {
       Array.from({ length: 22 }, (_, i) => `Text ${i}\t${i % 2 ? "yes" : "no"}`).join("\n"),
     );
     await user.click(screen.getByRole("button", { name: /Add 22 pasted rows/ }));
-    await user.click(await screen.findByRole("button", { name: "I have permission to use them" }));
     await waitFor(
       () =>
         expect(

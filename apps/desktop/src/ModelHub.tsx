@@ -196,7 +196,6 @@ export function ModelHub({ onDownloaded }: { onDownloaded?: () => void }) {
                         <span>{compactCount(r.downloads)} downloads</span>
                         <span>{compactCount(r.likes)} likes</span>
                         <span>{ago(r.updated)}</span>
-                        {r.license ? <span>{r.license}</span> : null}
                         {r.gated ? <span className="text-warn">needs an account</span> : null}
                         {!r.runnable ? <span>view only</span> : null}
                       </span>
@@ -337,10 +336,9 @@ function ModelDetail({ repo, onDownloaded }: { repo: string; onDownloaded?: () =
           {model.parameters ? <span>{paramsLabel(model.parameters)} parameters</span> : null}
           {model.context_length ? <span>{compactCount(model.context_length)} context</span> : null}
         </p>
-        <p className="text-sm">
-          Licence: <span className="font-medium">{model.license || "not stated"}</span>
-          {model.gated ? " · needs a Hugging Face account that accepted its terms" : ""}
-        </p>
+        {model.gated ? (
+          <p className="text-sm">Needs a Hugging Face account that accepted its terms.</p>
+        ) : null}
       </header>
 
       {error ? (
@@ -409,8 +407,7 @@ function ModelDetail({ repo, onDownloaded }: { repo: string; onDownloaded?: () =
             ))}
           </ul>
           <p className="text-muted-foreground text-sm">
-            {humanBytes(confirming.size)} from huggingface.co/{model.id}. Licence:{" "}
-            {model.license || "not stated"}.
+            {humanBytes(confirming.size)} from huggingface.co/{model.id}.
             {diskFree !== null ? ` Free space on that drive: ${humanBytes(diskFree)}.` : ""} The
             files are checked against their published checksums.
           </p>

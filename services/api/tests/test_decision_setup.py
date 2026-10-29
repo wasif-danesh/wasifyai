@@ -48,7 +48,7 @@ def alone(monkeypatch: pytest.MonkeyPatch):
 
 def test_the_pins_name_every_file_with_a_size_and_a_checksum():
     p = ds.load_decision_pins()
-    assert p.base_repo == "convaiinnovations/laya" and p.base_licence == "Apache-2.0"
+    assert p.base_repo == "convaiinnovations/laya"
     assert len(p.base_revision) == 40 and p.tool_version == "0.4.15"
     assert {f.path for f in p.base_files} == {
         "rl_agent_config.json", "encoder/config.json", "model.safetensors",
@@ -165,7 +165,7 @@ def test_the_plan_says_what_it_would_fetch_and_nothing_that_is_already_there(tmp
     plan = setup.plan()
     assert plan["bytes"] == 1000 + 16 + 300 + 120 == setup.missing_bytes()
     assert {p["name"] for p in plan["parts"]} == {"Trainer (Laya and PyTorch)", "Laya"}
-    assert all(p["licence"] and p["source"] for p in plan["parts"])
+    assert all(p["source"] for p in plan["parts"])
     write_model(ds.component_root(tmp_path) / "models" / setup.pins.base_folder)
     assert setup.missing_bytes() == 1000
     assert [p["have"] for p in setup.plan()["parts"]] == [False, True]
@@ -268,8 +268,7 @@ MULTI = {"rl_agent_config.json": b"{}", "model.safetensors": b"M" * 400}
 def multi_setup(tmp_path: Path, tamper: bool = False):
     setup, _, asked = setup_for(tmp_path)
     spec = ds.BaseSpec(
-        "laya-multilingual", "Laya (many languages)", "acme/laya", "r" * 40, "Apache-2.0",
-        "laya-multilingual",
+        "laya-multilingual", "Laya (many languages)", "acme/laya", "r" * 40, "laya-multilingual",
         tuple(ts.BaseFile(p, len(d), hashlib.sha256(d).hexdigest()) for p, d in MULTI.items()),
         subfolder="multilingual",
     )  # fmt: skip

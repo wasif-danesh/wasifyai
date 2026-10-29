@@ -111,9 +111,6 @@ export type ModelChoice = {
   engineName: string | null;
   fit: Fit | null;
   fitReason: string | null;
-  licence: string;
-  commercial: "yes" | "conditional" | "no" | "unreviewed";
-  licenceUrl: string | null;
   /** where it comes from: the app's own list, a file found on the computer, a running server */
   source: "app" | "found" | "server";
   /** the website the files come from, said in the download dialog: "huggingface.co" */

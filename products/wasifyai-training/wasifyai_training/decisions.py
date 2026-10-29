@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from wasifyai_platform_sdk import Identity, RouteDeps, RouteGuard, RunContext, set_context
+from wasifyai_platform_sdk import Identity, RouteDeps, RouteUsage, RunContext, set_context
 from wasifyai_platform_sdk.context import reset_context
 
 from wasifyai_training import bases, decision
@@ -25,7 +25,6 @@ from wasifyai_training.language import Stopped
 from wasifyai_training.runtime import (
     EV_RUN,
     PRODUCT_ID,
-    STATEMENTS,
     NotAvailable,
     Refused,
     add_to_search,
@@ -72,8 +71,6 @@ def missing(row: dict[str, Any], q: Question, rows: list[Row]) -> str | None:
     """What is missing before a run, in the sentence the person is shown; None when nothing is."""
     if why := decision.blocker(q, rows):
         return why
-    if not row["rights"]:
-        return "Say whose these texts are first."
     return None
 
 
@@ -161,11 +158,6 @@ class DecisionRunManager:
             raise Refused("busy", "A model is being taught. Wait for it to finish.")
         if why := missing(row, q, rows):
             raise Refused("not_ready_to_train", why)
-        guard = RouteGuard(state, PRODUCT_ID)
-        if refusal := await guard.over_quota(
-            identity, EV_RUN, "train_runs_per_user_per_day", "training runs"
-        ):
-            raise Refused(*refusal)
         fit = engine.fit(chosen.need_gb)
         if fit["verdict"] == "too_big":
             raise Refused("too_big", fit["reason"])
@@ -226,7 +218,7 @@ class DecisionRunManager:
             model = await self._keep(identity, row, q, rows, train, held, run, result, baseline)
             store.finish_run(run_id, "done", elapsed_s=result.seconds, model_id=model["id"])
             self._teaching = False
-            await RouteGuard(self._deps.state, PRODUCT_ID).record(
+            await RouteUsage(self._deps.state, PRODUCT_ID).record(
                 identity, EV_RUN, 1, "runs", steps=run["steps"], seconds=result.seconds, preview=False,
             )  # fmt: skip
             await add_to_search(self._deps.state, identity, model["id"], words_of(model))
@@ -251,7 +243,7 @@ class DecisionRunManager:
         rep = decision.report(q, held, result.before, result.after, baseline)
         card = {
             "kind": KIND, "base": run["base"], "base_title": d.title if d else run["base"],
-            "licence": d.licence if d else "", "engine": result.engine, "preview": False,
+            "engine": result.engine, "preview": False,
             "question": q.public(),
             "dataset": {"name": row["name"], "kind": KIND, "examples": len(rows),
                         "hash": set_hash(q, rows)},
@@ -260,7 +252,7 @@ class DecisionRunManager:
             "loss": result.loss,
             "peek": [{"text": t, "before": said_out(b), "after": said_out(a)}
                      for t, b, a in zip(decision.test_texts(train, held), result.peek_before, result.peek_after, strict=False)],
-            "report": rep, "statement": STATEMENTS.get(row["rights"], ""),
+            "report": rep,
             "evaluation": {"passed": rep["passed"], "note": rep["note"]},
             "trained_at": datetime.now(UTC).isoformat(timespec="seconds"),
         }  # fmt: skip

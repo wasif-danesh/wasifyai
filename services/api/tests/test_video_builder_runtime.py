@@ -68,7 +68,7 @@ def test_the_install_plan_names_every_download_with_size_source_and_licence(tmp_
         "HyperFrames and GSAP",
         "FFmpeg and ffprobe",
     }
-    assert all(p["licence"] and p["source"] for p in plan["parts"])
+    assert all(p["source"] for p in plan["parts"])
 
 
 def test_on_another_kind_of_computer_the_plan_says_it_is_not_offered_and_fetches_nothing(

@@ -161,11 +161,11 @@ describe("saved voices", () => {
     expect(calls[0]?.init?.body).toBe(
       JSON.stringify({ name: "Calm", description: "a deep, calm man" }),
     );
-    await api.cloneVoice(new File(["x"], "me.wav"), "Me", "permission", "the words");
+    await api.cloneVoice(new File(["x"], "me.wav"), "Me", "the words");
     const form = calls[1]?.init?.body as FormData;
     expect([form.get("name"), form.get("consent"), form.get("reference_text")]).toEqual([
       "Me",
-      "permission",
+      null,
       "the words",
     ]);
     await api.voices("clone");
@@ -476,15 +476,13 @@ describe("lip sync", () => {
     },
   });
 
-  it("sends the picture, what the person said about it and the voice, and returns the clip", async () => {
+  it("sends the picture and the voice, and returns the clip", async () => {
     const r = runs([ev("node", { label: "Making the video" }), made]);
     const steps: string[] = [];
     const out = await makeClip(
       r,
       {
         picture: "p1",
-        pictureBasis: "drawn",
-        voiceBasis: "own",
         source: { kind: "track", id: "t1" },
         model: "musetalk-v15",
         title: " Hi ",
@@ -495,8 +493,6 @@ describe("lip sync", () => {
     expect(r.seen.input).toEqual({
       task: "lipsync",
       picture: "p1",
-      picture_basis: "drawn",
-      voice_basis: "own",
       source_track: "t1",
       model: "musetalk-v15",
       title: " Hi ",
@@ -514,8 +510,6 @@ describe("lip sync", () => {
       r,
       {
         picture: "p1",
-        pictureBasis: "own",
-        voiceBasis: "generated",
         text: "Hello there",
         voice: "af_heart",
         source: { kind: "speech", id: "s1" },
@@ -525,8 +519,6 @@ describe("lip sync", () => {
     expect(r.seen.input).toEqual({
       task: "lipsync",
       picture: "p1",
-      picture_basis: "own",
-      voice_basis: "generated",
       text: "Hello there",
       voice: "af_heart",
     });
@@ -544,14 +536,14 @@ describe("lip sync", () => {
         ev("done", {
           outputs: {
             status: "refused",
-            refusal: { code: "consent_required", message: "Say whose voice." },
+            refusal: { code: "no_face", message: "No face was found." },
           },
         }),
       ]),
       base,
       new AbortController().signal,
     );
-    expect(refused).toEqual({ ok: false, code: "consent_required", message: "Say whose voice." });
+    expect(refused).toEqual({ ok: false, code: "no_face", message: "No face was found." });
     const failed = await makeClip(
       runs([ev("error", { code: "no_face", message: "No clear face was found in the picture." })]),
       base,
@@ -655,7 +647,6 @@ describe("dubbing", () => {
         language: "es",
         segments: [{ start: 0, end: 1.5, source: "Hello.", text: "Hola, amigos." }],
         voiceFrom: "speaker",
-        speakerBasis: "own",
         vocalsTrack: "v1",
         backgroundTrack: "b1",
         model: "qwen3-tts-0.6b-base",
@@ -668,7 +659,6 @@ describe("dubbing", () => {
       language: "es",
       segments: [{ start: 0, end: 1.5, source: "Hello.", text: "Hola, amigos." }],
       voice_from: "speaker",
-      speaker_basis: "own",
       vocals_track: "v1",
       background_track: "b1",
       model: "qwen3-tts-0.6b-base",
@@ -684,14 +674,14 @@ describe("dubbing", () => {
         ev("done", {
           outputs: {
             status: "refused",
-            refusal: { code: "consent_required", message: "Say whose voice." },
+            refusal: { code: "no_face", message: "No face was found." },
           },
         }),
       ]),
       { ...asked, segments: [], voiceFrom: "speaker" },
       new AbortController().signal,
     );
-    expect(refused).toEqual({ ok: false, code: "consent_required", message: "Say whose voice." });
+    expect(refused).toEqual({ ok: false, code: "no_face", message: "No face was found." });
     const failed = await dubScript(
       runs([
         ev("error", { code: "language_failed", message: "The language model did not answer." }),
@@ -878,12 +868,11 @@ const model = (over: Partial<VoiceModelInfo>): VoiceModelInfo =>
   ({
     id: "parakeet-tdt-0.6b-v3",
     title: "Parakeet TDT 0.6B v3",
-    licence: "CC-BY-4.0",
     tasks: ["transcribe"],
     recommended: ["transcribe"],
-    licence_evidence: "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     state: "ready",
     bytes_missing: 0,
+    source: "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     ...over,
   }) as VoiceModelInfo;
 
@@ -944,7 +933,6 @@ describe("whether the microphone can write words down", () => {
       model: {
         id: "parakeet-tdt-0.6b-v3",
         title: "Parakeet TDT 0.6B v3",
-        licence: "CC-BY-4.0",
         from: "huggingface.co",
         bytes: 915_733_744,
         languages: [],
@@ -975,11 +963,9 @@ const kokoro = (over: Partial<VoiceModelInfo> = {}): VoiceModelInfo =>
   model({
     id: "kokoro-82m",
     title: "Kokoro 82M",
-    licence: "Apache-2.0",
     tasks: ["speak"],
     recommended: ["speak"],
     languages: ["en-us", "en-gb"],
-    licence_evidence: "https://huggingface.co/hexgrad/Kokoro-82M",
     ...over,
   });
 
@@ -1054,7 +1040,6 @@ describe("whether a reply can be read aloud", () => {
       model: {
         id: "kokoro-82m",
         title: "Kokoro 82M",
-        licence: "Apache-2.0",
         from: "huggingface.co",
         bytes: 189_549_408,
         languages: ["en-us", "en-gb"],

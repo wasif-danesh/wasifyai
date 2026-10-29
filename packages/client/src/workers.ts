@@ -9,8 +9,6 @@ export type WorkerModel = {
   /** `ready` is on the worker; `can_install` needs a fetch; others cannot be fetched */
   state: string;
   bytes_missing: number;
-  licence: string;
-  commercial_use: "yes" | "conditional" | "no" | "unreviewed";
   tasks: string[];
   engine: string;
   runtime_ready: boolean;

@@ -229,7 +229,7 @@ function SetupCard({
               <strong>{p.name}</strong> <span className="text-muted-foreground">{p.version}</span>
             </span>
             <span className="text-muted-foreground tabular-nums">
-              {megabytes(p.bytes)} · {p.licence} · from {p.source}
+              {megabytes(p.bytes)} · from {p.source}
             </span>
           </li>
         ))}

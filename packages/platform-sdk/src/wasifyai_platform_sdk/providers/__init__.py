@@ -1,6 +1,6 @@
 """Provider registry (dispatcher pattern): config names a provider, this builds it."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -27,7 +27,6 @@ class ProviderDeps:
     storage: ScopedStorage | None = None
     db: AsyncEngine | None = None
     embedding_dims: int = 768
-    safeguards: Callable[[], Awaitable[bool]] | None = None  # ADR-0047
     # The desktop profile has no gateway: it supplies the text provider (its chosen local model)
     # and every `litellm` text binding of a product uses it.
     text_provider: Any | None = None
@@ -83,5 +82,4 @@ def build_capabilities(config: ProductConfig, deps: ProviderDeps) -> Capabilitie
         config=config,
         db=deps.db,
         usage=deps.usage,
-        safeguards=deps.safeguards,
     )

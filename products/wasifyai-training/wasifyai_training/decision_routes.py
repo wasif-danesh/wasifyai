@@ -22,7 +22,7 @@ from wasifyai_training.decisions import (
     manager_for,
 )
 from wasifyai_training.runtime import NotAvailable, Refused, store_for
-from wasifyai_training.store import DECISION_KINDS, QUALITIES, WRITING_RIGHTS, NotFound
+from wasifyai_training.store import DECISION_KINDS, QUALITIES, NotFound
 
 MAX_SORT = 2000
 
@@ -50,7 +50,6 @@ class DecisionSetPatch(BaseModel):
     high: str | None = Field(default=None, max_length=200)
     quality: str | None = Field(default=None, max_length=10)
     base: str | None = Field(default=None, max_length=80)
-    rights: str | None = Field(default=None, max_length=20)
 
 
 class RowIn(BaseModel):
@@ -121,7 +120,6 @@ def add_decision_routes(router: APIRouter, deps: RouteDeps) -> None:
             "max_options": decision.MAX_OPTIONS,
             "levels": [decision.MIN_LEVELS, decision.MAX_LEVELS, decision.DEFAULT_LEVELS],
             "kinds": list(DECISION_KINDS),
-            "rights": list(WRITING_RIGHTS),
             "qualities": list(QUALITIES),
             "choices": bases.choices(
                 "decision",
@@ -169,10 +167,6 @@ def add_decision_routes(router: APIRouter, deps: RouteDeps) -> None:
             )
         if "quality" in fields and fields["quality"] not in QUALITIES:
             raise HTTPException(422, {"code": "bad_quality", "message": "Choose Quick or Better."})
-        if "rights" in fields and fields["rights"] not in (*WRITING_RIGHTS, ""):
-            raise HTTPException(
-                422, {"code": "bad_rights", "message": "Choose one of the statements."}
-            )
         if fields.get("base") and bases.descriptor(fields["base"]) is None:
             raise HTTPException(
                 422, {"code": "bad_base", "message": "This model cannot be taught yet."}
@@ -206,7 +200,7 @@ def add_decision_routes(router: APIRouter, deps: RouteDeps) -> None:
         try:
             row = await manager_for(deps).start(identity, set_id)
         except Refused as e:
-            status = 422 if e.code in ("bad_rights", "not_ready_to_train") else 409
+            status = 422 if e.code == "not_ready_to_train" else 409
             raise HTTPException(status, {"code": e.code, "message": e.message}) from None
         return clean(row)
 

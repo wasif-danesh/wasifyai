@@ -399,33 +399,6 @@ def ready_dataset(client, pictures: int = 8, word: str = "marlo") -> dict[str, A
         assert r.status_code == 201, r.text
     assert client.post(f"{BASE}/datasets/{ds['id']}/captions").status_code == 202
     wait(client, f"/datasets/{ds['id']}", lambda d: not d["writing"])
-    r = client.patch(
-        f"{BASE}/datasets/{ds['id']}", json={"trigger_word": word, "rights": "drawing"}
-    )
+    r = client.patch(f"{BASE}/datasets/{ds['id']}", json={"trigger_word": word})
     assert r.status_code == 200, r.text
     return client.get(f"{BASE}/datasets/{ds['id']}").json()
-
-
-class Safeguards:
-    """The safeguards switched on, with the fake vision model as the moderator and the day's usage
-    as the database would count it."""
-
-    def __init__(self, app_state, vision: Vision, quota: dict[str, int] | None = None):
-        self.used: dict[str, float] = {}
-
-        class On:
-            async def enabled(self) -> bool:
-                return True
-
-        app_state.safeguards = On()
-        app_state.caps = {
-            "wasifyai-training": SimpleNamespace(
-                text=vision, db=object(), config=SimpleNamespace(quotas=quota or {})
-            )
-        }
-
-    def counted(self, monkeypatch) -> None:
-        async def used(db, tenant, product, user, kind, since):
-            return self.used.get(kind, 0)
-
-        monkeypatch.setattr("wasifyai_platform_sdk.route_guard.sum_usage", used)

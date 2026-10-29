@@ -34,7 +34,7 @@ def model(**over):
         "default_voice": "af_heart",
     }  # fmt: skip
     raw.update(over)
-    return parse_voice_model("kokoro-82m", "Kokoro 82M", "Apache-2.0", raw)
+    return parse_voice_model("kokoro-82m", "Kokoro 82M", raw)
 
 
 def wav(seconds: float, rate: int = 24000) -> bytes:

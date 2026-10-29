@@ -226,7 +226,7 @@ def test_models_by_task_with_their_state(tmp_path, monkeypatch):
     assert speak["kokoro-82m"]["state"] == "ready" and speak["kokoro-82m"]["bytes_missing"] == 0
     assert speak["voxcpm2"]["state"] == "can_install" and speak["voxcpm2"]["bytes_missing"] > 2e9
     assert [m["id"] for m in eng.models("transcribe")] == ["parakeet-tdt-0.6b-v3"]
-    assert speak["kokoro-82m"]["commercial_use"] == "yes"
+    assert "commercial_use" not in speak["kokoro-82m"]
     eng2, _ = make_engine(tmp_path, monkeypatch, present={"kokoro-82m-q8_0.gguf"}, install=False)
     assert {m["state"] for m in eng2.models("speak")} == {"needs_runtime", "can_install"}
 
@@ -520,7 +520,7 @@ async def test_music_can_come_back_as_raw_audio_and_failures_are_friendly(engine
     assert e.value.code == "wrong_task"
 
 
-def test_the_music_models_are_listed_with_their_licence(tmp_path, monkeypatch):
+def test_the_music_models_are_listed(tmp_path, monkeypatch):
     eng, _ = make_engine(tmp_path, monkeypatch, present={"ace-step-1.5-turbo-q8_0.gguf"})
     got = {m["id"]: m for m in eng.models("music")}
     assert set(got) == {
@@ -532,7 +532,6 @@ def test_the_music_models_are_listed_with_their_licence(tmp_path, monkeypatch):
     assert got["ace-step-1.5-turbo"]["state"] == "ready" and got["ace-step-1.5-turbo"][
         "recommended"
     ] == ["music"]
-    assert got["stable-audio-3-small-music"]["commercial_use"] == "conditional"
     assert got["stable-audio-3-small-music"]["recommended"] == []
     assert got["stable-audio-3-small-sfx"]["state"] == "can_install"
 

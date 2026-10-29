@@ -22,7 +22,7 @@ def test_the_choices_name_the_recommendation_and_say_why_a_method_cannot_be_used
     assert got["family"] == "image"
     assert got["default_base"] == trainer.BASE and got["default_method"] == "lora"
     first = got["bases"][0]
-    assert first["recommended"] and first["can_teach"] and first["licence"] == "Apache-2.0"
+    assert first["recommended"] and first["can_teach"] and "licence" not in first
     by_id = {m["id"]: m for m in first["methods"]}
     assert by_id["lora"]["can"] and by_id["lora"]["technical"] == "LoRA"
     # QLoRA and full fine-tuning are listed, with the reason, not hidden
@@ -32,7 +32,7 @@ def test_the_choices_name_the_recommendation_and_say_why_a_method_cannot_be_used
 
 def test_an_installed_model_with_no_descriptor_is_listed_as_not_teachable_yet():
     found = [
-        {"kind": "diffusion", "name": "Some other model", "licence": "MIT"},
+        {"kind": "diffusion", "name": "Some other model"},
         {"kind": "language", "name": "A chat model"},  # not a picture model: not listed
     ]
     rows = bases.choices("character", {"verdict": "fits"}, True, found)["bases"]

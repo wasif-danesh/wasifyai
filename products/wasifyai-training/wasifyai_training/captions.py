@@ -11,7 +11,7 @@ import re
 
 from wasifyai_platform_sdk import Capabilities, Image, RunError
 
-from wasifyai_training import guardrail
+from wasifyai_training import vision
 
 MAX_WORDS = 60
 KIND_PROMPT = {
@@ -46,9 +46,9 @@ def with_word(caption: str, word: str) -> str:
 
 async def describe(caps: Capabilities, png: bytes, kind: str, word: str) -> str:
     """The caption of one picture, from the chosen vision model. Raises `RunError` with words."""
-    small = await asyncio.to_thread(guardrail.review_copy, png)
-    system = guardrail.prompt(KIND_PROMPT.get(kind, "caption_object"))
-    user = [guardrail.prompt("caption_request"), Image.from_bytes(small, "image/jpeg")]
+    small = await asyncio.to_thread(vision.review_copy, png)
+    system = vision.prompt(KIND_PROMPT.get(kind, "caption_object"))
+    user = [vision.prompt("caption_request"), Image.from_bytes(small, "image/jpeg")]
     try:
         raw = await caps.text.complete("describe_image", system, user)
     except RunError:

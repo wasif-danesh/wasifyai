@@ -75,7 +75,6 @@ class ProductConfig(BaseModel):
 
     id: str
     capabilities: dict[str, CapabilityBinding] = Field(default_factory=dict)
-    quotas: dict[str, int] = Field(default_factory=dict)
     # Kinds of file a user may upload to this product: `uploads: { image: { max_bytes: ... } }`.
     uploads: dict[Literal["image", "audio"], UploadRule] = Field(default_factory=dict)
     # Prompts the user can have rewritten, by kind (ADR-0038). Absent: no Enhance button.

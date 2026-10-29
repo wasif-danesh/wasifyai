@@ -3,7 +3,7 @@ pictures (a long action: `job.status` and `job.cancel` follow and stop it), and 
 as a kind of creation (list, look at, rename, delete, save a copy).
 
 A set of pictures is made on the screen (the pictures are the person's files, the description of
-each is written by the app, and the person says whose they are), so an agent starts a run on a set
+each is written by the app), so an agent starts a run on a set
 that already exists and is ready."""
 
 import asyncio
@@ -54,20 +54,19 @@ class StartIn(BaseModel):
     dataset_id: str | None = Field(
         default=None, min_length=32, max_length=32,
         description="The set of pictures to teach from: made on the Train screen, with its "
-        "descriptions written, its magic word chosen and its statement of rights given.",
+        "descriptions written and its magic word chosen.",
     )  # fmt: skip
     set_id: str | None = Field(
         default=None, min_length=32, max_length=32,
         description="Or the set of examples to teach a writing model from: made on the Train "
         "screen under 'Teach it from examples', with at least 10 questions and "
-        "answers and a statement of whose they are. Give this or dataset_id, not both.",
+        "answers. Give this or dataset_id, not both.",
     )  # fmt: skip
     decision_set_id: str | None = Field(
         default=None, min_length=32, max_length=32,
         description="Or the set of texts and answers to teach a decision model from: made on the "
         "Train screen under 'Teach it to decide', with one question, at least 20 texts with their "
-        "answers and a statement of whose they are. Give one of dataset_id, set_id or "
-        "decision_set_id.",
+        "answers. Give one of dataset_id, set_id or decision_set_id.",
     )  # fmt: skip
     base: str | None = Field(
         default=None,
@@ -392,10 +391,10 @@ def actions() -> list[Action]:
             summary="Teach the image model a character, style or object from a set of pictures.",
             description=(
                 "Teach the image model something of the person's own from a set of their pictures: "
-                "a character, a pet, a person (with their agreement), a style or an object. The "
+                "a character, a pet, a person, a style or an object. The "
                 "set is made on the Train screen: the pictures are added there, the app writes a "
-                "description of each, the person chooses a magic word and says whose the pictures "
-                "are. This starts the run on a set that is ready and waits for it. It takes about "
+                "description of each, the person chooses a magic word. This starts the run on a "
+                "set that is ready and waits for it. It takes about "
                 "25 minutes on a Mac and pauses chat and image making, so it is made one at a "
                 "time. Then writing the magic word in a prompt draws the result. Or, with "
                 "set_id, it teaches a small language model to answer the way the person's own "

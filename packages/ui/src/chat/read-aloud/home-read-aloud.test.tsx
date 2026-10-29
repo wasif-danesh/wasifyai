@@ -37,13 +37,12 @@ const kokoro = (over: Partial<VoiceModelInfo> = {}) =>
   ({
     id: "kokoro-82m",
     title: "Kokoro 82M",
-    licence: "Apache-2.0",
     tasks: ["speak"],
     recommended: ["speak"],
     languages: ["en-US", "en-GB"],
-    licence_evidence: "https://huggingface.co/hexgrad/Kokoro-82M",
     state: "ready",
     bytes_missing: 0,
+    source: "https://huggingface.co/hexgrad/Kokoro-82M",
     ...over,
   }) as VoiceModelInfo;
 const runtime = (installed: boolean): AudioRuntime => ({
@@ -157,7 +156,7 @@ describe("the home screen", () => {
     expect(screen.queryByRole("button", { name: /read this reply/i })).toBeNull();
   });
 
-  it("offers the missing voice with its size and licence, fetches nothing before the click, then sets up and reads", async () => {
+  it("offers the missing voice with its size, fetches nothing before the click, then sets up and reads", async () => {
     let installed = false;
     let have = false;
     const voice = voiceThat(
@@ -178,7 +177,7 @@ describe("the home screen", () => {
     await user.click(await screen.findByRole("button", { name: "Read this reply aloud" }));
     const card = await screen.findByRole("region", { name: "Set up read aloud" });
     expect(card).toHaveTextContent("Kokoro 82M");
-    expect(card).toHaveTextContent("Apache-2.0");
+    expect(card).not.toHaveTextContent("Apache");
     expect(card).toHaveTextContent("huggingface.co");
     expect(card).toHaveTextContent("230 MB"); // the voice and the 40 MB runtime
     expect(card).toHaveTextContent("English");

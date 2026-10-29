@@ -40,7 +40,7 @@ def archive(server: str | None = SERVER_OK, extra: dict[str, bytes] | None = Non
 
 def manifest_for(body: bytes, sha: str | None = None) -> Manifest:
     pin = Archive(URL, len(body), sha or hashlib.sha256(body).hexdigest(), "tar.gz", strip=2)
-    pins = Pins("llamacpp", "Language engine (llama.cpp)", "b1", "MIT", "", 1000, pin,
+    pins = Pins("llamacpp", "Language engine (llama.cpp)", "b1", "", 1000, pin,
                 {"backend": "metal"})  # fmt: skip
     return Manifest("darwin-arm64", "3.12.15", {"llamacpp": pins})
 

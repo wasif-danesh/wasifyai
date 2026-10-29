@@ -34,9 +34,6 @@ langfuse:
 jobs:
   maxPerUser: 1         # ADR-0088: one job in the line per person across everything; admins are never limited; 0 = no limit
 
-safeguards:
-  forceOn: false        # true in production (ADR-0047): moderation and quotas always apply, the admin cannot turn them off
-
 auth:
   mode: jwt             # jwt = real sign-in; stub = every request is the dev user (local clusters only)
   adminEmails: ""       # comma-separated; only a verified email becomes admin

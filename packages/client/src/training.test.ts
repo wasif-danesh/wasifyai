@@ -28,7 +28,7 @@ describe("the training client", () => {
     const { transport, calls } = fake(() => json({ id: "d1" }));
     const api = createTrainingApi(transport);
     await api.createDataset("style", "Ink");
-    await api.updateDataset("d1", { trigger_word: "zorbak", rights: "mine" });
+    await api.updateDataset("d1", { trigger_word: "zorbak" });
     await api.dataset("d1");
     await api.removeDataset("d1");
     expect(calls.map((c) => [c.init?.method ?? "GET", c.path])).toEqual([
@@ -40,7 +40,6 @@ describe("the training client", () => {
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ kind: "style", name: "Ink" });
     expect(JSON.parse(String(calls[1]?.init?.body))).toEqual({
       trigger_word: "zorbak",
-      rights: "mine",
     });
   });
 

@@ -121,9 +121,8 @@ in `packages/ui` and talk to the engine through `packages/client`, so the web ap
    **Redis**, a **media worker** drives ComfyUI, and the graph resumes when the
    job finishes.
 6. Graph state is checkpointed in **Postgres**, so a run can pause for user input and resume.
-7. A set of **safeguards** (content moderation and per-user quotas) is one system-wide switch in the admin area:
-   off by default for development, forced on in production
-   ([ADR-0047](docs/decisions/0047-safeguards-switch.md)).
+7. Nothing a person makes is moderated, marked or limited per day
+   ([ADR-0094](docs/decisions/0094-no-safeguards-marks-or-licence-data-in-v1.md)).
 
 ## Products
 
@@ -327,7 +326,7 @@ The default `KIND_MODE=full` runs **every service as a pod, nothing native**: Ol
 Podman VM of about 24 GB of memory and 100 GB of disk (`podman machine set --memory 32768 --disk-size 160`) and
 downloads about 20 GB of models on the first start. There is no GPU in the cluster, so GPU media (images,
 video) are placeholders, apart from one model-free ComfyUI graph the smoke test runs for real. `KIND_MODE=light`
-is what CI runs: no models. `KIND_SAFEGUARDS=1` turns the production safeguards on. Home lab setup with k3s and
+is what CI runs: no models. Home lab setup with k3s and
 Argo CD: [runbook](docs/runbooks/homelab-k3s.md).
 
 ### Where everything is
@@ -338,7 +337,7 @@ Argo CD: [runbook](docs/runbooks/homelab-k3s.md).
 | Service | What it is | Compose (`make dev`) | kind (`make kind-up`) |
 |---|---|---|---|
 | Web app | the six products, My creations, admin | `http://localhost:3000` | `http://localhost:3000` |
-| Admin area | users, models, media backends, safeguards, audit | `http://localhost:3000/admin` | `http://localhost:3000/admin` |
+| Admin area | users, models, media backends, audit | `http://localhost:3000/admin` | `http://localhost:3000/admin` |
 | API docs | Swagger UI for the API | `http://localhost:8000/docs` | `kubectl -n wasifyai port-forward svc/wasifyai-api 8000:8000`, then `http://localhost:8000/docs` |
 | LiteLLM | the model gateway | `http://localhost:4000` | `kubectl -n wasifyai port-forward svc/wasifyai-litellm 4000:4000`, then `http://localhost:4000` |
 | Object storage | S3 API (SeaweedFS) | `http://localhost:8333` | `kubectl -n wasifyai port-forward svc/wasifyai-storage 8333:8333`, then `http://localhost:8333` |
@@ -409,7 +408,6 @@ Without a valid token every route except `/health` answers `401`. Responses for 
 | `DELETE /products/{id}/uploads/images/{upload_id}` | Take back an uploaded picture ([ADR-0039](docs/decisions/0039-picture-input.md)) |
 | `GET /products/wasifyai-video/videos`, `GET/DELETE /products/wasifyai-video/videos/{id}`, `.../download` | The signed-in user's clips, including ones still being made ([ADR-0037](docs/decisions/0037-video-product.md)) |
 | `GET /products/wasifyai-image/images`, `GET/DELETE /products/wasifyai-image/images/{id}`, `.../download` | The signed-in user's images ([ADR-0036](docs/decisions/0036-image-product.md)) |
-| `GET/PUT /admin/safeguards` | Admin only: the system-wide safeguards switch ([ADR-0047](docs/decisions/0047-safeguards-switch.md)) |
 
 Try it without the browser, through the Next.js BFF:
 
@@ -564,7 +562,7 @@ WASIFYAI_SMOKE=1 cargo run                         # the self-test: make an imag
 |---|---|---|
 | Dev | macOS, Linux or Windows (WSL2), Podman | Day-to-day development |
 | Staging | Home lab k3s, 24 GB NVIDIA GPU | Integration and test runs |
-| GCP test | Managed Kubernetes on GCP, built with OpenTofu, safeguards on, shut down after the test | Prove the deployment; not a launch |
+| GCP test | Managed Kubernetes on GCP, built with OpenTofu, shut down after the test | Prove the deployment; not a launch |
 | Prod | Managed Kubernetes, GCP first (AWS and Azure kept deployable) | Production, later |
 
 The same container images run everywhere. Only infrastructure and configuration differ.
@@ -624,7 +622,7 @@ documents, a live check of DuckDuckGo's reliability, and checks in a signed macO
 | 1 | End to end on local kind, nothing native (all six products) | Done |
 | 2 | Monitoring: metrics, dashboards, alerts to Telegram, an outside heartbeat | Done |
 | 3 | Staging on the 24 GB NVIDIA box, built with OpenTofu | Next |
-| 4 | GCP test with the safeguards on, then shut down | Planned |
+| 4 | GCP test, then shut down | Planned |
 
 After v1: real GPU media, long
 transcripts in search, SEO, analytics and billing (proposed ADRs 0026 to 0029).

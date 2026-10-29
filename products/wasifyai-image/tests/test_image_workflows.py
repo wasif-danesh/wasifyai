@@ -25,10 +25,7 @@ def test_the_product_config_loads_and_binds_every_mode():
     assert cfg.capabilities["image.edit"].workflow == "flux2-klein-4b-edit"
     assert cfg.capabilities["image.reference"].workflow == "flux2-klein-4b-reference"
     assert cfg.capabilities["image.inpaint"].workflow == "flux2-klein-4b-inpaint"
-    assert cfg.capabilities["text.moderate"].model == "moderator"
-    picture = cfg.capabilities["text.moderate_image"]
-    assert picture.model == "multimodal" and picture.inputs == ["text", "image"]
-    assert cfg.quotas == {"images_per_user_per_day": 20}
+    assert "text.moderate" not in cfg.capabilities and "text.moderate_image" not in cfg.capabilities
     assert cfg.uploads["image"].max_bytes == 10 * 1024 * 1024
 
 

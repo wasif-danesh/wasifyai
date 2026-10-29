@@ -16,7 +16,6 @@ from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
-from wasifyai_platform_sdk import RunContext, start_of_day_utc, sum_usage
 from wasifyai_platform_sdk.sqlite import (
     Migration,
     from_iso,
@@ -537,35 +536,6 @@ class InMemoryVideoStore:
             for v in self.videos
             if (v.tenant_id, v.user_id, v.status) == (tenant_id, user_id, "working")
         )
-
-
-class Quota(Protocol):
-    async def used_today(self, ctx: RunContext) -> int: ...
-
-
-class UsageQuota:
-    """Clips made today (UTC), counted from the `video.created` usage events."""
-
-    def __init__(self, engine: AsyncEngine):
-        self._engine = engine
-
-    async def used_today(self, ctx: RunContext) -> int:
-        return int(
-            await sum_usage(
-                self._engine, ctx.tenant_id, ctx.product_id, ctx.user_id, VIDEO_CREATED,
-                start_of_day_utc(),
-            )
-        )  # fmt: skip
-
-
-class FixedQuota:
-    """For tests: pretend the user already made `used` clips today."""
-
-    def __init__(self, used: int = 0) -> None:
-        self.used = used
-
-    async def used_today(self, ctx: RunContext) -> int:
-        return self.used
 
 
 class PosterError(Exception):

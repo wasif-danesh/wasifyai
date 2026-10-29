@@ -22,7 +22,7 @@ deciding about a person's job, credit or safety.
    one and say what it means) or a score (say what the lowest and the highest mean).
 3. Add examples: a text and the right answer for each. Type them, or paste two columns from a spreadsheet. At least
    20 are needed; 60 or more is a good start, and at least 5 of each answer.
-4. Read the check and say whose the texts are. Choose Teach it. It takes about a minute or two on a Mac.
+4. Read the check. Choose Teach it. It takes about a minute or two on a Mac.
 5. Read the report: how often it was right on texts it had not seen, beside a plain word counter, where it went
    wrong and whether its confidence can be trusted.
 6. Choose **Try it** to paste a text and see its answer and how sure it is, beside the model it started from. Choose

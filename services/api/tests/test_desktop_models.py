@@ -23,8 +23,8 @@ from wasifyai_api.desktop_models import (
     parse_catalogue,
 )
 from wasifyai_api.identity import get_identity
-from wasifyai_api.safeguards import InMemorySettingsStore
 from wasifyai_api.services import ApiServices
+from wasifyai_api.settings_store import InMemorySettingsStore
 from wasifyai_platform_sdk import Identity
 
 PRODUCTS = Path(__file__).resolve().parents[3] / "products"
@@ -107,9 +107,7 @@ def entry(origin: Origin) -> ModelEntry:
         f("text_encoders", "clip.safetensors", "/clip.bin"),
         f("vae", "vae.safetensors", "/vae.bin"),
     )
-    return ModelEntry(
-        "demo", "wasifyai-image", "Demo model", "Apache-2.0", "https://example.test", "", 24, files
-    )
+    return ModelEntry("demo", "wasifyai-image", "Demo model", "https://example.test", "", 24, files)
 
 
 async def finished(d, wait_s=10):
@@ -126,7 +124,7 @@ def test_the_shipped_catalogue_is_pinned_and_safe():
     entries = load_catalogue(PRODUCTS, ["wasifyai-image", "hello"])
     assert [e.id for e in entries] == ["flux2-klein-4b"]
     e = entries[0]
-    assert e.licence == "Apache-2.0" and e.approx_ram_gb == 24
+    assert e.approx_ram_gb == 24
     assert {f.name for f in e.files} == {
         "flux-2-klein-4b.safetensors", "qwen_3_4b.safetensors", "flux2-vae.safetensors"
     }  # fmt: skip

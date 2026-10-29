@@ -1,6 +1,6 @@
 """Desktop-profile stores that live in the API package because their interfaces do (users, the
-safeguards setting and the creation index). Same rules as the Postgres stores (ADR-0030,
-ADR-0041, ADR-0047) on the SQLite file the desktop profile uses (ADR-0056)."""
+settings and the creation index). Same rules as the Postgres stores (ADR-0030,
+ADR-0041) on the SQLite file the desktop profile uses (ADR-0056)."""
 
 import asyncio
 import json

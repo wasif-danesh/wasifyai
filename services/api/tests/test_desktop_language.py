@@ -23,8 +23,8 @@ from wasifyai_api.desktop_language import (
 )
 from wasifyai_api.identity import get_identity
 from wasifyai_api.llama_server import LlamaServer
-from wasifyai_api.safeguards import InMemorySettingsStore
 from wasifyai_api.services import ApiServices
+from wasifyai_api.settings_store import InMemorySettingsStore
 from wasifyai_platform_sdk import (
     Identity,
     InMemoryUsageRecorder,
@@ -339,7 +339,7 @@ def found(path: Path, **kw: Any) -> Found:
     base: dict[str, Any] = {
         "id": "f1", "name": "Demo 3B", "kind": "language", "family": "llama", "format": "gguf",
         "quant": "Q4_K_M", "size": path.stat().st_size, "path": str(path), "tool": "ollama",
-        "tool_title": "Ollama", "licence": "", "state": "can_use", "use": "chat", "layers": 0,
+        "tool_title": "Ollama", "state": "can_use", "use": "chat", "layers": 0,
         "kv_heads": 0, "head_dim": 0, "context": 0,
     }  # fmt: skip
     base.update(kw)

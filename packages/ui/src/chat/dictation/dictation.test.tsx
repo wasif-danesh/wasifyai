@@ -308,7 +308,6 @@ describe("the chat", () => {
           : {
               setup: {
                 title: "Parakeet TDT 0.6B v3",
-                licence: "CC-BY-4.0",
                 from: "huggingface.co",
                 bytes: 955_000_000,
                 run: async (onProgress) => {
@@ -332,7 +331,7 @@ describe("the chat", () => {
     await user.click(screen.getByRole("button", { name: /^Mic/ }));
     const card = await screen.findByRole("region", { name: "Set up dictation" });
     expect(card).toHaveTextContent("Parakeet TDT 0.6B v3");
-    expect(card).toHaveTextContent("CC-BY-4.0");
+    expect(card).not.toHaveTextContent("CC-BY");
     expect(card).toHaveTextContent("huggingface.co");
     expect(card).toHaveTextContent("955 MB");
     expect(screen.queryByText(/Listening/)).toBeNull(); // nothing was recorded
@@ -346,7 +345,6 @@ describe("the chat", () => {
     const { control } = fakeMic({
       setup: {
         title: "Parakeet",
-        licence: "CC-BY-4.0",
         from: "",
         bytes: 1e9,
         run: async () => Promise.reject(new Error("There is not enough disk space.")),

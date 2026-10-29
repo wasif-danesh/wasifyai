@@ -41,7 +41,7 @@ def _png_size(path: Path | str) -> int:
 def catalogue() -> dict[str, VoiceModel]:
     raw = yaml.safe_load((PRODUCT / "models.yaml").read_text())
     return {
-        m["id"]: parse_voice_model(m["id"], m["title"], m["licence"], m["voice"])
+        m["id"]: parse_voice_model(m["id"], m["title"], m["voice"])
         for m in raw["models"]
         if m.get("voice")
     }

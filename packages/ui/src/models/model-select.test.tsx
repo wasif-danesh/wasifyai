@@ -18,9 +18,6 @@ const choice = (over: Partial<ModelChoice> = {}): ModelChoice => ({
   engineName: null,
   fit: "fits",
   fitReason: null,
-  licence: "CC-BY-4.0",
-  commercial: "yes",
-  licenceUrl: "https://example.test/licence",
   source: "app",
   ...over,
 });
@@ -165,7 +162,7 @@ describe("choosing a model that is not on the computer", () => {
     expect(within(dialog).getByText("1.5 GB")).toBeInTheDocument();
     expect(within(dialog).getByText("16 GB")).toBeInTheDocument();
     expect(within(dialog).getByText(/18 GB, about \d+ minutes/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/Commercial use allowed/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/commercial|licence/i)).toBeNull();
     expect(api.get).not.toHaveBeenCalled(); // nothing yet
     await user.click(within(dialog).getByRole("button", { name: "Not now" }));
     // the question closes; the picker, a dialog of its own since stage U3, stays open

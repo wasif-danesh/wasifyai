@@ -167,7 +167,7 @@ def test_without_the_engine_the_routes_answer_503(api):
 
 
 def clone_form(c, name="My voice", data=None, filename="me.wav", **form):
-    form = {"name": name, "consent": "own", "reference_text": "the words I say", **form}
+    form = {"name": name, "reference_text": "the words I say", **form}
     return c.post(
         "voices/clone",
         files={"file": (filename, io.BytesIO(data or wav(5.0)), "audio/wav")},
@@ -209,7 +209,7 @@ def test_a_description_that_cannot_be_used_is_refused(api, body, code):
         assert r.json()["detail"]["code"] == code
 
 
-def test_a_clone_keeps_the_recording_for_playback_and_for_the_runtime_with_its_consent(api):
+def test_a_clone_keeps_the_recording_for_playback_and_for_the_runtime(api):
     c, _, state = api
     r = clone_form(c)
     assert r.status_code == 201
@@ -219,8 +219,7 @@ def test_a_clone_keeps_the_recording_for_playback_and_for_the_runtime_with_its_c
         and v["reference_seconds"] == 5.0
         and v["reference_url"].startswith("http")
     )
-    assert v["consent"]["basis"] == "own" and v["consent"]["statement"] == "This is my own voice."
-    assert v["consent"]["accepted_at"]
+    assert "consent" not in v
     path = store_for(state).reference_path(v["id"])
     assert path.is_file() and path.read_bytes()[:4] == b"RIFF"
     assert (
@@ -232,21 +231,6 @@ def test_a_clone_keeps_the_recording_for_playback_and_for_the_runtime_with_its_c
     assert c.patch(f"voices/{v['id']}", json={"description": "a man"}).status_code == 404
     assert c.delete(f"voices/{v['id']}").status_code == 204
     assert not path.exists()
-
-
-@pytest.mark.parametrize("consent", ["", "yes", "everyone"])
-def test_a_clone_is_not_saved_without_saying_whose_voice_it_is(api, consent):
-    c, _, state = api
-    r = clone_form(c, consent=consent)
-    assert r.status_code == 422 and r.json()["detail"]["code"] == "consent_required"
-    assert store_for(state).list_voices("t1", "u1") == []
-
-
-def test_permission_is_a_valid_basis_and_is_recorded_as_such(api):
-    c, *_ = api
-    v = clone_form(c, consent="permission").json()
-    assert v["consent"]["basis"] == "permission"
-    assert "permission" in v["consent"]["statement"]
 
 
 def test_a_recording_that_is_too_short_or_too_long_is_handled_in_words(api):
@@ -449,7 +433,7 @@ def seed_clip(state, clip_id="c1", script="Welcome everybody"):
     return store_for(state).add_clip(
         "t1", "u1", title="Greeting", model_id="musetalk-v15", picture_key="lipsync/pictures/p.png",
         video_key=f"lipsync/{clip_id}.mp4", voice={"kind": "speech", "id": "s"}, script=script,
-        seconds=2, fps=25, width=80, height=60, consent={"picture": "own", "voice": "generated"},
+        seconds=2, fps=25, width=80, height=60,
         load_s=0, elapsed_s=1, clip_id=clip_id,
     )  # fmt: skip
 
@@ -499,7 +483,7 @@ def test_clips_are_listed_downloaded_renamed_found_and_deleted(api):
     clip = listed[0]
     assert clip["video_url"].startswith("http://") and clip["picture_url"].startswith("http://")
     assert "video_key" not in clip and "user_id" not in clip
-    assert clip["consent"] == {"picture": "own", "voice": "generated"}
+    assert "consent" not in clip
     d = c.get("clips/c1/download")
     assert d.status_code == 200 and d.headers["content-type"] == "video/mp4"
     assert d.headers["content-disposition"].endswith('.mp4"')

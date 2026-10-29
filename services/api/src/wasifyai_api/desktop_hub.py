@@ -30,8 +30,8 @@ from wasifyai_platform_sdk import Identity, SecretStore, SecretsUnavailable
 from wasifyai_api.desktop_fit import Fit, Machine, assess_fit, need_of_image, need_of_language
 from wasifyai_api.desktop_models import DownloadError, ModelEntry, ModelFile
 from wasifyai_api.identity import get_identity
-from wasifyai_api.safeguards import SettingsStore
 from wasifyai_api.services import services_of
+from wasifyai_api.settings_store import SettingsStore
 
 log = logging.getLogger(__name__)
 
@@ -84,13 +84,6 @@ def capability_of(pipeline: str | None, tags: list[str], name: str = "") -> str:
     if pipe in ("text-to-video", "image-to-video", "video-to-video"):
         return "video"
     return "other"
-
-
-def license_of(tags: list[str], card: dict[str, Any] | None) -> str:
-    lic = (card or {}).get("license")
-    if isinstance(lic, str) and lic:
-        return lic
-    return next((t.split(":", 1)[1] for t in tags if t.startswith("license:")), "")
 
 
 def quant_of(name: str) -> str:
@@ -359,7 +352,6 @@ class HubService:
                     "downloads": int(m.get("downloads") or 0), "likes": int(m.get("likes") or 0),
                     "updated": m.get("lastModified"), "capability": cap,
                     "pipeline": m.get("pipeline_tag"), "gated": bool(m.get("gated")),
-                    "license": license_of(tags, None),
                     "gguf": "gguf" in tags or m.get("library_name") == "gguf",
                     # only the app's engine can run what is a GGUF language or embedding model
                     "runnable": cap in ("language", "embedding") and ("gguf" in tags),
@@ -381,7 +373,7 @@ class HubService:
         return {
             "id": repo, "commit": data.get("sha"), "stale": stale,
             "capability": cap, "pipeline": data.get("pipeline_tag"),
-            "license": license_of(tags, data.get("cardData")), "gated": bool(data.get("gated")),
+            "gated": bool(data.get("gated")),
             "downloads": int(data.get("downloads") or 0), "likes": int(data.get("likes") or 0),
             "updated": data.get("lastModified"), "tags": [t for t in tags if ":" not in t][:12],
             "architecture": gguf.get("architecture"), "context_length": gguf.get("context_length"),
@@ -445,7 +437,6 @@ class HubService:
             id=f"hub:{repo}",
             product_id="hub",
             title=repo,
-            licence=detail["license"] or "unknown",
             source=f"huggingface.co/{repo}",
             note="",
             approx_ram_gb=0,

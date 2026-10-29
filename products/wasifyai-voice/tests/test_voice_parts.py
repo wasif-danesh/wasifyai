@@ -246,10 +246,9 @@ def test_a_version_four_file_gains_clips_and_pictures(tmp_path):
     c = s.add_clip(
         "t", "u", title="Hello", model_id="musetalk-v15", picture_key=p["key"],
         video_key="lipsync/c1.mp4", voice={"kind": "speech", "id": "s1"}, script="Hi there",
-        seconds=2.0, fps=25, width=640, height=480,
-        consent={"picture": "own", "voice": "generated"}, load_s=0, elapsed_s=3, clip_id="c1",
+        seconds=2.0, fps=25, width=640, height=480, load_s=0, elapsed_s=3, clip_id="c1",
     )  # fmt: skip
-    assert c["consent"] == {"picture": "own", "voice": "generated"} and c["favourite"] is False
+    assert "consent" not in c and c["favourite"] is False
     assert s.update_clip("t", "u", "c1", favourite=True, title="Hi")["title"] == "Hi"
     with pytest.raises(NotFound):
         s.get_clip("t", "other", "c1")
@@ -264,7 +263,7 @@ async def test_the_index_source_also_pages_clips(tmp_path):
     s = VoiceStore.in_folder(tmp_path / "voice")
     s.add_clip(
         "t", "u", title="Greeting", model_id="m", picture_key="k", video_key="v", voice={},
-        script="Welcome to the show", seconds=2, fps=25, width=1, height=1, consent={},
+        script="Welcome to the show", seconds=2, fps=25, width=1, height=1,
         load_s=0, elapsed_s=0, clip_id="c1",
     )  # fmt: skip
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'wasifyai.db'}")

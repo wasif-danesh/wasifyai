@@ -2,16 +2,16 @@
 
 A product mounts `build_enhance_router(...)` from its own routes. The platform stays generic: the
 product says which kinds it has (product.yaml `enhance:`), loads the enhancer instructions from its
-own prompts, and supplies the guardrail that must pass on the user's text (and picture) first.
+own prompts.
 
 The user's text is data inside a fixed prompt, never instructions, and the result is only text for
-the prompt box: the run's own guardrail judges the final prompt again when it is submitted."""
+the prompt box."""
 
 import asyncio
 import io
 import logging
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -35,18 +35,6 @@ DESCRIBE_SYSTEM = (
     "plain sentences say what the picture shows: the subject, the setting, the colours and the "
     "light. No opinions, no guesses about who anyone is, and no names of real people."
 )
-
-
-class EnhanceRefused(Exception):
-    """The guardrail refused the user's text or picture; `message` is the fixed text to show."""
-
-    def __init__(self, message: str):
-        super().__init__(message)
-        self.message = message
-
-
-# (capabilities, kind, the user's text, their picture as stored or None); raises EnhanceRefused
-Guard = Callable[[Capabilities, str, str, bytes | None], Awaitable[None]]
 
 
 class EnhanceIn(BaseModel):
@@ -120,7 +108,6 @@ def build_enhance_router(
     deps: RouteDeps,
     product_id: str,
     load_prompt: Callable[[str], str],
-    guard: Guard,
     limiter_name: str = "enhance",
 ) -> APIRouter:
     router = APIRouter(tags=[product_id])
@@ -147,10 +134,7 @@ def build_enhance_router(
             picture = await _picture(deps, product_id, identity, body, rule.needs_picture)
             try:
                 async with asyncio.timeout(TIMEOUT_S):
-                    await guard(caps, body.kind, text, picture)
                     result = await _rewrite(caps, load_prompt(rule.prompt), text, picture)
-            except EnhanceRefused as exc:
-                raise HTTPException(422, exc.message) from None
             except RunError as exc:
                 raise HTTPException(503, exc.message) from None
             except TimeoutError:

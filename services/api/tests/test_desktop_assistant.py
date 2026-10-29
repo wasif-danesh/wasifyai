@@ -580,7 +580,7 @@ def test_the_picture_reader_is_offered_with_its_size_fetched_only_when_confirmed
 
     payload = b"GGUF" + b"\0" * 5000  # a stand-in for the 918 MB file
     entry = desktop_vision.ProjectorEntry(
-        id="demo", match=("demo-q4",), title="Demo picture reader", licence="Apache-2.0",
+        id="demo", match=("demo-q4",), title="Demo picture reader",
         source="huggingface.co", url="https://huggingface.co/x/y/resolve/main/mmproj-F16.gguf",
         name="mmproj-F16.gguf", size=len(payload), sha256=hashlib.sha256(payload).hexdigest(),
     )  # fmt: skip

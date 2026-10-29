@@ -43,7 +43,7 @@ export function defaultOf(models: VoiceModelInfo[], task: string, last: string |
   );
 }
 
-/** One model as a row: its state, what must be downloaded (the engine and the files), its fit and licence. */
+/** One model as a row: its state, what must be downloaded (the engine and the files) and its fit. */
 export function voiceRow(
   m: VoiceModelInfo,
   tasks: string[],
@@ -74,13 +74,7 @@ export function voiceRow(
         : fit === "too_big"
           ? "too_big"
           : "needs_download";
-  const tier =
-    COPY[m.id]?.tier ??
-    (m.commercial_use === "no" || m.commercial_use === "unreviewed"
-      ? "advanced"
-      : isRecommended
-        ? "recommended"
-        : "also");
+  const tier = COPY[m.id]?.tier ?? (isRecommended ? "recommended" : "also");
   return {
     id: m.id,
     title: m.title,
@@ -93,9 +87,6 @@ export function voiceRow(
     engineName,
     fit,
     fitReason: entry?.fit?.reason ?? null,
-    licence: m.licence,
-    commercial: m.commercial_use,
-    licenceUrl: m.licence_evidence || null,
     source: "app",
     from: hostOf(entry?.source),
     sizeBytes: entry && state === "ready" ? entry.bytes_total : 0,

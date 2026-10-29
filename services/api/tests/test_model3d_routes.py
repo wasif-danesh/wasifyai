@@ -22,7 +22,6 @@ def test_the_window_is_told_what_setting_up_3d_would_fetch(data_dir, monkeypatch
             "Cut-out model (BiRefNet)",
         ]
         assert plan["bytes"] == sum(p["bytes"] for p in plan["parts"]) or not plan["supported"]
-        assert any("Built with DINOv3" in p["licence"] for p in plan["parts"])
         assert state["progress"]["state"] == "idle"
         assert state["about"]["built_with"] == "Built with DINOv3"
 

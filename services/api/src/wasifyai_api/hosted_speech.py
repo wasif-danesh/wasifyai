@@ -36,11 +36,11 @@ TIMEOUT_S = 180.0
 
 
 def load_hosted_models(path: Path) -> list[VoiceModel]:
-    """The descriptors of `hosted-models.yaml`: a list of `{id, title, licence, voice: {...}}`."""
+    """The descriptors of `hosted-models.yaml`: a list of `{id, title, voice: {...}}`."""
     raw = yaml.safe_load(path.read_text()) or {}
     out = []
     for m in raw.get("models") or []:
-        model = parse_voice_model(m["id"], m["title"], m["licence"], m["voice"])
+        model = parse_voice_model(m["id"], m["title"], m["voice"])
         if model.engine != "remote":
             raise ValueError(f"{model.id}: a hosted model has `engine: remote`")
         out.append(model)

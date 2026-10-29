@@ -1,7 +1,7 @@
 """Models on the desktop (ADR-0059, docs/phase2-stage-a-plan.md, step A3): what can be used, what
 is on this computer, and getting a missing one.
 
-    load_catalogue()   the products' `models.yaml` files: id, licence, source, files (size, SHA-256)
+    load_catalogue()   the products' `models.yaml` files: id, source, files (size, SHA-256)
     ModelsService      where models live (the app's folder plus read-only extra folders), what is
                        present, the memory and disk checks, removal
     DownloadManager    one download at a time: resumable, checksum verified, atomic, cancellable
@@ -39,8 +39,8 @@ from wasifyai_api.desktop_fit import (
     read_machine,
 )
 from wasifyai_api.identity import get_identity
-from wasifyai_api.safeguards import SettingsStore
 from wasifyai_api.services import services_of
+from wasifyai_api.settings_store import SettingsStore
 
 log = logging.getLogger(__name__)
 
@@ -71,7 +71,6 @@ class ModelEntry:
     id: str
     product_id: str
     title: str
-    licence: str
     source: str
     note: str
     approx_ram_gb: int
@@ -102,10 +101,10 @@ def parse_catalogue(raw: dict[str, Any], product_id: str) -> list[ModelEntry]:
             files.append(ModelFile(f["folder"], f["name"], f["url"], int(f["size"]), sha))
         out.append(
             ModelEntry(
-                id=m["id"], product_id=product_id, title=m["title"], licence=m["licence"],
+                id=m["id"], product_id=product_id, title=m["title"],
                 source=m["source"], note=m.get("note", ""),
                 approx_ram_gb=int(m.get("approx_ram_gb", 0)), files=tuple(files),
-                voice=parse_voice_model(m["id"], m["title"], m["licence"], m["voice"])
+                voice=parse_voice_model(m["id"], m["title"], m["voice"])
                 if m.get("voice") else None,
             )
         )  # fmt: skip
@@ -435,7 +434,7 @@ class ModelsService:
             fit = assess_fit(need_declared(e.approx_ram_gb), machine or read_machine())
         gate = fit.reason if fit and fit.verdict != "fits" else None
         return {
-            "id": e.id, "product_id": e.product_id, "title": e.title, "licence": e.licence,
+            "id": e.id, "product_id": e.product_id, "title": e.title,
             "source": e.source, "note": e.note, "approx_ram_gb": e.approx_ram_gb,
             "status": status,
             "files": files, "bytes_total": e.total_bytes,

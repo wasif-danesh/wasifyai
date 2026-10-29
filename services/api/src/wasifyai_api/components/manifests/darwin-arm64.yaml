@@ -7,7 +7,6 @@ components:
   llamacpp:
     title: Language engine (llama.cpp)
     version: b11655
-    licence: MIT
     source: github.com/ggml-org/llama.cpp
     min_free_bytes: 268435456
     backend: metal
@@ -20,7 +19,6 @@ components:
   comfyui:
     title: Image engine (ComfyUI)
     version: 0.40.0
-    licence: GPL-3.0
     source: github.com/comfyanonymous/ComfyUI
     min_free_bytes: 4294967296
     lock: comfyui/requirements-aarch64-apple-darwin.lock  # in the engine bundle (scripts/build-engine-bundle.sh)
@@ -79,12 +77,10 @@ parts:
         size: 2440967
         sha256: 66663b1f7af49798c5ae47a6dd2744fbc92e92bfe477f9fb889b839dd33607c8
         cli: trellis-cli
-        licence: MIT (pixal3d.cpp, trellis.cpp, ggml)
         source: github.com/raven38/pixal3d.cpp
       weights:
         title: Pixal3D single view (Q8_0) and its encoder
         folder: pixal3d-sv
-        licence: MIT, and the DINOv3 licence for the image encoder (dinov3.gguf)
         source: huggingface.co/raven38/pixal3d-sv-q8_0-v1
         files:
         - name: DINOV3_LICENSE.md
@@ -142,7 +138,6 @@ parts:
       matte:
         title: BiRefNet cut-out
         folder: matte
-        licence: MIT (BiRefNet; the GGUF conversion carries no label)
         source: huggingface.co/ilintar/trellis2-gguf
         files:
         - name: birefnet.gguf
@@ -165,24 +160,18 @@ parts:
         url: https://nodejs.org/dist/v22.23.1/node-v22.23.1-darwin-arm64.tar.gz
         size: 50067502
         sha256: ef28d8fab2c0e4314522d4bb1b7173270aa3937e93b92cb7de79c112ac1fa953
-        licence: MIT
       shell:
         version: 152.0.7977.30
         url: https://storage.googleapis.com/chrome-for-testing-public/152.0.7977.30/mac-arm64/chrome-headless-shell-mac-arm64.zip
         size: 97532843
         sha256: 1db16c16e72bedfa747ed01c207a3fe8ee7370c35f2094279eb8878c996e8c79
-        licence: Chromium (BSD-3-Clause and bundled third-party licences, see LICENSE.headless_shell in
-          the download)
       packages:
         lock: video_builder/package-lock.json
         lock_sha256: c437422ab7aa1f47fcb06d93dde685cac8fc11b22a671d6fa89e81a3280df8b6
         package: video_builder/package.json
         package_sha256: 1ef87d3e4652390bbe049af6a53aea469dad320a283a5bad6ce192614cd26dd2
         bytes: 170000000
-        note: '130 packages (two of them carry FFmpeg 4.4 and ffprobe 4.4.1 for darwin-arm64: a GPL build,
-          run only as separate programs); Apache-2.0, MIT, ISC, BSD, CC0, 0BSD, SIL OFL-1.1 (the two font
-          packages), the gsap Standard no charge licence, and one LGPL-3.0-or-later prebuilt library (libvips
-          inside sharp) that is used as shipped and not modified'
+        note: '130 packages (two of them carry FFmpeg 4.4 and ffprobe 4.4.1 for darwin-arm64, run only as separate programs)'
       platforms:
       - darwin-arm64
   trainer-pictures:
@@ -191,7 +180,6 @@ parts:
       tool:
         id: mflux
         version: 0.22.0
-        licence: MIT
         source: pypi.org
         packages_bytes: 1100000000
         python: '3.12'
@@ -200,7 +188,6 @@ parts:
         title: FLUX.2 klein base 4B
         repo: black-forest-labs/FLUX.2-klein-base-4B
         revision: a3b4f4849157f664bdbc776fd7453c2783562f4d
-        licence: Apache-2.0
         source: huggingface.co
         folder: flux2-klein-base-4b
         files:
@@ -269,7 +256,6 @@ parts:
       tool:
         id: mlx-lm
         version: 0.31.3
-        licence: MIT
         source: pypi.org
         packages_bytes: 64300000
         python: '3.12'
@@ -278,7 +264,6 @@ parts:
         title: Qwen3 0.6B (4-bit)
         repo: mlx-community/Qwen3-0.6B-4bit
         revision: 73e3e38d981303bc594367cd910ea6eb48349da8
-        licence: Apache-2.0
         source: huggingface.co
         folder: qwen3-0.6b-4bit
         files:
@@ -320,7 +305,6 @@ parts:
       file: Qwen3-0.6B-Q8_0.gguf
       size: 639446688
       sha256: 9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031
-      licence: Apache-2.0
       source: huggingface.co
       folder: qwen3-0.6b-q8
     more_bases:
@@ -330,7 +314,6 @@ parts:
         title: Qwen3 1.7B (4-bit)
         repo: mlx-community/Qwen3-1.7B-4bit
         revision: 3b1b1768f8f8cf8351c712464f906e86c2b8269e
-        licence: Apache-2.0
         source: huggingface.co
         folder: qwen3-1.7b-4bit
         files:
@@ -369,14 +352,12 @@ parts:
           file: Qwen3-1.7B-Q8_0.gguf
           size: 1834426016
           sha256: 061b54daade076b5d3362dac252678d17da8c68f07560be70818cace6590cb1a
-          licence: Apache-2.0
           source: huggingface.co
           folder: qwen3-1.7b-q8
       - id: qwen3-4b-4bit
         title: Qwen3 4B (4-bit)
         repo: mlx-community/Qwen3-4B-4bit
         revision: 4dcb3d101c2a062e5c1d4bb173588c54ea6c4d25
-        licence: Apache-2.0
         source: huggingface.co
         folder: qwen3-4b-4bit
         files:
@@ -415,7 +396,6 @@ parts:
           file: Qwen3-4B-Q4_K_M.gguf
           size: 2497280256
           sha256: 7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5
-          licence: Apache-2.0
           source: huggingface.co
           folder: qwen3-4b-q4km
   trainer-deciding:
@@ -424,7 +404,6 @@ parts:
       tool:
         id: laya
         version: 0.4.15
-        licence: Apache-2.0
         source: pypi.org
         packages_bytes: 167600000
         python: '3.12'
@@ -433,7 +412,6 @@ parts:
         title: Laya
         repo: convaiinnovations/laya
         revision: 7b928d828b7b0e022f929d9bd2e44165aa270148
-        licence: Apache-2.0
         source: huggingface.co
         folder: laya-english
         files:
@@ -457,7 +435,6 @@ parts:
         title: Laya (many languages)
         repo: convaiinnovations/laya
         revision: 7b928d828b7b0e022f929d9bd2e44165aa270148
-        licence: Apache-2.0
         source: huggingface.co
         folder: laya-multilingual
         subfolder: multilingual
@@ -485,7 +462,6 @@ parts:
       tool:
         id: diffusers
         version: 0.42.0
-        licence: Apache-2.0
         source: pypi.org
         packages_bytes: 181700000
         python: '3.12'
@@ -494,7 +470,6 @@ parts:
         title: The video model's tokenizer and settings
         repo: Lightricks/LTX-Video
         revision: 8984fa25007f376c1a299016d0957a37a2f797bb
-        licence: OpenRAIL-M
         source: huggingface.co
         folder: ltx-video-2b-small
         files:

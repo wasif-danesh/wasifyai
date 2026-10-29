@@ -104,7 +104,6 @@ def test_a_picture_becomes_a_checked_cutout_and_then_a_real_glb(rig):
             "title": "Real object",
             "detail": "light",
             "seed": 5,
-            "rights": True,
         },
     )
     assert started.status_code == 202, started.text
@@ -141,9 +140,7 @@ def test_a_picture_becomes_a_checked_cutout_and_then_a_real_glb(rig):
 def test_a_run_that_is_cancelled_stops_the_engine_and_frees_the_memory(rig):
     items = rig.get(f"{BASE}/models").json()["items"]
     source = next(m for m in items if m["status"] == "done")["input_id"]
-    started = rig.post(
-        f"{BASE}/models", json={"input_id": source, "detail": "light", "seed": 9, "rights": True}
-    )
+    started = rig.post(f"{BASE}/models", json={"input_id": source, "detail": "light", "seed": 9})
     assert started.status_code == 202, started.text
     mid = started.json()["id"]
     follow(rig, f"/models/{mid}", lambda r: r["progress"] > 0, 120)

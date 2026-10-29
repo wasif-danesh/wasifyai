@@ -1,6 +1,6 @@
 # pyright: reportTypedDictNotRequiredAccess=false
 # (Graph state is filled in node by node; a node only reads keys that earlier nodes have set.)
-"""The image graph: guardrail, one job, finish.
+"""The image graph: a check of the request, one job, finish.
 
     check_request -> start_job -> await_job -> finalise
         |
@@ -8,9 +8,9 @@
       refuse
 
 Two modes: `text` (a description and a size) and `image` (an uploaded picture and an instruction).
-Graph code names capabilities (`text.moderate`, `text.moderate_image`, `image.generate`,
-`image.edit`), never models or workflow node IDs. The job is two nodes: one enqueues, one waits,
-because a paused node re-runs from its start on resume.
+Graph code names capabilities (`image.generate`, `image.edit`), never models or workflow node IDs.
+The job is two nodes: one enqueues, one waits, because a paused node re-runs from its start on
+resume.
 
 The uploaded picture is deleted as soon as it is no longer needed: when the request is refused,
 when the job fails, and when the image is saved.
@@ -31,7 +31,6 @@ from wasifyai_platform_sdk import (
     Capabilities,
     InMemoryUploadStore,
     JobFailed,
-    RunError,
     UploadRecord,
     UploadStore,
     await_job,
@@ -39,14 +38,11 @@ from wasifyai_platform_sdk import (
     upload_store,
 )
 
-from wasifyai_image import guardrail
 from wasifyai_image.images import (
     IMAGE_CREATED,
     ImageRecord,
     ImageStore,
     InMemoryImageStore,
-    Quota,
-    UsageQuota,
     image_store,
     thumbnail_of,
 )
@@ -158,8 +154,7 @@ def build_image(caps: Capabilities, checkpointer: Any):
     """Registry entry point: wires the production stores from the capabilities."""
     images: ImageStore = image_store(caps.db) if caps.db is not None else InMemoryImageStore()
     uploads: UploadStore = upload_store(caps.db) if caps.db is not None else InMemoryUploadStore()
-    quota: Quota | None = UsageQuota(caps.db) if caps.db is not None else None
-    return build_image_graph(caps, checkpointer, images, uploads, quota)
+    return build_image_graph(caps, checkpointer, images, uploads)
 
 
 def build_image_graph(
@@ -167,18 +162,7 @@ def build_image_graph(
     checkpointer: Any,
     images: ImageStore,
     uploads: UploadStore,
-    quota: Quota | None,
 ):
-    limit = (caps.config.quotas.get("images_per_user_per_day") if caps.config else None) or None
-
-    async def over_quota() -> bool:
-        if not await caps.safeguards_on():  # ADR-0047: quotas apply only with safeguards
-            return False
-        return bool(limit and quota and await quota.used_today(require_context()) >= limit)
-
-    def quota_message() -> str:
-        return f"You've reached today's limit of {limit} images. Please try again tomorrow."
-
     def refuse_with(code: str, message: str) -> ImageState:
         return {"status": "refused", "refusal": {"code": code, "message": message}}
 
@@ -228,7 +212,7 @@ def build_image_graph(
 
         return await asyncio.to_thread(look)
 
-    # ---- guardrail ----------------------------------------------------------------------
+    # ---- the request ----------------------------------------------------------------------
 
     async def source_of(state: ImageState, mode: str) -> str:
         """The picture of the person's library this one starts from: kept only when it is theirs
@@ -317,23 +301,6 @@ def build_image_graph(
             "status": "working",
         }
 
-        if await over_quota():  # before any LLM or GPU work
-            return await refused("quota_exceeded", quota_message())
-
-        if not await caps.safeguards_on():  # ADR-0047: no moderation while they are off
-            return out
-        kind = "image description" if mode in ("text", "reference") else "edit instruction"
-        verdict = await guardrail.judge_text(caps, kind, prompt)
-        if not verdict.allowed:
-            return await refused(verdict.category, guardrail.refusal_message(verdict.category))
-        assert caps.storage is not None
-        for field, key in keys.items():
-            if field == "mask_key":  # a mask is not a picture of anything
-                continue
-            picture = await caps.storage.get(key)
-            verdict = await guardrail.judge_picture(caps, prompt, picture)
-            if not verdict.allowed:
-                return await refused(verdict.category, guardrail.refusal_message(verdict.category))
         return out
 
     def after_check(state: ImageState) -> str:
@@ -345,9 +312,6 @@ def build_image_graph(
     # ---- the job ------------------------------------------------------------------------
 
     async def start_job(state: ImageState) -> ImageState:
-        if await over_quota():  # again, right before the GPU is used
-            await discard_all(state)
-            raise RunError("quota_exceeded", quota_message())
         write = get_stream_writer()
         mode = state["mode"]
         write(

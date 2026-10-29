@@ -33,7 +33,7 @@ declares can be proposed in the chat and run from its card (ADR-0071).
      `needs_consent` (then `consent` carries the statement the person agrees to);
    - `requires`: what must be ready (`need_product`, `need_model`, `need_runtime`, `NOTEBOOKS`, `CHAT`);
    - `long=True` if it can take more than a few seconds (it can then be a job with a handle);
-   - `bind`: a `RunBinding` (a child run of the product's graph: its checks, safeguards, quotas and queue are
+   - `bind`: a `RunBinding` (a child run of the product's graph: its checks and queue are
      the screens' own) or a `CallBinding` (a direct function on the product's store);
    - `ui`: the menu item that does the same thing (`voice.speak`), or `ui_exempt` with the reason there is none;
    - `surfaces`: where it may be offered, `assistant` and/or `mcp`. Nothing appears on a surface by accident.

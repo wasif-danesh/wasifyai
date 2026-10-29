@@ -1,5 +1,4 @@
 workflow: flux2-klein-4b-inpaint.json
-licence: "Apache-2.0 per the FLUX.2 [klein] 4B model card (ADR-0019). The 9B variant is licensed differently and is not used"
 notes: >
   Change only a painted area of a picture. There is no inpainting model for klein, so this is the Edit workflow
   on a copy of the picture with the painted area filled white, told to "fill the white area with ..."; the result

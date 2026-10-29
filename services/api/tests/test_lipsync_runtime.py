@@ -56,15 +56,15 @@ def test_every_weight_file_of_the_catalogue_has_a_place_to_be_laid_out():
     assert names == LIPSYNC_FILES == set(lr.WEIGHTS) | set(lr.TORCH_WEIGHTS)
     assert all(f.folder == "lipsync" and f.url.startswith("https://") for f in entry.files)
     assert sum(f.size for f in entry.files) == pytest.approx(4.2e9, rel=0.05)
-    assert entry.voice and entry.voice.lipsync["mark"] == "required"
-    assert entry.voice.engine == "sidecar" and entry.voice.commercial_use == "yes"
+    assert entry.voice and "mark" not in entry.voice.lipsync
+    assert entry.voice.engine == "sidecar"
 
 
-def test_the_mark_is_drawn_on_every_frame_and_cannot_be_asked_away():
+def test_no_mark_is_drawn_or_written():
     engine = (lr.SERVER_DIR / "engine.py").read_text()
     server = (lr.SERVER_DIR / "server.py").read_text()
-    assert "stamp(out, mark)" in engine and "-metadata" in engine
-    assert 'mark: Annotated[str, Form()] = ""' in server
+    assert "stamp(" not in engine and "-metadata" not in engine
+    assert "mark" not in server
 
 
 # ---- what counts as installed ----------------------------------------------------------------
@@ -332,16 +332,16 @@ def inputs(tmp_path, picture=b"\x89PNG....", voice=b"RIFF....WAVE"):
     return p, v
 
 
-async def test_a_clip_is_made_with_the_mark_and_the_weights_are_laid_out(tmp_path, monkeypatch):
+async def test_a_clip_is_made_and_the_weights_are_laid_out(tmp_path, monkeypatch):
     side, model, files, server_dir = sidecar_for(tmp_path, monkeypatch)
     try:
-        req = check_lipsync(model, 3.0, "drawn", "own")
+        req = check_lipsync(model, 3.0)
         pic, voice = inputs(tmp_path)
         out = await side.generate(model, req, pic, voice, files)
         assert out.mp4[4:8] == b"ftyp" and (out.width, out.height) == (640, 480)
         assert out.fps == 25 and out.seconds == 3.0 and out.model_id == "musetalk-v15"
         sent = json.loads((server_dir / "last.json").read_text())
-        assert sent["mark"] == "AI-generated" and sent["fps"] == 25 and sent["voice"] == 12
+        assert "mark" not in sent and sent["fps"] == 25 and sent["voice"] == 12
         assert (tmp_path / "engine/musetalk/src/models/musetalkV15/unet.pth").exists()
         again = await side.generate(model, req, pic, voice, files)  # warm: no loading to report
         assert again.load_s == 0.0 and out.load_s >= 0.0
@@ -368,7 +368,7 @@ async def test_the_server_is_told_where_musetalk_and_torch_files_are(tmp_path, m
 async def test_no_face_a_failure_and_a_stopped_server_are_told_apart(tmp_path, monkeypatch):
     side, model, files, _ = sidecar_for(tmp_path, monkeypatch)
     try:
-        req = check_lipsync(model, 3.0, "drawn", "own")
+        req = check_lipsync(model, 3.0)
         for picture, code in ((b"noface", "no_face"), (b"boom", "engine_failed")):
             pic, voice = inputs(tmp_path, picture)
             with pytest.raises(VoiceEngineError) as e:
@@ -389,7 +389,7 @@ async def _msg(side, model, req, files, tmp_path):
 async def test_cancelling_stops_the_server_so_the_memory_goes_back(tmp_path, monkeypatch):
     side, model, files, _ = sidecar_for(tmp_path, monkeypatch)
     try:
-        req = check_lipsync(model, 3.0, "drawn", "own")
+        req = check_lipsync(model, 3.0)
         pic, voice = inputs(tmp_path, b"slow")
         task = asyncio.create_task(side.generate(model, req, pic, voice, files))
         await asyncio.sleep(2.5)
@@ -446,7 +446,7 @@ def test_the_model_is_listed_with_what_it_needs_and_never_default_without_the_en
         got["musetalk-v15"]["state"] == "needs_runtime"
         and got["musetalk-v15"]["engine"] == "sidecar"
     )
-    assert got["musetalk-v15"]["lipsync"]["mark"] == "required"
+    assert "mark" not in got["musetalk-v15"]["lipsync"]
     with pytest.raises(VoiceEngineError) as e:
         eng.resolve("lipsync", "musetalk-v15")
     assert e.value.code == "runtime_missing" and "lip sync engine" in e.value.message
@@ -482,7 +482,7 @@ async def test_the_engine_holds_the_lip_sync_slot_and_passes_the_located_files(
     eng.slot = Slot()
     try:
         model = eng.resolve("lipsync", None)
-        req = check_lipsync(model, 3.0, "drawn", "own")
+        req = check_lipsync(model, 3.0)
         assert await eng.lipsync(model, req, tmp_path / "p.png", tmp_path / "v.wav") == "made"
         assert held == ["lipsync"] and set(got) == LIPSYNC_FILES
         other = eng.resolve("speak", "kokoro-82m")

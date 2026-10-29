@@ -18,9 +18,6 @@ const row = (over: Partial<ModelChoice> = {}): ModelChoice => ({
   engineName: null,
   fit: "fits",
   fitReason: null,
-  licence: "Apache-2.0",
-  commercial: "yes",
-  licenceUrl: null,
   source: "app",
   sizeBytes: 330_000_000,
   removable: true,
@@ -69,7 +66,7 @@ describe("the Models page", () => {
     );
   });
 
-  it("shows the models of a tab as a table: name, size, licence, state and one action", async () => {
+  it("shows the models of a tab as a table: name, size, state and one action", async () => {
     const { src } = source({
       voice: [
         row({ chosen: true }),
@@ -80,7 +77,6 @@ describe("the Models page", () => {
           downloadBytes: 4e9,
           sizeBytes: 0,
           tier: "also",
-          commercial: "conditional",
         }),
       ],
     });
@@ -96,7 +92,6 @@ describe("the Models page", () => {
     expect(kokoro.getByText("In use")).toBeTruthy();
     const vox = within(rows[2] as HTMLElement);
     expect(vox.getByText("4.0 GB")).toBeTruthy();
-    expect(vox.getByText("Commercial use with conditions")).toBeTruthy();
     expect(vox.getByText("Not downloaded")).toBeTruthy();
     expect(vox.getByRole("button", { name: /Get/ })).toBeTruthy();
   });

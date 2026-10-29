@@ -537,6 +537,33 @@ describe("your own voices", () => {
     expect(screen.getByText(/the words I say/)).toBeInTheDocument();
     expect(screen.getByText("This is my own voice.")).toBeInTheDocument();
   });
+
+  it("changes a recording's words in a box of the page, never with window.prompt", async () => {
+    // the app window has no window.prompt: it answers nothing at once
+    vi.stubGlobal("prompt", () => {
+      throw new Error("window.prompt is not available in the app window");
+    });
+    const v = saved({ kind: "clone", reference_text: "the words I say" });
+    const updateVoice = vi.fn(async () => ({ ...v, reference_text: "what I really say" }));
+    render(
+      <VoicesWorkspace
+        api={api({ voices: vi.fn(async () => [v]), updateVoice })}
+        runs={runsThat([])}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Change the words" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(updateVoice).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Change the words" }));
+    const field = screen.getByLabelText("The words spoken in the recording");
+    expect(field).toHaveProperty("value", "the words I say");
+    await userEvent.clear(field);
+    await userEvent.type(field, "what I really say");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(updateVoice).toHaveBeenCalledWith("v1", { reference_text: "what I really say" });
+    expect(await screen.findByText(/what I really say/)).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("text to speech with a saved voice", () => {

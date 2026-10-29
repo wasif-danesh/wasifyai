@@ -36,9 +36,7 @@ export function NotebooksPage() {
         error={error}
         onOpen={(n) => openNotebook(n.id)}
         onCreate={newNotebook}
-        onRename={async (n) => {
-          const next = window.prompt("Name this notebook", n.title)?.trim();
-          if (!next || next === n.title) return;
+        onRename={async (n, next) => {
           try {
             await notebooksApi.rename(n.id, next);
             await load();
@@ -47,8 +45,6 @@ export function NotebooksPage() {
           }
         }}
         onRemove={async (n) => {
-          const what = n.sources ? ` and its ${n.sources} source${n.sources === 1 ? "" : "s"}` : "";
-          if (!window.confirm(`Delete “${n.title}”${what}? This cannot be undone.`)) return;
           try {
             await notebooksApi.remove(n.id);
             await load();

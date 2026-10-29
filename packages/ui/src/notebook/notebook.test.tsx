@@ -492,6 +492,41 @@ describe("the notebooks list", () => {
     await userEvent.click(screen.getByText("Misc"));
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: "n3" }));
   });
+
+  it("renames and deletes a notebook in boxes of the page, never with window.confirm or window.prompt", async () => {
+    // the app window has neither: they answer "no" at once
+    vi.stubGlobal("confirm", () => {
+      throw new Error("window.confirm is not available in the app window");
+    });
+    vi.stubGlobal("prompt", () => {
+      throw new Error("window.prompt is not available in the app window");
+    });
+    const onRename = vi.fn();
+    const onRemove = vi.fn();
+    render(
+      <NotebookList
+        notebooks={[nb("n1", "Thesis")]}
+        onOpen={vi.fn()}
+        onCreate={vi.fn()}
+        onRename={onRename}
+        onRemove={onRemove}
+      />,
+    );
+    await userEvent.click(screen.getByLabelText("Rename Thesis"));
+    const field = screen.getByLabelText("Name");
+    expect(field).toHaveProperty("value", "Thesis");
+    await userEvent.type(field, "Thesis 2026{Enter}"); // the name starts selected
+    expect(onRename).toHaveBeenCalledWith(expect.objectContaining({ id: "n1" }), "Thesis 2026");
+
+    await userEvent.click(screen.getByLabelText("Delete Thesis"));
+    expect(screen.getByText(/Its 2 sources will be deleted too/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onRemove).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByLabelText("Delete Thesis"));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ id: "n1" }));
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("a notebook", () => {

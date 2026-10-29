@@ -436,10 +436,6 @@ real-window self-test.
 | Infographic | 84.7 s | the brief (5 sections) and an 864 x 1152 sketchnote picture; includes switching from the language model to the image model |
 
 **Found while building.**
-- **The picture's text is unreliable.** The 4B image model drew the sketchnote look well and the layout
-  sensibly, but misspelled words and garbled numbers ("14 MANCH DATE", "$3550,2027"). A factual infographic with
-  wrong numbers misleads, so the viewer always shows the exact facts beside it and says why. A larger image
-  model or drawing the text ourselves over an illustration are the later options.
 - **The audio script is a question-and-answer list, not yet a conversation.** Qwen3 4B follows the format and the
   facts, and writes short alternating turns; livelier dialogue needs the outline-then-segments method SurfSense
   uses, which is not worth building before there is a voice to play it.

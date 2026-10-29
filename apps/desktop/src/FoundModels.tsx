@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { Button, Notice, cn } from "@wasifyai/ui";
+import { Button, ConfirmDialog, Notice, cn } from "@wasifyai/ui";
 import { useCallback, useEffect, useState } from "react";
 import { FitBadge } from "./FitBadge";
 import { discoveryApi, hubApi } from "./api";
@@ -34,6 +34,8 @@ export function FoundModels({ onChanged }: { onChanged?: () => void }) {
   const [state, setState] = useState<DiscoveryState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // the app window cannot show window.confirm: the app's own dialog asks
+  const [removing, setRemoving] = useState<FoundModel | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -86,9 +88,7 @@ export function FoundModels({ onChanged }: { onChanged?: () => void }) {
   }
 
   async function remove(m: FoundModel) {
-    if (!window.confirm(`Delete ${m.name} from this computer? It was downloaded by Wasify AI.`)) {
-      return;
-    }
+    setRemoving(null);
     setBusy(m.id);
     setError(null);
     try {
@@ -217,7 +217,7 @@ export function FoundModels({ onChanged }: { onChanged?: () => void }) {
                       size="sm"
                       variant="outline"
                       disabled={busy === m.id}
-                      onClick={() => void remove(m)}
+                      onClick={() => setRemoving(m)}
                     >
                       Delete
                     </Button>
@@ -245,6 +245,15 @@ export function FoundModels({ onChanged }: { onChanged?: () => void }) {
           </ul>
         </div>
       ))}
+
+      {removing ? (
+        <ConfirmDialog
+          title={`Delete ${removing.name}?`}
+          message="It was downloaded by Wasify AI and is deleted from this computer."
+          onConfirm={() => void remove(removing)}
+          onCancel={() => setRemoving(null)}
+        />
+      ) : null}
     </section>
   );
 }

@@ -41,9 +41,7 @@ export function NotebookListScreen() {
         error={error}
         onOpen={(n) => router.push(`/notebooks/${n.id}`)}
         onCreate={() => router.push(`/notebooks/${NEW_NOTEBOOK}`)}
-        onRename={async (n) => {
-          const next = window.prompt("Name this notebook", n.title)?.trim();
-          if (!next || next === n.title) return;
+        onRename={async (n, next) => {
           try {
             await webNotebooks.rename(n.id, next);
             await load();
@@ -52,8 +50,6 @@ export function NotebookListScreen() {
           }
         }}
         onRemove={async (n) => {
-          const what = n.sources ? ` and its ${n.sources} source${n.sources === 1 ? "" : "s"}` : "";
-          if (!window.confirm(`Delete “${n.title}”${what}? This cannot be undone.`)) return;
           try {
             await webNotebooks.remove(n.id);
             await load();

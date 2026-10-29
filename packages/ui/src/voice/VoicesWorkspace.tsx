@@ -9,6 +9,7 @@ import {
 } from "@wasifyai/client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../components/button";
+import { Modal } from "../components/dialog";
 import { Label } from "../components/label";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
@@ -54,6 +55,8 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
   const [consent, setConsent] = useState<ConsentBasis | null>(null);
   const [trying, setTrying] = useState<string | null>(null);
   const [heard, setHeard] = useState<Record<string, string>>({});
+  // the app window cannot show window.prompt: the app's own dialog asks for the words
+  const [editing, setEditing] = useState<SavedVoice | null>(null);
   const abort = useRef<AbortController | null>(null);
 
   const load = useCallback(
@@ -116,9 +119,8 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
     setVoices((list) => list.filter((v) => v.id !== id));
   }
 
-  async function editWords(v: SavedVoice) {
-    const next = window.prompt("The words spoken in the recording", v.reference_text);
-    if (next === null) return;
+  async function editWords(v: SavedVoice, next: string) {
+    setEditing(null);
     try {
       const saved = await api.updateVoice(v.id, { reference_text: next });
       setVoices((list) => list.map((x) => (x.id === v.id ? saved : x)));
@@ -271,7 +273,7 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
                       <button
                         type="button"
                         className="underline underline-offset-4"
-                        onClick={() => void editWords(v)}
+                        onClick={() => setEditing(v)}
                       >
                         Change the words
                       </button>
@@ -313,6 +315,57 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
           </ul>
         </section>
       )}
+      {editing ? (
+        <WordsDialog
+          initial={editing.reference_text}
+          onSubmit={(next) => void editWords(editing, next)}
+          onCancel={() => setEditing(null)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/** The words spoken in a voice's recording: several lines, so not the one-line NameDialog. Empty is
+ * allowed (some models need no words). */
+function WordsDialog({
+  initial,
+  onSubmit,
+  onCancel,
+}: {
+  initial: string;
+  onSubmit: (words: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <Modal label="Change the words" onClose={onCancel}>
+      <form
+        className="grid gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (value.trim() !== initial.trim()) onSubmit(value.trim());
+          else onCancel();
+        }}
+      >
+        <div className="grid gap-1.5">
+          <Label htmlFor="voice-words">The words spoken in the recording</Label>
+          <Textarea
+            id="voice-words"
+            autoFocus
+            rows={4}
+            value={value}
+            maxLength={1000}
+            onChange={(e) => setValue(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit">Save</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

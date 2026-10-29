@@ -9,8 +9,9 @@ it worked.
     OwnKeysService   what each product uses, saving (tested first), testing, copying and removing
     router           `/desktop/keys`, what Settings > Your keys calls
 
-Chat and every text product follow `route("chat")` (K2, `own_keys_text.py`); the media products
-follow theirs from stages K3 and K4."""
+Chat and every text product follow `route("chat")` (K2, `own_keys_text.py`); images and video
+theirs in the media worker (K3, `own_keys_media.py`); speaking and 3D through `known` (K4,
+`own_keys_engines.py`)."""
 
 import time
 from collections.abc import Awaitable, Callable
@@ -199,6 +200,8 @@ class OwnKeysService:
         self._testers: dict[Kind, Tester] = testers or {"text": try_text, "media": try_fal}
         # each request asks where to go: the answer is kept until a key or a setting changes
         self._routes: dict[str, KeyRoute | None] = {}
+        # the same answers for code that cannot wait (the speech and 3D engines' lists, K4)
+        self._known: dict[str, KeyRoute | None] = {}
 
     # ---- what is saved ---------------------------------------------------------------------
 
@@ -221,6 +224,13 @@ class OwnKeysService:
         self._routes[product] = found
         return found
 
+    def known(self, product: str) -> KeyRoute | None:
+        """`route` as of the last `warm`: read at start and after every change in Settings."""
+        return self._known.get(product)
+
+    async def warm(self) -> None:
+        self._known = {p.id: await self.route(p.id) for p in PRODUCTS}
+
     async def _put(self, product: str, row: dict[str, Any] | None) -> None:
         self._routes.clear()
         rows = await self._all()
@@ -229,6 +239,7 @@ class OwnKeysService:
         else:
             rows[product] = row
         await self._store.put(SETTINGS, rows, "desktop")
+        await self.warm()
 
     async def view(self) -> dict[str, Any]:
         rows = await self._all()

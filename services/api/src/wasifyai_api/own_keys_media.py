@@ -13,8 +13,8 @@ from wasifyai_platform_sdk import JobRequest
 
 from wasifyai_api.own_keys import OwnKeysService
 
-# which product's key a job follows (the media products of ADR-0095: images and video here; voice
-# and 3D run outside this worker and follow theirs from stage K4)
+# which product's key a job follows (images and video here; speaking and 3D run outside this worker
+# and follow theirs in `own_keys_engines.py`, K4)
 PRODUCT_OF = {"wasifyai-image": "images", "wasifyai-video": "video"}
 
 

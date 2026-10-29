@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // The picker's rows and work for the speech, listening, music and lip sync groups (ADR-0086), from the voice
 // engine's model list, the catalogue (fit, size) and the engines a model runs on.
-import type { AudioRuntime, LipSyncEngine, VoiceApi, VoiceModelInfo } from "@wasifyai/client";
+import type {
+  AudioRuntime,
+  LipSyncEngine,
+  OwnKeysApi,
+  VoiceApi,
+  VoiceModelInfo,
+} from "@wasifyai/client";
 import type { ChoiceList, ChoicesApi, GroupId, ModelChoice } from "@wasifyai/ui";
 import type { ModelEntry, ModelsApi } from "../models";
 import { removable } from "./catalogue-choices";
 import { COPY, hostOf, plainFor } from "./copy";
+import { isKeyed, keyedRow, leaveKey, withKeyed } from "./keyed";
 import { type Step, modelStep, pause, runSteps } from "./steps";
 import type { Engines, Memory } from "./types";
 
@@ -14,6 +21,8 @@ export type VoiceChoicesDeps = {
   models: ModelsApi;
   memory: Memory;
   engines: Engines;
+  /** Settings › Your keys (ADR-0095, K4): speaking may run with the person's key */
+  keys?: OwnKeysApi;
 };
 
 type Context = {
@@ -136,13 +145,20 @@ export function voiceChoices(deps: VoiceChoicesDeps, group: GroupId, task?: stri
   const tasks = task ? [task] : (GROUP_TASKS[group] ?? []);
   return {
     async list(): Promise<ChoiceList> {
-      const { models, ctx, overview } = await read(deps, tasks);
+      const speaks = tasks.includes("speak");
+      const [{ models: all, ctx, overview }, keys] = await Promise.all([
+        read(deps, tasks),
+        speaks && deps.keys ? deps.keys.list().catch(() => null) : Promise.resolve(null),
+      ]);
+      // the engine lists the keyed model too (the speech screen takes it from there); here it is the keyed row
+      const models = all.filter((m) => !isKeyed(m.id));
       // one task has a model in use; the whole group (the Models page) shows none as in use
       const chosen = task
         ? (defaultOf(models, task, deps.memory.get(choiceKey(task)))?.id ?? null)
         : null;
+      const rows = models.map((m) => voiceRow(m, tasks, ctx, chosen));
       return {
-        choices: models.map((m) => voiceRow(m, tasks, ctx, chosen)),
+        choices: speaks ? withKeyed(rows, keyedRow(keys, "voice")) : rows,
         diskFreeBytes: overview?.disk_free_bytes ?? null,
         memoryBytes: overview?.memory_bytes ?? null,
       };
@@ -151,6 +167,10 @@ export function voiceChoices(deps: VoiceChoicesDeps, group: GroupId, task?: stri
     async choose(id) {
       const { models } = await read(deps, tasks);
       const m = models.find((x) => x.id === id);
+      // choosing a model on this computer for speaking takes Voice off the key (the key stays saved)
+      if (tasks.includes("speak") && (isKeyed(id) || m?.tasks.includes("speak"))) {
+        if (await leaveKey(deps.keys, "voice", id)) return;
+      }
       for (const t of tasks)
         if (!m || m.tasks.includes(t as never)) deps.memory.set(choiceKey(t), id);
     },

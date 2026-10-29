@@ -21,7 +21,7 @@ and deployment side and wait for it unless marked **blocks release**.
 | A8 | `scripts/purge_older_products.py --yes` | Run as a dry run only, against an empty bucket | Run against a bucket with files under the four old product prefixes |
 | A9 | The kind scripts and compose after the speech and lip sync services were removed | Syntax-checked (`bash -n`, YAML load) only | `make kind-up` and `make kind-test`; `podman compose up` |
 | A10 | Playwright after the second deletion round (services, SDK providers) | Not re-run; only unit, type and lint checks | `pnpm --filter web test:e2e` |
-| A11 | Own provider keys (ADR-0095): spike K0 with real keys, then every stage built on the person's keys | The owner chose to test with real keys at release time (2026-10-29); `scripts/spike_own_keys_k0.py` is checked only against a fake fal.ai queue | At release: export `OPENROUTER_API_KEY` and `FAL_KEY`, run the spike, write `docs/spikes/own-keys-k0.md`, then make one of each kind with the keys in the app |
+| A11 | Own provider keys (ADR-0095): spike K0 with real keys, then every stage built on the person's keys | The owner chose to test with real keys at release time (2026-10-29); `scripts/spike_own_keys_k0.py` is checked only against a fake fal.ai queue | At release: export `OPENROUTER_API_KEY` and `FAL_KEY`, run the spike, write `docs/spikes/own-keys-k0.md`, then make one of each kind with the keys in the app. K4 adds: Kokoro answers a WAV (else the app says it cannot read it), Pixal3D and BiRefNet take pictures as data URIs, the BiRefNet cut-out keeps a transparent background |
 
 ## B. Left open (not built)
 

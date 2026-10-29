@@ -7,6 +7,7 @@ import type { ModelEntry, ModelsApi } from "../models";
 import { CATALOGUE_GROUPS, catalogueChoices } from "./catalogue-choices";
 import { KEYED, chatChoices, fitOf, pickVariant } from "./chat-choices";
 import { recommendedChat } from "./copy";
+import { model3dChoices } from "./model3d-choices";
 import type { Step } from "./steps";
 import type { Engines, Memory } from "./types";
 import { choiceKey, voiceChoices } from "./voice-choices";
@@ -254,6 +255,44 @@ const voiceModel = (over: Partial<VoiceModelInfo> = {}): VoiceModelInfo =>
     ...over,
   }) as VoiceModelInfo;
 
+/** Settings › Your keys with one product on fal.ai (`mode` "key") or back on this computer. */
+function onKey(product: string, model: string, mode: "here" | "key" = "key") {
+  const save = vi.fn(async () => ({}));
+  const keys = {
+    list: async () => ({
+      can_save: true,
+      providers: [
+        {
+          id: "fal",
+          title: "fal.ai",
+          kind: "media",
+          host: "fal.ai",
+          needs_base: false,
+          models: [],
+        },
+      ],
+      products: [
+        {
+          id: product,
+          title: product,
+          kind: "media",
+          mode,
+          provider: "fal",
+          model,
+          base_url: null,
+          key_saved: true,
+          state: mode === "key" ? "ok" : "here",
+          said: null,
+          tested_at: null,
+          models: [],
+        },
+      ],
+    }),
+    save,
+  } as unknown as OwnKeysApi;
+  return { keys, save };
+}
+
 describe("speech and listening", () => {
   const voice = (models: VoiceModelInfo[], installed = false) =>
     ({
@@ -310,6 +349,88 @@ describe("speech and listening", () => {
     const list = await api.list();
     expect(list.choices).toHaveLength(1);
     expect(list.choices[0]?.chosen).toBe(false);
+  });
+
+  it("with Voice on the person's key, speaking shows that row in use, once", async () => {
+    const local = voiceModel({
+      id: "kokoro-82m",
+      tasks: ["speak"],
+      recommended: ["speak"],
+      state: "ready",
+    });
+    // the engine lists the keyed model for the speech screen; the picker shows the keyed row instead
+    const keyed = voiceModel({
+      id: "key:voice",
+      tasks: ["speak"],
+      state: "ready",
+      engine: "remote",
+    });
+    const { keys, save } = onKey("voice", "fal-ai/kokoro");
+    const api = voiceChoices(
+      { voice: voice([keyed, local]), models, memory: memory(), engines: engines(), keys },
+      "voice",
+      "speak",
+    );
+    const rows = (await api.list()).choices;
+    expect(rows.map((r) => [r.id, r.chosen])).toEqual([
+      ["key:voice", true],
+      ["kokoro-82m", false],
+    ]);
+    expect(rows[0]?.title).toBe("fal-ai/kokoro · with your key · fal.ai");
+    expect(rows[0]?.plain).toContain("the words it speaks");
+    await api.choose("key:voice");
+    expect(save).not.toHaveBeenCalled();
+    await api.choose("kokoro-82m"); // a model on this computer takes Voice off the key
+    expect(save).toHaveBeenCalledWith("voice", "here");
+  });
+
+  it("listening and the other voice tools do not follow the Voice key", async () => {
+    const { keys, save } = onKey("voice", "fal-ai/kokoro");
+    const ready = [voiceModel({ id: "a", state: "ready" })];
+    const api = voiceChoices(
+      { voice: voice(ready), models, memory: memory(), engines: engines(), keys },
+      "listening",
+      "transcribe",
+    );
+    expect((await api.list()).choices.some((r) => r.id.startsWith("key:"))).toBe(false);
+    await api.choose("a");
+    expect(save).not.toHaveBeenCalled();
+  });
+});
+
+describe("3D", () => {
+  const component = (over: Record<string, unknown> = {}) => ({
+    installed: false,
+    source: null,
+    plan: { supported: true, platform: "darwin-arm64", bytes: 7e9, parts: [], found: null },
+    progress: { state: "idle", message: "", done_bytes: 0, total_bytes: 0 },
+    fit: null,
+    about: { built_with: "", where: "" },
+    ...over,
+  });
+  const api3d = (c: ReturnType<typeof component>) =>
+    ({ component: async () => c }) as unknown as Parameters<typeof model3dChoices>[0];
+
+  it("with 3D on the person's key, that row is in use and this computer's is still to set up", async () => {
+    const { keys, save } = onKey("model3d", "fal-ai/pixal3d");
+    // the engine says installed for the 3D screen while on the key; `here` is this computer
+    const api = model3dChoices(
+      api3d(component({ installed: true, here: false, keyed: true })),
+      keys,
+    );
+    const rows = (await api.list()).choices;
+    expect(rows.map((r) => [r.id, r.chosen, r.state])).toEqual([
+      ["key:model3d", true, "ready"],
+      ["pixal3d", false, "needs_download"],
+    ]);
+    await api.choose("pixal3d");
+    expect(save).toHaveBeenCalledWith("model3d", "here");
+  });
+
+  it("on this computer the one row is as before", async () => {
+    const { keys } = onKey("model3d", "fal-ai/pixal3d", "here");
+    const rows = (await model3dChoices(api3d(component({ installed: true })), keys).list()).choices;
+    expect(rows.map((r) => [r.id, r.chosen, r.state])).toEqual([["pixal3d", true, "ready"]]);
   });
 });
 

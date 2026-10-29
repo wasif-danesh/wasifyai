@@ -36,6 +36,9 @@ export type Model3dComponent = {
   progress: Model3dProgress;
   fit: Fit | null;
   about: { built_with: string; where: string };
+  /** 3D runs with the person's key (ADR-0095, K4): `installed` is then true, `here` says whether it is set up here */
+  keyed?: boolean;
+  here?: boolean;
 };
 
 export type Model3dStatus = {

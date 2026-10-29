@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // The 3D group's one model (ADR-0080): it is a component of the engine, set up with its size shown first.
-import type { Model3dApi } from "@wasifyai/client";
+import type { Model3dApi, OwnKeysApi } from "@wasifyai/client";
 import type { ChoiceList, ChoicesApi, ModelChoice } from "@wasifyai/ui";
+import { keyedRow, leaveKey, withKeyed } from "./keyed";
 import { pause, runSteps } from "./steps";
 
 export const MODEL3D_ID = "pixal3d";
 
-export function model3dRow(c: Awaited<ReturnType<Model3dApi["component"]>>): ModelChoice {
+export function model3dRow(component: Awaited<ReturnType<Model3dApi["component"]>>): ModelChoice {
+  // with the key the engine says "installed" for the 3D screen; the row is about this computer
+  const c = { ...component, installed: component.here ?? component.installed };
   const state: ModelChoice["state"] = c.installed
     ? "ready"
     : !c.plan.supported
@@ -33,13 +36,20 @@ export function model3dRow(c: Awaited<ReturnType<Model3dApi["component"]>>): Mod
   };
 }
 
-export function model3dChoices(api: Model3dApi): ChoicesApi {
+export function model3dChoices(api: Model3dApi, keys?: OwnKeysApi): ChoicesApi {
   return {
     async list(): Promise<ChoiceList> {
-      const c = await api.component();
-      return { choices: [model3dRow(c)], diskFreeBytes: null, memoryBytes: null };
+      const [c, own] = await Promise.all([api.component(), keys?.list().catch(() => null)]);
+      return {
+        choices: withKeyed([model3dRow(c)], keyedRow(own ?? null, "model3d")),
+        diskFreeBytes: null,
+        memoryBytes: null,
+      };
     },
-    async choose() {},
+    async choose(id) {
+      // choosing the one on this computer takes 3D off the key (the key stays saved)
+      await leaveKey(keys, "model3d", id);
+    },
     async remove() {
       await api.uninstall();
     },

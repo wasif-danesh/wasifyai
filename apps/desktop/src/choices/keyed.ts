@@ -4,9 +4,16 @@
 import type { OwnKeys, OwnKeysApi } from "@wasifyai/client";
 import type { ModelChoice } from "@wasifyai/ui";
 
-/** The picker id of a product's keyed row: `key:chat`, `key:images`, `key:video`. */
+/** The picker id of a product's keyed row: `key:chat`, `key:images`, `key:voice` and so on. */
 export const keyedId = (product: string) => `key:${product}`;
 export const isKeyed = (id: string | null | undefined) => Boolean(id?.startsWith("key:"));
+
+/** What leaves the computer while a product runs on the key. */
+const SENT: Record<string, string> = {
+  chat: "what you write",
+  voice: "the words it speaks",
+  model3d: "the picture you add",
+};
 
 /** The row that says `product` runs with the person's key, or null while it runs on this computer. */
 export function keyedRow(keys: OwnKeys | null, product: string): ModelChoice | null {
@@ -14,7 +21,7 @@ export function keyedRow(keys: OwnKeys | null, product: string): ModelChoice | n
   if (!keys || !p || p.mode !== "key") return null;
   const provider = keys.providers.find((v) => v.id === p.provider);
   const name = provider?.title ?? p.provider ?? "your provider";
-  const what = product === "chat" ? "what you write" : "what you describe and the pictures you add";
+  const what = SENT[product] ?? "what you describe and the pictures you add";
   return {
     id: keyedId(product),
     title: `${p.model ?? "Your model"} · with your key · ${name}`,

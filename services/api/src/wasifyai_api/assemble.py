@@ -106,6 +106,7 @@ from wasifyai_api.mcp_server.fixed_port import FixedPort
 from wasifyai_api.mcp_server.runtime_file import Launcher, remove_runtime_file
 from wasifyai_api.media_access import MediaAccess, media_capabilities_from
 from wasifyai_api.model_access import ModelAccess, load_defaults
+from wasifyai_api.own_keys_engines import KeyedModel3d, KeyedSpeechEngine
 from wasifyai_api.own_keys_text import KeyedTextProvider
 from wasifyai_api.rag import DIMENSIONS, RagService
 from wasifyai_api.routes import HEARTBEAT_S
@@ -209,6 +210,8 @@ async def run_engine(
         await _web_services(s, settings, r, given)
     else:
         _desktop_services(s, desktop)
+        if desktop.own_keys is not None:  # where voice and 3D run, known before the first ask
+            await desktop.own_keys.warm()
     consumer: JobCompletionConsumer | None = None
     try:
         async with AsyncExitStack() as stack:
@@ -851,6 +854,11 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     s.desktop_vision = desktop.vision
     s.desktop_hub = desktop.hub
     s.own_keys = desktop.own_keys  # the person's own provider keys (ADR-0095)
+    if desktop.own_keys is not None:  # speaking and 3D follow theirs too (K4)
+        if desktop.audio is not None:
+            s.audio = KeyedSpeechEngine(desktop.audio, desktop.own_keys)
+        if desktop.model3d is not None:
+            s.model3d = KeyedModel3d(desktop.model3d, desktop.own_keys)
     if desktop.web is not None:  # web search: off until the person allows it (ADR-0083)
         desktop.web.usage = s.usage
         s.web = desktop.web

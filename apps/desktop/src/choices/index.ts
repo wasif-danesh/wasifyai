@@ -33,10 +33,10 @@ export function createChoicesSource(engines = createEngines()): ChoicesSource {
           CATALOGUE_GROUPS[group],
         );
       case "three_d":
-        return model3dChoices(model3d);
+        return model3dChoices(model3d, ownKeysApi);
       default:
         return voiceChoices(
-          { voice: voiceApi, models: modelsApi, memory: remembered, engines },
+          { voice: voiceApi, models: modelsApi, memory: remembered, engines, keys: ownKeysApi },
           group,
           task,
         );

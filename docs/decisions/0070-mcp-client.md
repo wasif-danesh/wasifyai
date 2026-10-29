@@ -28,7 +28,7 @@ an extension, **multi round-trip requests** for anything a server needs from the
 `input_required`), Roots, Sampling and Logging **deprecated**, HTTP+SSE **deprecated**, OAuth 2.1 with **Client
 ID Metadata Documents** preferred over Dynamic Client Registration, results from `tools/list` carry `ttlMs` and
 `cacheScope`. Tool **annotations** (read-only, destructive, open-world) are hints, and untrusted unless the server
-is. The official Python SDK `mcp` 2.x (MIT) is a client as well as a server.
+is. The official Python SDK `mcp` 2.x is a client as well as a server.
 
 The model rule from ADR-0057 and the evaluation (11 of 11 with Qwen3 4B on four tools) also matter: a **small
 local model degrades as the number of tools grows**, and a third-party server may bring forty tools.
@@ -74,7 +74,7 @@ local model degrades as the number of tools grows**, and a third-party server ma
    file, a log or an environment dump. The engine reads them through one small module so the mechanism can be
    swapped. OAuth 2.1 with PKCE uses the person's browser, a loopback callback, **Client ID Metadata Documents**
    where the server supports them and Dynamic Client Registration only as a fallback. Needs a dependency: Python
-   `keyring` (MIT) in the engine, or the shell storing secrets and handing them over on the engine's stdin; decided
+   `keyring` in the engine, or the shell storing secrets and handing them over on the engine's stdin; decided
    in spike S4.
 8. **How the assistant sees remote tools.** Not one model tool per remote tool. The assistant's meta-tools
    (ADR-0071) include `external_tools(query)`, which searches the connected servers' tool descriptions (with the

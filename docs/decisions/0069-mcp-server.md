@@ -26,7 +26,7 @@ version and client capabilities; servers must answer `server/discover`. Tasks le
 extension. Server-to-client requests (elicitation, sampling, roots) are replaced by **multi round-trip requests**
 (a result of `input_required` that the client answers by retrying). Roots, sampling and logging are deprecated,
 HTTP+SSE is deprecated, and Dynamic Client Registration is deprecated in favour of Client ID Metadata Documents.
-The Python SDK `mcp` 2.x (MIT, 2.3.0 on 2026-10-02) implements the new revision and serves the older ones.
+The Python SDK `mcp` 2.x (2.3.0 on 2026-10-02) implements the new revision and serves the older ones.
 
 Facts about our engine that decide the shape:
 
@@ -89,7 +89,7 @@ Facts about our engine that decide the shape:
    / Deny"); the tool call waits for the answer for a bounded time and then returns `needs_approval` with what
    to tell the person. Clients are unaffected by their own approval prompts: ours is the one that counts. A call
    made while the app is in the background raises a notification.
-9. **New dependencies, to be approved:** *(amended below: eight packages besides `mcp`)* the Python `mcp` SDK 2.x (MIT, official) in the engine, and, for the
+9. **New dependencies, to be approved:** *(amended below: eight packages besides `mcp`)* the Python `mcp` SDK 2.x (official) in the engine, and, for the
    launcher, nothing beyond what the shell already builds with (an HTTP client already present, or
    `ureq`/`reqwest`: checked in M1). The launcher is about 300 lines.
 10. **The engine's rules apply unchanged.** Every call runs as the desktop user through the same child runs, so

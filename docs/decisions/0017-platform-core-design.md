@@ -33,7 +33,7 @@ server named in earlier docs is no longer obtainable.
   subjects are strings) and adds indexes for quota and billing queries.
 - **Storage:** one `Storage` interface over `obstore` (S3 API, GCS, Azure). Keys are
   `{tenant}/{product}/{user}/{path}`, built by `ScopedStorage` from the run context with segment
-  validation. Responses carry presigned URLs. **SeaweedFS** (Apache-2.0) replaces MinIO for dev
+  validation. Responses carry presigned URLs. **SeaweedFS** replaces MinIO for dev
   and staging; because the interface is the S3 API, any S3-compatible server works.
 - **RAG:** pgvector in the existing Postgres (`rag_chunks`, HNSW cosine index), scoped by tenant
   and product. Embeddings come from the product's `text.embed` capability: LiteLLM alias

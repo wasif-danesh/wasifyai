@@ -17,7 +17,7 @@ source of truth: the `wasifyai-art` repository (model hub, generation, remix, Lo
 
 What was checked for this decision:
 
-- **Unsloth Desktop** (AGPL-3.0, Tauri 2) is a thin Rust shell around a Python backend and a React single-page
+- **Unsloth Desktop** (Tauri 2) is a thin Rust shell around a Python backend and a React single-page
   app. The shell supervises processes, provisions a managed Python environment on first run (a bundled install
   script writing progress markers), updates itself, and hands the webview a token over loopback. The web
   "Studio" and the desktop window share one frontend build. Its image feature offers Create, Transform, Inpaint,
@@ -49,8 +49,7 @@ What was checked for this decision:
    code never asks which profile it runs in (the rule 1 idea, for profiles).
 2. **New workspace members.**
    - `apps/desktop`: the Tauri 2 shell (process supervision, provisioning, updater, tray, keychain, pairing,
-     deep links). Written in Rust. AGPL-3.0-derived code, if any is taken from Unsloth, lives only here, with its
-     notice.
+     deep links). Written in Rust. Code taken from Unsloth, if any, lives only here.
    - `packages/ui` and `packages/client`: components (today in `apps/web/components/ui`) and a typed API client
      with a pluggable transport (BFF fetch on the web, loopback fetch on desktop). Screens move to shared
      modules that both a Next.js route and the desktop single-page app mount. The first spike is extracting one
@@ -101,8 +100,6 @@ What was checked for this decision:
 - A real extraction job: screens now live in a Next.js app and use server components; they must be restructured.
 - Two storage back ends and two queue back ends to keep behaviourally identical (contract tests run on both).
 - Provisioning and updates are new, large, platform-specific work (signing, notarization, AV quirks on Windows).
-- The desktop product is AGPL-3.0 where it contains Unsloth-derived code; the platform stays Apache-2.0 and the
-  NOTICE file records the boundary.
 
 ## Alternatives considered
 

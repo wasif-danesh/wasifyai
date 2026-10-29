@@ -6,7 +6,7 @@
 - **Date:** 2026-10-18
 - **Depends on:** ADR-0073 (training platform and the simplicity rules), ADR-0059 (ComfyUI sidecar, LoRA chain),
   ADR-0062 (reuse matrix), ADR-0056 (inventory from `wasifyai-art`), ADR-0038 (prompt and caption aids), ADR-0035
-  (upload hardening), ADR-0047, ADR-0044 (a person's word about a picture), ADR-0012 (licences).
+  (upload hardening), ADR-0047, ADR-0044 (a person's word about a picture).
 - **Re-opens and replaces:** ADR-0054 (withdrawn) for the desktop.
 - **Plan:** `docs/phase5-agent-training-video-builder-plan.md`, stages T3 and T3b.
 
@@ -29,7 +29,6 @@ What the training engines expect, which is what we must hide:
   **no Mac path**. **AI Toolkit** is NVIDIA-only with an experimental Mac script that did not converge (ADR-0054).
 - The platform has a multimodal alias (`text.describe_image`, ADR-0038), so captions need no new model. Captions are
   English because the text encoders are English-trained: a recorded limit.
-- FLUX.1-dev weights are non-commercial and so is anything trained on them (ADR-0012). klein 4B is Apache-2.0.
 
 ## Decision
 
@@ -83,7 +82,7 @@ What the training engines expect, which is what we must hide:
 5. **Engines (ADR-0073):** the **Mac**: **mflux** with the measured defaults (FLUX.2 klein base 4B first, Z-Image after
    its spike); **NVIDIA (own or rented)**: **Unsloth's diffusion trainer** through the component for the families it
    lists, with **AI Toolkit** as an alternative engine added by descriptor only if the spike finds a family or quality
-   it does better. FLUX.1-dev is **not offered** (non-commercial). If nothing can run here (an Intel Mac, no GPU),
+   it does better. FLUX.1-dev is **not offered**. If nothing can run here (an Intel Mac, no GPU),
    the screen offers the rented-GPU tier or explains.
 6. **Evaluation, always shown, in pictures:** the with-and-without grid at fixed seeds; the **magic-word test** (the
    same prompt with and without the word: a LoRA that looks the same either way did not bind; the page says "It
@@ -104,10 +103,10 @@ What the training engines expect, which is what we must hide:
 Changing a model's base weights (a full fine-tune, a DreamBooth of the whole network, domain training, distillation,
 merging) is **not offered on the person's computer**. A full fine-tune of a multi-billion-parameter diffusion
 transformer needs several times the memory of a LoRA (AI Toolkit's own FLUX guidance starts at a 24 GB NVIDIA card
-**for a LoRA**), produces a multi-gigabyte checkpoint, inherits the base's licence, and can drop the safeguards of the
+**for a LoRA**), produces a multi-gigabyte checkpoint, and can drop the safeguards of the
 model it came from. For almost every goal a LoRA is the right size. It is offered, later, **only on the remote tiers**
 (the person's NVIDIA machine or a rented GPU) behind a questionnaire that sends most people back to the LoRA ("How many
-pictures? Under about 200: use a LoRA"), with the consent and licence rules above, a cost cap, an evaluation that
+pictures? Under about 200: use a LoRA"), with the consent rules above, a cost cap, an evaluation that
 includes a regression grid on prompts the base did well, and the label "not covered by the safeguards of its base
 model". Whether AI Toolkit or Unsloth's DiT trainer can do a full fine-tune per family is **not verified**; stage T4
 checks it. It is the lowest priority and can be dropped without cost.
@@ -119,8 +118,8 @@ checks it. It is the lowest priority and can be dropped without cost.
 - We own two things no engine provides: **captions** and **the magic word**. Both are small, testable, and make the
   difference for non-technical users.
 - Two engines per tier, one dataset format, one result format: the descriptor hides the difference.
-- The consent and licence rules make some requests slower or impossible (real-person photos with the safeguards on;
-  non-commercial families). That is intended.
+- The consent rules make some requests slower or impossible (real-person photos with the safeguards on). That is
+  intended.
 - Captions in English only is a visible limit; the caption grid is where a person corrects them.
 
 ## Alternatives considered

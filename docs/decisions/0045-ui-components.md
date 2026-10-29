@@ -17,12 +17,12 @@ filtering, paging, column choice) for usage, models, voices and transcripts.
 The owner wants a professional look and decided to reuse a component library instead of growing our own.
 Options looked at (2026-10-09):
 
-| Option | Licence | Notes |
-|---|---|---|
-| **shadcn/ui** | MIT | Not a package: components are copied into our repo as source, built on Radix UI (accessibility, keyboard, focus, right-to-left) and Tailwind CSS |
-| **TanStack Table** | MIT | Headless: sorting, filtering, paging, column visibility, no markup or styles |
-| Material UI | MIT core; MUI X DataGrid Pro and Premium are commercial | Heavy, runtime CSS-in-JS, a strong Google look that is hard to brand, App Router friction |
-| Flowbite, DaisyUI, HeroUI | MIT | Good looks, but accessibility and theming vary, and they tie us to their theme and release pace |
+| Option | Notes |
+|---|---|
+| **shadcn/ui** | Not a package: components are copied into our repo as source, built on Radix UI (accessibility, keyboard, focus, right-to-left) and Tailwind CSS |
+| **TanStack Table** | Headless: sorting, filtering, paging, column visibility, no markup or styles |
+| Material UI | Heavy, runtime CSS-in-JS, a strong Google look that is hard to brand, App Router friction |
+| Flowbite, DaisyUI, HeroUI | Good looks, but accessibility and theming vary, and they tie us to their theme and release pace |
 
 Rule 12 (open source first, ask before adding a dependency) applies; accepting this ADR is that approval for the
 packages named here. The project must be multilingual: components must work with Bengali and other scripts, and
@@ -34,11 +34,11 @@ with right-to-left languages.
   into `apps/web/components/ui/`; they are ours to edit. Needed first: Button, Input, Textarea, Label, Select,
   Combobox (Command and Popover), RadioGroup, Checkbox, Switch, Tabs, Dialog, AlertDialog, DropdownMenu, Tooltip,
   Toast (Sonner), Skeleton, Badge, Alert, Form helpers.
-- **Form state and validation: react-hook-form with Zod** (both MIT), through shadcn's Form component. Validation
+- **Form state and validation: react-hook-form with Zod** through shadcn's Form component. Validation
   messages are plain, translatable sentences.
 - **Data grids: TanStack Table** with shadcn's Table component (the "data table" pattern): sorting, filtering,
   paging (server side where the list is large, using our cursor `before` paging), column visibility, row actions.
-  Virtualised rows (TanStack Virtual, MIT) only when a list proves too long.
+  Virtualised rows (TanStack Virtual) only when a list proves too long.
 - **Tailwind CSS** is added only as the engine shadcn needs. Our design tokens stay the source of truth: the
   existing CSS variables (colours, radii, focus ring, light and dark) are mapped into the Tailwind theme and
   shadcn's variables, so there is one palette and the current look and brand carry over.
@@ -57,8 +57,7 @@ with right-to-left languages.
 ## Consequences
 
 - New dependencies in `apps/web`: tailwindcss (with its PostCSS plugin), Radix UI packages, class-variance-authority,
-  clsx and tailwind-merge, lucide-react (icons, ISC), sonner, react-hook-form, zod, @tanstack/react-table. All are
-  MIT or ISC. The shadcn CLI is a development tool only.
+  clsx and tailwind-merge, lucide-react (icons), sonner, react-hook-form, zod, @tanstack/react-table. The shadcn CLI is a development tool only.
 - Two styling systems exist during migration. That costs some confusion and a larger bundle until the old CSS goes;
   the rule is "touch a screen, migrate it".
 - We own the component source, so fixes and look changes are ours, and upgrades are manual and deliberate.

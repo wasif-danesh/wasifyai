@@ -6,7 +6,7 @@
 - **Supersedes:** the default-model decision of ADR-0018 (Gemma 4 E4B for every chat alias), and the Gemma 4 E4B
   routing of the `multimodal` alias in ADR-0020 and the default text alias note in ADR-0060, once the checks pass.
 - **Depends on:** ADR-0072 (the agent needs a large context), ADR-0071 (assistant evaluation), ADR-0022 (guardrail
-  evidence), ADR-0056 (managed llama.cpp, the one slot), ADR-0012 (licences), ADR-0074 (fine-tuning base).
+  evidence), ADR-0056 (managed llama.cpp, the one slot), ADR-0074 (fine-tuning base).
 
 ## Context
 
@@ -16,12 +16,12 @@ to evaluate and to fine-tune).
 
 What is known (Hugging Face, read 2026-10-18):
 
-- `Qwen/Qwen3.5-9B`: **Apache-2.0**, 9.65 B parameters, architecture `qwen3_5`, task *image-text-to-text* (so it
+- `Qwen/Qwen3.5-9B`: 9.65 B parameters, architecture `qwen3_5`, task *image-text-to-text* (so it
   takes images, which the `multimodal` alias needs; **audio input is not claimed**). GGUF builds (Unsloth,
   bartowski, LM Studio) and MLX 4-bit and 8-bit builds exist, so both our runtimes can load it.
 - `Cloudflare/clef-flash`, a decision model, is a post-train of Qwen3.5-9B (ADR-0075): the same backbone family
   serves chat, the agent and the sorter.
-- Gemma 4 E4B (ADR-0018) is Apache-2.0, text and image, 128K context claimed, and runs in about 8 GB of RAM.
+- Gemma 4 E4B (ADR-0018) is text and image, 128K context claimed, and runs in about 8 GB of RAM.
 
 Not known and not to be assumed: the **context length and memory use of Qwen3.5-9B on our runtimes** (the 64,000
 tokens Hermes needs, with the cache, on a 32 and a 64 GB Mac), its **speed** on the owner's Mac, whether it
@@ -53,8 +53,6 @@ machine cannot run it.
    chat-template round-trip test applies to its template.
 5. **The model stays behind aliases** (ADR-0005, ADR-0010): the switch is a change in `model_defaults.yaml` and in the
    desktop recommended-model list, not in code, and can be undone by one line.
-6. **The licence is re-read from the model files**, not only from the Hugging Face tag, when the model is added to
-   the recommended list (ADR-0012).
 
 ## Consequences
 

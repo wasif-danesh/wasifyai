@@ -70,7 +70,7 @@ the shared list.
 
 ```
 model_catalog(id, tenant_id, product_id='platform', owner_user_id NULL, kind, family, name, comfy_file,
-              sha256, trigger_words[], default_weight, licence, source, status, preview_key, meta, created_at)
+              sha256, trigger_words[], default_weight, source, status, preview_key, meta, created_at)
 ```
 
 - `kind`: `lora` (checkpoints are variants in `product.yaml`, not catalog rows, in this version).
@@ -82,8 +82,6 @@ model_catalog(id, tenant_id, product_id='platform', owner_user_id NULL, kind, fa
   after an admin confirms its `family` at `/admin/catalog`, because the wrong family fails silently.
 - **Readiness gate:** a newly written file (a trained LoRA) is `ready` only once ComfyUI lists it, so a run cannot
   name a file the server does not know.
-- `licence` is a free text note. **Licences are researched and recorded by the owner**; nothing in this ADR blocks
-  or filters on it.
 - Reads: `GET /catalog/models?kind=lora&family=...` (the caller's own and shared, `ready` only). The API and the
   worker read `COMFYUI_BASE_URL`; no new address.
 

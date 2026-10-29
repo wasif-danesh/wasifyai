@@ -20,9 +20,8 @@ native) and through the full product UI.
 - **Lyric length is a product constraint.** ACE-Step fits about four seconds per sung line, so
   the prompt asks for 12 to 16 lines for 60 s and the validator rejects more than 20.
   Section tags must be on their own line; inline tags are split out by `normalise_lyrics`.
-- **Licences:** ACE-Step 1.5 is MIT per its model card. Klein 4B is Apache 2.0, and its VAE is
-  taken from the Comfy-Org/flux2-klein repo. The official template points at the flux2-dev VAE,
-  which carries a non-commercial label; do not use it.
+- **VAE:** Klein 4B's VAE is taken from the Comfy-Org/flux2-klein repo. The official template
+  points at the flux2-dev VAE; do not use it.
 - **Style control** (genre, tempo, vocal gender) is measurable but imperfect. Judging it with
   `gemma4:e4b` as a listener was unreliable, so objective audio metrics were used instead.
 - **Opt-in tests:** `make test-comfyui` runs both product workflows through the job processor

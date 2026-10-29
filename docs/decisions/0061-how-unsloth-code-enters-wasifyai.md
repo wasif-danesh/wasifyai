@@ -9,8 +9,7 @@
 The owner asked whether to clone the Unsloth project, move wasifyai's code into it, and call that wasifyai. The
 facts that decide it, from the research for ADR-0056 (file lists and selected source files read, the engine not run):
 
-- Unsloth's repository is an **LLM fine-tuning library** (`unsloth/`, Apache-2.0) with an app under `studio/`
-  (AGPL-3.0). The app has a Python backend (about 17 packages: inference, hub, library, models, training, export,
+- Unsloth's repository is an **LLM fine-tuning library** (`unsloth/`) with an app under `studio/`. The app has a Python backend (about 17 packages: inference, hub, library, models, training, export,
   data recipes, rag, mcp, auth, plugins, many `diffusion_*` modules), a React frontend with **33 feature folders**,
   and a Tauri 2 shell of about 36 Rust files.
 - wasifyai has 56 ADRs, a platform core, 8 products, Helm and OpenTofu, tenancy and usage seams, an eval culture,
@@ -21,13 +20,12 @@ facts that decide it, from the research for ADR-0056 (file lists and selected so
 ## Decision
 
 1. **wasifyai stays the repository.** We do not move it into a clone of Unsloth. It is the single source of
-   truth (owner's decision) and keeps its history, ADRs, licence (Apache-2.0) and CI.
+   truth (owner's decision) and keeps its history, ADRs and CI.
 2. **A reference clone lives outside the repo** (`~/Projects/unsloth`, pinned to a release tag; verified at `v0.1.907-beta`). It is
    read and run for study. It is not a git remote of wasifyai and is never merged.
 3. **Selective, recorded import.** Code is copied into wasifyai folder by folder, by decision, each with a
-   `PROVENANCE.md` (source path, commit, date, what changed) and, for AGPL-3.0 material, a `LICENSE-AGPL` and
-   header notice. Imported code lives only in `apps/desktop` (Rust shell) and clearly named packages, so the
-   Apache-2.0 platform core stays separable (NOTICE records the boundary).
+   `PROVENANCE.md` (source path, commit, date, what changed). Imported code lives only in `apps/desktop` (Rust shell)
+   and clearly named packages, so the platform core stays separable.
 4. **Ownership after import.** Imported code is ours: we rename, restyle, delete and change it. Upstream fixes are
    cherry-picked only for security issues in the shell.
 5. **Keep, adapt, replace, drop** (to be confirmed folder by folder in the Phase 0 spike, by running the app):
@@ -58,20 +56,17 @@ facts that decide it, from the research for ADR-0056 (file lists and selected so
      repository's inventory. Then the assistant (ADR-0057), then documents (ADR-0060).
 7. **The repo move was reconsidered at the Phase 0 gate and rejected.** Measured and read: the image and video
    engines are not kept, and the backend is 365k lines of LLM-centric code of which a few bounded parts are used.
-8. **Licence boundary.** The owner accepts AGPL-3.0 for the product. The root licence of the repository is still
-   to be decided explicitly (AGPL for all, or Apache-2.0 core with AGPL under `apps/desktop`); until then
-   imported code keeps its notice and lives in clearly named folders.
 
 ## Consequences
 
-- No history is lost and no licence is changed at the repository root; the AGPL surface is small and recorded.
+- No history is lost; the imported surface is small and recorded.
 - We pay for import work and for re-implementing what we do not copy, and we own all maintenance of the shell.
 - Phase 0 delays the first import by a week, in exchange for decisions made from running software.
 
 ## Alternatives considered
 
 - **Clone Unsloth and move wasifyai into it.** Fastest first window, but it makes an LLM fine-tuning repository the
-  root of an unrelated platform: AGPL at the root, 56 ADRs and Helm charts inside a repo with a different purpose,
+  root of an unrelated platform: 56 ADRs and Helm charts inside a repo with a different purpose,
   a 428-file rename again, and history split. Rejected.
 - **Long-lived fork with upstream merges.** Rejected: the divergence makes merges cost more than the code is worth.
 - **Reference only, no code.** Cheapest legally, but throws away the hardest part to write (the cross-platform shell

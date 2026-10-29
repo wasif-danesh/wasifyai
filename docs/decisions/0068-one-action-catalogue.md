@@ -83,7 +83,7 @@ What exists and is reusable:
    `notebook.*` (list, create, add_source, ask, studio_output), `models.*` (list, status; downloading a model is
    `needs_consent`-like: it shows its size and waits for a yes), `app.status`, `job.*`. About 40 actions. Settings,
    account and anything that changes the person's configuration are **not** actions.
-8. **Where it lives.** The catalogue and executor are Apache-2.0 platform code (`packages/platform-sdk`, with the
+8. **Where it lives.** The catalogue and executor are platform code (`packages/platform-sdk`, with the
    engine-side binding in `services/api`). Products declare their actions next to their graphs (a `actions.py` per
    product, registered like routes and index sources), so a product without actions is not exposed. The desktop
    and the future web deployment share them; what a deployment cannot run resolves to `unavailable`.

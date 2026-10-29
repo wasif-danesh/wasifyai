@@ -5,8 +5,7 @@
   section "Beyond LoRA").
 - **Date:** 2026-10-18
 - **Depends on:** ADR-0073 (training platform; read its revision note), ADR-0068 (action catalogue), ADR-0071 (the
-  assistant), ADR-0072 (agents), ADR-0061 and ADR-0062 (how Unsloth code enters, the reuse matrix), ADR-0012
-  (licence check), ADR-0047.
+  assistant), ADR-0072 (agents), ADR-0061 and ADR-0062 (how Unsloth code enters, the reuse matrix), ADR-0047.
 - **Plan:** `docs/phase5-agent-training-video-builder-plan.md`, stage T5.
 
 ## Context
@@ -38,10 +37,9 @@ it from anywhere in the app. It needs little memory (Laya is under 1 GB), trains
 measurable on a held-out set. It is not what a chat model is good at (a chat model gives uncalibrated, slow,
 sometimes inconsistent labels).
 
-What we do not know and must find out (spike T0): the **licences** of the Laya checkpoints
-(`convaiinnovations/laya`) and of Clef (`Cloudflare/clef-flash`), which must allow commercial use (ADR-0012);
-whether **Laya trains and serves on the Mac** without Studio; how well it does against a plain classifier on
-embeddings; and what serving it needs (Studio's runtime is AGPL-3.0 and in-process).
+What we do not know and must find out (spike T0): whether **Laya trains and serves on the Mac** without Studio;
+how well it does against a plain classifier on embeddings; and what serving it needs (Studio's runtime is
+in-process).
 
 ## Decision
 
@@ -61,8 +59,8 @@ embeddings; and what serving it needs (Studio's runtime is AGPL-3.0 and in-proce
    only on an NVIDIA machine or a rented GPU (ADR-0073 tiers), and on the Mac only if the spike shows the MLX
    decision-head path works. The screen shows one recommendation and a "see other options" link.
 5. **Training and serving come from Unsloth through the component** (ADR-0073 decision 4): the decision trainer
-   and the Laya runtime, driven by our adapter. Studio's code is AGPL-3.0, so it stays a **separate, pinned
-   component with its own licence notice** (ADR-0061 decision 3), not linked into our Apache-2.0 core.
+   and the Laya runtime, driven by our adapter. Studio's code stays a **separate, pinned
+   component** (ADR-0061 decision 3), not linked into our core.
 6. **The result is "a sorter" in My models** with its model card and **an honest report**: accuracy on the held-out
    set in plain words ("right 91 times out of 100"), how it does on each category, which categories it mixes up
    ("it often calls 'refund' 'billing'"), a calibration note ("when it says 90 percent, it is right about 90
@@ -86,7 +84,7 @@ embeddings; and what serving it needs (Studio's runtime is AGPL-3.0 and in-proce
 
 - A second kind of trained model with a clear, measurable use and a tiny footprint. It also gives the assistant and
   agents a cheap judgement tool.
-- A dependency on Unsloth's decision models and the licences of their checkpoints, to be read before anything ships.
+- A dependency on Unsloth's decision models.
 - The spreadsheet-to-rows conversion is ours and must be exact: the trainer validates every question the way the
   Decision API does, and a mistake is a failed run.
 
@@ -103,37 +101,25 @@ embeddings; and what serving it needs (Studio's runtime is AGPL-3.0 and in-proce
 
 ## Open questions
 
-1. The licences of Laya and Clef; the commercial-use rule can end this ADR for one or both.
-2. Whether Laya trains on the Mac (the trainer has an MLX path for the LLM layout; Laya's is unknown) and how fast.
-3. How a sorter is served inside our engine without Studio: Laya through its own runtime (Studio vendors laya 0.3.5),
+1. Whether Laya trains on the Mac (the trainer has an MLX path for the LLM layout; Laya's is unknown) and how fast.
+2. How a sorter is served inside our engine without Studio: Laya through its own runtime (Studio vendors laya 0.3.5),
    a GGUF through our llama-server, or an MLX form; the Decision API's request shape (`noul`, `choice`, `score`) is
    kept as our action's schema so any of them can serve it.
-4. Whether `score` questions need examples per level (they do for quality); the screen asks for at least five per level.
-5. Image sorting (a vision LLM with a decision head): later.
+3. Whether `score` questions need examples per level (they do for quality); the screen asks for at least five per level.
+4. Image sorting (a vision LLM with a decision head): later.
 
 ## Not in v1
 
 Clef and the LLM decision heads on the Mac; sorting images or audio; continual learning from corrections (a "that was
 wrong" button feeding a retrain is the natural next step and is named in the plan, stage T5b); sharing sorters.
 
-## Licence read (2026-10-18)
-
-Hugging Face lists both **`convaiinnovations/laya`** (421M parameters) and **`Cloudflare/clef-flash`** (9.4B, built on
-Qwen3.5-9B) as **Apache-2.0**, and Laya also carries a `commercial-use` tag. That clears open question 1 in
-principle. Not yet read: the licence files and model cards themselves, and the licences of the training data the
-authors used; T0 reads them before anything ships. Clef sharing Qwen3.5-9B's backbone fits ADR-0078.
-
 ## Amendment after spike T0 (2026-10-19; `docs/spikes/training-t0.md`)
 
 - **Laya trains and serves on the Mac through Studio's MLX decision trainer:** 30 steps in 9.2 s of training (12.3 s
   wall), 15 ms per answer, 2.4 GB resident. Laya through its own MPS script was **not tested**.
-- **Licences, read from the files:** the Laya repository has **no `LICENSE` file**; the licence is the README front
-  matter (`apache-2.0`, tag `commercial-use`) and a footer, and the training data is unstated. A GitHub repository
-  shows a `LICENSE` and the studio vendors Laya 0.3.5 with an Apache-2.0 `LICENSE.laya`. So `commercial_use` is
-  **conditional** until Convai Innovations confirms the licence file and the data. Clef-flash is Apache-2.0 with a full
-  licence file; it was **not run** (19 GB, not approved), and Studio's code suggests it may run on the Mac, so "GPU only"
+- Clef-flash was **not run** (19 GB, not approved), and Studio's code suggests it may run on the Mac, so "GPU only"
   (decision 4) is untested rather than known.
-- **Stage T5: Go, with the licence question.** The `decision.decide` request shape is unchanged.
+- **Stage T5: Go.** The `decision.decide` request shape is unchanged.
 
 ## Amendment (2026-10-26, owner): the card is "Teach it to decide"
 
@@ -147,10 +133,9 @@ A score). The family label stays "Decision model training" so a person looking f
 Built, and run for real on the owner's Mac (M5 Pro, 64 GB), through the real routes and the real engine, with the app's own installer on a
 clean data folder. What is true:
 
-- **Engine: the `laya` package (Apache-2.0, 0.4.15) on PyTorch (MPS), not Unsloth's component.** Laya ships its own trainer
+- **Engine: the `laya` package (0.4.15) on PyTorch (MPS), not Unsloth's component.** Laya ships its own trainer
   (`laya.train.finetune`: it splits off a tenth of the examples to fit how sure the model should be, trains, calibrates, and writes the
-  checkpoint `laya.load` reads). Using it directly removes the AGPL question of decision 5 for this family (the package carries its own
-  `LICENSE`; the weights repository has none and declares Apache-2.0 in its card, which is why `docs/credits.md` says so). **Laya teaches the
+  checkpoint `laya.load` reads). Using it directly avoids Studio's component of decision 5 for this family. **Laya teaches the
   whole model** (420 million numbers), so a result is a full copy of about **846 MB**, not a small adapter, and the descriptor lists LoRA and
   QLoRA as "all of it is taught", with the reason. The spike's Studio route did the same (`docs/spikes/training-t0.md`, section 5).
 - **Set up in the app (`decision_setup.py`, `decision_pins.json`):** the same shape as the writing trainer's. 35 packages from a committed

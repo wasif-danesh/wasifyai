@@ -22,8 +22,7 @@ them: one file that shows the cover while the song plays.
   and the cover as front-cover art (a JPEG of at most 1000 px, about 200 KB, made from the stored PNG).
   Phone, desktop and car players and file thumbnails then show the cover. The audio frames are not
   re-encoded, the stored file is not changed, and the tag is added on each download. If the cover or
-  tagging fails the plain MP3 is served. The tag writer is our own (about 80 lines) because the usual
-  libraries, `mutagen` and `eyeD3`, are GPL; its output is checked against `ffmpeg`.
+  tagging fails the plain MP3 is served. The tag writer is our own (about 80 lines); its output is checked against `ffmpeg`.
 - **`video` is the cover as a still picture with the song playing**: H.264 and AAC in an MP4, even
   dimensions and `yuv420p`, which phones and social apps accept. It is made on the first request,
   stored next to the song (`video.mp4`) and served from storage afterwards. One encode runs at a time
@@ -37,11 +36,6 @@ them: one file that shows the cover while the song plays.
   run about 5 seconds past a 60-second song. The cover is first re-saved as a plain RGB PNG: an
   unreadable picture makes `ffmpeg -loop 1` wait for its timeout, and a JPEG would make the video
   full-range.
-- **Licence.** `imageio-ffmpeg` is BSD-2-Clause, but the binary it bundles is an unmodified GPL build of
-  ffmpeg (it includes x264). We run it as a separate program and never link it. Images that contain it
-  and are published must make its source available; the source for the bundled version is the
-  imageio-ffmpeg and ffmpeg.org releases, which is the written offer to keep with the images. Pillow
-  (HPND) is a permissive dependency.
 
 ## Consequences
 

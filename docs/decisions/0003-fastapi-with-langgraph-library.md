@@ -13,6 +13,6 @@ Write a FastAPI service that runs LangGraph as a library, with the Postgres chec
 
 ## Consequences
 
-- Full control over identity, tenancy, metering and job callbacks; plain container, no licensing dependency.
+- Full control over identity, tenancy, metering and job callbacks; plain container.
 - Thread/run management and streaming plumbing must be built (a one-off cost).
 - LangGraph.js rejected: long-running graphs don't belong in web request handlers, and the AI tooling is Python.

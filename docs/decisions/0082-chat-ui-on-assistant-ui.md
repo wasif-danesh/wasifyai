@@ -10,7 +10,7 @@
   `docs/phase2-stage-d-plan.md` (D5, 2026-10-16), was "our own components, not `assistant-ui`". This ADR reverses it.
 - **Depends on:** ADR-0057 (the assistant), ADR-0045 (shadcn/ui, Radix, Tailwind), ADR-0081 (the design system: tokens only),
   ADR-0062 and ADR-0061 (how Unsloth code may be reused), ADR-0066 (our speech runtime), ADR-0068 and ADR-0071 (actions,
-  the assistant's action cards), ADR-0065 (notebooks), ADR-0047, ADR-0012.
+  the assistant's action cards), ADR-0065 (notebooks), ADR-0047.
 - **Plan:** `docs/chat-ui-migration-plan.md`, stages CU0 to CU5.
 
 ## Context
@@ -22,15 +22,14 @@ The owner wants the chat built on the same open-source project that Unsloth Stud
   `streamdown` 2.5.0 with its code, math and mermaid plugins, `katex`, Radix and shadcn. Its runtime provider alone is 4,372
   lines (local runtime, a remote thread-list adapter, a thread-history adapter, attachment adapters, dictation and
   speech-synthesis adapters, tool approval, MCP, research mode).
-- **`assistant-ui`** (`assistant-ui/assistant-ui`, **MIT**, 12,600 stars, pushed 2026-10-19). npm `@assistant-ui/react` is at
-  0.15.29 (unpacked 2.9 MB); it is **0.x and its API moves**. Dependencies: `radix-ui`, `zustand`, `zod`, `assistant-stream`
-  (MIT), `@assistant-ui/core|store|tap`, `react-textarea-autosize`, `safe-content-frame`, and **`assistant-cloud`** (a hosted
+- **`assistant-ui`** (`assistant-ui/assistant-ui`, 12,600 stars, pushed 2026-10-19). npm `@assistant-ui/react` is at
+  0.15.29 (unpacked 2.9 MB); it is **0.x and its API moves**. Dependencies: `radix-ui`, `zustand`, `zod`, `assistant-stream`,
+  `@assistant-ui/core|store|tap`, `react-textarea-autosize`, `safe-content-frame`, and **`assistant-cloud`** (a hosted
   service SDK; whether it makes network calls when unused is not verified). Peers: React 18 or 19. It is headless: Radix-style
   primitives that we style ourselves.
-- **`streamdown`** (Vercel, **Apache-2.0**, 125 KB unpacked), with `@streamdown/code`, `/math`, `/mermaid` (Apache-2.0) and
-  `katex` (MIT, 4 MB unpacked). `@assistant-ui/react-markdown` (MIT) is the alternative markdown part.
-- **Unsloth Studio's chat code is AGPL-3.0-only** (every file carries the header). `packages/ui` and the web app are
-  Apache-2.0. **No Studio frontend code can be copied into them.** `assistant-ui` itself is MIT and can be used directly.
+- **`streamdown`** (Vercel, 125 KB unpacked), with `@streamdown/code`, `/math`, `/mermaid` and
+  `katex` (4 MB unpacked). `@assistant-ui/react-markdown` is the alternative markdown part.
+- **No Unsloth Studio frontend code is copied** into `packages/ui` or the web app. `assistant-ui` itself can be used directly.
 - **What we have today** (about 2,800 lines): `chatReducer` and `useAssistantChat` (events into state, stop, retry, re-attach
   after a broken connection by replaying the event log), `ChatScreen`, `ToolCard`, `AssistantHome`, our own safe `Markdown`
   (React nodes, never HTML strings, links only `http(s)`), `NotebookChat` with `[n]` citation pills.
@@ -79,18 +78,17 @@ The owner wants the chat built on the same open-source project that Unsloth Stud
    they earn their place (CU5). Our side menu's "Recents" list stays the conversation list unless CU0 shows
    `RemoteThreadList` is a better fit.
 8. **Dependencies** (versions pinned exactly; assistant-ui is 0.x):
-   - `@assistant-ui/react` (MIT): **approved by the owner**. Version chosen in CU0 (Studio pins 0.12.28; current is 0.15.29).
-   - `assistant-stream` (MIT) only if the runtime needs it; `zustand`, `zod`, `radix-ui`, `react-textarea-autosize` come with it.
-   - `streamdown`, `@streamdown/code`, `@streamdown/math`, `@streamdown/mermaid` (Apache-2.0) and `katex` (MIT): **approval asked
+   - `@assistant-ui/react`: **approved by the owner**. Version chosen in CU0 (Studio pins 0.12.28; current is 0.15.29).
+   - `assistant-stream` only if the runtime needs it; `zustand`, `zod`, `radix-ui`, `react-textarea-autosize` come with it.
+   - `streamdown`, `@streamdown/code`, `@streamdown/math`, `@streamdown/mermaid` and `katex`: **approval asked
      in CU0**, with their sizes. Math and diagrams load lazily so the first chat does not pay for them.
    - **`assistant-cloud`** (a transitive dependency): CU0 proves with a network capture that it makes **no request** unless a
      cloud project is configured, which we never do; if it does, we alias it to a stub.
    The assistant-ui CLI, which copies component source into the repo (shadcn-style), may be used to generate the thread
    components; it needs a network fetch, so **it is run only after the owner says yes**, and its output is then ours: it must
    pass the token lint (ADR-0081).
-9. **Reuse rule (ADR-0062).** Studio's frontend is AGPL-3.0 and is **read for ideas only, never copied** into `packages/ui` or
-   `apps/web`. `apps/desktop` is AGPL-3.0, but it shares `packages/ui` with the web app, so a desktop-only copy would split the
-   code path; we do not do it.
+9. **Reuse rule (ADR-0062).** Studio's frontend is **read for ideas only, never copied** into `packages/ui` or
+   `apps/web`.
 10. **Styling is ours.** assistant-ui is headless. Every colour, size, radius and motion comes from the design tokens
     (ADR-0081); the token lint covers the new files; light, dark, phone width and right-to-left are checked by the existing
     Playwright layout and screenshot tests plus the new chat cases.
@@ -118,7 +116,7 @@ The owner wants the chat built on the same open-source project that Unsloth Stud
 - **`useChat` from the Vercel AI SDK with `@assistant-ui/react-ai-sdk`:** assumes the AI SDK's streaming protocol and request
   model; our engine has its own event contract and replay.
 - **`@assistant-ui/react-langgraph`:** for LangGraph Cloud style servers; our engine is not one.
-- **LibreChat, Open WebUI as the whole assistant:** full products with their own servers and licences; they would replace our
+- **LibreChat, Open WebUI as the whole assistant:** full products with their own servers; they would replace our
   engine, tools and library integration.
 - **`assistant-ui` on `LocalRuntime` only** (what Studio does): simplest, but the runtime then owns the message state while our
   engine is the system of record; kept as the CU0 alternative.
@@ -160,7 +158,7 @@ approval of the items marked *owner*.
 - **Decision 8:** `assistant-cloud` made **0 requests** in every capture and runtime A's bundle does not contain it; `safe-content-frame` must
   never render `SandboxHost` (hidden remote default). `radix-ui` must be aligned to **1.7.0** in `packages/ui` and `apps/web` first.
   Dependencies and sizes: assistant-ui 82 packages 36 MB; streamdown 103 packages 14 MB; code plugin and shiki 15 MB; math and katex 7 MB;
-  mermaid 131 MB on disk (lazy); no copyleft (`dompurify` is MPL-2.0 OR Apache-2.0: use Apache-2.0).
+  mermaid 131 MB on disk (lazy).
 - **Weight:** first chat screen JavaScript **275 KB raw / 85 KB gzip today, 1,090 KB raw / 326 KB gzip after**, plus about 15 MB of lazy chunks
   on disk. *Owner:* accept a 330 KB gzip budget for the web app and the 15 MB (or curate shiki languages first).
 - **Accessibility:** the library has **no live region**; we build the announcer; `dir="auto"` on the user bubble and the box.

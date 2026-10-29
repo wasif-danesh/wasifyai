@@ -21,18 +21,18 @@ exactly what a deepfake is. The design starts from that, not from the model.
 
 **The engine is InfiniteTalk** (MeiGen-AI), chosen by the owner. What was checked on 2026-10-09:
 
-| Part | Licence | Notes |
-|---|---|---|
-| InfiniteTalk weights and code | Apache-2.0 | Audio-driven video generation. Two modes: video to video (dubbing) and **image to video**, which is what this product uses. A song works as audio. |
-| Base model Wan2.1-I2V-14B-480P | Apache-2.0 (not gated) | A 14-billion-parameter video model; InfiniteTalk adds its audio conditioning on top of it |
-| Audio encoder `chinese-wav2vec2-base` | MIT (not gated) | Turns the audio into features for the video model |
-| ComfyUI workflow (`ComfyUI-WanVideoWrapper`, kijai) | Apache-2.0 | The route that fits our worker, which already drives ComfyUI |
+| Part | Notes |
+|---|---|
+| InfiniteTalk weights and code | Audio-driven video generation. Two modes: video to video (dubbing) and **image to video**, which is what this product uses. A song works as audio. |
+| Base model Wan2.1-I2V-14B-480P | A 14-billion-parameter video model; InfiniteTalk adds its audio conditioning on top of it |
+| Audio encoder `chinese-wav2vec2-base` | Turns the audio into features for the video model |
+| ComfyUI workflow (`ComfyUI-WanVideoWrapper`, kijai) | The route that fits our worker, which already drives ComfyUI |
 
 What the project documents, and what it does **not** say:
 
 - It makes 480P or 720P video. Image to video gives good results for up to about one minute (colour drift after
   that); the default maximum is 40 seconds. It offers an int8 quantised model, and a community low-memory
-  runner (Wan2GP, licence not stated) exists.
+  runner (Wan2GP) exists.
 - The reference setup assumes **NVIDIA CUDA** (a CUDA build of PyTorch and flash-attention). Nothing in what was
   read says it runs on Apple silicon, and **our own result with a neighbouring model is a warning**: Wan 2.2 5B
   image to video produced noise on this Mac (ADR-0037). Memory and time for the 14B model are not verified.
@@ -101,13 +101,13 @@ step 1 answers where InfiniteTalk can run.
    it, this ADR records that and the product targets a GPU host.
 2. **Languages.** The same character with speech in Bengali, Hindi, English, Spanish, Arabic, German, Japanese,
    Chinese and Russian, and a sung line. Lip alignment is scored with a lip-sync confidence measure (a SyncNet
-   style distance and confidence; the licence of whatever tool does the scoring is checked first) and by a person
+   style distance and confidence) and by a person
    who speaks the language; the table lists which languages are good, weak or not usable. A language that fails
    is shown as limited on the page, and the Whisper-encoder successor is tried for it.
 3. **The image guardrail:** a labelled set of photographs, illustrations, cartoons, 3D renders and AI-generated
    faces: how many real-person photographs are refused (must be all of the clear photographs), how many
    harmless drawings are refused (a few at most), and an honest note on realistic AI faces. Photographs of
-   people in the set are synthetic or properly licensed; no real person's photograph is generated or kept.
+   people in the set are synthetic or used with permission; no real person's photograph is generated or kept.
 4. **The audio check:** a script, a spoken file and a song in several languages each reach the moderator through
    the right path.
 
@@ -183,7 +183,7 @@ Built as designed, with these differences, all small and recorded here:
 
 A first run of InfiniteTalk on the Mac, at the only size it could manage (256x256, 2 steps), looked poor, and
 the owner decided that a prototype must run on the development machine. **The default engine is now MuseTalk
-v1.5** (TMElyralab; code MIT; weights stated free for commercial use; checked 2026-10-09). InfiniteTalk stays as
+v1.5** (TMElyralab; checked 2026-10-09). InfiniteTalk stays as
 the option for a big GPU (`PRODUCT_ENV=infinitetalk`, `product.infinitetalk.yaml`, the workflow files and the
 ComfyUI route are kept).
 
@@ -201,9 +201,9 @@ run natively (`scripts/lipsync-server.sh`, set up by `services/lipsync-musetalk/
 container on a Mac cannot reach the GPU; a CUDA container is the same code. The product's `video.lipsync`
 capability uses a new `lipsync` provider; the worker's `LipSyncRunner` (set by `LIPSYNC_SERVER_URL`) sends the
 picture and voice to it. MuseTalk's own code needs mmpose, which does not install without CUDA; the server takes the
-68 face landmarks from the `face-alignment` package instead, with the same crop rule. Weights and licences:
-MuseTalk v1.5 (MIT), sd-vae-ft-mse (MIT), whisper-tiny (MIT), the BiSeNet face parser and ResNet18 (the project's
-own links), face-alignment's S3FD and 2DFAN4 (BSD-3). A real run through the stack (script, Kokoro speech,
+68 face landmarks from the `face-alignment` package instead, with the same crop rule. Weights:
+MuseTalk v1.5, sd-vae-ft-mse, whisper-tiny, the BiSeNet face parser and ResNet18 (the project's
+own links), face-alignment's S3FD and 2DFAN4. A real run through the stack (script, Kokoro speech,
 768x768 clip, cold start included) took 39 seconds for 1.8 seconds of video.
 
 **Length.** The 15 second limit of the InfiniteTalk design is gone: with MuseTalk a clip costs about 5 seconds of
@@ -222,7 +222,7 @@ The owner asked for the InfiniteTalk code and its models to be removed. The work
 `infinitetalk` product overlay, the worker's ComfyUI address for lip sync (`COMFYUI_LIPSYNC_BASE_URL`), and the
 ability to hand a voice to a ComfyUI workflow were deleted, and the 62 GB of models, the ComfyUI environment and the
 spike scripts were removed from the Mac. The spike section above stays as the record of what was measured and why
-it was dropped. If a CUDA host and a need for whole-body motion appear, InfiniteTalk (Apache-2.0) can be added back
+it was dropped. If a CUDA host and a need for whole-body motion appear, InfiniteTalk can be added back
 as another provider, from this ADR and the git history (the commits of 2026-10-09).
 
 ## The desktop (2026-10-16)

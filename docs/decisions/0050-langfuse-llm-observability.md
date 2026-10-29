@@ -18,7 +18,7 @@ The owner wants monitoring, analytics and cost tracking for LLM use, self-hosted
 
 Facts (checked 2026-10-10):
 
-- **Langfuse** is open source: MIT for the repository, except its `ee` folders (enterprise features, not needed).
+- **Langfuse** is open source (its `ee` folders, enterprise features, are not needed).
   It provides traces, prompt management, evaluations, datasets and a playground, and is self-hostable. It has
   official Helm charts.
 - Self-hosting needs **Postgres, ClickHouse, Redis (or Valkey) and S3-compatible storage**, plus its web and worker
@@ -33,7 +33,7 @@ Facts (checked 2026-10-10):
 ## Decision
 
 1. **Langfuse, self-hosted, in the cluster**, installed from its official Helm chart in an `observability`
-   namespace, next to the monitoring stack. It is MIT; the `ee` features are not used. It is **not** used for
+   namespace, next to the monitoring stack. The `ee` features are not used. It is **not** used for
    alerting (Alertmanager stays the only place alerts come from) and it does **not** replace `usage_events`
    (billing's source of truth) or Prometheus.
 2. **New datastore: ClickHouse**, owned by Langfuse and used by nothing else. Postgres, Redis and object storage
@@ -76,7 +76,7 @@ Facts (checked 2026-10-10):
 
 - **LangSmith:** the natural pair for LangGraph, but proprietary and cloud-hosted; against rule 12 and data
   residency.
-- **Arize Phoenix:** open source and lighter, with a licence (Elastic) that is not OSI open source; no cost
+- **Arize Phoenix:** open source and lighter; no cost
   analytics comparable to Langfuse.
 - **OpenTelemetry traces into Grafana Tempo:** fits the existing stack, but no prompt or cost views, and we would
   build them.
@@ -98,7 +98,7 @@ test and production until a privacy review; access by port-forward or Tailscale 
 ## Built (2026-10-29, stage O1)
 
 - **The graphs:** `wasifyai_api/run_tracing.py` gives each run Langfuse's LangChain callback (the `langfuse`
-  Python SDK 5.0.4, MIT) when `LANGFUSE_BASE_URL`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are set. With
+  Python SDK 5.0.4) when `LANGFUSE_BASE_URL`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are set. With
   `LANGFUSE_CAPTURE_CONTENT` off (the default) every input and output is replaced by "[not captured]" before it
   leaves; the person is a one-way hash of tenant and user; the product is a tag. Langfuse has a tracer provider
   of its own, so its prompts never reach Tempo, and its traces share the run's trace id.

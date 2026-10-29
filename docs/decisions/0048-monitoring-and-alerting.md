@@ -69,7 +69,7 @@ The constraints that decide the design:
 
 Decision 7 excluded distributed tracing from v1. The owner approved it for stage O1 of the 2026-10-27 plan:
 
-- **OpenTelemetry** (`opentelemetry-api`, `-sdk`, `-exporter-otlp-proto-http`, Apache-2.0) in the API, the media
+- **OpenTelemetry** (`opentelemetry-api`, `-sdk`, `-exporter-otlp-proto-http`) in the API, the media
   worker, the engine workers and the action executor: one span per request, per run stretch, per graph node,
   per action and per engine or media job. The trace context travels in the job (`EngineJob.trace`,
   `JobRequest.trace`) and arrives from the web app's BFF as a `traceparent` header, so a run is one trace from

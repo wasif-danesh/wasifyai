@@ -12,7 +12,7 @@ use the products (make an image, find an earlier creation) rather than only talk
 (`default-chat`, `prompt-enhancer`, `multimodal`) and an event contract with `token`, `node`, `interrupt`,
 `job_progress`, `done`, but no conversation product. Unsloth's chat feature (history, attachments, retrieval,
 tool calling, MCP, web search, sandboxed code execution, model comparison) was read from its file names and docs,
-not run; its frontend uses `assistant-ui` (MIT).
+not run; its frontend uses `assistant-ui`.
 
 ## Decision
 

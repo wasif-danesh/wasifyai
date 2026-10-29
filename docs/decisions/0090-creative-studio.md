@@ -10,7 +10,7 @@
   creation is searchable), ADR-0063 (will it fit), ADR-0077 and ADR-0079 (Motion graphics: titles and captions), ADR-0073 to ADR-0076
   (Train: characters and styles), ADR-0078 (Qwen3.5-9B writes plans), ADR-0047 (safeguards), ADR-0061 (how outside ideas enter),
   ADR-0081 (design tokens), ADR-0086 (the model button, in the top bar), ADR-0087 (engine workers for the web), ADR-0088 (one job per
-  person), ADR-0012 (licences).
+  person).
 - **Evidence:** `docs/spikes/maestro-study.md` (what Maestro does, in my words; its source and docs were read, it was not run). No model
   was run for this ADR.
 - **Earlier proposal:** a narrower "music video" proposal was withdrawn by the owner on 2026-10-24. Its ideas that survive are used
@@ -20,8 +20,7 @@
 
 Maestro (an open local app built on WanGP, release 3.2.0 of 2026-10-22) offers three modes over one library of outputs: **Studio**
 (make one thing with every control), **Director** (a language model plans a music video or short film shot by shot, the app makes
-pictures and clips and joins them) and **Editor** (a timeline to finish the work). Its licence forbids using its code in a paid
-product, a hosted service or an integration, and it runs only on NVIDIA GPUs. The owner wants the *concept* in Wasify AI, built on
+pictures and clips and joins them) and **Editor** (a timeline to finish the work). It runs only on NVIDIA GPUs. The owner wants the *concept* in Wasify AI, built on
 what we have: a Mac, local models, ComfyUI, the voice product, Motion graphics, the library and the action catalogue.
 
 What we have today that a person could use to make a video by hand: Create images (klein 4B, about 13 s warm), Edit, Inpaint and
@@ -106,13 +105,13 @@ plan, which shot is which, and the cut.
    timed words, optionally who sings) and the video model's longest clip, and returns slots: cut times scored on musical cues,
    snapped to beats and to the video frame grid, with a **cut speed** control from -2 (few, longer) to +2 (many, shorter). A slot
    longer than a clip can be is split at a beat. A clip is made a little longer when needed and trimmed, so the music never drifts.
-   Beat and section analysis needs a tool we do not ship yet (stage CS0 tries candidates and reads their licences; **nothing enters
+   Beat and section analysis needs a tool we do not ship yet (stage CS0 tries candidates; **nothing enters
    the dependencies without the owner's yes**, CLAUDE.md "Ask before").
 6. **Draft first, motion later, always honest.** The order is cheapest first and the person can stop after any step:
    *Plan → Look (stills for every shot) → Preview (the stills cut on the beats over the song with ffmpeg camera moves) → Draft excerpt
    (animate a chosen stretch at the small setting) → Make it better (animate or sing chosen shots at the final setting)*.
    Before each **Start** the screen says in words: how many shots at each motion level, the time as a range ("about"), corrected
-   after the first shot, the disk it will use, the model still to download (with size and licence), and whether it fits (`fits`,
+   after the first shot, the disk it will use, the model still to download (with size), and whether it fits (`fits`,
    `tight`, `too_big`, ADR-0063). A step that cannot fit is not offered. Nothing is downloaded without the usual click.
 7. **Cut is a small, real timeline, not a full editor in v1.** One picture track (the shots in order, each with the chosen take), one
    audio track (the song), one caption track (lyrics or text, drawn with Motion graphics). The person can reorder, trim, split, swap a
@@ -138,7 +137,7 @@ plan, which shot is which, and the cut.
     music product; analysis for a new `caps.music.analyse`; the cut for a new `caps.video.compose` (ffmpeg). The model picker (ADR-0086)
     chooses them; a better clip model later is a descriptor (ADR-0066) with no change to a project.
 12. **Prompt guides are our own files.** What Maestro keeps as writing guides per model becomes `products/<id>/prompts/*.md` that **we
-    write ourselves**, for our models, in our words. Nothing is copied from Maestro (its licence forbids it and the guides were
+    write ourselves**, for our models, in our words. Nothing is copied from Maestro (the guides were
     written for other models).
 
 ## How it fits the product
@@ -195,7 +194,7 @@ Deleting a project (`destroy`) removes the document, stills, clips, cuts, export
 ("Also delete the song?", default keep). Deleting while a run is going cancels it first. Characters are shared and are not deleted
 with a project.
 
-### Consent, safeguards, licences
+### Consent and safeguards
 
 * **Faces and voices** keep the rules already in force for lip sync (ADR-0044) and voice cloning: the "who is this" and "whose voice"
   answers are kept with the video. The lip sync mark question stays as the owner decided on 2026-10-20 (backlog D13).
@@ -203,10 +202,8 @@ with a project.
   a hosted provider is not in this ADR). ADR-0047 safeguards apply through `await caps.safeguards_on()`.
 * **Prompt injection:** lyrics and story text are data; they reach the writer inside a prompt and cannot call tools; the plan is parsed
   as JSON and validated.
-* **Licences:** Maestro's code and guides are **not used**. Its ideas are not copyrightable and are used as ideas. Every model is one we
-  already list with `commercial_use: yes` (Qwen3.5-9B, klein 4B, LTX-Video 2B 0.9.5, MuseTalk, ACE-Step, HTDemucs, Parakeet).
-  A beat or section tool is **unreviewed until CS0 reads its licence**. If a better clip model with a revenue-threshold licence is
-  later wanted, the owner's policy of 2026-10-20 (backlog D13) applies.
+* **Maestro:** its code and guides are **not used**; its ideas are used as ideas. A beat or section tool is chosen by CS0 (nothing enters the
+  dependencies without the owner's yes).
 
 ## What exists, what is missing
 
@@ -227,7 +224,7 @@ with a project.
 
 | Stage | What | Size | Done when |
 |---|---|---|---|
-| **CS0** | **Spike, measured, no product code in the repo.** On the owner's Mac, in a throwaway folder: (a) beat, downbeat and section tools on three songs (sung English, instrumental, another language), reading each licence; (b) Qwen3.5-9B plans the same songs and two stories with our smaller schema: does it stay valid JSON (with the engine's schema support), cover the timeline, stay in the cast; how many rows need repair; a person's read of the shots; (c) klein stills for 12 shots with and without character reference pictures, and the preview cut on the beats; (d) LTX clips for six of them at draft and final settings; (e) MuseTalk on a sung vocal for 20 s; (f) a 60 s ffmpeg cut with captions from Motion graphics. Downloads are deleted afterwards and the disk used is reported. The owner watches two excerpts and says whether this works as a fast, honest draft | 3 | `docs/spikes/creative-cs0.md` with a measured table, licence rows, the schema that worked, a go or no-go. **No-go ends here** and the ADR is amended |
+| **CS0** | **Spike, measured, no product code in the repo.** On the owner's Mac, in a throwaway folder: (a) beat, downbeat and section tools on three songs (sung English, instrumental, another language); (b) Qwen3.5-9B plans the same songs and two stories with our smaller schema: does it stay valid JSON (with the engine's schema support), cover the timeline, stay in the cast; how many rows need repair; a person's read of the shots; (c) klein stills for 12 shots with and without character reference pictures, and the preview cut on the beats; (d) LTX clips for six of them at draft and final settings; (e) MuseTalk on a sung vocal for 20 s; (f) a 60 s ffmpeg cut with captions from Motion graphics. Downloads are deleted afterwards and the disk used is reported. The owner watches two excerpts and says whether this works as a fast, honest draft | 3 | `docs/spikes/creative-cs0.md` with a measured table, the schema that worked, a go or no-go. **No-go ends here** and the ADR is amended |
 | **CS1** | Project store and document, `music.analyse`, the cut-layout function, the brief and **Plan** view, plan writer with checks and checkpoints, the planning log, actions, help files, **search registration and eval row**, `creative_project` kind | 7 | a song becomes an editable plan on this Mac in the CS0-measured time; a crash mid-plan resumes; the search checklist in full |
 | **CS2** | **Shots** view: stills per shot, characters (pictures and look), takes, redo, out-of-date marks, Preview cut over the song, the honest panel, one job with child jobs, cancel keeps work, disk preflight | 7 | a 3-minute preview in about the estimated time; kill and resume redoes only missing shots |
 | **CS3** | **Cut** view: the small timeline, ffmpeg render graph, captions, take swap, undo, export, save a copy | 6 | the owner exports a finished video of a real song from the screens only |
@@ -264,7 +261,7 @@ job per person (ADR-0088), and need the GPU host (P7). `docs/web-parity-ledger.m
 * **Time.** A 3-minute song is estimated at about 10 to 15 minutes for the preview and 1.5 to 2.5 hours for full motion on this Mac
   (estimates from measured parts, not measured end to end). 16 and 32 GB Macs are unmeasured.
 * **Scope creep toward a full editor.** The decision keeps v1 to one picture track, a song and captions.
-* **Copying by accident.** Maestro's licence forbids it. The rule: nothing is copied; the study records ideas only; prompts, guides and
+* **Copying by accident.** The rule: nothing is copied; the study records ideas only; prompts, guides and
   schemas are written fresh; a reviewer checks the diff of each stage for anything that reads like theirs.
 * **Naming.** "Studio" names were avoided on purpose in this project (open question 1).
 * **Real people and songs:** deepfake and copyright risk; consent answers, safeguards and local-only reduce it; terms of service are
@@ -293,7 +290,7 @@ The owner took the recommendation on every question.
 ## Open questions for the owner
 
 None. What CS0 will decide with measurements (not owner questions): whether the 9B writer can fill the plan schema reliably, which beat and
-section tool to use and its licence, the real times of the preview and the draft, and whether character consistency by reference pictures is good enough.
+section tool to use, the real times of the preview and the draft, and whether character consistency by reference pictures is good enough.
 
 ## Amendment: the screen, and how every product plugs into it (2026-10-24, owner; **Proposed**, waits for the owner's look at the mockup)
 

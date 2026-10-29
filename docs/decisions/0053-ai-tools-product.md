@@ -76,7 +76,7 @@ Candidates for "two pictures and a sentence, no mask":
 | Qwen Image 2.1 edit, pictures addressed as `<image1>`, `<image2>` in the prompt (ComfyUI's official template, up to 16 pictures) | Installed (int8); built for multi-reference edits | Heavy; speed on Apple silicon unknown |
 | CatVTON / IDM-VTON custom nodes (mask and pose based) | Most faithful transfer | Custom nodes to pin and review, DensePose setup, CUDA-leaning |
 
-**Acceptance (before this ADR is accepted):** 20 person/garment pairs (synthetic or properly licensed images; no
+**Acceptance (before this ADR is accepted):** 20 person/garment pairs (synthetic images or ones used with permission; no
 real person's photo kept in git) through candidates 1 and 2, scored by the owner on garment fidelity (colour,
 pattern, shape), identity kept, pose and background kept, and seconds per image on the Mac. The chosen workflow
 is then run for real through the stack. The results table goes in this ADR.

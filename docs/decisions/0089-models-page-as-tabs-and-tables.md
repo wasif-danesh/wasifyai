@@ -9,14 +9,13 @@
 ## Context
 
 ADR-0086 made the Models page nine cards, one for each group of models. In use the cards were confusing: each repeats the same
-text, a person has to open a card to see what is on the computer, and sizes and licences cannot be compared. The web had no Models
+text, a person has to open a card to see what is on the computer, and sizes cannot be compared. The web had no Models
 page at all (the menu hid the item), so an admin could not see or get the models of a worker except in a separate Workers table.
 
 ## Decision
 
 1. **One tab for each group** (Chat, Images, Video, Voice, Listening, Music, Lip sync, Search, 3D), and under the open tab **a table
-   of its models**: name with a plain line about it (and "Recommended" where we have a clear choice), size, licence with a note
-   when it is not plain commercial use, state, and one action: **Use**, **Get** (after the dialog that says what is downloaded) or
+   of its models**: name with a plain line about it (and "Recommended" where we have a clear choice), size, state, and one action: **Use**, **Get** (after the dialog that says what is downloaded) or
    **Remove** (after asking). The model in use is first, then what is here, then the recommended, then the rest.
 2. **One component for both apps** (`ModelsHome` in `packages/ui`), over the same `ChoicesApi` the pickers use. A group the app
    has no picker for has no tab, so the web shows Voice, Listening, Music and Lip sync (what the workers serve) and the desktop

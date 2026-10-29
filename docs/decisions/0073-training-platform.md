@@ -35,18 +35,15 @@ Train page on the owner's M5 Pro, 64 GB):
 | **Diffusion LoRA** (`/api/train/diffusion/*`) | image LoRAs for SDXL, FLUX.1, Qwen-Image, Z-Image, Krea 2, FLUX.2 klein and dev, and video models (LTX-2, MiniMax-H3); from a folder of images with a sidecar `.txt` per image or a `metadata.jsonl`; **images without a caption are skipped** | **CUDA or Intel XPU, else CPU**: no MLX or Metal path, so not usable on a Mac |
 | Studio screens | Model, Method, HF token, Train as, Dataset, Subset, Train split, Evaluation split, Project name, Max steps / epochs, Context length, Learning rate, Advanced (batch, accumulation, optimiser, scheduler, rank, alpha, dropout, packing, gradient checkpointing, offload, W&B, TensorBoard), Load/Save YAML | |
 
-Licence: the `unsloth` library is Apache-2.0; **Studio (`studio/`) is AGPL-3.0**. ADR-0061 already says how AGPL
-code enters (a clearly named place with a notice and provenance, never linked into the Apache-2.0 core).
-
 **Other facts, unchanged** (re-checked in spikes T0 and T1):
 
-- On this Mac, `wasifyai-art` trained a FLUX.2 klein base 4B LoRA with **mflux** (MIT) at about 7.5 s per step; the
+- On this Mac, `wasifyai-art` trained a FLUX.2 klein base 4B LoRA with **mflux** at about 7.5 s per step; the
   trigger word binds only with the full timestep range, at 150 to 300 steps (ADR-0056, ADR-0062). mflux lists Z-Image
   and FLUX.2 base and distilled as trainable and FLUX.1 as not.
-- **Ostris AI Toolkit** (MIT) trains LoRA and LoKr for a long model list on **NVIDIA** GPUs, with cloud paths (RunPod,
+- **Ostris AI Toolkit** trains LoRA and LoKr for a long model list on **NVIDIA** GPUs, with cloud paths (RunPod,
   Modal). Its macOS script is "experimental" and ADR-0054 recorded that its Apple-silicon path did not converge.
 - The app has **one memory slot** (ADR-0056); a training run holds it for minutes to hours.
-- **Licences travel with weights** (FLUX.1-dev is non-commercial; ADR-0012). A model of a real person's **likeness**
+- A model of a real person's **likeness**
   is the most abusable thing the app could make.
 
 **What Studio's screen tells us about the audience.** It is built for people who know what QLoRA, context length,
@@ -61,17 +58,15 @@ bring **a folder of photos, a spreadsheet, or some chats**, and want a result.
    `train.publish`, `model.list`. Effects are `make`, flagged `costly`; a remote run is also `leaves_device`.
 2. **Unsloth is the engine; we do not rebuild its trainers.** Language and decision training, and image LoRA on
    NVIDIA, run through an **"Unsloth trainer" component**: a pinned copy of Unsloth Studio's backend installed on
-   request (size, source and licence shown first) in its own environment under `<app data>/components/trainer/`,
+   request (size and source shown first) in its own environment under `<app data>/components/trainer/`,
    started by the engine when a run starts and stopped after. It is reuse level **A** of ADR-0062 (an engine behind
    an adapter), chosen over copying Studio's modules into our tree (level B) because its trainers are 30,000 lines
    that depend on Studio's own utilities and update fast. How we drive it (its REST routes, `/api/train/*`, over
-   loopback with a one-run token, or its worker subprocess) is decided by spike T0. **The licence boundary:** the
-   component is a separate program under AGPL-3.0, with its notice and a source link in the app; our code talks to it
-   over a socket and stays Apache-2.0 (as `apps/desktop` keeps its own AGPL header, ADR-0061). A fallback exists:
+   loopback with a one-run token, or its worker subprocess) is decided by spike T0. The
+   component is a separate program; our code talks to it over a socket. A fallback exists:
    `mlx-lm` directly for language LoRAs if the component proves too heavy or unstable.
 3. **Engines are descriptors, as voices are (ADR-0066).** A file per engine and family: engine, base models,
-   platforms, minimum memory, input and output formats, the licence of the engine and of each base model
-   (`commercial_use: yes | conditional | no | unreviewed`), and `measured` (time per step, peak memory, on which
+   platforms, minimum memory, input and output formats, and `measured` (time per step, peak memory, on which
    machine). The screen lists only what can run here and why the others cannot ("needs an NVIDIA GPU"). **No number
    is guessed.**
 
@@ -96,7 +91,7 @@ bring **a folder of photos, a spreadsheet, or some chats**, and want a result.
    - **The app chooses** the model, method, steps, resolution and learning rate from the descriptor and the measured
      presets for this machine, and shows **one recommendation** in a sentence ("This will take about 25 minutes and
      pause chat and image making").
-   - **No account setup on the main path.** Models that need a Hugging Face token or a licence click are not
+   - **No account setup on the main path.** Models that need a Hugging Face token are not
      recommended; if the best choice needs one, the app asks once, explains why, and stores it in the keychain.
    - **An Advanced panel** (collapsed, labelled "For experts") shows the Unsloth-style fields and lets a technical
      person change them or load a saved configuration (YAML). Nothing in it is needed to finish.
@@ -117,7 +112,7 @@ bring **a folder of photos, a spreadsheet, or some chats**, and want a result.
    Stop and resume from the last checkpoint. Nothing is preempted without a click.
 9. **Results are models with cards (ADR-0041).** A trained result is listed under **My models** with its card: base
    model and hash, engine and version, dataset hash and size, the exact settings, steps and time, the trigger word or
-   prompt format, the licence it inherits, the person's statements, the evaluation, a date. It is searchable and
+   prompt format, the person's statements, the evaluation, a date. It is searchable and
    **published to where it is used**: a LoRA into ComfyUI's `loras` folder with the right key names (ADR-0059), a
    language adapter into the language server (ADR-0074), a sorter into the `decision.decide` action (ADR-0075).
 10. **Every run is evaluated before it is offered,** in plain words (decision 5), with a "did not pass" mark that does
@@ -134,7 +129,7 @@ bring **a folder of photos, a spreadsheet, or some chats**, and want a result.
 
 - Non-technical people get a three-step path for three kinds of training, and technical people keep the knobs.
 - We reuse Unsloth's trainers (and their continuing fixes) instead of writing our own, at the price of a large
-  component, a pinned version, and AGPL obligations for redistribution (a source link and the licence text).
+  component and a pinned version.
 - The Mac is a real training machine for language models, sorters and (through mflux) image LoRAs, and the honest
   answer for the rest is an NVIDIA box or a rented GPU.
 - A new class of long jobs (hours, overnight, resumable) needs a per-capability timeout, as ADR-0054 noted.
@@ -154,11 +149,9 @@ bring **a folder of photos, a spreadsheet, or some chats**, and want a result.
 
 1. How to drive the component (REST routes with a loopback token or the worker subprocess) and how big its Mac
    install is (spike T0).
-2. The licence of Studio redistribution: AGPL-3.0 allows it with source availability; the notice text and where the
-   source link lives are a legal read before shipping.
-3. Rented-GPU billing: the person's own account first.
-4. Whether "train overnight" is shared with agent scheduling (ADR-0072).
-5. Memory and time tables per Mac configuration (16, 32, 64 GB), measured per family.
+2. Rented-GPU billing: the person's own account first.
+3. Whether "train overnight" is shared with agent scheduling (ADR-0072).
+4. Memory and time tables per Mac configuration (16, 32, 64 GB), measured per family.
 
 ## Not in v1
 
@@ -181,17 +174,9 @@ Measured on the owner's M5 Pro, 64 GB. Verdict: **T1 Go**, with the conditions b
   `run_mlx_training_process(event_queue, stop_queue, config)`, all with progress, stop-with-save and resume (measured).
   Studio's REST routes (`/api/train/*`) exist but were read, not run. Our seam is a **small runner script of ours that
   runs as a separate process and only speaks JSON lines over a pipe** (progress out, a stop line in).
-- **Licence boundary, as the texts read (no legal advice; counsel must read it before shipping):** the repository
-  `LICENSE` is Apache-2.0, but `COPYING` is the AGPL text with the statement that `unsloth/*` is Apache-2.0 and
-  `studio/*` and `unsloth_cli/*` are AGPLv3. In the installed packages the "Apache" `unsloth` library has AGPL headers in
-  67 of 145 files; **the MLX trainer itself (`unsloth_zoo/mlx/*`) carries AGPL v3 headers while the package metadata
-  says LGPL-3.0-or-later**. AGPL v3 says inclusion of a covered work in an aggregate of separate and independent
-  works does not extend the licence to the rest. The conservative reading is the one already planned and now sharper:
-  **ship the component unmodified, with its `COPYING` and a source link, and a runner that is a separate executable**.
-  Open for counsel: the mixed headers, and whether a runner importing the adapter in-process counts as a "larger program".
-- **T1 conditions:** (a) the licence reading above; (b) pre-seed the transformers side environments (60 MB each) so
-  installs need no network; (c) pin unsloth 2026.10.6 and mlx 0.32.3 and count the **2.1 GB** environment as the
-  component's size (a no-torch variant was not tried); (d) own the Qwen3.5 PEFT conversion (`mlx2peft.py`) and the
+- **T1 conditions:** (a) pre-seed the transformers side environments (60 MB each) so
+  installs need no network; (b) pin unsloth 2026.10.6 and mlx 0.32.3 and count the **2.1 GB** environment as the
+  component's size (a no-torch variant was not tried); (c) own the Qwen3.5 PEFT conversion (`mlx2peft.py`) and the
   **thinking-off serving rule**.
 - **Measured descriptors (decision 3):** Unsloth MLX QLoRA Qwen3-0.6B 0.31 s/step, 1.19 GB; Qwen3.5-0.8B 0.22 s/step,
   1.76 GB; mlx-lm 0.058 s/step, 0.98 GB and 0.48 s/step, **6.33 GB** (Qwen3.5's large vocabulary); Laya sorter 0.14
@@ -303,7 +288,7 @@ diffusion trainer lists video models, line 35) and under "Not in v1". It is now 
    (ADR-0068 floor: `make`, `costly`, and `leaves_device` when rented).
 7. **Needs before it is built:** the TV0 spike (can LTX-Video 2B be taught, on what, how fast, how much memory, does it keep
    the magic word, does it load in ComfyUI after the key rename); the video descriptors; the clip checks and the frame
-   captioner; the screens; the licence of each trainable base model (decision 3, `commercial_use`).
+   captioner; the screens.
 
 **Status:** decided, not built; it follows the picture card's real trainer and the language card. Not in the first release
 unless TV0 finds a path that works on the owner's Mac.
@@ -311,13 +296,13 @@ unless TV0 finds a path that works on the owner's Mac.
 ## Built (2026-10-24, later): the real picture trainer (mflux) on this Mac
 
 `services/api/src/wasifyai_api/desktop_training.py` (`MfluxTrainer`) replaces the preview in the desktop engine. It runs
-`mflux-train` (0.22.0, MIT) as a separate process in its own process group, holds the one big-model slot, reads the progress
+`mflux-train` (0.22.0) as a separate process in its own process group, holds the one big-model slot, reads the progress
 bar, copies each sample picture as it appears (`step-0000-1.png` is what the untrained base drew), takes the adapter out of the
 last checkpoint and removes the pictures copy and the checkpoints. A stop or the slot being wanted kills the group. It says in
 words why it cannot run (not an Apple-silicon Mac; the tool not set up; the base model not on the computer) and **never
 downloads silently** (`HF_HUB_OFFLINE=1`).
 
-- **Base and recipe:** FLUX.2 **klein base 4B** (Apache-2.0, 15 GB on disk: transformer 7.75 GB, text encoder 8.1 GB, VAE 0.17 GB),
+- **Base and recipe:** FLUX.2 **klein base 4B** (15 GB on disk: transformer 7.75 GB, text encoder 8.1 GB, VAE 0.17 GB),
   not the distilled klein that Create image runs (the file in ComfyUI hashes to the distilled repo, not the base). LoRA rank 16 on
   the attention and feed-forward layers of the 5 double and 20 single blocks, 8-bit base, 768 px, gradient checkpointing, full
   timestep range (0 to 28, sigmoid), AdamW 1e-4, one picture a step, 4 sample rounds of 2 prompts (one scene it saw, one new).
@@ -373,8 +358,8 @@ A fresh install can now train. `services/api/src/wasifyai_api/training_setup.py`
 **Set up training** on the Train screen) fetches, on request, what the picture trainer needs, in the same shape as the other
 components (3D, the notebooks' reader):
 
-- **Shown first, repeated on the button:** the trainer (mflux 0.22.0, MIT, from PyPI, about 1.1 GB) and the picture model it learns on
-  (FLUX.2 klein base 4B, Apache-2.0, from Hugging Face, 15.98 GB), the free disk space needed (about 20 GB), and a button that
+- **Shown first, repeated on the button:** the trainer (mflux 0.22.0, from PyPI, about 1.1 GB) and the picture model it learns on
+  (FLUX.2 klein base 4B, from Hugging Face, 15.98 GB), the free disk space needed (about 20 GB), and a button that
   carries the exact total ("Download and set up (17.1 GB)"). The engine refuses a start whose size is not the one shown. A part
   that is already on the computer (a Hugging Face cache that holds a whole copy of the model, a developer's `WASIFYAI_MFLUX_DIR`) is
   used where it is and not offered again.
@@ -433,8 +418,8 @@ distilled klein as the image engine. Three picture sets: 12 pictures of one fict
 
 The amendment of 2026-10-24 is built for pictures; nothing in it is guessed.
 
-- **Descriptors:** `products/wasifyai-training/wasifyai_training/bases.py`. A `Descriptor` names a family, a base model, its engine, its
-  licence and the methods it cannot use with the reason for each. Today one: FLUX.2 klein base 4B, engine mflux, LoRA only (QLoRA: "pictures are
+- **Descriptors:** `products/wasifyai-training/wasifyai_training/bases.py`. A `Descriptor` names a family, a base model, its engine
+  and the methods it cannot use with the reason for each. Today one: FLUX.2 klein base 4B, engine mflux, LoRA only (QLoRA: "pictures are
   taught as a small adapter"; full fine-tuning: "far more memory than a Mac has"). `engine_for` is `bases.resolve(kind, base, method)`: it
   returns the descriptor and method a run will use, or says in words why a choice cannot be used. A new base or method is one descriptor entry.
 - **The list:** `GET .../train/choices?kind=` joins the descriptors with the engine's fit (too big, not set up) and the models the discovery scan found
@@ -490,7 +475,7 @@ taught a look by a LoRA on this Mac's graphics chip** with a small script of our
 app's own ComfyUI (fp32) after a rename of its keys (the file as saved is silently ignored there). So decision 4's "Mac path is unproven" and the card's
 "needs an NVIDIA graphics card for now" are **no longer true for this model**; the card's words change when the feature is built (TV1), not before.
 Still open: a real subject (the data was synthetic), the steps needed at a real size (300 at 768x512 were not enough; 800 at 384x256 were), image to video,
-and 16 GB Macs. The only ready-made Mac trainer found (`ltx-trainer-mlx`) teaches LTX-2.3, a different and much larger model that the product does not ship (ADR-0037 avoids its licence). It was **not run because it needs a download of 20 GB or more that was not asked for and its numbers would not transfer to the 2B model**; nothing in ADR-0037 forbids running it as a measurement.
+and 16 GB Macs. The only ready-made Mac trainer found (`ltx-trainer-mlx`) teaches LTX-2.3, a different and much larger model that the product does not ship. It was **not run because it needs a download of 20 GB or more that was not asked for and its numbers would not transfer to the 2B model**; nothing in ADR-0037 forbids running it as a measurement.
 
 **Real-subject test (2026-10-26, owner's approval and the fictional character Ena):** a video LoRA taught from the 36 Ena pictures alone (no clips) took 12.5 minutes (640x576, 1500 steps,
 7.2 GB) or 36 minutes (768x704, 3000 steps, 9.6 GB), and **worked in the app's own ComfyUI in half precision** (the fp32 setting was not needed). It moved a generic "woman on a

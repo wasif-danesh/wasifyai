@@ -10,7 +10,7 @@
 
 ## Context
 
-The owner wants "something like HyperFrames (experimental)". **HyperFrames** (HeyGen, Apache-2.0, read 2026-10-18)
+The owner wants "something like HyperFrames (experimental)". **HyperFrames** (HeyGen, read 2026-10-18)
 renders **HTML, CSS, media and seekable animations into deterministic MP4**: a composition is a plain HTML file
 (a root with `data-composition-id`, `data-width`, `data-height`; clips with `data-start`, `data-duration`,
 `data-track-index`; animations as GSAP timelines on `window.__timelines`), the renderer seeks each frame in
@@ -30,11 +30,7 @@ Constraints that matter:
   engine. That is an execution risk, unlike every other creation in the app.
 - **Dependencies.** A headless Chrome (a large download), Node.js 22, FFmpeg (the app already ships one through
   `imageio-ffmpeg`). The desktop app is a Tauri shell with a Python engine; neither provides Chrome or Node.
-- **GSAP licence.** HyperFrames' animations use GSAP. GSAP's "Standard No Charge" licence (Webflow, read 2026-10-18)
-  allows commercial use but **forbids tools that let people build visual animations without code and help build a
-  Webflow competitor**, and one copy says that if **end users are charged a fee** a paid "Business" membership is
-  required. A video-composition product is near enough to be read both ways; it needs an actual licence decision,
-  not an assumption. An alternative that avoids GSAP exists in principle (the Web Animations API, CSS animations,
+- **GSAP.** HyperFrames' animations use GSAP. An alternative that avoids GSAP exists in principle (the Web Animations API, CSS animations,
   Anime.js), at the cost of leaving HyperFrames' conventions.
 - **No GPU needed to render**, but CPU time is real: Chrome per frame plus encoding. Speed on a Mac is unmeasured.
 
@@ -47,8 +43,8 @@ Constraints that matter:
    the **assistant or the agent write it** (decision 5).
 2. **Adopt HyperFrames as the render engine for v1; do not build our own renderer yet.** The seam is an interface
    `VideoBuilderEngine` (create project, lint, preview, render, list assets) so another engine can replace it. We adopt
-   because a deterministic browser-to-MP4 renderer is hard to get right and the project is Apache-2.0 and
-   agent-oriented. Adopting is gated on: the GSAP licence read (decision 8), a measured render speed (V0), and a
+   because a deterministic browser-to-MP4 renderer is hard to get right and the project is
+   agent-oriented. Adopting is gated on: a measured render speed (V0), and a
    headless browser that is safe to ship (decision 4). If the gate fails, the fallback is our own engine on the
    same composition idea with the Web Animations API, which is a larger project and a new ADR.
 3. **Installed as a managed component on request, like ComfyUI and the notebooks' reader:** the size, source and
@@ -79,11 +75,8 @@ Constraints that matter:
    captions), **Slides to video** (a document or a notebook summary), **Report video** (a report from the agent
    with charts), **Social vertical** (9:16 captions), **Lyric or caption video**. A template is a HyperFrames
    project with slots our actions fill.
-8. **Licence work before code (a gate, not a footnote).** Read the GSAP Standard No Charge licence as it stands,
-   decide whether Video Builder is a "Prohibited Use" and whether a paid Business membership is needed if the app ever
-   charges, and ask GSAP (it invites the question). If the answer is no or unclear, Video Builder ships on the Web
-   Animations API or Anime.js and the HyperFrames conventions are followed only where they do not require GSAP.
-   Likewise check the licences of the browser build, Node.js, fonts and any template asset (rule 12).
+8. **Fallback without GSAP.** If GSAP does not work out, Video Builder ships on the Web Animations API or Anime.js
+   and the HyperFrames conventions are followed only where they do not require GSAP.
 9. **Outputs are creations (ADR-0041).** A composition (project folder, kind `composition`) and its renders (kind
    `video`, with a link to the composition and the render settings) are in My creations, searchable by their text
    (script, scene text, captions). A render records its determinism inputs (project hash, engine versions) so the
@@ -99,15 +92,13 @@ Constraints that matter:
 - A new component stack (Node, a browser, a render engine) and a new kind of risk (running composed code); the
   sandbox is the product's responsibility, not an afterthought.
 - Depends on an external project that is young; pinned, wrapped and replaceable.
-- The licence gate may change the engine. That is why it comes before code.
 
 ## Alternatives considered
 
 - **Build our own renderer in Rust on the system webview.** The shell's webview cannot be driven frame by frame
   deterministically as far as we know (not tested); worth one spike (V0) before we rule it out, since it would
   remove the Chrome download. Not v1.
-- **Remotion** (React-based; its licence is source-available with terms that depend on the size of the company, to
-  be read before any use). Not adopted: React-only authoring and a licence we have not cleared.
+- **Remotion** (React-based). Not adopted: React-only authoring.
 - **FFmpeg filter graphs and Python (MoviePy)** for compositing. Fine for slideshows; no HTML layout, charts,
   or animation timelines. Kept for simple slideshow renders if the engine is unavailable.
 - **Generate everything with video models.** They make seconds of footage, not a script-driven video with text and
@@ -122,20 +113,13 @@ Constraints that matter:
    the Chrome component can be dropped.
 3. Which HyperFrames features we need beyond the renderer (its Studio, its skills, its catalogue) versus our own
    screen.
-4. Fonts: shipping a small set of open fonts (licences checked) so renders look the same on every machine.
+4. Fonts: shipping a small set of open fonts so renders look the same on every machine.
 5. The web deployment: rendering arbitrary code in a server needs a real sandbox; desktop only in v1.
 
 ## Not in v1
 
 A visual timeline editor; live collaboration; rendering in the cloud; importing compositions from the web;
 embedding third-party scripts; audio recording in the composition; the web deployment.
-
-## Owner's answers (2026-10-18)
-
-- **The desktop app will be open source and free**, so the **GSAP gate (decision 8) is cleared for the desktop**:
-  no one is charged for it. It is not a free pass for everything: GSAP's terms (read earlier) bar using it to build a
-  tool that competes with Webflow's visual animation builders, which Video Builder is not, and a **paid or hosted web
-  version of Video Builder would need the question asked again**. The Web Animations API fallback stays as the plan B.
 
 ## Amendment after spike V0 (2026-10-19; `docs/spikes/video-builder-v0.md`)
 
@@ -178,10 +162,8 @@ The component and the sandboxed render path are built (engine side only; no scre
 - **Decision 3 (a managed component):** `<app data>/components/video-builder/` holds a pinned Node.js 22.23.1 (50 MB download), the pinned Chrome headless shell
   152.0.7977.30 (97.5 MB) and the 126 npm packages of a lock with integrity hashes (`hyperframes` 0.8.171, `gsap` 3.15.0; no install scripts). The person sees
   **288 MB** before the click; about 510 MB is used after. Telemetry and the skills download are off, the environment starts empty, `HOME` is inside the component.
-  The installed Chrome is not offered (owner, 2026-10-20: the plan's default). One of the 126 packages is **LGPL-3.0-or-later** (libvips, a prebuilt library inside
-  `sharp`, used as shipped and not modified): its notice is kept, and, on my reading of the LGPL (not legal advice), rule 12 is met: commercial use is allowed for an unmodified,
-  separately installed library. Have counsel confirm with the AGPL review already listed in the backlog (D10).
-- **Decision 8 (GSAP):** unchanged; GSAP is vendored into each project from the component's copy, never from a CDN, and the lint refuses any non-local URL before
+  The installed Chrome is not offered (owner, 2026-10-20: the plan's default).
+- **Decision 8 (GSAP):** GSAP is vendored into each project from the component's copy, never from a CDN, and the lint refuses any non-local URL before
   HyperFrames' compiler (which downloads CDN scripts in Node) sees it.
 - **Still open for V1c and later:** the memory limit from the fit check; a quarantine flag inside the packaged app; WebRTC and service-worker escapes; Windows and Linux; a model
   resident on small Macs. The browser's popup stays open until the render ends (behind the filter).

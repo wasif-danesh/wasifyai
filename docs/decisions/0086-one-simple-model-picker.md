@@ -4,10 +4,9 @@
 - **Date:** 2026-10-21. **Built** the same day: `packages/ui/src/models/` (the button, the dialog, the Models page), `apps/desktop/src/choices/` (the adapters), tests in both.
 - **Supersedes:** decision 1 of ADR-0064 (the Models screen with two tabs, On device and Discover) and the "Get it in Models" step
   of the screens. The rest of ADR-0064 stands: the engine does the browsing, opt-in network, only what the app can run by default, fit
-  on every variant, confirm-first downloads, licence first, model cards as text.
+  on every variant, confirm-first downloads, model cards as text.
 - **Depends on:** ADR-0059 (confirm-first resumable downloads, one managed engine), ADR-0063 (found models, the fit check),
-  ADR-0066 (speech and music models), ADR-0078 (the default chat model), ADR-0083 (the chat's model chip, the picture reader),
-  ADR-0012 (licences)
+  ADR-0066 (speech and music models), ADR-0078 (the default chat model), ADR-0083 (the chat's model chip, the picture reader)
 - **Plan and the reasoning:** `docs/model-picker-plan.md`
 
 ## Context
@@ -31,7 +30,7 @@ sections and a Hugging Face search; and the 19 catalogue models have no type a s
    image, video and other large models load on the first use (the first run says "Preparing the model"); the one big-model slot and its idle unload
    (ADR-0056) stay as they are. The choice is remembered per group and shared by every screen of the group.
 5. **Choosing one that is not on the computer opens a dialog in plain words**: what it is, the size, a time estimate, that it runs on this computer,
-   the licence in words (commercial use) with a link, whether it fits, free disk. **If it needs an engine the computer lacks (the image engine, the
+   whether it fits, free disk. **If it needs an engine the computer lacks (the image engine, the
    language engine, the speech runtime), the same dialog adds it to the total** ("Image engine 1.5 GB, once, plus FLUX.2 klein 4B 16.1 GB"). One
    "Download and use" runs the engine, the model and the choice as one job with one progress bar, resumable, with the exact files and total echoed to
    the engine as ADR-0059 requires. Nothing is downloaded without that click.
@@ -54,7 +53,7 @@ sections and a Hugging Face search; and the 19 catalogue models have no type a s
 | Keep two tabs and add help text | the problem is the detour and the jargon, not a missing sentence |
 | Download the recommended set at first run | breaks confirm-first (ADR-0059); a 16 GB image model is not for everyone |
 | One engine route that returns every group's rows | the rows already exist in five engine routes; a window adapter adds no second source of truth. Revisit if the web needs it |
-| Copy Unsloth's selector | AGPL (ADR-0062); its layout (Recommended, On Device, search, folders) is the pattern, the code is ours |
+| Copy Unsloth's selector | (ADR-0062) its layout (Recommended, On Device, search, folders) is the pattern, the code is ours |
 
 ## Consequences
 
@@ -76,14 +75,14 @@ the top of the screen's area (`TopBarSlot` in `packages/ui/src/window-bar.tsx`, 
 screens). It is no longer inside the body of the Video, Voice, Music, Listening, Dubbing, Audiobook, Lip sync and Edit speech
 screens, and it has no "Model" label of its own. One exception: a second picker on a screen that already has its one (editing a
 track on the Music screen) stays in its panel (`inBody`). The setup card of 3D, which shows a picker before the component is
-installed, keeps it in the card. Where there is no picker (the web's plain list of models, with its licence lines), nothing moves.
+installed, keeps it in the card. Where there is no picker (the web's plain list of models), nothing moves.
 
 ## Amendment: the picker on the web for what the service sets up (2026-10-24, owner)
 
 The "Not in this version" line (no picker on the web) no longer holds. On the web, **Image, Video, Chat and 3D** have the same button in the
 same top bar, and it lists **only the models the service has set up**, so a person sees what is in use and whether it is ready. It is read
 only: nothing to choose or download (an admin sets chat up in Admin > Models and images and video in Admin > Media; 3D is its worker's
-Pixal3D). The engine route is `GET /models/in-use` (any signed-in person; title, plain line, ready and licence only: never a key, an
+Pixal3D). The engine route is `GET /models/in-use` (any signed-in person; title, plain line and ready only: never a key, an
 address or a setting; `services/api/src/wasifyai_api/models_in_use.py`). The voice, listening, music and lip sync groups keep their
 choice of a worker's model (ADR-0086, P5). The admin Models page keeps its four worker tabs (`ModelsHome only=`). On the desktop the
 3D screen now has its button in the top bar too; its setup card points at it.
@@ -91,7 +90,7 @@ choice of a worker's model (ADR-0086, P5). The admin Models page keeps its four 
 ## Amendment: a download does not block the window (2026-10-25, owner)
 
 The owner found that while a model downloaded, the dialog stayed open over the whole window: nothing else could be clicked and the window could
-not be used. **A download now goes on in the background.** The confirm dialog (it names the files, the size and the licence, and is still
+not be used. **A download now goes on in the background.** The confirm dialog (it names the files and the size, and is still
 needed before anything is fetched) closes the moment the person agrees; the download runs in a **tray** at the top right of the window, below
 the top bar, that is shown on every screen: the model's name, how far it is, and a button to stop it. Several downloads wait in a queue and run
 one at a time, in the order asked. A finished one says "Ready" and goes away by itself; a failed one stays, says why in words and offers

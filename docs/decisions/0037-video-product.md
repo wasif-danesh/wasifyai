@@ -40,10 +40,7 @@ Findings that shape the decision:
 - **LTX 0.9.5 worked in fp32 for both modes.** We did not try it in half precision.
 - **LTX image to video needs image strength 1.0 and a prompt that describes the picture.** At the template's 0.15 it
   ignored the photo and drew the prompt instead.
-- Wan 2.2 is Apache 2.0. LTX-Video 2B 0.9.5 is the Open RAIL-M licence (March 2025): commercial use is allowed
-  but with use restrictions that must be passed on to users. Later LTX weights (0.9.6 and up) use a different
-  licence that requires a paid licence above USD 10M annual revenue, so we pin 0.9.5 (ADR-0012 asks for a
-  commercial-use check; this is it).
+- We pin LTX-Video 2B 0.9.5 (March 2025).
 
 ## Decision
 
@@ -117,8 +114,6 @@ Findings that shape the decision:
 - A second ComfyUI process on the Mac, with its own memory use (about 8 GB for the fp32 model plus the text
   encoder). The Helm chart passes `COMFYUI_VIDEO_BASE_URL` through (`env.COMFYUI_VIDEO_BASE_URL`); running a second
   ComfyUI pod is not part of this change.
-- The Open RAIL-M restrictions must reach users through the terms of service, which do not exist yet
-  ("Legal basics" in the roadmap). That must be done before the video product is opened to the public.
 - A `status` column and a stuck-run sweep are new; the image product does not need them because its wait is short.
 - Clips are short and the image-to-video motion is gentle. Better motion (higher resolution, more steps, a newer
   model) is a later change behind the same capability names.
@@ -140,8 +135,7 @@ on the 64 GB Apple-silicon Mac with ComfyUI 0.40 and the files already used abov
   it is measured again.
 - **Times (768x512, 30 steps, half precision):** 49 frames 72 s, 121 frames 252 s. Peak memory about 13 GB.
 - The same two workflows run unchanged; clips are kept in SQLite (`SqliteVideoStore`).
-- **Not chosen, on licence:** the distilled 2B (0.9.8) would need far fewer steps, but it comes under the later LTX
-  licence (paid above USD 10M revenue), which this ADR avoids. It stays an option for a later decision.
+- **Not chosen:** the distilled 2B (0.9.8) would need far fewer steps. It stays an option for a later decision.
 
 ## Amendment 2026-10-21 (owner): clips of 5 and 8 seconds, no ceiling on Extend
 

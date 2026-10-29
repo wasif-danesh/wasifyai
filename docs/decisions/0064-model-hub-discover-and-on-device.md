@@ -11,7 +11,7 @@ The owner wants a screen like Unsloth Studio's Model hub: one place to discover 
 them, and see what is on the device. Unsloth's hub (read from a screenshot and the Phase 0 spike, about 37k lines
 of TypeScript in its `hub` feature) has two tabs, **Discover** and **On Device**; a search box with sort and
 capability filters; a list with name, publisher, downloads, likes and age; a detail panel with the capability
-tags, the variant and size to download, parameters, library and licence, and the model's README; and a header
+tags, the variant and size to download, parameters and library, and the model's README; and a header
 with this computer's memory, the number of cached and local models and the download backend.
 
 What we have: a one-model catalogue with pinned checksums (ADR-0059), a confirm-first resumable download
@@ -21,14 +21,14 @@ fit check (`fits`, `tight`, `too_big`). There is no way to find a model we have 
 ## Decision
 
 1. **The hub is the Models screen, with two tabs.** **On device** is what exists today made one list: the
-   app's own folder, found models (ADR-0063) and the Hugging Face cache, each with size, source, fit, licence and
+   app's own folder, found models (ADR-0063) and the Hugging Face cache, each with size, source, fit and
    the actions that apply (use, unload, remove from the app's folder). **Discover** is new. The side-menu entry
    stays "Models".
 2. **The engine does the browsing; the window never talks to the internet.** The window's content security
    policy stays closed to loopback. The engine calls the Hugging Face API and serves the results through
    `/desktop/hub/...` routes (search, model detail, files). That also gives one place for caching, rate limits,
    the token and tests with a fake server.
-3. **Hugging Face is the one live source in v1.** The Hub's API gives search, `pipeline_tag`, library, licence,
+3. **Hugging Face is the one live source in v1.** The Hub's API gives search, `pipeline_tag`, library,
    downloads, likes, file lists with sizes and SHA-256 for large files, and the commit to pin. A **curated shelf**
    ships with the app (recommended models we have measured: ADR-0062's per-capability choices), so Discover is
    useful on first open and offline. Ollama's library has no stable public API: its models are reached through
@@ -46,9 +46,9 @@ fit check (`fits`, `tight`, `too_big`). There is no way to find a model we have 
    nearest smaller variant suggested.
 7. **Downloads reuse the confirm-first manager.** For a model chosen in Discover the engine builds a catalogue
    entry on the fly from the Hub: the revision is pinned to the commit seen, sizes and SHA-256 come from the
-   file list, and the same confirmation (exact files, total size, source, licence, free space) and checksum rules
+   file list, and the same confirmation (exact files, total size, source, free space) and checksum rules
    apply. A file without a published checksum is refused. Several downloads queue; one runs at a time.
-8. **Licence first.** The licence is shown on the card and again in the confirmation. Gated models are marked,
+8. **Gated models** are marked,
    and need the person's own Hugging Face token, kept in the operating system's keychain by the shell and handed
    to the engine at launch (never written to the settings database). We never ship or proxy a token of ours.
 9. **Model cards are shown as text, safely.** The README is rendered as Markdown without scripts and **without
@@ -67,7 +67,7 @@ fit check (`fits`, `tight`, `too_big`). There is no way to find a model we have 
 | Embed Unsloth's hub frontend | Large, tied to its backend routes and its engine set; ADR-0061 prefers selective import. We build our own on `packages/ui` and borrow the layout |
 | Window calls Hugging Face directly | Opens the content security policy, spreads the token, makes testing harder |
 | Curated catalogue only | Safest, but goes stale and cannot answer "what is the newest Qwen" |
-| Index Ollama's library by scraping | No stable API; fragile; its licence terms are unclear |
+| Index Ollama's library by scraping | No stable API; fragile |
 | Auto-download recommended models | Violates confirm-first (ADR-0059) and surprises people with 10 to 50 GB transfers |
 
 ## Consequences
@@ -104,7 +104,7 @@ formats, ModelScope and other hubs, and automatic updates.
 | 5 only what the app can run by default | done for language and embedding (GGUF); image and video are listed as view-only |
 | 6 fit on every variant | done, at the chat context; estimates labelled |
 | 7 downloads reuse the confirm-first manager | done: the engine rebuilds the entry from the repository at its current commit and refuses a list that differs |
-| 8 licence first; gated models and a token | licence shown on the card and in the confirmation; **a gated model is refused**: the token reaches the engine through `HF_TOKEN` only, and the keychain and its sign-in are not built |
+| 8 gated models and a token | **a gated model is refused**: the token reaches the engine through `HF_TOKEN` only, and the keychain and its sign-in are not built |
 | 9 model cards as text, no remote images | done: front matter, HTML and pictures removed in the engine |
 | 10 header with this computer | not done: the memory and disk figures appear in the confirmation and in the fit badges, not in a header |
 | 11 no automatic updates | done: nothing is fetched without a confirmation |

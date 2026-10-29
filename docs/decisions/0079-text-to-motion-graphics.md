@@ -7,7 +7,7 @@
 - **Depends on:** ADR-0077 (Video Builder: the render engine, sandbox and `video_builder.*` actions), ADR-0068 (action catalogue),
   ADR-0069 (our MCP server), ADR-0070 (trust levels for outside content), ADR-0071 (assistant, `how_to`), ADR-0072
   (agent), ADR-0078 (Qwen3.5-9B, a model that reads pictures), ADR-0066 (speech, music, word times), ADR-0041
-  (searchable), ADR-0047 (safeguards), ADR-0061 (how outside material enters), ADR-0012 (licences).
+  (searchable), ADR-0047 (safeguards), ADR-0061 (how outside material enters).
 - **Plan:** `docs/phase5-agent-training-video-builder-plan.md`, stages MG0 to MG3.
 
 ## Context
@@ -22,20 +22,17 @@ The owner pointed at `iart-ai/motion-skills` and asked for text to motion graphi
   storyboard to scenes to captions), lower thirds, web animation, Manim, WebGL, b-roll for talking-head videos. Each
   skill ends in a **deliver-and-verify loop**: render a frame, screenshot it, check it (clipped glyphs, wrong line
   breaks, no motion-reduced fallback), and a short pre-flight list.
-- **Licence.** MIT for the index and 16 packs; **`generative-illustration-skills` has no licence** and
-  `awesome-motion-skills` is "other" (neither is usable). It is by iart.ai, whose hosted product is promoted in the
+- **Source.** The skills are by iart.ai, whose hosted product is promoted in the
   READMEs (a competitor in spirit; nothing in the skills calls it).
 - **What they run on.** Two tiers in the skills read: a **light tier of standalone HTML** with CSS or **GSAP**
   timelines and a "freeze at time t" harness (`?t=1.5`, `tl.pause(); tl.seek(t)`), screenshotted with Playwright;
   and a **deliverable tier on Remotion** (React) for MP4. The lower-thirds pack ships its own `render.mjs`
   (Playwright plus FFmpeg) that writes **WebM with alpha (VP9) and ProRes 4444** and checks that the alpha is really
   there. Nothing mentions HyperFrames.
-- **Remotion's licence** (read from its `LICENSE.md`, 2026-10-18): free for individuals, for-profit organisations of
-  up to 3 employees, and non-profits; **a paid company licence for larger for-profit organisations**. An app that
-  ships Remotion would pass that obligation to every business user. ADR-0077 already declined Remotion.
+- **Remotion.** ADR-0077 already declined Remotion.
 - **The match with ADR-0077.** The light tier (HTML plus a seekable GSAP timeline, rendered frame by frame in headless
   Chrome) is the same idea as HyperFrames (HTML clips, GSAP timelines on `window.__timelines`, seek each frame,
-  encode with FFmpeg). GSAP is cleared for the open-source, free desktop (ADR-0077, owner's answer).
+  encode with FFmpeg).
 
 The real question is not "can we install these skills" but **what makes a non-technical person's "make me a
 kinetic title that says X" come out right**, with the app's own models, locally, safely.
@@ -58,14 +55,14 @@ kinetic title that says X" come out right**, with the app's own models, locally,
      model is available (`agent-ready`, ADR-0072) and always behind the preview.
 4. **The motion-skills material is imported as reviewed content, not as a dependency** (ADR-0061, level B: copy
    what we need, keep the notice):
-   - Take only **MIT packs**, pinned to a **commit hash**, and only the skills the evaluation (decision 7) shows help:
+   - Take **packs** pinned to a **commit hash**, and only the skills the evaluation (decision 7) shows help:
      the starter set is kinetic typography, chart animation, explainer, lower thirds, and web/GSAP recipes.
    - **Read every line, then adapt:** keep the recipes and the verify list, rewrite the build and render steps for
      HyperFrames and our `video_builder.*` actions, **drop the Remotion steps**, drop `npx`, `curl` and package installs
-     (a skill that tells a model to install things is an injection path), and keep the MIT notice and a source
+     (a skill that tells a model to install things is an injection path), and keep a source
      line with the commit. Skills are stored as our files (`products/wasifyai-video-builder/skills/`), versioned with
      the app, **never fetched or updated at run time, never `npx skills add`**.
-   - **Exclude** `generative-illustration-skills` (no licence), `awesome-motion-skills` (a list, "other" licence),
+   - **Exclude** `generative-illustration-skills`, `awesome-motion-skills` (a list),
      and anything that links to iart.ai.
 5. **Skills are loaded one or two at a time, by a lookup.** The model does not see 50 skills. A **skill catalogue**
    (name, one-line "use when", tags) is searched with the person's request (the `how_to` meta-tool of ADR-0071, the
@@ -85,7 +82,7 @@ kinetic title that says X" come out right**, with the app's own models, locally,
    GitHub, and a strong reference). A skill that does not raise the score is not shipped. Results are kept next to
    the assistant's and the agent's.
 9. **Safeguards and rights.** Prompts and slot text pass the text moderator when safeguards are on (ADR-0047). Fonts
-   are open fonts we ship (licences checked); a logo or picture comes from the library with the person's statement
+   are open fonts we ship; a logo or picture comes from the library with the person's statement
    that they may use it. No brand or real-person impersonation templates.
 10. **Outputs are creations (ADR-0041).** Kinds `composition` and `video` as in ADR-0077; the index text is the slot
     text, the script and the captions; "Make it again" opens the composition. `motion.make` (effect
@@ -93,7 +90,7 @@ kinetic title that says X" come out right**, with the app's own models, locally,
     clients can use them: *"Make a lower third for Maya Chen, Head of Design"* works from chat.
 11. **Transparent output.** Verified by spike V0 (2026-10-19): HyperFrames itself writes WebM VP9 with alpha and ProRes
     4444, and the alpha survives decoding (with libvpx). The lower-thirds pack's own capture route (Playwright plus
-    FFmpeg, MIT) is kept only as a fallback.
+    FFmpeg) is kept only as a fallback.
 
 ## Consequences
 
@@ -110,8 +107,7 @@ kinetic title that says X" come out right**, with the app's own models, locally,
 
 - **Install the packs as agent skills (`npx skills add`).** Fetches unreviewed instructions onto the person's
   machine and into a model's prompt at run time. Rejected: a supply-chain and injection path.
-- **Remotion as the render engine** (the skills' deliverable tier). Licence obligation for larger companies, and
-  React-only authoring. Rejected (ADR-0077).
+- **Remotion as the render engine** (the skills' deliverable tier). React-only authoring. Rejected (ADR-0077).
 - **Use iart.ai's hosted service.** Sends the person's content to a competitor, a paid service, outside the
   desktop's local-first rule. Rejected.
 - **Let the model write code for everything.** Slower, riskier, and wrong more often on a local model; kept only as
@@ -124,7 +120,7 @@ kinetic title that says X" come out right**, with the app's own models, locally,
 1. Whether Qwen3.5-9B writes valid HyperFrames HTML with a skill loaded, and how often it needs the fix loop (MG0).
 2. Whether HyperFrames writes transparent video; if not, the lower-thirds route (decision 11).
 3. Which of the 55 skills are worth adapting: the evaluation picks; web, WebGL and Manim ones are probably not v1.
-4. Whether to contribute adaptations back to the upstream pack (the MIT notice allows it; not a v1 task).
+4. Whether to contribute adaptations back to the upstream pack (not a v1 task).
 5. Languages: right-to-left and Indic text in kinetic type needs font and shaping checks; English only is v1.
 
 ## Not in v1
@@ -137,7 +133,7 @@ is not built); automatic b-roll from a talking-head recording; a template store 
 - **Verdict: MG1 Go for the template path.** MG2 (model-written compositions) is **not assessed**: no model was
   evaluated; that is the other half of MG0 and still has to be run (about 20 requests with and without a skill, three
   model tiers).
-- **Two skills were adapted and rendered** (a lower third and a kinetic title, from the MIT packs, with the notice kept);
+- **Two skills were adapted and rendered** (a lower third and a kinetic title, from the packs, with the notice kept);
   every `npx`, CDN and Google Fonts reference was removed. Conditions for MG1: **ship open fonts with the templates**
   (system fonts differ per machine), and run the exact-text readback at the hold frame **with a pixel check** and a
   clipped-glyph look-check.
@@ -201,11 +197,11 @@ made". Now: the engine looks for both tools, hands the render the exact paths it
 `brew install ffmpeg`" with a Check again button; every route and the catalogue's readiness say the same. CI installs it
 with Homebrew. **Owner decision still open:** ship FFmpeg with the component instead (npm `@ffmpeg-installer` and
 `@ffprobe-installer` packages, which HyperFrames also finds, or pinned static builds), which makes "set up" the whole job but
-adds a dependency and a licence to read (FFmpeg is LGPL or GPL depending on the build).
+adds a dependency.
 
-**Resolved the same day (owner: "install the right version automatically; the licence does not matter").** The component now carries
+**Resolved the same day (owner: "install the right version automatically").** The component now carries
 FFmpeg and ffprobe: the two npm packages `@ffmpeg-installer/ffmpeg` 1.1.0 and `@ffprobe-installer/ffprobe` 2.1.2 are in its lock
-(130 packages), and for darwin-arm64 they bring **FFmpeg 4.4** (a GPL, version 3 and nonfree static build with libx264,
+(130 packages), and for darwin-arm64 they bring **FFmpeg 4.4** (a static build with libx264,
 libx265, libvpx, libvpx-vp9, prores_ks, aac, libopus and VideoToolbox) and **ffprobe 4.4.1**, 24 MB downloaded and 54 MB on
 disk. HyperFrames finds them, and the engine names their paths in the render's environment. Their install script (`chmod`)
 does not run, so setup sets the executable bit and then checks that FFmpeg starts and lists the four encoders the templates
@@ -213,9 +209,7 @@ need, and that ffprobe starts; a copy without them fails setup in words. The com
 a component set up before this change, which is "set up again" because its lock changed. The download is 318 MB now. Measured
 with only these tools (no Homebrew): everything passes, but **FFmpeg 4.4 draws about twice as slowly as the 8.1 the owner had**
 (a 90 second transparent WebM 53 s against 26 s, captions 65 s against 33 s; the 5 to 30 second videos 7 to 12 s). A newer
-pinned build (option C of `docs/spikes/video-builder-ffmpeg.md`) is the way to get the speed back if it matters. The licence
-is not a concern for now (owner), and the "nonfree" flag of this build means it must not be redistributed by us, only fetched
-by the person's own computer from npm, which is what the setup does; counsel can read it with D10.
+pinned build (option C of `docs/spikes/video-builder-ffmpeg.md`) is the way to get the speed back if it matters.
 
 ## Amendment: menu placement (2026-10-24, owner)
 

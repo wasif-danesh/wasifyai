@@ -51,10 +51,10 @@ a handful to a few hundred examples, not a Hugging Face dataset, and have never 
    options (Full, CPT, LoftQ, rslora, dora, packing, offload, W&B) live in **Advanced** (ADR-0073) and Full and CPT
    only on NVIDIA.
 3. **Engine.** The **Unsloth component** (ADR-0073 decision 2): on Apple silicon its **MLX backend**, on NVIDIA
-   its CUDA path. Fallback if the component is too heavy on the Mac: Apple's `mlx-lm` (MIT) directly for LoRA and
+   its CUDA path. Fallback if the component is too heavy on the Mac: Apple's `mlx-lm` directly for LoRA and
    QLoRA. Both write a standard adapter. Spike T0 measures both on 16, 32 and 64 GB Macs.
 4. **Base models.** Only models that are **already on the computer or recommended by the app**, with **trainable
-   weights** (Hugging Face format or an MLX conversion), a **licence that allows commercial use** (ADR-0012) and
+   weights** (Hugging Face format or an MLX conversion) and
    **no sign-in needed** where possible. The app shows the memory the run needs and the time **from measurements**;
    a model that will not fit is listed with the reason and a smaller suggestion. About 8B on a 64 GB Mac is the
    expected ceiling for v1.
@@ -135,7 +135,7 @@ Built and run for real on the owner's Mac (M5 Pro, 64 GB) with the real model, t
   a checkpoint every 25 steps) and `language_answer.py` asks the same environment how a model answers, greedy and with thinking off. It holds the
   one big-model slot, kills the process group on stop, and samples memory. Unsloth's MLX backend stays the other engine: both write a standard
   adapter, and the base descriptor is where an engine is chosen. Reason for `mlx-lm` first: measured 0.06 s a step and 0.98 GB on Qwen3-0.6B
-  against 0.31 s and 1.19 GB, MIT instead of a 2.1 GB AGPL environment; it holds 6.3 GB on Qwen3.5 0.8B (Unsloth 1.8 GB), which is why only the
+  against 0.31 s and 1.19 GB, instead of a 2.1 GB environment; it holds 6.3 GB on Qwen3.5 0.8B (Unsloth 1.8 GB), which is why only the
   measured Qwen3 0.6B is offered.
 - **Measured on the real model** (the T0 fixture, 50 questions with a sign-off style; Qwen3-0.6B 4-bit): 69 steps in **8 to 13 s**, **1.27 GB**
   peak, held-out loss **5.28 to 2.56** (52 percent closer), the sign-off in **4 of 4** new answers against 0 of 4 before; a whole run through the
@@ -154,7 +154,7 @@ Built and run for real on the owner's Mac (M5 Pro, 64 GB) with the real model, t
   is listed with that reason; full fine-tuning is listed with "needs an NVIDIA graphics card"); `GET .../writing/status` carries the rows.
 - **Set up in the app (`language_setup.py`):** the same shape as the picture trainer's: `mlx-lm` 0.31.3 from a committed hashed lock
   (`scripts/lock-language-trainer.sh`; 34 packages, no torch; **64.3 MB** of wheels by PyPI's own metadata) and the model's 9 files pinned by size
-  and SHA-256 (`mlx-community/Qwen3-0.6B-4bit` at revision `73e3e38d`, Apache-2.0, **351.4 MB**), `/desktop/language-setup`, a consent card with
+  and SHA-256 (`mlx-community/Qwen3-0.6B-4bit` at revision `73e3e38d`, **351.4 MB**), `/desktop/language-setup`, a consent card with
   the size repeated on the button, resumable, removable; the bundle script copies the lock. **Run for real (2026-10-26, owner's yes for the 416 MB):** on a clean data folder the screen offered
   415,683,618 bytes, the button downloaded and set it up in under a minute (the environment 342 MB on disk, the model 335 MiB, every file checked
   against its pin; `mlx_lm 0.31.3`, `mlx 0.32.3` start from it), and a run with only what the app had installed trained 69 steps in **9.9 s** at
@@ -190,10 +190,10 @@ Run for real on the owner's Mac: trained through the screen, converted, served b
   difference 1.5e-5, half-precision rounding) and by serving it in the app's `llama-server` b11655 (6 of 6 in the taught style). Qwen3 only; any
   other architecture is refused in words. (Qwen3.5 needs the layout of its fused tensors: with L3.)
 - **The chat copy (`language_chat_pins.json`):** a taught adapter is served on a GGUF of the same base, `Qwen/Qwen3-0.6B-GGUF` Q8_0 (**639 MB**,
-  Apache-2.0, revision and SHA-256 pinned), fetched once through the same checked, resumable downloader, asked for only when a taught model is first
+  revision and SHA-256 pinned), fetched once through the same checked, resumable downloader, asked for only when a taught model is first
   used in chat, with its size shown before anything is fetched. Its pins are a file of their own so that asking for it never makes the installed
   trainer look out of date. **Run for real with the owner's yes (2026-10-26):** through the screen (the consent card showed
-  "639 MB, Apache-2.0, from huggingface.co" and nothing moved until the button), **38 seconds**, the file exactly the pinned 639,446,688 bytes and its
+  "639 MB, from huggingface.co" and nothing moved until the button), **38 seconds**, the file exactly the pinned 639,446,688 bytes and its
   SHA-256 the pinned one; a model taught on the 4-bit base then answered through the assistant on this Q8 file with the adapter on top: all three
   questions in the taught style, signed, no stray tag (the earlier real test used the spike's f16 file).
 - **Chat (`desktop_language.py`):** the chat selection can carry an adapter (`lora`, `style`): the engine starts `llama-server` with `--lora`, thinking
@@ -211,7 +211,7 @@ Run for real on the owner's Mac: trained through the screen, converted, served b
 
 The owner approved downloading Qwen3 1.7B and 4B (about 7.6 GB with their chat copies). Built and run for real through the app's own downloader.
 
-- **Several bases, fetched on request.** `language_more_bases.json` pins, for each extra base, the MLX weights (`mlx-community/Qwen3-1.7B-4bit` and `-4B-4bit`, Apache-2.0, 9 files each with size and SHA-256,
+- **Several bases, fetched on request.** `language_more_bases.json` pins, for each extra base, the MLX weights (`mlx-community/Qwen3-1.7B-4bit` and `-4B-4bit`, 9 files each with size and SHA-256,
   revision fixed) and the chat copy its adapters are served on (`Qwen/Qwen3-1.7B-GGUF` Q8_0, 1.83 GB; `Qwen3-4B-GGUF` Q4_K_M, 2.50 GB, SHA-256 from the hub's LFS record). The first base
   stays set up with the trainer; the others are asked for one part at a time (its weights, or the chat form of it), with the size shown and repeated on the button, resumable, checked, and removed with the
   component. `language_setup.py` has a catalogue (`BaseSpec`), per-base finders (`find_model`, `find_chat_copy`), `fetch_start|cancel` and `/desktop/language-setup/bases[...]`; the single chat-copy

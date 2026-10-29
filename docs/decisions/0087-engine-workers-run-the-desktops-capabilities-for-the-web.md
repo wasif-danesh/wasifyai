@@ -1,12 +1,12 @@
 # ADR-0087: Engine workers run the desktop's capabilities for the web
 
 - **Status:** Accepted for P0 and P1 (2026-10-21, by the owner: "yes, start" to "P0, P1, P2 first, on the Mac"). The later stages
-  (P2 onward) and the hosting questions (cloud GPU choice, licences on a public service, shared or personal workers) stay open until
+  (P2 onward) and the hosting questions (cloud GPU choice, shared or personal workers) stay open until
   the owner answers; the plan lists them.
 - **Date:** 2026-10-21
 - **Depends on:** ADR-0056 (one engine, two shells), ADR-0021 (event log and queue), ADR-0032 (media backends), ADR-0058
   (a runner on a person's desktop), ADR-0066 (speech, music and avatar models; decision 11: what a deployment lists),
-  ADR-0077 (Video Builder), ADR-0080 (3D), ADR-0047 (safeguards), ADR-0012 (licences)
+  ADR-0077 (Video Builder), ADR-0080 (3D), ADR-0047 (safeguards)
 - **Plan:** `docs/phase6-web-identical-plan.md`
 
 ## Context
@@ -30,14 +30,12 @@ Edit speech, Dub, Audiobook, Split, 3D and Video Builder have none, and the web 
 3. **Two ways to reach a worker, one worker.** (a) **Direct**: the worker reads the queue and storage itself (a worker on the
    same network: the owner's Mac for development and a home lab, a CUDA host for staging and production). (b) **Runner**
    (ADR-0058): a person's desktop connects outbound and serves that person's jobs. Same job contract; only the transport differs.
-4. **The same model picker.** On the web `ModelSelect` shows the models the deployment lists for the group (ADR-0066 decision 11:
-   only models that allow commercial use are offered on a public service) and the person's own choice; "download" is an
+4. **The same model picker.** On the web `ModelSelect` shows the models the deployment lists for the group (ADR-0066 decision 11) and the person's own choice; "download" is an
    admin action, not a user one. The desktop keeps its own adapters.
 5. **Equal means a gate, not a promise.** Every desktop menu item and action has a web decision (`apps/web/lib/parity.ts`, its
    test, `docs/web-parity-ledger.md`); a release is blocked while a desktop item is "soon" on the web without an owner-accepted
    reason.
-6. **What may differ, on purpose:** the window (title bar, Save As box, recents menu), the user downloading models, models whose
-   licence does not allow commercial use (desktop only on a public service), and the privacy sentences ("nothing leaves this
+6. **What may differ, on purpose:** the window (title bar, Save As box, recents menu), the user downloading models, and the privacy sentences ("nothing leaves this
    computer" becomes where the work runs; the screens already take a `place`).
 
 ## Consequences
@@ -109,8 +107,7 @@ Edit speech, Dub, Audiobook, Split, 3D and Video Builder have none, and the web 
   (`apps/web/lib/choices.ts`, `WebModelChoices` in the product layout): the choice is remembered in the browser under the key
   the screens already read; a person who is not an admin sees a missing model as "ask an admin". `scripts/worker.sh models`
   still works (it uses the same code).
-- **Left:** the licence filter for a public service (a deployment setting that hides and refuses models that do not allow
-  commercial use) waits for decision 2 of the plan; a worker does one job at a time, so a big download makes other work
+- **Left:** a worker does one job at a time, so a big download makes other work
   wait; the picker is not on the Image, Video, Chat and 3D screens on the web (their models are the deployment's).
 
 ## Built (2026-10-22): P6 safeguards and usage, P8 the gate

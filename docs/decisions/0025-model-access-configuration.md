@@ -19,7 +19,7 @@ should not change.
   header. Needs a paid subscription. Credits are charged for active GPU time. v1 is deprecated in
   favour of Comfy API v2. Inputs and outputs are kept 24 hours, so results must be copied to our
   storage at once. Unconfirmed: that it has our exact model files, credits per song, concurrency
-  limits, commercial-use terms.
+  limits.
 - **Free LLM tiers:** Gemini's free tier may use prompts to improve Google products and cannot serve
   users in the EEA, Switzerland or the UK. Groq and Cerebras free tiers are for prototyping
   (about 30 requests per minute).

@@ -77,5 +77,5 @@ Hugging Face token was read from the environment only. The MCP server (M1) and t
   what a person can say ("let it make pictures, not read my library").
 - **Python `keyring`:** one more dependency (plus `secretstorage` and `jeepney` on Linux), and its backends make
   the same calls these modules make.
-- **The shell as keychain owner:** right by licence boundary and process identity, but every secret would cross a
+- **The shell as keychain owner:** right by process identity, but every secret would cross a
   new IPC path; the engine already runs as the app's identity and the framework grants the login keychain to it.

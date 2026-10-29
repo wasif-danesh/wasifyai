@@ -10,4 +10,4 @@
 - Object storage interface: obstore.
 - Primary cloud: GCP (GKE, Cloud SQL, GCS). AWS and Azure stay deployable but not running.
 - Prototype LLM: `gpt-oss:20b` via Ollama, behind the LiteLLM aliases `lyrics-writer` and `moderator`.
-- Prototype defaults: 10 songs per user per day; MP3 audio output. Licence checks are deferred while this is a prototype (revisit before any public launch, see ADR-0012).
+- Prototype defaults: 10 songs per user per day; MP3 audio output.

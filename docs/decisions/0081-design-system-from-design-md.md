@@ -5,8 +5,7 @@
   spikes (G0, T0, V0, TD0) are done**, and before the Phase 5 screens are built.
 - **Date:** 2026-10-19
 - **Depends on:** ADR-0045 (shadcn/ui, Radix, Tailwind, tokens as CSS variables), ADR-0046 (side panel), ADR-0056 and
-  `docs/desktop-profile.md` (one shared `packages/ui` for web and desktop), ADR-0073 (plain words, "For experts"),
-  ADR-0012 (licences).
+  `docs/desktop-profile.md` (one shared `packages/ui` for web and desktop), ADR-0073 (plain words, "For experts").
 - **Plan:** `docs/phase5-agent-training-video-builder-plan.md`, stages DS0 to DS4.
 
 ## Context
@@ -53,7 +52,7 @@ icon set, illustration, copy beyond written rules). A structural redesign remain
    - `packages/ui/src/tokens.gen.ts` (token names and types, for the catalogue and tests),
    - `docs/design-system/tokens.md` (the table of every token, generated).
    Generated files are committed and marked "do not edit". CI fails if they differ from what the generator produces
-   (`pnpm design:check`). If the script outgrows us, **Style Dictionary** (Apache-2.0) is the upgrade, with its own
+   (`pnpm design:check`). If the script outgrows us, **Style Dictionary** is the upgrade, with its own
    approval.
 4. **Validation runs inside the generator, and a template that fails it does not build:**
    - **Completeness:** every required token exists (a template can be swapped only because the schema is fixed).
@@ -92,12 +91,11 @@ icon set, illustration, copy beyond written rules). A structural redesign remain
 9. **Accessibility is part of the system, not a later pass:** AA contrast (decision 4), a visible focus ring on every
    control, a minimum target of 24 px (44 px on touch), `prefers-reduced-motion`, forced-colors and high-contrast
    modes, labels and names for every control, no meaning by colour alone. Automated checks with **axe-core**
-   (MPL-2.0) through its Playwright integration are proposed; **a new dependency, so it needs your approval
+   through its Playwright integration are proposed; **a new dependency, so it needs your approval
    first** (it closes backlog B2).
 10. **Language and script:** logical CSS properties (start and end, not left and right) so right-to-left works;
     font stacks with fallbacks per script; no fixed-width text; layouts tested with long strings. English only in
-    v1 (project rule), without closing the door. **Fonts are files in the repository or the app**, with open
-    licences recorded; the desktop never fetches fonts from the network.
+    v1 (project rule), without closing the door. **Fonts are files in the repository or the app**; the desktop never fetches fonts from the network.
 11. **Content design in `DESIGN.md`:** plain words, sentence case, one action per button, errors say what happened and
     what to do, no jargon on the simple path (the ADR-0073 list of expert words stays behind "For experts"), a glossary
     of product words ("magic word", "Video Builder", "Motion graphics", "My models"), and microcopy for the common
@@ -115,7 +113,7 @@ icon set, illustration, copy beyond written rules). A structural redesign remain
 15. **Usability testing is part of the practice:** a short task-based test with about five non-technical people for each
     major flow (Teach, Agent, Make a 3D model, Video Builder), notes in `docs/research/`. The system makes screens
     consistent; testing shows whether they are clear.
-16. **Brand assets** (wordmark "Wasify AI", icon, favicon) live in `design/assets/` with their source and licence;
+16. **Brand assets** (wordmark "Wasify AI", icon, favicon) live in `design/assets/` with their source;
     designing a new logo is not part of this ADR.
 
 ## Consequences
@@ -131,7 +129,7 @@ icon set, illustration, copy beyond written rules). A structural redesign remain
 
 ## Alternatives considered
 
-- **Style Dictionary (Apache-2.0).** Powerful, multi-platform; adds a dependency and a config language for a job a
+- **Style Dictionary.** Powerful, multi-platform; adds a dependency and a config language for a job a
   200-line script does today. Kept as the upgrade path.
 - **Tokens Studio and Figma sync.** Declined by the owner.
 - **Edit `tailwind.css` by hand and add a README.** What we have; it cannot be swapped as a whole and has no checks.
@@ -143,12 +141,11 @@ icon set, illustration, copy beyond written rules). A structural redesign remain
 ## Open questions
 
 1. The final blue, after a visual review of the recommendation and the two alternatives on real screens (DS2).
-2. The font families (the current stack is system fonts; a bundled open family would make web and desktop identical)
-   and their licences.
+2. The font families (the current stack is system fonts; a bundled open family would make web and desktop identical).
 3. The chart palette and how many categorical colours are needed.
 4. Whether the desktop window and the web app should share the catalogue route or each have one.
 5. Whether a compact density is wanted at launch or only the comfortable one.
-6. The axe-core dependency (decision 9) and its licence, MPL-2.0: acceptable for a dev and CI tool?
+6. The axe-core dependency (decision 9): acceptable for a dev and CI tool?
 
 ## Not in v1
 

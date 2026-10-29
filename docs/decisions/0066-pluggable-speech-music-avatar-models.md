@@ -19,7 +19,7 @@ some now. Reading VoiceStudio and Unsloth Studio showed two ways to be "flexible
   table is written twice (server and client) and the client guesses from repository names.
 
 Neither has lip sync. audio.cpp has an experimental `liveavatar` family (CUDA, 14B). Our web stack has MuseTalk as a
-deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's default) is non-commercial.
+deployment-level choice.
 
 ## Decision
 
@@ -29,8 +29,7 @@ deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's
    `lipsync`), `engine` (adapter kind, see 2), `family`, `languages`, `voices`, `capabilities` (for example clone:
    reference text required/optional/unused; music modes with lyrics, duration bounds, edit actions; lip sync inputs:
    image or video, audio, max seconds), `options` (the request options with type, bounds, enum values),
-   `hardware` (platforms, accelerators, memory floor, speed class), and `licence` (SPDX, **`commercial_use`:
-   yes, conditional, no, unreviewed**, evidence URL, review date). Files stay pinned by size and SHA-256 as today.
+   `hardware` (platforms, accelerators, memory floor, speed class). Files stay pinned by size and SHA-256 as today.
 2. **One adapter per runtime, not per model.** An adapter implements a small protocol: `available()` (with a
    reason), `ensure_ready()`, `run(task, request) -> result`, `cancel()`, `unload()`, `compute_profile()`.
    Adapters planned: `audiocpp` (the pinned prebuilt server, loopback; speech, transcription, music, conversion,
@@ -42,12 +41,10 @@ deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's
    returns descriptors with their state; the window builds its dropdown and its controls from that response. No model
    or family names in TypeScript. Request options are validated on the engine against the descriptor (unknown names
    dropped, numbers clamped, enums checked), so a new model's controls need no UI change.
-4. **The dropdown states are honest.** Each row is one of: *ready*, *can install* (files, sizes, source and licence
+4. **The dropdown states are honest.** Each row is one of: *ready*, *can install* (files, sizes and source
    shown, confirm required: ADR-0059/0064 rule), *needs the runtime* (one click installs the pinned component),
    *found on this computer* (ADR-0063), or *not available here* with the reason (platform, accelerator, memory).
-   A licence badge is always shown; **a model whose `commercial_use` is `no` or `unreviewed` is never the
-   recommended default**, and an unreviewed model needs a review entry before it enters the catalogue (CLAUDE.md
-   rule 12). There is no silent fallback to another model or to the CPU.
+   There is no silent fallback to another model or to the CPU.
 5. **The request carries `model`.** Resolution order: the request, the person's default for that task (settings key
    `desktop.default_model.<task>`), the catalogue's recommended model, otherwise a typed error before any work.
    Graphs keep asking for capabilities (`caps.speech.synthesize(model=...)`, `caps.music.generate(model=...)`,
@@ -57,10 +54,10 @@ deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's
    process** configured with `--max-loaded-models 1`, `--idle-unload-ms` and `--min-free-memory-mb`, instead of one
    process per model. Small models (the speech-to-text model, Kokoro-class text to speech) stay in the utility class
    of ADR-0056 only if measured small enough.
-7. **Specs are data we ship.** The spec JSON files of the pinned audio.cpp tag (Apache-2.0) are fetched at build
+7. **Specs are data we ship.** The spec JSON files of the pinned audio.cpp tag are fetched at build
    time into the component, listed in its manifest with hashes, and are the source for generated descriptors
    (options, languages, voices, tasks). Hand-written fields in a descriptor are only what the spec cannot say:
-   licence, measured speed, our recommendation, the capability notes. A test fails if a pinned family has no
+   measured speed, our recommendation, the capability notes. A test fails if a pinned family has no
    descriptor decision (include, or "unsupported" with a reason).
 8. **Lip sync is an ordinary task.** Input: a picture (or a video) and a voice recording or a script (a script goes
    through `speak` first). Output: a video. The first adapters are the existing MuseTalk server (as a `sidecar`
@@ -73,7 +70,7 @@ deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's
 10. **Reuse.** audio.cpp and its specs: use as an engine (level A, ADR-0061). Unsloth Studio's audio code and all of
     VoiceStudio: **reference only**; nothing is copied. Ideas adopted, with credit in `PROVENANCE`-style notes:
     availability with a reason and no silent fallback, sidecar isolation, attribute-based voice design for engines
-    that need it, portable voices with a consent record and a watermarked preview, licence as data, the dubbing
+    that need it, portable voices with a consent record and a watermarked preview, the dubbing
     stages, and the one-engine-many-families shape.
 11. **Web stack.** `media_bindings` (an admin picks the backend per capability) stay. The same descriptors list the
     models a deployment *allows*; the person chooses among those. Nothing in this ADR changes the existing web
@@ -83,7 +80,7 @@ deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's
 
 - **A class per engine (VoiceStudio).** Rejected: the cost grows with every model, and the quality of each class
   depends on its author; we would own 17 integrations to offer 17 dropdown rows.
-- **Copy Unsloth's family table and pages.** Rejected: AGPL-3.0, written in two places, tied to its own hub and
+- **Copy Unsloth's family table and pages.** Rejected: written in two places, tied to its own hub and
   gallery. We rebuild the idea on our contracts from the spec files.
 - **Fixed model per task, chosen by the deployment (today's web stack).** Rejected for the desktop: the owner's
   requirement is a choice by the person.
@@ -94,7 +91,7 @@ deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's
 
 | Step | What | Evidence |
 |---|---|---|
-| V0 | Spike, 1 day: one audio.cpp process with `--max-loaded-models 1` switching between Kokoro, Qwen3-TTS, VoxCPM2 and Parakeet; fetch and read the spec JSON of the pin; measure load, first and warm time, memory, and whether each family runs on Metal; read the licence of each model card | numbers in `docs/spikes/` |
+| V0 | Spike, 1 day: one audio.cpp process with `--max-loaded-models 1` switching between Kokoro, Qwen3-TTS, VoxCPM2 and Parakeet; fetch and read the spec JSON of the pin; measure load, first and warm time, memory, and whether each family runs on Metal | numbers in `docs/spikes/` |
 | V1 | The audio runtime component (pinned, SHA-256, confirm), descriptor schema and loader, `GET /desktop/models?task=`, **Speak** and **Transcribe** with the dropdown, voices, a speech engine slot; the window's Voice and Library pieces | descriptor and adapter tests, real run, self-test |
 | V2 | **Design** and **Clone** with saved voices, consent record and preview; **the notebooks' audio overview gets its voices** (two hosts, two voices) | listening check, E5 gap closed |
 | V3 | **Music** from descriptors (audio.cpp families beside the ComfyUI workflow), edit modes | real runs |
@@ -106,11 +103,11 @@ deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's
 
 ## Consequences
 
-- The cost of a new model is a descriptor, a licence review and a measured speed; the cost of a new runtime is an
+- The cost of a new model is a descriptor and a measured speed; the cost of a new runtime is an
   adapter.
-- The licence column and the "never silently fall back" rule make some choices visible that other products hide;
+- The "never silently fall back" rule makes some choices visible that other products hide;
   that is intended.
-- audio.cpp becomes a dependency of the desktop (Apache-2.0, a native binary of about 70 MB per platform, pinned).
+- audio.cpp becomes a dependency of the desktop (a native binary of about 70 MB per platform, pinned).
   Its families move quickly (the pinned tag lists about 100); the pin and the descriptor test make a bump a
   deliberate change.
 - Some models will exist in the catalogue as "not available here" (CUDA-only, too large). That is correct, and
@@ -120,15 +117,14 @@ deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's
 
 - Streaming speech (`/v1/audio/speech/live`) and live dictation; the dictation widget.
 - Bengali and Hindi voices (v1 is English only); the Indic servers of the web stack stay as `remote` descriptors.
-- Seed-VC (GPL-3.0) and Stable Audio (conditional licence): whether they are listed at all.
+- Seed-VC and Stable Audio: whether they are listed at all.
 - Watermarking every generated clip (VoiceStudio uses AudioSeal): a safeguards decision, ADR-0047.
 
 ## Answers (owner, 2026-10-16)
 
 1. **Reuse level:** reference only for VoiceStudio and Unsloth's audio code; audio.cpp is the engine.
 2. **Now:** V1 (speak and transcribe), then V2 (design, clone, voices for the notebook overview). Start with the V0 spike.
-3. **Licence policy:** non-commercial models may be listed, with a badge, and are **never the default or the recommendation**.
-4. **Lip sync:** MuseTalk stays, as an optional download (a `sidecar` component).
+3. **Lip sync:** MuseTalk stays, as an optional download (a `sidecar` component).
 
 ## Amendments
 
@@ -153,8 +149,7 @@ deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's
   (c) a voice is changed **only into a saved voice made from a recording** (it carries the consent record of
   ADR-0044), never into a file a run was handed; (d) the second engine, `comfyui`, is `ComfyMusic`: the descriptor
   names a workflow and its map file, the sidecar is the one the images use, and the model holds the **image** slot,
-  so one big model is in memory at a time; (e) a model whose weights card is unclear (dots.tts Edit: "other",
-  pointing at an Apache-2.0 project) is `conditional`, so it is listed but never chosen for the person.
+  so one big model is in memory at a time.
 - **V5 (2026-10-16, `docs/phase2-voice-plan.md`):** (a) a lip sync model is a `sidecar` engine: the descriptor's
   `lipsync` block gives the longest voice, the largest picture and the frame rate, and **must say `mark: required`**;
   (b) the component is installed **by the engine** (the pinned source, the hashed lock, the app's `uv`), not by the
@@ -169,7 +164,7 @@ deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's
   ready model speaks is refused before any work; (c) copying the original speaker's voice needs the person's word that
   it is theirs or that they have permission (the consent of a saved cloned voice) and is kept with the result;
   (d) the result is a track (`mode: dubbed`, `parent_id`, the script in `edit` and, for search, in `lyrics`); (e)
-  one speaker only: diarisation is not in because the one model for it (Sortformer) is CC-BY-NC.
+  one speaker only: diarisation is not in.
 - **V7 (2026-10-17, `docs/phase2-voice-plan.md`):** the audiobook is, like dubbing, a graph task over the speaking
   models there are, not a model. (a) The chapters are **planned by a route** (`POST /audiobook/plan`: headings, or
   size when there are none) and approved by the person before anything is spoken; (b) a chapter is cut into pieces of
@@ -184,7 +179,7 @@ deployment-level choice. Weight licences differ widely: OmniVoice (VoiceStudio's
   does not serve is refused with `not_offered` ("in the desktop app"), so nothing is claimed that the deployment cannot
   do; (c) the voice product replaces the older `wasifyai-tts` and `wasifyai-stt` on the web (their menu entries and
   create pages go; saved results stay readable); (d) a hosted model sends the person's text or recording to the
-  provider, so the screens say so, and its descriptor records the provider's terms as the licence evidence; (e) voice
+  provider, so the screens say so; (e) voice
   cloning and dubbing on the public service come last, behind a flag, with the desktop's consent text (decision of
   2026-10-18), and are not part of this step.
 - **W5 b to e (2026-10-18):** the web does not wait for a GPU host. (a) The web profile may run the desktop's runtime

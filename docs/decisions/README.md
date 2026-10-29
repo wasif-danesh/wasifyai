@@ -81,7 +81,7 @@
 | [0077](0077-video-builder-programmatic-video.md) | Video Builder (experimental): videos written as code, rendered deterministically | Accepted |
 | [0078](0078-one-default-model-qwen35-9b.md) | One default model for the app: Qwen3.5-9B (switch alias by alias after checks) | Accepted |
 | [0079](0079-text-to-motion-graphics.md) | Text to motion graphics: describe it, get an animated title, chart or overlay (motion-skills as reviewed content) | Accepted |
-| [0080](0080-text-and-image-to-3d.md) | Text and image to 3D with Pixal3D through pixal3d.cpp (runs on the Mac; one licence gate: DINOv3) | Accepted |
+| [0080](0080-text-and-image-to-3d.md) | Text and image to 3D with Pixal3D through pixal3d.cpp (runs on the Mac) | Accepted |
 | [0081](0081-design-system-from-design-md.md) | A design system with design/DESIGN.md as the single source of the look (blue accent; DS0 to DS2 built 2026-10-19) | Accepted |
 | [0082](0082-chat-ui-on-assistant-ui.md) | The chat UI is built on assistant-ui (and streamdown), not on our own components; amends ADR-0057 decision 7 | Accepted (assistant-ui); other dependencies to approve in CU0 |
 | [0083](0083-composer-options-attach-search-thinking-mic.md) | The chat box gets Attach, Search (DuckDuckGo first), Thinking and Mic | Accepted (CO0 on hold) |

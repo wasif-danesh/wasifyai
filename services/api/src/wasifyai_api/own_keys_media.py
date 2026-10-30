@@ -8,7 +8,6 @@ Settings applies to the next picture or clip."""
 from typing import Any
 
 import httpx
-from wasifyai_media_worker.backends import FalRunner
 from wasifyai_platform_sdk import JobRequest
 
 from wasifyai_api.own_keys import OwnKeysService
@@ -38,6 +37,9 @@ class KeyedMediaRouter:
         route = await self._keys.route(product) if product else None
         if route is None or route.provider.id != "fal":
             return self._local
+        # the media worker is the desktop's (an extra of the API): imported where it runs
+        from wasifyai_media_worker.backends import FalRunner
+
         return FalRunner(
             route.key, route.model, self._http, self._timeout, self._poll, route.base_url
         )

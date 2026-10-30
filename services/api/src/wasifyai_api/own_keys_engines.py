@@ -16,9 +16,8 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
-from wasifyai_media_worker.backends import FalQueue, data_uri
-from wasifyai_media_worker.comfy import ComfyError
 from wasifyai_platform_sdk import SpeechResult, VoiceEngineError
+from wasifyai_platform_sdk.fal import FalError, FalQueue, data_uri
 from wasifyai_platform_sdk.voice_models import OptionSpec, VoiceInfo, VoiceModel
 
 from wasifyai_api.audio_runtime import _wav_rate, _wav_seconds
@@ -139,7 +138,7 @@ class KeyedSpeechEngine:
             try:
                 result = await fal.call(route.model, body, _no_progress)
                 wav, _ = await fal.fetch(result.get("audio"), "audio/wav")
-            except ComfyError as e:
+            except FalError as e:
                 raise VoiceEngineError(e.code, e.message) from None
             except TimeoutError:
                 raise VoiceEngineError("provider_refused", "fal.ai took too long.") from None
@@ -223,7 +222,7 @@ class KeyedModel3d:
                 fal = FalQueue(route.key, http, self._timeout, self._poll, route.base_url)
                 result = await fal.call(endpoint, body, on_progress)
                 data, _ = await fal.fetch(result.get(field), "application/octet-stream")
-        except ComfyError as e:
+        except FalError as e:
             return RunResult(False, "failed", e.message, time.monotonic() - t0)
         except TimeoutError:
             return RunResult(False, "wall_time", "fal.ai took too long.", time.monotonic() - t0)

@@ -6,7 +6,6 @@ Remote backends run no GPU work here: the processor skips the GPU lock for them.
 
 import asyncio
 import base64
-import contextlib
 import logging
 import mimetypes
 import time
@@ -22,6 +21,7 @@ from wasifyai_platform_sdk import (
     SecretsUnavailable,
     input_image_name,
 )
+from wasifyai_platform_sdk.fal import FAL_QUEUE, FalError, FalQueue, data_uri
 
 from wasifyai_media_worker.comfy import ComfyClient, ComfyError, ProgressFn, use_picture
 from wasifyai_media_worker.settings import WorkerSettings
@@ -262,7 +262,6 @@ class OpenAIImagesRunner:
 
 # ---- fal.ai, on the person's own key (ADR-0095, stage K3) -------------------------------------
 
-FAL_QUEUE = "https://queue.fal.run"
 # the endpoint a capability uses, from the model the person chose for the product (its text-to-X
 # endpoint). A capability with no entry for that model cannot run on the key.
 FAL_EDIT = {"fal-ai/flux-2": "fal-ai/flux-2/edit"}
@@ -274,107 +273,11 @@ NOT_WITH_KEY = {
 }
 
 
-def data_uri(data: bytes) -> str:
-    kind = "image/png" if data[:4] == b"\x89PNG" else "image/jpeg"
-    return f"data:{kind};base64,{base64.b64encode(data).decode()}"
-
-
-def _fal_said(r: httpx.Response) -> str:
-    """fal.ai's own words for a refusal (its `detail`: a sentence or a list of them)."""
-    try:
-        detail = r.json().get("detail")
-    except ValueError:
-        return ""
-    if isinstance(detail, str):
-        return detail[:300]
-    if isinstance(detail, list):
-        words = [str(d.get("msg", "")) for d in detail if isinstance(d, dict)]
-        return "; ".join(w for w in words if w)[:300]
-    return ""
-
-
-class FalQueue:
-    """fal.ai's queue with the person's key: submit, follow `status_url`, read `response_url`; and
-    the file it names, fetched without the key. Images and video (`FalRunner`), speech and 3D
-    (ADR-0095, K3 and K4) go through it. Every failure is a `ComfyError` in fal.ai's words."""
-
-    def __init__(
-        self,
-        key: str,
-        http: httpx.AsyncClient,
-        timeout_s: float,
-        poll_s: float = 2.0,
-        base_url: str = FAL_QUEUE,
-    ):
-        self._headers = {"Authorization": f"Key {key}"}
-        self._http = http
-        self._timeout = timeout_s
-        self._poll = poll_s
-        self._base = base_url.rstrip("/")
-
-    def _refused(self, r: httpx.Response) -> ComfyError:
-        if r.status_code in (401, 403):
-            return ComfyError("provider_refused", "fal.ai did not accept the key.")
-        if r.status_code == 429:
-            return ComfyError("provider_refused", "fal.ai says too many requests. Try again soon.")
-        said = _fal_said(r)
-        return ComfyError(
-            "provider_refused",
-            f"fal.ai could not make it: {said}" if said else f"fal.ai answered {r.status_code}.",
-        )
-
-    async def call(
-        self, endpoint: str, body: dict[str, Any], on_progress: ProgressFn
-    ) -> dict[str, Any]:
-        """What `endpoint` made for `body` (its result object), once the queue has finished it."""
-        await on_progress(0.02)
-        try:
-            r = await self._http.post(
-                f"{self._base}/{endpoint}", json=body, headers=self._headers, timeout=60
-            )
-        except httpx.HTTPError:
-            raise ComfyError("connection_lost", "fal.ai could not be reached.") from None
-        if r.status_code >= 400:
-            raise self._refused(r)
-        sub = r.json()
-        started = time.monotonic()
-        try:
-            while True:
-                if time.monotonic() - started > self._timeout:
-                    raise TimeoutError
-                st = await self._http.get(sub["status_url"], headers=self._headers, timeout=30)
-                if st.status_code >= 400:
-                    raise self._refused(st)
-                state = st.json()
-                status = state.get("status")
-                if status == "COMPLETED":
-                    break
-                await on_progress(0.05 if status == "IN_QUEUE" else 0.4)
-                await asyncio.sleep(self._poll)
-        except asyncio.CancelledError:
-            # the person stopped it: ask fal.ai to stop too, without waiting on the answer
-            if sub.get("cancel_url"):
-                with contextlib.suppress(httpx.HTTPError):
-                    await self._http.put(sub["cancel_url"], headers=self._headers, timeout=5)
-            raise
-        if state.get("error"):
-            raise ComfyError(
-                "provider_refused", f"fal.ai could not make it: {state['error']}"[:400]
-            )
-        res = await self._http.get(sub["response_url"], headers=self._headers, timeout=60)
-        if res.status_code >= 400:
-            raise self._refused(res)
-        return res.json()
-
-    async def fetch(self, item: Any, fallback_type: str) -> tuple[bytes, str]:
-        """The file of a result's `{url, content_type}`, and its type. No key goes to its host."""
-        url = item.get("url") if isinstance(item, dict) else None
-        if not url:
-            raise ComfyError("missing_output", "fal.ai returned nothing to keep.")
-        got = await self._http.get(url, follow_redirects=True, timeout=self._timeout)
-        raise_for_backend(got)
-        ctype = (item.get("content_type") or got.headers.get("content-type") or "").split(";")[0]
-        return got.content, ctype.strip() or fallback_type
+def _fal_failed(e: FalError) -> Exception:
+    """The worker's own error for a fal.ai failure: a busy service is retried."""
+    if e.code == "unavailable":
+        return BackendUnavailable(e.message)
+    return ComfyError(e.code, e.message)
 
 
 class FalRunner:
@@ -460,11 +363,16 @@ class FalRunner:
             ((n, s.get("type", "image")) for n, s in job.outputs.items()), ("output", "image")
         )
         endpoint, body = self._request(job, files)
-        result = await self._queue.call(endpoint, body, on_progress)
-        item = (result.get("images") or [{}])[0] if kind == "image" else result.get("video") or {}
-        await on_progress(0.9)
-        fallback = "video/mp4" if kind == "video" else "image/png"
-        data, ctype = await self._queue.fetch(item, fallback)
+        try:
+            result = await self._queue.call(endpoint, body, on_progress)
+            item = (
+                (result.get("images") or [{}])[0] if kind == "image" else result.get("video") or {}
+            )
+            await on_progress(0.9)
+            fallback = "video/mp4" if kind == "video" else "image/png"
+            data, ctype = await self._queue.fetch(item, fallback)
+        except FalError as e:
+            raise _fal_failed(e) from None
         await on_progress(1.0)
         return {name: (data, ctype, _EXT.get(ctype, "mp4" if kind == "video" else "png"))}
 

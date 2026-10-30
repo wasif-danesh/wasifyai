@@ -472,6 +472,18 @@ class TrainingStore:
         )
         return [self._model(r) for r in rows]
 
+    def taught_in_run(self, run_prefix: str) -> dict[str, str] | None:
+        """What a run taught (`kind`: character, object, style ...) and its magic `word`, from the
+        start of its id: the image screens' styles name Train's runs by its first 8 characters."""
+        if not run_prefix or not all(c in "0123456789abcdef-" for c in run_prefix):
+            return None
+        row = self._one(
+            "SELECT kind, trigger_word FROM models WHERE run_id LIKE ? "
+            "ORDER BY created_at DESC LIMIT 1",
+            (f"{run_prefix}%",),
+        )
+        return {"kind": str(row["kind"]), "word": str(row["trigger_word"] or "")} if row else None
+
     def rename_model(self, tenant: str, user: str, item: str, name: str) -> dict[str, Any]:
         n = self._exec(
             "UPDATE models SET name = ? WHERE id = ? AND tenant_id = ? AND user_id = ?",

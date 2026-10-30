@@ -318,3 +318,18 @@ def test_a_set_says_what_teaching_it_would_take_and_the_run_keeps_the_side(rig):
     assert got["steps"] == 200 and got["estimate"] == "About 20 minutes"
     run = rig.post(f"{BASE}/runs", json={"dataset_id": ds["id"]}).json()
     assert run["steps"] == 200 and run["settings"]["side"] == 512
+
+
+def test_a_runs_kind_is_found_from_the_start_of_its_id(tmp_path):
+    """The image screens' styles name Train's runs by their first 8 characters (ADR-0091)."""
+    from wasifyai_training.store import TrainingStore
+
+    store = TrainingStore.in_folder(tmp_path)
+    store.add_model(
+        "t1", "u1", run_id="b37ba287f9604199b22047e56ad709ce", dataset_id=None, name="Ena",
+        trigger_word="gabrin", kind="character", base="flux2-klein-base-4b", card={},
+        preview=False, adapter_bytes=1,
+    )  # fmt: skip
+    assert store.taught_in_run("b37ba287") == {"kind": "character", "word": "gabrin"}
+    assert store.taught_in_run("00000000") is None
+    assert store.taught_in_run("b37%") is None  # not a run id: nothing is matched

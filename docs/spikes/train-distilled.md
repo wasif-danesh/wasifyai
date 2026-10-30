@@ -47,5 +47,5 @@ Ena, and a training picture.
 - Train stays on klein base (ADR-0073 unchanged).
 - A **character** taught on base carries to Create. Two **looks** others taught on base (S0) did not; whether a look *Train*
   teaches carries is not measured (no style dataset on this Mac yet). The Styles row's warning "made for klein base: the look may
-  not show" is shown on Ena too, where it is not true; worth narrowing to looks.
+  not show" was shown on Ena too; narrowed to looks the same day (owner), and Ena now shows its word `gabrin` from Train.
 - The distilled transformer (7.75 GB) is not needed by Train; it can be deleted.

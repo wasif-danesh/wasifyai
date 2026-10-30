@@ -851,12 +851,23 @@ def _desktop_text(desktop: Desktop | None, recorder: Any) -> Any:
     return KeyedTextProvider(local, desktop.own_keys, recorder)
 
 
+def _taught_in(s: ApiServices, run: str) -> dict[str, str] | None:
+    """What a Train run taught and its magic word, from Train's own store, if it is here."""
+    try:
+        from wasifyai_training.runtime import store_for
+    except ImportError:  # a build without Train
+        return None
+    return store_for(s).taught_in_run(run)
+
+
 def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     """What only the desktop has: the runtimes and components of this computer (ADR-0056)."""
     s.local_files = desktop.local_files
     s.desktop_models = desktop.models
     s.desktop_discovery = desktop.discovery
     s.desktop_styles = desktop.styles
+    if desktop.styles is not None:  # what Train taught in each run: only a look gets the warning
+        desktop.styles.taught = lambda run: _taught_in(s, run)
     s.llama_server = desktop.llama
     s.audio = desktop.audio  # the speech runtime (ADR-0066); products reach it here
     s.video_builder = desktop.video_builder  # the render engine (ADR-0077)

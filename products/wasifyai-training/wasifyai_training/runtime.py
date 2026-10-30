@@ -560,7 +560,7 @@ class RunManager:
             with contextlib.suppress(Exception):
                 await styles.describe(
                     name, dataset["name"] or dataset["trigger_word"], dataset["trigger_word"],
-                    {"kind": "trained", "run": row["id"]},
+                    {"kind": "trained", "run": row["id"], "what": dataset["kind"]},
                 )  # fmt: skip
         return {"lora_name": name} if name else None
 

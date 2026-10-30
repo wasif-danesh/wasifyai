@@ -514,3 +514,62 @@ def test_the_recommended_list_leaves_out_what_is_here(client):
     listed = client.get("/desktop/styles").json()
     assert [r["repo"] for r in listed["recommended"]] == [r["repo"] for r in RECOMMENDED]
     assert all(len(r["sha256"]) == 64 and r["word"] for r in listed["recommended"])
+
+
+# ---- the klein base warning: looks only (docs/spikes/train-distilled.md) -------------------------
+
+
+@pytest.mark.parametrize(("taught", "warned"), [("character", False), ("object", False),
+                                                ("style", True), (None, True)])  # fmt: skip
+async def test_a_train_style_made_on_base_is_warned_about_only_when_it_is_a_look(
+    tmp_path, taught, warned
+):
+    folder = tmp_path / "loras"
+    folder.mkdir()
+    write(
+        folder, "wasify-ena-b37ba287.safetensors", lora(meta={"taught_on": "flux2-klein-base-4b"})
+    )
+    svc = StylesService(folder)
+    asked: list[str] = []
+    svc.taught = lambda run: (
+        asked.append(run) or ({"kind": taught, "word": "gabrin"} if taught else None)
+    )
+    (s,) = await svc.all()
+    assert asked == ["b37ba287"] and s.public()["made_for_base"] is warned
+    if taught:  # kept in the record, with Train's magic word: Train's store is not asked again
+        assert s.source["what"] == taught and s.trigger == "gabrin"
+        (again,) = await svc.all()
+        assert again.source["what"] == taught and asked == ["b37ba287"]
+
+
+async def test_a_train_style_that_knew_its_kind_but_not_its_word_gets_the_word_once(tmp_path):
+    folder = tmp_path / "loras"
+    folder.mkdir()
+    write(folder, "wasify-ena-b37ba287.safetensors", lora())
+    svc = StylesService(folder)
+    (s,) = await svc.all()
+    s.source = {"kind": "trained", "run": "b37ba287", "what": "character"}  # an earlier record
+    svc._write(s)
+    svc.taught = lambda run: {"kind": "character", "word": "gabrin"}
+    (s,) = await svc.all()
+    assert s.trigger == "gabrin" and s.source["asked"] is True
+
+
+async def test_a_style_from_elsewhere_made_for_base_is_warned_about(tmp_path):
+    svc = StylesService(tmp_path / "loras")
+    s = await svc.import_file(
+        chunks(lora(meta={"taught_on": "flux2-klein-base-4b"})), "x.safetensors"
+    )
+    assert s.public()["made_for_base"] is True
+
+
+async def test_train_says_what_it_taught_when_it_names_its_style(tmp_path):
+    folder = tmp_path / "loras"
+    folder.mkdir()
+    write(
+        folder, "wasify-ena-b37ba287.safetensors", lora(meta={"taught_on": "flux2-klein-base-4b"})
+    )
+    svc = StylesService(folder)
+    source = {"kind": "trained", "run": "b37ba287-x", "what": "character"}
+    s = await svc.describe("wasify-ena-b37ba287.safetensors", "Ena", "gabrin", source)
+    assert s is not None and s.public()["made_for_base"] is False

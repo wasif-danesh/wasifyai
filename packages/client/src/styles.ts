@@ -22,7 +22,7 @@ export type Style = {
   /** the model the file says it was made for: "FLUX.2 klein 4B", "FLUX.1", … or null */
   model: string | null;
   fit: StyleFit;
-  /** made for klein base: the look may not show on the distilled model the screens run */
+  /** a look made for klein base: it may not show on the distilled model the screens run (a person or thing Train taught does) */
   made_for_base: boolean;
   rank: number | null;
   /** parts of the file this app does not apply (said in one line) */

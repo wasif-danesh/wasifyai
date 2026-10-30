@@ -188,12 +188,19 @@ class Style:
     added_at: float
     extra: dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def look_may_not_show(self) -> bool:
+        """Made for klein base, and a look: a look taught on base did not show on the distilled
+        model; a person or a thing Train taught on base did (docs/spikes/train-distilled.md)."""
+        taught = self.source.get("what") if self.source.get("kind") == "trained" else None
+        return bool(self.base) and taught not in ("character", "object")
+
     def public(self) -> dict[str, Any]:
         out = asdict(self)
         out.pop("file")
         out.pop("extra")
         out["selectable"] = self.fit != "other"
-        out["made_for_base"] = bool(self.base)
+        out["made_for_base"] = self.look_may_not_show
         return out
 
 
@@ -216,6 +223,9 @@ class StylesService:
 
     def __init__(self, loras_dir: Path, settings: Any = None):
         self.dir = loras_dir
+        # what Train taught in a run ({kind, word}), by the start of the run's id; set on the
+        # desktop (Train's store), for its styles made before they said so themselves
+        self.taught: Any = None
         self._settings = settings  # a SettingsStore: the saved looks; none, they are kept in memory
         self._looks_here: list[dict[str, Any]] = []
         self._lock = asyncio.Lock()
@@ -265,6 +275,13 @@ class StylesService:
                 )  # fmt: skip
                 s = self._record(f, source, h, _sha256(f))
                 self._write(s)
+            if s.source.get("kind") == "trained" and not s.source.get("asked") and self.taught:
+                with contextlib.suppress(Exception):  # Train's store away: asked again next time
+                    found = self.taught(str(s.source.get("run") or ""))
+                    if found:
+                        s.source = {**s.source, "what": found["kind"], "asked": True}
+                        s.trigger = s.trigger or found.get("word") or None
+                        self._write(s)
             out.append(s)
         for side in self.dir.glob(f"*{SIDECAR}"):  # a record whose file went (Train removed it)
             if not (self.dir / side.name[: -len(SIDECAR)]).is_file():

@@ -63,7 +63,10 @@ def _made_for(s: Any) -> str:
         return f"made for {s.model or 'another model'}: it cannot be used here"
     if s.fit == "unsure":
         return "not sure which model it was made for"
-    return "made for klein base: its look may not show" if s.base else f"made for {s.model}"
+    return (
+        "made for klein base: its look may not show" if s.look_may_not_show
+        else f"made for {s.model}"
+    )  # fmt: skip
 
 
 async def _list(p: ListIn, ctx: ActionContext) -> Outcome:

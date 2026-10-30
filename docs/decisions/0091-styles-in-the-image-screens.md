@@ -93,7 +93,9 @@
    **not sure** (selectable with a warning). *S0 measured:* klein 4B = width 3072, 5 double, 20 single; klein 9B = 4096, 8, 24; FLUX.1
    = 3072, 19, 38. Base or distilled is not in the file: when the source says **klein base** (Train's `taught_on`, the Hugging Face
    repo's `base_model` tag) the row adds "Made for klein base: the look may not show on this model" and stays selectable (S0: a look
-   trained on base did not show on our distilled model at strength 2 or 8 steps; a subject did). The family tag in the sidecar, when present, is checked against the fingerprint; a mismatch
+   trained on base did not show on our distilled model at strength 2 or 8 steps; a subject did). *Narrowed 2026-10-30* (owner, after
+   `docs/spikes/train-distilled.md`): a character or object Train taught on base shows in Create, so the warning is for looks only;
+   Train's styles carry what was taught (`source.what`, older ones looked up once in Train's store, with their magic word). The family tag in the sidecar, when present, is checked against the fingerprint; a mismatch
    is shown. The engine enforces the same rule on the request (as Unsloth does), so no client can load a wrong-family file.
 7. **Up to 8 styles, strength 0 to 2 in steps of 0.05** (the engine accepts 0.1 to 2.0 today; 0 means "off", so the screen offers 0.05 to
    2). The chain limit in each workflow map goes from 3 to 8. The honest line before Generate says "Changing styles adds a few seconds to the next picture" (S0: 1 to 3 s once, nothing per

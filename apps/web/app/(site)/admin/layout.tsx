@@ -28,6 +28,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <NavLink href="/admin/users">Users</NavLink>
           <NavLink href="/admin/models">Models</NavLink>
           <NavLink href="/admin/media">Media</NavLink>
+          <NavLink href="/admin/styles">Styles</NavLink>
           <NavLink href="/admin/workers">Models and workers</NavLink>
           <NavLink href="/admin/search">Search</NavLink>
           <NavLink href="/admin/settings">Settings</NavLink>

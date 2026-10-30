@@ -31,10 +31,16 @@
     "screen": "images.create",
     "where": "Images › Create",
     "actions": [
-      "image.generate"
+      "image.generate",
+      "styles.add_from_hub",
+      "styles.list",
+      "styles.remove"
     ],
     "does": [
-      "Make a picture"
+      "Make a picture",
+      "Get a style from Hugging Face",
+      "Styles on this computer",
+      "Delete a style"
     ]
   },
   {

@@ -476,6 +476,42 @@
   "body": "# Speech to text\n\nAction: `speech.transcribe`\n\n## What it is for\n\nWrite down what a recording in your library says and keep it as a transcript.\n\n## Steps in the app\n\n1. Open **Voice › Speech to text**.\n2. Drop a recording on the screen or choose **Choose a recording**.\n3. Choose **Transcribe**. The text appears with its times, with Copy and Save (.txt, .srt or .vtt), and\n   joins Recent transcripts.\n\n## Fields\n\n- `source_kind`: track or speech.\n- `source_id`: The recording.\n- `path`: For another app connected to Wasify AI: the full path of an audio or video file inside a folder that connection may read (Settings › Other apps), instead of a recording of the library.\n- `title`: Optional name.\n\n## Limits\n\n- The recording must be in your library.\n\n## Needs\n\n- A transcription model (Models).\n\n## Examples\n\n- Write down what that speech says.\n\n## Problems\n\n- **Recording is no longer there** Choose another one."
  },
  {
+  "action": "styles.add_from_hub",
+  "title": "Get a style from Hugging Face",
+  "screen": "images.create",
+  "synonyms": [
+   "download a style",
+   "get a lora",
+   "add a lora from hugging face",
+   "install a style"
+  ],
+  "body": "# Get a style from Hugging Face\n\nAction: `styles.add_from_hub`\n\n## What it is for\n\nDownload a style (a .safetensors LoRA) from a Hugging Face repository to this computer. You are shown the file and\nits size and must agree. It is checked when it arrives, then it is in your styles.\n\n## Steps in the app\n\n1. Open **Images › Create**.\n2. Under **Styles**, choose **Add a style**, then **From Hugging Face…**.\n3. Write the repository's name or paste its address, choose **Look**, choose the file and **Download … and add**.\n\n## Fields\n\n- `repo`: The repository, `owner/name`, or its address.\n- `file`: The .safetensors file, when the repository has more than one.\n\n## Limits\n\n- Only .safetensors files; .ckpt and .pt files are never offered (they can run code).\n- At most 2 GB.\n- One download at a time.\n- Asks Hugging Face only once browsing is allowed.\n\n## Needs\n\n- The desktop app and a connection.\n\n## Examples\n\n- Get the anime style Sawata97/flux2_4b_koni_animestyle.\n\n## Problems\n\n- **Browsing is off** Allow it in **Model hub** or from the dialog.\n- **This is a model, not a style** The file was deleted again; choose another.\n- **Gated** It needs a Hugging Face token in Settings."
+ },
+ {
+  "action": "styles.list",
+  "title": "Styles on this computer",
+  "screen": "images.create",
+  "synonyms": [
+   "list styles",
+   "my styles",
+   "my loras",
+   "which styles do I have",
+   "saved looks"
+  ],
+  "body": "# Styles on this computer\n\nAction: `styles.list`\n\n## What it is for\n\nSee the styles (also called LoRAs) the image screens can use: the ones you made in Train, added from this computer\nor got from Hugging Face, with what model each was made for and its word. Your saved looks are listed too.\n\n## Steps in the app\n\n1. Open **Images › Create**.\n2. Under **Styles**, choose **Add a style** to see them.\n\n## Fields\n\nNone.\n\n## Limits\n\n- Desktop only: the web shows the styles an admin installed.\n\n## Needs\n\n- The desktop app.\n\n## Examples\n\n- Which styles do I have?\n- Use my anime style for this picture.\n\n## Problems\n\n- **Made for another model** That style cannot be used here; it would give noise.\n- **Made for klein base** Its look may barely show on this model."
+ },
+ {
+  "action": "styles.remove",
+  "title": "Delete a style",
+  "screen": "images.create",
+  "synonyms": [
+   "delete a style",
+   "remove a lora",
+   "delete a lora"
+  ],
+  "body": "# Delete a style\n\nAction: `styles.remove`\n\n## What it is for\n\nDelete the app's copy of a style from this computer. Pictures made with it stay. A file another app keeps is never\ntouched.\n\n## Steps in the app\n\n1. Open **Images › Create** and choose the style under **Styles**.\n2. In its menu, choose **Delete from this computer…** and confirm.\n\n## Fields\n\n- `style_id`: The style, from the list.\n\n## Limits\n\n- Always asks you first.\n\n## Needs\n\n- The desktop app.\n\n## Examples\n\n- Delete the yarn style.\n\n## Problems\n\n- **Not on this computer** It was deleted already."
+ },
+ {
   "action": "train.start",
   "title": "Teach a character or style",
   "screen": "train",

@@ -932,7 +932,14 @@ class DiscoveryService:
         self.scanned_at = saved.get("scanned_at")
         self.scanned = list(saved.get("scanned", []))
         self.truncated = bool(saved.get("truncated", False))
-        self.items = [Found(**i) for i in saved.get("items", []) if isinstance(i, dict)]
+        # a field an older app saved and this one no longer has (`licence`, ADR-0094) is left
+        # out, so a saved scan never stops the engine from starting
+        known = set(Found.__dataclass_fields__)
+        self.items = [
+            Found(**{k: v for k, v in i.items() if k in known})
+            for i in saved.get("items", [])
+            if isinstance(i, dict)
+        ]
 
     async def _save(self) -> None:
         await self._store.put(

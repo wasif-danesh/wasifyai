@@ -123,6 +123,21 @@ export {
   createOwnKeysApi,
 } from "./own-keys";
 export {
+  type FoundStyle,
+  type HubStyleFiles,
+  type HubStyleJob,
+  type Look,
+  type RecommendedStyle,
+  type Style,
+  StyleError,
+  type StyleChoice,
+  type StyleFit,
+  type StylesApi,
+  type StylesList,
+  createServiceStylesApi,
+  createStylesApi,
+} from "./styles";
+export {
   type AttachedResource,
   type ExternalActivity,
   type ExternalApi,

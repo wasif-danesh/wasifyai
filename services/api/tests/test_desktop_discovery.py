@@ -411,6 +411,15 @@ async def test_the_service_scans_saves_and_lets_a_file_be_used_in_place(tmp_path
     with pytest.raises(KeyError):
         await again.use("nope")
 
+    # a scan an older app saved, with a field this one no longer has (`licence`), still loads
+    saved = await store.get("desktop.discovery")
+    assert isinstance(saved, dict)
+    saved["items"][0]["licence"] = "Apache-2.0"
+    await store.put("desktop.discovery", saved, "desktop")
+    older = DiscoveryService(store, svc_models, tools_for(home))
+    await older.load()
+    assert len(older.items) == 1 and not hasattr(older.items[0], "licence")
+
 
 async def test_scans_do_not_overlap_and_a_failure_does_not_stick(tmp_path):
     svc = DiscoveryService(InMemorySettingsStore(), None, tools_for(tmp_path))

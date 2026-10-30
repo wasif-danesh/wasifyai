@@ -10,13 +10,13 @@ import {
   createNotebooksApi,
   createOwnKeysApi,
   createRunClient,
+  createStylesApi,
   createVoiceApi,
 } from "@wasifyai/client";
 import { createDiscoveryApi } from "./discovery";
 import { engineSession } from "./engine";
 import { createHubApi } from "./hub";
 import { createLanguageApi } from "./language";
-import { createLorasApi } from "./loras";
 import { createModelsApi } from "./models";
 import { createEngineTransport } from "./transport";
 
@@ -31,7 +31,7 @@ export const discoveryApi = createDiscoveryApi(transport);
 export const languageApi = createLanguageApi(transport);
 export const hubApi = createHubApi(transport);
 export const assistantApi = createAssistantApi(transport);
-export const lorasApi = createLorasApi(transport);
+export const stylesApi = createStylesApi(transport); // the image screens' styles (ADR-0091)
 export const notebooksApi = createNotebooksApi(transport);
 export const voiceApi = createVoiceApi(transport);
 export const creationsApi = createCreationsApi(transport);

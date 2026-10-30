@@ -179,8 +179,8 @@ def test_a_lora_goes_between_the_model_and_the_guider(name, guider):
 
 def test_too_many_loras_and_a_workflow_without_a_chain_are_refused():
     wf = Workflow.load(WORKFLOWS, "flux2-klein-4b")
-    with pytest.raises(ValueError, match="at most 3"):
-        wf.fill({"prompt": "x"}, [(f"{n}.safetensors", 1.0) for n in range(4)])
+    with pytest.raises(ValueError, match="at most 8"):
+        wf.fill({"prompt": "x"}, [(f"{n}.safetensors", 1.0) for n in range(9)])
 
 
 def test_a_chain_that_points_at_a_missing_node_is_a_problem(tmp_path):

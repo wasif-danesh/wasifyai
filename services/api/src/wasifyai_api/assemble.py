@@ -113,6 +113,7 @@ from wasifyai_api.rag import DIMENSIONS, RagService
 from wasifyai_api.routes import HEARTBEAT_S
 from wasifyai_api.run_tracing import Langfuse
 from wasifyai_api.runs import RunManager
+from wasifyai_api.service_styles import ServiceStyles
 from wasifyai_api.services import ApiServices
 from wasifyai_api.settings_store import InMemorySettingsStore, PostgresSettingsStore
 from wasifyai_api.tool_host import ApiToolHost
@@ -466,6 +467,8 @@ async def _shared(
         r.background.append(asyncio.create_task(sweep_forever(s.uploads, store)))
     s.engine = db
     s.storage = store
+    if not desktop and store is not None:  # the styles an admin adds for everyone (ADR-0091 S5)
+        s.service_styles = ServiceStyles(settings_store, store.backing)
     s.heartbeat_s = given.heartbeat_s
     return r
 
@@ -623,6 +626,12 @@ def _build_graphs(
             from wasifyai_api.person_looks import person_looks
 
             caps.extras["person_looks"] = person_looks(s, video=product_id == "wasifyai-video")
+        if not r.desktop and product_id == "wasifyai-image" and s.service_styles is not None:
+            # the web: the styles an admin added, by id, fetched by the media worker per job
+            caps.extras["styles"] = s.service_styles.files_for
+        if r.desktop and product_id == "wasifyai-image":
+            # the desktop: styles by id, turned into the files of the `loras` folder (ADR-0091)
+            caps.extras["styles"] = lambda wanted: s.desktop_styles.files_for(wanted)
         s.caps[product_id] = caps
         graphs[product_id] = reg.build(product_id, caps, saver)
     return graphs
@@ -847,6 +856,7 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     s.local_files = desktop.local_files
     s.desktop_models = desktop.models
     s.desktop_discovery = desktop.discovery
+    s.desktop_styles = desktop.styles
     s.llama_server = desktop.llama
     s.audio = desktop.audio  # the speech runtime (ADR-0066); products reach it here
     s.video_builder = desktop.video_builder  # the render engine (ADR-0077)

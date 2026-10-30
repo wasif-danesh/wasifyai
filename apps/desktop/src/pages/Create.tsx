@@ -9,30 +9,12 @@ import {
   type WorkspacePreset,
   useChoicesFor,
 } from "@wasifyai/ui";
-import { useEffect, useRef, useState } from "react";
-import { client, discoveryApi, lorasApi } from "../api";
+import { useRef } from "react";
+import { client, stylesApi } from "../api";
 import { useGroupReady } from "../choices/use-ready";
 import { useImageEngine, useModelOf } from "../engine-hooks";
 import { images } from "../images";
-import type { LoraList } from "../loras";
 import type { Route } from "../router";
-
-function useLoras(): [LoraList, () => void] {
-  const [list, setList] = useState<LoraList>({ ready: [], available: [] });
-  const [version, setVersion] = useState(0);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `version` is the refresh trigger
-  useEffect(() => {
-    let gone = false;
-    lorasApi
-      .list()
-      .then((l) => !gone && setList(l))
-      .catch(() => {});
-    return () => {
-      gone = true;
-    };
-  }, [version]);
-  return [list, () => setVersion((v) => v + 1)];
-}
 
 export function CreatePage({
   mode,
@@ -51,7 +33,6 @@ export function CreatePage({
 }) {
   const model = useModelOf("wasifyai-image");
   const engine = useImageEngine();
-  const [loras, refreshLoras] = useLoras();
 
   // "Select image model": the model in use, or the way to get one (ADR-0086)
   const choices = useChoicesFor("images");
@@ -81,17 +62,8 @@ export function CreatePage({
       beforeMake={ensure}
       preset={preset}
       onOpenLibrary={() => go("library")}
-      loras={loras.ready.map((l) => ({ id: l.id, name: l.name, title: l.title, size: l.size }))}
-      availableLoras={loras.available.map((l) => ({
-        id: l.id,
-        name: l.name,
-        title: `${l.title} (${l.tool})`,
-        size: l.size,
-      }))}
-      onUseLora={async (id) => {
-        await discoveryApi.use(id); // adds the folder; the list reads again once the scan is done
-        setTimeout(refreshLoras, 1500);
-      }}
+      stylesApi={stylesApi}
+      onOpenFolders={() => go("settings")}
       onEditThis={onEditThis}
       onAnimateThis={onAnimateThis}
       sourceImage={source ?? null}

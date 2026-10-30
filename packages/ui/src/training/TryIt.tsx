@@ -23,7 +23,16 @@ export function starterPrompt(model: Pick<TrainedModel, "kind" | "trigger_word">
 }
 
 /** "Use it": the same words drawn without and with what was taught, side by side. */
-export function TryIt({ model, runs }: { model: TrainedModel; runs: ImageFlowApi }) {
+export function TryIt({
+  model,
+  runs,
+  onUseInCreate,
+}: {
+  model: TrainedModel;
+  runs: ImageFlowApi;
+  /** "Use in Create": Create opens with this style chosen and its word in the prompt */
+  onUseInCreate?: (model: TrainedModel) => void;
+}) {
   const id = useId();
   const [prompt, setPrompt] = useState(() => starterPrompt(model));
   const { state, draw } = useTryIt(runs);
@@ -63,6 +72,11 @@ export function TryIt({ model, runs }: { model: TrainedModel; runs: ImageFlowApi
           {working ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
           {working ? "Drawing…" : "Draw it"}
         </Button>
+        {onUseInCreate ? (
+          <Button type="button" variant="outline" onClick={() => onUseInCreate(model)}>
+            Use in Create
+          </Button>
+        ) : null}
       </div>
       {state.phase === "drawing" ? (
         <output className="text-muted-foreground text-sm">

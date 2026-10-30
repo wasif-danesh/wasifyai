@@ -38,7 +38,23 @@ Both run on FLUX.2 klein 4B through ComfyUI; no new model.
 
 ### Styles (LoRAs), Vary and Edit this result
 
-A request may carry `loras: [{name, weight}]` (at most 3, weight 0.1 to 2.0, names relative to a `loras` folder).
+A request may carry `loras: [{name, weight}]` (at most 8, weight 0.05 to 2.0, names relative to a `loras` folder)
+or, on the desktop, `styles: [{id, strength}]`: ids of the style records the engine keeps (ADR-0091 S1,
+`desktop_styles.py`): each style is a file in `<models>/loras` with a `<file>.style.json` sidecar (title, source,
+SHA-256, size, the model read from the header, fit, made for klein base, rank, trigger word). `GET /desktop/styles`
+lists them (Train's first; files with no record are adopted), `POST /desktop/styles/import?name=` takes a file as the
+body and keeps a checked copy, `PATCH` renames or sets the word, `DELETE` removes our copy. Only `.safetensors`; the
+header alone is read; a style made for another model is not selectable and is refused in a request.
+The screen (S2): the Styles section is always in view on Create, Edit, Inpaint and Reference (`StylesSection`);
+its Add menu lists yours first, the styles kept here, the ones another app keeps (`POST /desktop/styles/from-found`
+copies one in) "From this computer…" (`ImportStyleDialog`) and "From Hugging Face…" (`HubStyleDialog`, S3: a repository's
+`.safetensors` files after browsing is allowed, the confirmed file fetched at its commit with its checksum, then
+checked like any style; `/desktop/styles/hub/...`); Train's Try it has **Use in Create**.
+S4: **Advanced** (steps, seed, how many pictures, a size of one's own; the graph takes `steps`, `width`,
+`height`), **Saved looks** (`/desktop/styles/looks`), "Make it again" with the styles' ids and checksums, and the
+actions `styles.list`, `styles.add_from_hub`, `styles.remove` plus `styles` on the image actions.
+S5: **Recommended** in the Add menu (three styles checked in S0, pinned by checksum). On the web the same section
+is read only over the styles an admin added in Admin > Styles (`service_styles.py`).
 The image graph validates them before any model is asked, the recipe keeps them, and a workflow whose map file has
 no `lora_chain` refuses them. `GET /desktop/loras` answers `{ready, available}`: a LoRA in a ComfyUI-layout folder
 (`<root>/loras/...`) is usable once its root is a read-only folder ("Use it"); the app's own `models/loras` folder

@@ -28,6 +28,15 @@
 //   apps/desktop/scripts/ui-audit.sh light u10-make             Teach's front door, a real notebook report as a card,
 //                                                                a real Motion graphics video on the frame, and a real
 //                                                                3D picture check (its cut-out) on the stage
+//   apps/desktop/scripts/ui-audit.sh light styles-make          Styles (ADR-0091 S2): the section, the Add menu, Train's
+//                                                                style chosen and a real picture made with it, then
+//                                                                the section on Edit, Inpaint and Reference
+//   apps/desktop/scripts/ui-audit.sh light styles-hub-make      Styles (S3): a real style from Hugging Face fetched,
+//                                                                checked and used in a real picture (downloads it)
+//   apps/desktop/scripts/ui-audit.sh light styles-advanced-make Styles (S4): Advanced, a real picture, a saved look,
+//                                                                then "Make it again" choosing the style again
+//   apps/desktop/scripts/ui-audit.sh light styles-recommended   Styles (S5): the Recommended styles in the Add menu and
+//                                                                the dialog with the pinned file chosen (no download)
 //   apps/desktop/scripts/ui-audit.sh light home-make            the home: quick starts with readiness, the "+" menu,
 //                                                                typed words taken to Images by Picture, a real
 //                                                                picture made, then opened from the home's Recent
@@ -229,6 +238,142 @@ for (const scheme of ["light", "dark"]) {
       await page.waitForTimeout(400);
       await shot(page, "image-made-more");
       await page.keyboard.press("Escape");
+    });
+  }
+  if (scheme === "light" && names.has("styles-make")) {
+    // the check of Styles stage S2 (ADR-0091): the section always in view, the Add menu with yours first,
+    // Train's style chosen, a real picture made with it, and the same section on Edit, Inpaint and Reference
+    await attempt("styles-make", async () => {
+      await open(page, "/images/create");
+      await page.getByRole("region", { name: "Styles" }).waitFor();
+      await shot(page, "styles-empty");
+      await page.getByRole("button", { name: /Add a style/ }).click();
+      await page.waitForTimeout(400);
+      await shot(page, "styles-add-menu");
+      await page
+        .getByRole("menuitem", { name: /\(yours\)/ })
+        .first()
+        .click();
+      await page.waitForTimeout(600);
+      await shot(page, "styles-chosen");
+      await page
+        .getByRole("textbox", { name: /prompt/i })
+        .fill("A lighthouse on a cliff at sunrise, soft watercolour");
+      await page.getByRole("button", { name: "Make the picture" }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 20_000 });
+      await untilDone(page, page.locator('[data-slot="stage"][data-state="result"] img'), 300_000);
+      await page.waitForTimeout(800);
+      await shot(page, "styles-made");
+      for (const [name, path] of [
+        ["styles-edit", "/images/edit"],
+        ["styles-inpaint", "/images/inpaint"],
+        ["styles-reference", "/images/reference"],
+      ]) {
+        await open(page, path);
+        await page.getByRole("region", { name: "Styles" }).waitFor();
+        await shot(page, name);
+      }
+    });
+  }
+  if (scheme === "light" && names.has("styles-hub-make")) {
+    // the check of Styles stage S3: a real style from the reviewed shortlist fetched from Hugging Face, checked,
+    // chosen with its word, and a real picture made with it (WASIFYAI_AUDIT_STYLE_REPO picks another)
+    await attempt("styles-hub-make", async () => {
+      const repo = process.env.WASIFYAI_AUDIT_STYLE_REPO ?? "Sawata97/flux2_4b_koni_animestyle";
+      await open(page, "/images/create");
+      await page.getByRole("button", { name: /Add a style/ }).click();
+      await page.getByRole("menuitem", { name: "From Hugging Face…" }).click();
+      await page.getByLabel("Name or address").fill(repo);
+      await page.getByRole("dialog").getByRole("button", { name: "Look", exact: true }).click();
+      const allow = page.getByRole("button", { name: "Allow browsing Hugging Face" });
+      const files = page.getByRole("radio").first();
+      await Promise.race([allow.waitFor({ timeout: 30_000 }), files.waitFor({ timeout: 30_000 })]);
+      if (await allow.isVisible()) await allow.click();
+      await files.waitFor({ timeout: 30_000 });
+      await files.check();
+      await shot(page, "styles-hub-files");
+      await page.getByRole("button", { name: /^Download .* and add$/ }).click();
+      await page.waitForTimeout(3000);
+      await shot(page, "styles-hub-getting");
+      await page.getByText(/was checked and added/).waitFor({ timeout: 900_000 });
+      await shot(page, "styles-hub-added");
+      await page.getByRole("button", { name: "Use it in this picture" }).click();
+      await page
+        .getByRole("textbox", { name: /prompt/i })
+        .fill("A lighthouse on a rocky cliff at sunset, a small boat in the bay");
+      const word = page.getByRole("button", { name: "Use this word" }).first();
+      if (await word.isVisible()) await word.click();
+      await page.waitForTimeout(400);
+      await shot(page, "styles-hub-chosen");
+      await page.getByRole("button", { name: "Make the picture" }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 20_000 });
+      await untilDone(page, page.locator('[data-slot="stage"][data-state="result"] img'), 300_000);
+      await page.waitForTimeout(800);
+      await shot(page, "styles-hub-made");
+    });
+  }
+  if (scheme === "light" && names.has("styles-advanced-make")) {
+    // the check of Styles stage S4: a style chosen with its word, Advanced (8 steps, 1280 x 720), a real picture,
+    // the look saved; then a fresh screen, the picture opened and "Make it again" choosing the style again
+    await attempt("styles-advanced-make", async () => {
+      await open(page, "/images/create");
+      await page.getByRole("button", { name: /Add a style/ }).click();
+      await page.getByRole("menuitem", { name: /anime/i }).first().click();
+      await page
+        .getByRole("textbox", { name: /prompt/i })
+        .fill("A lighthouse on a rocky cliff at sunset, a small boat in the bay");
+      await page.getByRole("button", { name: "Use this word" }).first().click();
+      await page.getByText("Advanced", { exact: true }).click();
+      await page.getByRole("spinbutton", { name: "Steps" }).fill("8");
+      await page.getByRole("spinbutton", { name: "Width" }).fill("1280");
+      await page.getByRole("spinbutton", { name: "Height" }).fill("720");
+      await page.waitForTimeout(300);
+      await shot(page, "styles-advanced", 1400);
+      await page.getByRole("button", { name: "Make the picture" }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 20_000 });
+      await untilDone(page, page.locator('[data-slot="stage"][data-state="result"] img'), 300_000);
+      await page.waitForTimeout(800);
+      await shot(page, "styles-advanced-made");
+      await page.getByRole("button", { name: /Saved looks/ }).click();
+      await page.getByRole("menuitem", { name: "Save this look…" }).click();
+      await page.getByLabel("Its name").fill("Anime wide");
+      await page.getByRole("button", { name: "Save", exact: true }).click();
+      await page.waitForTimeout(600);
+      await page.getByRole("button", { name: /Saved looks/ }).click();
+      await page.waitForTimeout(300);
+      await shot(page, "styles-looks-menu");
+      await page.keyboard.press("Escape");
+      // a fresh screen: nothing chosen; the picture's recipe brings the style, the steps and the size back
+      await open(page, "/images/create");
+      await page.locator('[data-slot="recent-strip"] button[aria-label^="Open:"]').first().click();
+      await page.getByRole("button", { name: "More", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Make it again" }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(1500);
+      await shot(page, "styles-again", 1400);
+      await untilDone(page, page.locator('[data-slot="stage"][data-state="result"] img'), 300_000);
+      await page.waitForTimeout(800);
+      await shot(page, "styles-again-made");
+    });
+  }
+  if (scheme === "light" && names.has("styles-recommended")) {
+    // Styles stage S5: the Add menu with the Recommended styles that are not here yet (nothing is fetched)
+    await attempt("styles-recommended", async () => {
+      await open(page, "/images/create");
+      await page.getByRole("button", { name: /Add a style/ }).click();
+      await page
+        .getByRole("menuitem", { name: /recommended/ })
+        .first()
+        .waitFor();
+      await shot(page, "styles-recommended");
+      await page
+        .getByRole("menuitem", { name: /recommended/ })
+        .first()
+        .click();
+      await page.getByRole("radio").first().waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(400);
+      await shot(page, "styles-recommended-dialog");
+      await page.getByRole("button", { name: "Not now" }).click();
     });
   }
   if (scheme === "light" && names.has("video-make")) {

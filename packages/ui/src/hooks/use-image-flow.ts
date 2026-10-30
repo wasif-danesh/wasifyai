@@ -35,8 +35,14 @@ export type ImageRequest = {
   seed?: number;
   /** Styles (LoRAs) to apply, by name and strength. */
   loras?: { name: string; weight: number }[];
+  /** the desktop's styles by id (ADR-0091); the engine turns them into its files */
+  styles?: { id: string; strength: number }[];
   /** The picture of the library a change starts from ("Edit this"), kept as where it came from. */
   sourceId?: string;
+  /** Advanced (ADR-0091): sampling steps, and a size of one's own (text and reference) */
+  steps?: number;
+  width?: number;
+  height?: number;
 };
 
 const sleep = (ms: number, signal: AbortSignal) =>
@@ -159,7 +165,12 @@ export function useImageFlow(api: ImageFlowApi) {
         ...(mode === "reference" ? { image2_key: request.image2Key } : {}),
         ...(mode === "inpaint" ? { mask_key: request.maskKey } : {}),
         ...(request.loras && request.loras.length > 0 ? { loras: request.loras } : {}),
+        ...(request.styles && request.styles.length > 0 ? { styles: request.styles } : {}),
         ...(mode !== "text" && request.sourceId ? { source_id: request.sourceId } : {}),
+        ...(request.steps ? { steps: request.steps } : {}),
+        ...((mode === "text" || mode === "reference") && request.width && request.height
+          ? { width: request.width, height: request.height }
+          : {}),
       };
       void follow((signal) => startRun(IMAGE_PRODUCT, input, signal, onEvent), ctrl.signal);
     },

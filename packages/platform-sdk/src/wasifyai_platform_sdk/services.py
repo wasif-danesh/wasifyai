@@ -78,6 +78,7 @@ class EngineServices:
     local_files: Any = None
     desktop_models: Any = None
     desktop_discovery: Any = None
+    desktop_styles: Any = None  # the image screens' styles (ADR-0091)
     llama_server: Any = None
     desktop_language: Any = None  # the local language model
     desktop_vision: Any = None

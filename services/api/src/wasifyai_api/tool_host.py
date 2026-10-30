@@ -179,6 +179,10 @@ class ApiToolHost:
             if state.desktop_models is None:
                 return Readiness.unavailable("Models are managed in the desktop app.")
             return Readiness.ready()
+        if need.kind == "runtime" and need.name == "styles":
+            if state.desktop_styles is None:
+                return Readiness.unavailable("Styles are kept by the desktop app.")
+            return Readiness.ready()
         if need.kind == "runtime" and need.name == "video-builder":
             builder = state.video_builder
             if builder is None or not builder.installer.supported:

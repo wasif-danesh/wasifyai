@@ -106,12 +106,21 @@ export type TrainProps = {
   runs?: ImageFlowApi;
   /** how often to read again while the descriptions are written or a run goes (milliseconds) */
   pollMs?: number;
+  /** "Use in Create": open Create with this picture model's style chosen (the desktop, ADR-0091) */
+  onUseInCreate?: (model: TrainedModel) => void;
 };
 
 type Hook = ReturnType<typeof useTraining>;
 
 /** Teach the app something of your own (ADR-0073): today a character, style or object from pictures. */
-export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: TrainProps) {
+export function Train({
+  api,
+  place = "device",
+  onOpenLibrary,
+  runs,
+  pollMs,
+  onUseInCreate,
+}: TrainProps) {
   const t = useTraining(api, pollMs);
   const { state } = t;
   // the trainer's own component: offered while training is not ready (a desktop engine), read again once set up
@@ -215,7 +224,14 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
       ) : state.loading ? (
         <output className="text-muted-foreground">Looking at training…</output>
       ) : showingRun && state.run ? (
-        <RunView t={t} run={state.run} onOpenLibrary={onOpenLibrary} runs={runs} api={api} />
+        <RunView
+          t={t}
+          run={state.run}
+          onOpenLibrary={onOpenLibrary}
+          runs={runs}
+          api={api}
+          onUseInCreate={onUseInCreate}
+        />
       ) : state.current ? (
         <MakeView t={t} status={state.status} api={api} video={video} />
       ) : (
@@ -227,6 +243,7 @@ export function Train({ api, place = "device", onOpenLibrary, runs, pollMs }: Tr
           api={api}
           setting={setting}
           place={place}
+          onUseInCreate={onUseInCreate}
           onSetUp={(which) => setSetting(setting === which ? null : which)}
           onStart={{
             writing: place === "device" ? () => setScreen("writing") : undefined,
@@ -251,6 +268,7 @@ function Home({
   setting,
   onSetUp,
   place,
+  onUseInCreate,
 }: {
   t: Hook;
   runs?: ImageFlowApi;
@@ -261,6 +279,7 @@ function Home({
   setting?: "image" | "video" | null;
   onSetUp?: (which: "image" | "video") => void;
   place: "device" | "service";
+  onUseInCreate?: (model: TrainedModel) => void;
 }) {
   const { state } = t;
   const ready = state.status?.ready === true;
@@ -451,7 +470,14 @@ function Home({
         ) : (
           <ul className="m-0 grid list-none gap-2 p-0 md:grid-cols-2">
             {state.models.map((m) => (
-              <ModelCard key={m.id} model={m} t={t} runs={runs} api={api} />
+              <ModelCard
+                key={m.id}
+                model={m}
+                t={t}
+                runs={runs}
+                api={api}
+                onUseInCreate={onUseInCreate}
+              />
             ))}
           </ul>
         )}
@@ -567,7 +593,14 @@ function ModelCard({
   t,
   runs,
   api,
-}: { model: TrainedModel; t: Hook; runs?: ImageFlowApi; api: TrainingApi }) {
+  onUseInCreate,
+}: {
+  model: TrainedModel;
+  t: Hook;
+  runs?: ImageFlowApi;
+  api: TrainingApi;
+  onUseInCreate?: (model: TrainedModel) => void;
+}) {
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(m.name);
   const id = useId();
@@ -661,7 +694,7 @@ function ModelCard({
           <summary className="cursor-pointer font-medium text-sm">Check and try it</summary>
           <div className="grid gap-5 pt-3">
             <CheckIt model={m} api={api} runs={runs} onSaved={() => void t.refresh()} />
-            <TryIt model={m} runs={runs} />
+            <TryIt model={m} runs={runs} onUseInCreate={onUseInCreate} />
           </div>
         </details>
       ) : null}
@@ -1119,12 +1152,14 @@ function RunView({
   onOpenLibrary,
   runs,
   api,
+  onUseInCreate,
 }: {
   t: Hook;
   run: TrainRun;
   onOpenLibrary?: () => void;
   runs?: ImageFlowApi;
   api: TrainingApi;
+  onUseInCreate?: (model: TrainedModel) => void;
 }) {
   const working = run.status === "working";
   const model = t.state.models.find((m) => m.id === run.model_id) ?? null;
@@ -1223,7 +1258,7 @@ function RunView({
       {run.status === "done" && model && runs && model.card.family !== "video" ? (
         <>
           <CheckIt model={model} api={api} runs={runs} auto onSaved={() => void t.refresh()} />
-          <TryIt model={model} runs={runs} />
+          <TryIt model={model} runs={runs} onUseInCreate={onUseInCreate} />
         </>
       ) : null}
 

@@ -113,7 +113,7 @@
                 <div class="hl">Yours<small>Trained in Train models · 1</small></div>
                 <div>From this computer<small>Choose a .safetensors file</small></div>
                 <div>From Hugging Face<small>Paste owner/name, or search</small></div>
-                <div>Recommended<small>Checked for klein 4B and for commercial use</small></div>
+                <div>Recommended<small>Checked on klein 4B by us</small></div>
                 <hr><div>Look in a folder…<small>Read styles another app keeps</small></div>
               </span></span>
           </h2>
@@ -127,7 +127,7 @@
 
           <div class="style">
             <div class="srow"><span class="name">Soft watercolour</span><span class="tag">Hugging Face</span><button class="btn sm ghost" aria-label="Remove">🗑</button></div>
-            <div class="fit ok">✓ Made for FLUX.2 klein 4B · 164 MB · Licence: Apache-2.0</div>
+            <div class="fit ok">✓ Made for FLUX.2 klein 4B · 164 MB</div>
             <div class="srow"><span class="small muted" style="width:54px">Strength</span><div class="slider"><i style="width:40%"></i><b style="left:40%"></b></div><span class="num">0.80</span></div>
           </div>
 
@@ -145,7 +145,7 @@
         </div>
       </div>
       <div class="foot">
-        <div class="honest"><span><b>About 28 s</b> on this Mac</span><span style="color:var(--ok)">Fits</span><span>2 styles add about 2 s</span></div>
+        <div class="honest"><span><b>About 12 s</b> on this Mac</span><span style="color:var(--ok)">Fits</span><span>Changing styles adds a few seconds to the next picture</span></div>
         <button class="btn primary">Generate</button>
       </div>
     </div>
@@ -153,7 +153,7 @@
 
   <!-- ===================== 2: Hugging Face ===================== -->
   <div class="col">
-    <p class="label">2. Add from Hugging Face (asks first, shows size and licence)</p>
+    <p class="label">2. Add from Hugging Face (asks first, shows the size)</p>
     <div class="frame win scrim" style="color-scheme:dark;grid-template-rows:1fr">
       <div class="dlg">
         <h3>Get a style from Hugging Face</h3>
@@ -164,9 +164,8 @@
           <div class="file">○ <span style="flex:1">watercolour_v1.safetensors</span><span class="muted">164 MB</span></div>
           <div class="file" style="opacity:.55">✕ <span style="flex:1">watercolour.ckpt</span><span class="muted">not offered: it can run code</span></div>
         </div>
-        <div class="srow small"><span class="tag">Licence: Apache-2.0</span><span class="tag">For: FLUX.2 klein 4B (checked after download)</span></div>
-        <div class="notice warn small">Commercial use of this style has <b>not been reviewed</b> by us. The licence above is what its author states.</div>
-        <div class="srow" style="justify-content:flex-end;gap:8px"><button class="btn">Not now</button><button class="btn primary">Download 164 MB and add</button></div>
+        <div class="srow small"><span class="tag">For: FLUX.2 klein 4B (checked after download)</span></div>
+                <div class="srow" style="justify-content:flex-end;gap:8px"><button class="btn">Not now</button><button class="btn primary">Download 164 MB and add</button></div>
       </div>
     </div>
   </div>
@@ -191,8 +190,8 @@
 
 <div class="notes">
   <div><b>What this borrows from Unsloth's image screen:</b> a list of up to eight adapters, each with a strength from 0 to 2, an "Add" button, a way to look in other folders, and suggestions for the loaded model. It does not copy its code or wording.</div>
-  <div><b>What is ours:</b> styles you trained in the app come first and are marked; each one says in words whether it fits the model (read from the file, not guessed from the name); a trigger word has a "Use this word" button; downloads ask first and show size and licence; only .safetensors files are accepted; and the honest line says what the styles cost in time.</div>
-  <div><b>Honest limits:</b> the pictures are sketches. The numbers (28 s, 2 s per style) are examples in the style of our measured ones, to be measured in stage S0.</div>
+  <div><b>What is ours:</b> styles you trained in the app come first and are marked; each one says in words whether it fits the model (read from the file, not guessed from the name); a trigger word has a "Use this word" button; downloads ask first and show the size; only .safetensors files are accepted; and the honest line says what the styles cost in time.</div>
+  <div><b>Honest limits:</b> the pictures are sketches. The numbers are the ones S0 measured (docs/spikes/styles-s0.md). Amended 2026-10-30: licence lines removed (ADR-0094), the time line from S0.</div>
 </div>
 </body>
 </html>

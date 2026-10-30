@@ -225,6 +225,9 @@ export {
 } from "./window-bar";
 export * from "./models";
 export { Train, type TrainProps } from "./training/Train";
+export { starterPrompt } from "./training/TryIt";
+export { HubStyleDialog } from "./image/style-picker/HubStyleDialog";
+export { fitLine } from "./image/style-picker/fit";
 export { MyCreations } from "./creations/MyCreations";
 export { CreationsList } from "./creations/CreationsList";
 export { longEnough, toRow } from "./creations/model";

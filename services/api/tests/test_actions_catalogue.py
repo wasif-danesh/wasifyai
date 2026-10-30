@@ -166,8 +166,9 @@ def test_the_first_set_is_there(catalogue):
     # "about 40" (ADR-0068 decision 7); 45 at motion graphics, 46 with 3D (ADR-0080 decision 9): a
     # creation kind's list, look, rename, delete, save and read are the library's, not new actions;
     # 51 with decision.decide (ADR-0075 decision 7), the one action a taught decision model adds;
-    # 52 with external.call (ADR-0070 decision 8), the one action behind every outside tool
-    assert 35 <= len(ids) <= 52
+    # 52 with external.call (ADR-0070 decision 8), the one action behind every outside tool;
+    # 55 with styles.list, styles.add_from_hub and styles.remove (ADR-0091 decision 12)
+    assert 35 <= len(ids) <= 55
     for expected in (
         "library.search", "library.list", "library.get", "library.export", "library.rename",
         "library.delete", "image.generate", "image.edit", "video.generate", "video.animate",
@@ -188,9 +189,12 @@ def test_nothing_that_configures_the_app_is_an_action(catalogue):
 
 def test_effects_and_flags_are_what_the_adr_says(catalogue):
     by = {a.id: a for a in catalogue}
-    assert {a.id for a in catalogue if a.effect == "destroy"} == {"library.delete"}
+    assert {a.id for a in catalogue if a.effect == "destroy"} == {
+        "library.delete", "styles.remove",
+    }  # fmt: skip
     consent = {a.id for a in catalogue if "needs_consent" in a.flags}
-    assert consent == {"models.download"}  # the person approves a large download; nothing else
+    # the person approves a download: a model, or a style from Hugging Face; nothing else
+    assert consent == {"models.download", "styles.add_from_hub"}
     for a in catalogue:
         assert (a.effect == "read") or a.effect in ("make", "change", "destroy")
         if a.private:

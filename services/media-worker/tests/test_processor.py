@@ -25,9 +25,9 @@ GRAPH = {
 
 
 def job(graph=None, **kw) -> JobRequest:
+    kw = {"product_id": "p1", **kw}
     return JobRequest(
         tenant_id="t1",
-        product_id="p1",
         user_id="u1",
         run_id=RUN,
         thread_id=THREAD,
@@ -377,6 +377,25 @@ async def test_a_look_that_is_not_the_persons_own_fails_the_job_and_reads_nothin
     assert result.status == "failed" and result.error is not None
     assert result.error.code == "invalid_input"
     assert runner.graph is None and not list(tmp_path.rglob("*.safetensors"))
+
+
+async def test_a_style_the_admin_added_is_fetched_for_a_picture_and_only_for_a_picture(tmp_path):
+    """ADR-0091 S5: the service's styles live under the image product's `service` part."""
+    runner = LookRunner(tmp_path)
+    rig = Rig(
+        runner, WorkerSettings(max_attempts=1, ollama_base_url="", media_loras_dir=str(tmp_path))
+    )
+    key = object_key("t1", "wasifyai-image", "service", "styles", "ab12cd34ef56.safetensors")
+    await rig.storage.put(key, b"SERVICESTYLE")
+    result = await rig.p.process(look_job(key, product_id="wasifyai-image"))
+    assert result.status == "completed", result
+    assert runner.seen == b"SERVICESTYLE"
+    other = await rig.p.process(look_job(key, product_id="wasifyai-video"))  # not on a clip
+    assert other.status == "failed" and other.error is not None
+    elsewhere = object_key("t2", "wasifyai-image", "service", "styles", "x.safetensors")
+    await rig.storage.put(elsewhere, b"OTHERTENANT")
+    third = await rig.p.process(look_job(elsewhere, product_id="wasifyai-image"))
+    assert third.status == "failed"  # another tenant's service styles are not this one's
 
 
 async def test_a_worker_with_nowhere_to_put_a_look_says_so(tmp_path):

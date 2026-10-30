@@ -1000,6 +1000,33 @@
       "summary": "Change a picture of the library by describing the change.",
       "description": "Change a picture the person already has in the library: say what to change. It makes a new picture and keeps the original. Use image.generate for a new one.",
       "input": {
+        "$defs": {
+          "StyleIn": {
+            "additionalProperties": false,
+            "description": "A style (LoRA) the desktop keeps, by its id from styles.list.",
+            "properties": {
+              "id": {
+                "description": "The style's id, from styles.list.",
+                "pattern": "^[a-f0-9]{6,32}$",
+                "title": "Id",
+                "type": "string"
+              },
+              "strength": {
+                "default": 1.0,
+                "description": "How strongly it is applied.",
+                "maximum": 2.0,
+                "minimum": 0.05,
+                "title": "Strength",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "title": "StyleIn",
+            "type": "object"
+          }
+        },
         "additionalProperties": false,
         "properties": {
           "image_id": {
@@ -1015,6 +1042,15 @@
             "minLength": 1,
             "title": "Prompt",
             "type": "string"
+          },
+          "styles": {
+            "description": "Styles to apply (desktop only), from styles.list; put each style's word in the prompt.",
+            "items": {
+              "$ref": "#/$defs/StyleIn"
+            },
+            "maxItems": 8,
+            "title": "Styles",
+            "type": "array"
           }
         },
         "required": [
@@ -1091,8 +1127,35 @@
       "id": "image.generate",
       "title": "Make a picture",
       "summary": "Make a new picture from a description.",
-      "description": "Make a new picture from a description and save it to the person's library. Use it when the person asks you to draw, paint, make or generate an image. Write the prompt as a clear, concrete description in English. Returns the picture's id and size. To change a picture that exists, use image.edit.",
+      "description": "Make a new picture from a description and save it to the person's library. Use it when the person asks you to draw, paint, make or generate an image. Write the prompt as a clear, concrete description in English. Returns the picture's id and size. To change a picture that exists, use image.edit. On the desktop, styles from styles.list can be applied (put each style's word in the prompt).",
       "input": {
+        "$defs": {
+          "StyleIn": {
+            "additionalProperties": false,
+            "description": "A style (LoRA) the desktop keeps, by its id from styles.list.",
+            "properties": {
+              "id": {
+                "description": "The style's id, from styles.list.",
+                "pattern": "^[a-f0-9]{6,32}$",
+                "title": "Id",
+                "type": "string"
+              },
+              "strength": {
+                "default": 1.0,
+                "description": "How strongly it is applied.",
+                "maximum": 2.0,
+                "minimum": 0.05,
+                "title": "Strength",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "title": "StyleIn",
+            "type": "object"
+          }
+        },
         "additionalProperties": false,
         "properties": {
           "prompt": {
@@ -1114,6 +1177,15 @@
             ],
             "title": "Size",
             "type": "string"
+          },
+          "styles": {
+            "description": "Styles to apply (desktop only), from styles.list; put each style's word in the prompt.",
+            "items": {
+              "$ref": "#/$defs/StyleIn"
+            },
+            "maxItems": 8,
+            "title": "Styles",
+            "type": "array"
           }
         },
         "required": [
@@ -1167,6 +1239,15 @@
         {
           "prompt": "a cat dressed as an astronaut on the moon",
           "size": "wide"
+        },
+        {
+          "prompt": "a lighthouse at sunset, anime_style",
+          "styles": [
+            {
+              "id": "c0fa6b280203",
+              "strength": 1.0
+            }
+          ]
         }
       ],
       "effect": "make",
@@ -1236,6 +1317,31 @@
             ],
             "title": "Region",
             "type": "object"
+          },
+          "StyleIn": {
+            "additionalProperties": false,
+            "description": "A style (LoRA) the desktop keeps, by its id from styles.list.",
+            "properties": {
+              "id": {
+                "description": "The style's id, from styles.list.",
+                "pattern": "^[a-f0-9]{6,32}$",
+                "title": "Id",
+                "type": "string"
+              },
+              "strength": {
+                "default": 1.0,
+                "description": "How strongly it is applied.",
+                "maximum": 2.0,
+                "minimum": 0.05,
+                "title": "Strength",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "title": "StyleIn",
+            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -1257,6 +1363,15 @@
           "region": {
             "$ref": "#/$defs/Region",
             "description": "The area to change, as a rectangle. Everything outside it stays as it is."
+          },
+          "styles": {
+            "description": "Styles to apply (desktop only), from styles.list; put each style's word in the prompt.",
+            "items": {
+              "$ref": "#/$defs/StyleIn"
+            },
+            "maxItems": 8,
+            "title": "Styles",
+            "type": "array"
           }
         },
         "required": [
@@ -1342,6 +1457,33 @@
       "summary": "Make a new picture from a description and two library pictures.",
       "description": "Make a new picture from two pictures of the library and a description that says what to take from each (\"the cat from picture 1 on the chair from picture 2\"). The pictures are used in order, the originals stay, and the new picture is saved to the library. Use image.edit to change one picture, image.generate for a picture from words alone.",
       "input": {
+        "$defs": {
+          "StyleIn": {
+            "additionalProperties": false,
+            "description": "A style (LoRA) the desktop keeps, by its id from styles.list.",
+            "properties": {
+              "id": {
+                "description": "The style's id, from styles.list.",
+                "pattern": "^[a-f0-9]{6,32}$",
+                "title": "Id",
+                "type": "string"
+              },
+              "strength": {
+                "default": 1.0,
+                "description": "How strongly it is applied.",
+                "maximum": 2.0,
+                "minimum": 0.05,
+                "title": "Strength",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "title": "StyleIn",
+            "type": "object"
+          }
+        },
         "additionalProperties": false,
         "properties": {
           "image_ids": {
@@ -1373,6 +1515,15 @@
             ],
             "title": "Size",
             "type": "string"
+          },
+          "styles": {
+            "description": "Styles to apply (desktop only), from styles.list; put each style's word in the prompt.",
+            "items": {
+              "$ref": "#/$defs/StyleIn"
+            },
+            "maxItems": 8,
+            "title": "Styles",
+            "type": "array"
           }
         },
         "required": [
@@ -4715,6 +4866,268 @@
       ],
       "consent": "",
       "help": "docs/help/speech.transcribe.md"
+    },
+    {
+      "id": "styles.add_from_hub",
+      "title": "Get a style from Hugging Face",
+      "summary": "Download a style from a Hugging Face repository to this computer.",
+      "description": "Get a style (a .safetensors LoRA) from a Hugging Face repository. The person is shown the file and its size and must approve. The file is checked when it arrives; follow the download with models.status, then find the style in styles.list.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "repo": {
+            "description": "The Hugging Face repository, owner/name, or its address.",
+            "maxLength": 200,
+            "minLength": 3,
+            "title": "Repo",
+            "type": "string"
+          },
+          "file": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The .safetensors file to get; leave it out when the repository has one.",
+            "title": "File"
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "title": "HubIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "download_id": {
+            "title": "Download Id",
+            "type": "string"
+          },
+          "repo": {
+            "title": "Repo",
+            "type": "string"
+          },
+          "file": {
+            "title": "File",
+            "type": "string"
+          },
+          "bytes_total": {
+            "title": "Bytes Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "download_id",
+          "repo",
+          "file",
+          "bytes_total"
+        ],
+        "title": "HubOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "repo": "Sawata97/flux2_4b_koni_animestyle"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "needs_consent",
+        "leaves_device",
+        "costly"
+      ],
+      "requires": [
+        {
+          "kind": "runtime",
+          "name": "styles"
+        }
+      ],
+      "long": false,
+      "product": "platform",
+      "ui": "images.create",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "I agree to download this style from Hugging Face to this computer. Its file and size are shown in the window before I approve.",
+      "help": "docs/help/styles.add_from_hub.md"
+    },
+    {
+      "id": "styles.list",
+      "title": "Styles on this computer",
+      "summary": "The styles (LoRAs) and saved looks the image screens can use.",
+      "description": "List the styles (also called LoRAs) on this computer, with what model each was made for, whether it can be used here, and its word, plus the saved looks. Use it before image.generate with styles, to find a style's id and its word.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "ListIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "StyleRow": {
+            "properties": {
+              "style_id": {
+                "title": "Style Id",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "usable": {
+                "title": "Usable",
+                "type": "boolean"
+              },
+              "made_for": {
+                "title": "Made For",
+                "type": "string"
+              },
+              "word": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Word"
+              },
+              "source": {
+                "title": "Source",
+                "type": "string"
+              }
+            },
+            "required": [
+              "style_id",
+              "title",
+              "usable",
+              "made_for",
+              "source"
+            ],
+            "title": "StyleRow",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "styles": {
+            "items": {
+              "$ref": "#/$defs/StyleRow"
+            },
+            "title": "Styles",
+            "type": "array"
+          },
+          "looks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Looks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "styles",
+          "looks"
+        ],
+        "title": "ListOut",
+        "type": "object"
+      },
+      "examples": [
+        {}
+      ],
+      "effect": "read",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "runtime",
+          "name": "styles"
+        }
+      ],
+      "long": false,
+      "product": "platform",
+      "ui": "images.create",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/styles.list.md"
+    },
+    {
+      "id": "styles.remove",
+      "title": "Delete a style",
+      "summary": "Delete the app's copy of a style from this computer.",
+      "description": "Delete a style the app keeps (its copy, never a file another app keeps). Pictures made with it stay. Always asks the person.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "style_id": {
+            "description": "From styles.list.",
+            "maxLength": 32,
+            "minLength": 6,
+            "title": "Style Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "style_id"
+        ],
+        "title": "RemoveIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "style_id": {
+            "title": "Style Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "style_id",
+          "title"
+        ],
+        "title": "RemoveOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "style_id": "9a07a5c7d23e"
+        }
+      ],
+      "effect": "destroy",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "runtime",
+          "name": "styles"
+        }
+      ],
+      "long": false,
+      "product": "platform",
+      "ui": "images.create",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/styles.remove.md"
     },
     {
       "id": "train.start",

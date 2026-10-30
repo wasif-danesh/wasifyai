@@ -555,6 +555,13 @@ class RunManager:
         except Exception:
             log.exception("a trained model could not be published to the image engine")
             return None
+        styles = getattr(self._deps.state, "desktop_styles", None)
+        if name and styles is not None:  # the image screens list it as yours (ADR-0091)
+            with contextlib.suppress(Exception):
+                await styles.describe(
+                    name, dataset["name"] or dataset["trigger_word"], dataset["trigger_word"],
+                    {"kind": "trained", "run": row["id"]},
+                )  # fmt: skip
         return {"lora_name": name} if name else None
 
     async def cancel(self, identity: Identity, run_id: str) -> bool:

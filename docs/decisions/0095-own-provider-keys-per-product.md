@@ -72,7 +72,5 @@ and people do not bring keys; own keys are a desktop feature. Stage K5 is the ad
 1. ~~The mockup~~ Approved (owner, 2026-10-29).
 2. ~~Which media providers besides fal.ai~~ Answered 2026-10-29 (owner): Runware, Muapi and others are added later, each with its own runner, test and provider entry; fal.ai only for now.
 3. ~~On the web, the admin's models beside the person's keys~~ Answered 2026-10-29 (owner): the web has no own keys; the admin selects the models and providers (K5).
-4. CLAUDE.md rule 5 says every LLM call goes through LiteLLM. On the desktop (K2) a person's key goes to its provider
-   directly, through the OpenAI-compatible client the text provider already uses; the web keeps LiteLLM. Recommended:
-   rule 5 amended to "every LLM call goes through LiteLLM on the web, or the OpenAI-compatible text provider with the
-   person's own key on the desktop".
+4. ~~CLAUDE.md rule 5 and the person's key~~ Answered 2026-10-29 (owner): LiteLLM is for the web; on the desktop,
+   the person's own key may go straight to its provider. Rule 5 of CLAUDE.md says so.

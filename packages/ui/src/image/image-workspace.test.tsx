@@ -79,6 +79,9 @@ describe("presetOf", () => {
       size: "wide",
       seed: 4242,
       loras: [],
+      styles: [],
+      steps: null,
+      own: null,
     });
     expect(presetOf(summary({ recipe: null }))).toBeNull();
     expect(presetOf(summary({ mode: "image" }))).toBeNull();
@@ -204,10 +207,11 @@ describe("ImageWorkspace", () => {
       />,
     );
     expect(screen.getByRole("textbox")).toHaveValue("a fox");
-    expect(screen.getByText("7")).toBeInTheDocument();
+    const seed = screen.getByRole("spinbutton", { name: "Seed" });
+    expect(seed).toHaveValue(7);
 
-    await user.click(screen.getByRole("button", { name: /use a new one/i }));
-    expect(screen.queryByText("7")).not.toBeInTheDocument();
+    await user.clear(seed); // empty: a new seed
+    expect(seed).toHaveValue(null);
     await user.click(screen.getByRole("button", { name: "Make the picture" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -321,19 +325,66 @@ describe("styles, Vary and the edit source", () => {
     ]);
   });
 
-  it("allows three styles and no more", async () => {
+  it("allows eight styles and no more", async () => {
     const user = userEvent.setup();
+    const names = ["a", "b", "c", "d", "e", "f", "g", "h", "i"];
     render(
       <ImageWorkspace
         mode="text"
         runs={runs}
         images={fakeApi([])}
-        loras={["a", "b", "c", "d"].map((n) => ({ name: `${n}.safetensors`, title: n }))}
+        loras={names.map((n) => ({ name: `${n}.safetensors`, title: n }))}
         preset={{ prompt: "x", size: null, seed: 1, loras: [] }}
       />,
     );
-    for (const n of ["a", "b", "c"]) await user.click(screen.getByRole("checkbox", { name: n }));
-    expect(screen.getByRole("checkbox", { name: "d" })).toBeDisabled();
+    for (const n of names.slice(0, 8)) await user.click(screen.getByRole("checkbox", { name: n }));
+    expect(screen.getByRole("checkbox", { name: "i" })).toBeDisabled();
+  });
+
+  it("on the desktop, styles are always in view and go to the engine by id", async () => {
+    fetchMock.mockResolvedValue(sse([node("check_request")]));
+    const user = userEvent.setup();
+    const ink = {
+      id: "a1",
+      title: "Ink",
+      source: { kind: "file" as const },
+      sha256: "x",
+      size: 1,
+      model: "FLUX.2 klein 4B",
+      fit: "fits" as const,
+      made_for_base: false,
+      rank: 16,
+      unused_parts: 0,
+      trigger: "inkwash",
+      added_at: 1,
+      selectable: true,
+    };
+    const stylesApi = {
+      list: vi.fn(async () => ({ styles: [ink], found: [], max: 8 })),
+    } as never;
+    render(
+      <ImageWorkspace
+        mode="text"
+        runs={runs}
+        images={fakeApi([])}
+        stylesApi={stylesApi}
+        preset={{
+          prompt: "a fox",
+          size: null,
+          seed: null,
+          loras: [],
+          styles: [{ id: "a1", strength: 0.7 }],
+        }}
+      />,
+    ); // fmt: skip
+    await user.click(await screen.findByRole("button", { name: "Use this word" }));
+    expect(screen.getByRole("textbox", { name: /prompt/i })).toHaveValue("a fox, inkwash");
+    await user.click(screen.getByRole("button", { name: "Make the picture" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const input = JSON.parse(String(init.body)).input;
+    expect(input.styles).toEqual([{ id: "a1", strength: 0.7 }]);
+    expect(input.loras).toBeUndefined();
   });
 
   it("offers a style that is one click away, and does it", async () => {
@@ -500,5 +551,60 @@ describe("where an edit came from", () => {
     } finally {
       globalThis.fetch = realFetch;
     }
+  });
+
+  it("Advanced: steps and a size of one's own go to the engine, and several pictures follow one another", async () => {
+    let n = 0;
+    fetchMock.mockImplementation(async () => {
+      n += 1;
+      return sse([
+        node("check_request"),
+        done({
+          status: "done",
+          image_id: `i${n}`,
+          image_url: "x",
+          thumb_url: "x",
+          width: 1280,
+          height: 720,
+          prompt: "a fox",
+          mode: "text",
+        }),
+      ]);
+    }); // fmt: skip
+    const user = userEvent.setup();
+    render(<ImageWorkspace mode="text" runs={runs} images={fakeApi([])} />);
+    await user.type(screen.getByRole("textbox", { name: /prompt/i }), "a fox");
+    await user.click(screen.getByText("Advanced"));
+    await user.type(screen.getByRole("spinbutton", { name: "Steps" }), "8");
+    await user.type(screen.getByRole("spinbutton", { name: "Seed" }), "41");
+    await user.type(screen.getByRole("spinbutton", { name: "Width" }), "1280");
+    await user.type(screen.getByRole("spinbutton", { name: "Height" }), "720");
+    expect(screen.getByText("1280 × 720, instead of the shape above.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "3" }));
+    await user.click(screen.getByRole("button", { name: "Make the picture" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3), { timeout: 4000 });
+    const inputs = fetchMock.mock.calls.map(
+      ([, init]) => JSON.parse(String((init as RequestInit).body)).input,
+    );
+    expect(inputs.map((i) => [i.seed, i.steps, i.width, i.height])).toEqual([
+      [41, 8, 1280, 720],
+      [42, 8, 1280, 720],
+      [43, 8, 1280, 720],
+    ]); // fmt: skip
+  });
+
+  it("Advanced: a size off the grid is said and not sent", async () => {
+    fetchMock.mockResolvedValue(sse([node("check_request")]));
+    const user = userEvent.setup();
+    render(<ImageWorkspace mode="text" runs={runs} images={fakeApi([])} />);
+    await user.type(screen.getByRole("textbox", { name: /prompt/i }), "a fox");
+    await user.click(screen.getByText("Advanced"));
+    await user.type(screen.getByRole("spinbutton", { name: "Width" }), "1000");
+    await user.type(screen.getByRole("spinbutton", { name: "Height" }), "700");
+    expect(screen.getByText(/in steps of 16/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Make the picture" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).input.width).toBeUndefined();
   });
 });

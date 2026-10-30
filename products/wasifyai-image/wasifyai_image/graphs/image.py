@@ -64,6 +64,13 @@ class ImageState(TypedDict, total=False):
     mask_key: str  # the painted area, white on black (inpaint mode)
     seed: int  # optional in the request; always set once the request is checked
     loras: list[dict[str, Any]]  # [{name, weight}], checked: at most MAX_LORAS
+    # on the desktop: [{id, strength}] of the person's styles (ADR-0091); turned into `loras`
+    styles: list[dict[str, Any]]
+    # Advanced (ADR-0091 decision 10): sampling steps, and a size of the person's own instead of a
+    # named shape (text and reference); absent, the workflow's own steps and the named size
+    steps: int
+    width: int
+    height: int
     lora_files: dict[
         str, str
     ]  # on the web: the storage key of each style, which is the person's own
@@ -97,9 +104,11 @@ INPAINT_INSTRUCTION = "Fill the white area with: {prompt}. Keep everything else 
 MIN_PAINTED, MAX_PAINTED = 0.001, 0.98  # the share of the picture a mask may cover
 MAX_SEED = 2**31 - 1
 RECIPE_VERSION = 1
-MAX_LORAS = 3
+MAX_LORAS = 8  # ADR-0091 decision 7
 LORA_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()/-]{0,200}\.safetensors$")
-MIN_WEIGHT, MAX_WEIGHT = 0.1, 2.0
+MIN_WEIGHT, MAX_WEIGHT = 0.05, 2.0
+MIN_STEPS, MAX_STEPS = 1, 50
+MIN_SIDE, MAX_SIDE = 256, 2048  # a size of one's own: multiples of 16 (FLUX.2's grid)
 
 
 def check_loras(raw: object) -> tuple[list[dict[str, Any]], str]:
@@ -129,10 +138,75 @@ def check_loras(raw: object) -> tuple[list[dict[str, Any]], str]:
     return out, ""
 
 
+STYLE_ID = re.compile(r"^[a-f0-9]{6,32}$")
+
+
+def check_styles(raw: object) -> tuple[list[dict[str, Any]], str]:
+    """The styles of a request as `[{id, strength}]`, or why they are refused. An id names a record
+    the engine keeps; the request never names a file."""
+    if not isinstance(raw, list):
+        return [], "Please choose the styles from the list."
+    if len(raw) > MAX_LORAS:
+        return [], f"Please use at most {MAX_LORAS} styles."
+    out: list[dict[str, Any]] = []
+    for item in raw:
+        sid = item.get("id") if isinstance(item, dict) else None
+        strength = item.get("strength", 1.0) if isinstance(item, dict) else None
+        if not isinstance(sid, str) or not STYLE_ID.match(sid):
+            return [], "Please choose the styles from the list."
+        if isinstance(strength, bool) or not isinstance(strength, int | float):
+            return [], "A style's strength must be a number."
+        if not MIN_WEIGHT <= float(strength) <= MAX_WEIGHT:
+            return [], f"A style's strength must be between {MIN_WEIGHT} and {MAX_WEIGHT}."
+        if any(o["id"] == sid for o in out):
+            return [], "Each style can be used once."
+        out.append({"id": sid, "strength": round(float(strength), 2)})
+    return out, ""
+
+
+def check_advanced(state: dict[str, Any], sized: bool) -> tuple[dict[str, int], str]:
+    """Steps and a size of one's own, or why they are refused."""
+    out: dict[str, int] = {}
+    steps = state.get("steps")
+    if steps is not None:
+        if (
+            isinstance(steps, bool)
+            or not isinstance(steps, int)
+            or not (MIN_STEPS <= steps <= MAX_STEPS)
+        ):
+            return {}, f"Steps must be a whole number from {MIN_STEPS} to {MAX_STEPS}."
+        out["steps"] = steps
+    width, height = state.get("width"), state.get("height")
+    if width is None and height is None:
+        return out, ""
+    if not sized:
+        return {}, "This kind of change keeps the picture's own size."
+    for side in (width, height):
+        if isinstance(side, bool) or not isinstance(side, int):
+            return {}, "Give the width and the height as whole numbers."
+        if not MIN_SIDE <= side <= MAX_SIDE or side % 16:
+            return {}, (
+                f"Width and height must be between {MIN_SIDE} and {MAX_SIDE}, in steps of 16."
+            )
+    out["width"], out["height"] = int(width), int(height)  # type: ignore[arg-type]
+    return out, ""
+
+
+def size_of(state: ImageState) -> tuple[int, int]:
+    """The picture's width and height: one's own, or the named shape's."""
+    if state.get("width") and state.get("height"):
+        return state["width"], state["height"]
+    return SIZES[state["size"]]
+
+
 def recipe_of(state: ImageState, width: int, height: int) -> dict[str, Any]:
     """What made the image, in the shape the window shows and "run again" reads. The model is not
     named: the graph asks for a capability, not a model (see docs/phase2-stage-b-plan.md)."""
     sized = state["mode"] in ("text", "reference")  # the others take their shape from the picture
+    styles = {"styles": state["styles"]} if state.get("styles") else {}
+    advanced: dict[str, Any] = {"steps": state["steps"]} if state.get("steps") else {}
+    if sized and state.get("width"):  # a size of one's own, not the named shape
+        advanced["own_size"] = True
     return {
         "v": RECIPE_VERSION,
         "mode": state["mode"],
@@ -142,6 +216,8 @@ def recipe_of(state: ImageState, width: int, height: int) -> dict[str, Any]:
         "height": height,
         "seed": state["seed"],
         "loras": state.get("loras") or [],
+        **styles,  # by id, strength, checksum and title: "Make it again" finds them (ADR-0091)
+        **advanced,
     }
 
 
@@ -261,6 +337,9 @@ def build_image_graph(
         sized = mode in ("text", "reference")
         if sized and (state.get("size") or DEFAULT_SIZE) not in SIZES:
             return await refused("invalid_request", "Please choose one of the image sizes.")
+        advanced, why = check_advanced(dict(state), sized)
+        if why:
+            return await refused("invalid_request", why)
         for key in keys.values():
             if not key or await find_upload(key) is None:
                 again = "picture" if len(keys) == 1 else "pictures"
@@ -272,21 +351,45 @@ def build_image_graph(
             seed = secrets.randbelow(MAX_SEED + 1)
         elif isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= MAX_SEED:
             return await refused("invalid_request", "That seed is not valid.")
-        loras, why = check_loras(state.get("loras"))
+        wanted = state.get("styles")
+        styles: list[dict[str, Any]] = []
+        raw_loras = state.get("loras")
+        if wanted:
+            to_files = caps.extras.get("styles")  # the desktop: style ids to the files it keeps
+            styles, why = check_styles(wanted)
+            if to_files is None:
+                why = why or "Styles cannot be used here."
+            if why or to_files is None:
+                return await refused("invalid_request", why)
+            raw_loras, why = await to_files(styles)
+            if why:
+                return await refused("invalid_request", why)
+            # what each style was, kept with the picture: "Make it again" can say which is missing
+            styles = [
+                {**s, **{k: r[k] for k in ("sha256", "title") if k in r}}
+                for s, r in zip(styles, raw_loras, strict=False)
+            ]
+        loras, why = check_loras(raw_loras)
         if why:
             return await refused("invalid_request", why)
-        lora_files: dict[str, str] = {}
+        # the web: a style an admin added is fetched by its storage key (the resolver says it)
+        lora_files: dict[str, str] = {
+            str(r["name"]): str(r["key"])
+            for r in (raw_loras if isinstance(raw_loras, list) else [])
+            if isinstance(r, dict) and r.get("key")
+        }
         resolve_looks = caps.extras.get(
             "person_looks"
         )  # the web keeps each person's styles in storage
-        if loras and resolve_looks is not None:
+        own = [x["name"] for x in loras if x["name"] not in lora_files]
+        if own and resolve_looks is not None:
             ctx = require_context()
-            found = await resolve_looks(ctx.tenant_id, ctx.user_id, [x["name"] for x in loras])
+            found = await resolve_looks(ctx.tenant_id, ctx.user_id, own)
             if found is None:
                 return await refused(
                     "invalid_request", "One of those styles is not yours any more."
                 )
-            lora_files = found
+            lora_files = {**lora_files, **found}
         out: ImageState = {
             "mode": mode,
             "prompt": prompt,
@@ -296,11 +399,15 @@ def build_image_graph(
             "mask_key": keys.get("mask_key", ""),
             "seed": seed,
             "loras": loras,
+            "styles": styles,
             "lora_files": lora_files,
             "source_id": await source_of(state, mode),
             "status": "working",
         }
-
+        if "steps" in advanced:
+            out["steps"] = advanced["steps"]
+        if "width" in advanced:
+            out["width"], out["height"] = advanced["width"], advanced["height"]
         return out
 
     def after_check(state: ImageState) -> str:
@@ -328,6 +435,8 @@ def build_image_graph(
         )
         seed = state["seed"]
         extra: dict[str, Any] = {"loras": state["loras"]} if state.get("loras") else {}
+        if state.get("steps"):
+            extra["steps"] = state["steps"]
         if state.get("lora_files"):
             extra["lora_files"] = state["lora_files"]
         prompt = state["prompt"]
@@ -336,7 +445,7 @@ def build_image_graph(
                 prompt=prompt, image_key=state["image_key"], seed=seed, **extra
             )
         elif mode == "reference":
-            width, height = SIZES[state["size"]]
+            width, height = size_of(state)
             handle = await caps.image.reference(
                 prompt=prompt, image_key=state["image_key"], image2_key=state["image2_key"],
                 width=width, height=height, seed=seed, **extra,
@@ -347,7 +456,7 @@ def build_image_graph(
                 mask_key=state["mask_key"], seed=seed, **extra,
             )  # fmt: skip
         else:
-            width, height = SIZES[state["size"]]
+            width, height = size_of(state)
             handle = await caps.image.generate(
                 prompt=prompt, width=width, height=height, seed=seed, **extra
             )

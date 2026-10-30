@@ -86,4 +86,11 @@ describe("Try it", () => {
     render(<TryIt model={{ ...MODEL, preview: true }} runs={fakeRuns([])} />);
     expect(screen.getByText(/preview model cannot draw/)).toBeInTheDocument();
   });
+
+  it("offers Use in Create where the window can open it", async () => {
+    const onUse = vi.fn();
+    render(<TryIt model={MODEL} runs={fakeRuns([])} onUseInCreate={onUse} />);
+    await userEvent.click(screen.getByRole("button", { name: "Use in Create" }));
+    expect(onUse).toHaveBeenCalledWith(MODEL);
+  });
 });

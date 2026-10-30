@@ -38,6 +38,7 @@ from wasifyai_api.desktop_llm import router as desktop_llm_router
 from wasifyai_api.desktop_model3d import router as desktop_model3d_router
 from wasifyai_api.desktop_models import router as desktop_models_router
 from wasifyai_api.desktop_save import router as desktop_save_router
+from wasifyai_api.desktop_styles import router as desktop_styles_router
 from wasifyai_api.desktop_video_builder import router as desktop_video_builder_router
 from wasifyai_api.diagnostics import router as diagnostics_router
 from wasifyai_api.graphs import default_registry
@@ -53,6 +54,8 @@ from wasifyai_api.models_in_use import router as models_in_use_router
 from wasifyai_api.own_keys import router as own_keys_router
 from wasifyai_api.routes import router
 from wasifyai_api.run_tracing import TracingMiddleware
+from wasifyai_api.service_styles import admin_router as admin_styles_router
+from wasifyai_api.service_styles import router as styles_router
 from wasifyai_api.training_setup import router as training_setup_router
 from wasifyai_api.uploads import router as uploads_router
 from wasifyai_api.video_setup import router as video_setup_router
@@ -139,6 +142,8 @@ def create_app(given: Injected | None = None) -> FastAPI:
     app.include_router(admin_router)
     app.include_router(admin_models_router)
     app.include_router(admin_media_router)
+    app.include_router(admin_styles_router)
+    app.include_router(styles_router)
     app.include_router(admin_workers_router)
     app.include_router(uploads_router)
     app.include_router(connections_router)
@@ -161,6 +166,7 @@ def create_app(given: Injected | None = None) -> FastAPI:
         app.include_router(video_setup_router)
         app.include_router(desktop_save_router)
         app.include_router(desktop_discovery_router)
+        app.include_router(desktop_styles_router)
         app.include_router(desktop_llm_router)
         app.include_router(desktop_hub_router)
         app.include_router(own_keys_router)

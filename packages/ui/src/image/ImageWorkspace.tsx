@@ -7,6 +7,8 @@ import {
   type ImagesApi,
   type LoraChoice,
   type RunClient,
+  type StyleChoice,
+  type StylesApi,
   canRunAgain,
   sizeName,
   when,
@@ -35,6 +37,7 @@ import { PageHeader } from "../window-bar";
 import { appearsHere, makeLabel, makingLabel } from "../words";
 import { MAX_PROMPT, SIZES } from "./ImageForm";
 import { MaskPainter, type MaskPainterHandle } from "./MaskPainter";
+import { StylesSection } from "./style-picker/StylesSection";
 
 const EXAMPLES = {
   text: [
@@ -91,14 +94,22 @@ const COPY: Record<ImageMode, { tab: string; title: string; blurb: string; label
 export type WorkspacePreset = {
   prompt: string;
   size: string | null;
-  seed: number;
+  /** null: a new picture each time (a style sent from Train, for example) */
+  seed: number | null;
   loras: LoraChoice[];
+  /** the desktop's styles by id (ADR-0091) */
+  styles?: StyleChoice[];
+  /** Advanced: sampling steps, and a size of one's own */
+  steps?: number | null;
+  own?: { width: number; height: number } | null;
 };
+
+const MAX_PICTURES = 4;
 
 /** A style the image engine can apply (or could, with one click). */
 export type LoraOption = { id?: string; name: string; title: string; size?: number };
 
-const MAX_STYLES = 3;
+const MAX_STYLES = 8; // ADR-0091 decision 7
 const LAST_SECONDS_KEY = "wasifyai-image:last-seconds";
 
 function lastSeconds(): number | null {
@@ -113,7 +124,15 @@ function lastSeconds(): number | null {
 export function presetOf(image: ImageSummary): WorkspacePreset | null {
   const r = image.recipe;
   if (!canRunAgain(image) || r === null) return null;
-  return { prompt: r.prompt, size: r.size, seed: r.seed, loras: r.loras ?? [] };
+  return {
+    prompt: r.prompt,
+    size: r.size,
+    seed: r.seed,
+    loras: r.loras ?? [],
+    styles: r.styles ?? [],
+    steps: r.steps ?? null,
+    own: r.own_size ? { width: r.width, height: r.height } : null,
+  };
 }
 
 export type ImageWorkspaceProps = {
@@ -142,6 +161,12 @@ export type ImageWorkspaceProps = {
   /** Styles one click away (their folder is not read yet), with `onUseLora` to do it. */
   availableLoras?: LoraOption[];
   onUseLora?: (id: string) => Promise<void> | void;
+  /** The desktop's styles (ADR-0091): given, the Styles section is always shown and chooses by id. */
+  stylesApi?: StylesApi;
+  /** "Look in a folder…" in the Add menu: where the folders of other apps are set */
+  onOpenFolders?: () => void;
+  /** the web (ADR-0091 S5): `stylesApi` lists the styles an admin added; a person only chooses */
+  stylesReadOnly?: boolean;
   /** Take a result into Edit as its source picture (the app opens the Edit screen). */
   onEditThis?: (image: ImageSummary) => void;
   /** Take a result into Video's Animate as its picture (the app opens the Animate screen). */
@@ -197,6 +222,9 @@ export function ImageWorkspace({
   loras = [],
   availableLoras = [],
   onUseLora,
+  stylesApi,
+  onOpenFolders,
+  stylesReadOnly = false,
   onEditThis,
   onAnimateThis,
   onOpenLibrary,
@@ -216,6 +244,13 @@ export function ImageWorkspace({
   const [size, setSize] = useState<string>(preset?.size ?? "square");
   const [seed, setSeed] = useState<number | null>(preset?.seed ?? null);
   const [styles, setStyles] = useState<LoraChoice[]>(preset?.loras ?? []);
+  const [chosen, setChosen] = useState<StyleChoice[]>(preset?.styles ?? []);
+  // Advanced (ADR-0091 decision 10): steps (null: the model's own), a size of one's own, how many pictures
+  const [steps, setSteps] = useState<number | null>(preset?.steps ?? null);
+  const [own, setOwn] = useState<{ width: number; height: number } | null>(preset?.own ?? null);
+  const [count, setCount] = useState(1);
+  // the pictures still to make after this one, and the seed of the last (consecutive seeds)
+  const more = useRef<{ left: number; seed: number | null } | null>(null);
   const startedAt = useRef<number | null>(null);
   const [took, setTook] = useState<number | null>(lastSeconds);
   const [picked, setPicked] = useState<ImageSummary | null>(null);
@@ -300,7 +335,15 @@ export function ImageWorkspace({
   }, [sourceKey, mode]);
 
   const begin = useCallback(
-    async (text: string, sizeId: string, withSeed: number | null, withStyles: LoraChoice[]) => {
+    async (
+      text: string,
+      sizeId: string,
+      withSeed: number | null,
+      withStyles: LoraChoice[],
+      withChosen: StyleChoice[],
+      withSteps: number | null = steps,
+      withOwn: { width: number; height: number } | null = own,
+    ) => {
       setPicked(null);
       setRecipeOpen(false);
       setSaved(null);
@@ -339,15 +382,38 @@ export function ImageWorkspace({
         maskKey,
         seed: mode === "text" && withSeed !== null ? withSeed : undefined,
         loras: withStyles.length > 0 ? withStyles : undefined,
+        styles:
+          stylesApi && withChosen.length > 0
+            ? withChosen.map((c) => ({ id: c.id, strength: c.strength }))
+            : undefined,
+        steps: withSteps ?? undefined,
+        width: withOwn?.width,
+        height: withOwn?.height,
         sourceId: mode !== "text" ? (fromLibrary.current ?? undefined) : undefined,
       });
     },
-    [mode, pic, pic2, flow, runs],
+    [mode, pic, pic2, flow, runs, stylesApi, steps, own],
   );
 
   const generate = useCallback(() => {
-    if (valid && !working && (beforeMake?.() ?? true)) void begin(trimmed, size, seed, styles);
-  }, [valid, working, begin, trimmed, size, seed, styles, beforeMake]);
+    if (!valid || working || !(beforeMake?.() ?? true)) return;
+    // several pictures: consecutive seeds from this one (a new one when none is set; text to image)
+    const first =
+      count > 1 && mode === "text" ? (seed ?? Math.floor(Math.random() * 2 ** 31)) : seed;
+    more.current = count > 1 ? { left: count - 1, seed: mode === "text" ? first : null } : null;
+    void begin(trimmed, size, first, styles, chosen);
+  }, [valid, working, begin, trimmed, size, seed, styles, chosen, beforeMake, count, mode]);
+
+  // the next of several pictures, once one is done (each finished picture has its own id)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the phase and the finished picture are the trigger
+  useEffect(() => {
+    const next = more.current;
+    if (state.phase === "error" || state.phase === "refused") more.current = null;
+    if (state.phase !== "done" || !next || next.left <= 0) return;
+    const seedNext = next.seed === null ? null : (next.seed + 1) % 2 ** 31;
+    more.current = next.left > 1 ? { left: next.left - 1, seed: seedNext } : null;
+    void begin(trimmed, size, seedNext, styles, chosen);
+  }, [state.phase, resultId]);
 
   const shown: ImageSummary | null =
     picked ??
@@ -374,7 +440,10 @@ export function ImageWorkspace({
     setSize(p.size ?? "square");
     setSeed(p.seed);
     setStyles(p.loras);
-    void begin(p.prompt, p.size ?? "square", p.seed, p.loras);
+    setChosen(p.styles ?? []);
+    setSteps(p.steps ?? null);
+    setOwn(p.own ?? null);
+    void begin(p.prompt, p.size ?? "square", p.seed, p.loras, p.styles ?? [], p.steps, p.own);
   }
 
   /** The same recipe with a new seed: another picture in the same spirit. */
@@ -385,7 +454,10 @@ export function ImageWorkspace({
     setSize(p.size ?? "square");
     setSeed(null);
     setStyles(p.loras);
-    void begin(p.prompt, p.size ?? "square", null, p.loras);
+    setChosen(p.styles ?? []);
+    setSteps(p.steps ?? null);
+    setOwn(p.own ?? null);
+    void begin(p.prompt, p.size ?? "square", null, p.loras, p.styles ?? [], p.steps, p.own);
   }
 
   function toggleStyle(name: string) {
@@ -665,7 +737,14 @@ export function ImageWorkspace({
                 <legend className="mb-1 font-semibold text-ui-lg">Aspect ratio</legend>
                 <div className="flex flex-wrap gap-2">
                   {SIZES.map((s) => (
-                    <Chip key={s.id} aria-pressed={size === s.id} onClick={() => setSize(s.id)}>
+                    <Chip
+                      key={s.id}
+                      aria-pressed={size === s.id && !own}
+                      onClick={() => {
+                        setSize(s.id);
+                        setOwn(null); // a shape chosen again: the size of one's own goes
+                      }}
+                    >
                       {s.label} <span className="opacity-85">{s.hint}</span>
                     </Chip>
                   ))}
@@ -673,7 +752,38 @@ export function ImageWorkspace({
               </fieldset>
             ) : null}
 
-            {loras.length > 0 || availableLoras.length > 0 || styles.length > 0 ? (
+            {stylesApi ? (
+              <StylesSection
+                api={stylesApi}
+                chosen={chosen}
+                onChange={setChosen}
+                disabled={working}
+                onOpenFolders={onOpenFolders}
+                readOnly={stylesReadOnly}
+                settings={{
+                  size,
+                  width: own?.width ?? null,
+                  height: own?.height ?? null,
+                  steps,
+                }}
+                onApplyLook={(l) => {
+                  if (l.size) setSize(l.size);
+                  setOwn(l.width && l.height ? { width: l.width, height: l.height } : null);
+                  setSteps(l.steps ?? null);
+                }}
+                onUseWord={(word) =>
+                  setPrompt((cur) =>
+                    cur.toLowerCase().includes(word.toLowerCase())
+                      ? cur
+                      : cur.trim()
+                        ? `${cur.trim()}, ${word}`
+                        : word,
+                  )
+                }
+              />
+            ) : null}
+            {(!stylesApi || stylesReadOnly) &&
+            (loras.length > 0 || availableLoras.length > 0 || styles.length > 0) ? (
               // the styles are in view (ADR-0091): a row of the ones that are here, each with its strength once chosen
               <section className="grid gap-2" aria-label="Styles">
                 <h2 className="m-0 font-semibold text-ui-lg">
@@ -753,22 +863,25 @@ export function ImageWorkspace({
               </section>
             ) : null}
 
-            {mode === "text" && seed !== null ? (
-              <Experts summary="seed">
-                <p className="m-0 flex flex-wrap items-center gap-2 text-sm">
-                  <span>
-                    Using seed <span className="font-mono">{seed}</span> from an earlier picture.
-                  </span>
-                  <button
-                    type="button"
-                    className="text-muted-foreground underline underline-offset-4"
-                    onClick={() => setSeed(null)}
-                  >
-                    Use a new one
-                  </button>
-                </p>
-              </Experts>
-            ) : null}
+            <Experts
+              title="Advanced"
+              summary="steps, seed, how many, size"
+              open={seed !== null || steps !== null || own !== null || undefined}
+            >
+              <AdvancedFields
+                idBase={id}
+                mode={mode}
+                steps={steps}
+                onSteps={setSteps}
+                seed={seed}
+                onSeed={setSeed}
+                count={count}
+                onCount={setCount}
+                own={own}
+                onOwn={setOwn}
+                disabled={working}
+              />
+            </Experts>
           </>
         }
         action={
@@ -835,7 +948,15 @@ export function RecipeList({ image }: { image: ImageSummary }) {
         <>
           <dt className="text-muted-foreground">Seed</dt>
           <dd className="font-mono">{r.seed}</dd>
-          {r.loras && r.loras.length > 0 ? (
+          {r.styles && r.styles.length > 0 ? (
+            <>
+              <dt className="text-muted-foreground">Styles</dt>
+              <dd>
+                {r.styles.length === 1 ? "1 style" : `${r.styles.length} styles`} (
+                {r.styles.map((x) => x.strength.toFixed(2)).join(", ")})
+              </dd>
+            </>
+          ) : r.loras && r.loras.length > 0 ? (
             <>
               <dt className="text-muted-foreground">Styles</dt>
               <dd>{r.loras.map((l) => `${l.name} (${l.weight})`).join(", ")}</dd>
@@ -846,5 +967,174 @@ export function RecipeList({ image }: { image: ImageSummary }) {
       <dt className="text-muted-foreground">Made</dt>
       <dd>{when(image.created_at)}</dd>
     </dl>
+  );
+}
+
+const NUMBER =
+  "h-9 w-24 rounded-md border bg-transparent px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/** A whole number from a box, or null when it is empty or not a number. */
+function wholeOf(text: string): number | null {
+  const n = Number(text);
+  return text.trim() && Number.isInteger(n) ? n : null;
+}
+
+const onGrid = (n: number | null) => n !== null && n >= 256 && n <= 2048 && n % 16 === 0;
+
+/** Advanced (ADR-0091 decision 10): steps, seed, how many pictures and a size of one's own. */
+function AdvancedFields({
+  idBase,
+  mode,
+  steps,
+  onSteps,
+  seed,
+  onSeed,
+  count,
+  onCount,
+  own,
+  onOwn,
+  disabled,
+}: {
+  idBase: string;
+  mode: ImageMode;
+  steps: number | null;
+  onSteps: (n: number | null) => void;
+  seed: number | null;
+  onSeed: (n: number | null) => void;
+  count: number;
+  onCount: (n: number) => void;
+  own: { width: number; height: number } | null;
+  onOwn: (o: { width: number; height: number } | null) => void;
+  disabled: boolean;
+}) {
+  const sized = mode === "text" || mode === "reference";
+  const [w, setW] = useState(own ? String(own.width) : "");
+  const [h, setH] = useState(own ? String(own.height) : "");
+  const had = useRef(own);
+  useEffect(() => {
+    if (own) {
+      setW(String(own.width));
+      setH(String(own.height));
+    } else if (had.current) {
+      setW(""); // a shape was chosen above: the boxes empty
+      setH("");
+    }
+    had.current = own;
+  }, [own]);
+  const typed = Boolean(w.trim() || h.trim());
+  function setSide(nextW: string, nextH: string) {
+    setW(nextW);
+    setH(nextH);
+    const a = wholeOf(nextW);
+    const b = wholeOf(nextH);
+    onOwn(onGrid(a) && onGrid(b) ? { width: a as number, height: b as number } : null);
+  }
+  return (
+    <div className="grid gap-3 text-sm">
+      <label htmlFor={`${idBase}-steps`} className="flex flex-wrap items-center gap-2">
+        <span className="w-28 text-muted-foreground">Steps</span>
+        <input
+          id={`${idBase}-steps`}
+          aria-label="Steps"
+          type="number"
+          min={1}
+          max={50}
+          className={NUMBER}
+          placeholder="4"
+          value={steps ?? ""}
+          disabled={disabled}
+          onChange={(e) => {
+            const n = wholeOf(e.target.value);
+            onSteps(n !== null && n >= 1 && n <= 50 ? n : null);
+          }}
+        />
+        <span className="text-muted-foreground">
+          Empty: the model's own (4). More steps take longer.
+        </span>
+      </label>
+      {mode === "text" ? (
+        <label htmlFor={`${idBase}-seed`} className="flex flex-wrap items-center gap-2">
+          <span className="w-28 text-muted-foreground">Seed</span>
+          <input
+            id={`${idBase}-seed`}
+            aria-label="Seed"
+            type="number"
+            min={0}
+            className={NUMBER}
+            placeholder="Random"
+            value={seed ?? ""}
+            disabled={disabled}
+            onChange={(e) => {
+              const n = wholeOf(e.target.value);
+              onSeed(n !== null && n >= 0 && n < 2 ** 31 ? n : null);
+            }}
+          />
+          <span className="text-muted-foreground">
+            The same seed and words make the same picture.
+          </span>
+        </label>
+      ) : null}
+      <fieldset className="m-0 flex flex-wrap items-center gap-2 border-0 p-0">
+        <legend className="float-left w-28 text-muted-foreground">Pictures</legend>
+        {Array.from({ length: MAX_PICTURES }, (_, i) => i + 1).map((n) => (
+          <Chip key={n} aria-pressed={count === n} onClick={() => onCount(n)} disabled={disabled}>
+            {n}
+          </Chip>
+        ))}
+        {count > 1 ? (
+          <span className="text-muted-foreground">
+            One after the other{mode === "text" ? ", with consecutive seeds" : ""}.
+          </span>
+        ) : null}
+      </fieldset>
+      {sized ? (
+        <div className="grid gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-28 text-muted-foreground">Size</span>
+            <input
+              aria-label="Width"
+              type="number"
+              min={256}
+              max={2048}
+              step={16}
+              className={NUMBER}
+              placeholder="width"
+              value={w}
+              disabled={disabled}
+              onChange={(e) => setSide(e.target.value, h)}
+            />
+            <span aria-hidden="true">×</span>
+            <input
+              aria-label="Height"
+              type="number"
+              min={256}
+              max={2048}
+              step={16}
+              className={NUMBER}
+              placeholder="height"
+              value={h}
+              disabled={disabled}
+              onChange={(e) => setSide(w, e.target.value)}
+            />
+            {typed ? (
+              <button
+                type="button"
+                className="text-muted-foreground underline underline-offset-4"
+                onClick={() => setSide("", "")}
+              >
+                Use the shape above
+              </button>
+            ) : null}
+          </div>
+          <p className={`m-0 ${typed && !own ? "text-warn" : "text-muted-foreground"}`}>
+            {typed && !own
+              ? "Width and height: 256 to 2048, in steps of 16 (like 1280 and 720)."
+              : own
+                ? `${own.width} × ${own.height}, instead of the shape above.`
+                : "Empty: the shape chosen above."}
+          </p>
+        </div>
+      ) : null}
+    </div>
   );
 }

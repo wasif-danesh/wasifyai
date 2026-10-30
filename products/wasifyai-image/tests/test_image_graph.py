@@ -277,7 +277,7 @@ async def test_an_edit_may_use_loras_too(tmp_path, ctx):
         ([{"name": "a.safetensors", "weight": 5}], "between"),
         ([{"name": "a.safetensors", "weight": "heavy"}], "number"),
         ([{"name": "a.safetensors"}, {"name": "a.safetensors"}], "once"),
-        ([{"name": f"{n}.safetensors"} for n in range(4)], "at most 3"),
+        ([{"name": f"{n}.safetensors"} for n in range(9)], "at most 8"),
         ("ink.safetensors", "from the list"),
     ],
 )
@@ -286,3 +286,133 @@ async def test_bad_loras_are_refused_before_any_model_is_asked(tmp_path, ctx, lo
     s = await Story(rig).start({"mode": "text", "prompt": "a fox", "loras": loras})
     assert s.state["status"] == "refused" and fragment in s.state["refusal"]["message"]
     assert rig.asked() == [] and rig.sink.submitted == []
+
+
+# ---- styles by id (ADR-0091) ---------------------------------------------------------------------
+
+
+def with_styles(rig, known: dict[str, str]):
+    """The desktop's resolver: a style id to its file in the `loras` folder, or why not."""
+
+    async def to_files(wanted):
+        if any(w["id"] not in known for w in wanted):
+            return [], "One of those styles is not on this computer any more."
+        return [
+            {"name": known[w["id"]], "weight": w["strength"], "sha256": "ab" * 32, "title": w["id"]}
+            for w in wanted
+        ], ""
+
+    rig.caps.extras["styles"] = to_files
+
+
+async def test_styles_by_id_reach_the_job_as_their_files_and_the_recipe_keeps_the_ids(
+    tmp_path, ctx
+):
+    rig = make_rig(tmp_path)
+    with_styles(rig, {"a1b2c3d4e5f6": "koni.safetensors", "0f0f0f0f0f0f": "ink.safetensors"})
+    wanted = [{"id": "a1b2c3d4e5f6", "strength": 0.8}, {"id": "0f0f0f0f0f0f", "strength": 1}]
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "styles": wanted})
+    assert rig.sink.submitted[0].prompt["loras"] == [
+        {"name": "koni.safetensors", "weight": 0.8}, {"name": "ink.safetensors", "weight": 1.0},
+    ]  # fmt: skip
+    s = await s.finish_job()
+    (image,) = s.images.images
+    assert image.recipe is not None and image.recipe["styles"] == [
+        {"id": "a1b2c3d4e5f6", "strength": 0.8, "sha256": "ab" * 32, "title": "a1b2c3d4e5f6"},
+        {"id": "0f0f0f0f0f0f", "strength": 1.0, "sha256": "ab" * 32, "title": "0f0f0f0f0f0f"},
+    ]  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("styles", "fragment"),
+    [
+        ([{"id": "../ink.safetensors"}], "from the list"),
+        ([{"id": "a1b2c3d4e5f6", "strength": 3}], "between"),
+        ([{"id": "a1b2c3d4e5f6"}, {"id": "a1b2c3d4e5f6"}], "once"),
+        ([{"id": f"{n:012x}"} for n in range(9)], "at most 8"),
+        ([{"id": "999999999999"}], "not on this computer"),
+    ],
+)
+async def test_bad_styles_are_refused_before_any_model_is_asked(tmp_path, ctx, styles, fragment):
+    rig = make_rig(tmp_path)
+    with_styles(rig, {"a1b2c3d4e5f6": "koni.safetensors"})
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "styles": styles})
+    assert s.state["status"] == "refused" and fragment in s.state["refusal"]["message"]
+    assert rig.sink.submitted == []
+
+
+async def test_styles_are_refused_where_nothing_keeps_them(tmp_path, ctx):
+    rig = make_rig(tmp_path)  # the web: a person's looks go by name through their own storage
+    s = await Story(rig).start(
+        {"mode": "text", "prompt": "a fox", "styles": [{"id": "a1b2c3d4e5f6"}]}
+    )
+    assert s.state["status"] == "refused" and rig.sink.submitted == []
+
+
+# ---- Advanced: steps and a size of one's own (ADR-0091 S4) ---------------------------------------
+
+
+async def test_steps_and_a_size_of_ones_own_reach_the_job_and_the_recipe(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+    s = await Story(rig).start(
+        {"mode": "text", "prompt": "a fox", "steps": 8, "width": 1280, "height": 720}
+    )
+    job = rig.sink.submitted[0]
+    assert (job.prompt["width"], job.prompt["height"], job.prompt["steps"]) == (1280, 720, 8)
+    s = await s.finish_job()
+    (image,) = s.images.images
+    assert image.recipe is not None and image.recipe["steps"] == 8 and image.recipe["own_size"]
+
+
+async def test_without_advanced_the_workflow_keeps_its_own_steps(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+    await Story(rig).start({"mode": "text", "prompt": "a fox", "size": "wide"})
+    job = rig.sink.submitted[0]
+    assert "steps" not in job.inputs and (job.prompt["width"], job.prompt["height"]) == (1344, 768)
+
+
+@pytest.mark.parametrize(
+    ("extra", "fragment"),
+    [({"steps": 0}, "Steps must"), ({"steps": 51}, "Steps must"), ({"steps": 4.5}, "Steps must"),
+     ({"width": 1000, "height": 1024}, "steps of 16"), ({"width": 4096, "height": 1024}, "between"),
+     ({"width": 1024}, "whole numbers")],
+)  # fmt: skip
+async def test_bad_advanced_settings_are_refused_in_words(tmp_path, ctx, extra, fragment):
+    rig = make_rig(tmp_path)
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", **extra})
+    assert s.state["status"] == "refused" and fragment in s.state["refusal"]["message"]
+    assert rig.sink.submitted == []
+
+
+async def test_a_change_keeps_the_pictures_own_size(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+    up = await put_upload(rig)
+    s = await Story(rig).start(
+        {"mode": "image", "prompt": "dusk", "image_key": up.key, "width": 512, "height": 512}
+    )
+    assert s.state["status"] == "refused" and "own size" in s.state["refusal"]["message"]
+
+
+async def test_on_the_web_a_service_style_goes_to_the_worker_by_its_key(tmp_path, ctx):
+    """ADR-0091 S5: the resolver names the storage key; the looks are asked only for the rest."""
+    rig = make_rig(tmp_path)
+    key = "t1/wasifyai-image/service/styles/ab12cd34ef56.safetensors"
+
+    async def to_files(wanted):
+        return [{"name": "service-ab12cd34ef56.safetensors", "weight": 1.0, "sha256": "ab" * 32,
+                 "title": "Anime", "key": key}], ""  # fmt: skip
+
+    asked: list[list[str]] = []
+
+    async def looks(tenant, user, names):
+        asked.append(names)
+        return {n: f"t1/wasifyai-training/u1/train/looks/r1/{n}" for n in names}
+
+    rig.caps.extras["styles"] = to_files
+    rig.caps.extras["person_looks"] = looks
+    await Story(rig).start({
+        "mode": "text", "prompt": "a fox", "styles": [{"id": "ab12cd34ef56"}],
+    })  # fmt: skip
+    job = rig.sink.submitted[0]
+    assert job.prompt["lora_files"] == {"service-ab12cd34ef56.safetensors": key}
+    assert asked == []  # the service's style is not one of the person's looks

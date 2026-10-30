@@ -46,6 +46,8 @@ REMOTE_SECONDS = "media.remote_seconds"
 LOOK_DIR = "wasify-user"  # inside a `loras` folder: a person's own looks, for the length of one job
 LOOK_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.safetensors$")
 TRAINING_PRODUCT = "wasifyai-training"
+IMAGE_PRODUCT = "wasifyai-image"
+SERVICE_USER = "service"  # the service's own files: the styles an admin added
 CANCEL_POLL_S = 1.0  # how often a running job looks whether it was stopped (stage J3)
 STOPPED = "Stopped."
 
@@ -368,6 +370,8 @@ class JobProcessor:
         if root is None or not isinstance(files, dict):
             raise ComfyError("invalid_input", "This worker cannot use a look.")
         mine = object_key(job.tenant_id, TRAINING_PRODUCT, job.user_id, "train", "looks") + "/"
+        # a style an admin added for everyone on the service (ADR-0091 S5), on pictures only
+        service = object_key(job.tenant_id, IMAGE_PRODUCT, SERVICE_USER, "styles") + "/"
         who = hashlib.sha256(f"{job.tenant_id}/{job.user_id}".encode()).hexdigest()[:12]
         mapped: dict[str, str] = {}
         written: list[Path] = []
@@ -375,7 +379,8 @@ class JobProcessor:
             for name, key in files.items():
                 if not isinstance(key, str) or not LOOK_NAME.match(str(name)):
                     raise ComfyError("invalid_input", "One of the looks is not valid.")
-                if not key.startswith(mine) or ".." in key:
+                ours = job.product_id == IMAGE_PRODUCT and key.startswith(service)
+                if not (key.startswith(mine) or ours) or ".." in key:
                     raise ComfyError("invalid_input", "One of the looks is not yours.")
                 try:
                     data = await self.storage.get(key)

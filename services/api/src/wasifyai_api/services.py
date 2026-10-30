@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from wasifyai_api.media_access import MediaAccess
     from wasifyai_api.model_access import ModelAccess
     from wasifyai_api.own_keys import OwnKeysService
+    from wasifyai_api.service_styles import ServiceStyles
 
 
 @dataclass(eq=False)
@@ -47,6 +48,7 @@ class ApiServices(EngineServices):
     own_keys: "OwnKeysService | None" = None  # the person's own provider keys (ADR-0095, desktop)
     # on the web: speaking and 3D on the provider the admin chose in Admin › Media (ADR-0095, K5)
     admin_providers: "AdminProviders | None" = None
+    service_styles: "ServiceStyles | None" = None  # the web's styles, added by an admin (ADR-0091)
 
 
 def services_of(request: Request) -> ApiServices:

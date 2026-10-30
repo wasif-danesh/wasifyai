@@ -7,6 +7,8 @@ import {
   createModel3dApi,
   createModelsInUseApi,
   createNotebooksApi,
+  createServiceStylesApi,
+  createStylesApi,
   createTrainingApi,
   createVideoBuilderApi,
   createVideosApi,
@@ -16,6 +18,10 @@ import {
 import { transport } from "./run-client";
 
 export const webImages = createImagesApi(transport);
+/** The styles an admin added for the service (ADR-0091 S5): chosen on the image screens, read only. */
+export const webStyles = createServiceStylesApi(transport);
+/** Admin > Styles: the same calls as the desktop's styles, on the service's admin routes. */
+export const adminStyles = createStylesApi(transport, "/admin/styles");
 export const webVideos = createVideosApi(transport);
 export const webAssistant = createAssistantApi(transport);
 /** 3D models are made by an engine worker (ADR-0087): nothing to set up from the page. */

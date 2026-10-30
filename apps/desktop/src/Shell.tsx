@@ -19,6 +19,7 @@ import {
   type TrayJob,
   VoicesPage,
   WindowBarProvider,
+  type WorkspacePreset,
   cn,
   jobLabel,
   openInMusic,
@@ -118,6 +119,8 @@ export function Shell() {
   const voice = { api: voiceApi, runs: client, remembered, go, place: "device" as const };
   // an image whose recipe was sent to Create ("make it again"); used once, then forgotten
   const [again, setAgain] = useState<ImageSummary | null>(null);
+  // a taught style sent to Create from Train ("Use in Create", ADR-0091); used once, then forgotten
+  const [startWith, setStartWith] = useState<WorkspacePreset | null>(null);
   // a result sent to Edit as its source picture ("Edit this result")
   const [editSource, setEditSource] = useState<{ url: string; name: string; id?: string } | null>(
     null,
@@ -133,6 +136,7 @@ export function Shell() {
   const [libraryOpen, setLibraryOpen] = useState<{ kind: string; id: string } | null>(null);
   useEffect(() => {
     if (route !== "create") setAgain(null);
+    if (route !== "create") setStartWith(null);
     if (route !== "edit") setEditSource(null);
     if (route !== "animate") setAnimateSource(null);
     if (route !== "extend") setExtendSource(null);
@@ -283,10 +287,10 @@ export function Shell() {
               ) : null}
               {route === "create" ? (
                 <CreatePage
-                  key={`create-${again?.id ?? ""}`}
+                  key={`create-${again?.id ?? ""}-${startWith?.styles?.[0]?.id ?? ""}`}
                   mode="text"
                   go={go}
-                  preset={again ? presetOf(again) : null}
+                  preset={again ? presetOf(again) : startWith}
                   onEditThis={(image) => {
                     setEditSource({ url: image.image_url, name: `${image.id}.png`, id: image.id });
                     go("edit");
@@ -363,7 +367,15 @@ export function Shell() {
               ) : null}
               {route === "videobuilder" ? <VideoBuilderPage go={go} /> : null}
               {route === "model3d" ? <Model3dPage go={go} /> : null}
-              {route === "train" ? <TrainPage go={go} /> : null}
+              {route === "train" ? (
+                <TrainPage
+                  go={go}
+                  onUseInCreate={(preset) => {
+                    setStartWith(preset);
+                    go("create");
+                  }}
+                />
+              ) : null}
               {route === "models" ? <ModelsPage /> : null}
               {route === "settings" ? <SettingsPage /> : null}
             </main>

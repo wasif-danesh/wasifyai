@@ -1,13 +1,13 @@
 # ADR-0091: Styles (LoRAs) in the image screens: add, check, stack and reuse them
 
 - **Status:** Accepted (owner, 2026-10-25: "Take your recommendations on all seven questions", recorded in "Owner's answers" below).
-  **Nothing is built; stage S0 (the measuring spike) starts when the owner says.**
+  **S0 (the measuring spike) done 2026-10-29: go** (`docs/spikes/styles-s0.md`); decisions 5, 6, 7 and 10 amended from it. **S1 (the engine) built 2026-10-30.** **S2 (the screen) built 2026-10-30.** **S3 (Hugging Face) built 2026-10-30.** **S4 (Advanced, saved looks, actions) built 2026-10-30.** **S5 built 2026-10-30: the plan is complete.**
 - **Date:** 2026-10-25
 - **Asked by:** the owner, 2026-10-25, with a picture of Unsloth Studio's "Create images" panel: our image module is very basic and does
   not let a person add LoRAs; check Unsloth's features and plan how to build them.
 - **Depends on:** ADR-0059 (ComfyUI as the managed image engine, confirm-first downloads), ADR-0062 (Unsloth Studio is read for ideas, never
   copied), ADR-0063 (found models and tools, the fit check), ADR-0064 and ADR-0086 (the model hub, opt-in network, one model button),
-  ADR-0068 (every feature is an action), ADR-0047 (safeguards), ADR-0073 to ADR-0076 (Train: the app makes image LoRAs), ADR-0081
+  ADR-0068 (every feature is an action), ADR-0094 (no safeguards, marks or terms), ADR-0073 to ADR-0076 (Train: the app makes image LoRAs), ADR-0081
   (design tokens), ADR-0087 (engine workers for the web), ADR-0090 (Creative Studio reuses these panels).
 - **Evidence:** the local checkout `~/Projects/unsloth` (commit `133a8076d`, 2026-10-13): `studio/frontend/src/features/images/`,
   `features/generation-presets/` and `studio/backend/core/inference/diffusion_lora.py`; our code and the LoRA the app trained on this Mac
@@ -81,18 +81,23 @@
 4. **The screen never names a path.** A request carries a **style id**; the engine resolves it to a file in its own folder and refuses an
    unknown id. A name that is not in the records, a `..`, an absolute path or a file that is not `.safetensors` is refused (the check we
    already have, kept, and applied to the new ids). **Pickled formats (`.ckpt`, `.pt`) are never offered or read.**
-5. **Checks on a file before it is kept:** a header of a sane size; only tensors, no code; every tensor name a known LoRA style; size under
+5. **Checks on a file before it is kept** (S0: no converter is needed; ComfyUI applies the `diffusion_model.`, kohya `lora_unet_`,
+   diffusers `transformer.` and unprefixed key styles as they are, the last two with 6 modulation keys unused, counted and said in one
+   line): a header of a sane size; only tensors, no code; every tensor name a known LoRA style; size under
    a ceiling (**2 GB**, a klein 4B style is 50 to 500 MB); not already present (same hash); a name that is safe on disk. The reader never
    loads the weights into memory. A file that fails says why in words ("This is a checkpoint, not a style").
 6. **Does it fit?** A fingerprint read from the header says which model the style was made for. Measured on the one LoRA we have: the
    tensor names carry `double_blocks` and `single_blocks`, the model width is **3072**, there are **5 double and 20 single blocks**, which
    is FLUX.2 klein 4B (FLUX.1 shares the width but has 19 and 38 blocks; the 9B variant differs and is to be measured in S0). The
    result is one of **fits** (shown with a tick), **made for another model** (shown but not selectable, "it would give noise here") and
-   **not sure** (selectable with a warning). The family tag in the sidecar, when present, is checked against the fingerprint; a mismatch
+   **not sure** (selectable with a warning). *S0 measured:* klein 4B = width 3072, 5 double, 20 single; klein 9B = 4096, 8, 24; FLUX.1
+   = 3072, 19, 38. Base or distilled is not in the file: when the source says **klein base** (Train's `taught_on`, the Hugging Face
+   repo's `base_model` tag) the row adds "Made for klein base: the look may not show on this model" and stays selectable (S0: a look
+   trained on base did not show on our distilled model at strength 2 or 8 steps; a subject did). The family tag in the sidecar, when present, is checked against the fingerprint; a mismatch
    is shown. The engine enforces the same rule on the request (as Unsloth does), so no client can load a wrong-family file.
 7. **Up to 8 styles, strength 0 to 2 in steps of 0.05** (the engine accepts 0.1 to 2.0 today; 0 means "off", so the screen offers 0.05 to
-   2). The chain limit in each workflow map goes from 3 to 8. The honest line before Generate says what the styles cost ("2 styles add about
-   2 s"), measured in S0. The order of the rows is the order of the chain.
+   2). The chain limit in each workflow map goes from 3 to 8. The honest line before Generate says "Changing styles adds a few seconds to the next picture" (S0: 1 to 3 s once, nothing per
+   picture after; memory does not grow with 8 styles). The order of the rows is the order of the chain.
 8. **Trigger words.** Many styles need a word in the prompt. The record stores it (typed, or found in the file's metadata or the repo's
    description), and the row offers **Use this word**, which adds it to the prompt. Train's "magic word" uses the same field.
 9. **Remove.** The trash icon takes a style out of **this picture**. A separate **Delete from this computer** (in the style's menu) removes
@@ -100,8 +105,7 @@
 10. **Advanced (collapsed): steps, seed, how many pictures, size.** Steps are an input of the workflow map already; seed is already sent;
     how many pictures runs the job that many times with consecutive seeds; size is a width and a height on the model's grid (multiples
     of 16, within the fit check), with the five shapes as shortcuts. **Not shown:** guidance (klein distilled runs at 1), negative prompt
-    and sampler (no effect there). If S0 shows a style trained on the base model needs more steps or a different guidance on the distilled
-    model, guidance joins this section for that case.
+    and sampler (no effect there). S0 showed no setting brings out a look trained on klein base, so guidance stays out.
 11. **Saved looks (presets).** A name for a bundle of size, steps and **styles by pointer** (id and strength, no weights). Applying a look
     that names a style that is not on this computer says so and offers to get it again from the recorded source. The default look is
     the model's recommendation. Recipes of finished pictures already carry the styles; they gain the style's id and hash so "Make it
@@ -115,10 +119,9 @@
     set strength, no add or delete. A row in `docs/web-parity-ledger.md` says so when S1 starts.
 14. **Creative Studio (ADR-0090) uses these panels.** The Make panel's Image tab shows the same Styles section; a character can name its
     style. Nothing here depends on that ADR.
-15. **Safeguards.** Styles are the person's own responsibility and are not content-inspected. **Prompts and pictures are
-    checked by the safeguards switch exactly as today** (ADR-0047); a style does not change that, and there is no separate "mature"
-    mode (see question 7). A style we did not review is shown as "not reviewed by us", never recommended and
-    never a default.
+15. **No safeguards (ADR-0094).** Styles are the person's own responsibility and are not content-inspected; prompts and
+    pictures are not inspected either (the safeguards switch was removed on 2026-10-29). A style we did not review is shown as
+    "not reviewed by us", never recommended and never a default.
 
 ## How it is built
 
@@ -136,12 +139,12 @@
 
 | Stage | What | Size | Done when |
 |---|---|---|---|
-| **S0** | **Spike, measured, outside the repo.** (a) Which LoRA key styles ComfyUI applies to klein 4B: our converted ones, `diffusion_model.*`, kohya `lora_unet_*`, diffusers `transformer.*`; which need a converter; (b) the fingerprint (blocks, width) for klein 4B, klein 9B and FLUX.1 files; (c) time and memory with 1, 3 and 8 styles; (d) how a style trained on **klein base** behaves on our **distilled** model at 4 steps and at more steps; (e) where trigger words live in real files; (f) pick the Recommended ones from a short list of klein-4B styles. Downloads: a handful of files, under 5 GB, deleted after | 1.5 | `docs/spikes/styles-s0.md` with a measured table, the formats that work, the fingerprint rules, a reviewed shortlist, and a go or no-go |
-| **S1** | Engine: records and sidecars, header checks, fingerprint, import, delete, `GET /desktop/styles`, chain 8, request validation by id, tests with fixture files | 3 | a fixture style imports, is classed, applied to a stub job; hostile files (a `.ckpt`, a huge header, a name with `..`) are refused |
-| **S2** | Screen: the always-visible Styles section, the add menu, rows with strength, fit and trigger word, remove, delete, folders, Yours first; the dialog for "From this computer"; Train's "Use in Create" | 4 | the owner adds the trained style from the screen and uses it in Create, Edit, Inpaint and Reference |
-| **S3** | Hugging Face: file list, the confirm dialog, download, recheck, offline behaviour, tests with a fake hub | 3 | a real klein-4B style from the shortlist downloads, is checked and used |
-| **S4** | Advanced section, Saved looks, recipes with ids and hashes, `styles` on the image actions, the three new actions, help files, the contract rows | 4 | "Make it again" restores styles; the assistant can list and use one; the action tests pass |
-| **S5** | The Recommended list, the web read-only section (admin installs through the worker path), the ledger row, the panel layout for Creative Studio | 3 | the web shows an admin's styles; the ledger gate passes |
+| **S0** | **Done 2026-10-29: go** (`docs/spikes/styles-s0.md`). **Spike, measured, outside the repo.** (a) Which LoRA key styles ComfyUI applies to klein 4B: our converted ones, `diffusion_model.*`, kohya `lora_unet_*`, diffusers `transformer.*`; which need a converter; (b) the fingerprint (blocks, width) for klein 4B, klein 9B and FLUX.1 files; (c) time and memory with 1, 3 and 8 styles; (d) how a style trained on **klein base** behaves on our **distilled** model at 4 steps and at more steps; (e) where trigger words live in real files; (f) pick the Recommended ones from a short list of klein-4B styles. Downloads: a handful of files, under 5 GB, deleted after | 1.5 | `docs/spikes/styles-s0.md` with a measured table, the formats that work, the fingerprint rules, a reviewed shortlist, and a go or no-go |
+| **S1** | **Built 2026-10-30** against fixture files: `desktop_styles.py` (`read_style_header` with S0's fingerprints and refusals, `StylesService`: records as `<file>.style.json` sidecars in `<models>/loras`, files with no record adopted (Train's first, `kind: trained`), import as a streamed checked copy under a safe name with SHA-256 de-duplication, rename and trigger word, delete of our copies, ids resolved to files), routes `GET /desktop/styles`, `POST /desktop/styles/import?name=`, `PATCH` and `DELETE /desktop/styles/{id}`; the image graph takes `styles: [{id, strength}]` (resolved through `caps.extras["styles"]`, refused on the web), keeps them in the recipe, chains of 8 in the four workflow maps, strength 0.05 to 2. Train's real style is classed "FLUX.2 klein 4B, fits, made for klein base". `GET /desktop/loras` stays until S2 moves the screen. Engine: records and sidecars, header checks, fingerprint, import, delete, `GET /desktop/styles`, chain 8, request validation by id, tests with fixture files | 3 | a fixture style imports, is classed, applied to a stub job; hostile files (a `.ckpt`, a huge header, a name with `..`) are refused |
+| **S2** | **Built 2026-10-30**, seen in the real window (`apps/desktop/scripts/ui-audit.sh light styles-make`, pictures `docs/ui-audit/desktop/styles-*.png`: Train's style chosen from the Add menu and a real picture made with it; the section on Edit, Inpaint and Reference): `StylesSection` and `ImportStyleDialog` in `packages/ui/src/image/style-picker/` (rows with strength 0.05 to 2, what the file was made for in words, "made for klein base" warning, Use this word, Take it out, Delete from this computer with a question; the Add menu: yours first, the ones kept here, another app's copied in on choice (`POST /desktop/styles/from-found`), From this computer, Look in a folder), `createStylesApi` in `packages/client/src/styles.ts`; `ImageWorkspace` takes `stylesApi` and sends `styles` by id (the web keeps its looks by name); Train writes its style's name and magic word (`StylesService.describe`) and Try it offers **Use in Create** (Create opens with the style chosen and the word in the prompt); a Train file from before S2 is adopted with its run and its name. The desktop's old `lorasApi` is gone. Not done here: Hugging Face (S3), Advanced and saved looks (S4), Recommended (S5). Screen: the always-visible Styles section, the add menu, rows with strength, fit and trigger word, remove, delete, folders, Yours first; the dialog for "From this computer"; Train's "Use in Create" | 4 | the owner adds the trained style from the screen and uses it in Create, Edit, Inpaint and Reference |
+| **S3** | **Built 2026-10-30**, with a real download in the window (`ui-audit.sh light styles-hub-make`, pictures `docs/ui-audit/desktop/styles-hub-*.png`): the shortlist's anime style (`Sawata97/flux2_4b_koni_animestyle`, 185 MB) was fetched at its commit, matched the SHA-256 pinned in S0, was classed "FLUX.2 klein 4B, fits, distilled, word anime_style", and a real picture made with it shows the look; it is kept in the app (owner). `HubStyles` in `desktop_styles.py`: `POST /desktop/styles/hub/files` (a name or a huggingface.co address; only `.safetensors` offered, pickles and files over 2 GB named with why; what the repository's card says it was made for and its `instance_prompt`; nothing asked before the person allowed browsing), `POST /desktop/styles/hub/download` (re-read fresh: commit, size and checksum must match what was confirmed; gated needs a token; the model hub's download manager), `GET /desktop/styles/hub/downloads/{id}` (the style kept, or why the file was refused and removed); `HubStyleDialog` in the Add menu ("From Hugging Face…", with "Allow browsing Hugging Face" when it is off). Hugging Face: file list, the confirm dialog, download, recheck, offline behaviour, tests with a fake hub | 3 | a real klein-4B style from the shortlist downloads, is checked and used |
+| **S4** | **Built 2026-10-30**, seen in the real window (`ui-audit.sh light styles-advanced-make`, pictures `docs/ui-audit/desktop/styles-advanced*.png`, `styles-looks-menu.png`, `styles-again*.png`: the anime style with its word, 8 steps and 1280 x 720 made a real picture; the look saved; on a fresh screen "Make it again" chose the style, the steps, the seed and the size again and made the same picture). The graph takes `steps` (1 to 50) and `width`/`height` (256 to 2048 in steps of 16, text and reference only); the recipe keeps `steps`, `own_size` and each style's id, strength, SHA-256 and title. **Advanced** (collapsed, open when something is set): steps, seed, how many pictures (1 to 4, one after the other, consecutive seeds), a size of one's own. **Saved looks** (`/desktop/styles/looks`, in the app's settings, up to 50): size, steps and styles by pointer with checksum, title and source; a style that came back under another id is found by its checksum; a missing one is named and, from Hugging Face, has **Get it again**. Actions (`styles_actions.py`, help in `docs/help/`): `styles.list` (read, private), `styles.add_from_hub` (make, needs consent, leaves the device), `styles.remove` (destroy, always asks); `image.generate`, `image.edit`, `image.reference`, `image.inpaint` take `styles: [{id, strength}]`; tested through the executor on the real desktop engine (the assistant lists, makes a picture with one, and a delete asks). Not checked in a real chat with the chat model. Advanced section, Saved looks, recipes with ids and hashes, `styles` on the image actions, the three new actions, help files, the contract rows | 4 | "Make it again" restores styles; the assistant can list and use one; the action tests pass |
+| **S5** | **Built 2026-10-30.** **Recommended:** three styles checked in S0, pinned by repository, file and SHA-256 (`RECOMMENDED` in `desktop_styles.py`), offered in the Add menu while not on this computer; the Hugging Face dialog chooses the file and the engine fetches it only when its checksum is still the one we checked. **Web, read only:** `service_styles.py`: an admin adds a style from Hugging Face in **Admin > Styles** (the desktop's dialog, on `/admin/styles`), the API fetches it at its commit, checks size, checksum and header (a style for another model is refused) and keeps it under `<tenant>/wasifyai-image/service/styles/`; everyone signed in sees `/styles` in the same Styles section, read only (choose and strength; no add, delete, folders, Recommended or looks); a request's style id becomes `lora_files` with its storage key and the media worker fetches it for that job (it accepts that prefix for pictures only, of the job's own tenant); a person's own taught styles stay beside them. **Ledger:** a row in `docs/web-parity-ledger.md`. **Creative Studio:** `StylesSection` is self-contained (an api, the chosen styles, a change), so ADR-0090's Make panel uses it as it is; no separate panel is built before CS0. Not seen on a running web stack (the web's unit and route tests only). The Recommended list, the web read-only section (admin installs through the worker path), the ledger row, the panel layout for Creative Studio | 3 | the web shows an admin's styles; the ledger gate passes |
 
 Total about 18.5 working days. S0 alone says whether community styles work on our distilled model, which decides how useful the rest is.
 
@@ -158,11 +161,10 @@ Total about 18.5 working days. S0 alone says whether community styles work on ou
   Advanced section gets guidance and the Recommended list says which styles work.
 * **Wrong-family files are the common mistake** (the screen already warns about noise). The fingerprint is a header heuristic and can
   be wrong for unusual files, hence the third state "not sure".
-* **Unreviewed styles.** We mark them "not reviewed" and never recommend them. The person carries the responsibility (decision 15); the terms of service (backlog B4) must say so before a public release.
+* **Unreviewed styles.** We mark them "not reviewed" and never recommend them. The person carries the responsibility (decision 15).
 * **Disk.** Each style is up to 2 GB; the Models page must list them with sizes and a delete.
 * **Copying by accident.** Nothing from Unsloth's code is copied. The mockup, the schema and the words are ours.
-* **Content.** A style can change what the base model will draw. The safeguards switch is the one control (decision 15); it is off by
-  default on the desktop (ADR-0047). That is a product choice for the owner, not a technical limit (question 7).
+* **Content.** A style can change what the base model will draw. There is no control over that by design (ADR-0094, decision 15).
 
 ## Not decided here
 
@@ -182,7 +184,7 @@ The owner took the recommendation on every question.
 | 4 | The word | **Styles**, with "(LoRA)" in the help and the tooltip | Decision 1 |
 | 5 | Web | **Desktop first**; the web shows only what an admin installed, read only | Decision 13 |
 | 6 | A Recommended list | **A short reviewed list** after S0 | Decision 3; S5 |
-| 7 | Content | **Styles are not content-inspected; prompts and pictures follow the safeguards switch as today; no separate mature mode.** What the switch does on a public service is decided before launch (backlog B4) | Decision 15 |
+| 7 | Content | **Styles are not content-inspected; no separate mature mode.** Superseded 2026-10-29 by ADR-0094: there is no safeguards switch and no terms | Decision 15 |
 
 ## Open questions for the owner
 

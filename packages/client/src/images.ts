@@ -20,6 +20,12 @@ export type ImageRecipe = {
   seed: number;
   /** absent on images made before styles existed */
   loras?: LoraChoice[];
+  /** the desktop's styles by id, with checksum and title (ADR-0091): what "Make it again" chooses again */
+  styles?: { id: string; strength: number; sha256?: string; title?: string }[];
+  /** sampling steps, when the person set them (Advanced) */
+  steps?: number;
+  /** the width and height were the person's own, not the named shape's */
+  own_size?: boolean;
 };
 
 export type ImageSummary = {

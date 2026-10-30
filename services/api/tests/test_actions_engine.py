@@ -156,3 +156,44 @@ def test_the_assistant_origin_only_reaches_what_the_action_offers(engine):
     assert audit[-1]["origin"] == "assistant"
     nope = engine.run("image.generate", {"prompt": "a fox"}, origin="mcp:Codex")
     assert nope.status == "needs_approval"  # the default asks; nothing runs behind a connection
+
+
+def test_styles_are_listed_used_in_a_picture_and_deleted_only_with_a_yes(engine, data_dir):  # noqa: F811
+    """ADR-0091 S4: the assistant lists the styles, makes a picture with one (the recipe keeps its
+    id and checksum), and deleting one always asks."""
+    from tests.test_desktop_styles import lora
+
+    folder = data_dir / "models" / "loras"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "ink.safetensors").write_bytes(lora(meta={"trigger": "inkwash"}))
+    (folder / "nine.safetensors").write_bytes(lora(4096, 8, 24))
+
+    listed = engine.run("styles.list", origin="assistant")
+    assert listed.ok, listed.text
+    rows = {r["title"]: r for r in listed.output["styles"]}
+    ink, nine = rows["ink"], rows["nine"]
+    assert ink["usable"] and ink["word"] == "inkwash" and not nine["usable"]
+    assert "inkwash" in listed.text and ink["style_id"] in listed.text
+
+    made = engine.run(
+        "image.generate",
+        {"prompt": "a fox, inkwash", "styles": [{"id": ink["style_id"], "strength": 0.8}]},
+        origin="assistant", policy=OPEN,
+    )  # fmt: skip
+    assert made.ok, made.text
+    recipe = engine.client.get(
+        f"/products/wasifyai-image/images/{made.output['image_id']}", headers=auth()
+    ).json()["recipe"]
+    assert recipe["styles"][0]["id"] == ink["style_id"] and recipe["styles"][0]["sha256"]
+
+    wrong = engine.run(
+        "image.generate", {"prompt": "a fox", "styles": [{"id": nine["style_id"]}]},
+        origin="assistant", policy=OPEN,
+    )  # fmt: skip
+    assert not wrong.ok and "another model" in wrong.text
+
+    asked = engine.run(
+        "styles.remove", {"style_id": ink["style_id"]}, origin="assistant", policy=OPEN
+    )
+    assert asked.status == "needs_approval"  # destroy always asks, whatever the setting
+    assert (folder / "ink.safetensors").is_file()

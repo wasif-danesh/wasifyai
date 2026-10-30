@@ -2,7 +2,7 @@
 
 import { ANIMATE } from "@/components/video/VideoScreens";
 import { putHandoff, takeHandoff } from "@/lib/handoff";
-import { imageDownload, webImages, webTraining } from "@/lib/library";
+import { imageDownload, webImages, webStyles, webTraining } from "@/lib/library";
 import { webClient } from "@/lib/run-client";
 import type { ImageMode } from "@wasifyai/client";
 import {
@@ -51,6 +51,8 @@ export function ImageScreen({ mode }: { mode: ImageMode }) {
           preset={start.preset}
           sourceImage={start.source}
           loras={styles}
+          stylesApi={webStyles}
+          stylesReadOnly
           header={
             choices ? (
               <ModelSelect group="images" api={choices} />

@@ -58,6 +58,7 @@ from wasifyai_api.desktop_language import LanguageService
 from wasifyai_api.desktop_language_training import MlxLmTrainer, make_language_trainer
 from wasifyai_api.desktop_model3d import Model3dService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
+from wasifyai_api.desktop_styles import StylesService
 from wasifyai_api.desktop_training import make_trainer
 from wasifyai_api.desktop_video_builder import VideoBuilderService
 from wasifyai_api.desktop_video_training import VIDEO_MODEL, LtxTrainer, make_video_trainer
@@ -104,6 +105,7 @@ class DesktopBackends:
     _worker_cleanup: Any = None
     models: ModelsService | None = None
     discovery: DiscoveryService | None = None
+    styles: StylesService | None = None  # the styles (LoRAs) of the image screens (ADR-0091)
     llama: LlamaServer | None = None
     language: LanguageService | None = None
     vision: VisionService | None = None  # the picture reader of the chosen chat model (ADR-0083)
@@ -268,6 +270,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         own_keys=own_keys,
         models=models,
         discovery=discovery,
+        styles=StylesService(settings.models_dir / "loras", SqliteSettingsStore(engine)),
         llama=llama,
         audio=audio,
         video_builder=VideoBuilderService(settings.desktop_dir),

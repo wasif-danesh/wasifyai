@@ -23,8 +23,9 @@ check "My creations renders" "curl -fsS -m 20 http://localhost:3000/creations | 
 check "prompt enhancing needs a known kind" "test \"\$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{\"kind\":\"nope\",\"prompt\":\"x\"}' http://localhost:3000/api/products/wasifyai-video/prompt/enhance)\" = 422"
 
 # Model aliases live in LiteLLM's database and are seeded by the API (ADR-0025). The local overlay runs
-# with AUTH_MODE=stub, where the dev user is an admin, so ask the API from inside its own pod.
-check "default model aliases are seeded in the gateway" "kubectl -n $NS exec deploy/wasifyai-api -c api -- python -c \"import urllib.request,json,sys; m=json.load(urllib.request.urlopen('http://localhost:8000/admin/models',timeout=20))['models']; sys.exit(0 if len(m)==10 and all(x['source']=='default' for x in m) else 1)\""
+# with AUTH_MODE=stub, where the dev user is an admin, so ask the API from inside its own pod. The
+# expected list is the API's own (model_defaults.yaml), not a number written here.
+check "default model aliases are seeded in the gateway" "kubectl -n $NS exec deploy/wasifyai-api -c api -- python -c \"import urllib.request,json,sys,yaml; from wasifyai_api.model_access import DEFAULTS_FILE; want=set(yaml.safe_load(DEFAULTS_FILE.read_text())['aliases']); m=json.load(urllib.request.urlopen('http://localhost:8000/admin/models',timeout=20))['models']; sys.exit(0 if {x['alias'] for x in m}==want and all(x['source']=='default' for x in m) else 1)\""
 
 # Media pipeline: queue -> worker (stub mode) -> object storage -> completion -> graph resumes.
 # Needs no LLM or GPU, so it also runs in CI.

@@ -2,6 +2,7 @@
 
 - **Status:** Accepted (owner, 2026-10-24: "I'll go with your pick" on all seven questions, recorded in "Owner's answers" below). **Nothing is
   built or started; stage CS0 (the measuring spike) starts only when the owner says.** "Creative Studio" is the owner's working name.
+- **Order and shared parts:** ADR-0096 (2026-10-31): the Motion graphics editor is built first; its screen frame, media rail, Make panel and docked assistant are shared with this product. The consent, safeguard and terms parts below were removed by ADR-0094. CS0 still waits for the owner.
 - **Date:** 2026-10-24
 - **Asked by:** the owner, 2026-10-24: study Maestro's Creative studio, Director and video editor, **do not use its code**, and plan how to
   adopt the concept.

@@ -30,7 +30,8 @@ from wasifyai_platform_sdk.actions.testing import FakeActionHost
 from wasifyai_platform_sdk.sqlite import create_sqlite_engine
 from wasifyai_video.actions import actions, library_kinds
 from wasifyai_video.builder import projects, templates
-from wasifyai_video.builder.index import BuilderIndexSource
+from wasifyai_video.builder.index import BuilderIndexSource, words_of
+from wasifyai_video.builder.runtime import store_for
 from wasifyai_video.builder.store import LEFT_RUNNING, BuilderStore, NotFound, NothingToUndo
 from wasifyai_video.index import video_index_source
 from wasifyai_video.routes import build_routes
@@ -906,3 +907,133 @@ async def test_the_library_lists_renames_and_deletes_compositions(arig):
     deleted = await arig.go("library.delete", gone, person_approved=True)
     assert deleted.status == "ok" and cid in arig.unindexed
     assert (await arig.go("library.get", gone)).status == "refused"
+
+
+# ---- a project of scenes through the catalogue (ADR-0096) ----------------------------------------
+
+SCENE_PROJECT = {
+    "name": "Northbean launch",
+    "shape": "portrait",
+    "scenes": [
+        {"kind": "title", "name": "Hook", "fields": {"title": "Mornings are hard.", "seconds": 4}},
+        {"kind": "quote", "fields": {"quote": "Smooth, not bitter.", "author": "A customer"}},
+        {"kind": "chart", "fields": {"title": "Sales", "data": "North, 120\nSouth, 95"}},
+    ],
+}
+
+
+async def test_a_project_of_scenes_is_written_changed_and_made_through_the_catalogue(arig):
+    made = await arig.go("motion.write_scenes", SCENE_PROJECT)
+    assert made.status == "ok", made
+    cid, ids = made.output["composition_id"], [s["id"] for s in made.output["scenes"]]
+    assert made.output["seconds"] == 14 and made.output["title"] == "Northbean launch"
+    assert arig.state.video_builder.rendered == [], "writing makes nothing"
+    changed = await arig.go(
+        "motion.change_scene",
+        {
+            "composition_id": cid,
+            "scene_id": ids[1],
+            "fields": {"quote": "New words.", "seconds": 6},
+        },
+    )
+    assert changed.status == "ok" and changed.output["seconds"] == 15
+    added = await arig.go(
+        "motion.add_scene",
+        {"composition_id": cid, "kind": "title", "fields": {"title": "Try it."}, "position": 0},
+    )
+    new = added.output["scene_id"]
+    assert added.output["scenes"][0]["id"] == new
+    moved = await arig.go(
+        "motion.move_scene", {"composition_id": cid, "scene_id": new, "position": 3}
+    )
+    assert [s["id"] for s in moved.output["scenes"]] == [*ids, new]
+    copy = await arig.go("motion.duplicate_scene", {"composition_id": cid, "scene_id": ids[0]})
+    assert len(copy.output["scenes"]) == 5
+    gone = await arig.go(
+        "motion.remove_scene", {"composition_id": cid, "scene_id": copy.output["scene_id"]}
+    )
+    assert len(gone.output["scenes"]) == 4
+    rendered = await arig.go("video_builder.render", {"composition_id": cid})
+    assert rendered.status == "ok", rendered
+    assert rendered.output["checked"] is True and rendered.output["seconds"] == 20
+    found = arig.state.creation_index.items[cid][1]  # search finds every scene's words
+    for said in ("Northbean launch", "Mornings are hard", "New words", "South 95", "Try it"):
+        assert said in found
+
+
+def test_a_project_of_scenes_is_indexed_again_from_its_row():
+    slots = templates.normalize_slots(templates.SCENES, SCENE_PROJECT)
+    words = words_of(templates.SCENES, json.dumps(slots))
+    assert "Smooth, not bitter" in words and "North 120" in words
+
+
+async def test_every_project_reads_as_scenes_for_the_window(rig):
+    client, _ = rig if isinstance(rig, tuple) else (rig, None)
+    made = client.post(
+        f"{BASE}/projects",
+        json={"template": "scenes", "slots": SCENE_PROJECT},
+    ).json()
+    assert made["template"] == "scenes" and made["formats"] == ["mp4"]
+    assert [s["name"] for s in made["document"]["scenes"]][0] == "Hook"
+    assert made["title"] == "Northbean launch" and len(made["preview_times"]) == 3
+    bad = client.post(f"{BASE}/projects", json={"template": "scenes", "slots": {"scenes": []}})
+    assert bad.status_code == 422 and "at least one scene" in bad.json()["detail"]["message"]
+    old = client.post(f"{BASE}/projects", json={"template": "title", "slots": SLOTS}).json()
+    assert old["template"] == "title"
+    assert old["document"]["scenes"][0]["fields"]["title"] == "Launch day"
+
+
+async def test_each_change_to_a_scene_is_one_undo(arig):
+    made = await arig.go("motion.write_scenes", SCENE_PROJECT)
+    cid, first = made.output["composition_id"], made.output["scenes"][0]["id"]
+    await arig.go(
+        "motion.change_scene", {"composition_id": cid, "scene_id": first, "fields": {"seconds": 9}}
+    )
+    await arig.go("motion.remove_scene", {"composition_id": cid, "scene_id": first})
+    back = await arig.go("motion.undo", {"composition_id": cid})
+    assert [s["seconds"] for s in back.output["scenes"]] == [9, 5, 5]
+    back = await arig.go("motion.undo", {"composition_id": cid})
+    assert [s["seconds"] for s in back.output["scenes"]] == [4, 5, 5]
+    assert back.output["scenes"][0]["id"] == first
+    none = await arig.go("motion.undo", {"composition_id": cid})
+    assert none.status == "refused" and "nothing to undo" in none.text
+
+
+async def test_a_project_from_a_template_becomes_scenes_on_its_first_change_and_undo_turns_it_back(
+    arig,
+):
+    cid = await title(arig, title="Launch day")
+    before = store_for(arig.state).get_composition("t1", "u1", cid)
+    assert before["template"] == "title"
+    added = await arig.go(
+        "motion.add_scene", {"composition_id": cid, "kind": "title", "fields": {"title": "Two"}}
+    )
+    assert [s["kind"] for s in added.output["scenes"]] == ["title", "title"]
+    now = store_for(arig.state).get_composition("t1", "u1", cid)
+    assert (
+        now["template"] == "scenes" and now["slots"]["scenes"][0]["fields"]["title"] == "Launch day"
+    )
+    await arig.go("motion.undo", {"composition_id": cid})
+    assert store_for(arig.state).get_composition("t1", "u1", cid) | {"updated_at": ""} == before | {
+        "updated_at": ""
+    }
+
+
+async def test_scene_actions_refuse_in_words(arig):
+    made = await arig.go("motion.write_scenes", SCENE_PROJECT)
+    cid, ids = made.output["composition_id"], [s["id"] for s in made.output["scenes"]]
+    bad = await arig.go(
+        "motion.change_scene", {"composition_id": cid, "scene_id": "00000000", "fields": {}}
+    )
+    assert bad.status == "refused" and "not in this project" in bad.text
+    long = await arig.go(
+        "motion.change_scene",
+        {"composition_id": cid, "scene_id": ids[0], "fields": {"seconds": 90}},
+    )
+    assert long.status == "refused" and "would run" in long.text
+    worded = await arig.go(
+        "motion.write_scenes", {"scenes": [{"kind": "title", "fields": {"subtitle": "no title"}}]}
+    )
+    assert worded.status == "refused" and "Scene 1" in worded.text
+    store_for(arig.state).get_composition("t1", "u1", cid)  # a refused change changed nothing
+    assert store_for(arig.state).version_count(cid) == 0

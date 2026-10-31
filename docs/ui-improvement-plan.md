@@ -3,8 +3,8 @@
 From the audit of 2026-10-27 (`docs/ui-audit-2026-10-27.md`, pictures of the real window in
 `docs/ui-audit/desktop/` and of the web app in `docs/ui-audit/`). The aim: one product that feels advanced and is
 easy to use, where a person who has used one screen can use every other, and where the window and the web are
-the same app (ADR-0087). The decisions that are new are ADR-0093 (Proposed); nothing here is built until the
-owner picks the first stage.
+the same app (ADR-0087). The decisions that are new are ADR-0093 (Accepted 2026-10-30); every stage here is
+built (U0 to U12, 2026-10-27 and 2026-10-28).
 
 ## Principles (the whole app)
 

@@ -3,10 +3,14 @@ template, check it, make it, change it, and the compositions as a kind of creati
 
 `motion.make` is the plain-words front door (ADR-0079): the assistant or an agent maps "a lower
 third for Maya Chen, Head of Design" onto a template and its fields, and the words go in verbatim;
-no model retypes them, and the exact-text check refuses a page that does not say them."""
+no model retypes them, and the exact-text check refuses a page that does not say them.
+
+`motion.write_scenes` and the `motion.*_scene` actions work on a project of scenes (ADR-0096). The
+editor's assistant uses them, so one change is one version that `motion.undo` brings back."""
 
 import asyncio
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
@@ -24,7 +28,7 @@ from wasifyai_platform_sdk.actions import (
 )
 from wasifyai_platform_sdk.actions.helpers import need_deps
 
-from wasifyai_video.builder import templates
+from wasifyai_video.builder import scenes, templates
 from wasifyai_video.builder.routes import delete_composition
 from wasifyai_video.builder.runtime import (
     NotFound,
@@ -34,12 +38,16 @@ from wasifyai_video.builder.runtime import (
     manager_for,
     store_for,
 )
+from wasifyai_video.builder.store import NothingToUndo
 
 PRODUCT_ID = "wasifyai-video"
 BUILDER = need_runtime("video-builder")
 SAMPLE_ID = "0b7c1f9e000040008000000000000000"
+SAMPLE_SCENE = "1f2e3d4c"
 TemplateId = Literal["title", "quote", "chart", "lower_third", "captions"]
 Format = Literal["mp4", "webm", "mov"]
+Shape = Literal["landscape", "portrait", "square"]
+Font = Literal["sans", "serif"]
 
 
 def _fields_help() -> str:
@@ -147,6 +155,68 @@ class MotionOut(BaseModel):
     video_id: str | None
     video_uri: str | None
     checked: bool
+
+
+class SceneIn(Strict):
+    kind: TemplateId = Field(description="What the scene is: one of the five templates.")
+    name: str = Field("", max_length=60, description="A short name for the scene.")
+    fields: dict[str, Any] = Field(
+        description=(
+            "The template's words and settings, exactly as they should be shown, without shape and "
+            "font (those are set for the whole project). `seconds` is 5 if not given."
+        )
+    )
+
+
+class WriteScenesIn(Strict):
+    name: str = Field("", max_length=80, description="The project's name.")
+    shape: Shape = Field("landscape", description="The shape of the whole video.")
+    font: Font = Field("sans", description="The letters of the whole video.")
+    scenes: list[SceneIn] = Field(
+        min_length=1, max_length=templates.MAX_SCENES, description="The scenes, in order."
+    )
+
+
+class AddSceneIn(CompositionIn, SceneIn):
+    position: int | None = Field(
+        None, ge=0, description="Where it goes, from 0. At the end if not given."
+    )
+
+
+class SceneRefIn(CompositionIn):
+    scene_id: str = Field(
+        min_length=8, max_length=8, pattern="^[0-9a-f]{8}$",
+        description="The scene, as listed by the project.",
+    )  # fmt: skip
+
+
+class ChangeSceneIn(SceneRefIn):
+    fields: dict[str, Any] = Field(
+        default_factory=dict, description="Only the fields of this scene that change."
+    )
+    name: str | None = Field(None, max_length=60, description="A new name for the scene.")
+
+
+class MoveSceneIn(SceneRefIn):
+    position: int = Field(ge=0, description="Where it goes, from 0.")
+
+
+class SceneOut(BaseModel):
+    id: str
+    name: str
+    kind: str
+    seconds: int
+
+
+class ScenesOut(BaseModel):
+    composition_id: str
+    product_id: str
+    uri: str
+    title: str
+    shape: str
+    seconds: int
+    scenes: list[SceneOut]
+    scene_id: str | None = None
 
 
 def _store(ctx: ActionContext):  # noqa: ANN202
@@ -309,8 +379,197 @@ async def _revise(p: ReviseIn, ctx: ActionContext) -> Outcome:
     )
 
 
+# ---- a project of scenes (ADR-0096) --------------------------------------------------------------
+
+
+def _scenes_out(found: dict[str, Any], scene_id: str | None = None) -> dict[str, Any]:
+    document = templates.as_scenes(found["template"], found["slots"])
+    return {
+        "composition_id": found["id"], "product_id": PRODUCT_ID,
+        "uri": f"wasify://creation/composition/{found['id']}", "title": found["title"],
+        "shape": document["shape"], "seconds": document["seconds"], "scene_id": scene_id,
+        "scenes": [
+            {"id": s["id"], "name": s["name"], "kind": s["kind"], "seconds": s["fields"]["seconds"]}
+            for s in document["scenes"]
+        ],
+    }  # fmt: skip
+
+
+async def _write_scenes(p: WriteScenesIn, ctx: ActionContext) -> Outcome:
+    deps = need_deps(ctx)
+    try:
+        document = templates.normalize_slots(templates.SCENES, p.model_dump())
+    except templates.SlotError as e:
+        return Outcome.refused(str(e), "bad_slot")
+    found = await asyncio.to_thread(
+        store_for(deps.state).add_composition, ctx.actor.tenant_id, ctx.actor.user_id,
+        title=templates.title_of(templates.SCENES, document), template=templates.SCENES,
+        slots=document,
+    )  # fmt: skip
+    await index_composition(deps, ctx.actor, found)
+    return Outcome.ok(
+        _scenes_out(found),
+        f'The project "{found["title"]}" was written: {len(document["scenes"])} scenes, '
+        f"{document['seconds']} seconds. Nothing has been made yet: use video_builder.render to "
+        "make the video.",
+    )
+
+
+async def _edit(
+    ctx: ActionContext, cid: str, words: str, change: Callable[[dict[str, Any]], Any]
+) -> Outcome:
+    """One change to a project's scenes: one version. `change` gives the new document, or the new
+    document and a scene's id. A project made from a template becomes a project of scenes here."""
+    deps = need_deps(ctx)
+    current = _found(ctx, cid)
+    try:
+        made = change(templates.as_scenes(current["template"], current["slots"]))
+    except templates.SlotError as e:
+        return Outcome.refused(str(e), "bad_slot")
+    document, scene_id = made if isinstance(made, tuple) else (made, None)
+    found = await asyncio.to_thread(
+        store_for(deps.state).update_composition, ctx.actor.tenant_id, ctx.actor.user_id, cid,
+        title=templates.title_of(templates.SCENES, document), slots=document,
+        template=templates.SCENES,
+    )  # fmt: skip
+    await index_composition(deps, ctx.actor, found)
+    return Outcome.ok(
+        _scenes_out(found, scene_id),
+        f"{words} The video is now {document['seconds']} seconds, with "
+        f"{len(document['scenes'])} scenes. This can be undone.",
+    )
+
+
+async def _add_scene(p: AddSceneIn, ctx: ActionContext) -> Outcome:
+    return await _edit(
+        ctx, p.composition_id, "The scene was added.",
+        lambda d: scenes.add(d, p.kind, p.fields, p.name, p.position),
+    )  # fmt: skip
+
+
+async def _change_scene(p: ChangeSceneIn, ctx: ActionContext) -> Outcome:
+    return await _edit(
+        ctx, p.composition_id, "The scene was changed.",
+        lambda d: scenes.change(d, p.scene_id, p.fields, p.name),
+    )  # fmt: skip
+
+
+async def _move_scene(p: MoveSceneIn, ctx: ActionContext) -> Outcome:
+    return await _edit(
+        ctx, p.composition_id, "The scene was moved.",
+        lambda d: scenes.move(d, p.scene_id, p.position),
+    )  # fmt: skip
+
+
+async def _duplicate_scene(p: SceneRefIn, ctx: ActionContext) -> Outcome:
+    return await _edit(
+        ctx, p.composition_id, "The scene was copied.", lambda d: scenes.duplicate(d, p.scene_id)
+    )
+
+
+async def _remove_scene(p: SceneRefIn, ctx: ActionContext) -> Outcome:
+    return await _edit(
+        ctx, p.composition_id, "The scene was removed.", lambda d: scenes.remove(d, p.scene_id)
+    )
+
+
+async def _undo(p: CompositionIn, ctx: ActionContext) -> Outcome:
+    deps = need_deps(ctx)
+    try:
+        found = await asyncio.to_thread(
+            store_for(deps.state).undo_composition,
+            ctx.actor.tenant_id, ctx.actor.user_id, p.composition_id,
+        )  # fmt: skip
+    except NothingToUndo:
+        return Outcome.refused("There is nothing to undo.", "nothing_to_undo")
+    await index_composition(deps, ctx.actor, found)
+    return Outcome.ok(_scenes_out(found), f'The last change to "{found["title"]}" was undone.')
+
+
+def _scene_action(
+    action_id: str, title: str, summary: str, description: str, given: type[BaseModel],
+    example: dict[str, Any], call: Callable[..., Any],
+) -> Action:  # fmt: skip
+    """A change to a project of scenes: nothing is drawn, so it needs only the product."""
+    return Action(
+        id=action_id, title=title, summary=summary, description=description, input=given,
+        output=ScenesOut, examples=(example,), effect="change",
+        requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+        bind=CallBinding(call, check=_check_composition), ui="motion",
+    )  # fmt: skip
+
+
 def actions() -> list[Action]:
     return [
+        Action(
+            id="motion.write_scenes", title="Write a video of several scenes",
+            summary="Start a video from a list of scenes, without making it yet.",
+            description=(
+                "Create a Motion graphics project of several scenes, one after another, for a "
+                "promotion, an advert or a social post. Each scene is one of the five templates. "
+                "The words are shown exactly as given. Nothing is rendered; call "
+                "video_builder.render to make the video. " + _fields_help()
+            ),
+            input=WriteScenesIn, output=ScenesOut,
+            examples=({"name": "Northbean launch", "shape": "portrait", "scenes": [
+                {"kind": "title", "name": "Hook", "fields": {"title": "Mornings are hard."}},
+                {"kind": "quote", "fields": {"quote": "Smooth, not bitter.", "seconds": 6}},
+            ]},),
+            effect="make", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+            bind=CallBinding(_write_scenes), ui="motion",
+        ),
+        _scene_action(
+            "motion.add_scene", "Add a scene",
+            "Add a scene to a video project.",
+            "Add one scene to a Motion graphics project, at the end or at a position. A project "
+            "made from one template becomes a project of scenes. Nothing is rendered.",
+            AddSceneIn,
+            {"composition_id": SAMPLE_ID, "kind": "title", "fields": {"title": "Try Northbean."}},
+            _add_scene,
+        ),
+        _scene_action(
+            "motion.change_scene", "Change a scene",
+            "Change the words, length or look of one scene.",
+            (
+                "Change one scene of a Motion graphics project: give only the fields that change. "
+                "The other scenes stay as they are. Nothing is rendered."
+            ),
+            ChangeSceneIn,
+            {"composition_id": SAMPLE_ID, "scene_id": SAMPLE_SCENE, "fields": {"seconds": 4}},
+            _change_scene,
+        ),
+        _scene_action(
+            "motion.move_scene", "Move a scene",
+            "Move a scene earlier or later in a video project.",
+            "Move one scene of a Motion graphics project to a position, from 0.",
+            MoveSceneIn,
+            {"composition_id": SAMPLE_ID, "scene_id": SAMPLE_SCENE, "position": 0},
+            _move_scene,
+        ),
+        _scene_action(
+            "motion.duplicate_scene", "Copy a scene",
+            "Copy a scene, right after itself.",
+            "Copy one scene of a Motion graphics project, right after itself.",
+            SceneRefIn, {"composition_id": SAMPLE_ID, "scene_id": SAMPLE_SCENE}, _duplicate_scene,
+        ),
+        _scene_action(
+            "motion.remove_scene", "Remove a scene",
+            "Take a scene out of a video project.",
+            (
+                "Remove one scene of a Motion graphics project. A project keeps at least one "
+                "scene, and motion.undo brings a removed scene back."
+            ),
+            SceneRefIn, {"composition_id": SAMPLE_ID, "scene_id": SAMPLE_SCENE}, _remove_scene,
+        ),
+        _scene_action(
+            "motion.undo", "Undo the last change",
+            "Bring back a video project as it was before the last change.",
+            (
+                "Undo the last change to a Motion graphics project. Twenty earlier versions are "
+                "kept, so it can be used again to go further back."
+            ),
+            CompositionIn, {"composition_id": SAMPLE_ID}, _undo,
+        ),
         Action(
             id="video_builder.create", title="Write a video project",
             summary="Start a video from a template, without making it yet.",

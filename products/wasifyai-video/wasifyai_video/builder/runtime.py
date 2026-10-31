@@ -156,10 +156,11 @@ class RenderManager:
             raise Refused("too_big", fit["reason"])
         found = store.get_composition(identity.tenant_id, identity.user_id, cid)
         template = templates.get(found["template"])
-        if fmt not in template.formats:
+        formats = templates.formats_of(found["template"], found["slots"])
+        if fmt not in formats:
             raise Refused(
                 "bad_format",
-                f"{template.title} can be made as {', '.join(template.formats)}, not {fmt}.",
+                f"{template.title} can be made as {', '.join(formats)}, not {fmt}.",
             )
         folder = self._write(identity, found, engine)
         row = store.add_render(

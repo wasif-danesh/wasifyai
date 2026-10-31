@@ -132,12 +132,13 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         out = {k: v for k, v in found.items() if k not in ("tenant_id", "user_id")}
         rows = store_for(deps.state).list_renders(identity.tenant_id, identity.user_id, found["id"])
         out["renders"] = [await render_out(identity, r) for r in (rows if detail else rows[:1])]
-        t = templates.get(found["template"])
         out["can_undo"] = store_for(deps.state).version_count(found["id"]) > 0
-        out["formats"] = list(t.formats)
+        out["formats"] = list(templates.formats_of(found["template"], found["slots"]))
         out["preview_times"] = templates.preview_times(found["template"], found["slots"])
         if detail:  # the code view: what the template makes of these words
             out["code"] = templates.render_html(found["template"], found["slots"])
+            # every project reads as scenes: one made from a template is one scene
+            out["document"] = templates.as_scenes(found["template"], found["slots"])
         return out
 
     @router.get("/status")

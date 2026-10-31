@@ -44,3 +44,28 @@ async def test_a_render_left_working_is_failed_by_the_sweep_not_by_opening_the_s
     assert store.fail_stale("0000-01-01", "stopped") == 0  # newer than the cut: still working
     assert store.fail_stale("9999-01-01", "stopped") == 1
     assert store.get_render("t1", "u1", r["id"])["status"] == "failed"
+
+
+async def test_a_template_project_becomes_scenes_and_undo_turns_it_back_on_postgres(store):
+    a = store.add_composition("t1", "u1", title="One", template="title", slots={"title": "One"})
+    doc = {"shape": "landscape", "font": "sans", "name": "", "seconds": 5, "scenes": []}
+    now = store.update_composition("t1", "u1", a["id"], title="One", slots=doc, template="scenes")
+    assert now["template"] == "scenes" and now["slots"] == doc
+    back = store.undo_composition("t1", "u1", a["id"])
+    assert back["template"] == "title" and back["slots"] == {"title": "One"}
+
+
+async def test_tables_from_before_scenes_are_upgraded_on_postgres(store):
+    from wasifyai_api.config import get_settings
+    from wasifyai_video.builder.store import BuilderStore
+
+    a = store.add_composition("t1", "u1", title="One", template="quote", slots={"quote": "One"})
+    store.update_composition("t1", "u1", a["id"], title="Two", slots={"quote": "Two"})
+    with store.db.transaction() as conn:
+        conn.execute("ALTER TABLE versions DROP COLUMN template")
+        conn.execute("UPDATE meta SET value = '2' WHERE key = 'schema'")
+    again = BuilderStore.on_postgres(get_settings().database_url, schema=store.schema)
+    try:
+        assert again.undo_composition("t1", "u1", a["id"])["template"] == "quote"
+    finally:
+        again.close()

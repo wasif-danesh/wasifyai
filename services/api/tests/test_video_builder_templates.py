@@ -14,11 +14,25 @@ import os
 import subprocess
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from wasifyai_api import video_builder_runtime as vb
 from wasifyai_api.desktop_video_builder import VideoBuilderService
+from wasifyai_platform_sdk import (
+    EngineServices,
+    Identity,
+    RouteDeps,
+    ScopedStorage,
+    memory_storage,
+)
+from wasifyai_platform_sdk.actions import ActionExecutor, ActionRegistry, builtin_actions
+from wasifyai_platform_sdk.actions.testing import FakeActionHost
+from wasifyai_platform_sdk.sqlite import create_sqlite_engine
+from wasifyai_video.actions import actions, library_kinds
 from wasifyai_video.builder import check, projects, templates
+from wasifyai_video.builder.store import BuilderStore
+from wasifyai_video.videos import video_store
 
 INSTALL = vb.find_install(Path("/nonexistent"))
 pytestmark = pytest.mark.skipif(
@@ -244,3 +258,155 @@ async def test_a_90_second_video_is_made_in_a_minute_and_holds_the_same_memory(
     # 14 to 33 s on an M5 Pro (a slower Mac has room); a CI runner has no GPU: about 7 minutes
     assert result.seconds < (900 if os.environ.get("CI") else 120)
     assert result.peak_rss_bytes < 3.5 * 2**30  # 2.0 to 2.3 GB measured at 30, 60 and 90 seconds
+
+
+# ---- a project of scenes (ADR-0096): one page through the same sandbox and check ----------------
+
+FILM: dict[str, Any] = {
+    "name": "Northbean launch",
+    "scenes": [
+        {"kind": "title", "fields": {"title": "Mornings are hard.", "theme": "forest",
+                                     "seconds": 3}},
+        {"kind": "quote", "fields": {"quote": "Smooth, not bitter.", "author": "A customer",
+                                     "theme": "sunrise", "seconds": 4}},
+        {"kind": "chart", "fields": {"title": "Sales", "data": "North, 120\nSouth, 95",
+                                     "theme": "paper", "seconds": 5}},
+        {"kind": "lower_third", "fields": {"name": "Maya Chen", "role": "Founder", "seconds": 3}},
+        {"kind": "captions", "fields": {"lines": "One line\nAnother line", "per_line": "2",
+                                        "theme": "paper"}},
+    ],
+}  # fmt: skip
+
+
+def frame_at(path: Path, at: float) -> tuple[int, int, bytes]:
+    info = probe(path)["streams"][0]
+    data = subprocess.run(
+        [tool("ffmpeg"), "-v", "error", "-ss", str(at), "-i", str(path), "-frames:v", "1",
+         "-pix_fmt", "rgb24", "-f", "rawvideo", "-"],
+        capture_output=True, check=True,
+    ).stdout  # fmt: skip
+    return info["width"], info["height"], data
+
+
+def corner(frame: tuple[int, int, bytes]) -> tuple[int, ...]:
+    """The colour just inside the top left: the scene's background, away from any words."""
+    width, _, data = frame
+    at = (8 * width + 8) * 3
+    return tuple(data[at : at + 3])
+
+
+async def test_a_film_passes_the_check_and_each_scene_is_drawn_in_its_own_time(tmp_path, engine):
+    folder, slots = write(tmp_path, engine, templates.SCENES, FILM)
+    assert engine.lint(folder) == []
+    report = await checked(engine, folder, templates.SCENES, slots)
+    assert report["ok"], report["message"]
+    assert report["checked"] == len(templates.expected(templates.SCENES, slots)) > 8
+    out = tmp_path / "film.mp4"
+    result = await engine.render(folder, out, extra_args=("--format", "mp4"))
+    assert result.ok, result.message
+    assert result.blocked == []
+    assert abs(float(probe(out)["format"]["duration"]) - slots["seconds"]) < 0.5
+    colours = [corner(frame_at(out, t)) for t in (1.5, 5.0, 9.5, 13.5, 16.0)]
+    assert len(set(colours)) >= 4, (
+        colours
+    )  # each scene shows its own background, not the last one's
+
+
+async def test_the_check_catches_a_wrong_word_in_a_later_scene(tmp_path, engine):
+    folder, slots = write(tmp_path, engine, templates.SCENES, FILM)
+    page = projects.read_page(folder)
+    (folder / "index.html").write_text(page.replace("Smooth, not bitter.", "Smooth and bitter."))
+    report = await checked(engine, folder, templates.SCENES, slots)
+    assert not report["ok"] and "Smooth and bitter." in report["message"]
+
+
+@pytest.mark.parametrize("case", range(len(CASES)))
+async def test_each_hard_case_passes_as_a_scene_of_a_film(tmp_path, engine, case):
+    kind, fields = CASES[case]
+    fields = dict(fields)
+    shape, font = fields.pop("shape", "landscape"), fields.pop("font", "sans")
+    film = {"shape": shape, "font": font, "scenes": [
+        {"kind": "title", "fields": {"title": "First", "seconds": 3}},
+        {"kind": kind, "fields": fields},
+    ]}  # fmt: skip
+    folder, slots = write(tmp_path, engine, templates.SCENES, film)
+    report = await checked(engine, folder, templates.SCENES, slots)
+    assert report["ok"], report["message"]
+
+
+@pytest.mark.parametrize("template", list(SAMPLES))
+async def test_a_template_looks_the_same_as_one_scene(tmp_path, engine, template):
+    folder, slots = write(tmp_path / "a", engine, template, {**SAMPLES[template], "seconds": 5})
+    one = templates.as_scenes(template, slots)
+    scene_folder, scene_slots = write(tmp_path / "b", engine, templates.SCENES, one)
+    report = await checked(engine, scene_folder, templates.SCENES, scene_slots)
+    assert report["ok"], report["message"]
+    a, b = tmp_path / "a.mp4", tmp_path / "b.mp4"
+    assert (await engine.render(folder, a, extra_args=("--format", "mp4"))).ok
+    assert (await engine.render(scene_folder, b, extra_args=("--format", "mp4"))).ok
+    at = templates.preview_times(template, slots)[2]
+    _, _, x = frame_at(a, at)
+    _, _, y = frame_at(b, at)
+    assert len(x) == len(y)
+    far = sum(abs(p - q) > 24 for p, q in zip(x, y, strict=True))
+    assert far / len(x) < 0.005, f"{far} of {len(x)} values differ"
+
+
+def _reachable_postgres() -> str | None:
+    """The deployment's Postgres, when there is one to test on (`make dev`)."""
+    url = os.environ.get("BUILDER_TEST_DATABASE_URL")
+    return url or None
+
+
+@pytest.fixture(params=["sqlite", "postgres"])
+def film_store(request, tmp_path):
+    if request.param == "sqlite":
+        store = BuilderStore.in_folder(tmp_path / "builder")
+        yield store
+        store.close()
+        return
+    url = _reachable_postgres()
+    if url is None:
+        pytest.skip("set BUILDER_TEST_DATABASE_URL to run this on Postgres")
+    store = BuilderStore.on_postgres(url, schema="builder_t_" + uuid4().hex[:8])
+    yield store
+    store.drop_schema()
+    store.close()
+
+
+async def test_a_film_is_written_changed_and_made_through_the_actions_in_the_real_sandbox(
+    tmp_path, engine, film_store
+):
+    database = create_sqlite_engine(tmp_path / "wasifyai.db")
+    me = Identity("t1", "u1")
+    state = EngineServices(
+        engine=database, storage=ScopedStorage(memory_storage()), desktop_dir=tmp_path,
+        video_builder=engine, creation_index=None, builder_store=film_store,
+    )  # fmt: skip
+    host = FakeActionHost(RouteDeps(state, lambda: me))
+    run = ActionExecutor(
+        ActionRegistry([*builtin_actions(), *actions()]), host,
+        library={k.kind: k for k in library_kinds()},
+    ).run_action  # fmt: skip
+    try:
+        made = await run(
+            "motion.write_scenes",
+            {"name": "Three scenes", "shape": "portrait", "scenes": FILM["scenes"][:2]},
+            "window", actor=me,
+        )  # fmt: skip
+        assert made.status == "ok", made
+        cid = made.output["composition_id"]
+        added = await run(
+            "motion.add_scene",
+            {"composition_id": cid, "kind": "title", "fields": {"title": "Try it", "seconds": 3}},
+            "window", actor=me,
+        )  # fmt: skip
+        assert added.status == "ok", added
+        done = await run("video_builder.render", {"composition_id": cid}, "window", actor=me)
+        assert done.status == "ok", done
+        assert done.output["checked"] is True and done.output["seconds"] == 10
+        clip = await video_store(database).get("t1", "u1", done.output["video_id"])
+        assert clip is not None and clip.status == "done" and clip.mode == "composition"
+        assert (clip.width, clip.height) == templates.SHAPES["portrait"]
+    finally:
+        await database.dispose()

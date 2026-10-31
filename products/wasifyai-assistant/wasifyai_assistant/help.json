@@ -307,6 +307,42 @@
   "body": "# Model and download status\n\nAction: `models.status`\n\n## What it is for\n\nSee whether one model is ready, how far a download is, and the free disk space.\n\n## Steps in the app\n\n1. Open **Model hub**.\n\n## Fields\n\n- `model_id`: Optional: one model.\n\n## Limits\n\n- Nothing.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- Is the speech model ready?\n\n## Problems\n\n- **Desktop only** Models are managed in the desktop app."
  },
  {
+  "action": "motion.add_scene",
+  "title": "Add a scene",
+  "screen": "motion",
+  "synonyms": [
+   "add a scene",
+   "new scene",
+   "one more scene",
+   "add an end card"
+  ],
+  "body": "# Add a scene\n\nAction: `motion.add_scene`\n\n## What it is for\n\nAdd one scene to a video project, at the end or at a position you choose. A project made from one template becomes a project of scenes, and Undo turns it back.\n\n## Steps in the app\n\n1. Ask the assistant to add the scene.\n2. Check it, then choose Make the video.\n\n## Fields\n\n- `composition_id`: The project.\n- `kind`: title, quote, chart, lower_third or captions.\n- `fields`: Its words and settings.\n- `name`: A short name for the scene.\n- `position`: Where it goes, from 0. At the end if not given.\n\n## Limits\n\n- Up to 30 scenes and 90 seconds in all.\n\n## Needs\n\n- Nothing else: the change is only written down. Motion graphics must be set up to make the video.\n\n## Examples\n\n- \"Add an end card that says Try Northbean.\"\n\n## Problems\n\n- A scene or project that does not fit is refused, and the message says what to change. Nothing changes until it is right."
+ },
+ {
+  "action": "motion.change_scene",
+  "title": "Change a scene",
+  "screen": "motion",
+  "synonyms": [
+   "change a scene",
+   "shorten a scene",
+   "edit scene",
+   "change the words of a scene",
+   "make it longer"
+  ],
+  "body": "# Change a scene\n\nAction: `motion.change_scene`\n\n## What it is for\n\nChange the words, length or look of one scene. Give only what changes; the rest of that scene and the other scenes stay as they are.\n\n## Steps in the app\n\n1. Ask the assistant for the change.\n2. Choose Make the video when you are happy with it.\n\n## Fields\n\n- `composition_id`: The project.\n- `scene_id`: The scene.\n- `fields`: Only the fields that change.\n- `name`: A new name for the scene.\n\n## Limits\n\n- Shape and letters are set for the whole project, not for one scene.\n\n## Needs\n\n- Nothing else: the change is only written down. Motion graphics must be set up to make the video.\n\n## Examples\n\n- \"Make scene 2 four seconds long.\"\n\n## Problems\n\n- A scene or project that does not fit is refused, and the message says what to change. Nothing changes until it is right."
+ },
+ {
+  "action": "motion.duplicate_scene",
+  "title": "Copy a scene",
+  "screen": "motion",
+  "synonyms": [
+   "copy a scene",
+   "duplicate a scene",
+   "same scene again"
+  ],
+  "body": "# Copy a scene\n\nAction: `motion.duplicate_scene`\n\n## What it is for\n\nCopy one scene, right after itself, to change the copy.\n\n## Steps in the app\n\n1. Ask the assistant to copy the scene.\n\n## Fields\n\n- `composition_id`: The project.\n- `scene_id`: The scene to copy.\n\n## Limits\n\n- Up to 30 scenes and 90 seconds in all.\n\n## Needs\n\n- Nothing else: the change is only written down. Motion graphics must be set up to make the video.\n\n## Examples\n\n- \"Copy the first scene.\"\n\n## Problems\n\n- A scene or project that does not fit is refused, and the message says what to change. Nothing changes until it is right."
+ },
+ {
   "action": "motion.make",
   "title": "Make a motion graphic",
   "screen": "motion",
@@ -325,6 +361,30 @@
   "body": "# Make a motion graphic\n\nAction: `motion.make`\n\n## What it is for\n\nMake a finished animated graphic in one step: an animated title, a quote that appears word by word,\na bar chart from your own numbers, a lower third (a name strap) or captions. The words and numbers\ngo in exactly as you typed them. Before anything is drawn the page is opened and every word on the\nscreen is checked against what you typed; a misspelt name, a cut-off line or a word too close to\nthe edge stops the video and says which. The video is saved to the Library, and the project stays\nin your library so you can change it. Motion graphics is experimental.\n\n## Steps in the app\n\n1. Open **Motion graphics**.\n2. Say what to make in your own words, for example `Lower third for \"Maya Chen\", Head of Design`,\n   and press the arrow. You can attach a CSV file to chart, and pick a shape. The form opens filled\n   in, with what was understood; check anything it flags. (Or choose \"Or fill in the form\n   yourself\" and pick Animated title, Quote, Bar chart, Lower third or Captions.)\n3. Check the form. For a chart, one line per bar like `Sales, 120`; for captions, one caption per\n   line. Choose a length of 30, 60 or 90 seconds, or type another from 3 to 90.\n4. Choose Preview to see three stills, Check the words to test them alone, then Make the video.\n5. For a lower third or captions, choose WebM or MOV to keep the background clear.\n\n## Fields\n\n- `template`: title, quote, chart, lower_third or captions.\n- `fields`: The words and settings of that template. Title: `title`, `subtitle`. Quote: `quote`,\n  `author`. Chart: `title`, `data` (lines like `North, 120`; 2 to 8 lines; numbers are shown as\n  typed, such as `$1,200` or `45%`). Lower third: `name`, `role`. Captions: `lines` (one per line)\n  and `per_line` (2, 3 or 4 seconds each). All of them also take `shape` (landscape, portrait or\n  square), `seconds` (3 to 90, 30 unless given), `theme` (midnight, sunrise, forest or paper) and\n  `font` (sans or serif).\n- `format`: mp4, webm or mov. webm and mov keep the background clear and are offered for lower\n  thirds and captions.\n- `render`: Set to false to write the project without making the video.\n\n## Limits\n\n- Five templates; the page is built from them, so a freely written page is not possible here.\n- Up to 90 seconds. A 90 second video takes about 15 to 35 seconds to draw on an Apple-silicon\n  Mac and about 2.3 GB of memory, the same as a short one; a transparent MOV of that length is\n  about 140 MB.\n- One video at a time. A video that asks for too much memory or takes too long is stopped.\n- English text is the supported language for now. Other scripts such as Bengali are drawn with the\n  Mac's own fonts and pass the same check.\n- It does not make pictures of things; use image or video generation for those.\n\n## Needs\n\n- Motion graphics set up (a download of about 320 MB, shown before it starts; FFmpeg is part of it) and\n  about 3 GB of free memory. Only Apple-silicon Macs for now.\n\n## Examples\n\n- A lower third for \"Maya Chen\", \"Head of Design\", as a transparent WebM.\n- A chart from the lines `North, 120`, `South, 95` and `East, 150`, titled \"Sales by region\".\n\n## Problems\n\n- **The words on the screen are not exactly what you wrote** The check stopped the video; the\n  message says which word and why. Change the words or choose a shorter text and try again.\n- **Give at least two lines** A chart needs two to eight lines, each like `Sales, 120`.\n- **Choose a language model first** The box that reads your description needs a chat model\n  (Settings › Language). The form works without one.\n- **A video is already being made** Wait for it to finish or cancel it.\n- **Motion graphics needs FFmpeg** This should not happen: FFmpeg comes with Motion graphics. If it does,\n  run `brew install ffmpeg` in Terminal, then choose Check again.\n- **Motion graphics is not set up** Open **Motion graphics** and choose Set up."
  },
  {
+  "action": "motion.move_scene",
+  "title": "Move a scene",
+  "screen": "motion",
+  "synonyms": [
+   "move a scene",
+   "reorder scenes",
+   "put this scene first",
+   "change the order"
+  ],
+  "body": "# Move a scene\n\nAction: `motion.move_scene`\n\n## What it is for\n\nMove one scene earlier or later in a video project.\n\n## Steps in the app\n\n1. Ask the assistant to move the scene.\n2. Choose Make the video to see it in its new place.\n\n## Fields\n\n- `composition_id`: The project.\n- `scene_id`: The scene.\n- `position`: Where it goes, from 0.\n\n## Limits\n\n- A position past the end puts the scene last.\n\n## Needs\n\n- Nothing else: the change is only written down. Motion graphics must be set up to make the video.\n\n## Examples\n\n- \"Put the quote first.\"\n\n## Problems\n\n- A scene or project that does not fit is refused, and the message says what to change. Nothing changes until it is right."
+ },
+ {
+  "action": "motion.remove_scene",
+  "title": "Remove a scene",
+  "screen": "motion",
+  "synonyms": [
+   "remove a scene",
+   "delete a scene",
+   "take out a scene",
+   "drop this scene"
+  ],
+  "body": "# Remove a scene\n\nAction: `motion.remove_scene`\n\n## What it is for\n\nTake one scene out of a video project. Undo brings it back.\n\n## Steps in the app\n\n1. Ask the assistant to remove the scene.\n\n## Fields\n\n- `composition_id`: The project.\n- `scene_id`: The scene to remove.\n\n## Limits\n\n- A project keeps at least one scene. To delete the whole project, delete it from the Library.\n\n## Needs\n\n- Nothing else: the change is only written down. Motion graphics must be set up to make the video.\n\n## Examples\n\n- \"Take out scene 3.\"\n\n## Problems\n\n- A scene or project that does not fit is refused, and the message says what to change. Nothing changes until it is right."
+ },
+ {
   "action": "motion.revise",
   "title": "Change a motion graphic",
   "screen": "motion",
@@ -338,6 +398,32 @@
    "undo"
   ],
   "body": "# Change a motion graphic\n\nAction: `motion.revise`\n\n## What it is for\n\nChange a project you made with Motion graphics and make the video again. Give only what changes: the\nrest stays as it was. The new words are checked against what you typed before anything is drawn. The\nearlier version is kept, and **Undo the last change** on the Motion graphics screen brings it back\n(the last 20 changes are kept).\n\n## Steps in the app\n\n1. Open **Motion graphics** and open the project.\n2. Change the words or the look in the form.\n3. Choose Make the video. Use Undo the last change if you prefer how it was.\n\n## Fields\n\n- `composition_id`: The project to change.\n- `fields`: Only the fields that change, as for Make a motion graphic.\n- `format`: mp4, webm or mov, as the template allows.\n- `render`: Set to false to change the project without making the video again.\n\n## Limits\n\n- A change always asks you first when an assistant proposes it.\n- Twenty earlier versions are kept for each project; older ones are dropped.\n\n## Needs\n\n- Motion graphics set up and about 3 GB of free memory, to make the video again.\n\n## Examples\n\n- Use the forest look for the project \"Launch day\".\n- Fix the spelling of the name in a lower third.\n\n## Problems\n\n- **The length must be between 3 and 90 seconds** Choose a length in the range the message names.\n- **The project does not exist** It may have been deleted; open Motion graphics to see what is left.\n- **The words on the screen are not exactly what you wrote** The change was kept but no video was\n  made; change the words and try again, or choose Undo."
+ },
+ {
+  "action": "motion.undo",
+  "title": "Undo the last change",
+  "screen": "motion",
+  "synonyms": [
+   "undo",
+   "go back",
+   "undo that change",
+   "bring it back",
+   "put it back"
+  ],
+  "body": "# Undo the last change\n\nAction: `motion.undo`\n\n## What it is for\n\nBring a video project back as it was before the last change. Use it again to go further back.\n\n## Steps in the app\n\n1. Choose **Undo the last change** on the Motion graphics screen, or ask the assistant.\n\n## Fields\n\n- `composition_id`: The project.\n\n## Limits\n\n- Twenty earlier versions are kept for each project; older ones are dropped.\n- A video already made stays in the Library.\n\n## Needs\n\n- Nothing else: the change is only written down. Motion graphics must be set up to make the video.\n\n## Examples\n\n- \"Undo that.\"\n\n## Problems\n\n- A scene or project that does not fit is refused, and the message says what to change. Nothing changes until it is right."
+ },
+ {
+  "action": "motion.write_scenes",
+  "title": "Write a video of several scenes",
+  "screen": "motion",
+  "synonyms": [
+   "start a promo",
+   "make an advert",
+   "write a social video",
+   "video with scenes",
+   "several scenes"
+  ],
+  "body": "# Write a video of several scenes\n\nAction: `motion.write_scenes`\n\n## What it is for\n\nStart a video made of several scenes, one after another: for a product promotion, an advert or a social post. Each scene is a title, a quote, a chart, a name strap or captions, and has its own words, length and look. Nothing is drawn until you make the video. The Motion graphics screen for scenes is being built; for now the assistant and other apps can write and change these projects.\n\n## Steps in the app\n\n1. Ask the assistant for the video you want, or use this action from another app.\n2. Check the scenes it wrote.\n3. Choose Make the video.\n\n## Fields\n\n- `name`: The project's name.\n- `shape`: landscape, portrait or square, for the whole video.\n- `font`: sans or serif, for the whole video.\n- `scenes`: The scenes in order. Each has a `kind` (title, quote, chart, lower_third or captions), its `fields` and an optional `name`. A scene is 5 seconds unless `seconds` says otherwise.\n\n## Limits\n\n- Up to 30 scenes and 90 seconds in all.\n- Your words are shown exactly as given.\n\n## Needs\n\n- Writing a project needs nothing else. Motion graphics must be set up to make the video.\n\n## Examples\n\n- \"A 15 second vertical ad for my coffee, three scenes.\"\n\n## Problems\n\n- A scene or project that does not fit is refused, and the message says what to change. Nothing changes until it is right."
  },
  {
   "action": "music.generate",

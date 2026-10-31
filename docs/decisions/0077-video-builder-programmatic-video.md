@@ -2,6 +2,7 @@
 
 - **Status:** Accepted (2026-10-18, by the owner), together with the components it names. Labelled **experimental** in the app. **Renamed from "Compose" to "Video Builder" on 2026-10-18** (working name, chosen by the
   owner; "Compose" clashed with Compose Multiplatform and `docker compose`). Action names are `video_builder.*`.
+- **Superseded in part:** by ADR-0096 (2026-10-31): the visual editor in "Not in v1" is now planned.
 - **Date:** 2026-10-18
 - **Depends on:** ADR-0068 (action catalogue), ADR-0069 (our MCP server), ADR-0072 (the agent), ADR-0066 (speech,
   music, transcripts), ADR-0059 and ADR-0037 (images and generated video), ADR-0041 (searchable), ADR-0047, ADR-0061

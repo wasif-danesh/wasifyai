@@ -4,6 +4,7 @@
   *Video Builder* (ADR-0077's HTML-to-video product) are working names chosen by the owner on 2026-10-18 until better ones
   are found; "Compose" was dropped because it clashes with Compose Multiplatform and `docker compose`.
 - **Superseded in part:** by ADR-0094 (2026-10-29): the words check and the daily limit are removed.
+- **Amended:** by ADR-0096 (2026-10-31): the five templates become scene kinds of a project of scenes; the exact-text check stays.
 - **Date:** 2026-10-18
 - **Depends on:** ADR-0077 (Video Builder: the render engine, sandbox and `video_builder.*` actions), ADR-0068 (action catalogue),
   ADR-0069 (our MCP server), ADR-0070 (trust levels for outside content), ADR-0071 (assistant, `how_to`), ADR-0072

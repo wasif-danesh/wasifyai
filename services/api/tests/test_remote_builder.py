@@ -225,6 +225,24 @@ def test_a_video_is_made_on_the_worker_checked_first_and_becomes_a_library_clip(
     assert web.app_state_items()[done["video_id"]][0] == "video"
 
 
+def test_a_project_of_scenes_is_made_on_the_worker_from_its_document(web):
+    client = web[0] if isinstance(web, tuple) else web
+    body = {"template": "scenes", "slots": {"name": "Film", "scenes": [
+        {"kind": "title", "fields": {"title": "First", "seconds": 3}},
+        {"kind": "quote", "fields": {"quote": "Second", "seconds": 4}},
+    ]}}  # fmt: skip
+    made = client.post("/products/wasifyai-video/builder/projects", json=body)
+    assert made.status_code == 201, made.text
+    project = made.json()
+    assert project["slots"]["seconds"] == 7
+    started = client.post(
+        f"/products/wasifyai-video/builder/projects/{project['id']}/render", json={"format": "mp4"}
+    )
+    assert started.status_code == 202, started.text
+    row = wait_for(client, started.json()["id"])
+    assert row["status"] == "done", row
+
+
 def test_a_preview_still_comes_from_the_worker_and_is_cached(web):
     made = create(web)
     first = web.get(f"{BASE}/projects/{made['id']}/preview?at=1")

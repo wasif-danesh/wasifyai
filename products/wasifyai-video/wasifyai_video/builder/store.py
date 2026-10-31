@@ -16,13 +16,13 @@ from typing import Any
 
 from wasifyai_platform_sdk.sqlstore import PostgresStoreDb, SqliteStoreDb, StoreDb, ddl_for
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 KEEP_VERSIONS = 20  # earlier versions of a composition that can be brought back
 
 _VERSIONS = """
 CREATE TABLE versions(
   id INTEGER PRIMARY KEY AUTOINCREMENT, composition_id TEXT NOT NULL, title TEXT NOT NULL,
-  slots TEXT NOT NULL, saved_at TEXT NOT NULL);
+  slots TEXT NOT NULL, saved_at TEXT NOT NULL, template TEXT);
 CREATE INDEX versions_composition ON versions(composition_id, id DESC);
 """
 _SCHEMA = (
@@ -46,6 +46,13 @@ CREATE INDEX renders_composition ON renders(composition_id, started_at DESC);
 )
 # what version 2 adds to a version 1 file: the exact-text check's report, and earlier versions
 _V2_UPGRADE = "ALTER TABLE renders ADD COLUMN check_report TEXT;" + _VERSIONS
+# what version 3 adds to a version 2 file: a change can turn a template's project into scenes, so a
+# version says which template its slots are for (ADR-0096)
+_V3_UPGRADE = """
+ALTER TABLE versions ADD COLUMN template TEXT;
+UPDATE versions SET template =
+  (SELECT template FROM compositions c WHERE c.id = versions.composition_id);
+"""
 
 LEFT_RUNNING = "The app was closed while this video was being made."
 
@@ -139,6 +146,9 @@ class BuilderStore:
                 raise RuntimeError("builder.db was made by a newer version of this app")
             if version == 1:
                 db.executescript("BEGIN;" + _V2_UPGRADE + "COMMIT;")
+            elif version == 2:
+                db.executescript("BEGIN;" + _V3_UPGRADE + "COMMIT;")
+            if version < SCHEMA_VERSION:
                 db.execute("UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),))
 
     def _init_postgres(self) -> None:
@@ -160,10 +170,17 @@ class BuilderStore:
                 conn.execute("INSERT INTO meta VALUES ('schema', ?)", (str(SCHEMA_VERSION),))
                 return
             row = conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()
-        if not row or int(row["value"]) > SCHEMA_VERSION:
-            raise RuntimeError(
-                "the Motion graphics tables were made by a newer version of this app"
-            )
+            if not row or int(row["value"]) > SCHEMA_VERSION:
+                raise RuntimeError(
+                    "the Motion graphics tables were made by a newer version of this app"
+                )
+            if int(row["value"]) == 2:
+                for statement in _V3_UPGRADE.split(";"):
+                    if statement.strip():
+                        conn.execute(statement)
+                conn.execute(
+                    "UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),)
+                )
 
     def fail_stale(self, before: str, message: str) -> int:
         """Fail renders still working since before `before`: nobody is working on them (a service
@@ -232,14 +249,18 @@ class BuilderStore:
         return [self._composition(r) for r in rows]
 
     def update_composition(
-        self, tenant: str, user: str, cid: str, *, title: str, slots: dict[str, Any]
-    ) -> dict[str, Any]:
+        self, tenant: str, user: str, cid: str, *, title: str, slots: dict[str, Any],
+        template: str | None = None,
+    ) -> dict[str, Any]:  # fmt: skip
+        """Change a composition; the one before it is kept as a version. `template` turns a
+        template's project into a project of scenes (ADR-0096); Undo turns it back."""
         before = self.get_composition(tenant, user, cid)
         with self._connect() as db:
             if before["slots"] != slots:  # a change that changes nothing is not a version
                 db.execute(
-                    "INSERT INTO versions(composition_id, title, slots, saved_at) VALUES (?,?,?,?)",
-                    (cid, before["title"], json.dumps(before["slots"]), now()),
+                    "INSERT INTO versions(composition_id, title, slots, saved_at, template) "
+                    "VALUES (?,?,?,?,?)",
+                    (cid, before["title"], json.dumps(before["slots"]), now(), before["template"]),
                 )
                 db.execute(
                     "DELETE FROM versions WHERE composition_id=? AND id NOT IN "
@@ -247,9 +268,17 @@ class BuilderStore:
                     (cid, cid, KEEP_VERSIONS),
                 )
             db.execute(
-                "UPDATE compositions SET title=?, slots=?, updated_at=? "
+                "UPDATE compositions SET title=?, template=?, slots=?, updated_at=? "
                 "WHERE id=? AND tenant_id=? AND user_id=?",
-                (title, json.dumps(slots), now(), cid, tenant, user),
+                (
+                    title,
+                    template or before["template"],
+                    json.dumps(slots),
+                    now(),
+                    cid,
+                    tenant,
+                    user,
+                ),
             )
         return self.get_composition(tenant, user, cid)
 
@@ -262,10 +291,10 @@ class BuilderStore:
 
     def undo_composition(self, tenant: str, user: str, cid: str) -> dict[str, Any]:
         """Bring back the version before this one (the current one is not kept)."""
-        self.get_composition(tenant, user, cid)
+        current = self.get_composition(tenant, user, cid)
         with self._connect() as db:
             row = db.execute(
-                "SELECT id, title, slots FROM versions WHERE composition_id=? "
+                "SELECT id, title, slots, template FROM versions WHERE composition_id=? "
                 "ORDER BY id DESC LIMIT 1",
                 (cid,),
             ).fetchone()
@@ -273,8 +302,8 @@ class BuilderStore:
                 raise NothingToUndo(cid)
             db.execute("DELETE FROM versions WHERE id=?", (row["id"],))
             db.execute(
-                "UPDATE compositions SET title=?, slots=?, updated_at=? WHERE id=?",
-                (row["title"], row["slots"], now(), cid),
+                "UPDATE compositions SET title=?, template=?, slots=?, updated_at=? WHERE id=?",
+                (row["title"], row["template"] or current["template"], row["slots"], now(), cid),
             )
         return self.get_composition(tenant, user, cid)
 

@@ -30,10 +30,10 @@ def _quote(text: str, limit: int = 40) -> str:
 
 
 def spec_for(template: str, slots: dict[str, Any]) -> dict[str, Any]:
-    t = templates.get(template)
     width, height = templates.SHAPES[slots["shape"]]
     return {
-        "width": width, "height": height, "transparent": t.transparent, "safe": templates.SAFE,
+        "width": width, "height": height, "safe": templates.SAFE,
+        "transparent": templates.is_transparent(template, slots),
         "items": [{"slot": e.slot, "at": e.at} for e in templates.expected(template, slots)],
     }  # fmt: skip
 

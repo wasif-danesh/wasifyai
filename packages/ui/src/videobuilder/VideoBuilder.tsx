@@ -278,7 +278,8 @@ function ProjectList({
   onOpen: (id: string) => void;
   onNew: () => void;
 }) {
-  const kind = (id: string) => catalogue?.templates.find((t) => t.id === id)?.title ?? id;
+  const kind = (id: string) =>
+    id === "scenes" ? "Scenes" : (catalogue?.templates.find((t) => t.id === id)?.title ?? id);
   return (
     <nav aria-label="Your video projects" className="grid min-w-0 gap-2">
       <div className="flex items-center justify-between gap-3">
@@ -446,6 +447,30 @@ function CheckNotice({ check }: { check: BuilderCheck }) {
   );
 }
 
+/** A project of scenes (ADR-0096), written by the assistant or another app. The editor is the next stage (MX2). */
+function ScenesSummary({ project }: { project: BuilderProject }) {
+  const scenes = (project.slots.scenes ?? []) as unknown as {
+    id: string;
+    name: string;
+    fields: { seconds: number };
+  }[];
+  return (
+    <section aria-label="Scenes" className="grid max-w-xl gap-3 p-6">
+      <h1 className="m-0 font-semibold text-lg tracking-tight">{project.title}</h1>
+      <ol className="m-0 grid list-decimal gap-1 ps-5 text-sm">
+        {scenes.map((scene) => (
+          <li key={scene.id}>
+            {scene.name}, {scene.fields.seconds} seconds
+          </li>
+        ))}
+      </ol>
+      <p className="m-0 text-muted-foreground text-sm">
+        Ask the assistant to change these scenes or to make the video.
+      </p>
+    </section>
+  );
+}
+
 function Editor({
   api,
   videos,
@@ -483,6 +508,7 @@ function Editor({
     } else setDraft(blankDraft(template));
   }, [project, template, drafted]);
 
+  if (project?.template === "scenes") return <ScenesSummary project={project} />;
   if (!template) return null;
   const slots = fromDraft(template, draft);
   const dirty =

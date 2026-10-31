@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motion graphics editor: mockup</title>
+<style>
+  /* The real tokens of packages/ui/src/tokens.generated.css (template blue 1.0.0). */
+  :root {
+    color-scheme: light;
+    --bg: light-dark(oklch(97% 0.004 250), oklch(15% 0.012 255));
+    --surface: light-dark(oklch(100% 0 0), oklch(21% 0.014 255));
+    --surface-2: light-dark(oklch(96% 0.006 250), oklch(26% 0.016 255));
+    --text: light-dark(oklch(21% 0.02 255), oklch(95% 0.006 250));
+    --muted: light-dark(oklch(49% 0.02 255), oklch(70% 0.016 255));
+    --border: light-dark(oklch(90% 0.01 250), oklch(34% 0.018 255));
+    --accent: light-dark(oklch(50% 0.17 258), oklch(76% 0.12 250));
+    --on-accent: light-dark(oklch(99% 0 0), oklch(19% 0.04 250));
+    --accent-soft: color-mix(in oklch, var(--accent) 10%, transparent);
+    --ok: light-dark(oklch(52% 0.125 155), oklch(76% 0.15 155));
+    --ok-soft: light-dark(oklch(95% 0.03 140), oklch(28% 0.04 140));
+    --on-ok-soft: light-dark(oklch(42% 0.11 145), oklch(82% 0.12 140));
+    --warn: light-dark(oklch(58% 0.12 70), oklch(82% 0.13 80));
+    --danger: light-dark(oklch(55% 0.19 25), oklch(74% 0.14 25));
+    --scrim: oklch(20% 0.03 255 / 0.84);
+    --radius-sm: 0.5rem;
+    --radius: 0.85rem;
+    --radius-control: 0.65rem;
+    --shadow: 0 1px 2px oklch(22% 0.03 255 / 0.05), 0 12px 30px -16px oklch(30% 0.08 255 / 0.22);
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 var(--font); padding: 14px; }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  svg { flex: none; }
+  h1, h2, h3, p { margin: 0; }
+
+  /* the mockup's own controls, not part of the product */
+  .mock { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; max-width: 1400px; margin: 0 auto 12px; color: var(--muted); font-size: 13px; }
+  .mock strong { color: var(--text); }
+  .grow { flex: 1; min-width: 0; }
+
+  .frame { max-width: 1400px; margin: 0 auto; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg); box-shadow: var(--shadow); }
+  .win { height: 830px; display: grid; grid-template-rows: 48px minmax(0, 1fr) auto; min-height: 0; }
+
+  .btn { display: inline-flex; gap: 6px; align-items: center; justify-content: center; min-height: 32px; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-control); padding: 4px 11px; font-size: 13px; }
+  .btn:hover { background: var(--surface-2); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; font-weight: 600; }
+  .btn.primary:hover { background: color-mix(in oklch, var(--accent) 88%, var(--text)); }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover { background: var(--surface-2); color: var(--text); }
+  .btn.sm { min-height: 26px; padding: 2px 8px; font-size: 12px; }
+  .btn.icon { width: 32px; padding: 0; }
+  .btn.full { width: 100%; }
+  .btn.danger { color: var(--danger); }
+  .seg { display: inline-flex; gap: 2px; border: 1px solid var(--border); border-radius: var(--radius-control); padding: 2px; background: var(--surface-2); }
+  .seg button { border: 0; background: transparent; color: var(--muted); border-radius: var(--radius-sm); padding: 3px 10px; font-size: 12.5px; }
+  .seg button[aria-pressed=true] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px oklch(22% 0.03 255 / .15); }
+  .seg.full { display: flex; } .seg.full button { flex: 1; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .chip { display: inline-flex; gap: 5px; align-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 2px 10px; font-size: 12px; }
+  .chip:hover { background: var(--surface-2); }
+
+  .bar { display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--surface); min-width: 0; }
+  .bar .crumb { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .bar input.name { border: 1px solid transparent; background: transparent; font-weight: 600; font-size: 14px; border-radius: var(--radius-sm); padding: 3px 6px; width: 170px; }
+  .bar input.name:hover { border-color: var(--border); }
+  .saved { display: inline-flex; gap: 5px; align-items: center; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+
+  .body { display: grid; grid-template-columns: 272px minmax(0, 1fr) 332px; min-height: 0; }
+  .panel { background: var(--surface); min-height: 0; display: flex; flex-direction: column; }
+  .panel.left { border-inline-end: 1px solid var(--border); }
+  .panel.right { border-inline-start: 1px solid var(--border); }
+  .scroll { overflow: auto; min-height: 0; flex: 1; padding: 12px; display: grid; gap: 12px; align-content: start; }
+
+  .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 10px; border-bottom: 1px solid var(--border); }
+  .tool { display: grid; justify-items: center; gap: 2px; padding: 7px 2px; border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; color: var(--muted); font-size: 12px; }
+  .tool:hover { background: var(--surface-2); }
+  .tool[aria-pressed=true] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+  .field { display: grid; gap: 4px; }
+  .field > label, .field > .lab { font-size: 12.5px; font-weight: 600; }
+  .hint { font-size: 12px; color: var(--muted); }
+  textarea, input.text, select { width: 100%; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-control); padding: 6px 9px; font-size: 13px; }
+  textarea { resize: vertical; min-height: 54px; }
+  h3 { font-size: 13px; font-weight: 600; }
+  .assets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .asset { aspect-ratio: 1; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); padding: 0; display: grid; place-items: center; overflow: hidden; position: relative; }
+  .asset small { position: absolute; inset-inline-start: 3px; bottom: 2px; font-size: 10px; background: var(--scrim); color: white; border-radius: 4px; padding: 0 4px; }
+  .asset[aria-pressed=true] { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .looks { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .look-btn { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0; background: var(--surface); overflow: hidden; text-align: start; font-size: 12px; }
+  .look-btn span { display: block; padding: 3px 7px; }
+  .look-btn i { display: block; height: 38px; }
+  .look-btn[aria-pressed=true] { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .honest { font-size: 12px; color: var(--muted); border-inline-start: 2px solid var(--border); padding-inline-start: 8px; }
+  .swatches { display: flex; gap: 6px; align-items: center; }
+  .swatch { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border); }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row.between { justify-content: space-between; }
+  .logo-box { display: flex; gap: 10px; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; }
+
+  .center { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; padding: 10px 14px; gap: 8px; }
+  .stage { display: grid; place-items: center; min-height: 0; background: var(--surface-2); border-radius: var(--radius); padding: 10px; overflow: hidden; container-type: size; }
+  .play { width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+  input[type=range] { accent-color: var(--accent); width: 100%; }
+
+  /* the picture itself: sizes are in shares of its width, as a composition's are */
+  .cv { position: relative; container-type: inline-size; overflow: hidden; background: var(--c-bg); color: var(--c-text); font-family: var(--font); user-select: none; }
+  .stage > .cv { box-shadow: 0 8px 28px -10px oklch(10% .02 255 / .5); border-radius: 4px; }
+  .cv .it { position: absolute; }
+  .cv .t { font-weight: 700; line-height: 1.06; letter-spacing: -.01em; white-space: pre-wrap; }
+  .cv .serif { font-family: var(--font-serif); font-weight: 500; }
+  .cv .s { line-height: 1.3; opacity: .86; white-space: pre-wrap; }
+  .cv .cap { position: absolute; inset-inline: 8%; bottom: 4.5%; text-align: center; }
+  .cv .cap span { background: rgb(0 0 0 / .68); color: #fff; padding: .25em .6em; border-radius: .3em; line-height: 1.5; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .cv .logo { position: absolute; font-weight: 700; letter-spacing: .02em; color: var(--c-acc); }
+  .cv .cta { display: inline-block; margin-top: .6em; padding: .4em .9em; border-radius: 99em; background: var(--c-acc); color: var(--c-bg); font-weight: 700; font-size: .8em; }
+  .arrange .it { outline: 1px dashed rgb(255 255 255 / .7); outline-offset: 2px; cursor: move; touch-action: none; }
+  .arrange .it:focus-visible, .arrange .it.on { outline: 2px solid #6ea8ff; }
+  .arrange .h { position: absolute; inset-inline-end: -7px; bottom: -7px; width: 13px; height: 13px; background: #fff; border: 2px solid #3b82f6; border-radius: 3px; cursor: nwse-resize; touch-action: none; }
+
+  .tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 6px; flex: none; }
+  .tabs button { flex: 1; border: 0; background: transparent; color: var(--muted); padding: 10px 6px 8px; border-bottom: 2px solid transparent; font-size: 13px; display: inline-flex; gap: 6px; justify-content: center; align-items: center; }
+  .tabs button[aria-selected=true] { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
+
+  .chat { display: grid; gap: 10px; align-content: start; }
+  .msg.me { justify-self: end; max-width: 88%; background: var(--surface-2); padding: 7px 11px; border-radius: 12px; }
+  .msg.ai { display: grid; gap: 7px; }
+  .change { display: flex; gap: 8px; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 9px; font-size: 12.5px; background: var(--ok-soft); color: var(--on-ok-soft); }
+  .change.undone { background: transparent; color: var(--muted); }
+  .ask { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px; display: grid; gap: 7px; }
+  .composer { border-top: 1px solid var(--border); padding: 10px; display: grid; gap: 7px; flex: none; }
+  .sugg { display: flex; flex-wrap: wrap; gap: 5px; }
+  .box { border: 1px solid var(--border); border-radius: var(--radius); padding: 7px 9px; display: grid; gap: 4px; }
+  .box textarea { border: 0; padding: 0; min-height: 36px; resize: none; background: transparent; outline: none; }
+  .where { font-size: 11.5px; color: var(--muted); display: flex; gap: 5px; align-items: center; }
+
+  .bottom { background: var(--surface); border-top: 1px solid var(--border); padding: 9px 14px; display: grid; gap: 7px; }
+  .strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 4px; }
+  .card { flex: none; width: 138px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); padding: 5px; text-align: start; display: grid; gap: 3px; }
+  .card[aria-current=true] { outline: 2px solid var(--accent); border-color: transparent; }
+  .card.dragging { opacity: .4; }
+  .card .thumb { border-radius: 3px; overflow: hidden; height: 66px; display: grid; place-items: center; background: var(--surface-2); pointer-events: none; }
+  .card .thumb .cv { height: 66px; }
+  .card .foot { display: flex; justify-content: space-between; font-size: 11.5px; gap: 6px; }
+  .card .foot b { font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .add { flex: none; width: 106px; border: 1px dashed var(--border); border-radius: var(--radius-sm); background: transparent; color: var(--muted); font-size: 12.5px; }
+  .add:hover { background: var(--surface-2); color: var(--text); }
+  .lane { display: flex; gap: 9px; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px 10px; font-size: 12.5px; min-height: 34px; }
+  .lane b { font-weight: 600; }
+  .lane input[type=range] { width: 90px; }
+
+  .menu { position: absolute; bottom: 100%; inset-inline-start: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 4px; display: grid; min-width: 170px; z-index: 5; margin-bottom: 4px; }
+  .menu button { border: 0; background: transparent; text-align: start; padding: 5px 8px; border-radius: 6px; font-size: 12.5px; }
+  .menu button:hover { background: var(--surface-2); }
+
+  /* New project */
+  .start { min-height: 660px; display: grid; grid-template-rows: 48px 1fr; }
+  .start-in { padding: 44px 20px; max-width: 800px; width: 100%; margin: 0 auto; display: grid; gap: 22px; align-content: start; }
+  .start-in h1 { font-size: 26px; font-weight: 600; letter-spacing: -.01em; text-align: center; }
+  .bigbox { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow); display: grid; gap: 10px; }
+  .bigbox textarea { border: 0; min-height: 80px; padding: 2px; font-size: 15px; background: transparent; outline: none; resize: none; }
+  .kinds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .kind { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-sm); padding: 9px 10px; text-align: start; display: grid; gap: 1px; }
+  .kind:hover { background: var(--surface-2); }
+  .kind[aria-pressed=true] { outline: 2px solid var(--accent); border-color: transparent; }
+  .kind b { font-weight: 600; font-size: 13px; }
+  .kind span { color: var(--muted); font-size: 11.5px; line-height: 1.3; }
+
+  /* Export dialog */
+  .scrim { position: absolute; inset: 0; background: var(--scrim); display: grid; place-items: center; z-index: 10; padding: 16px; }
+  .dialog { background: var(--surface); border-radius: var(--radius); max-width: 470px; width: 100%; padding: 18px; display: grid; gap: 13px; box-shadow: var(--shadow); }
+  .dialog h2 { font-size: 17px; font-weight: 600; }
+  .check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+  .progress { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+  .progress i { display: block; height: 100%; background: var(--accent); width: 0; }
+
+  /* Phone */
+  .phone-wrap { display: grid; justify-items: center; padding: 18px; }
+  .phone { width: 390px; max-width: 100%; height: 800px; border: 1px solid var(--border); border-radius: 22px; overflow: hidden; display: grid; grid-template-rows: 46px auto auto minmax(0, 1fr) 56px; background: var(--surface); }
+  .phone .stage { container-type: normal; border-radius: 0; height: 330px; }
+  .phone .strip { padding: 7px 10px; border-block: 1px solid var(--border); }
+  .phone .card { width: 96px; } .phone .card .thumb, .phone .card .thumb .cv { height: 54px; }
+  .dock { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--border); }
+  .dock .tool { font-size: 11px; border-radius: 0; }
+
+  .notes { max-width: 1400px; margin: 16px auto 40px; display: grid; gap: 8px; }
+  .notes h2 { font-size: 16px; font-weight: 600; margin-top: 8px; }
+  .notes li { margin-bottom: 4px; }
+  .notes ol, .notes ul { margin: 0; padding-inline-start: 20px; }
+
+  @media (max-width: 1100px) {
+    .frame { overflow: auto; }
+    .win, .start { min-width: 1100px; }
+    .phone-wrap { min-width: 0; }
+    .kinds { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<div class="mock">
+  <span><strong>Motion graphics editor: mockup.</strong> Pictures are sketches drawn for this page, not real output. Nothing saves or renders.</span>
+  <span class="grow"></span>
+  <span class="seg" id="view-seg" role="group" aria-label="Which screen">
+    <button data-view="start">New project</button>
+    <button data-view="editor" aria-pressed="true">Editor</button>
+    <button data-view="phone">Phone</button>
+  </span>
+  <span class="seg" id="theme-seg" role="group" aria-label="Light or dark">
+    <button data-theme="light" aria-pressed="true">Light</button>
+    <button data-theme="dark">Dark</button>
+  </span>
+</div>
+
+<div class="frame" id="frame" style="position:relative"></div>
+
+<section class="notes">
+  <h2>What to try</h2>
+  <ul>
+    <li><b>Assistant tab:</b> press the suggestions. Each change lands in the preview and the scene strip and can be undone from its own card. Making a voiceover says what it costs first.</li>
+    <li><b>Arrange:</b> drag the words and the can on the preview, drag a corner to resize, or use the arrow keys on a focused item.</li>
+    <li><b>Scene strip:</b> pick a scene, drag to reorder, or use the arrows. Change the shape in the top bar. Press play.</li>
+    <li><b>Add panel:</b> Media, Words, Sound, Looks, Make (the other products) and Brand.</li>
+    <li><b>Make the video</b> opens the export dialog, with several shapes at once. <b>New project</b> is the first screen.</li>
+  </ul>
+  <h2>Questions for the owner</h2>
+  <ol>
+    <li><b>The assistant shares the right column with the scene's details, as two tabs.</b> This keeps the preview large. The other way is a fourth column, which leaves the preview small on a laptop. Recommended: two tabs.</li>
+    <li><b>Make sits among the Add tools</b>, not as a screen of its own, so a generated picture goes straight into the scene. Recommended: yes.</li>
+    <li><b>The story strip is scene cards, not a timeline with tracks.</b> This is KinoFold's way and the plan's. Recommended: yes for now.</li>
+    <li><b>The first screen asks what to promote</b>, and the five one-off graphics (title, quote, chart, name strap, captions) stay as a row under it. Recommended: yes.</li>
+    <li><b>Anything to change</b> in the regions, tabs or words? Say what, and the mockup changes before any code.</li>
+  </ol>
+</section>
+
+<script>
+const ICON = {
+  back: '<path d="m15 18-6-6 6-6"/>', next: '<path d="m9 18 6-6-6-6"/>',
+  undo: '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>', redo: '<path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 15-6.7l3 2.7"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3-3a2 2 0 0 0-3 0l-9 9"/>',
+  type: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>', music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  palette: '<circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor"/>', spark: '<path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/>',
+  brand: '<path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 8 2a6 6 0 0 0 3.6-1.2.5.5 0 0 1 .4.5V15a1 1 0 0 1-.4.8A6 6 0 0 1 16 17c-3 0-5-2-8-2a8 8 0 0 0-4 1"/>',
+  play: '<path d="M6 3l15 9-15 9z" fill="currentColor"/>', pause: '<rect x="5" y="3" width="5" height="18" fill="currentColor"/><rect x="14" y="3" width="5" height="18" fill="currentColor"/>',
+  chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>', sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  send: '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>', paperclip: '<path d="m21 11-9 9a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>', mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/>', export: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+};
+const ic = (n, s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const $ = (q, el = document) => el.querySelector(q);
+const $$ = (q, el = document) => [...el.querySelectorAll(q)];
+
+const LOOKS = {
+  brand: { name: 'Your brand', bg: 'linear-gradient(150deg,#12352b,#1d4a3a 60%,#2a5a45)', text: '#f6efe2', acc: '#d9925a', serif: true },
+  night: { name: 'Night', bg: 'radial-gradient(circle at 75% 30%,#3c3266,#172440 48%,#0b1426)', text: '#f8f8f6', acc: '#8fb4ff' },
+  paper: { name: 'Paper', bg: 'linear-gradient(135deg,#efe3d0,#d8c9ab)', text: '#302e2a', acc: '#b4532a', serif: true },
+  sage: { name: 'Sage', bg: 'linear-gradient(135deg,#d8e0c5,#9bac95)', text: '#27302a', acc: '#2f6650' },
+  pulse: { name: 'Pulse', bg: 'linear-gradient(135deg,#4a2060,#181820)', text: '#f8f6fb', acc: '#ff7ab6' },
+  sunrise: { name: 'Sunrise', bg: 'linear-gradient(160deg,#2a0f2e,#7a2f3b 70%,#c9713f)', text: '#fff4e6', acc: '#ffb347' },
+};
+const SHAPES = { '16:9': [16, 9], '9:16': [9, 16], '1:1': [1, 1], '4:5': [4, 5] };
+const TALL = (s) => s === '9:16';
+// words as a share of the picture's width, per shape: title, line underneath, captions, logo
+const SIZE = { '16:9': [6.4, 2.5, 2.2, 1.9], '1:1': [7.6, 3.2, 3, 2.6], '4:5': [8.2, 3.4, 3.2, 2.8], '9:16': [10.4, 4.3, 3.8, 3.3] };
+
+function rects(title, sub, img) { return { title, sub, img }; }
+const scene = (o) => ({ transition: 'fade', caption: '', sub: '', look: 'night', sound: '', ...o });
+function startScenes() {
+  return [
+    scene({ id: 'a', name: 'Hook', title: 'Mornings are hard.', sub: 'Your coffee should not be.', dur: 4, caption: 'Mornings are hard.',
+      wide: rects({ x: 8, y: 32, w: 50 }, { x: 8, y: 58, w: 50 }, { x: 66, y: 14, w: 20 }), tall: rects({ x: 8, y: 14, w: 84 }, { x: 8, y: 31, w: 84 }, { x: 30, y: 44, w: 40 }) }),
+    scene({ id: 'b', name: 'Product', title: 'Steeped for 18 hours.', sub: 'Never heated. Never rushed.', dur: 6, caption: 'We steep it for eighteen hours.',
+      wide: rects({ x: 8, y: 30, w: 50 }, { x: 8, y: 60, w: 50 }, { x: 62, y: 8, w: 26 }), tall: rects({ x: 8, y: 12, w: 84 }, { x: 8, y: 30, w: 84 }, { x: 26, y: 42, w: 48 }) }),
+    scene({ id: 'c', name: 'Proof', title: 'Smooth, not bitter.', sub: 'Three ingredients. No sugar.', dur: 5, caption: 'Three ingredients. No sugar.', look: 'night', transition: 'slide',
+      wide: rects({ x: 34, y: 34, w: 58 }, { x: 34, y: 60, w: 58 }, { x: 8, y: 14, w: 20 }), tall: rects({ x: 8, y: 50, w: 84 }, { x: 8, y: 68, w: 84 }, { x: 32, y: 8, w: 36 }) }),
+    scene({ id: 'd', name: 'End card', title: 'Try Northbean.', sub: 'northbean.example', dur: 5, cta: 'Get 20% off your first box',
+      wide: rects({ x: 8, y: 26, w: 56 }, { x: 8, y: 48, w: 56 }, { x: 66, y: 14, w: 20 }), tall: rects({ x: 8, y: 58, w: 84 }, { x: 8, y: 72, w: 84 }, { x: 30, y: 10, w: 40 }) }),
+  ];
+}
+
+const S = {
+  view: 'editor', theme: 'light', tool: 'media', tab: 'assistant', mode: 'preview', shape: '9:16', sel: 0, t: 0.9, playing: false,
+  title: 'Northbean launch', scenes: startScenes(), music: 'Slow sunrise', voice: false, volume: 40, logo: true,
+  past: [], future: [], addOpen: false, dialog: false, exporting: 0, makeTab: 'picture', kind: 'promo',
+  chat: [
+    { me: true, text: 'A 20 second vertical ad for this can of cold brew. Calm, for people who hate mornings.', file: 'northbean-can.png' },
+    { text: 'I wrote four scenes from your picture: a hook, the product, why it is different, and an end card with an offer. The words are mine, so change anything you like.', change: { text: 'Made 4 scenes, 20 seconds', id: 'first' } },
+  ],
+};
+
+const snap = () => JSON.stringify({ scenes: S.scenes, music: S.music, voice: S.voice, shape: S.shape, logo: S.logo });
+function restore(j) { const o = JSON.parse(j); Object.assign(S, o); S.sel = Math.min(S.sel, S.scenes.length - 1); }
+function commit(label, fn) { S.past.push({ label, state: snap() }); S.future = []; fn(); flashSaved(); }
+function undo() { const u = S.past.pop(); if (!u) return; S.future.push({ label: u.label, state: snap() }); restore(u.state); render(); }
+function redo() { const r = S.future.pop(); if (!r) return; S.past.push({ label: r.label, state: snap() }); restore(r.state); render(); }
+let savedTimer;
+function flashSaved() { const el = $('#saved'); if (!el) return; el.innerHTML = '<span class="dot" style="background:var(--warn)"></span>Saving'; clearTimeout(savedTimer); savedTimer = setTimeout(() => { const e = $('#saved'); if (e) e.innerHTML = '<span class="dot"></span>Saved'; }, 500); }
+
+const total = () => S.scenes.reduce((a, s) => a + s.dur, 0);
+const startOf = (i) => S.scenes.slice(0, i).reduce((a, s) => a + s.dur, 0);
+const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+const cur = () => S.scenes[S.sel];
+const R = (s) => (TALL(S.shape) ? s.tall : s.wide);
+
+function can(look) {
+  return `<svg viewBox="0 0 60 120" style="width:100%;display:block" aria-hidden="true">
+    <rect x="6" y="6" width="48" height="108" rx="7" fill="${look.acc}"/><rect x="6" y="6" width="16" height="108" rx="7" fill="#fff" opacity=".16"/>
+    <rect x="10" y="2" width="40" height="7" rx="3" fill="#c9ccd1"/><rect x="10" y="111" width="40" height="6" rx="3" fill="#a9acb1"/>
+    <text x="30" y="58" text-anchor="middle" font-family="Georgia,serif" font-size="7.5" font-weight="700" fill="${look.text === '#f8f8f6' ? '#10203c' : '#12352b'}">Northbean</text>
+    <text x="30" y="70" text-anchor="middle" font-family="sans-serif" font-size="5.5" fill="${look.text === '#f8f8f6' ? '#10203c' : '#12352b'}">cold brew</text></svg>`;
+}
+
+function canvasHTML(s, arrange) {
+  const L = LOOKS[s.look]; const r = R(s); const [, , cSize, logoSize] = SIZE[S.shape]; const tall = TALL(S.shape);
+  const handle = arrange ? '<i class="h" data-h="1"></i>' : '';
+  const it = (key, inner, cls, delay) => `<div class="it ${cls}" tabindex="${arrange ? 0 : -1}" data-key="${key}" data-delay="${delay}" style="left:${r[key].x}%;top:${r[key].y}%;width:${r[key].w}%">${inner}${handle}</div>`;
+  return `<div class="cv ${arrange ? 'arrange' : ''}" style="--c-bg:${L.bg};--c-text:${L.text};--c-acc:${L.acc};background:${L.bg};aspect-ratio:${SHAPES[S.shape].join('/')}">
+    ${it('img', can(L), 'img', 0.15)}
+    ${it('title', esc(s.title), `t ${L.serif ? 'serif' : ''}`, 0)}
+    ${it('sub', esc(s.sub) + (s.cta ? `<br><span class="cta">${esc(s.cta)}</span>` : ''), 's', 0.25)}
+    ${s.caption ? `<div class="cap" data-delay="0.3" style="font-size:${cSize}cqw"><span>${esc(s.caption)}</span></div>` : ''}
+    ${S.logo ? `<div class="logo ${L.serif ? 'serif' : ''}" style="font-size:${logoSize}cqw;${tall ? 'right:5%;top:3%' : 'right:3%;top:4%'}">Northbean</div>` : ''}
+  </div>`;
+}
+function sizeText(root) {
+  const [title, sub] = SIZE[S.shape];
+  $$('.it.t', root).forEach((e) => { e.style.fontSize = `${title}cqw`; });
+  $$('.it.s', root).forEach((e) => { e.style.fontSize = `${sub}cqw`; });
+}
+function fitCanvas(stage) {
+  const cv = stage.firstElementChild; if (!cv) return;
+  const [a, b] = SHAPES[S.shape];
+  const W = stage.clientWidth - 20; const H = stage.clientHeight - 20;
+  const scale = Math.min(W / a, H / b);
+  cv.style.width = `${Math.floor(a * scale)}px`;
+}
+function animate(stage, local, s) {
+  const cv = stage?.firstElementChild; if (!cv) return;
+  const still = S.mode === 'arrange';
+  $$('[data-delay]', cv).forEach((e) => {
+    const d = Number(e.dataset.delay);
+    const p = still || s.transition === 'none' ? 1 : Math.max(0, Math.min(1, (local - d) / 0.4));
+    const eased = 1 - (1 - p) ** 3;
+    e.style.opacity = eased;
+    const slide = s.transition === 'slide' ? 8 : 3;
+    let tr = still ? '' : `translateY(${(1 - eased) * slide}cqw)`;
+    if (e.classList.contains('img') && !still) tr += ` scale(${1 + (local / s.dur) * 0.05})`;
+    e.style.transform = tr;
+  });
+}
+
+/* ---- the panels ---- */
+const TOOLS = [['media', 'Media', 'image'], ['words', 'Words', 'type'], ['sound', 'Sound', 'music'], ['looks', 'Looks', 'palette'], ['make', 'Make', 'spark'], ['brand', 'Brand', 'brand']];
+function leftPanel() {
+  const s = cur();
+  const body = {
+    media: () => `
+      <h3>Photos and clips</h3>
+      <p class="hint">Add to scene ${S.sel + 1}. MP4 or MOV with H.264 works best.</p>
+      <div class="row"><button class="btn full">From Library</button><button class="btn full">From this computer</button></div>
+      <h3>In this project</h3>
+      <div class="assets">
+        <button class="asset" aria-pressed="true" aria-label="northbean-can.png">${`<span style="width:30%">${can(LOOKS.brand)}</span>`}<small>can</small></button>
+        <button class="asset" aria-label="Pouring clip" style="background:linear-gradient(135deg,#513521,#b9855b)"><small>0:06</small></button>
+        <button class="asset" aria-label="Kitchen picture" style="background:linear-gradient(135deg,#cdd7c6,#f0e2c7)"><small>kitchen</small></button>
+      </div>
+      <div class="row"><button class="btn full sm">Use as background</button><button class="btn full sm">Place on scene</button></div>
+      <button class="btn ghost sm" style="justify-self:start">Save this scene as a picture</button>`,
+    words: () => `
+      <h3>Add words</h3>
+      <div class="row" style="flex-wrap:wrap">
+        <button class="chip" data-do="caption">Captions</button><button class="chip" data-do="cta">Button with an offer</button><button class="chip">Extra line</button>
+      </div>
+      <h3>Layout</h3>
+      <p class="hint">Starts a layout you can still move in Arrange.</p>
+      <div class="assets">
+        ${[['Centered', 'c'], ['Title at top', 't'], ['Title at bottom', 'b']].map(([n, k]) => `<button class="asset" style="aspect-ratio:1/.8;font-size:11px" data-layout="${k}">${n}</button>`).join('')}
+      </div>
+      <h3>Captions from speech</h3>
+      <p class="hint">When a scene has a voiceover, the captions follow its words.</p>
+      <button class="btn full sm">Make captions from the voiceover</button>`,
+    sound: () => `
+      <h3>Sound for scene ${S.sel + 1}</h3>
+      <p class="hint">Plays only during this scene. Music for the whole video is in the row at the bottom.</p>
+      <button class="btn full">Add a sound</button>
+      <h3>Voiceover</h3>
+      <div class="field"><label for="vo">What it says</label><textarea id="vo">${esc(s.caption)}</textarea></div>
+      <select aria-label="Voice"><option>Calm, warm (saved voice)</option><option>Bright</option></select>
+      <p class="honest">On this computer, about 20 seconds for the whole video.</p>
+      <button class="btn primary full" data-do="voice">${ic('mic', 14)} Make the voiceover</button>`,
+    looks: () => `
+      <h3>Look of scene ${S.sel + 1}</h3>
+      <div class="looks">${Object.entries(LOOKS).map(([k, l]) => `<button class="look-btn" data-look="${k}" aria-pressed="${s.look === k}"><i style="background:${l.bg}"></i><span>${l.name}</span></button>`).join('')}</div>
+      <button class="btn sm" data-do="lookall">Use this look on every scene</button>`,
+    make: () => `
+      <div class="seg full" role="group" aria-label="What to make">${[['picture', 'Picture'], ['clip', 'Clip'], ['speech', 'Speech'], ['song', 'Music']].map(([k, n]) => `<button data-make="${k}" aria-pressed="${S.makeTab === k}">${n}</button>`).join('')}</div>
+      ${{ picture: `<div class="field"><label for="mk">Describe the picture</label><textarea id="mk">A can of cold brew on a kitchen table, soft morning light</textarea></div><p class="honest">About 13 seconds. Fits this computer. Uses your Image model.</p><button class="btn primary full">Make the picture</button>`,
+        clip: `<div class="field"><label for="mk">Describe the motion</label><textarea id="mk">Slow push in on the can, steam in the light</textarea></div><p class="honest">A 5 second clip takes about 4 minutes. Starts from the picture in this scene.</p><button class="btn primary full">Make the clip</button>`,
+        speech: `<div class="field"><label for="mk">What it says</label><textarea id="mk">${esc(s.caption)}</textarea></div><p class="honest">On this computer, a few seconds.</p><button class="btn primary full">Make the speech</button>`,
+        song: `<div class="field"><label for="mk">Describe the music</label><textarea id="mk">Warm, slow acoustic, 20 seconds</textarea></div><p class="honest">About a minute on this computer. Goes in the row at the bottom.</p><button class="btn primary full">Make the music</button>` }[S.makeTab]}
+      <p class="hint">Goes to scene ${S.sel + 1} and to your Library. Nothing replaces what is in the scene until you choose it.</p>`,
+    brand: () => `
+      <h3>Northbean</h3>
+      <p class="hint">Used in every project. The Your brand look comes from this.</p>
+      <div class="logo-box"><span style="font:700 15px var(--font-serif);color:#12352b;background:#f6efe2;padding:6px 8px;border-radius:6px">Northbean</span><button class="btn sm">Change logo</button></div>
+      <label class="check"><input type="checkbox" data-do="logo" ${S.logo ? 'checked' : ''}> Show the logo on every scene</label>
+      <div class="field"><span class="lab">Colours</span><div class="swatches"><span class="swatch" style="background:#12352b"></span><span class="swatch" style="background:#f6efe2"></span><span class="swatch" style="background:#d9925a"></span><button class="btn sm">Change</button></div></div>
+      <div class="field"><label for="bf">Fonts</label><select id="bf"><option>Source Serif 4 and Inter</option><option>Inter only</option></select></div>
+      <div class="field"><label for="bc">Your link and offer</label><input class="text" id="bc" value="northbean.example"></div>
+      <button class="btn sm" data-do="brandall">Use the brand on this project</button>`,
+  }[S.tool]();
+  return `<div class="tools" role="group" aria-label="Add to your video">${TOOLS.map(([k, n, i]) => `<button class="tool" data-tool="${k}" aria-pressed="${S.tool === k}">${ic(i, 18)}${n}</button>`).join('')}</div><div class="scroll">${body}</div>`;
+}
+
+function rightPanel() {
+  const tabs = `<div class="tabs" role="tablist"><button role="tab" data-tab="assistant" aria-selected="${S.tab === 'assistant'}">${ic('chat', 14)} Assistant</button><button role="tab" data-tab="scene" aria-selected="${S.tab === 'scene'}">${ic('sliders', 14)} Scene ${S.sel + 1}</button></div>`;
+  if (S.tab === 'scene') {
+    const s = cur();
+    return `${tabs}<div class="scroll">
+      <div class="field"><label for="f-title">What does this scene say?</label><textarea id="f-title" data-field="title">${esc(s.title)}</textarea></div>
+      <div class="field"><label for="f-sub">A line underneath</label><textarea id="f-sub" data-field="sub" style="min-height:40px">${esc(s.sub)}</textarea></div>
+      <div class="field"><label for="f-cap">Captions</label><textarea id="f-cap" data-field="caption" style="min-height:40px">${esc(s.caption)}</textarea></div>
+      <div class="field"><span class="lab">How long is it on screen?</span>
+        <div class="row"><button class="btn icon" data-dur="-1" aria-label="One second less">−</button><b style="min-width:70px;text-align:center">${s.dur} seconds</b><button class="btn icon" data-dur="1" aria-label="One second more">+</button></div>
+        <span class="hint">${s.title.split(/\s+/).length + s.sub.split(/\s+/).length} words. People need about ${Math.max(2, Math.ceil((s.title.split(/\s+/).length + s.sub.split(/\s+/).length) / 2.5))} seconds to read them.</span></div>
+      <div class="field"><span class="lab">How it starts</span><span class="seg full" role="group" aria-label="How it starts">${[['none', 'Cut'], ['fade', 'Fade'], ['slide', 'Slide']].map(([k, n]) => `<button data-trans="${k}" aria-pressed="${s.transition === k}">${n}</button>`).join('')}</span></div>
+      <div class="field"><label for="f-look">Look</label><select id="f-look" data-sel-look>${Object.entries(LOOKS).map(([k, l]) => `<option value="${k}" ${s.look === k ? 'selected' : ''}>${l.name}</option>`).join('')}</select></div>
+      <div class="row"><button class="btn full" data-do="dup">Duplicate</button><button class="btn full danger" data-do="remove" ${S.scenes.length < 2 ? 'disabled' : ''}>Remove</button></div>
+    </div>`;
+  }
+  const msgs = S.chat.map((m) => (m.me
+    ? `<div class="msg me">${m.file ? `<div class="chip" style="margin-bottom:5px">${ic('image', 12)} ${esc(m.file)}</div><br>` : ''}${esc(m.text)}</div>`
+    : `<div class="msg ai"><div>${esc(m.text)}</div>
+        ${m.change ? (() => { const off = m.change.mark !== undefined && S.past.length <= m.change.mark; return `<div class="change ${off ? 'undone' : ''}">${ic('check', 14)}<span class="grow">${esc(m.change.text)}${off ? ' (undone)' : ''}</span>${m.change.mark !== undefined && !off ? `<button class="btn sm" data-undo-chat="${m.change.id}">Undo</button>` : ''}</div>`; })() : ''}
+        ${m.ask && !m.ask.done ? `<div class="ask"><b>${esc(m.ask.title)}</b><span class="small muted">${esc(m.ask.cost)}</span><div class="row"><button class="btn primary sm" data-ask="${m.ask.id}">${esc(m.ask.yes)}</button><button class="btn sm" data-ask-no="${m.ask.id}">Not now</button></div></div>` : ''}
+      </div>`)).join('');
+  const suggestions = [['shorter', 'Shorten scene 2'], ['brand', 'Use our brand colours'], ['voice', 'Add a voiceover'], ['square', 'Make a square version']];
+  return `${tabs}<div class="scroll" id="chat-scroll"><div class="chat">${msgs}</div></div>
+    <div class="composer">
+      <div class="sugg">${suggestions.map(([k, n]) => `<button class="chip" data-say="${k}">${n}</button>`).join('')}</div>
+      <div class="box"><div class="where">Working on ${esc(S.title)}, scene ${S.sel + 1}</div>
+        <textarea id="say" aria-label="Ask for a change" placeholder="Ask for a change"></textarea>
+        <div class="row between"><button class="btn ghost icon" aria-label="Attach a picture">${ic('paperclip', 15)}</button><span class="chip" title="The model the assistant uses">Qwen3.5-9B</span><button class="btn primary icon" data-send aria-label="Send">${ic('send', 15)}</button></div>
+      </div>
+    </div>`;
+}
+
+function strip() {
+  return S.scenes.map((s, i) => `<button class="card" draggable="true" data-i="${i}" aria-current="${i === S.sel}" aria-label="Scene ${i + 1}, ${esc(s.name)}, ${s.dur} seconds">
+    <span class="thumb">${canvasHTML(s, false)}</span>
+    <span class="foot"><b>${i + 1}. ${esc(s.name)}</b><span class="muted">${fmt(s.dur)}</span></span></button>`).join('');
+}
+
+function editor() {
+  const s = cur();
+  return `<div class="win">
+    <div class="bar">
+      <span class="crumb">Motion graphics</span><span class="muted">/</span>
+      <input class="name" id="title" value="${esc(S.title)}" aria-label="Project name">
+      <span class="saved" id="saved"><span class="dot"></span>Saved</span>
+      <span class="grow"></span>
+      <span class="seg" role="group" aria-label="Shape">${Object.keys(SHAPES).map((k) => `<button data-shape="${k}" aria-pressed="${S.shape === k}">${k}</button>`).join('')}</span>
+      <span class="grow"></span>
+      <button class="btn ghost icon" data-do="undo" aria-label="Undo${S.past.length ? ': ' + esc(S.past[S.past.length - 1].label) : ''}" title="Undo${S.past.length ? ': ' + esc(S.past[S.past.length - 1].label) : ''}" ${S.past.length ? '' : 'disabled'}>${ic('undo')}</button>
+      <button class="btn ghost icon" data-do="redo" aria-label="Redo" ${S.future.length ? '' : 'disabled'}>${ic('redo')}</button>
+      <button class="btn primary" data-do="export">${ic('export', 14)} Make the video</button>
+    </div>
+    <div class="body">
+      <aside class="panel left" aria-label="Add to your video">${leftPanel()}</aside>
+      <main class="center">
+        <div class="row between">
+          <div class="row"><button class="btn ghost icon" data-go="-1" aria-label="Scene before">${ic('back')}</button><b>Scene ${S.sel + 1} of ${S.scenes.length}</b><button class="btn ghost icon" data-go="1" aria-label="Scene after">${ic('next')}</button></div>
+          <span class="seg" role="group" aria-label="Watch or arrange"><button data-mode="preview" aria-pressed="${S.mode === 'preview'}">Watch</button><button data-mode="arrange" aria-pressed="${S.mode === 'arrange'}">Arrange</button></span>
+        </div>
+        <div class="stage" id="stage">${canvasHTML(s, S.mode === 'arrange')}</div>
+        <div class="row">
+          <button class="play" data-do="play" aria-label="${S.playing ? 'Pause' : 'Play'}">${ic(S.playing ? 'pause' : 'play', 14)}</button>
+          <span class="small muted" id="clock" style="min-width:32px">${fmt(S.t)}</span>
+          <input type="range" id="seek" min="0" max="${total()}" step="0.05" value="${S.t}" aria-label="Move through the video">
+          <span class="small muted">${fmt(total())}</span>
+        </div>
+      </main>
+      <aside class="panel right" aria-label="Assistant and scene details">${rightPanel()}</aside>
+    </div>
+    <div class="bottom">
+      <div class="row between small"><b>Your scenes</b><span class="row muted"><span>${S.scenes.length} scenes, ${fmt(total())}</span>
+        <button class="btn ghost icon" data-move="-1" aria-label="Move this scene earlier" ${S.sel === 0 ? 'disabled' : ''}>${ic('back', 14)}</button>
+        <button class="btn ghost icon" data-move="1" aria-label="Move this scene later" ${S.sel === S.scenes.length - 1 ? 'disabled' : ''}>${ic('next', 14)}</button></span></div>
+      <div class="strip" id="strip">${strip()}
+        <span style="position:relative;flex:none;display:grid"><button class="add" data-do="addmenu" aria-expanded="${S.addOpen}">+ Add a scene</button></span></div>
+      ${S.addOpen ? `<div style="position:relative;height:0"><div class="menu" style="inset-inline-start:${Math.min(S.scenes.length * 146, 800)}px"><button data-add="words">A few words</button><button data-add="media">A photo or clip</button><button data-add="ask">Ask the assistant</button></div></div>` : ''}
+      <div class="lane">${ic('music', 14)}<b>Music for the whole video</b>
+        ${S.music ? `<span class="muted">${esc(S.music)}</span><span class="grow"></span><label class="row small muted">Volume <input type="range" min="0" max="100" value="${S.volume}" aria-label="Music volume"></label><button class="btn sm">Change</button><button class="btn sm" data-do="nomusic">Remove</button>`
+    : '<span class="grow"></span><button class="btn sm" data-do="music">Add music</button>'}</div>
+      ${S.voice ? `<div class="lane">${ic('mic', 14)}<b>Voiceover</b><span class="muted">Calm, warm. Music dips while it speaks.</span><span class="grow"></span><button class="btn sm" data-do="novoice">Remove</button></div>` : ''}
+    </div>
+    ${S.dialog ? exportDialog() : ''}
+  </div>`;
+}
+
+function exportDialog() {
+  const done = S.exporting >= 100;
+  return `<div class="scrim" role="dialog" aria-modal="true" aria-labelledby="dlg"><div class="dialog">
+    <h2 id="dlg">${done ? 'Your videos are in the Library' : 'Make the video'}</h2>
+    ${S.exporting > 0 ? `
+      <div class="grid" style="display:grid;gap:5px"><span class="small">${done ? 'Finished. The words on screen match the project.' : `Making ${S.exportShapes.join(', ')}. You can leave this screen.`}</span><div class="progress"><i style="width:${S.exporting}%"></i></div></div>
+      <div class="row between">${done ? '<button class="btn" data-do="closedlg">Close</button><button class="btn primary">Open in Library</button>' : '<span></span><button class="btn" data-do="closedlg">Stop</button>'}</div>`
+    : `<div class="field"><span class="lab">Shapes</span>
+        ${[['9:16', 'Stories, Reels, TikTok'], ['1:1', 'Square posts'], ['4:5', 'Feed posts'], ['16:9', 'YouTube, websites']].map(([k, n]) => `<label class="check"><input type="checkbox" data-shape-out="${k}" ${k === S.shape ? 'checked' : ''}> ${k} <span class="muted small">${n}</span></label>`).join('')}</div>
+      <div class="field"><span class="lab">Quality</span><span class="seg full" role="group" aria-label="Quality"><button>Draft</button><button aria-pressed="true">High</button><button>Best</button></span></div>
+      <p class="honest">About 1 minute for each shape, 40 MB each. These numbers are placeholders until the spike measures them. The words on screen are checked against your project after each one.</p>
+      <div class="row between"><button class="btn ghost" data-do="closedlg">Not now</button><button class="btn primary" data-do="startexport">Make the videos</button></div>`}
+  </div></div>`;
+}
+
+function start() {
+  const kinds = [['promo', 'Product promo', 'Show a product and why it matters'], ['launch', 'Launch announcement', 'Something new is here'], ['sale', 'Sale or offer', 'A deal with a clear end'], ['testimonial', 'Customer words', 'A quote people believe'], ['explain', 'Feature explainer', 'One feature, step by step'], ['before', 'Before and after', 'Show the difference'], ['post', 'Social post', 'One idea, short and loud'], ['blank', 'Start empty', 'Build it scene by scene']];
+  return `<div class="start">
+    <div class="bar"><span class="crumb">Motion graphics</span><span class="grow"></span><button class="btn ghost">Your projects</button></div>
+    <div class="start-in">
+      <h1>What do you want to promote?</h1>
+      <div class="bigbox">
+        <textarea aria-label="Describe your video">A 20 second vertical ad for this can of cold brew. Calm, for people who hate mornings.</textarea>
+        <div class="row" style="flex-wrap:wrap"><span class="chip">${ic('image', 12)} northbean-can.png</span><button class="chip">${ic('paperclip', 12)} Add a picture, clip or link</button><span class="chip">${ic('brand', 12)} Northbean brand</span>
+          </div>
+        <div class="row between"><span class="seg" role="group" aria-label="Shape">${Object.keys(SHAPES).map((k) => `<button data-shape-start="${k}" aria-pressed="${S.shape === k}">${k}</button>`).join('')}</span>
+          <button class="btn primary" data-view="editor">Make a first version</button></div>
+        <p class="hint">The assistant writes the scenes and you change them. Nothing is rendered yet, so this takes about a minute.</p>
+      </div>
+      <div class="kinds" role="group" aria-label="Starting points">${kinds.map(([k, n, d]) => `<button class="kind" data-kind="${k}" aria-pressed="${S.kind === k}"><b>${n}</b><span>${d}</span></button>`).join('')}</div>
+      <div class="row" style="flex-wrap:wrap"><span class="small muted">Or just one graphic:</span>${['Title', 'Quote', 'Chart', 'Name strap', 'Captions'].map((n) => `<button class="chip">${n}</button>`).join('')}</div>
+    </div>
+  </div>`;
+}
+
+function phone() {
+  const s = cur();
+  return `<div class="phone-wrap"><div class="phone">
+    <div class="bar"><button class="btn ghost icon" aria-label="Back">${ic('back')}</button><b class="grow" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(S.title)}</b><button class="btn ghost icon" data-do="undo" aria-label="Undo" ${S.past.length ? '' : 'disabled'}>${ic('undo')}</button><button class="btn primary sm" data-do="export">Make</button></div>
+    <div class="stage" id="stage">${canvasHTML(s, false)}</div>
+    <div class="strip" id="strip">${strip()}<button class="add" data-add="words" style="width:60px" aria-label="Add a scene">+</button></div>
+    <div style="min-height:0;display:flex;flex-direction:column;overflow:hidden">${S.tool === 'assistant' ? rightPanelPhone() : `<div class="scroll">${leftPanel().split('<div class="scroll">')[1]}`}</div>
+    <div class="dock" role="group" aria-label="Tools">${[['assistant', 'Assistant', 'chat'], ['media', 'Media', 'image'], ['words', 'Words', 'type'], ['sound', 'Sound', 'music'], ['looks', 'Looks', 'palette']].map(([k, n, i]) => `<button class="tool" data-tool="${k}" aria-pressed="${S.tool === k}">${ic(i, 17)}${n}</button>`).join('')}</div>
+  </div></div>`;
+}
+function rightPanelPhone() { const was = S.tab; S.tab = 'assistant'; const html = rightPanel().replace(/<div class="tabs"[\s\S]*?<\/div>/, ''); S.tab = was; return html; }
+
+/* ---- drawing ---- */
+function render() {
+  const frame = $('#frame');
+  const keep = $('#chat-scroll')?.scrollTop;
+  frame.innerHTML = S.view === 'editor' ? editor() : S.view === 'start' ? start() : phone();
+  frame.style.maxWidth = S.view === 'phone' ? '520px' : '';
+  $$('#view-seg button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.view === S.view));
+  drawStage();
+  $$('.card .thumb').forEach((t) => sizeText(t));
+  const chat = $('#chat-scroll'); if (chat) chat.scrollTop = keep === undefined ? chat.scrollHeight : chat.scrollHeight;
+}
+function drawStage() {
+  const stage = $('#stage'); if (!stage) return;
+  sizeText(stage); fitCanvas(stage);
+  animate(stage, S.t - startOf(S.sel), cur());
+  $$('.card .thumb').forEach((t) => { $$('[data-delay]', t).forEach((e) => { e.style.opacity = 1; }); });
+}
+function redrawCanvas() { const stage = $('#stage'); if (!stage) return; stage.innerHTML = canvasHTML(cur(), S.mode === 'arrange'); drawStage(); }
+function select(i, seek = true) { S.sel = Math.max(0, Math.min(S.scenes.length - 1, i)); if (seek) S.t = startOf(S.sel) + Math.min(0.9, cur().dur / 2); render(); }
+
+let last = 0;
+function tick(now) {
+  if (S.playing) {
+    S.t += (now - last) / 1000;
+    if (S.t >= total()) { S.t = 0; S.playing = false; render(); }
+    let i = 0; while (i < S.scenes.length - 1 && S.t >= startOf(i + 1)) i++;
+    if (i !== S.sel) { S.sel = i; render(); } else {
+      animate($('#stage'), S.t - startOf(S.sel), cur());
+      const seek = $('#seek'); if (seek) seek.value = S.t; const c = $('#clock'); if (c) c.textContent = fmt(S.t);
+    }
+  }
+  last = now; requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+addEventListener('resize', drawStage);
+
+/* ---- the assistant, on rails: each suggestion is a real change to the project on this page ---- */
+let chatId = 1;
+function say(kind) {
+  const id = `c${chatId++}`;
+  const change = (me, after, label, fn) => {
+    S.chat.push({ me: true, text: me });
+    const mark = S.past.length;
+    commit(label, fn);
+    S.chat.push({ text: after, change: { text: label, id, mark } });
+  };
+  if (kind === 'shorter') change('Shorten scene 2', 'Scene 2 is 4 seconds now, and I cut the second line so people can still read it.', 'Scene 2: 6 to 4 seconds, one line shorter', () => {
+    const s = S.scenes[1] || S.scenes[0]; s.dur = Math.max(2, s.dur - 2); s.sub = 'Never rushed.';
+  });
+  if (kind === 'brand') change('Use our brand colours', 'All scenes use the Northbean look: the green, the cream and the copper, with your logo.', 'Brand look on all scenes', () => { S.scenes.forEach((s) => { s.look = 'brand'; }); S.logo = true; });
+  if (kind === 'square') change('Make a square version', 'This is the square shape. I moved the words so nothing is cut off. Your vertical version stays one click away in the top bar.', 'Shape: square', () => { S.shape = '1:1'; });
+  if (kind === 'voice') {
+    S.chat.push({ me: true, text: 'Add a voiceover' });
+    S.chat.push({ text: 'I would read the captions aloud in your saved voice, and turn the music down while it speaks.', ask: { id, title: 'Make a voiceover', cost: 'About 20 seconds, on this computer. Nothing leaves it.', yes: 'Make it' } });
+  }
+  if (kind === 'free') { S.chat.push({ me: true, text: $('#say')?.value || '' }); S.chat.push({ text: 'In this mockup only the suggestions work. In the product this goes to the model.' }); }
+  S.tab = 'assistant'; render();
+}
+
+/* ---- events ---- */
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button, [data-do]'); if (!b) return;
+  const d = b.dataset;
+  if (b.closest('#theme-seg')) { S.theme = d.theme; document.documentElement.style.colorScheme = S.theme; $$('#theme-seg button').forEach((x) => x.setAttribute('aria-pressed', x === b)); return; }
+  if (d.view) { S.view = d.view; if (S.view === 'phone' && S.tool === 'make') S.tool = 'media'; if (S.view === 'editor' && S.tool === 'assistant') S.tool = 'media'; render(); return; }
+  if (d.tool) { S.tool = d.tool; render(); return; }
+  if (d.tab) { S.tab = d.tab; render(); return; }
+  if (d.mode) { S.mode = d.mode; S.playing = false; render(); return; }
+  if (d.shape) { commit('Change the shape', () => { S.shape = d.shape; }); render(); return; }
+  if (d.shapeStart) { S.shape = d.shapeStart; render(); return; }
+  if (d.kind) { S.kind = d.kind; render(); return; }
+  if (d.make) { S.makeTab = d.make; render(); return; }
+  if (d.i !== undefined) { S.playing = false; select(Number(d.i)); return; }
+  if (d.go) { S.playing = false; select(S.sel + Number(d.go)); return; }
+  if (d.look) { commit('Change the look', () => { cur().look = d.look; }); render(); return; }
+  if (d.trans) { commit('Change how it starts', () => { cur().transition = d.trans; }); S.t = startOf(S.sel); render(); return; }
+  if (d.dur) { commit('Change the length', () => { cur().dur = Math.max(1, Math.min(30, cur().dur + Number(d.dur))); }); render(); return; }
+  if (d.move) { const j = S.sel + Number(d.move); commit('Move a scene', () => { const [x] = S.scenes.splice(S.sel, 1); S.scenes.splice(j, 0, x); }); select(j); return; }
+  if (d.say) { say(d.say); return; }
+  if (d.send !== undefined) { if ($('#say')?.value.trim()) say('free'); return; }
+  if (d.undoChat) {
+    const m = S.chat.find((x) => x.change?.id === d.undoChat); if (!m) return;
+    while (S.past.length > m.change.mark) undo();
+    render(); return;
+  }
+  if (d.ask) { const m = S.chat.find((x) => x.ask?.id === d.ask); m.ask.done = true; commit('Add a voiceover', () => { S.voice = true; }); S.chat.push({ text: 'Done. It is in the row at the bottom, and the music dips while it speaks.', change: { text: 'Voiceover added', id: `c${chatId++}`, mark: S.past.length - 1 } }); render(); return; }
+  if (d.askNo) { const m = S.chat.find((x) => x.ask?.id === d.askNo); m.ask.done = true; render(); return; }
+  if (d.layout) {
+    commit('Apply a layout', () => {
+      const r = R(cur());
+      if (d.layout === 'c') { r.title = { x: 10, y: 34, w: 80 }; r.sub = { x: 10, y: 52, w: 80 }; }
+      if (d.layout === 't') { r.title = { x: 8, y: 8, w: 84 }; r.sub = { x: 8, y: 24, w: 84 }; }
+      if (d.layout === 'b') { r.title = { x: 8, y: 66, w: 84 }; r.sub = { x: 8, y: 82, w: 84 }; }
+    }); render(); return;
+  }
+  if (d.add) {
+    S.addOpen = false;
+    if (d.add === 'ask') { S.tab = 'assistant'; render(); $('#say')?.focus(); return; }
+    commit('Add a scene', () => {
+      const n = scene({ id: `n${Date.now()}`, name: 'New scene', title: 'A few words', dur: 4, look: cur().look, wide: rects({ x: 8, y: 34, w: 70 }, { x: 8, y: 58, w: 70 }, { x: 72, y: 20, w: 18 }), tall: rects({ x: 8, y: 16, w: 84 }, { x: 8, y: 34, w: 84 }, { x: 32, y: 48, w: 36 }) });
+      S.scenes.splice(S.sel + 1, 0, n);
+    });
+    S.tab = 'scene'; select(S.sel + 1); return;
+  }
+  const act = {
+    undo, redo,
+    play() { if (S.mode === 'arrange') S.mode = 'preview'; S.playing = !S.playing; render(); },
+    export() { S.dialog = true; S.exporting = 0; render(); },
+    closedlg() { S.dialog = false; S.exporting = 0; clearInterval(S.timer); render(); },
+    startexport() {
+      S.exportShapes = $$('[data-shape-out]:checked').map((x) => x.dataset.shapeOut); if (!S.exportShapes.length) return;
+      S.exporting = 1; render();
+      S.timer = setInterval(() => { S.exporting = Math.min(100, S.exporting + 4); if (S.exporting >= 100) clearInterval(S.timer); render(); }, 90);
+    },
+    addmenu() { S.addOpen = !S.addOpen; render(); },
+    dup() { commit('Duplicate a scene', () => { const c = JSON.parse(JSON.stringify(cur())); c.id = `n${Date.now()}`; S.scenes.splice(S.sel + 1, 0, c); }); select(S.sel + 1); },
+    remove() { commit('Remove a scene', () => { S.scenes.splice(S.sel, 1); }); select(Math.min(S.sel, S.scenes.length - 1)); },
+    music() { commit('Add music', () => { S.music = 'Slow sunrise'; }); render(); },
+    nomusic() { commit('Remove the music', () => { S.music = ''; }); render(); },
+    novoice() { commit('Remove the voiceover', () => { S.voice = false; }); render(); },
+    voice() { say('voice'); },
+    lookall() { const k = cur().look; commit('Use this look everywhere', () => { S.scenes.forEach((s) => { s.look = k; }); }); render(); },
+    brandall() { commit('Use the brand', () => { S.scenes.forEach((s) => { s.look = 'brand'; }); S.logo = true; }); render(); },
+    logo() { commit('Show or hide the logo', () => { S.logo = !S.logo; }); render(); },
+    caption() { S.tab = 'scene'; render(); $('#f-cap')?.focus(); },
+    cta() { commit('Add an offer', () => { cur().cta = 'Get 20% off your first box'; }); render(); },
+  }[d.do];
+  if (act) act();
+});
+
+let typing = null;
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  if (el.id === 'seek') { S.playing = false; S.t = Number(el.value); let i = 0; while (i < S.scenes.length - 1 && S.t >= startOf(i + 1)) i++; if (i !== S.sel) { S.sel = i; render(); } else { animate($('#stage'), S.t - startOf(i), cur()); $('#clock').textContent = fmt(S.t); } return; }
+  if (el.dataset.field) {
+    if (typing !== el) { S.past.push({ label: 'Change the words', state: snap() }); S.future = []; typing = el; }
+    cur()[el.dataset.field] = el.value;
+    redrawCanvas(); flashSaved();
+    const st = $('#strip'); if (st) { const c = $$('.card', st)[S.sel]; if (c) { const th = $('.thumb', c); th.innerHTML = canvasHTML(cur(), false); sizeText(th); $$('[data-delay]', th).forEach((x) => { x.style.opacity = 1; }); } }
+    return;
+  }
+  if (el.id === 'title') { S.title = el.value; flashSaved(); }
+});
+document.addEventListener('focusout', () => { typing = null; });
+document.addEventListener('change', (e) => {
+  if (e.target.matches('[data-sel-look]')) { commit('Change the look', () => { cur().look = e.target.value; }); render(); }
+});
+
+/* Arrange: drag, a corner to resize, arrow keys on a focused item */
+let drag = null;
+document.addEventListener('pointerdown', (e) => {
+  const it = e.target.closest('.arrange .it'); if (!it) return;
+  e.preventDefault();
+  const cv = it.closest('.cv').getBoundingClientRect(); const r = R(cur())[it.dataset.key];
+  S.past.push({ label: 'Move on the scene', state: snap() }); S.future = [];
+  drag = { key: it.dataset.key, cv, x: e.clientX, y: e.clientY, r: { ...r }, size: Boolean(e.target.dataset.h), it };
+  $$('.arrange .it').forEach((x) => x.classList.toggle('on', x === it)); it.focus({ preventScroll: true });
+});
+document.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const dx = ((e.clientX - drag.x) / drag.cv.width) * 100; const dy = ((e.clientY - drag.y) / drag.cv.height) * 100;
+  const r = R(cur())[drag.key];
+  if (drag.size) { r.w = Math.max(8, Math.min(100 - r.x, drag.r.w + dx)); drag.it.style.width = `${r.w}%`; } else {
+    r.x = Math.max(-10, Math.min(95, drag.r.x + dx)); r.y = Math.max(-5, Math.min(95, drag.r.y + dy));
+    drag.it.style.left = `${r.x}%`; drag.it.style.top = `${r.y}%`;
+  }
+});
+document.addEventListener('pointerup', () => { if (drag) { drag = null; flashSaved(); const st = $('#strip'); if (st) { const keep = document.activeElement?.dataset?.key; render(); if (keep) $(`.arrange .it[data-key="${keep}"]`)?.focus({ preventScroll: true }); } } });
+document.addEventListener('keydown', (e) => {
+  const it = e.target.closest?.('.arrange .it'); if (!it) return;
+  const step = e.shiftKey ? 5 : 1; const r = R(cur())[it.dataset.key]; const m = { ArrowLeft: ['x', -step], ArrowRight: ['x', step], ArrowUp: ['y', -step], ArrowDown: ['y', step] }[e.key];
+  if (!m) return; e.preventDefault();
+  commit('Move on the scene', () => { r[m[0]] += m[1]; });
+  const nr = R(cur())[it.dataset.key]; nr[m[0]] = nr[m[0]]; it.style.left = `${nr.x}%`; it.style.top = `${nr.y}%`;
+});
+
+/* the scene strip: drag to reorder */
+let dragFrom = null;
+document.addEventListener('dragstart', (e) => { const c = e.target.closest?.('.card'); if (!c) return; dragFrom = Number(c.dataset.i); c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+document.addEventListener('dragover', (e) => { if (dragFrom !== null && e.target.closest?.('.card')) e.preventDefault(); });
+document.addEventListener('drop', (e) => {
+  const c = e.target.closest?.('.card'); if (dragFrom === null || !c) return; e.preventDefault();
+  const to = Number(c.dataset.i); const from = dragFrom; dragFrom = null;
+  if (to === from) { render(); return; }
+  commit('Move a scene', () => { const [x] = S.scenes.splice(from, 1); S.scenes.splice(to, 0, x); }); select(to);
+});
+document.addEventListener('dragend', () => { dragFrom = null; $$('.dragging').forEach((x) => x.classList.remove('dragging')); });
+
+render();
+</script>
+</body>
+</html>

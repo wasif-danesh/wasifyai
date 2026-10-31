@@ -13,10 +13,15 @@ what the person typed. A template marks each such element `data-slot="<name>"`.
 
 Five templates (ADR-0079): an animated title, a quote that appears word by word, a bar chart from
 the person's own numbers, a lower third (a name strap, transparent) and typed captions
-(transparent)."""
+(transparent).
+
+A project of scenes (ADR-0096, `SCENES`) is a sixth kind of composition: its slots are a document, a
+list of scenes where each is one of the five templates, one after another. It is still one page, so
+the sandbox, the check, the worker and search treat it like any other composition."""
 
 import html
 import re
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -235,6 +240,8 @@ def _field(f: Field, raw: dict[str, Any]) -> Any:
 
 def normalize_slots(template: str, raw: dict[str, Any]) -> dict[str, Any]:
     """The slots of a template, checked and completed. Unknown names are refused, not dropped."""
+    if template == SCENES:
+        return _normalize_scenes(raw)
     t = TEMPLATES.get(template)
     if t is None:
         raise SlotError("That template does not exist.")
@@ -249,7 +256,7 @@ def normalize_slots(template: str, raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def get(template: str) -> Template:
-    t = TEMPLATES.get(template)
+    t = SCENES_TEMPLATE if template == SCENES else TEMPLATES.get(template)
     if t is None:
         raise SlotError("That template does not exist.")
     return t
@@ -267,7 +274,17 @@ def title_of(template: str, slots: dict[str, Any]) -> str:
 
 
 def preview_times(template: str, slots: dict[str, Any]) -> list[float]:
-    """Three moments for the preview: coming in, half way, and everything on the screen."""
+    """Three moments for the preview: coming in, half way, and everything on the screen. For
+    several scenes, the moment everything is on the screen in each of the first three."""
+    if template == SCENES and len(slots["scenes"]) > 1:
+        starts = scene_starts(slots)
+        return [
+            round(start + TEMPLATES[scene["kind"]].hold(scene_slots(slots, scene)), 2)
+            for scene, start in zip(slots["scenes"][:3], starts, strict=False)
+        ]
+    if template == SCENES:
+        scene = slots["scenes"][0]
+        return preview_times(scene["kind"], scene_slots(slots, scene))
     t = get(template)
     hold = t.hold(slots)
     return [round(min(0.6, hold / 2), 2), round(hold / 2, 2), round(hold, 2)]
@@ -290,6 +307,8 @@ def _look(template: Template, slots: dict[str, Any]) -> Look:
 
 def render_html(template: str, slots: dict[str, Any]) -> str:
     """The composition's index.html for these slots (checked again here)."""
+    if template == SCENES:
+        return _render_scenes(normalize_slots(SCENES, slots))
     t = get(template)
     s = normalize_slots(template, slots)
     look = _look(t, s)
@@ -710,8 +729,254 @@ TEMPLATES: dict[str, Template] = {
 TEMPLATE_ORDER = tuple(TEMPLATES)
 
 
+# ---- a project of scenes (ADR-0096) --------------------------------------------------------------
+
+SCENES = "scenes"
+MAX_SCENES = 30
+SCENE_SECONDS = 5  # how long a scene is when no length is given (a template's own default is 30)
+_WHOLE_PROJECT = ("shape", "font")  # set once for the project, not per scene
+_SCENE_ID = re.compile(r"[0-9a-f]{8}")
+
+
+def scene_slots(document: dict[str, Any], scene: dict[str, Any]) -> dict[str, Any]:
+    """A scene's fields as the slots its template expects."""
+    return {**scene["fields"], "shape": document["shape"], "font": document["font"]}
+
+
+def scene_starts(document: dict[str, Any]) -> list[int]:
+    """When each scene starts in the film, in seconds."""
+    starts, at = [], 0
+    for scene in document["scenes"]:
+        starts.append(at)
+        at += scene["fields"]["seconds"]
+    return starts
+
+
+def new_scene_id() -> str:
+    return uuid.uuid4().hex[:8]
+
+
+def _normalize_scene(raw: Any, n: int, shape: str, font: str, seen: set[str]) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        raise SlotError(f"Scene {n} is not a scene.")
+    extra = sorted(set(raw) - {"id", "name", "kind", "fields"})
+    if extra:
+        raise SlotError(f"A scene has no setting called {extra[0]}.")
+    kind = raw.get("kind")
+    template = TEMPLATES.get(kind) if isinstance(kind, str) else None
+    if template is None or not isinstance(kind, str):
+        raise SlotError(f"Scene {n} must be one of: {', '.join(TEMPLATE_ORDER)}.")
+    fields = dict(raw.get("fields") or {})
+    fixed = sorted(set(fields) & set(_WHOLE_PROJECT))
+    if fixed:
+        raise SlotError(f"The {fixed[0]} is set for the whole project, not for one scene.")
+    seconds = next((f for f in template.fields if f.id == "seconds"), None)
+    if seconds is not None and "seconds" not in fields:
+        fields["seconds"] = max(SCENE_SECONDS, seconds.minimum)
+    try:
+        slots = normalize_slots(kind, {**fields, "shape": shape, "font": font})
+    except SlotError as e:
+        raise SlotError(f"Scene {n}: {e}") from None
+    given = raw.get("id")
+    scene_id = (
+        given
+        if isinstance(given, str) and _SCENE_ID.fullmatch(given) and given not in seen
+        else new_scene_id()
+    )
+    seen.add(scene_id)
+    return {
+        "id": scene_id,
+        "name": _text(raw.get("name"), "scene name", 60, False) or template.title,
+        "kind": kind,
+        "fields": {k: v for k, v in slots.items() if k not in _WHOLE_PROJECT},
+    }
+
+
+def _normalize_scenes(raw: dict[str, Any]) -> dict[str, Any]:
+    """The document of a project of scenes, checked and completed. Its length comes from its
+    scenes. A scene keeps its id; one without an id, or with one already used, gets a new one."""
+    extra = sorted(set(raw) - {"name", "shape", "font", "scenes", "seconds"})
+    if extra:
+        raise SlotError(f"A project of scenes has no setting called {extra[0]}.")
+    shape, font = raw.get("shape", "landscape"), raw.get("font", "sans")
+    if shape not in SHAPES:
+        raise SlotError(f"The shape must be one of: {', '.join(SHAPES)}.")
+    if font not in FONTS:
+        raise SlotError(f"The letters must be one of: {', '.join(FONTS)}.")
+    given = raw.get("scenes")
+    if not isinstance(given, list) or not given:
+        raise SlotError("A project needs at least one scene.")
+    if len(given) > MAX_SCENES:
+        raise SlotError(f"A project can have at most {MAX_SCENES} scenes.")
+    seen: set[str] = set()
+    scenes = [_normalize_scene(s, n, shape, font, seen) for n, s in enumerate(given, 1)]
+    seconds = sum(s["fields"]["seconds"] for s in scenes)
+    if seconds > MAX_SECONDS:
+        raise SlotError(
+            f"These scenes would run {seconds} seconds; the longest is {MAX_SECONDS}. "
+            "Shorten or remove a scene."
+        )
+    return {
+        "name": _text(raw.get("name"), "project name", 80, False),
+        "shape": shape,
+        "font": font,
+        "seconds": seconds,
+        "scenes": scenes,
+    }
+
+
+def as_scenes(template: str, slots: dict[str, Any]) -> dict[str, Any]:
+    """Any project as a document of scenes: a project of one template is one scene."""
+    if template == SCENES:
+        return slots
+    fields = {k: v for k, v in slots.items() if k not in _WHOLE_PROJECT}
+    return _normalize_scenes(
+        {
+            "shape": slots["shape"],
+            "font": slots["font"],
+            "scenes": [{"kind": template, "fields": fields}],
+        }
+    )
+
+
+def _scenes_expected(document: dict[str, Any]) -> list[Expect]:
+    out = []
+    for scene, start in zip(document["scenes"], scene_starts(document), strict=True):
+        for e in TEMPLATES[scene["kind"]].expected(scene_slots(document, scene)):
+            out.append(Expect(f"{scene['id']}-{e.slot}", e.text, round(start + e.at, 2)))
+    return out
+
+
+def _scenes_words(document: dict[str, Any]) -> str:
+    said = [
+        TEMPLATES[scene["kind"]].words(scene_slots(document, scene)) for scene in document["scenes"]
+    ]
+    return ". ".join(x.rstrip(".") for x in [document["name"], *said] if x)
+
+
+def is_transparent(template: str, slots: dict[str, Any]) -> bool:
+    """Whether the picture has no background. A film is, only if every scene in it is."""
+    if template == SCENES:
+        return all(TEMPLATES[s["kind"]].transparent for s in slots["scenes"])
+    return get(template).transparent
+
+
+def formats_of(template: str, slots: dict[str, Any]) -> tuple[str, ...]:
+    if template == SCENES:
+        kinds = {s["kind"] for s in slots["scenes"]}
+        if is_transparent(template, slots):
+            return TEMPLATES[sorted(kinds)[0]].formats
+        return ("mp4",)
+    return get(template).formats
+
+
+def _scoped(scene: str, start: int, css: str, body: str, script: str) -> tuple[str, str, str]:
+    """One template's css, markup and script, made to live beside other scenes on one page: its ids
+    and slots get the scene's prefix, its rules and class selectors reach only inside the scene, and
+    its clips start when the scene does. The person's words are escaped (`_e`), so they cannot look
+    like the attributes changed here, and no script holds them."""
+    root = f"scene-{scene}"
+    prefix = f"s{scene}-"  # a selector cannot start with a digit, and an id can
+    # a script can name an element that this scene left out (a line under a title, when empty)
+    named = {*re.findall(r'\bid="([\w-]+)"', body), *re.findall(r'"#([\w-]+)"', script)}
+    ids = sorted(named, key=len, reverse=True)
+
+    def with_ids(text: str) -> str:
+        return re.sub(rf"#({'|'.join(ids)})\b", rf"#{prefix}\1", text) if ids else text
+
+    body = re.sub(r'\bid="([\w-]+)"', rf'id="{prefix}\1"', body)
+    body = re.sub(r'\bdata-slot="([\w-]+)"', rf'data-slot="{scene}-\1"', body)
+    body = body.replace('data-start="0"', f'data-start="{start}"')
+    body = body.replace('data-track-index="0"', 'data-track-index="1"')
+    script = re.sub(r'getElementById\("([\w-]+)"\)', rf'getElementById("{prefix}\1")', script)
+    script = with_ids(script).replace('".', f'"#{root} .')
+    return f"  #{root} {{\n{with_ids(css)}\n  }}", body, script
+
+
+def _render_scenes(document: dict[str, Any]) -> str:
+    width, height = SHAPES[document["shape"]]
+    family, file, _ = FONTS[document["font"]]
+    clear = is_transparent(SCENES, document)
+    rules, parts, scripts = [], [], []
+    for scene, start in zip(document["scenes"], scene_starts(document), strict=True):
+        template = TEMPLATES[scene["kind"]]
+        slots = scene_slots(document, scene)
+        look = _look(template, slots)
+        seconds = slots["seconds"]
+        css, body, script = _scoped(scene["id"], start, *template.build(slots, look))
+        background = (
+            "transparent" if clear else f"linear-gradient(135deg, {look.top}, {look.bottom})"
+        )
+        rules.append(css)
+        parts.append(
+            f'<div id="scene-{scene["id"]}" class="clip scene" data-start="{start}" '
+            f'data-duration="{seconds}" data-track-index="0" '
+            f'style="background: {background}; color: {look.ink}; font-family: {look.stack};">\n'
+            f"{body}\n</div>"
+        )
+        # the film itself shows each scene only in its own time: the renderer hides clips, but the
+        # exact-text check opens the page without the renderer's runtime
+        root = f"#scene-{scene['id']}"
+        hide = f'  gsap.set("{root}", {{ visibility: "hidden" }});\n' if start else ""
+        show = f'  film.set("{root}", {{ visibility: "visible" }}, {start});\n' if start else ""
+        scripts.append(
+            f"""{hide}{show}  film.set("{root}", {{ visibility: "hidden" }}, {start + seconds});
+  (() => {{
+    const tl = gsap.timeline();
+{script}
+    tl.to({{}}, {{ duration: 0.01 }}, {seconds} - 0.01);
+    film.add(tl, {start});
+  }})();"""
+        )
+    seconds = document["seconds"]
+    newline = chr(10)
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width={width}, height={height}">
+<script src="vendor/gsap.min.js"></script>
+<style>
+  @font-face {{ font-family: "{family}"; font-style: normal; font-weight: 100 900;
+    font-display: block; src: url("vendor/fonts/{file}") format("woff2"); }}
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  [data-slot] {{ overflow-wrap: anywhere; }}
+  html, body {{ width: {width}px; height: {height}px; overflow: hidden;
+    background: {"transparent" if clear else "#000"}; }}
+  #root {{ position: relative; width: {width}px; height: {height}px; overflow: hidden; }}
+  .scene {{ position: absolute; inset: 0; overflow: hidden; }}
+{newline.join(rules)}
+</style></head><body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="{seconds}"
+     data-width="{width}" data-height="{height}">
+{newline.join(parts)}
+</div>
+<script>
+  const film = gsap.timeline({{ paused: true }});
+{newline.join(scripts)}
+  film.to({{}}, {{ duration: 0.01 }}, {seconds} - 0.01);
+  window.__timelines = window.__timelines || {{}};
+  window.__timelines["main"] = film;
+  film.seek(0);
+</script>
+</body></html>
+"""
+
+
+SCENES_TEMPLATE = Template(
+    id=SCENES,
+    title="Scenes",
+    description="Several scenes, one after another.",
+    fields=(),
+    build=lambda s, look: ("", "", ""),  # `_render_scenes` makes the page
+    expected=_scenes_expected,
+    hold=lambda s: float(s["seconds"]),
+    words=_scenes_words,
+    primary="name",
+)
+
+
 __all__ = [
     "FONT_FILES", "FONTS", "FORMATS", "FPS", "SHAPES", "TEMPLATES", "THEMES", "Expect", "Field",
-    "SlotError", "Template", "describe", "expected", "get", "normalize_slots", "parse_number",
-    "preview_times", "render_html", "title_of",
+    "SCENES", "SlotError", "Template", "as_scenes", "describe", "expected", "formats_of", "get",
+    "is_transparent", "normalize_slots", "parse_number", "preview_times", "render_html",
+    "scene_slots", "scene_starts", "title_of",
 ]  # fmt: skip

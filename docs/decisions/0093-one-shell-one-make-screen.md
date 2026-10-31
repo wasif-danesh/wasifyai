@@ -1,6 +1,7 @@
 # ADR-0093: One shell and one make screen for every product
 
-- **Status:** Proposed (2026-10-27; built only when the owner picks a stage of `docs/ui-improvement-plan.md`)
+- **Status:** Accepted (owner, 2026-10-30). Proposed 2026-10-27; stages U0 to U12 of `docs/ui-improvement-plan.md` built
+  2026-10-27 and 2026-10-28; all seven owner decisions answered by 2026-10-29.
 - **Date:** 2026-10-27
 - **Depends on:** ADR-0081 (the design system), ADR-0086 (the model button and its dialog), ADR-0041 (every
   creation is searchable), ADR-0087 (the web is the desktop's twin).

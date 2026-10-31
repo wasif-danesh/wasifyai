@@ -20,7 +20,7 @@ Add one scene to a video project, at the end or at a position you choose. A proj
 ## Fields
 
 - `composition_id`: The project.
-- `kind`: title, quote, chart, lower_third or captions.
+- `kind`: title, quote, chart, lower_third, end_card or captions.
 - `fields`: Its words and settings.
 - `name`: A short name for the scene.
 - `position`: Where it goes, from 0. At the end if not given.

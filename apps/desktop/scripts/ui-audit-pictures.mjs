@@ -31,6 +31,9 @@
 //   apps/desktop/scripts/ui-audit.sh light motion-assistant     The editor's assistant (ADR-0096 MX3) on the real language
 //                                                                model: a brief, edits in words, Undo, a video; on this
 //                                                                computer's data, and it deletes what it made
+//   apps/desktop/scripts/ui-audit.sh light motion-pack          The marketing pack (ADR-0096 MX7): a starting point, a
+//                                                                brand with a real logo, every shape made for real;
+//                                                                needs MOTION_FIXTURES and a throwaway DESKTOP_DATA_DIR
 //   apps/desktop/scripts/ui-audit.sh light motion-make          The Make panel (ADR-0096 MX6): real models, a real
 //                                                                voiceover with timed captions and a real video; a
 //                                                                throwaway DESKTOP_DATA_DIR with models and components linked
@@ -376,6 +379,104 @@ for (const scheme of ["light", "dark"]) {
       console.log(`MEDIA ${JSON.stringify(seen)}`);
     });
   }
+  if (names.has("motion-pack")) {
+    // The marketing pack (ADR-0096 MX7): a starting point, a brand set up with a real logo, and one
+    // project made in every shape. MOTION_FIXTURES has can.png. Run it on a throwaway DESKTOP_DATA_DIR.
+    await attempt("motion-pack", async () => {
+      const seen = { errors: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      const saved = async () => {
+        await page.waitForTimeout(700);
+        await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      };
+      const ready = () =>
+        page.waitForFunction(
+          () => document.querySelector("hyperframes-player")?.duration > 0,
+          null,
+          {
+            timeout: 30000,
+          },
+        );
+      const axe = async (root) => {
+        const AxeBuilder = require("@axe-core/playwright").default;
+        const found = await new AxeBuilder({ page })
+          .include(root)
+          .exclude("hyperframes-player")
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+          .analyze();
+        return found.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      };
+      await open(page, "/video/builder");
+      await page.getByRole("button", { name: "Product promo" }).click();
+      await shot(page, "motion-pack-start");
+      await page.getByRole("button", { name: "Start from Product promo" }).click();
+      await ready();
+      await page.getByRole("radio", { name: "Looks", exact: true }).click();
+      await page.getByRole("button", { name: "Set up your brand" }).click();
+      const asked = page.getByRole("dialog");
+      await asked.getByLabel("Name").fill("Northbean");
+      await asked
+        .getByLabel("Add your logo")
+        .setInputFiles(join(process.env.MOTION_FIXTURES, "can.png"));
+      await asked.getByLabel("Background").fill("#123456");
+      await asked.getByLabel("It fades to").fill("#0a2a4a");
+      await asked.getByLabel("Accent").fill("#ff8800");
+      await asked.getByLabel("What should people do at the end?").fill("Try Northbean today");
+      await asked.getByLabel(/^Where/).fill("northbean.example");
+      await asked.getByRole("img", { name: "Your logo" }).waitFor();
+      await shot(page, "motion-pack-brand");
+      seen.axeBrand = await axe("dialog");
+      await asked.getByRole("button", { name: "Save your brand" }).click();
+      await page
+        .getByRole("checkbox", { name: "Use it in this video" })
+        .waitFor({ timeout: 15000 });
+      await page.waitForFunction(
+        () => document.querySelector("[data-slot=scene-editor] input[type=checkbox]:checked"),
+        null,
+        { timeout: 15000 },
+      );
+      await saved();
+      await page.waitForTimeout(3000);
+      await shot(page, "motion-pack-branded");
+      seen.axeEditor = await axe("[data-slot=scene-editor]");
+      await page.getByRole("button", { name: "Make the video" }).click();
+      const dialog = page.getByRole("dialog");
+      for (const shape of [/^1:1/, /^16:9/, /^4:5/]) {
+        await dialog.getByRole("checkbox", { name: shape }).check();
+      }
+      await shot(page, "motion-pack-shapes");
+      seen.axeShapes = await axe("dialog");
+      const started = Date.now();
+      await dialog.getByRole("button", { name: "Make 4 videos" }).click();
+      await dialog.getByText("Video 2 of 4", { exact: false }).waitFor({ timeout: 300000 });
+      await shot(page, "motion-pack-making");
+      await dialog.getByText("Your videos are in the Library").waitFor({ timeout: 900000 });
+      seen.seconds = Math.round((Date.now() - started) / 1000);
+      await dialog.locator("video").nth(3).waitFor();
+      await page.waitForTimeout(1500);
+      seen.videos = await dialog
+        .locator("video")
+        .evaluateAll((all) =>
+          all.map((v) => [v.videoWidth, v.videoHeight, Math.round(v.duration)]),
+        );
+      await shot(page, "motion-pack-made");
+      await dialog.getByRole("button", { name: "Close" }).click();
+      // set once: a new project starts with it
+      await page
+        .locator("[data-slot=scene-editor]")
+        .getByRole("button", { name: "Motion graphics", exact: true })
+        .click();
+      await page.getByRole("button", { name: "Start empty" }).click();
+      await ready();
+      await page.getByRole("radio", { name: "Looks", exact: true }).click();
+      seen.newProjectHasBrand = await page
+        .getByRole("checkbox", { name: "Use it in this video" })
+        .isChecked();
+      await shot(page, "motion-pack-new-project");
+      console.log(`PACK ${JSON.stringify(seen)}`);
+    });
+  }
+
   if (names.has("motion-make")) {
     // The Make panel (ADR-0096 MX6): real models from inside the editor, a real voiceover with its
     // captions in time, and a real video. Run it on a throwaway DESKTOP_DATA_DIR with the real

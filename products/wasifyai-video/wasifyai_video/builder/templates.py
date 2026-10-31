@@ -29,11 +29,13 @@ from typing import Any
 FPS = 30
 SAFE = 0.06  # the title-safe margin, as a share of the width
 
-# shape -> (width, height). Landscape and portrait are 720p, square is 1080 (about the same cost).
+# shape -> (width, height): 1080p, what social channels ask for (ADR-0096 MX7). Everything on a page
+# is sized from these, so an older project looks the same, only sharper.
 SHAPES: dict[str, tuple[int, int]] = {
-    "landscape": (1280, 720),
-    "portrait": (720, 1280),
+    "landscape": (1920, 1080),
+    "portrait": (1080, 1920),
     "square": (1080, 1080),
+    "feed": (1080, 1350),
 }
 # theme -> (background from, background to, text, accent). Presets only: no colour is typed in.
 THEMES: dict[str, tuple[str, str, str, str]] = {
@@ -300,9 +302,13 @@ def expected(template: str, slots: dict[str, Any]) -> list[Expect]:
 # ---- the page ------------------------------------------------------------------------------------
 
 
-def _look(template: Template, slots: dict[str, Any]) -> Look:
+def _look(template: Template, slots: dict[str, Any], brand: dict[str, Any] | None = None) -> Look:
     width, height = SHAPES[slots["shape"]]
-    top, bottom, ink, accent = THEMES[slots["theme"]]
+    top, bottom, ink, accent = (
+        (brand["background"], brand["second"], brand["text"], brand["accent"])
+        if brand
+        else THEMES[slots["theme"]]
+    )
     return Look(
         width, height, top, bottom, ink, accent, FONTS[slots["font"]][2], template.transparent
     )
@@ -365,7 +371,8 @@ def _common_fields(seconds: tuple[int, int, int], font: str = "sans") -> tuple[F
     low, high, default = seconds
     return (
         Field("shape", "choice", "Shape", default="landscape", choices=(
-            ("landscape", "Landscape"), ("portrait", "Portrait"), ("square", "Square"))),
+            ("landscape", "Landscape"), ("portrait", "Portrait"), ("square", "Square"),
+            ("feed", "Feed (4:5)"),)),
         Field("seconds", "seconds", "Length", minimum=low, maximum=high, default=default),
         Field("theme", "choice", "Look", default="midnight", choices=tuple(
             (k, k.title()) for k in THEMES)),
@@ -618,6 +625,40 @@ def _captions_hold(s: dict[str, Any]) -> float:
     return round(int(s["per_line"]) / 2, 2)
 
 
+def _end_build(s: dict[str, Any], look: Look) -> tuple[str, str, str]:
+    w, h = look.width, look.height
+    big = round(min(w, h) * (0.085 if w >= h else 0.1) * _shrink(s["action"], 24, 40))
+    small = round(big * 0.45)
+    css = f"""  #stage {{ position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: {round(big * 0.5)}px;
+    padding: {round(w * 0.08)}px; text-align: center; }}
+  div.end-logo {{ display: none; }}
+  img.end-logo {{ max-width: {round(w * 0.4)}px; max-height: {round(h * 0.22)}px; }}
+  .action {{ font-size: {big}px; font-weight: 700; line-height: 1.15; letter-spacing: -0.02em;
+    color: {look.ink}; text-wrap: balance; }}
+  .address {{ font-size: {small}px; font-weight: 500; line-height: 1.35; color: {look.accent}; }}"""
+    address = f'<p id="address" data-slot="address" class="address">{_e(s["address"])}</p>'
+    body = f"""  <div id="stage" {_clip(s["seconds"])}>
+    <div id="logo" class="end-logo"></div>
+    <h1 id="action" data-slot="action" class="action">{_e(s["action"])}</h1>
+    {address if s["address"] else ""}
+  </div>"""
+    script = """  if (document.getElementById("logo")) {
+    tl.from("#logo", { opacity: 0, scale: 0.9, duration: 0.6, ease: "power2.out" }, 0.1);
+  }
+  tl.from("#action", { y: 30, opacity: 0, duration: 0.7, ease: "power3.out" }, 0.3);
+  if (document.getElementById("address")) {
+    tl.from("#address", { opacity: 0, duration: 0.6, ease: "power2.out" }, 0.7);
+  }"""
+    return css, body, script
+
+
+def _end_expected(s: dict[str, Any]) -> list[Expect]:
+    at = _title_hold(s)
+    out = [Expect("action", s["action"], at)]
+    return out + ([Expect("address", s["address"], at)] if s["address"] else [])
+
+
 # ---- the registry -------------------------------------------------------------------------------
 
 TEMPLATES: dict[str, Template] = {
@@ -693,6 +734,21 @@ TEMPLATES: dict[str, Template] = {
         formats=("webm", "mov", "mp4"),
         words=lambda s: f"{s['name']}. {s['role']}" if s["role"] else s["name"],
     ),
+    "end_card": Template(
+        id="end_card",
+        title="End card",
+        description="The last thing people see: your logo, what to do next, and where.",
+        fields=(
+            Field("action", "text", "What should people do?", required=True, max_chars=60),
+            Field("address", "text", "Where? A web address or a place", max_chars=80, default=""),
+            *_common_fields((3, MAX_SECONDS, 30)),
+        ),
+        build=_end_build,
+        expected=_end_expected,
+        hold=_title_hold,
+        primary="action",
+        words=lambda s: f"{s['action']}. {s['address']}" if s["address"] else s["action"],
+    ),
     "captions": Template(
         id="captions",
         title="Captions",
@@ -750,10 +806,12 @@ PARTS: dict[str, dict[str, str]] = {
     "quote": {"mark": ".mark", "quote": ".quote", "author": ".by"},
     "chart": {"title": ".title", "rows": ".rows"},
     "lower_third": {"strap": "#third"},
+    "end_card": {"logo": ".end-logo", "action": ".action", "address": ".address"},
     "captions": {"captions": "#caps"},
 }
 _MIN_WIDTH, _MIN_SCALE, _MAX_SCALE = 3.0, 0.4, 3.0
 MAX_ASSETS, MAX_PLACED, MAX_CUES = 60, 6, 60
+_HEX = re.compile(r"#[0-9a-fA-F]{6}")
 _FILE = re.compile(r"[0-9a-f]{8}\.(png|jpg|mp4|mov|webm|m4a|mp3|wav|ogg|flac)")
 _PLACED_START = {"x": 35.0, "y": 25.0, "w": 30.0, "scale": 1.0}  # a picture just put on a scene
 _PLACED_LEFT, _PLACED_WIDTH = 8.0, 84.0  # a part given only its height on the picture
@@ -1002,11 +1060,37 @@ def _normalize_scene(
     }
 
 
+def _brand(raw: Any, assets: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """A brand on a project (`brand.py`): its colours on every scene, and its logo. A colour reaches
+    the page's css, so nothing but `#rrggbb` passes."""
+    if not raw:
+        return None
+    if not isinstance(raw, dict):
+        raise SlotError("A brand needs colours.")
+    colours = {}
+    for name in ("background", "second", "text", "accent"):
+        value = raw.get(name)
+        if not isinstance(value, str) or not _HEX.fullmatch(value):
+            raise SlotError(f"The brand's {name} colour must look like #1a2b3c.")
+        colours[name] = value
+    logo = assets.get(str(raw.get("logo")))
+    return {
+        **colours,
+        "logo": logo["id"] if logo is not None and logo["kind"] == "image" else None,
+        "logo_on_scenes": bool(raw.get("logo_on_scenes", True)),
+    }
+
+
+def plain_text(value: Any, label: str, limit: int) -> str:
+    """Words that are not on a scene: checked the same way."""
+    return _text(value, label, limit, False)
+
+
 def _normalize_scenes(raw: dict[str, Any]) -> dict[str, Any]:
     """The document of a project of scenes, checked and completed. Its length comes from its
     scenes. A scene keeps its id; one without an id, or with one already used, gets a new one."""
     extra = sorted(
-        set(raw) - {"name", "shape", "font", "scenes", "seconds", "assets", "soundtrack"}
+        set(raw) - {"name", "shape", "font", "scenes", "seconds", "assets", "soundtrack", "brand"}
     )
     if extra:
         raise SlotError(f"A project of scenes has no setting called {extra[0]}.")
@@ -1038,6 +1122,7 @@ def _normalize_scenes(raw: dict[str, Any]) -> dict[str, Any]:
         "scenes": scenes,
         "assets": assets,
         "soundtrack": _soundtrack(raw.get("soundtrack"), by_id),
+        "brand": _brand(raw.get("brand"), by_id),
     }
 
 
@@ -1096,7 +1181,7 @@ def is_transparent(template: str, slots: dict[str, Any]) -> bool:
         return all(
             TEMPLATES[s["kind"]].transparent and not s.get("background") and not s.get("images")
             for s in slots["scenes"]
-        )
+        ) and not slots.get("brand")
     return get(template).transparent
 
 
@@ -1233,13 +1318,26 @@ def _render_scenes(document: dict[str, Any]) -> str:
     assets = {a["id"]: a for a in document.get("assets", [])}
     family, file, _ = FONTS[document["font"]]
     clear = is_transparent(SCENES, document)
+    brand = document.get("brand")
     rules, parts, scripts = [], [], []
     for scene, start in zip(document["scenes"], scene_starts(document), strict=True):
         template = TEMPLATES[scene["kind"]]
         slots = scene_slots(document, scene)
-        look = _look(template, slots)
+        look = _look(template, slots, brand)
         seconds = slots["seconds"]
         css, body, script = _scoped(scene["id"], start, *template.build(slots, look))
+        logo = assets[brand["logo"]] if brand and brand["logo"] else None
+        if scene["kind"] == "end_card" and logo:  # its own place, large, instead of in the corner
+            body = body.replace(
+                f'<div id="s{scene["id"]}-logo" class="end-logo"></div>',
+                f'<img id="s{scene["id"]}-logo" class="end-logo" src="assets/{logo["file"]}" '
+                'alt="">',
+            )
+        elif logo and brand["logo_on_scenes"]:
+            body = (
+                f'<img id="s{scene["id"]}-corner" class="brand-corner" '
+                f'src="assets/{logo["file"]}" alt="">\n{body}'
+            )
         background = (
             "transparent" if clear else f"linear-gradient(135deg, {look.top}, {look.bottom})"
         )
@@ -1297,6 +1395,9 @@ def _render_scenes(document: dict[str, Any]) -> str:
   .scene {{ position: absolute; inset: 0; overflow: hidden; }}
   .scene-back {{ position: absolute; inset: 0; width: 100%; height: 100%; }}
   .placed {{ position: absolute; height: auto; }}
+  .brand-corner {{ position: absolute; z-index: 2; top: {round(width * SAFE)}px;
+    right: {round(width * SAFE)}px; max-width: {round(min(width, height) * 0.2)}px;
+    max-height: {round(min(width, height) * 0.09)}px; }}
   .scene-caption {{ position: absolute; left: 8%; right: 8%;
     bottom: {max(round(height * 0.05), round(width * SAFE + min(width, height) * 0.015))}px;
     text-align: center;

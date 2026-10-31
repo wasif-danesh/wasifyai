@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Res
 from pydantic import BaseModel, Field
 from wasifyai_platform_sdk import Identity, RouteDeps, parse_ids
 
-from wasifyai_video.builder import check, live, media, projects, templates
+from wasifyai_video.builder import brand, check, live, media, projects, starts, templates
 from wasifyai_video.builder.runtime import (
     NotAvailable,
     NotFound,
@@ -50,6 +50,19 @@ class RenderIn(BaseModel):
     quality: str | None = Field(None, max_length=12)
 
 
+class ShapesIn(RenderIn):
+    shapes: list[str] = Field(min_length=1, max_length=4)
+
+
+class StartIn(BaseModel):
+    start: str = Field(max_length=40)
+    shape: str = Field("portrait", max_length=20)
+
+
+class UseBrandIn(BaseModel):
+    use: bool = True
+
+
 class ProjectPatch(BaseModel):
     slots: dict[str, Any]
     # "scenes" turns a project made from one template into a project of scenes (ADR-0096)
@@ -80,6 +93,7 @@ def template_info() -> dict[str, Any]:
             for k, (a, b, c, d) in templates.THEMES.items()
         },
         "fonts": {k: v[0] for k, v in templates.FONTS.items()},
+        "starts": starts.info(),
     }
 
 
@@ -126,6 +140,7 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
             out["progress"] = live
         out["stage"] = manager_for(deps).stage(row["id"]) if row["status"] == "working" else None
         out["format"] = row["settings"].get("format", "mp4")
+        out["shape"] = row["settings"].get("shape")
         out["video_url"] = out["poster_url"] = None
         if row["status"] == "done" and row["video_id"] and deps.storage is not None:
             clip = await video_store(deps.engine).get(
@@ -208,8 +223,123 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
             identity.tenant_id, identity.user_id,
             title=templates.title_of(body.template, slots), template=body.template, slots=slots,
         )  # fmt: skip
+        found = await with_brand(identity, found)
         await index_composition(deps, identity, found)
         return await project_out(identity, found, detail=True)
+
+    async def with_brand(identity: Identity, found: dict[str, Any]) -> dict[str, Any]:
+        return await brand.on_new_project(
+            deps, store_for(deps.state), (identity.tenant_id, PRODUCT_ID, identity.user_id), found
+        )
+
+    @router.post("/projects/from-start", status_code=201)
+    async def create_from_start(
+        body: StartIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """A project from a starting point: a set of scenes with words to replace."""
+        guard()
+        try:
+            wanted = starts.document_of(body.start, body.shape)
+        except KeyError:
+            raise HTTPException(404, "no such starting point") from None
+        slots = slots_or_422(templates.SCENES, wanted)
+        found = await asyncio.to_thread(
+            store_for(deps.state).add_composition,
+            identity.tenant_id, identity.user_id,
+            title=templates.title_of(templates.SCENES, slots), template=templates.SCENES,
+            slots=slots,
+        )  # fmt: skip
+        found = await with_brand(identity, found)
+        await index_composition(deps, identity, found)
+        return await project_out(identity, found, detail=True)
+
+    # ---- the brand kit (ADR-0096 MX7) -----------------------------------------------------------
+
+    @router.get("/brand")
+    async def get_brand(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        guard()
+        kit = await asyncio.to_thread(
+            store_for(deps.state).get_brand, identity.tenant_id, identity.user_id
+        )
+        return {"kit": kit}
+
+    @router.put("/brand")
+    async def set_brand(
+        body: dict[str, Any], identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        guard()
+        store = store_for(deps.state)
+        try:
+            kit = brand.normalize_kit(body)
+        except templates.SlotError as e:
+            raise HTTPException(422, {"code": "bad_slot", "message": str(e)}) from None
+        before = await asyncio.to_thread(store.get_brand, identity.tenant_id, identity.user_id)
+        kit["logo_asset"] = (before or {}).get("logo_asset")
+        await asyncio.to_thread(store.set_brand, identity.tenant_id, identity.user_id, kit)
+        return {"kit": kit}
+
+    @router.post("/brand/logo", status_code=201)
+    async def set_brand_logo(
+        file: UploadFile = File(...),  # noqa: B008
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        """The logo: a picture, checked as any file is, kept for this person's projects."""
+        guard()
+        limiter = deps.state.upload_limiter
+        if limiter is not None and not await limiter.allow(identity.tenant_id, identity.user_id):
+            raise HTTPException(429, "Too many uploads. Please wait a while and try again.")
+        data = await file.read(media.MAX_BYTES + 1)
+        try:
+            checked = await asyncio.to_thread(media.check_upload, data, file.filename or "")
+        except media.MediaError as e:
+            raise HTTPException(422, {"code": "bad_file", "message": str(e)}) from None
+        if checked.asset["kind"] != "image":
+            raise HTTPException(422, {"code": "bad_file", "message": "A logo must be a picture."})
+        assert deps.storage is not None, "storage is required"
+        owner = (identity.tenant_id, PRODUCT_ID, identity.user_id)
+        await deps.storage.put_for(
+            owner, media.rel_path(brand.KIT_FOLDER, checked.asset["file"]), checked.data,
+            media.type_of(checked.asset["file"]),
+        )  # fmt: skip
+        store = store_for(deps.state)
+        kit = await asyncio.to_thread(store.get_brand, identity.tenant_id, identity.user_id)
+        kit = {**(kit or brand.normalize_kit({})), "logo_asset": checked.asset}
+        await asyncio.to_thread(store.set_brand, identity.tenant_id, identity.user_id, kit)
+        return {"kit": kit}
+
+    @router.get("/brand/logo")
+    async def get_brand_logo(identity: Identity = Depends(deps.identity)) -> Response:
+        guard()
+        kit = await asyncio.to_thread(
+            store_for(deps.state).get_brand, identity.tenant_id, identity.user_id
+        )
+        logo = (kit or {}).get("logo_asset")
+        if not logo or deps.storage is None:
+            raise HTTPException(404, "no logo")
+        owner = (identity.tenant_id, PRODUCT_ID, identity.user_id)
+        data = await deps.storage.get_for(owner, media.rel_path(brand.KIT_FOLDER, logo["file"]))
+        return Response(
+            data, media_type=media.type_of(logo["file"]),
+            headers={"X-Content-Type-Options": "nosniff"},
+        )  # fmt: skip
+
+    @router.post("/projects/{cid}/brand")
+    async def use_brand(
+        cid: str, body: UseBrandIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """What this project's document would be with the brand on it, and its files with the logo
+        among them. The window puts it in its own document, one Undo step, like a made file."""
+        guard()
+        found = composition(identity, cid)
+        if found["template"] != templates.SCENES:
+            raise HTTPException(409, {"code": "not_scenes", "message": "Add more scenes first."})
+        store = store_for(deps.state)
+        kit = await asyncio.to_thread(store.get_brand, identity.tenant_id, identity.user_id)
+        if kit is None:
+            raise HTTPException(409, {"code": "no_brand", "message": "Set up your brand first."})
+        owner = (identity.tenant_id, PRODUCT_ID, identity.user_id)
+        document = await brand.use_on(deps, store, owner, found, kit)
+        return {"brand": document["brand"], "font": document["font"], "assets": document["assets"]}
 
     @router.get("/projects/{cid}")
     async def get_project(cid: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
@@ -594,6 +724,20 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
             raise refuse(e) from None
         return await render_out(identity, row)
 
+    @router.post("/projects/{cid}/render-shapes", status_code=202)
+    async def start_render_shapes(
+        cid: str, body: ShapesIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        guard()
+        composition(identity, cid)
+        try:
+            rows = await manager_for(deps).start_shapes(
+                identity, cid, body.shapes, body.format, body.quality
+            )
+        except Refused as e:
+            raise refuse(e) from None
+        return {"renders": [await render_out(identity, r) for r in rows]}
+
     @router.get("/renders/{rid}")
     async def get_render(rid: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
         guard()
@@ -657,6 +801,11 @@ async def delete_composition(deps: RouteDeps, identity: Identity, cid: str) -> b
         await deps.unindex(identity, PRODUCT_ID, vid)
     folder = projects.project_dir(root_for(deps.state), identity.tenant_id, identity.user_id, cid)
     await asyncio.to_thread(projects.remove_project, folder)
+    for shape in templates.SHAPES:  # one a restart left behind
+        variant = projects.project_dir(
+            root_for(deps.state), identity.tenant_id, identity.user_id, cid, shape
+        )
+        await asyncio.to_thread(projects.remove_project, variant)
     if deps.storage is not None:
         owner = (identity.tenant_id, PRODUCT_ID, identity.user_id)
         for asset in found["slots"].get("assets") or []:

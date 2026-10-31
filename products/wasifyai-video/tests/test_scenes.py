@@ -286,6 +286,7 @@ def test_the_page_can_find_every_part_of_every_kind(kind):
         "chart": {"title": "T", "data": "A, 1\nB, 2"},
         "lower_third": {"name": "N", "role": "R"},
         "captions": {"lines": "L"},
+        "end_card": {"action": "Go", "address": "a.example"},
     }[kind]
     d = templates.normalize_slots(
         SCENES, {"scenes": [{"kind": kind, "fields": fields, "caption": "C"}]}

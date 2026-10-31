@@ -403,7 +403,7 @@ def test_bad_words_are_refused_in_words_and_another_person_sees_nothing(rig):
 def test_templates_and_status_tell_the_window_what_it_needs(rig):
     info = rig.get(f"{BASE}/templates").json()
     assert [t["id"] for t in info["templates"]] == list(templates.TEMPLATES)
-    assert set(info["shapes"]) == {"landscape", "portrait", "square"}
+    assert set(info["shapes"]) == {"landscape", "portrait", "square", "feed"}
     assert "midnight" in info["themes"]
     assert info["fonts"] == {"sans": "Inter", "serif": "Source Serif 4"}
     lower = next(t for t in info["templates"] if t["id"] == "lower_third")

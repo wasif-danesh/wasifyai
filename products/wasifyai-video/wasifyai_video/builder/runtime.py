@@ -9,6 +9,7 @@ layout), so Your videos, search, export and delete already work on it."""
 import asyncio
 import logging
 import re
+import shutil
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -135,6 +136,11 @@ async def put_files_beside(
         await asyncio.to_thread(target.write_bytes, data)
 
 
+def _in_shape(found: dict[str, Any], shape: str) -> dict[str, Any]:
+    """The project as it is in another shape, for one video: nothing of it is saved."""
+    return {**found, "slots": {**found["slots"], "shape": shape}}
+
+
 class RenderManager:
     """Starts, follows and cancels renders. One at a time on this computer: a render holds a
     browser and a few gigabytes, and the person's models need the memory too."""
@@ -169,23 +175,7 @@ class RenderManager:
         state = self._deps.state
         engine = engine_for(state)
         store = store_for(state)
-        if not engine.ready():
-            raise Refused("not_ready", not_ready(engine))
-        if self.busy(identity):
-            raise Refused("busy", "A video is already being made. Wait for it to finish.")
-        fit = engine.fit()
-        if fit["verdict"] == "too_big":
-            raise Refused("too_big", fit["reason"])
-        found = store.get_composition(identity.tenant_id, identity.user_id, cid)
-        template = templates.get(found["template"])
-        formats = templates.formats_of(found["template"], found["slots"])
-        if quality is not None and quality not in QUALITIES:
-            raise Refused("bad_quality", f"The quality must be one of: {', '.join(QUALITIES)}.")
-        if fmt not in formats:
-            raise Refused(
-                "bad_format",
-                f"{template.title} can be made as {', '.join(formats)}, not {fmt}.",
-            )
+        found, fit = self._may_start(identity, cid, fmt, quality, engine, store)
         folder = await self._write_all(identity, found, engine)
         row = store.add_render(
             identity.tenant_id, identity.user_id, cid,
@@ -203,17 +193,119 @@ class RenderManager:
         )
         return row
 
+    async def start_shapes(
+        self,
+        identity: Identity,
+        cid: str,
+        shapes: list[str],
+        fmt: str = "mp4",
+        quality: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """One project as several videos, one for each shape (ADR-0096 MX7), made one after another
+        as anything is. Each has its own check of the words, because a line that fits one shape can
+        be too wide for another; one that fails does not stop the rest. Stopping stops them all."""
+        state = self._deps.state
+        engine = engine_for(state)
+        store = store_for(state)
+        unknown = [s for s in shapes if s not in templates.SHAPES]
+        if unknown or not shapes:
+            raise Refused("bad_shape", f"The shape must be one of: {', '.join(templates.SHAPES)}.")
+        wanted = list(dict.fromkeys(shapes))
+        found, fit = self._may_start(identity, cid, fmt, quality, engine, store)
+        rows = [
+            store.add_render(
+                identity.tenant_id, identity.user_id, cid,
+                {"fps": templates.FPS, "seconds": found["slots"]["seconds"], "shape": shape,
+                 "fit": fit["verdict"], "format": fmt, **({"quality": quality} if quality else {})},
+            )
+            for shape in wanted
+        ]  # fmt: skip
+        for row in rows:
+            self._progress[row["id"]] = 0.0
+            self._owners[row["id"]] = self._who(identity)
+            self._stage[row["id"]] = "waiting"
+        task = asyncio.create_task(
+            self._acting(identity, self._run_shapes(identity, found, rows, engine, fmt, quality))
+        )
+        for row in rows:
+            self._jobs[row["id"]] = task
+        return rows
+
+    async def _run_shapes(
+        self,
+        identity: Identity,
+        found: dict[str, Any],
+        rows: list[dict[str, Any]],
+        engine: Any,
+        fmt: str,
+        quality: str | None,
+    ) -> None:
+        store = store_for(self._deps.state)
+        left = [row["id"] for row in rows]
+        try:
+            for row in rows:
+                rid, shape = row["id"], row["settings"]["shape"]
+                this = _in_shape(found, shape)
+                folder = await self._write_all(identity, this, engine, shape)
+                try:
+                    self._stage[rid] = "checking"
+                    await self._run(identity, this, folder, rid, engine, fmt, quality=quality)
+                    left.remove(rid)
+                finally:
+                    await asyncio.to_thread(shutil.rmtree, folder, ignore_errors=True)
+        except asyncio.CancelledError:
+            if not getattr(engine, "closing", False):
+                for rid in left:
+                    # the one being drawn was marked by `_run`, and marking is first come
+                    if store.get_status(rid) == "working":
+                        store.finish_render(rid, "cancelled", error="The video was cancelled.")
+            raise
+        except Exception:
+            log.exception("a set of Motion graphics renders failed")
+            for rid in left:
+                store.finish_render(rid, "failed", error="The video could not be made.")
+        finally:
+            for rid in left:
+                self._progress.pop(rid, None)
+                self._stage.pop(rid, None)
+
+    def _may_start(
+        self, identity: Identity, cid: str, fmt: str, quality: str | None, engine: Any, store: Any
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """The project and how it fits here, or why a video cannot be started now."""
+        if not engine.ready():
+            raise Refused("not_ready", not_ready(engine))
+        if self.busy(identity):
+            raise Refused("busy", "A video is already being made. Wait for it to finish.")
+        fit = engine.fit()
+        if fit["verdict"] == "too_big":
+            raise Refused("too_big", fit["reason"])
+        found = store.get_composition(identity.tenant_id, identity.user_id, cid)
+        template = templates.get(found["template"])
+        formats = templates.formats_of(found["template"], found["slots"])
+        if quality is not None and quality not in QUALITIES:
+            raise Refused("bad_quality", f"The quality must be one of: {', '.join(QUALITIES)}.")
+        if fmt not in formats:
+            raise Refused(
+                "bad_format",
+                f"{template.title} can be made as {', '.join(formats)}, not {fmt}.",
+            )
+        return found, fit
+
     async def _acting(self, identity: Identity, work: Any) -> None:
         """Run a render as this person: the engine reads whose it is from the context."""
         with self._deps.acting_as(identity, PRODUCT_ID):
             await work
 
-    def _write(self, identity: Identity, found: dict[str, Any], engine: Any) -> Path:
+    def _write(
+        self, identity: Identity, found: dict[str, Any], engine: Any, variant: str = ""
+    ) -> Path:
         gsap = engine.gsap()
         if gsap is None:
             raise Refused("not_ready", "Motion graphics is not set up yet. Set it up first.")
+        # a shape of a set has its own folder: the editor's still can write the project's meanwhile
         folder = projects.project_dir(
-            root_for(self._deps.state), identity.tenant_id, identity.user_id, found["id"]
+            root_for(self._deps.state), identity.tenant_id, identity.user_id, found["id"], variant
         )
         fonts = engine.fonts(templates.FONT_FILES)
         family = templates.FONTS[found["slots"]["font"]][1]
@@ -225,8 +317,10 @@ class RenderManager:
         projects.write_project(folder, found["template"], found["slots"], gsap, fonts)
         return folder
 
-    async def _write_all(self, identity: Identity, found: dict[str, Any], engine: Any) -> Path:
-        folder = self._write(identity, found, engine)
+    async def _write_all(
+        self, identity: Identity, found: dict[str, Any], engine: Any, variant: str = ""
+    ) -> Path:
+        folder = self._write(identity, found, engine, variant)
         await put_files_beside(self._deps, identity, found, folder, engine)
         return folder
 
@@ -255,7 +349,10 @@ class RenderManager:
                 found = store.get_composition(who.tenant_id, who.user_id, row["composition_id"])
                 if row["check"] is None:
                     raise NotFound(rid)
-                folder = await self._write_all(who, found, engine)
+                shape = row["settings"].get("shape")
+                if shape:
+                    found = _in_shape(found, shape)
+                folder = await self._write_all(who, found, engine, shape or "")
             except (NotFound, Refused):
                 store.finish_render(rid, "failed", error=STOPPED)
                 continue

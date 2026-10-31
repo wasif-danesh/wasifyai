@@ -3261,6 +3261,7 @@
               "quote",
               "chart",
               "lower_third",
+              "end_card",
               "captions"
             ],
             "title": "Kind",
@@ -3921,7 +3922,7 @@
       "id": "motion.make",
       "title": "Make a motion graphic",
       "summary": "Make an animated title, quote, chart, lower third or captions.",
-      "description": "Make a finished animated graphic in one step: pick the template that fits the request and give its fields, with the person's words and numbers exactly as they typed them (never rewrite, correct or translate them). The page is built from a vetted template, the words on the screen are checked against what was given, and the video is saved to the library with the project, which stays editable. For overlays on footage use lower_third or captions with format webm (transparent). Use image.generate or video.generate for pictures of things. title: A title and a line under it, animated in on a colour you pick. Fields: title (text, up to 80 characters, required); subtitle (text, up to 140 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). quote: A quote that appears word by word, with who said it. Fields: quote (text, up to 220 characters, required); author (text, up to 60 characters); shape (landscape/portrait/square); seconds (seconds, 4 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). chart: Bars that grow, from your own numbers. Each number is shown exactly as you type it. Fields: title (text, up to 80 characters, required); data (lines like 'Sales, 120', up to 8); shape (landscape/portrait/square); seconds (seconds, 5 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). lower_third: A name strap for the bottom of a video. Transparent, to lay over footage. Fields: name (text, up to 60 characters, required); role (text, up to 80 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). captions: Your own words as captions, one after another. Transparent, to lay over footage. Fields: lines (one caption per line, up to 45 lines); per_line (2/3/4); shape (landscape/portrait/square); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif).",
+      "description": "Make a finished animated graphic in one step: pick the template that fits the request and give its fields, with the person's words and numbers exactly as they typed them (never rewrite, correct or translate them). The page is built from a vetted template, the words on the screen are checked against what was given, and the video is saved to the library with the project, which stays editable. For overlays on footage use lower_third or captions with format webm (transparent). Use image.generate or video.generate for pictures of things. title: A title and a line under it, animated in on a colour you pick. Fields: title (text, up to 80 characters, required); subtitle (text, up to 140 characters); shape (landscape/portrait/square/feed); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). quote: A quote that appears word by word, with who said it. Fields: quote (text, up to 220 characters, required); author (text, up to 60 characters); shape (landscape/portrait/square/feed); seconds (seconds, 4 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). chart: Bars that grow, from your own numbers. Each number is shown exactly as you type it. Fields: title (text, up to 80 characters, required); data (lines like 'Sales, 120', up to 8); shape (landscape/portrait/square/feed); seconds (seconds, 5 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). lower_third: A name strap for the bottom of a video. Transparent, to lay over footage. Fields: name (text, up to 60 characters, required); role (text, up to 80 characters); shape (landscape/portrait/square/feed); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). end_card: The last thing people see: your logo, what to do next, and where. Fields: action (text, up to 60 characters, required); address (text, up to 80 characters); shape (landscape/portrait/square/feed); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). captions: Your own words as captions, one after another. Transparent, to lay over footage. Fields: lines (one caption per line, up to 45 lines); per_line (2/3/4); shape (landscape/portrait/square/feed); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif).",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -3932,6 +3933,7 @@
               "quote",
               "chart",
               "lower_third",
+              "end_card",
               "captions"
             ],
             "title": "Template",
@@ -4405,6 +4407,65 @@
       "help": "docs/help/motion.move_scene.md"
     },
     {
+      "id": "motion.read_brand",
+      "title": "Read the brand",
+      "summary": "Read the person's brand: name, colours, letters, end card words.",
+      "description": "Read the person's brand kit, used in their Motion graphics projects: its name, colours, letters, whether it has a logo, and the words of its end card.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "Strict",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "kit": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kit"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kit"
+        ],
+        "title": "BrandOut",
+        "type": "object"
+      },
+      "examples": [
+        {}
+      ],
+      "effect": "read",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-video",
+      "ui": "motion",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/motion.read_brand.md"
+    },
+    {
       "id": "motion.read_project",
       "title": "Read a video project",
       "summary": "What a video project's scenes say, for working on it.",
@@ -4787,10 +4848,143 @@
       "help": "docs/help/motion.revise.md"
     },
     {
+      "id": "motion.set_brand",
+      "title": "Set the brand",
+      "summary": "Save the person's brand: name, colours, letters, end card words.",
+      "description": "Save the person's brand kit for their Motion graphics projects: name, colours as #rrggbb, letters, the end card's call to action and address. New projects start with it. The logo is added on the screen.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "default": "",
+            "description": "The brand's name.",
+            "maxLength": 60,
+            "title": "Name",
+            "type": "string"
+          },
+          "background": {
+            "default": "#0b1220",
+            "description": "Background colour.",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "title": "Background",
+            "type": "string"
+          },
+          "second": {
+            "default": "#1c2b4a",
+            "description": "Second colour, the background fades to.",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "title": "Second",
+            "type": "string"
+          },
+          "text": {
+            "default": "#f5f7fb",
+            "description": "Colour of the words.",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "title": "Text",
+            "type": "string"
+          },
+          "accent": {
+            "default": "#4f8cff",
+            "description": "Accent colour.",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "title": "Accent",
+            "type": "string"
+          },
+          "font": {
+            "default": "sans",
+            "description": "The letters.",
+            "enum": [
+              "sans",
+              "serif"
+            ],
+            "title": "Font",
+            "type": "string"
+          },
+          "action": {
+            "default": "",
+            "description": "The end card's call to action.",
+            "maxLength": 60,
+            "title": "Action",
+            "type": "string"
+          },
+          "address": {
+            "default": "",
+            "description": "The end card's web address or place.",
+            "maxLength": 80,
+            "title": "Address",
+            "type": "string"
+          },
+          "logo_on_scenes": {
+            "default": true,
+            "description": "Show the logo in the corner of every scene.",
+            "title": "Logo On Scenes",
+            "type": "boolean"
+          }
+        },
+        "title": "BrandIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "kit": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kit"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kit"
+        ],
+        "title": "BrandOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "name": "Northbean",
+          "background": "#10261c",
+          "second": "#1f4d3a",
+          "text": "#f7f3e9",
+          "accent": "#e0a458",
+          "action": "Try it today",
+          "address": "northbean.example"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-video",
+      "ui": "motion",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/motion.set_brand.md"
+    },
+    {
       "id": "motion.set_project",
       "title": "Change the whole project",
       "summary": "Change the name or shape of a video project, or write all its scenes.",
-      "description": "Change a Motion graphics project's name, shape or letters, or replace all its scenes at once, as when turning a brief into a first version. Give only what changes. Nothing is rendered. title: A title and a line under it, animated in on a colour you pick. Fields: title (text, up to 80 characters, required); subtitle (text, up to 140 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). quote: A quote that appears word by word, with who said it. Fields: quote (text, up to 220 characters, required); author (text, up to 60 characters); shape (landscape/portrait/square); seconds (seconds, 4 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). chart: Bars that grow, from your own numbers. Each number is shown exactly as you type it. Fields: title (text, up to 80 characters, required); data (lines like 'Sales, 120', up to 8); shape (landscape/portrait/square); seconds (seconds, 5 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). lower_third: A name strap for the bottom of a video. Transparent, to lay over footage. Fields: name (text, up to 60 characters, required); role (text, up to 80 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). captions: Your own words as captions, one after another. Transparent, to lay over footage. Fields: lines (one caption per line, up to 45 lines); per_line (2/3/4); shape (landscape/portrait/square); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif).",
+      "description": "Change a Motion graphics project's name, shape or letters, or replace all its scenes at once, as when turning a brief into a first version. Give only what changes. Nothing is rendered. title: A title and a line under it, animated in on a colour you pick. Fields: title (text, up to 80 characters, required); subtitle (text, up to 140 characters); shape (landscape/portrait/square/feed); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). quote: A quote that appears word by word, with who said it. Fields: quote (text, up to 220 characters, required); author (text, up to 60 characters); shape (landscape/portrait/square/feed); seconds (seconds, 4 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). chart: Bars that grow, from your own numbers. Each number is shown exactly as you type it. Fields: title (text, up to 80 characters, required); data (lines like 'Sales, 120', up to 8); shape (landscape/portrait/square/feed); seconds (seconds, 5 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). lower_third: A name strap for the bottom of a video. Transparent, to lay over footage. Fields: name (text, up to 60 characters, required); role (text, up to 80 characters); shape (landscape/portrait/square/feed); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). end_card: The last thing people see: your logo, what to do next, and where. Fields: action (text, up to 60 characters, required); address (text, up to 80 characters); shape (landscape/portrait/square/feed); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). captions: Your own words as captions, one after another. Transparent, to lay over footage. Fields: lines (one caption per line, up to 45 lines); per_line (2/3/4); shape (landscape/portrait/square/feed); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif).",
       "input": {
         "$defs": {
           "SceneIn": {
@@ -4803,6 +4997,7 @@
                   "quote",
                   "chart",
                   "lower_third",
+                  "end_card",
                   "captions"
                 ],
                 "title": "Kind",
@@ -4942,7 +5137,8 @@
                 "enum": [
                   "landscape",
                   "portrait",
-                  "square"
+                  "square",
+                  "feed"
                 ],
                 "type": "string"
               },
@@ -5123,6 +5319,167 @@
       "help": "docs/help/motion.set_project.md"
     },
     {
+      "id": "motion.start_from",
+      "title": "Start a video from a starting point",
+      "summary": "Start a marketing video from a ready set of scenes with words to replace.",
+      "description": "Start a Motion graphics project from a set of scenes: a product promo, launch announcement, sale or offer, customer words, feature explainer, before and after, or social post. The words are there to be replaced. Nothing is rendered.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "start": {
+            "description": "Which starting point.",
+            "enum": [
+              "promo",
+              "launch",
+              "offer",
+              "customer",
+              "explainer",
+              "before_after",
+              "social"
+            ],
+            "title": "Start",
+            "type": "string"
+          },
+          "shape": {
+            "default": "portrait",
+            "description": "The shape of the whole video.",
+            "enum": [
+              "landscape",
+              "portrait",
+              "square",
+              "feed"
+            ],
+            "title": "Shape",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "description": "The project's name.",
+            "maxLength": 80,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start"
+        ],
+        "title": "StartFromIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "SceneOut": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "kind": {
+                "title": "Kind",
+                "type": "string"
+              },
+              "seconds": {
+                "title": "Seconds",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "kind",
+              "seconds"
+            ],
+            "title": "SceneOut",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "composition_id": {
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "shape": {
+            "title": "Shape",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "integer"
+          },
+          "scenes": {
+            "items": {
+              "$ref": "#/$defs/SceneOut"
+            },
+            "title": "Scenes",
+            "type": "array"
+          },
+          "scene_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Scene Id"
+          }
+        },
+        "required": [
+          "composition_id",
+          "product_id",
+          "uri",
+          "title",
+          "shape",
+          "seconds",
+          "scenes"
+        ],
+        "title": "ScenesOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "start": "promo",
+          "shape": "portrait"
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-video",
+      "ui": "motion",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/motion.start_from.md"
+    },
+    {
       "id": "motion.undo",
       "title": "Undo the last change",
       "summary": "Bring back a video project as it was before the last change.",
@@ -5258,10 +5615,151 @@
       "help": "docs/help/motion.undo.md"
     },
     {
+      "id": "motion.use_brand",
+      "title": "Use the brand on a video project",
+      "summary": "Put the person's brand on a video project, or take it off.",
+      "description": "Put the person's brand on a Motion graphics project of scenes: its colours on every scene, its letters and its logo. It can be undone, and with use false it comes off and the scenes' own looks show again.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "composition_id": {
+            "description": "The video project, as returned when it was created.",
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "use": {
+            "default": true,
+            "description": "True puts the person's brand on, false takes it off.",
+            "title": "Use",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "composition_id"
+        ],
+        "title": "UseBrandIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "SceneOut": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "kind": {
+                "title": "Kind",
+                "type": "string"
+              },
+              "seconds": {
+                "title": "Seconds",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "kind",
+              "seconds"
+            ],
+            "title": "SceneOut",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "composition_id": {
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "shape": {
+            "title": "Shape",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "integer"
+          },
+          "scenes": {
+            "items": {
+              "$ref": "#/$defs/SceneOut"
+            },
+            "title": "Scenes",
+            "type": "array"
+          },
+          "scene_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Scene Id"
+          }
+        },
+        "required": [
+          "composition_id",
+          "product_id",
+          "uri",
+          "title",
+          "shape",
+          "seconds",
+          "scenes"
+        ],
+        "title": "ScenesOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "composition_id": "0b7c1f9e000040008000000000000000"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-video",
+      "ui": "motion",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/motion.use_brand.md"
+    },
+    {
       "id": "motion.write_scenes",
       "title": "Write a video of several scenes",
       "summary": "Start a video from a list of scenes, without making it yet.",
-      "description": "Create a Motion graphics project of several scenes, one after another, for a promotion, an advert or a social post. Each scene is one of the five templates. The words are shown exactly as given. Nothing is rendered; call video_builder.render to make the video. title: A title and a line under it, animated in on a colour you pick. Fields: title (text, up to 80 characters, required); subtitle (text, up to 140 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). quote: A quote that appears word by word, with who said it. Fields: quote (text, up to 220 characters, required); author (text, up to 60 characters); shape (landscape/portrait/square); seconds (seconds, 4 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). chart: Bars that grow, from your own numbers. Each number is shown exactly as you type it. Fields: title (text, up to 80 characters, required); data (lines like 'Sales, 120', up to 8); shape (landscape/portrait/square); seconds (seconds, 5 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). lower_third: A name strap for the bottom of a video. Transparent, to lay over footage. Fields: name (text, up to 60 characters, required); role (text, up to 80 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). captions: Your own words as captions, one after another. Transparent, to lay over footage. Fields: lines (one caption per line, up to 45 lines); per_line (2/3/4); shape (landscape/portrait/square); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif).",
+      "description": "Create a Motion graphics project of several scenes, one after another, for a promotion, an advert or a social post. Each scene is one of the five templates. The words are shown exactly as given. Nothing is rendered; call video_builder.render to make the video. title: A title and a line under it, animated in on a colour you pick. Fields: title (text, up to 80 characters, required); subtitle (text, up to 140 characters); shape (landscape/portrait/square/feed); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). quote: A quote that appears word by word, with who said it. Fields: quote (text, up to 220 characters, required); author (text, up to 60 characters); shape (landscape/portrait/square/feed); seconds (seconds, 4 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). chart: Bars that grow, from your own numbers. Each number is shown exactly as you type it. Fields: title (text, up to 80 characters, required); data (lines like 'Sales, 120', up to 8); shape (landscape/portrait/square/feed); seconds (seconds, 5 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). lower_third: A name strap for the bottom of a video. Transparent, to lay over footage. Fields: name (text, up to 60 characters, required); role (text, up to 80 characters); shape (landscape/portrait/square/feed); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). end_card: The last thing people see: your logo, what to do next, and where. Fields: action (text, up to 60 characters, required); address (text, up to 80 characters); shape (landscape/portrait/square/feed); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). captions: Your own words as captions, one after another. Transparent, to lay over footage. Fields: lines (one caption per line, up to 45 lines); per_line (2/3/4); shape (landscape/portrait/square/feed); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif).",
       "input": {
         "$defs": {
           "SceneIn": {
@@ -5274,6 +5772,7 @@
                   "quote",
                   "chart",
                   "lower_third",
+                  "end_card",
                   "captions"
                 ],
                 "title": "Kind",
@@ -5398,7 +5897,8 @@
             "enum": [
               "landscape",
               "portrait",
-              "square"
+              "square",
+              "feed"
             ],
             "title": "Shape",
             "type": "string"
@@ -7682,7 +8182,7 @@
       "id": "video_builder.create",
       "title": "Write a video project",
       "summary": "Start a video from a template, without making it yet.",
-      "description": "Create a Motion graphics project from one of five templates and keep it in the library. Nothing is rendered; call video_builder.render to make the video, or use motion.make to do both at once. The words are shown exactly as given. title: A title and a line under it, animated in on a colour you pick. Fields: title (text, up to 80 characters, required); subtitle (text, up to 140 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). quote: A quote that appears word by word, with who said it. Fields: quote (text, up to 220 characters, required); author (text, up to 60 characters); shape (landscape/portrait/square); seconds (seconds, 4 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). chart: Bars that grow, from your own numbers. Each number is shown exactly as you type it. Fields: title (text, up to 80 characters, required); data (lines like 'Sales, 120', up to 8); shape (landscape/portrait/square); seconds (seconds, 5 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). lower_third: A name strap for the bottom of a video. Transparent, to lay over footage. Fields: name (text, up to 60 characters, required); role (text, up to 80 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). captions: Your own words as captions, one after another. Transparent, to lay over footage. Fields: lines (one caption per line, up to 45 lines); per_line (2/3/4); shape (landscape/portrait/square); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif).",
+      "description": "Create a Motion graphics project from one of five templates and keep it in the library. Nothing is rendered; call video_builder.render to make the video, or use motion.make to do both at once. The words are shown exactly as given. title: A title and a line under it, animated in on a colour you pick. Fields: title (text, up to 80 characters, required); subtitle (text, up to 140 characters); shape (landscape/portrait/square/feed); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). quote: A quote that appears word by word, with who said it. Fields: quote (text, up to 220 characters, required); author (text, up to 60 characters); shape (landscape/portrait/square/feed); seconds (seconds, 4 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). chart: Bars that grow, from your own numbers. Each number is shown exactly as you type it. Fields: title (text, up to 80 characters, required); data (lines like 'Sales, 120', up to 8); shape (landscape/portrait/square/feed); seconds (seconds, 5 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). lower_third: A name strap for the bottom of a video. Transparent, to lay over footage. Fields: name (text, up to 60 characters, required); role (text, up to 80 characters); shape (landscape/portrait/square/feed); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). end_card: The last thing people see: your logo, what to do next, and where. Fields: action (text, up to 60 characters, required); address (text, up to 80 characters); shape (landscape/portrait/square/feed); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). captions: Your own words as captions, one after another. Transparent, to lay over footage. Fields: lines (one caption per line, up to 45 lines); per_line (2/3/4); shape (landscape/portrait/square/feed); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif).",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -7694,6 +8194,7 @@
               "quote",
               "chart",
               "lower_third",
+              "end_card",
               "captions"
             ],
             "title": "Template",
@@ -7889,7 +8390,7 @@
       "id": "video_builder.render",
       "title": "Make the video",
       "summary": "Render a video project to a video in the library.",
-      "description": "Render a Motion graphics project and save it to the library (Your videos). The words on the screen are checked against what was typed first; a page that does not say them is not rendered. It runs in a sandbox, takes seconds to a minute, and only one video is made at a time. Returns a job handle when it is not done within the wait. Lower thirds and captions can be made transparent (webm or mov).",
+      "description": "Render a Motion graphics project and save it to the library (Your videos). The words on the screen are checked against what was typed first; a page that does not say them is not rendered. It runs in a sandbox, takes seconds to a minute, and only one video is made at a time. Returns a job handle when it is not done within the wait. Lower thirds and captions can be made transparent (webm or mov). `shapes` makes one video for each shape from the one project.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -7929,6 +8430,29 @@
             "default": null,
             "description": "draft is fastest, high is best. standard if not given.",
             "title": "Quality"
+          },
+          "shapes": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "landscape",
+                    "portrait",
+                    "square",
+                    "feed"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "To make one video for each of these shapes from the one project, one after another: landscape, portrait, square, feed (4:5). The project's own shape if not given.",
+            "title": "Shapes"
           }
         },
         "required": [
@@ -7938,6 +8462,57 @@
         "type": "object"
       },
       "output": {
+        "$defs": {
+          "ShapeMade": {
+            "properties": {
+              "shape": {
+                "title": "Shape",
+                "type": "string"
+              },
+              "video_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Video Id"
+              },
+              "uri": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Uri"
+              },
+              "error": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Error"
+              }
+            },
+            "required": [
+              "shape"
+            ],
+            "title": "ShapeMade",
+            "type": "object"
+          }
+        },
         "properties": {
           "composition_id": {
             "title": "Composition Id",
@@ -7970,6 +8545,14 @@
           "checked": {
             "title": "Checked",
             "type": "boolean"
+          },
+          "shapes": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/ShapeMade"
+            },
+            "title": "Shapes",
+            "type": "array"
           }
         },
         "required": [

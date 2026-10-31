@@ -4,7 +4,9 @@
 // assistant beside the scene's details, MX4 arranging on the preview, MX5 and MX6 more tools on the left.
 import type {
   AssistantApi,
+  BrandKit,
   BuilderProject,
+  BuilderRender,
   BuilderShape,
   BuilderSlots,
   BuilderTheme,
@@ -42,6 +44,7 @@ import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../../save";
 import { FormField } from "../FormField";
 import { toDraft } from "../slots";
 import { ArrangeOverlay, type MeasuredPart, laidOut } from "./ArrangeOverlay";
+import { BrandTools } from "./BrandTools";
 import { LivePreview, type LivePreviewHandle } from "./LivePreview";
 import { MakeTools } from "./MakeTools";
 import {
@@ -51,12 +54,20 @@ import {
   MediaTools,
   SoundTools,
 } from "./MediaTools";
-import { lengthOf, sceneAt, startOf, useSceneEditor } from "./use-scene-editor";
+import { END_CARD_WORDS, lengthOf, sceneAt, startOf, useSceneEditor } from "./use-scene-editor";
 
 const SIZES: Record<BuilderShape, { width: number; height: number; label: string }> = {
-  landscape: { width: 1280, height: 720, label: "16:9" },
-  portrait: { width: 720, height: 1280, label: "9:16" },
+  landscape: { width: 1920, height: 1080, label: "16:9" },
+  portrait: { width: 1080, height: 1920, label: "9:16" },
+  feed: { width: 1080, height: 1350, label: "4:5" },
   square: { width: 1080, height: 1080, label: "1:1" },
+};
+/** What each shape is for, where the person chooses which videos to make. */
+const SHAPE_USES: Record<BuilderShape, string> = {
+  portrait: "Stories, Reels, TikTok",
+  feed: "Instagram and Facebook feed",
+  square: "A square post",
+  landscape: "YouTube, your website",
 };
 const WHOLE_PROJECT = new Set(["shape", "font", "seconds", "theme"]);
 const TRANSITIONS = [
@@ -69,12 +80,13 @@ const FIRST_WORDS: Record<string, Record<string, string | number>> = {
   quote: { quote: "What someone said", seconds: 5 },
   chart: { title: "Your numbers", data: "First, 10\nSecond, 20", seconds: 5 },
   lower_third: { name: "A name", seconds: 5 },
+  end_card: { action: END_CARD_WORDS, seconds: 4 },
   captions: { lines: "Your first line", per_line: "3" },
 };
 
 /** The actions whose result the screen reads back. Making the video changes nothing here. */
 const CHANGES_THE_PROJECT =
-  /^motion\.(set_project|add_scene|change_scene|move_scene|duplicate_scene|remove_scene|undo|make_file)$/;
+  /^motion\.(set_project|add_scene|change_scene|move_scene|duplicate_scene|remove_scene|undo|make_file|use_brand)$/;
 
 const LAYOUTS = [
   { where: "design", label: "As designed" },
@@ -102,7 +114,7 @@ const clock = (seconds: number) =>
 
 const firstWords = (scene: Scene) => {
   const f = scene.fields;
-  const said = f.title ?? f.quote ?? f.name ?? f.lines ?? "";
+  const said = f.title ?? f.quote ?? f.name ?? f.action ?? f.lines ?? "";
   const text = Array.isArray(said) ? said[0] : said;
   return String(text ?? "");
 };
@@ -166,6 +178,19 @@ export function SceneEditor({
   );
   const [playing, setPlaying] = useState(false);
   const [tool, setTool] = useState<"add" | "media" | "make" | "sound" | "looks">("add");
+  const [kit, setKit] = useState<BrandKit | null>(null);
+  useEffect(() => {
+    let current = true;
+    api.brand().then(
+      (found) => {
+        if (current) setKit(found.kit);
+      },
+      () => {},
+    );
+    return () => {
+      current = false;
+    };
+  }, [api]);
   const [voices, setVoices] = useState<MakeVoice[]>([]);
   useEffect(() => {
     if (tool !== "make") return;
@@ -408,7 +433,7 @@ export function SceneEditor({
           </div>
           <div className="grid flex-1 content-start gap-3 overflow-auto p-3 pt-1">
             {tool === "add" ? (
-              <AddTools catalogue={catalogue} onAdd={e.addScene} />
+              <AddTools catalogue={catalogue} kit={kit} onAdd={e.addScene} />
             ) : tool === "media" ? (
               <MediaTools
                 doc={doc}
@@ -456,26 +481,42 @@ export function SceneEditor({
                 }}
               />
             ) : (
-              <LooksTools
-                catalogue={catalogue}
-                scene={scene}
-                index={index}
-                onLook={(theme) => {
-                  if (scene) {
-                    e.changeScene(scene.id, "Change the look", (s) => ({
-                      ...s,
-                      fields: { ...s.fields, theme },
-                    }));
-                  }
-                }}
-                onEvery={() => {
-                  const theme = scene?.fields.theme;
-                  e.apply("Use this look on every scene", (d) => ({
-                    ...d,
-                    scenes: d.scenes.map((s) => ({ ...s, fields: { ...s.fields, theme } })),
-                  }));
-                }}
-              />
+              <>
+                <BrandTools
+                  api={api}
+                  kit={kit}
+                  on={Boolean(doc.brand)}
+                  fonts={catalogue.fonts}
+                  onKit={setKit}
+                  onUse={(use, saved) => e.useBrand(use, saved ?? kit)}
+                />
+                {doc.brand ? (
+                  <p className="m-0 text-muted-foreground text-xs">
+                    Your brand's colours are on every scene. Clear the tick to choose a look.
+                  </p>
+                ) : (
+                  <LooksTools
+                    catalogue={catalogue}
+                    scene={scene}
+                    index={index}
+                    onLook={(theme) => {
+                      if (scene) {
+                        e.changeScene(scene.id, "Change the look", (s) => ({
+                          ...s,
+                          fields: { ...s.fields, theme },
+                        }));
+                      }
+                    }}
+                    onEvery={() => {
+                      const theme = scene?.fields.theme;
+                      e.apply("Use this look on every scene", (d) => ({
+                        ...d,
+                        scenes: d.scenes.map((s) => ({ ...s, fields: { ...s.fields, theme } })),
+                      }));
+                    }}
+                  />
+                )}
+              </>
             )}
           </div>
         </aside>
@@ -707,6 +748,7 @@ export function SceneEditor({
         <MakeDialog
           editor={e}
           title={doc.name || project.title}
+          shape={doc.shape}
           videos={videos}
           canSave={canSave}
           downloadHref={downloadHref}
@@ -721,11 +763,21 @@ export function SceneEditor({
   );
 }
 
+/** The words of an end card that the person's brand has. */
+function endWords(kit: BrandKit | null) {
+  return {
+    ...(kit?.action ? { action: kit.action } : {}),
+    ...(kit?.address ? { address: kit.address } : {}),
+  };
+}
+
 function AddTools({
   catalogue,
+  kit,
   onAdd,
 }: {
   catalogue: TemplateCatalogue;
+  kit: BrandKit | null;
   onAdd: (scene: Omit<Scene, "id">) => void;
 }) {
   return (
@@ -744,7 +796,7 @@ function AddTools({
                 kind: t.id,
                 caption: "",
                 transition: "fade",
-                fields: { ...FIRST_WORDS[t.id] },
+                fields: { ...FIRST_WORDS[t.id], ...(t.id === "end_card" ? endWords(kit) : {}) },
               })
             }
           >
@@ -1055,7 +1107,10 @@ function SceneStrip({
       </div>
       <ol className="m-0 flex list-none gap-2 overflow-x-auto p-0.5">
         {doc.scenes.map((scene, i) => {
-          const look = catalogue.themes[String(scene.fields.theme ?? "midnight") as BuilderTheme];
+          const theme = catalogue.themes[String(scene.fields.theme ?? "midnight") as BuilderTheme];
+          const look = doc.brand
+            ? { from: doc.brand.background, to: doc.brand.second, ink: doc.brand.text }
+            : theme;
           return (
             <li key={scene.id} className="shrink-0">
               <button
@@ -1118,6 +1173,7 @@ function SceneStrip({
 function MakeDialog({
   editor,
   title,
+  shape,
   videos,
   canSave,
   downloadHref,
@@ -1126,28 +1182,35 @@ function MakeDialog({
 }: {
   editor: ReturnType<typeof useSceneEditor>;
   title: string;
+  shape: BuilderShape;
   videos?: Pick<VideosApi, "exportCopy">;
   canSave?: boolean;
   downloadHref?: (videoId: string) => string;
   onOpenLibrary?: () => void;
   onClose: () => void;
 }) {
-  const { render, problem } = editor;
+  const { renders, problem } = editor;
   const [quality, setQuality] = useState<RenderQuality>("standard");
+  const [shapes, setShapes] = useState<BuilderShape[]>([shape]);
   const [started, setStarted] = useState(false);
   const save = useSaveCopy();
   const [saved, setSaved] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
-  const working = render?.status === "working";
-  const done = render?.status === "done" && render.video_url;
+  const now = renders.find((r) => r.status === "working") ?? null;
+  const number = now ? renders.indexOf(now) + 1 : 0;
+  const finished = renders.length > 0 && !now;
+  const made = renders.filter((r) => r.status === "done" && r.video_url);
+  const notMade = renders.filter((r) => r.status === "failed" || r.status === "cancelled");
   useEffect(() => setSaved(null), []);
 
-  async function saveCopy(videoId: string) {
-    if (!videos) return;
+  async function saveCopy(render: BuilderRender) {
+    if (!videos || !render.video_id) return;
+    const videoId = render.video_id;
+    const size = render.shape ? ` ${SIZES[render.shape].label.replace(":", "x")}` : "";
     setFailed(null);
     try {
       const wrote = await save({
-        name: fileNameFor(title, extensionOf(render?.video_url ?? "", "mp4"), "video"),
+        name: fileNameFor(`${title}${size}`, extensionOf(render.video_url ?? "", "mp4"), "video"),
         copy: (path) => videos.exportCopy(videoId, path),
       });
       if (wrote) setSaved(savedText(wrote));
@@ -1159,9 +1222,30 @@ function MakeDialog({
   return (
     <Modal label="Make the video" onClose={onClose}>
       <div className="grid gap-3">
-        {done ? <p className="m-0 font-medium">Your video is in the Library.</p> : null}
-        {!started && !render ? (
+        {finished && made.length ? (
+          <p className="m-0 font-medium">
+            {made.length > 1 ? "Your videos are in the Library." : "Your video is in the Library."}
+          </p>
+        ) : null}
+        {!started && !renders.length ? (
           <div className="grid gap-2">
+            <span className="font-medium text-sm">Which shapes?</span>
+            <div className="grid gap-1">
+              {(Object.keys(SHAPE_USES) as BuilderShape[]).map((s) => (
+                <label key={s} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={shapes.includes(s)}
+                    onChange={(ev) => {
+                      const on = ev.target.checked;
+                      setShapes((all) => (on ? [...all, s] : all.filter((x) => x !== s)));
+                    }}
+                  />
+                  {SIZES[s].label}
+                  <span className="text-muted-foreground text-xs">{SHAPE_USES[s]}</span>
+                </label>
+              ))}
+            </div>
             <span className="font-medium text-sm">Quality</span>
             <Segmented
               size="sm"
@@ -1176,21 +1260,24 @@ function MakeDialog({
               ]}
             />
             <p className="m-0 text-muted-foreground text-xs">
-              A video takes about as long to make as it is to watch. Best takes longer. The words on
-              the screen are checked first.
+              Each video takes about as long to make as it is to watch, one after another. Best
+              takes longer. The words on the screen are checked first.
             </p>
           </div>
         ) : null}
-        {started && (working || !render) && !problem ? (
+        {started && (now || !renders.length) && !problem ? (
           <div className="grid gap-1.5">
             <p className="m-0 text-sm">
-              {!render
+              {renders.length > 1 && now?.shape
+                ? `${SIZES[now.shape].label}, video ${number} of ${renders.length}: `
+                : ""}
+              {!now
                 ? "Saving your changes…"
-                : render.stage === "checking"
-                  ? "Checking the words on the screen…"
-                  : "Drawing the video…"}
+                : now.stage === "drawing"
+                  ? "Drawing the video…"
+                  : "Checking the words on the screen…"}
             </p>
-            <Bar value={render && render.progress > 0 ? render.progress * 100 : undefined} />
+            <Bar value={now && now.progress > 0 ? now.progress * 100 : undefined} />
             <p className="m-0 text-muted-foreground text-xs">You can keep working while it runs.</p>
           </div>
         ) : null}
@@ -1199,25 +1286,50 @@ function MakeDialog({
             {problem}
           </Notice>
         ) : null}
-        {render?.status === "failed" || render?.status === "cancelled" ? (
-          <Notice tone="error" title="The video was not made">
+        {notMade.map((render) => (
+          <Notice
+            key={render.id}
+            tone="error"
+            title={
+              render.shape
+                ? `The ${SIZES[render.shape].label} video was not made`
+                : "The video was not made"
+            }
+          >
             {render.error ?? "It was stopped."}
           </Notice>
-        ) : null}
-        {done && render.video_url ? (
-          <>
-            {/* biome-ignore lint/a11y/useMediaCaption: the words are the picture; a made video has no track */}
+        ))}
+        {made.map((render) => (
+          <div key={render.id} className="grid gap-1.5">
+            {render.shape ? (
+              <span className="font-medium text-sm">{SIZES[render.shape].label}</span>
+            ) : null}
+            {/* biome-ignore lint/a11y/useMediaCaption: the words are the picture; a made video has no transcript */}
             <video
               controls
-              src={render.video_url}
+              src={render.video_url ?? undefined}
               poster={render.poster_url ?? undefined}
               className="max-h-72 w-full rounded-md bg-black"
             />
             {render.check?.ok ? (
               <p className="m-0 text-muted-foreground text-xs">{render.check.message}</p>
             ) : null}
-          </>
-        ) : null}
+            <div className="flex flex-wrap justify-end gap-2">
+              {render.video_id && canSave ? (
+                <Button type="button" variant="outline" onClick={() => void saveCopy(render)}>
+                  Save a copy
+                </Button>
+              ) : null}
+              {render.video_id && downloadHref ? (
+                <Button asChild variant="outline">
+                  <a href={downloadHref(render.video_id)} download>
+                    Download
+                  </a>
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ))}
         {saved ? <p className="m-0 text-sm">{saved}</p> : null}
         {failed ? (
           <Notice tone="error" title="That did not work">
@@ -1225,49 +1337,34 @@ function MakeDialog({
           </Notice>
         ) : null}
         <div className="flex flex-wrap justify-end gap-2">
-          {working ? (
+          {now ? (
             <Button type="button" variant="outline" onClick={() => void editor.cancel()}>
               Stop
             </Button>
           ) : null}
-          {done && render.video_id && canSave ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void saveCopy(render.video_id as string)}
-            >
-              Save a copy
-            </Button>
-          ) : null}
-          {done && render.video_id && downloadHref ? (
-            <Button asChild variant="outline">
-              <a href={downloadHref(render.video_id)} download>
-                Download
-              </a>
-            </Button>
-          ) : null}
-          {done && onOpenLibrary ? (
+          {finished && made.length && onOpenLibrary ? (
             <Button type="button" variant="outline" onClick={onOpenLibrary}>
               Open in Library
             </Button>
           ) : null}
-          {!started && !render ? (
+          {!started && !renders.length ? (
             <Button
               type="button"
+              disabled={!shapes.length}
               onClick={() => {
                 setStarted(true);
-                void editor.make(quality);
+                void editor.make(quality, shapes);
               }}
             >
-              Make the video
+              {shapes.length > 1 ? `Make ${shapes.length} videos` : "Make the video"}
             </Button>
           ) : null}
           <Button
             type="button"
-            variant={!started && !render ? "outline" : "default"}
+            variant={!started && !renders.length ? "outline" : "default"}
             onClick={onClose}
           >
-            {working ? "Keep working" : !started && !render ? "Not now" : "Close"}
+            {now ? "Keep working" : !started && !renders.length ? "Not now" : "Close"}
           </Button>
         </div>
       </div>

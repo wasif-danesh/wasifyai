@@ -1,12 +1,28 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { BuilderProject, SceneDocument, VideoBuilderApi } from "@wasifyai/client";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import type { BrandKit, BuilderProject, SceneDocument, VideoBuilderApi } from "@wasifyai/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatScreenProps } from "../../chat/ChatScreen";
 import { ArrangeOverlay, laidOut, moved, placeOf, resized } from "./ArrangeOverlay";
+import { BrandTools, contrast } from "./BrandTools";
 import { type EditorAssistant, SceneEditor } from "./SceneEditor";
 import { ScenesStart } from "./ScenesStart";
-import { lengthOf, newSceneId, sceneAt, startOf, withWorkedOut } from "./use-scene-editor";
+import {
+  lengthOf,
+  newSceneId,
+  sceneAt,
+  startOf,
+  useSceneEditor,
+  withWorkedOut,
+} from "./use-scene-editor";
 
 vi.mock("./vendor/hyperframes-player.global.js", () => ({}));
 
@@ -119,6 +135,7 @@ function rig(over: Partial<VideoBuilderApi> = {}) {
   const update = vi.fn(async (_id: string, slots: unknown) => project(slots as SceneDocument));
   const api = {
     update,
+    brand: vi.fn(async () => ({ kit: null })),
     live: vi.fn(async () => ({
       url: "http://engine/live/t/index.html",
       expires_at: Date.now() / 1000 + 3600,
@@ -199,6 +216,7 @@ describe("the editor", () => {
   it("hears the player even when its address comes after its script", async () => {
     let answer: (a: { url: string; expires_at: number }) => void = () => {};
     rig({
+      brand: vi.fn(async () => ({ kit: null })),
       live: vi.fn(
         () =>
           new Promise((go) => {
@@ -294,6 +312,7 @@ describe("the editor", () => {
     const update = vi.fn();
     const api = {
       update,
+      brand: vi.fn(async () => ({ kit: null })),
       live: vi.fn(async () => ({ url: "x", expires_at: 0 })),
     } as unknown as VideoBuilderApi;
     render(
@@ -372,6 +391,7 @@ describe("the assistant in the editor", () => {
     const update = vi.fn(async (_id: string, slots: unknown) => project(slots as SceneDocument));
     const api = {
       update,
+      brand: vi.fn(async () => ({ kit: null })),
       live: vi.fn(async () => ({
         url: "http://engine/live",
         expires_at: Date.now() / 1000 + 3600,
@@ -506,47 +526,177 @@ describe("the assistant in the editor", () => {
 });
 
 describe("the first screen", () => {
-  it("sends the brief with a starting point and the shape", () => {
-    const onBrief = vi.fn();
+  const starts = {
+    ...(catalogue as object),
+    starts: [{ id: "offer", title: "Sale or offer", description: "An offer, clear about what." }],
+  } as never;
+  function first(over: Partial<Parameters<typeof ScenesStart>[0]> = {}) {
     render(
       <ScenesStart
-        catalogue={catalogue}
-        onBrief={onBrief}
+        catalogue={starts}
+        onBrief={() => {}}
+        onStart={() => {}}
         onEmpty={() => {}}
         onOneGraphic={() => {}}
+        {...over}
       />,
     );
+  }
+
+  it("sends a brief with the shape", () => {
+    const onBrief = vi.fn();
+    first({ onBrief });
     expect(
       (screen.getByRole("button", { name: "Make a first version" }) as HTMLButtonElement).disabled,
     ).toBe(true);
     fireEvent.change(screen.getByLabelText("Describe your video"), {
       target: { value: "Our new tea." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Sale or offer" }));
-    fireEvent.click(screen.getByRole("radio", { name: "1:1" }));
+    fireEvent.click(screen.getByRole("radio", { name: "4:5" }));
     fireEvent.click(screen.getByRole("button", { name: "Make a first version" }));
-    expect(onBrief).toHaveBeenCalledWith(
-      "A short video about an offer, clear about what it is. Our new tea.",
-      "square",
-      undefined,
-    );
+    expect(onBrief).toHaveBeenCalledWith("Our new tea.", "feed", undefined);
+  });
+
+  it("opens a starting point as it is, or with the words asked for", () => {
+    const onStart = vi.fn();
+    first({ onStart });
+    fireEvent.click(screen.getByRole("button", { name: "Sale or offer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start from Sale or offer" }));
+    expect(onStart).toHaveBeenLastCalledWith("offer", "portrait", undefined, undefined);
+    fireEvent.change(screen.getByLabelText("Describe your video"), {
+      target: { value: "Half price tea." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Make a first version" }));
+    expect(onStart).toHaveBeenLastCalledWith("offer", "portrait", "Half price tea.", undefined);
   });
 
   it("can start empty, or make just one graphic", () => {
     const onEmpty = vi.fn();
     const onOne = vi.fn();
-    render(
-      <ScenesStart
-        catalogue={catalogue}
-        onBrief={() => {}}
-        onEmpty={onEmpty}
-        onOneGraphic={onOne}
-      />,
-    );
+    first({ onEmpty, onOneGraphic: onOne });
     fireEvent.click(screen.getByRole("button", { name: "Start empty" }));
     expect(onEmpty).toHaveBeenCalledWith("portrait");
     fireEvent.click(screen.getByRole("button", { name: "Quote" }));
     expect(onOne).toHaveBeenCalledWith("quote");
+  });
+});
+
+describe("the brand", () => {
+  const kit: BrandKit = {
+    name: "Tea Co",
+    background: "#102030",
+    second: "#203040",
+    text: "#ffffff",
+    accent: "#ff8800",
+    font: "sans",
+    action: "Try a cup",
+    address: "tea.example",
+    logo_on_scenes: true,
+    logo_asset: null,
+  };
+
+  it("fills an end card still showing its first words, and keeps typed ones", async () => {
+    const card = (id: string, action: string) => ({
+      id,
+      name: "End",
+      kind: "end_card",
+      caption: "",
+      transition: "fade",
+      fields: { action, seconds: 4 },
+    });
+    const doc = {
+      ...film,
+      scenes: [card("aaaaaaaa", "Your call to action"), card("bbbbbbbb", "Typed")],
+    } as SceneDocument;
+    const brand = { ...kit, logo: null };
+    const api = {
+      update: vi.fn(async (_id: string, slots: unknown) => project(slots as SceneDocument)),
+      useBrand: vi.fn(async () => ({ brand, font: "serif", assets: [] })),
+    } as unknown as VideoBuilderApi;
+    const { result } = renderHook(() => useSceneEditor(api, project(doc)));
+    await act(() => result.current.useBrand(true, kit));
+    const now = result.current.document;
+    expect(now.font).toBe("serif");
+    expect(now.scenes[0]?.fields.action).toBe("Try a cup");
+    expect(now.scenes[0]?.fields.address).toBe("tea.example");
+    expect(now.scenes[1]?.fields.action).toBe("Typed");
+    await act(async () => {
+      await result.current.undo();
+    });
+    expect(result.current.document.scenes[0]?.fields.action).toBe("Your call to action");
+  });
+
+  it("says when words will be hard to read", () => {
+    expect(contrast("#ffffff", "#000000")).toBeCloseTo(21);
+    expect(contrast("#777777", "#808080")).toBeLessThan(3);
+  });
+
+  it("is set up once and goes on this video", async () => {
+    const setBrand = vi.fn(async (_kit: unknown) => ({ kit }));
+    const onUse = vi.fn(async () => {});
+    const onKit = vi.fn();
+    render(
+      <BrandTools
+        api={{ setBrand } as unknown as VideoBuilderApi}
+        kit={null}
+        on={false}
+        fonts={{ sans: "Sans" }}
+        onKit={onKit}
+        onUse={onUse}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Set up your brand" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Tea Co" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save your brand" }));
+    await waitFor(() => expect(onKit).toHaveBeenCalledWith(kit));
+    expect(setBrand.mock.calls[0]?.[0]).toMatchObject({ name: "Tea Co" });
+    expect(onUse).toHaveBeenCalledWith(true, kit);
+  });
+
+  it("turns on and off for this video", () => {
+    const onUse = vi.fn(async () => {});
+    render(
+      <BrandTools
+        api={{} as VideoBuilderApi}
+        kit={kit}
+        on
+        fonts={{ sans: "Sans" }}
+        onKit={() => {}}
+        onUse={onUse}
+      />,
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "Use it in this video" }));
+    expect(onUse).toHaveBeenCalledWith(false, undefined);
+  });
+});
+
+describe("several shapes", () => {
+  it("makes one video for each shape chosen, with both results", async () => {
+    const done = (id: string, shape: string) => ({
+      id,
+      shape,
+      status: "done",
+      progress: 1,
+      stage: null,
+      check: null,
+      error: null,
+      video_id: `v${id}`,
+      video_url: `/${id}.mp4`,
+      poster_url: null,
+    });
+    const renderShapes = vi.fn(async () => ({
+      renders: [done("a", "portrait"), done("b", "square")],
+    }));
+    rig({ renderShapes } as never);
+    fireEvent.click(screen.getByRole("button", { name: "Make the video" }));
+    const asked = screen.getByRole("dialog");
+    fireEvent.click(within(asked).getByRole("checkbox", { name: /1:1/ }));
+    fireEvent.click(within(asked).getByRole("button", { name: "Make 2 videos" }));
+    await waitFor(() =>
+      expect(renderShapes).toHaveBeenCalledWith("p".repeat(32), [film.shape, "square"], "standard"),
+    );
+    expect(await screen.findByText("Your videos are in the Library.")).toBeTruthy();
+    expect(within(screen.getByRole("dialog")).getByText("1:1")).toBeTruthy();
   });
 });
 
@@ -638,6 +788,7 @@ describe("arranging on the preview", () => {
     const update = vi.fn(async (_id: string, slots: unknown) => project(slots as SceneDocument));
     const api = {
       update,
+      brand: vi.fn(async () => ({ kit: null })),
       live: vi.fn(async () => ({ url: "x", expires_at: Date.now() / 1000 + 3600 })),
     } as unknown as VideoBuilderApi;
     const placedFilm = { ...film, scenes: [{ ...first, arrange: { title: place } }] };
@@ -675,6 +826,7 @@ describe("a project's files", () => {
     );
     const api = {
       update,
+      brand: vi.fn(async () => ({ kit: null })),
       live: vi.fn(async () => ({
         url: "http://engine/live/t/index.html",
         expires_at: Date.now() / 1000 + 3600,
@@ -705,6 +857,7 @@ describe("a project's files", () => {
       const update = vi.fn(async (_id: string, slots: unknown) => project(slots as SceneDocument));
       const api = {
         update,
+        brand: vi.fn(async () => ({ kit: null })),
         live: vi.fn(async () => ({
           url: "http://engine/live/t/index.html",
           expires_at: Date.now() / 1000 + 3600,

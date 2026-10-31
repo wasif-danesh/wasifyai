@@ -699,3 +699,41 @@ cases:
     action: motion.set_project
     keeps: [Mornings are hard.]
     result: { soundtrack_asset: cccc0000, scene_count: 4 }
+  - id: ed-use-brand
+    kind: editor
+    expect: propose_action
+    say: "Use our brand colours on this video."
+    action: motion.use_brand
+    result: { brand_on: true }
+  - id: ed-brand-off
+    kind: editor
+    expect: propose_action
+    say: "Take our brand off this video."
+    action: motion.use_brand
+    result: { brand_on: false }
+  - id: ed-set-brand
+    kind: editor
+    expect: propose_action
+    say: "Our brand is Northbean: background #102030 and accent #ff8800. Save that as our brand."
+    action: motion.set_brand
+    result: { kit_background: "#102030", kit_accent: "#ff8800", kit_name: Northbean }
+  - id: ed-end-card
+    kind: editor
+    expect: propose_action
+    say: "Add an end card at the end that says Try Northbean today."
+    action: motion.add_scene
+    keeps: [Try Northbean today]
+    result: { last_scene_kind: end_card }
+  - id: ed-three-shapes
+    kind: editor
+    expect: propose_action
+    say: "Make this video in vertical, square and landscape."
+    action: video_builder.render
+    result: { shapes_made: [landscape, portrait, square] }
+  - id: ed-tiktok-feed
+    kind: editor
+    expect: propose_action
+    say: "Change this video to the 4:5 shape for the Instagram feed."
+    action: motion.set_project
+    keeps: [Mornings are hard.]
+    result: { shape: feed, scene_count: 4 }

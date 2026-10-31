@@ -665,7 +665,14 @@ def applied(action: str, params: dict, document: dict) -> tuple[dict | None, str
                 scenes.find(document, str(f.scene_id))
             return {**document, "make_what": f.what, "make_use": f.use, "make_text": f.text,
                     "make_captions": f.captions}, ""  # fmt: skip
-        return document, ""  # motion.undo and video_builder.render change no words here
+        if action == "motion.use_brand":
+            return {**document, "brand_on": motion.UseBrandIn(**given).use}, ""
+        if action == "motion.set_brand":
+            return {**document, "kit": motion.BrandIn(**params).model_dump()}, ""
+        if action == "video_builder.render":
+            shapes = motion.RenderIn(**given).shapes or []
+            return {**document, "shapes_made": sorted(shapes)}, ""
+        return document, ""  # motion.undo changes no words here
     except (templates.SlotError, ValidationError, TypeError, KeyError) as e:
         return None, str(e)[:200]
 
@@ -728,6 +735,10 @@ def judge_editor(case: dict, message: dict, document: dict) -> tuple[bool, str]:
                 return False, f"{name} is {at!r}; params {shown}"
             continue
         got = len(made["scenes"]) if name == "scene_count" else made.get(name)
+        if name == "last_scene_kind":
+            got = made["scenes"][-1]["kind"]
+        if name.startswith("kit_"):
+            got = (made.get("kit") or {}).get(name[4:])
         if name.startswith("scene_") and name != "scene_count":  # scene_2_seconds, of the second
             _, n, field = name.split("_", 2)
             scene = made["scenes"][int(n) - 1]

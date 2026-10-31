@@ -17,7 +17,7 @@ from typing import Any
 
 from wasifyai_platform_sdk.sqlstore import PostgresStoreDb, SqliteStoreDb, StoreDb, ddl_for
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 KEEP_VERSIONS = 20  # earlier versions of a composition that can be brought back
 
 _VERSIONS = """
@@ -42,6 +42,9 @@ CREATE TABLE renders(
   elapsed_s DOUBLE PRECISION, peak_mb INTEGER, blocked INTEGER NOT NULL DEFAULT 0,
   started_at TEXT NOT NULL, finished_at TEXT, check_report TEXT);
 CREATE INDEX renders_composition ON renders(composition_id, started_at DESC);
+CREATE TABLE brand_kits(
+  tenant_id TEXT NOT NULL, user_id TEXT NOT NULL, kit TEXT NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, user_id));
 """
     + _VERSIONS
 )
@@ -56,6 +59,12 @@ UPDATE versions SET template =
 """
 # what version 4 adds: the chat with the editor's assistant, one for each project (ADR-0096)
 _V4_UPGRADE = "ALTER TABLE compositions ADD COLUMN conversation_id TEXT;"
+# what version 5 adds: a person's brand kit, used in all their projects (ADR-0096 MX7)
+_V5_UPGRADE = """
+CREATE TABLE brand_kits(
+  tenant_id TEXT NOT NULL, user_id TEXT NOT NULL, kit TEXT NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, user_id));
+"""
 
 LEFT_RUNNING = "The app was closed while this video was being made."
 
@@ -153,6 +162,8 @@ class BuilderStore:
                 db.executescript("BEGIN;" + _V3_UPGRADE + "COMMIT;")
             if version < 4:
                 db.executescript("BEGIN;" + _V4_UPGRADE + "COMMIT;")
+            if version < 5:
+                db.executescript("BEGIN;" + _V5_UPGRADE + "COMMIT;")
             if version < SCHEMA_VERSION:
                 db.execute("UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),))
 
@@ -181,6 +192,7 @@ class BuilderStore:
                 )
             version = int(row["value"])
             upgrades = (_V3_UPGRADE if version == 2 else "") + (_V4_UPGRADE if version < 4 else "")
+            upgrades += _V5_UPGRADE if version < 5 else ""
             for statement in upgrades.split(";"):
                 if statement.strip():
                     conn.execute(statement)
@@ -322,6 +334,35 @@ class BuilderStore:
             )
         return self.get_composition(tenant, user, cid)
 
+    def begin_with(self, tenant: str, user: str, cid: str, slots: dict[str, Any]) -> dict[str, Any]:
+        """How a new project begins, set before anything was done to it: no step for Undo."""
+        self.get_composition(tenant, user, cid)
+        with self._connect() as db:
+            db.execute(
+                "UPDATE compositions SET slots=?, updated_at=? WHERE id=?",
+                (json.dumps(slots), now(), cid),
+            )
+        return self.get_composition(tenant, user, cid)
+
+    # ---- the brand kit -----------------------------------------------------------------------
+
+    def get_brand(self, tenant: str, user: str) -> dict[str, Any] | None:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT kit FROM brand_kits WHERE tenant_id=? AND user_id=?", (tenant, user)
+            ).fetchone()
+        return json.loads(row["kit"]) if row else None
+
+    def set_brand(self, tenant: str, user: str, kit: dict[str, Any]) -> dict[str, Any]:
+        with self._connect() as db:
+            db.execute(
+                "INSERT INTO brand_kits(tenant_id, user_id, kit, updated_at) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT (tenant_id, user_id) DO UPDATE "
+                "SET kit = excluded.kit, updated_at = excluded.updated_at",
+                (tenant, user, json.dumps(kit), now()),
+            )
+        return kit
+
     def set_conversation(self, tenant: str, user: str, cid: str, conversation: str) -> None:
         """The chat that belongs to this project, found again when it is opened."""
         self.get_composition(tenant, user, cid)
@@ -409,6 +450,11 @@ class BuilderStore:
                 (cid, tenant, user),
             ).fetchall()
         return [self.get_render(tenant, user, r["id"]) for r in rows]
+
+    def get_status(self, rid: str) -> str | None:
+        with self._connect() as db:
+            row = db.execute("SELECT status FROM renders WHERE id=?", (rid,)).fetchone()
+        return row["status"] if row else None
 
     def working_renders(self) -> list[dict[str, Any]]:
         """Renders being made now, for any person: what a restarted service picks up again."""

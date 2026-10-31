@@ -636,3 +636,104 @@ async def test_a_worker_makes_the_same_film_from_files_in_storage(tmp_path, engi
     )  # fmt: skip
     with pytest.raises(handlers.Refused):
         await handlers.Work(other, storage, tmp_path / "work2").file("project/assets/x.png")
+
+
+# ---- the marketing pack (ADR-0096 MX7): 1080p, every shape, the brand, the end card -----------
+
+
+BRAND = {
+    "background": "#123456",
+    "second": "#123456",
+    "text": "#ffffff",
+    "accent": "#ff8800",
+    "logo": None,
+    "logo_on_scenes": False,
+}
+BRANDED = {
+    "name": "Brand film",
+    "brand": BRAND,
+    "scenes": [
+        {"kind": "title", "fields": {"title": "Tea, slowly", "seconds": 3}},
+        {
+            "kind": "end_card",
+            "fields": {"action": "Try a cup today", "address": "tea.example", "seconds": 3},
+        },
+    ],
+}
+
+
+@pytest.mark.parametrize(
+    ("shape", "width", "height"),
+    [
+        ("landscape", 1920, 1080),
+        ("portrait", 1080, 1920),
+        ("square", 1080, 1080),
+        ("feed", 1080, 1350),
+    ],
+)
+async def test_each_shape_with_the_brand_is_drawn_at_its_full_size(
+    tmp_path, engine, shape, width, height
+):
+    folder, slots = write(tmp_path, engine, templates.SCENES, {**BRANDED, "shape": shape})
+    report = await checked(engine, folder, templates.SCENES, slots)
+    assert report["ok"], report["message"]
+    out = tmp_path / "film.mp4"
+    result = await engine.render(folder, out, extra_args=("--format", "mp4"))
+    assert result.ok, result.message
+    frame = frame_at(out, 1.5)
+    assert frame[:2] == (width, height)
+    # the brand's colour on the scene and on the end card, within what video compression changes
+    for at in (1.5, 4.5):
+        have = corner(frame_at(out, at))
+        assert all(abs(a - b) < 14 for a, b in zip(have, (0x12, 0x34, 0x56), strict=True)), have
+
+
+@pytest.mark.parametrize("shape", ["landscape", "portrait", "square", "feed"])
+@pytest.mark.parametrize("template", list(SAMPLES))
+async def test_every_kind_of_scene_fits_every_shape(tmp_path, engine, shape, template):
+    fields = {k: v for k, v in SAMPLES[template].items() if k not in ("shape", "font", "theme")}
+    film = {"shape": shape, "scenes": [{"kind": template, "fields": fields}]}
+    folder, slots = write(tmp_path, engine, templates.SCENES, film)
+    report = await checked(engine, folder, templates.SCENES, slots)
+    assert report["ok"], (shape, template, report["message"])
+
+
+async def test_the_logo_is_on_every_scene_and_large_on_the_end_card(tmp_path, engine, media_files):
+    pic = media_files["pic"]["checked"]
+    film = {
+        **BRANDED,
+        "shape": "square",
+        "brand": {**BRAND, "logo": pic.asset["id"], "logo_on_scenes": True},
+        "assets": [pic.asset],
+    }
+    folder, slots = write(tmp_path, engine, templates.SCENES, film)
+    (folder / "assets").mkdir()
+    (folder / "assets" / pic.asset["file"]).write_bytes(pic.data)
+    report = await checked(engine, folder, templates.SCENES, slots)
+    assert report["ok"], report["message"]
+    out = tmp_path / "film.mp4"
+    result = await engine.render(folder, out, extra_args=("--format", "mp4"))
+    assert result.ok, result.message
+
+    def logo_share(at: float) -> float:
+        width, height, data = frame_at(out, at)
+        near = sum(
+            1
+            for i in range(0, len(data), 3)
+            if abs(data[i] - 0xD9) < 24
+            and abs(data[i + 1] - 0x92) < 24
+            and abs(data[i + 2] - 0x5A) < 24
+        )
+        return near / (width * height)
+
+    assert logo_share(1.5) > 0.0005, "the logo in the corner of a scene"
+    assert logo_share(4.5) > logo_share(1.5), "the logo larger on the end card"
+
+
+def test_a_brand_is_kept_per_person_on_both_stores(film_store):
+    kit = {"name": "Tea", "background": "#123456", "logo_asset": None}
+    assert film_store.get_brand("t", "u") is None
+    film_store.set_brand("t", "u", kit)
+    film_store.set_brand("t", "u", {**kit, "name": "Tea Co"})
+    assert film_store.get_brand("t", "u")["name"] == "Tea Co"
+    assert film_store.get_brand("t", "someone else") is None

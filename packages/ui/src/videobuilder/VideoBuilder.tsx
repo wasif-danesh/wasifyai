@@ -168,6 +168,7 @@ export function VideoBuilder({
         <ScenesStart
           catalogue={state.catalogue}
           onBrief={(brief, shape, picture) => void b.startScenes(shape, brief, picture)}
+          onStart={(start, shape, brief, picture) => void b.startFrom(start, shape, brief, picture)}
           onEmpty={(shape) => void b.startScenes(shape)}
           onOneGraphic={(template) => b.openOneGraphic(template)}
         />

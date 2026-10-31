@@ -353,6 +353,33 @@ export function useVideoBuilder(api: VideoBuilderApi) {
     [api, patch],
   );
 
+  /** A set of scenes with words to replace; a brief asks the assistant to fill them in. */
+  const startFrom = useCallback(
+    async (start: string, shape: BuilderShape, brief?: string, picture?: File) => {
+      try {
+        const made = await api.createFromStart(start, shape);
+        if (picture) await api.addAsset(made.id, picture);
+        const opened = picture ? await api.get(made.id) : made;
+        const about =
+          picture && brief ? `${brief} Use the picture I added, ${picture.name}.` : brief;
+        patch({
+          selected: made.id,
+          project: opened,
+          render: null,
+          stills: [],
+          check: null,
+          error: null,
+          brief: about
+            ? `Write the words of these scenes for this, keeping the scenes: ${about}`
+            : null,
+        });
+      } catch (e) {
+        patch({ error: say(e, "The project could not be started.") });
+      }
+    },
+    [api, patch],
+  );
+
   /** A project made from one template becomes a project of scenes; Undo in the editor turns it back. */
   const toScenes = useCallback(
     async (id: string) => {
@@ -403,6 +430,7 @@ export function useVideoBuilder(api: VideoBuilderApi) {
   return {
     state,
     startScenes,
+    startFrom,
     openOneGraphic: (template: string) => {
       patch({ oneGraphic: true, selected: NEW, project: null, render: null, draft: template });
     },

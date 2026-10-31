@@ -64,6 +64,7 @@ const SHAPES: { id: BuilderShape; label: string; w: number; h: number }[] = [
   { id: "landscape", label: "16:9", w: 16, h: 9 },
   { id: "portrait", label: "9:16", w: 9, h: 16 },
   { id: "square", label: "1:1", w: 12, h: 12 },
+  { id: "feed", label: "4:5", w: 12, h: 15 },
 ];
 
 export function PromptBox({

@@ -9,6 +9,7 @@ no model retypes them, and the exact-text check refuses a page that does not say
 editor's assistant uses them, so one change is one version that `motion.undo` brings back."""
 
 import asyncio
+import json
 import math
 import tempfile
 from collections.abc import Callable
@@ -30,7 +31,7 @@ from wasifyai_platform_sdk.actions import (
 )
 from wasifyai_platform_sdk.actions.helpers import need_deps
 
-from wasifyai_video.builder import editor, make, media, scenes, templates
+from wasifyai_video.builder import brand, editor, make, media, scenes, starts, templates
 from wasifyai_video.builder.routes import delete_composition
 from wasifyai_video.builder.runtime import (
     NotFound,
@@ -46,9 +47,9 @@ PRODUCT_ID = "wasifyai-video"
 BUILDER = need_runtime("video-builder")
 SAMPLE_ID = "0b7c1f9e000040008000000000000000"
 SAMPLE_SCENE = "1f2e3d4c"
-TemplateId = Literal["title", "quote", "chart", "lower_third", "captions"]
+TemplateId = Literal["title", "quote", "chart", "lower_third", "end_card", "captions"]
 Format = Literal["mp4", "webm", "mov"]
-Shape = Literal["landscape", "portrait", "square"]
+Shape = Literal["landscape", "portrait", "square", "feed"]
 Font = Literal["sans", "serif"]
 Transition = Literal["none", "fade", "slide"]
 
@@ -110,6 +111,13 @@ class RenderIn(CompositionIn):
     quality: Literal["draft", "standard", "high"] | None = Field(
         None, description="draft is fastest, high is best. standard if not given."
     )
+    shapes: list[Shape] | None = Field(
+        None, max_length=4,
+        description=(
+            "To make one video for each of these shapes from the one project, one after another: "
+            "landscape, portrait, square, feed (4:5). The project's own shape if not given."
+        ),
+    )  # fmt: skip
 
 
 class Finding(BaseModel):
@@ -125,6 +133,13 @@ class LintOut(BaseModel):
     findings: list[Finding]
 
 
+class ShapeMade(BaseModel):
+    shape: str
+    video_id: str | None = None
+    uri: str | None = None
+    error: str | None = None
+
+
 class RenderOut(BaseModel):
     composition_id: str
     render_id: str
@@ -134,6 +149,42 @@ class RenderOut(BaseModel):
     seconds: int
     format: str
     checked: bool
+    shapes: list[ShapeMade] = []
+
+
+class BrandIn(Strict):
+    name: str = Field("", max_length=60, description="The brand's name.")
+    background: str = Field(
+        "#0b1220", pattern="^#[0-9a-fA-F]{6}$", description="Background colour."
+    )
+    second: str = Field(
+        "#1c2b4a",
+        pattern="^#[0-9a-fA-F]{6}$",
+        description="Second colour, the background fades to.",
+    )
+    text: str = Field("#f5f7fb", pattern="^#[0-9a-fA-F]{6}$", description="Colour of the words.")
+    accent: str = Field("#4f8cff", pattern="^#[0-9a-fA-F]{6}$", description="Accent colour.")
+    font: Font = Field("sans", description="The letters.")
+    action: str = Field("", max_length=60, description="The end card's call to action.")
+    address: str = Field("", max_length=80, description="The end card's web address or place.")
+    logo_on_scenes: bool = Field(True, description="Show the logo in the corner of every scene.")
+
+
+class BrandOut(BaseModel):
+    kit: dict[str, Any] | None
+    message: str = ""
+
+
+class UseBrandIn(CompositionIn):
+    use: bool = Field(True, description="True puts the person's brand on, false takes it off.")
+
+
+class StartFromIn(Strict):
+    start: Literal[
+        "promo", "launch", "offer", "customer", "explainer", "before_after", "social"
+    ] = Field(description="Which starting point.")
+    shape: Shape = Field("portrait", description="The shape of the whole video.")
+    name: str = Field("", max_length=80, description="The project's name.")
 
 
 class MakeIn(Strict):
@@ -428,7 +479,54 @@ async def _made(
     return None, done
 
 
+async def _render_shapes(p: RenderIn, ctx: ActionContext) -> Outcome:
+    """One project as a video for each shape. Each says for itself how it went: a line that fits
+    one shape can be too wide for another."""
+    deps = need_deps(ctx)
+    manager, store = manager_for(deps), store_for(deps.state)
+    try:
+        rows = await manager.start_shapes(
+            ctx.actor, p.composition_id, list(p.shapes or []), p.format, p.quality
+        )
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    try:
+        await manager.wait(rows[0]["id"])
+    except asyncio.CancelledError:
+        await manager.cancel(ctx.actor, rows[0]["id"])
+        raise
+    done = [store.get_render(ctx.actor.tenant_id, ctx.actor.user_id, r["id"]) for r in rows]
+    made = [
+        {
+            "shape": r["settings"]["shape"], "video_id": r["video_id"],
+            "uri": f"wasify://creation/video/{r['video_id']}" if r["video_id"] else None,
+            "error": None if r["status"] == "done" else r["error"] or "It was not made.",
+        }
+        for r in done
+    ]  # fmt: skip
+    first = next((r for r in done if r["status"] == "done" and r["video_id"]), None)
+    if first is None:
+        why = "; ".join(f"{m['shape']}: {m['error']}" for m in made)
+        return Outcome.error(f"No video was made. {why}", "render_failed")
+    found = _found(ctx, p.composition_id)
+    seconds = int(found["slots"]["seconds"])
+    words = "; ".join(
+        f"{m['shape']}: saved" if not m["error"] else f"{m['shape']}: not made, {m['error']}"
+        for m in made
+    )
+    return Outcome.ok(
+        {
+            "composition_id": found["id"], "render_id": first["id"], "video_id": first["video_id"],
+            "product_id": PRODUCT_ID, "uri": f"wasify://creation/video/{first['video_id']}",
+            "seconds": seconds, "format": p.format, "checked": True, "shapes": made,
+        },
+        f'Videos of "{found["title"]}" ({seconds} seconds). {words}.',
+    )  # fmt: skip
+
+
 async def _render(p: RenderIn, ctx: ActionContext) -> Outcome:
+    if p.shapes:
+        return await _render_shapes(p, ctx)
     failed, done = await _made(ctx, p.composition_id, p.format, p.quality)
     if failed is not None or done is None:
         return failed or Outcome.error("The video could not be made.", "render_failed")
@@ -518,6 +616,87 @@ def _scenes_out(found: dict[str, Any], scene_id: str | None = None) -> dict[str,
     }  # fmt: skip
 
 
+def _owner(ctx: ActionContext) -> tuple[str, str, str]:
+    return (ctx.actor.tenant_id, PRODUCT_ID, ctx.actor.user_id)
+
+
+async def _with_brand(ctx: ActionContext, found: dict[str, Any]) -> dict[str, Any]:
+    return await brand.on_new_project(need_deps(ctx), _store(ctx), _owner(ctx), found)
+
+
+async def _read_brand(p: Strict, ctx: ActionContext) -> Outcome:
+    kit = await asyncio.to_thread(_store(ctx).get_brand, ctx.actor.tenant_id, ctx.actor.user_id)
+    return Outcome.ok(
+        {"kit": kit, "message": "" if kit else "No brand has been set up yet."},
+        json.dumps(kit, ensure_ascii=False) if kit else "No brand has been set up yet.",
+    )
+
+
+async def _set_brand(p: BrandIn, ctx: ActionContext) -> Outcome:
+    """The kit, in words and colours: the logo is a file the person adds on the screen."""
+    store = _store(ctx)
+    try:
+        kit = brand.normalize_kit(p.model_dump())
+    except templates.SlotError as e:
+        return Outcome.refused(str(e), "bad_slot")
+    before = await asyncio.to_thread(store.get_brand, ctx.actor.tenant_id, ctx.actor.user_id)
+    kit["logo_asset"] = (before or {}).get("logo_asset")
+    await asyncio.to_thread(store.set_brand, ctx.actor.tenant_id, ctx.actor.user_id, kit)
+    return Outcome.ok(
+        {"kit": kit, "message": "The brand was saved."},
+        "The brand was saved. New projects start with it; use motion.use_brand for one already "
+        "started.",
+    )
+
+
+async def _use_brand(p: UseBrandIn, ctx: ActionContext) -> Outcome:
+    """On or off for one project, one Undo step, like any change to it."""
+    deps = need_deps(ctx)
+    found = _found(ctx, p.composition_id)
+    if not p.use:
+        return await _edit(
+            ctx, found["id"], "The brand was taken off this project.",
+            lambda d: templates.normalize_slots(templates.SCENES, {**d, "brand": None}),
+        )  # fmt: skip
+    kit = await asyncio.to_thread(_store(ctx).get_brand, ctx.actor.tenant_id, ctx.actor.user_id)
+    if kit is None:
+        return Outcome.refused("Set up the brand first, with its colours.", "no_brand")
+    if found["template"] != templates.SCENES:
+        return Outcome.refused("Add more scenes first.", "not_scenes")
+    document = await brand.use_on(deps, _store(ctx), _owner(ctx), found, kit)
+    return await _edit(
+        ctx, found["id"], "The brand's colours, letters and logo are on this project.",
+        lambda d: templates.normalize_slots(
+            templates.SCENES,
+            {**d, "brand": document["brand"], "font": document["font"],
+             "assets": document["assets"]},
+        ),
+    )  # fmt: skip
+
+
+async def _start_from(p: StartFromIn, ctx: ActionContext) -> Outcome:
+    """A set of scenes with words to replace: the same document as any other."""
+    deps = need_deps(ctx)
+    try:
+        document = templates.normalize_slots(
+            templates.SCENES, starts.document_of(p.start, p.shape, p.name)
+        )
+    except templates.SlotError as e:
+        return Outcome.refused(str(e), "bad_slot")
+    found = await asyncio.to_thread(
+        store_for(deps.state).add_composition, ctx.actor.tenant_id, ctx.actor.user_id,
+        title=templates.title_of(templates.SCENES, document), template=templates.SCENES,
+        slots=document,
+    )  # fmt: skip
+    found = await _with_brand(ctx, found)
+    await index_composition(deps, ctx.actor, found)
+    return Outcome.ok(
+        _scenes_out(found),
+        f'The project "{found["title"]}" was started with {len(document["scenes"])} scenes. Their '
+        "words are there to be replaced. Nothing has been made yet.",
+    )
+
+
 async def _write_scenes(p: WriteScenesIn, ctx: ActionContext) -> Outcome:
     deps = need_deps(ctx)
     try:
@@ -529,6 +708,7 @@ async def _write_scenes(p: WriteScenesIn, ctx: ActionContext) -> Outcome:
         title=templates.title_of(templates.SCENES, document), template=templates.SCENES,
         slots=document,
     )  # fmt: skip
+    found = await _with_brand(ctx, found)
     await index_composition(deps, ctx.actor, found)
     return Outcome.ok(
         _scenes_out(found),
@@ -770,6 +950,57 @@ def actions() -> list[Action]:
             bind=CallBinding(_write_scenes), ui="motion",
         ),
         Action(
+            id="motion.read_brand", title="Read the brand",
+            summary="Read the person's brand: name, colours, letters, end card words.",
+            description=(
+                "Read the person's brand kit, used in their Motion graphics projects: its name, "
+                "colours, letters, whether it has a logo, and the words of its end card."
+            ),
+            input=Strict, output=BrandOut, examples=({},), effect="read",
+            requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+            bind=CallBinding(_read_brand), ui="motion",
+        ),
+        Action(
+            id="motion.set_brand", title="Set the brand",
+            summary="Save the person's brand: name, colours, letters, end card words.",
+            description=(
+                "Save the person's brand kit for their Motion graphics projects: name, colours as "
+                "#rrggbb, letters, the end card's call to action and address. New projects start "
+                "with it. The logo is added on the screen."
+            ),
+            input=BrandIn, output=BrandOut,
+            examples=({"name": "Northbean", "background": "#10261c", "second": "#1f4d3a",
+                       "text": "#f7f3e9", "accent": "#e0a458", "action": "Try it today",
+                       "address": "northbean.example"},),
+            effect="change", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+            bind=CallBinding(_set_brand), ui="motion",
+        ),
+        Action(
+            id="motion.use_brand", title="Use the brand on a video project",
+            summary="Put the person's brand on a video project, or take it off.",
+            description=(
+                "Put the person's brand on a Motion graphics project of scenes: its colours on "
+                "every scene, its letters and its logo. It can be undone, and with use false it "
+                "comes off and the scenes' own looks show again."
+            ),
+            input=UseBrandIn, output=ScenesOut, examples=({"composition_id": SAMPLE_ID},),
+            effect="change", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+            bind=CallBinding(_use_brand, check=_check_composition), ui="motion",
+        ),
+        Action(
+            id="motion.start_from", title="Start a video from a starting point",
+            summary="Start a marketing video from a ready set of scenes with words to replace.",
+            description=(
+                "Start a Motion graphics project from a set of scenes: a product promo, launch "
+                "announcement, sale or offer, customer words, feature explainer, before and after, "
+                "or social post. The words are there to be replaced. Nothing is rendered."
+            ),
+            input=StartFromIn, output=ScenesOut,
+            examples=({"start": "promo", "shape": "portrait"},),
+            effect="make", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+            bind=CallBinding(_start_from), ui="motion",
+        ),
+        Action(
             id="motion.make_file", title="Make something for a video project",
             summary="Make a picture, clip, voiceover or music and add it to a video project.",
             description=(
@@ -892,7 +1123,7 @@ def actions() -> list[Action]:
                 "does not say them is not rendered. It runs in a sandbox, takes seconds to a "
                 "minute, and only one video is made at a time. Returns a job handle when it is not "
                 "done within the wait. Lower thirds and captions can be made transparent (webm or "
-                "mov)."
+                "mov). `shapes` makes one video for each shape from the one project."
             ),
             input=RenderIn, output=RenderOut, examples=({"composition_id": SAMPLE_ID},),
             effect="make", flags=("costly",), requires=(need_product(PRODUCT_ID), BUILDER),

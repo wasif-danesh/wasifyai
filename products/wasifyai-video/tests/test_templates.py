@@ -24,8 +24,10 @@ def slots_of(template: str, **over: Any) -> dict[str, Any]:
     return templates.normalize_slots(template, {**SAMPLES[template], **over})
 
 
-def test_there_are_five_templates_each_with_samples_and_a_description_for_the_window():
-    assert tuple(templates.TEMPLATES) == ("title", "quote", "chart", "lower_third", "captions")
+def test_there_are_six_templates_each_with_samples_and_a_description_for_the_window():
+    assert tuple(templates.TEMPLATES) == (
+        "title", "quote", "chart", "lower_third", "end_card", "captions",
+    )  # fmt: skip
     for t in templates.TEMPLATES.values():
         info = t.info()
         assert info["description"] and info["fields"] and info["formats"][0] in templates.FORMATS
@@ -199,7 +201,10 @@ def test_overlays_are_transparent_and_the_rest_have_a_background():
 
 
 def test_each_shape_has_its_size_and_the_look_and_letters_are_presets():
-    sizes = {"landscape": (1280, 720), "portrait": (720, 1280), "square": (1080, 1080)}
+    sizes = {
+        "landscape": (1920, 1080), "portrait": (1080, 1920), "square": (1080, 1080),
+        "feed": (1080, 1350),
+    }  # fmt: skip
     for shape, (w, h) in sizes.items():
         page = templates.render_html("title", slots_of("title", shape=shape))
         assert f'data-width="{w}"' in page and f'data-height="{h}"' in page

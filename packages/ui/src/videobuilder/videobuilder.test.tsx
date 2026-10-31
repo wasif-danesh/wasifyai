@@ -149,6 +149,7 @@ const CATALOGUE: TemplateCatalogue = {
     landscape: { width: 1280, height: 720 },
     portrait: { width: 720, height: 1280 },
     square: { width: 1080, height: 1080 },
+    feed: { width: 1080, height: 1350 },
   },
   themes: {
     midnight: { from: "#0b1220", to: "#1c2b4a", ink: "#fff", accent: "#4f8cff" },
@@ -265,6 +266,13 @@ function api(over: Partial<VideoBuilderApi> = {}): VideoBuilderApi {
     cancel: vi
       .fn()
       .mockResolvedValue(aRender({ status: "cancelled", error: "The video was cancelled." })),
+    renderShapes: vi.fn(),
+    createFromStart: vi.fn(),
+    brand: vi.fn().mockResolvedValue({ kit: null }),
+    setBrand: vi.fn(),
+    setBrandLogo: vi.fn(),
+    brandLogo: vi.fn(),
+    useBrand: vi.fn(),
     ...over,
   };
 }

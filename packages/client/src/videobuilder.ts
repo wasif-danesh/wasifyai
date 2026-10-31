@@ -37,7 +37,7 @@ export type BuilderComponent = {
   sandbox: { network: string; telemetry: string };
 };
 
-export type BuilderShape = "landscape" | "portrait" | "square";
+export type BuilderShape = "landscape" | "portrait" | "square" | "feed";
 export type BuilderTheme = "midnight" | "sunrise" | "forest" | "paper" | "night" | "sage" | "pulse";
 export type BuilderFormat = "mp4" | "webm" | "mov";
 
@@ -74,6 +74,32 @@ export type TemplateCatalogue = {
   shapes: Record<BuilderShape, { width: number; height: number }>;
   themes: Record<BuilderTheme, { from: string; to: string; ink: string; accent: string }>;
   fonts: Record<string, string>;
+  /** the starting points of a marketing video: each is a set of scenes */
+  starts?: { id: string; title: string; description: string }[];
+};
+
+/** A person's brand: set once, used in every new project of scenes. */
+export type BrandKit = {
+  name: string;
+  background: string;
+  second: string;
+  text: string;
+  accent: string;
+  font: string;
+  action: string;
+  address: string;
+  logo_on_scenes: boolean;
+  logo_asset?: ProjectAsset | null;
+};
+
+/** A brand on a project: the kit's colours, and the logo among the project's files. */
+export type ProjectBrand = {
+  background: string;
+  second: string;
+  text: string;
+  accent: string;
+  logo: string | null;
+  logo_on_scenes: boolean;
 };
 
 /** What a project holds: the typed words by field id (rows and lines as the text typed). */
@@ -99,7 +125,9 @@ export type BuilderRender = {
   /** 0 to 1 while it works */
   progress: number;
   /** while it works: "checking" the words, then "drawing" the video */
-  stage: "checking" | "drawing" | null;
+  stage: "waiting" | "checking" | "drawing" | null;
+  /** the shape it was made in, when one project was made in several */
+  shape?: BuilderShape | null;
   format: BuilderFormat;
   /** what the check of the words found; null when the render ended before it ran */
   check: BuilderCheck | null;
@@ -185,6 +213,7 @@ export type SceneDocument = {
   scenes: Scene[];
   assets?: ProjectAsset[];
   soundtrack?: (SceneSound & { start: number }) | null;
+  brand?: ProjectBrand | null;
 };
 
 export type BuilderProject = {
@@ -272,6 +301,21 @@ export type VideoBuilderApi = {
   /** A still of the project at `at` seconds (the middle moment when left out), as an object URL. */
   preview(id: string, at?: number): Promise<string>;
   render(id: string, format?: BuilderFormat, quality?: RenderQuality): Promise<BuilderRender>;
+  /** One project as a video for each shape, made one after another. */
+  renderShapes(
+    id: string,
+    shapes: BuilderShape[],
+    quality?: RenderQuality,
+  ): Promise<{ renders: BuilderRender[] }>;
+  /** A new project from a starting point: a set of scenes with words to replace. */
+  createFromStart(start: string, shape: BuilderShape): Promise<BuilderProject>;
+  brand(): Promise<{ kit: BrandKit | null }>;
+  setBrand(kit: Omit<BrandKit, "logo_asset">): Promise<{ kit: BrandKit | null }>;
+  setBrandLogo(file: File): Promise<{ kit: BrandKit | null }>;
+  /** The logo, as an object URL. */
+  brandLogo(): Promise<string>;
+  /** The brand as it would be on this project; the window puts it in its document. */
+  useBrand(id: string): Promise<{ brand: ProjectBrand; font: string; assets: ProjectAsset[] }>;
   /** A photo, clip or sound for a project of scenes: checked, kept, and listed in its document. */
   addAsset(id: string, file: File): Promise<{ asset: ProjectAsset; assets: ProjectAsset[] }>;
   /** A file out of the project and out of every scene that used it. */
@@ -408,6 +452,26 @@ export function createVideoBuilderApi(
           ? send("POST", { ...(format ? { format } : {}), ...(quality ? { quality } : {}) })
           : { method: "POST" },
       ),
+    renderShapes: (id, shapes, quality) =>
+      json<{ renders: BuilderRender[] }>(
+        `${base}/projects/${enc(id)}/render-shapes`,
+        send("POST", { shapes, ...(quality ? { quality } : {}) }),
+      ),
+    createFromStart: (start, shape) =>
+      json<BuilderProject>(`${base}/projects/from-start`, send("POST", { start, shape })),
+    brand: () => json<{ kit: BrandKit | null }>(`${base}/brand`),
+    setBrand: (kit) => json<{ kit: BrandKit | null }>(`${base}/brand`, send("PUT", kit)),
+    setBrandLogo(file) {
+      const form = new FormData();
+      form.append("file", file);
+      return json(`${base}/brand/logo`, { method: "POST", body: form });
+    },
+    async brandLogo() {
+      const res = await transport.fetch(`${base}/brand/logo`);
+      if (!res.ok) throw new Error("The logo could not be shown.");
+      return URL.createObjectURL(await res.blob());
+    },
+    useBrand: (id) => json(`${base}/projects/${enc(id)}/brand`, send("POST", {})),
     addAsset(id, file) {
       const form = new FormData();
       form.append("file", file);

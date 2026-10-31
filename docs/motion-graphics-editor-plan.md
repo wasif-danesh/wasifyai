@@ -1,7 +1,7 @@
 # Plan: Motion graphics becomes a scene editor for promotion and social content
 
 **Status:** approved by the owner 2026-10-31 (all five decisions as recommended; the mockup, `docs/spikes/motion-editor-mockup.html`,
-with its recommended answers); ADR-0096. MX0 to MX6 are done (MX0: `docs/spikes/motion-editor-mx0.md`; the others: "Built" in the ADR). MX7 is next.
+with its recommended answers); ADR-0096. MX0 to MX7 are done (MX0: `docs/spikes/motion-editor-mx0.md`; the others: "Built" in the ADR). Decision 5, the name, is still the owner's now that the build works.
 Sizes are working days of one engineer with Claude, and they are estimates.
 
 **Asked by:** the owner, 2026-10-31: bring KinoFold's features (`~/Projects/kinofold`, also built on HyperFrames) into Motion graphics,

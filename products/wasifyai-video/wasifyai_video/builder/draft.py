@@ -277,6 +277,7 @@ async def _fill(engine: Engine, template: str, request: str, has_file: bool) -> 
 # the request has a word that asks for it; the rest stay at the template's own defaults.
 ASKED = {
     ("shape", "portrait"): ("portrait", "vertical", "tiktok", "reel", "stories", "story", "9:16"),
+    ("shape", "feed"): ("4:5", "feed", "instagram feed"),
     ("shape", "square"): ("square", "1:1", "instagram post"),
     ("shape", "landscape"): ("landscape", "horizontal", "widescreen", "wide", "16:9", "youtube"),
     ("theme", "midnight"): ("midnight", "dark", "night", "navy", "blue"),

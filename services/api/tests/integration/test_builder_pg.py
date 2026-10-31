@@ -64,9 +64,11 @@ async def test_tables_from_before_scenes_are_upgraded_on_postgres(store):
     with store.db.transaction() as conn:
         conn.execute("ALTER TABLE versions DROP COLUMN template")
         conn.execute("ALTER TABLE compositions DROP COLUMN conversation_id")
+        conn.execute("DROP TABLE brand_kits")
         conn.execute("UPDATE meta SET value = '2' WHERE key = 'schema'")
     again = BuilderStore.on_postgres(get_settings().database_url, schema=store.schema)
     try:
         assert again.undo_composition("t1", "u1", a["id"])["template"] == "quote"
+        assert again.get_brand("t1", "u1") is None
     finally:
         again.close()

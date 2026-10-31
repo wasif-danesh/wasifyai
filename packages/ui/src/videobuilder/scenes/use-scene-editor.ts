@@ -2,9 +2,11 @@
 // The editor's state (ADR-0096): one document, one selection, an Undo that groups a typing session
 // into one step, and a save queue that never lets an old save overwrite a newer edit.
 import type {
+  BrandKit,
   BuilderMakeRequest,
   BuilderProject,
   BuilderRender,
+  BuilderShape,
   MakeProgress,
   MakeWhat,
   ProjectAsset,
@@ -16,6 +18,7 @@ import type {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const SAVE_AFTER_MS = 500;
+export const END_CARD_WORDS = "Your call to action";
 const POLL_MS = 700;
 const MAKE_POLL_MS = 1500;
 const KEEP_STEPS = 100;
@@ -82,7 +85,7 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
   const [revision, setRevision] = useState(0);
   const [canUndoSaved, setCanUndoSaved] = useState(project.can_undo);
   const [live, setLive] = useState<{ url: string; expires_at: number } | null>(null);
-  const [render, setRender] = useState<BuilderRender | null>(null);
+  const [renders, setRenders] = useState<BuilderRender[]>([]);
 
   const alive = useRef(true);
   const latest = useRef(document);
@@ -356,19 +359,59 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
   }, [live, renewLive]);
 
   // while a video is being made, follow it
-  const renderId = render?.status === "working" ? render.id : null;
+  const following = renders
+    .filter((r) => r.status === "working")
+    .map((r) => r.id)
+    .join(",");
   useEffect(() => {
-    if (!renderId) return;
+    if (!following) return;
+    const ids = following.split(",");
     const poll = setInterval(() => {
-      api
-        .renderStatus(renderId)
-        .then((r) => {
-          if (alive.current) setRender(r);
-        })
-        .catch(() => {});
+      for (const id of ids) {
+        api
+          .renderStatus(id)
+          .then((r) => {
+            if (alive.current) setRenders((all) => all.map((x) => (x.id === r.id ? r : x)));
+          })
+          .catch(() => {});
+      }
     }, POLL_MS);
     return () => clearInterval(poll);
-  }, [api, renderId]);
+  }, [api, following]);
+
+  /** The person's brand on this project, or off it: one Undo step, saved like any change. */
+  const useBrand = useCallback(
+    async (use: boolean, kit?: BrandKit | null) => {
+      if (!use) {
+        apply("Take your brand off", (d) => ({ ...d, brand: null }));
+        return;
+      }
+      await saveNow();
+      const { brand, font, assets } = await api.useBrand(project.id);
+      if (!alive.current) return;
+      latest.current = { ...latest.current, assets };
+      setDocument(latest.current);
+      apply("Use your brand", (d) => ({
+        ...d,
+        brand,
+        font,
+        // words the person typed stay; an end card still showing its first words takes the brand's
+        scenes: d.scenes.map((s) =>
+          s.kind === "end_card" && s.fields.action === END_CARD_WORDS && kit?.action
+            ? {
+                ...s,
+                fields: {
+                  ...s.fields,
+                  action: kit.action,
+                  ...(kit.address && !s.fields.address ? { address: kit.address } : {}),
+                },
+              }
+            : s,
+        ),
+      }));
+    },
+    [api, project.id, apply, saveNow],
+  );
 
   /** A file for the project. It stays whichever version of the scenes is on the screen. */
   const addFile = useCallback(
@@ -450,13 +493,18 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
   }, []);
 
   const make = useCallback(
-    async (quality?: RenderQuality) => {
+    async (quality?: RenderQuality, shapes?: BuilderShape[]) => {
       setProblem(null);
       try {
         if (timer.current) clearTimeout(timer.current);
         await saveNow();
         if (dirty.current) return; // the last change could not be saved: `problem` says why
-        setRender(await api.render(project.id, "mp4", quality));
+        const several = shapes && (shapes.length > 1 || shapes[0] !== latest.current.shape);
+        setRenders(
+          several
+            ? (await api.renderShapes(project.id, shapes, quality)).renders
+            : [await api.render(project.id, "mp4", quality)],
+        );
       } catch (e) {
         setProblem(say(e, "The video could not be started."));
       }
@@ -465,13 +513,16 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
   );
 
   const cancel = useCallback(async () => {
-    if (!render) return;
+    const now = renders.find((r) => r.status === "working");
+    if (!now) return;
     try {
-      setRender(await api.cancel(render.id));
+      await api.cancel(now.id); // the rest of a set stop with it
+      const found = await Promise.all(renders.map((r) => api.renderStatus(r.id)));
+      if (alive.current) setRenders(found);
     } catch (e) {
       setProblem(say(e, "The video could not be stopped."));
     }
-  }, [api, render]);
+  }, [api, renders]);
 
   return {
     document,
@@ -481,8 +532,9 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
     problem,
     revision,
     live,
-    render,
-    clearRender: () => setRender(null),
+    renders,
+    clearRender: () => setRenders([]),
+    useBrand,
     canUndo: past.length > 0 || canUndoSaved,
     undoLabel: past[past.length - 1]?.label ?? null,
     canRedo: future.length > 0,

@@ -51,6 +51,10 @@ class Checked:
     asset: dict[str, Any]
 
 
+def type_of(file: str) -> str:
+    return MEDIA_TYPES.get(Path(file).suffix, "application/octet-stream")
+
+
 def rel_path(cid: str, file: str) -> str:
     """Where a project's file is kept, under its owner's prefix. Never taken from a document."""
     return f"motion/{cid}/{file}"

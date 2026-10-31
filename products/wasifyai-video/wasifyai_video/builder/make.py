@@ -16,7 +16,8 @@ PAUSE = re.compile(r",$")
 
 # what = (the action, how its input is made, the key of what it made, the library's kind, a name)
 PICTURE, CLIP, SPEECH, MUSIC = "picture", "clip", "speech", "music"
-SHAPES_OF_PICTURES = {"landscape": "landscape", "portrait": "portrait", "square": "square"}
+# what the image and video products call the nearest shape (a feed's 4:5 is cropped from portrait)
+NEAREST = {"landscape": "landscape", "portrait": "portrait", "square": "square", "feed": "portrait"}
 
 
 def inner_call(
@@ -24,11 +25,11 @@ def inner_call(
 ) -> tuple[str, dict]:
     """The product's own action for this, and what to ask it."""
     if what == PICTURE:
-        return "image.generate", {"prompt": text, "size": SHAPES_OF_PICTURES[shape]}
+        return "image.generate", {"prompt": text, "size": NEAREST[shape]}
     if what == CLIP:
         return "video.generate", {
             "prompt": text,
-            "shape": shape,
+            "shape": NEAREST[shape],
             "seconds": 8 if seconds > 6 else 5,
         }
     if what == SPEECH:

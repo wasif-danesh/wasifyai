@@ -10,29 +10,22 @@ import { Segmented } from "../../components/segmented";
 const SHAPES: { value: BuilderShape; label: string }[] = [
   { value: "portrait", label: "9:16" },
   { value: "landscape", label: "16:9" },
+  { value: "feed", label: "4:5" },
   { value: "square", label: "1:1" },
 ];
-
-// what each starting point adds to the brief; MX7 makes these ready-made sets of scenes
-const STARTS = [
-  ["Product promo", "A short promo that shows a product and why it matters."],
-  ["Launch announcement", "An announcement that something new is here."],
-  ["Sale or offer", "A short video about an offer, clear about what it is."],
-  ["Customer words", "A short video built around what a customer said."],
-  ["Feature explainer", "A short video that explains one feature, step by step."],
-  ["Before and after", "A short video that shows the difference, before and after."],
-  ["Social post", "One idea, short and loud, for a social post."],
-] as const;
 
 export function ScenesStart({
   catalogue,
   onBrief,
+  onStart,
   onEmpty,
   onOneGraphic,
   disabled,
 }: {
   catalogue: TemplateCatalogue | null;
   onBrief: (brief: string, shape: BuilderShape, picture?: File) => void;
+  /** A set of scenes with words to replace, and what the assistant is asked to fill them with. */
+  onStart: (start: string, shape: BuilderShape, brief?: string, picture?: File) => void;
   onEmpty: (shape: BuilderShape) => void;
   onOneGraphic: (template: string) => void;
   disabled?: boolean;
@@ -41,8 +34,8 @@ export function ScenesStart({
   const [shape, setShape] = useState<BuilderShape>("portrait");
   const [start, setStart] = useState<string | null>(null);
   const [picture, setPicture] = useState<File | null>(null);
-  const chosen = STARTS.find(([name]) => name === start)?.[1] ?? "";
-  const brief = [chosen, text.trim()].filter(Boolean).join(" ");
+  const brief = text.trim();
+  const starting = catalogue?.starts?.find((s) => s.id === start);
   return (
     <section
       aria-label="New project"
@@ -88,27 +81,33 @@ export function ScenesStart({
             </Button>
             <Button
               type="button"
-              disabled={disabled || !brief}
-              onClick={() => onBrief(brief, shape, picture ?? undefined)}
+              disabled={disabled || (!brief && !starting)}
+              onClick={() =>
+                starting
+                  ? onStart(starting.id, shape, brief || undefined, picture ?? undefined)
+                  : onBrief(brief, shape, picture ?? undefined)
+              }
             >
-              Make a first version
+              {starting && !brief ? `Start from ${starting.title}` : "Make a first version"}
             </Button>
           </span>
         </div>
         <p className="m-0 text-muted-foreground text-xs">
-          The assistant writes the scenes and you change them. No video is made yet.
+          {starting && !brief
+            ? `${starting.description} The words are there for you to replace.`
+            : "The assistant writes the scenes and you change them. No video is made yet."}
         </p>
       </div>
       <div className="grid gap-1.5">
         <h2 className="m-0 font-medium text-sm">Or start from</h2>
         <div className="flex flex-wrap gap-2">
-          {STARTS.map(([name]) => (
+          {catalogue?.starts?.map((s) => (
             <Chip
-              key={name}
-              aria-pressed={start === name}
-              onClick={() => setStart((s) => (s === name ? null : name))}
+              key={s.id}
+              aria-pressed={start === s.id}
+              onClick={() => setStart((now) => (now === s.id ? null : s.id))}
             >
-              {name}
+              {s.title}
             </Chip>
           ))}
         </div>

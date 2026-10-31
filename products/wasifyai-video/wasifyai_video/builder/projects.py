@@ -19,10 +19,15 @@ def _slug(text: str) -> str:
     return f"{safe}-{hashlib.sha256(text.encode()).hexdigest()[:8]}"
 
 
-def project_dir(root: Path, tenant: str, user: str, cid: str) -> Path:
+def project_dir(root: Path, tenant: str, user: str, cid: str, variant: str = "") -> Path:
     if not re.fullmatch(r"[0-9a-f]{32}", cid):
         raise ValueError("not a composition id")
-    return root / "projects" / _slug(tenant) / _slug(user) / cid
+    folder = root / "projects" / _slug(tenant) / _slug(user) / cid
+    if not variant:
+        return folder
+    if not variant.isalnum():
+        raise ValueError("not a shape")
+    return folder.with_name(f"{folder.name}-{variant}")
 
 
 def write_project(

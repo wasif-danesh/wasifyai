@@ -20,12 +20,14 @@ in the Library. It takes seconds to a minute for a short video and only one is m
 2. Open a project.
 3. Choose a file kind if the template offers more than one, then Make the video; watch the
    progress (checking the words, then drawing), or leave the screen.
+   In a project of scenes, tick each shape you want, and one video is made for each.
 4. Choose Save a copy to keep the file, or find it in the Library.
 
 ## Fields
 
 - `composition_id`: The project to make.
 - `format`: mp4, webm or mov, as the template allows (a title, quote or chart is an MP4).
+- `shapes`: To make one video for each shape from the one project, one after another: landscape, portrait, square, feed (4:5).
 
 ## Quality
 
@@ -44,6 +46,7 @@ Draft is fastest, High is the usual choice, and Best takes longest. Field `quali
 ## Examples
 
 - Make the video of "Launch day".
+- "Make this video in vertical, square and landscape."
 
 ## Problems
 

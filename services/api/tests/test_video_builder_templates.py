@@ -546,6 +546,44 @@ def assert_media_film(out: Path) -> None:
     assert power(out, 7, 220) > -40, "the soundtrack goes on, repeating"
 
 
+@pytest.mark.parametrize("shape", ["landscape", "portrait", "square"])
+async def test_a_typed_caption_where_it_starts_is_inside_the_picture(tmp_path, engine, shape):
+    film = {
+        "shape": shape,
+        "scenes": [{"kind": "title", "fields": {"title": "Words"}, "caption": "A typed caption"}],
+    }
+    folder, slots = write(tmp_path, engine, templates.SCENES, film)
+    report = await checked(engine, folder, templates.SCENES, slots)
+    assert report["ok"], report["message"]
+
+
+async def test_timed_captions_are_each_on_the_screen_when_said_and_gone_after(
+    tmp_path, engine, media_files
+):
+    voice = media_files["voice"]["checked"].asset
+    film = {
+        "assets": [voice],
+        "scenes": [
+            {"kind": "title", "fields": {"title": "Words", "seconds": 4},
+             "sound": {"asset": voice["id"]},
+             "cues": [{"text": "Mornings are hard.", "start": 0.5, "end": 1.5},
+                      {"text": "We steep it slowly.", "start": 1.5, "end": 3.0}]},
+        ],
+    }  # fmt: skip
+    folder, slots = write(tmp_path, engine, templates.SCENES, film)
+    (folder / "assets").mkdir()
+    (folder / "assets" / voice["file"]).write_bytes(media_files["voice"]["checked"].data)
+    assert engine.lint(folder) == []
+    report = await checked(engine, folder, templates.SCENES, slots)
+    assert report["ok"], report["message"]
+    out = tmp_path / "film.mp4"
+    result = await engine.render(folder, out, extra_args=("--format", "mp4", "--quality", "draft"))
+    assert result is not None and out.stat().st_size > 0
+    # the caption's band is there while a line is said, and the picture is plain before and after
+    before, said, after = (pixel(out, at, 0.5, 0.855) for at in (0.2, 1.0, 3.6))
+    assert before == after and sum(abs(a - b) for a, b in zip(said, after, strict=True)) > 20
+
+
 async def test_a_film_with_a_picture_a_clip_and_sounds_is_all_in_the_video(
     tmp_path, engine, media_files
 ):

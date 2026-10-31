@@ -250,6 +250,19 @@ async def _delete(ctx: ActionContext, item_id: str) -> bool:
     return True
 
 
+async def _read(ctx: ActionContext, item_id: str) -> bytes | None:
+    """A clip's bytes, for what brings it somewhere else (a project of scenes, ADR-0096)."""
+    deps = need_deps(ctx)
+    clip = await video_store(deps.engine).get(ctx.actor.tenant_id, ctx.actor.user_id, item_id)
+    if clip is None or not clip.video_key:
+        return None
+    with deps.acting_as(ctx.actor, PRODUCT_ID):
+        try:
+            return await deps.storage.get(clip.video_key)
+        except FileNotFoundError:
+            return None
+
+
 async def _export(ctx: ActionContext, item_id: str, folder: Path) -> Path | None:
     deps = need_deps(ctx)
     video = await video_store(deps.engine).get(ctx.actor.tenant_id, ctx.actor.user_id, item_id)
@@ -267,7 +280,7 @@ async def _export(ctx: ActionContext, item_id: str, folder: Path) -> Path | None
 
 def library_kinds() -> list[LibraryKind]:
     return [
-        LibraryKind("video", PRODUCT_ID, "video", _list, _get, _delete, None, _export),
+        LibraryKind("video", PRODUCT_ID, "video", _list, _get, _delete, None, _export, _read),
         *builder_library_kinds(),
     ]
 

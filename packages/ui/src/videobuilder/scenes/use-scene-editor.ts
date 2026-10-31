@@ -2,8 +2,12 @@
 // The editor's state (ADR-0096): one document, one selection, an Undo that groups a typing session
 // into one step, and a save queue that never lets an old save overwrite a newer edit.
 import type {
+  BuilderMakeRequest,
   BuilderProject,
   BuilderRender,
+  MakeProgress,
+  MakeWhat,
+  ProjectAsset,
   RenderQuality,
   Scene,
   SceneDocument,
@@ -13,10 +17,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const SAVE_AFTER_MS = 500;
 const POLL_MS = 700;
+const MAKE_POLL_MS = 1500;
 const KEEP_STEPS = 100;
 const RENEW_BEFORE_S = 300;
 
 export type SaveState = "saved" | "saving" | "failed";
+
+/** What is being made for this project right now; one at a time, as the models work. */
+export type MakingNow = { what: MakeWhat; jobId: string | null; progress: number | null };
 
 /** One Undo step; `toolId` when the assistant made it, so its card in the chat can undo it. */
 type Step = { label: string; document: SceneDocument; toolId?: string };
@@ -178,6 +186,9 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
     setSelected((id) => (d.scenes.some((s) => s.id === id) ? id : (d.scenes[0]?.id ?? "")));
   }, []);
 
+  const [making, setMaking] = useState<MakingNow | null>(null);
+  const makeRun = useRef<{ stopped: boolean } | null>(null);
+
   const undo = useCallback(async () => {
     group.current = null;
     const step = past[past.length - 1];
@@ -185,9 +196,11 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
       const now = latest.current;
       setPast(past.slice(0, -1));
       setFuture((f) => [...f, { label: step.label, document: now }]);
-      latest.current = step.document;
-      setDocument(step.document);
-      keepSelection(step.document);
+      // a project's files are not undone (the engine keeps today's): only where they are used
+      const back = { ...step.document, assets: now.assets };
+      latest.current = back;
+      setDocument(back);
+      keepSelection(back);
       saveSoon();
       return;
     }
@@ -392,6 +405,50 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
     [api, project.id, saveNow],
   );
 
+  /** Make something and, when it comes, put it in the document: one Undo step, autosaved. It is
+   * placed by the window, so a make that takes minutes cannot overwrite what was done meanwhile. */
+  const makeFile = useCallback(
+    async (
+      request: BuilderMakeRequest,
+      label: string,
+      place: (d: SceneDocument, file: ProjectAsset, cues: Scene["cues"]) => SceneDocument,
+    ) => {
+      const mine = { stopped: false };
+      makeRun.current = mine;
+      setProblem(null);
+      setMaking({ what: request.what, jobId: null, progress: null });
+      try {
+        let step: MakeProgress = await api.make(project.id, request);
+        while (step.state === "working") {
+          const jobId = step.job_id;
+          const progress = step.progress ?? null;
+          if (mine.stopped) {
+            await api.stopMake(jobId);
+            return;
+          }
+          if (alive.current) setMaking({ what: request.what, jobId, progress });
+          await new Promise((done) => setTimeout(done, MAKE_POLL_MS));
+          step = mine.stopped ? step : await api.makeStatus(jobId);
+        }
+        if (step.state !== "done" || mine.stopped || !alive.current) return;
+        const { asset, assets, cues } = step;
+        latest.current = { ...latest.current, assets };
+        setDocument(latest.current);
+        apply(label, (d) => place(d, asset, cues));
+      } catch (e) {
+        if (alive.current && !mine.stopped) setProblem(say(e, "That could not be made."));
+      } finally {
+        if (makeRun.current === mine && alive.current) setMaking(null);
+      }
+    },
+    [api, project.id, apply],
+  );
+
+  const stopMaking = useCallback(() => {
+    if (makeRun.current) makeRun.current.stopped = true;
+    setMaking(null);
+  }, []);
+
   const make = useCallback(
     async (quality?: RenderQuality) => {
       setProblem(null);
@@ -437,6 +494,9 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
     undoOfTool,
     addFile,
     removeFile,
+    making,
+    makeFile,
+    stopMaking,
     changeScene,
     moveScene,
     addScene,

@@ -128,8 +128,28 @@ export type Scene = {
   background?: SceneBackground | null;
   images?: { asset: string }[];
   sound?: SceneSound | null;
+  /** Captions in time with its sound: lines, each with when it shows, in the scene's own time. */
+  cues?: SceneCue[];
   fields: Record<string, unknown>;
 };
+
+export type SceneCue = { text: string; start: number; end: number };
+
+/** Something to make for a project, by the product that makes that kind of thing. */
+export type MakeWhat = "picture" | "clip" | "speech" | "music";
+export type BuilderMakeRequest = {
+  what: MakeWhat;
+  text: string;
+  seconds?: number;
+  voice?: string;
+  captions?: boolean;
+};
+export type MakeVoice = { id: string; name: string };
+/** A make as the window follows it: still working, or the new file in the project. */
+export type MakeProgress =
+  | { state: "working"; job_id: string; progress?: number | null }
+  | { state: "done"; asset: ProjectAsset; assets: ProjectAsset[]; cues: SceneCue[] }
+  | { state: "stopped" };
 
 export type PlacedPart = { x: number; y: number; w: number; scale: number };
 
@@ -256,6 +276,12 @@ export type VideoBuilderApi = {
   addAsset(id: string, file: File): Promise<{ asset: ProjectAsset; assets: ProjectAsset[] }>;
   /** A file out of the project and out of every scene that used it. */
   removeAsset(id: string, assetId: string): Promise<BuilderProject>;
+  /** Make a picture, clip, voiceover or music; the file joins the project, and the Library. */
+  make(id: string, request: BuilderMakeRequest): Promise<MakeProgress>;
+  makeStatus(jobId: string): Promise<MakeProgress>;
+  stopMake(jobId: string): Promise<MakeProgress>;
+  /** The person's saved voices. */
+  voices(): Promise<MakeVoice[]>;
   renderStatus(renderId: string): Promise<BuilderRender>;
   cancel(renderId: string): Promise<BuilderRender>;
 };
@@ -389,6 +415,12 @@ export function createVideoBuilderApi(
     },
     removeAsset: (id, assetId) =>
       json<BuilderProject>(`${base}/projects/${enc(id)}/assets/${enc(assetId)}`, send("DELETE")),
+    make: (id, request) =>
+      json<MakeProgress>(`${base}/projects/${enc(id)}/make`, send("POST", request)),
+    makeStatus: (job) => json<MakeProgress>(`${base}/make-jobs/${enc(job)}`),
+    stopMake: (job) =>
+      json<MakeProgress>(`${base}/make-jobs/${enc(job)}/cancel`, { method: "POST" }),
+    voices: () => json<MakeVoice[]>(`${base}/voices`),
     renderStatus: (rid) => json<BuilderRender>(`${base}/renders/${enc(rid)}`),
     cancel: (rid) => json<BuilderRender>(`${base}/renders/${enc(rid)}/cancel`, { method: "POST" }),
   };

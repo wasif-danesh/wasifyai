@@ -398,6 +398,86 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         out["Content-Range"] = f"bytes {first}-{last}/{size}"
         return Response(data, status_code=206, media_type=kind, headers=out)
 
+    def make_answer(result: Any) -> dict[str, Any]:
+        """A make as the window follows it: working, done, or why not, in words."""
+        if result.status == "running":
+            return {"state": "working", "job_id": result.job_id}
+        if result.status == "ok":
+            return {"state": "done", **result.output}
+        text = result.setup.step if result.setup else result.text
+        raise HTTPException(
+            422, {"code": result.code or "not_made", "message": text or "That could not be made."}
+        )
+
+    @router.post("/projects/{cid}/make")
+    async def make_file(
+        cid: str, body: dict[str, Any], identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Make something for this project: the person pressed the button, so nothing asks again.
+        A long make is a job; the window puts the file where it wants it, so its own saves and
+        this cannot overwrite each other (ADR-0096 MX6)."""
+        guard()
+        composition(identity, cid)
+        executor = deps.state.actions
+        if executor is None:
+            raise HTTPException(
+                409, {"code": "not_ready", "message": "That is not available here."}
+            )
+        params = {**body, "composition_id": cid, "use": "none"}
+        return make_answer(
+            await executor.run_action(
+                "motion.make_file", params, "window", actor=identity, person_approved=True,
+                wait_seconds=1.0,
+            )
+        )  # fmt: skip
+
+    @router.get("/make-jobs/{job_id}")
+    async def make_status(
+        job_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        guard()
+        executor = deps.state.actions
+        if executor is None:
+            raise HTTPException(
+                409, {"code": "not_ready", "message": "That is not available here."}
+            )
+        found = await executor.run_action(
+            "job.status", {"job_id": job_id}, "window", actor=identity
+        )
+        if found.status != "ok":
+            raise HTTPException(404, "no such job")
+        done = found.output.get("result")
+        if done is None:
+            progress = found.output.get("progress") or {}
+            return {"state": "working", "job_id": job_id, "progress": progress.get("progress")}
+        if done.get("status") == "ok":
+            return {"state": "done", **done.get("output", {})}
+        raise HTTPException(
+            422,
+            {"code": done.get("code") or "not_made", "message": done.get("text") or "Not made."},
+        )
+
+    @router.post("/make-jobs/{job_id}/cancel")
+    async def make_cancel(
+        job_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        guard()
+        executor = deps.state.actions
+        if executor is not None:
+            await executor.run_action("job.cancel", {"job_id": job_id}, "window", actor=identity)
+        return {"state": "stopped"}
+
+    @router.get("/voices")
+    async def voices(identity: Identity = Depends(deps.identity)) -> list[dict[str, str]]:
+        """The person's saved voices, for a voiceover. None where speech is not served."""
+        guard()
+        executor = deps.state.actions
+        if executor is None:
+            return []
+        found = await executor.run_action("voice.list", {}, "window", actor=identity)
+        rows = found.output.get("voices", []) if found.status == "ok" else []
+        return [{"id": v["voice_id"], "name": v["name"]} for v in rows]
+
     @router.post("/projects/{cid}/live")
     async def live_address(cid: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
         """Where the player finds this project (ADR-0096 decision 3): a frame cannot send the

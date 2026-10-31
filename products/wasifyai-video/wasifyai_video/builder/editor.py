@@ -17,6 +17,7 @@ ACTIONS = (
     "motion.duplicate_scene",
     "motion.remove_scene",
     "motion.undo",
+    "motion.make_file",
     "video_builder.render",
 )
 _NOT_WORDS = ("seconds", "theme", "shape", "font", "per_line")
@@ -42,6 +43,12 @@ font, scenes. To write a first version from a brief, give name and all the scene
 scene has kind, name, fields and transition. Several short scenes work best: a hook, the product, \
 why it is different, an end card with an offer.
 - motion.undo: bring back the project as it was before the last change.
+- motion.make_file: make something new and put it in the project; the person is asked first. \
+params: what (picture, clip, speech, music), text (for speech, the exact words; otherwise what it \
+shows or sounds like, in English), use (background, place, sound, soundtrack), scene_id, and for \
+speech captions true to show the words in time. When they say make, narrate, or voiceover, this is \
+the action: nothing else can make a file. Use motion.change_scene or motion.set_project only for a \
+file that is already in the project.
 - video_builder.render: make the finished video, only when they ask for it.
 
 Change as little as you can: never send the whole project when one scene or one setting changes. \
@@ -62,6 +69,13 @@ Examples, for a current scene with scene_id 1f2e3d4c:
 "1f2e3d4c", "images": [{"asset": "<its id>"}]}}; it is the part image-0, placed with arrange.
 "Use the music for the whole video": {"action_id": "motion.set_project", "params": {"soundtrack": \
 {"asset": "<its id>", "volume": 0.4, "loop": true}}}
+"Add a voiceover saying Try it today, with captions": {"action_id": "motion.make_file", "params": \
+{"what": "speech", "text": "Try it today", "use": "sound", "scene_id": "1f2e3d4c", \
+"captions": true}}
+"Make a picture of a red can and put it behind this scene": {"action_id": "motion.make_file", \
+"params": {"what": "picture", "text": "A red can", "use": "background", "scene_id": "1f2e3d4c"}}
+"Make some calm piano music for the video": {"action_id": "motion.make_file", "params": {"what": \
+"music", "text": "Calm piano", "use": "soundtrack"}}
 "Make a square version": {"action_id": "motion.set_project", "params": {"shape": "square"}}
 "Call it Spring": {"action_id": "motion.set_project", "params": {"name": "Spring"}}
 "Add a scene saying Order today": {"action_id": "motion.add_scene", "params": {"kind": "title", \

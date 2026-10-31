@@ -31,6 +31,9 @@
 //   apps/desktop/scripts/ui-audit.sh light motion-assistant     The editor's assistant (ADR-0096 MX3) on the real language
 //                                                                model: a brief, edits in words, Undo, a video; on this
 //                                                                computer's data, and it deletes what it made
+//   apps/desktop/scripts/ui-audit.sh light motion-make          The Make panel (ADR-0096 MX6): real models, a real
+//                                                                voiceover with timed captions and a real video; a
+//                                                                throwaway DESKTOP_DATA_DIR with models and components linked
 //   apps/desktop/scripts/ui-audit.sh light motion-media         Media and sound (ADR-0096 MX5): real files through the
 //                                                                screen and a real video; needs MOTION_FIXTURES and a
 //                                                                throwaway DESKTOP_DATA_DIR
@@ -371,6 +374,112 @@ for (const scheme of ["light", "dark"]) {
       await shot(page, "motion-media-made");
       seen.check = await dialog.getByText(/Checked:/).innerText();
       console.log(`MEDIA ${JSON.stringify(seen)}`);
+    });
+  }
+  if (names.has("motion-make")) {
+    // The Make panel (ADR-0096 MX6): real models from inside the editor, a real voiceover with its
+    // captions in time, and a real video. Run it on a throwaway DESKTOP_DATA_DIR with the real
+    // models and components linked into it: what it makes stays out of the person's Library.
+    await attempt("motion-make", async () => {
+      const seen = { errors: [], took: {} };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      const saved = async () => {
+        await page.waitForTimeout(700);
+        await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      };
+      const make = async (kind, box, text, button) => {
+        const started = Date.now();
+        await page.getByRole("radio", { name: kind, exact: true }).click();
+        await page.getByLabel(box).fill(text);
+        await page.getByRole("button", { name: button }).click();
+        await page.getByRole("button", { name: "Stop" }).waitFor({ timeout: 10000 });
+        await page.getByRole("button", { name: button }).waitFor({ timeout: 900000 });
+        seen.took[kind] = Math.round((Date.now() - started) / 1000);
+        seen[`${kind}Problem`] = await page.locator("[role=alert]").allInnerTexts();
+        const problem = seen[`${kind}Problem`].join(" ");
+        if (problem) throw new Error(`${kind}: ${problem}`);
+        await saved();
+      };
+      await open(page, "/video/builder");
+      await page.getByRole("button", { name: "Start empty" }).click();
+      await page.waitForFunction(
+        () => document.querySelector("hyperframes-player")?.duration > 0,
+        null,
+        { timeout: 30000 },
+      );
+      await page.getByRole("radio", { name: "16:9" }).click();
+      await page.getByRole("radio", { name: "Make", exact: true }).click();
+      await shot(page, "motion-make");
+      await make(
+        "Picture",
+        "What should it show?",
+        "A red can on a marble table",
+        "Make the picture",
+      );
+      await page.waitForTimeout(3000);
+      await shot(page, "motion-make-picture");
+      const WORDS =
+        "Mornings are hard. Northbean steeps for eighteen hours, so you do not have to.";
+      await make("Speech", "What should it say?", WORDS, "Make the voiceover");
+      const frame = () => page.frames().find((f) => f.url().includes("/live/"));
+      await page.waitForTimeout(3000);
+      const id = (await page.locator("hyperframes-player").getAttribute("src")).match(
+        /live\/([0-9a-f]{32})\./,
+      )[1];
+      const found = await engine(`/products/wasifyai-video/builder/projects/${id}`);
+      const scene = found.slots.scenes[0];
+      seen.assets = found.slots.assets.map((a) => [a.kind, a.name, a.seconds]);
+      seen.sound = scene.sound;
+      seen.background = scene.background?.asset;
+      seen.seconds = scene.fields.seconds;
+      seen.cues = scene.cues;
+      seen.wordsKept = scene.cues.map((c) => c.text).join(" ") === WORDS;
+      const second = scene.cues[1];
+      await page
+        .getByLabel("Move through the video")
+        .fill(String(Math.round(((second.start + second.end) / 2) * 20) / 20));
+      await page.waitForTimeout(1500);
+      seen.showing = await frame().evaluate(() =>
+        [...document.querySelectorAll(".cue")]
+          .filter((c) => Number(getComputedStyle(c).opacity) > 0.5)
+          .map((c) => c.textContent),
+      );
+      await shot(page, "motion-make-voiceover");
+      await make(
+        "Music",
+        "What should it sound like?",
+        "Warm acoustic guitar, unhurried",
+        "Make the music",
+      );
+      await make(
+        "Clip",
+        "What should happen in it?",
+        "Steam rising from a cup, slowly",
+        "Make the clip",
+      );
+      await page.waitForTimeout(3000);
+      await shot(page, "motion-make-all");
+      const AxeBuilder = require("@axe-core/playwright").default;
+      const axe = await new AxeBuilder({ page })
+        .include("[data-slot=scene-editor]")
+        .exclude("hyperframes-player")
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .analyze();
+      seen.axe = axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      await page.getByRole("button", { name: "Make the video" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Make the video" }).click();
+      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 300000 });
+      await shot(page, "motion-make-made");
+      seen.check = await dialog.getByText(/Checked:/).innerText();
+      const after = await engine(`/products/wasifyai-video/builder/projects/${id}`);
+      seen.renders = (after?.renders ?? []).map((r) => [
+        r.status,
+        r.check?.ok,
+        r.error,
+        r.output_path,
+      ]);
+      console.log(`MOTIONMAKE ${JSON.stringify(seen)}`);
     });
   }
   if (names.has("motion-arrange")) {

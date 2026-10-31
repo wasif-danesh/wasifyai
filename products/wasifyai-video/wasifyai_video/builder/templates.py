@@ -753,7 +753,7 @@ PARTS: dict[str, dict[str, str]] = {
     "captions": {"captions": "#caps"},
 }
 _MIN_WIDTH, _MIN_SCALE, _MAX_SCALE = 3.0, 0.4, 3.0
-MAX_ASSETS, MAX_PLACED = 60, 6
+MAX_ASSETS, MAX_PLACED, MAX_CUES = 60, 6, 60
 _FILE = re.compile(r"[0-9a-f]{8}\.(png|jpg|mp4|mov|webm|m4a|mp3|wav|ogg|flac)")
 _PLACED_START = {"x": 35.0, "y": 25.0, "w": 30.0, "scale": 1.0}  # a picture just put on a scene
 _PLACED_LEFT, _PLACED_WIDTH = 8.0, 84.0  # a part given only its height on the picture
@@ -836,6 +836,22 @@ def _sound(raw: Any, assets: dict[str, dict[str, Any]]) -> dict[str, Any] | None
 def _soundtrack(raw: Any, assets: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
     found = _sound(raw, assets)
     return {**found, "start": _number(raw.get("start"), 0, MAX_SECONDS, 0)} if found else None
+
+
+def _cues(raw: Any, seconds: float) -> list[dict[str, Any]]:
+    """Captions in time with what is said: lines, each with when it shows, in the scene's own time.
+    One that starts after the scene ends is dropped; the words are checked like any others. They
+    belong to the scene's sound, and go when it goes: the scene's typed captions show again."""
+    out = []
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        text = _text(item.get("text"), "caption", MAX_CAPTION, False)
+        start = _number(item.get("start"), 0, 100_000, 0)
+        end = _number(item.get("end"), 0, 100_000, 0)
+        if text and start < seconds and end > start:
+            out.append({"text": text, "start": start, "end": min(end, float(seconds))})
+    return out[:MAX_CUES]
 
 
 def _normalize_assets(raw: Any) -> list[dict[str, Any]]:
@@ -938,7 +954,7 @@ def _normalize_scene(
         raise SlotError(f"Scene {n} is not a scene.")
     allowed = {
         "id", "name", "kind", "fields", "caption", "transition", "arrange", "background",
-        "images", "sound",
+        "images", "sound", "cues",
     }  # fmt: skip
     extra = sorted(set(raw) - allowed)
     if extra:
@@ -970,6 +986,7 @@ def _normalize_scene(
     transition = raw.get("transition", "none")
     if transition not in TRANSITIONS:
         raise SlotError(f"Scene {n} must start with one of: {', '.join(TRANSITIONS)}.")
+    sound = _sound(raw.get("sound"), found)
     return {
         "id": scene_id,
         "name": _text(raw.get("name"), "scene name", 60, False) or template.title,
@@ -979,7 +996,8 @@ def _normalize_scene(
         "arrange": _normalize_arrange(kind, raw.get("arrange"), n, len(images)),
         "background": _background(raw.get("background"), found),
         "images": images,
-        "sound": _sound(raw.get("sound"), found),
+        "sound": sound,
+        "cues": _cues(raw.get("cues"), slots["seconds"]) if sound else [],
         "fields": {k: v for k, v in slots.items() if k not in _WHOLE_PROJECT},
     }
 
@@ -1044,9 +1062,13 @@ def _scenes_expected(document: dict[str, Any]) -> list[Expect]:
         slots = scene_slots(document, scene)
         for e in template.expected(slots):
             out.append(Expect(f"{scene['id']}-{e.slot}", e.text, round(start + e.at, 2)))
-        if scene["caption"]:
+        cues = scene.get("cues") or []
+        if scene["caption"] and not cues:
             at = round(start + template.hold(slots), 2)
             out.append(Expect(f"{scene['id']}-caption", scene["caption"], at))
+        for i, cue in enumerate(cues):
+            at = round(start + (cue["start"] + cue["end"]) / 2, 2)
+            out.append(Expect(f"{scene['id']}-cue-{i}", cue["text"], at))
     return out
 
 
@@ -1055,6 +1077,7 @@ def _scenes_words(document: dict[str, Any]) -> str:
     for scene in document["scenes"]:
         said.append(TEMPLATES[scene["kind"]].words(scene_slots(document, scene)))
         said.append(scene["caption"])
+        said.extend(cue["text"] for cue in scene.get("cues") or [])
     return ". ".join(x.rstrip(".") for x in [document["name"], *said] if x)
 
 
@@ -1109,6 +1132,17 @@ def _scoped(scene: str, start: int, css: str, body: str, script: str) -> tuple[s
     script = re.sub(r'getElementById\("([\w-]+)"\)', rf'getElementById("{prefix}\1")', script)
     script = with_ids(script).replace('".', f'"#{root} .')
     return f"  #{root} {{\n{with_ids(css)}\n  }}", body, script
+
+
+def _cue_times(scene: dict[str, Any]) -> str:
+    """Each line of timed captions shows only while it is being said: nothing but numbers and the
+    engine's own ids are written into the script."""
+    out = []
+    for i, cue in enumerate(scene.get("cues") or []):
+        sel = f"#s{scene['id']}-cue-{i}"
+        out.append(f'    tl.set("{sel}", {{ opacity: 1 }}, {cue["start"]});\n')
+        out.append(f'    tl.set("{sel}", {{ opacity: 0 }}, {cue["end"]});\n')
+    return "".join(out)
 
 
 def _transition(kind: str, root: str, height: int) -> str:
@@ -1213,7 +1247,15 @@ def _render_scenes(document: dict[str, Any]) -> str:
         placed = _arrange_rules(scene)
         if placed:
             rules.append(placed)
-        if scene["caption"]:
+        cues = scene.get("cues") or []
+        if cues:
+            lines = "".join(
+                f'<span id="s{scene["id"]}-cue-{i}" class="cue" data-slot="{scene["id"]}-cue-{i}">'
+                f"{_e(cue['text'])}</span>"
+                for i, cue in enumerate(cues)
+            )
+            body += f'\n<div class="scene-caption scene-cues">{lines}</div>'
+        elif scene["caption"]:
             body += (
                 f'\n<div class="scene-caption"><span data-slot="{scene["id"]}-caption">'
                 f"{_e(scene['caption'])}</span></div>"
@@ -1233,7 +1275,7 @@ def _render_scenes(document: dict[str, Any]) -> str:
             f"""{hide}{show}  film.set("{root}", {{ visibility: "hidden" }}, {start + seconds});
   (() => {{
     const tl = gsap.timeline();
-{_transition(scene["transition"], root, height)}{script}
+{_transition(scene["transition"], root, height)}{_cue_times(scene)}{script}
     tl.to({{}}, {{ duration: 0.01 }}, {seconds} - 0.01);
     film.add(tl, {start});
   }})();"""
@@ -1255,8 +1297,12 @@ def _render_scenes(document: dict[str, Any]) -> str:
   .scene {{ position: absolute; inset: 0; overflow: hidden; }}
   .scene-back {{ position: absolute; inset: 0; width: 100%; height: 100%; }}
   .placed {{ position: absolute; height: auto; }}
-  .scene-caption {{ position: absolute; left: 8%; right: 8%; bottom: 5%; text-align: center;
+  .scene-caption {{ position: absolute; left: 8%; right: 8%;
+    bottom: {max(round(height * 0.05), round(width * SAFE + min(width, height) * 0.015))}px;
+    text-align: center;
     font-size: {round(min(width, height) * 0.036)}px; line-height: 1.5; color: #fff; }}
+  .scene-cues {{ display: grid; }}
+  .scene-cues .cue {{ grid-area: 1 / 1; justify-self: center; align-self: end; opacity: 0; }}
   .scene-caption span {{ background: rgba(0,0,0,0.68); padding: 0.25em 0.6em; border-radius: 0.3em;
     -webkit-box-decoration-break: clone; box-decoration-break: clone; }}
 {newline.join(rules)}

@@ -8,6 +8,7 @@ import type {
   BuilderShape,
   BuilderSlots,
   BuilderTheme,
+  MakeVoice,
   RenderQuality,
   Scene,
   SceneDocument,
@@ -42,6 +43,7 @@ import { FormField } from "../FormField";
 import { toDraft } from "../slots";
 import { ArrangeOverlay, type MeasuredPart, laidOut } from "./ArrangeOverlay";
 import { LivePreview, type LivePreviewHandle } from "./LivePreview";
+import { MakeTools } from "./MakeTools";
 import {
   BackgroundDetails,
   FilmSoundtrack,
@@ -72,7 +74,7 @@ const FIRST_WORDS: Record<string, Record<string, string | number>> = {
 
 /** The actions whose result the screen reads back. Making the video changes nothing here. */
 const CHANGES_THE_PROJECT =
-  /^motion\.(set_project|add_scene|change_scene|move_scene|duplicate_scene|remove_scene|undo)$/;
+  /^motion\.(set_project|add_scene|change_scene|move_scene|duplicate_scene|remove_scene|undo|make_file)$/;
 
 const LAYOUTS = [
   { where: "design", label: "As designed" },
@@ -89,6 +91,11 @@ function settledMoment(scene: Scene): number {
   if (scene.kind === "lower_third") return (0.7 + seconds - 0.6) / 2;
   return Math.max(0, seconds - 0.1);
 }
+
+/** How long this kind of scene can be, from the catalogue. */
+const longestOf = (catalogue: TemplateCatalogue, scene: Scene | undefined) =>
+  catalogue.templates.find((t) => t.id === scene?.kind)?.fields.find((f) => f.kind === "seconds")
+    ?.max ?? 0;
 
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
@@ -158,7 +165,21 @@ export function SceneEditor({
     Math.min(0.9, (Number(doc.scenes[0]?.fields.seconds) || 0) / 2),
   );
   const [playing, setPlaying] = useState(false);
-  const [tool, setTool] = useState<"add" | "media" | "sound" | "looks">("add");
+  const [tool, setTool] = useState<"add" | "media" | "make" | "sound" | "looks">("add");
+  const [voices, setVoices] = useState<MakeVoice[]>([]);
+  useEffect(() => {
+    if (tool !== "make") return;
+    let current = true;
+    api.voices().then(
+      (found) => {
+        if (current) setVoices(found);
+      },
+      () => {},
+    );
+    return () => {
+      current = false;
+    };
+  }, [api, tool]);
   const [making, setMaking] = useState(false);
   const shape = SIZES[doc.shape];
   const index = Math.max(
@@ -363,7 +384,7 @@ export function SceneEditor({
           </Notice>
         </div>
       ) : null}
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto @4xl:grid-cols-[15rem_minmax(0,1fr)_18rem] @4xl:overflow-hidden @6xl:grid-cols-[16rem_minmax(0,1fr)_20rem]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto @4xl:grid-cols-[17rem_minmax(0,1fr)_18rem] @4xl:overflow-hidden @6xl:grid-cols-[17rem_minmax(0,1fr)_20rem]">
         <aside
           aria-label="Add to your video"
           inert={busy}
@@ -373,12 +394,13 @@ export function SceneEditor({
             <Segmented
               size="sm"
               label="Tools"
-              className="w-full"
+              className="w-full justify-between [&>*]:px-1.5"
               value={tool}
-              onValueChange={(v) => setTool(v as "add" | "media" | "sound" | "looks")}
+              onValueChange={(v) => setTool(v as "add" | "media" | "make" | "sound" | "looks")}
               options={[
                 { value: "add", label: "Add" },
                 { value: "media", label: "Media" },
+                { value: "make", label: "Make" },
                 { value: "sound", label: "Sound" },
                 { value: "looks", label: "Looks" },
               ]}
@@ -410,6 +432,17 @@ export function SceneEditor({
                     new File([blob], `Scene ${index + 1}.png`, { type: "image/png" }),
                   );
                 }}
+              />
+            ) : tool === "make" ? (
+              <MakeTools
+                doc={doc}
+                scene={scene}
+                number={index + 1}
+                making={e.making}
+                longestScene={longestOf(catalogue, scene)}
+                voices={voices}
+                onMake={(request, label, place) => void e.makeFile(request, label, place)}
+                onStop={e.stopMaking}
               />
             ) : tool === "sound" ? (
               <SoundTools
@@ -848,20 +881,36 @@ function SceneDetails({
           <label className="font-medium text-sm" htmlFor={captionId}>
             Captions <span className="font-normal text-muted-foreground">(optional)</span>
           </label>
-          <textarea
-            id={captionId}
-            rows={2}
-            maxLength={140}
-            className="rounded-md border border-input bg-transparent px-3 py-2 text-sm"
-            value={scene.caption}
-            onChange={(ev) =>
-              onChange(
-                "Change the captions",
-                (s) => ({ ...s, caption: ev.target.value }),
-                `${scene.id}:caption`,
-              )
-            }
-          />
+          {scene.cues?.length ? (
+            <p className="m-0 text-muted-foreground text-xs">
+              They show in time with the voiceover: {scene.cues.map((c) => c.text).join(" ")}
+            </p>
+          ) : null}
+          {scene.cues?.length ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onChange("Type the captions", (s) => ({ ...s, cues: [] }))}
+            >
+              Type them instead
+            </Button>
+          ) : (
+            <textarea
+              id={captionId}
+              rows={2}
+              maxLength={140}
+              className="rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+              value={scene.caption}
+              onChange={(ev) =>
+                onChange(
+                  "Change the captions",
+                  (s) => ({ ...s, caption: ev.target.value }),
+                  `${scene.id}:caption`,
+                )
+              }
+            />
+          )}
         </div>
       ) : null}
       {length ? (

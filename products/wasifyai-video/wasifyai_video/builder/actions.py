@@ -9,6 +9,7 @@ no model retypes them, and the exact-text check refuses a page that does not say
 editor's assistant uses them, so one change is one version that `motion.undo` brings back."""
 
 import asyncio
+import math
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -19,6 +20,7 @@ from wasifyai_platform_sdk.actions import (
     Action,
     ActionContext,
     ActionRefused,
+    ActionResult,
     CallBinding,
     LibraryItem,
     LibraryKind,
@@ -28,7 +30,7 @@ from wasifyai_platform_sdk.actions import (
 )
 from wasifyai_platform_sdk.actions.helpers import need_deps
 
-from wasifyai_video.builder import editor, scenes, templates
+from wasifyai_video.builder import editor, make, media, scenes, templates
 from wasifyai_video.builder.routes import delete_composition
 from wasifyai_video.builder.runtime import (
     NotFound,
@@ -276,6 +278,37 @@ class SetProjectIn(CompositionIn):
         None, max_length=templates.MAX_SCENES,
         description="All the scenes, in order, replacing the ones there now.",
     )  # fmt: skip
+
+
+class MakeFileIn(CompositionIn):
+    what: Literal["picture", "clip", "speech", "music"] = Field(description="What to make.")
+    text: str = Field(
+        min_length=1, max_length=2000,
+        description=(
+            "picture or clip: what it shows, in English. speech: the exact words to say. music: "
+            "the style and mood, in English."
+        ),
+    )  # fmt: skip
+    seconds: float = Field(30, ge=1, le=240, description="clip or music: about how long.")
+    voice: str | None = Field(None, max_length=64, description="speech: a saved voice's id.")
+    use: Literal["none", "background", "place", "sound", "soundtrack"] = Field(
+        "none", description="What to do with it: nothing, or where it goes in the project."
+    )
+    scene_id: str | None = Field(
+        None,
+        pattern="^[0-9a-f]{8}$",
+        description="The scene it is for, for background, place, sound.",
+    )
+    captions: bool = Field(False, description="speech: show the words as captions, in time.")
+
+
+class MakeFileOut(BaseModel):
+    composition_id: str
+    asset: dict[str, Any]
+    assets: list[dict[str, Any]]
+    cues: list[dict[str, Any]] = []
+    uri: str
+    message: str = ""
 
 
 class ReadProjectIn(CompositionIn):
@@ -581,6 +614,103 @@ async def _set_project(p: SetProjectIn, ctx: ActionContext) -> Outcome:
     return await _edit(ctx, p.composition_id, "The project was changed.", change)
 
 
+def _not_done(result: ActionResult) -> Outcome:
+    """Why a product's action did not make it, in its own words."""
+    text = result.setup.step if result.setup else result.text
+    return Outcome.refused(text or "That could not be made.", result.code or "not_made")
+
+
+async def _make_file(p: MakeFileIn, ctx: ActionContext) -> Outcome:
+    """Made by the product's own action, kept in the Library as usual, and copied into the project.
+    It runs as the person who was asked, or who pressed the button: this action's own approval."""
+    deps = need_deps(ctx)
+    current = _found(ctx, p.composition_id)
+    if current["template"] != templates.SCENES:
+        return Outcome.refused("Add more scenes first.", "not_scenes")
+    document = current["slots"]
+    if p.use in ("background", "place", "sound") and p.scene_id is None:
+        return Outcome.refused("Say which scene it is for.", "bad_slot")
+    action, params = make.inner_call(p.what, p.text, document["shape"], p.seconds, p.voice)
+    done = await ctx.executor.run_action(
+        action, params, "window", actor=ctx.actor, person_approved=True
+    )
+    if done.status != "ok":
+        return _not_done(done)
+    item = make.made_item(p.what, done.output)
+    kind = ctx.executor.library.get(item[0]) if item else None
+    data = await kind.read(ctx, item[1]) if item and kind and kind.read else None
+    if data is None:
+        return Outcome.error("It was made, but could not be brought here. It is in your Library.")
+    try:
+        checked = await asyncio.to_thread(media.check_upload, data, make.file_name(p.what, p.text))
+    except media.MediaError as e:
+        return Outcome.error(f"It was made, but could not be used here: {e}")
+    await deps.storage.put_for(
+        (ctx.actor.tenant_id, PRODUCT_ID, ctx.actor.user_id),
+        media.rel_path(current["id"], checked.asset["file"]),
+        checked.data,
+        media.MEDIA_TYPES.get(Path(checked.asset["file"]).suffix, "application/octet-stream"),
+    )
+    store = _store(ctx)
+    latest = store.get_composition(ctx.actor.tenant_id, ctx.actor.user_id, current["id"])
+    assets = [*(latest["slots"].get("assets") or []), checked.asset]
+    await asyncio.to_thread(
+        store.set_assets, ctx.actor.tenant_id, ctx.actor.user_id, current["id"], assets
+    )
+    cues: list[dict[str, Any]] = []
+    if p.what == "speech" and p.captions:
+        heard = await ctx.executor.run_action(
+            "speech.transcribe", {"source_kind": "speech", "source_id": item[1]}, "window",
+            actor=ctx.actor, person_approved=True,
+        )  # fmt: skip
+        # no speech to text here: the lines are timed by how far through the words they are
+        segments = heard.output.get("segments", []) if heard.status == "ok" else []
+        cues = make.timed_lines(p.text, segments, checked.asset["seconds"])
+    if p.use != "none":
+        placed = await _use_file(ctx, latest["id"], checked.asset, p, cues)
+        if placed is not None:
+            return placed
+    return Outcome.ok(
+        {
+            "composition_id": current["id"], "asset": checked.asset, "assets": assets, "cues": cues,
+            "uri": f"wasify://creation/composition/{current['id']}",
+            "message": f"{checked.asset['name']} is in the project.",
+        },
+        f"It was made and added to the project as {checked.asset['name']}. This can be undone.",
+    )  # fmt: skip
+
+
+async def _use_file(
+    ctx: ActionContext, cid: str, asset: dict[str, Any], p: MakeFileIn, cues: list[dict[str, Any]]
+) -> Outcome | None:
+    """Put what was just made where the assistant was asked to. None when that worked."""
+
+    def change(d: dict[str, Any]) -> dict[str, Any]:
+        if p.use == "soundtrack":
+            track = {"asset": asset["id"], "volume": 0.4, "loop": True}
+            return templates.normalize_slots(templates.SCENES, {**d, "soundtrack": track})
+        scene = d["scenes"][scenes.find(d, str(p.scene_id))]
+        if p.use == "background":
+            return scenes.change(d, scene["id"], {}, background={"asset": asset["id"]})
+        if p.use == "place":
+            pictures = [*scene.get("images", []), {"asset": asset["id"]}]
+            return scenes.change(d, scene["id"], {}, images=pictures)
+        longer = {}
+        if "seconds" in scene["fields"] and asset["seconds"] > scene["fields"]["seconds"]:
+            longest = next(
+                f.maximum for f in templates.TEMPLATES[scene["kind"]].fields if f.kind == "seconds"
+            )
+            longer = {"seconds": min(math.ceil(asset["seconds"]), longest)}
+        return scenes.change(
+            d, scene["id"], longer,
+            sound={"asset": asset["id"], "volume": 1, "loop": False},
+            cues=cues or None,
+        )  # fmt: skip
+
+    edited = await _edit(ctx, cid, "It was put in the project.", change)
+    return edited if edited.status != "ok" else None
+
+
 async def _read_project(p: ReadProjectIn, ctx: ActionContext) -> Outcome:
     found = _found(ctx, p.composition_id)
     document = templates.as_scenes(found["template"], found["slots"])
@@ -638,6 +768,21 @@ def actions() -> list[Action]:
             ]},),
             effect="make", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
             bind=CallBinding(_write_scenes), ui="motion",
+        ),
+        Action(
+            id="motion.make_file", title="Make something for a video project",
+            summary="Make a picture, clip, voiceover or music and add it to a video project.",
+            description=(
+                "Make a picture, a clip, speech or music with the app's own models and add it to "
+                "a Motion graphics project; it is also kept in the library. `use` says where it "
+                "goes. For a voiceover, `captions` shows the words in time with the speech."
+            ),
+            input=MakeFileIn, output=MakeFileOut,
+            examples=({"composition_id": SAMPLE_ID, "what": "speech", "text": "Try it today.",
+                       "use": "sound", "scene_id": SAMPLE_SCENE, "captions": True},),
+            effect="make", flags=("costly",), requires=(need_product(PRODUCT_ID),),
+            long=True, product=PRODUCT_ID,
+            bind=CallBinding(_make_file, check=_check_composition), ui="motion",
         ),
         Action(
             id="motion.read_project", title="Read a video project",

@@ -662,6 +662,36 @@ cases:
     say: "Put the can on this scene."
     action: motion.change_scene
     result: { scene_2_uses_images: aaaa0000 }
+  - id: ed-voiceover
+    kind: editor
+    expect: propose_action
+    say: "Add a voiceover to this scene saying: Try it today"
+    action: motion.make_file
+    result: { make_what: speech, make_use: sound, make_text: Try it today }
+  - id: ed-voiceover-captions
+    kind: editor
+    expect: propose_action
+    say: "Narrate this scene with the words Brewed slowly, and show them as captions in time."
+    action: motion.make_file
+    result: { make_what: speech, make_use: sound, make_captions: true }
+  - id: ed-make-picture
+    kind: editor
+    expect: propose_action
+    say: "Make a picture of a steaming cup on a wooden table and put it behind this scene."
+    action: motion.make_file
+    result: { make_what: picture, make_use: background }
+  - id: ed-make-music
+    kind: editor
+    expect: propose_action
+    say: "Make some warm acoustic guitar music for the whole video."
+    action: motion.make_file
+    result: { make_what: music, make_use: soundtrack }
+  - id: ed-file-not-made
+    kind: editor
+    expect: propose_action
+    say: "Use the can photo we already have behind this scene."
+    action: motion.change_scene
+    result: { scene_2_uses_background: aaaa0000 }
   - id: ed-soundtrack
     kind: editor
     expect: propose_action

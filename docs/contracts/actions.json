@@ -4076,6 +4076,182 @@
       "help": "docs/help/motion.make.md"
     },
     {
+      "id": "motion.make_file",
+      "title": "Make something for a video project",
+      "summary": "Make a picture, clip, voiceover or music and add it to a video project.",
+      "description": "Make a picture, a clip, speech or music with the app's own models and add it to a Motion graphics project; it is also kept in the library. `use` says where it goes. For a voiceover, `captions` shows the words in time with the speech.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "composition_id": {
+            "description": "The video project, as returned when it was created.",
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "what": {
+            "description": "What to make.",
+            "enum": [
+              "picture",
+              "clip",
+              "speech",
+              "music"
+            ],
+            "title": "What",
+            "type": "string"
+          },
+          "text": {
+            "description": "picture or clip: what it shows, in English. speech: the exact words to say. music: the style and mood, in English.",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "seconds": {
+            "default": 30,
+            "description": "clip or music: about how long.",
+            "maximum": 240,
+            "minimum": 1,
+            "title": "Seconds",
+            "type": "number"
+          },
+          "voice": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "speech: a saved voice's id.",
+            "title": "Voice"
+          },
+          "use": {
+            "default": "none",
+            "description": "What to do with it: nothing, or where it goes in the project.",
+            "enum": [
+              "none",
+              "background",
+              "place",
+              "sound",
+              "soundtrack"
+            ],
+            "title": "Use",
+            "type": "string"
+          },
+          "scene_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{8}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The scene it is for, for background, place, sound.",
+            "title": "Scene Id"
+          },
+          "captions": {
+            "default": false,
+            "description": "speech: show the words as captions, in time.",
+            "title": "Captions",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "composition_id",
+          "what",
+          "text"
+        ],
+        "title": "MakeFileIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "composition_id": {
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "asset": {
+            "additionalProperties": true,
+            "title": "Asset",
+            "type": "object"
+          },
+          "assets": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Assets",
+            "type": "array"
+          },
+          "cues": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Cues",
+            "type": "array"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "composition_id",
+          "asset",
+          "assets",
+          "uri"
+        ],
+        "title": "MakeFileOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "composition_id": "0b7c1f9e000040008000000000000000",
+          "what": "speech",
+          "text": "Try it today.",
+          "use": "sound",
+          "scene_id": "1f2e3d4c",
+          "captions": true
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "costly"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-video",
+      "ui": "motion",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/motion.make_file.md"
+    },
+    {
       "id": "motion.move_scene",
       "title": "Move a scene",
       "summary": "Move a scene earlier or later in a video project.",
@@ -6658,6 +6834,15 @@
             "default": false,
             "title": "Truncated",
             "type": "boolean"
+          },
+          "segments": {
+            "description": "When each stretch was said: start, end, text.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Segments",
+            "type": "array"
           }
         },
         "required": [

@@ -228,6 +228,9 @@ async def test_a_clip_still_being_made_is_not_deleted(rig):
 
 def test_every_video_action_is_run_in_this_file():
     # Motion graphics' actions are run in test_builder.py, which has its own rig and stand-in engine
-    source = Path(__file__).read_text() + (Path(__file__).parent / "test_builder.py").read_text()
+    source = Path(__file__).read_text() + "".join(
+        (Path(__file__).parent / name).read_text()
+        for name in ("test_builder.py", "test_builder_make.py")
+    )
     missing = [a.id for a in actions() if f'"{a.id}"' not in source]
     assert not missing, f"no test runs {missing}"

@@ -294,6 +294,9 @@ async def _file_recording(ctx: ActionContext, path: str) -> tuple[bytes, dict[st
     return audio.wav, {"title": real.name, "seconds": audio.seconds}
 
 
+MAX_OUTPUT_SEGMENTS = 400
+
+
 class TranscriptOut(BaseModel):
     transcript_id: str
     uri: str
@@ -301,6 +304,9 @@ class TranscriptOut(BaseModel):
     seconds: float
     text: str  # the start of it; the whole transcript is in the library
     truncated: bool = False
+    segments: list[dict[str, Any]] = Field(
+        default_factory=list, description="When each stretch was said: start, end, text."
+    )
 
 
 async def _recording(ctx: ActionContext, kind: str, item_id: str) -> tuple[bytes, dict[str, Any]]:
@@ -368,6 +374,10 @@ async def _transcribe(p: TranscribeIn, ctx: ActionContext) -> Outcome:
             "transcript_id": saved["id"], "uri": _uri("transcript", saved["id"]),
             "title": saved["title"], "seconds": float(saved["seconds"]),
             "text": text[:OUTPUT_TEXT_CHARS], "truncated": len(text) > OUTPUT_TEXT_CHARS,
+            "segments": [
+                {"start": round(s.start, 2), "end": round(s.end, 2), "text": s.text}
+                for s in result.segments[:MAX_OUTPUT_SEGMENTS]
+            ],
         },
         "The recording was written down and saved to the library as a transcript:\n"
         + text[:OUTPUT_TEXT_CHARS],
@@ -1208,6 +1218,23 @@ async def _rename_clip(ctx: ActionContext, item_id: str, title: str) -> bool:
     return True
 
 
+def _reader(getter: str, key: str) -> Any:
+    """A recording's bytes, for what brings it somewhere else (a project of scenes, ADR-0096)."""
+
+    async def read(ctx: ActionContext, item_id: str) -> bytes | None:
+        deps = need_deps(ctx)
+        try:
+            row = await asyncio.to_thread(
+                getattr(_store(ctx), getter), ctx.actor.tenant_id, ctx.actor.user_id, item_id
+            )
+            with deps.acting_as(ctx.actor, PRODUCT_ID):
+                return await deps.storage.get(row[key])
+        except (KeyError, LookupError, FileNotFoundError):
+            return None
+
+    return read
+
+
 def _exporter(method: str, key: str, ext: str, name: str) -> Any:
     async def export_(ctx: ActionContext, item_id: str, folder: Path) -> Path | None:
         deps = need_deps(ctx)
@@ -1242,11 +1269,13 @@ def library_kinds() -> list[LibraryKind]:
             "speech", PRODUCT_ID, "speech", _lister("list_speeches", _speech_item),
             _getter("get_speech", _speech_item), _deleter("delete_speech", ("audio_key",)),
             None, _exporter("get_speech", "audio_key", "wav", "text"),
+            _reader("get_speech", "audio_key"),
         ),
         LibraryKind(
             "track", PRODUCT_ID, "song", _lister("list_tracks", _track_item),
             _getter("get_track", _track_item), _deleter("delete_track", ("audio_key",)),
             _rename_track, _exporter("get_track", "audio_key", "wav", "title"),
+            _reader("get_track", "audio_key"),
         ),
         LibraryKind(
             "transcript", PRODUCT_ID, "transcript", _lister("list_transcripts", _transcript_item),

@@ -361,6 +361,31 @@ def test_sounds_play_in_their_time_and_loop_to_fill_it():
     assert 'id="sound-2"' in page and 'data-start="15.0" data-duration="5.0"' in page
 
 
+def test_timed_captions_show_only_while_said_and_must_be_on_the_screen():
+    cues = [
+        {"text": "Mornings <b>are</b> hard.", "start": 0.5, "end": 2},
+        {"text": "We steep it.", "start": 2, "end": 3.5},
+        {"text": "Too late.", "start": 90, "end": 91},
+        {"text": "Backwards.", "start": 2, "end": 1},
+        "not a cue",
+    ]
+    document = media_doc(caption="Typed", cues=cues, sound={"asset": "cccc0000"})
+    scene = document["scenes"][0]
+    assert [c["text"] for c in scene["cues"]] == ["Mornings <b>are</b> hard.", "We steep it."]
+    sid = scene["id"]
+    page = templates.render_html(SCENES, document)
+    assert "Mornings &lt;b&gt;are&lt;/b&gt; hard." in page and "<b>are" not in page
+    assert "Typed" not in page.split("</style>")[-1]  # the timed words are its captions now
+    assert f'tl.set("#s{sid}-cue-1", {{ opacity: 1 }}, 2' in page
+    assert f'tl.set("#s{sid}-cue-1", {{ opacity: 0 }}, 3.5' in page
+    wanted = {e.slot: e for e in templates.expected(SCENES, document)}
+    assert wanted[f"{sid}-cue-1"].text == "We steep it."
+    assert wanted[f"{sid}-cue-1"].at == pytest.approx(2.75)
+    assert "We steep it" in templates.describe(SCENES, document)
+    without = media_doc(caption="Typed", cues=cues)["scenes"][0]
+    assert without["cues"] == [] and without["caption"] == "Typed"
+
+
 def test_a_file_that_is_gone_leaves_its_scene_working():
     one = {"kind": "title", "fields": {"title": "Hi"}, "background": {"asset": "dddd0000"},
            "images": [{"asset": "dddd0000"}], "sound": {"asset": "dddd0000"}}  # fmt: skip

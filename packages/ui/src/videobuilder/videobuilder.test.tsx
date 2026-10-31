@@ -233,6 +233,10 @@ function api(over: Partial<VideoBuilderApi> = {}): VideoBuilderApi {
     keepConversation: vi.fn(),
     addAsset: vi.fn(),
     removeAsset: vi.fn(),
+    make: vi.fn(),
+    makeStatus: vi.fn(),
+    stopMake: vi.fn(),
+    voices: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockImplementation(async (template, s) =>
       project({
         template,

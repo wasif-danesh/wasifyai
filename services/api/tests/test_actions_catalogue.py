@@ -170,7 +170,8 @@ def test_the_first_set_is_there(catalogue):
     # 55 with styles.list, styles.add_from_hub and styles.remove (ADR-0091 decision 12);
     # 64 with motion.write_scenes, motion.set_project, motion.read_project, the five changes to one
     # scene and motion.undo (ADR-0096)
-    assert 35 <= len(ids) <= 64
+    # 65 with motion.make_file (ADR-0096 MX6)
+    assert 35 <= len(ids) <= 65
     for expected in (
         "library.search", "library.list", "library.get", "library.export", "library.rename",
         "library.delete", "image.generate", "image.edit", "video.generate", "video.animate",

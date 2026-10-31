@@ -693,6 +693,131 @@ describe("a project's files", () => {
     return { api, update };
   }
   const tool = (name: string) => fireEvent.click(screen.getByRole("radio", { name }));
+
+  describe("making something for a scene", () => {
+    const voiceover = {
+      id: "dddd0000", kind: "audio" as const, name: "Try it.wav", file: "dddd0000.wav", seconds: 40,
+      width: 0, height: 0, has_audio: false, codec: "pcm_s16le",
+    }; // biome-ignore format: a sample
+    const cues = [{ text: "Try it.", start: 0.2, end: 1 }];
+
+    function maker(make: VideoBuilderApi["make"], more: Partial<VideoBuilderApi> = {}) {
+      const update = vi.fn(async (_id: string, slots: unknown) => project(slots as SceneDocument));
+      const api = {
+        update,
+        live: vi.fn(async () => ({
+          url: "http://engine/live/t/index.html",
+          expires_at: Date.now() / 1000 + 3600,
+        })),
+        voices: vi.fn(async () => [{ id: "v1", name: "Warm" }]),
+        make,
+        ...more,
+      } as unknown as VideoBuilderApi;
+      render(
+        <SceneEditor api={api} project={project(film)} catalogue={catalogue} onBack={() => {}} />,
+      );
+      fireEvent.click(screen.getByRole("radio", { name: "Make" }));
+      return { update };
+    }
+    const lastSaved = async (update: ReturnType<typeof vi.fn>) => {
+      await waitFor(() => expect(update).toHaveBeenCalled(), { timeout: 2000 });
+      return update.mock.calls.at(-1)?.[1] as SceneDocument;
+    };
+
+    it("puts a voiceover on the scene with its captions and makes the scene long enough", async () => {
+      const make = vi.fn(async () => ({
+        state: "done" as const, asset: voiceover, assets: [voiceover], cues,
+      })); // biome-ignore format: a sample
+      const { update } = maker(make);
+      fireEvent.click(screen.getByRole("radio", { name: "Speech" }));
+      fireEvent.change(screen.getByLabelText("What should it say?"), {
+        target: { value: "Try it." },
+      });
+      fireEvent.change(await screen.findByLabelText("Voice"), { target: { value: "v1" } });
+      fireEvent.click(screen.getByRole("button", { name: "Make the voiceover" }));
+      await waitFor(() =>
+        expect(make).toHaveBeenCalledWith("p".repeat(32), {
+          what: "speech", text: "Try it.", captions: true, voice: "v1",
+        }),
+      ); // biome-ignore format: a sample
+      const saved = await lastSaved(update);
+      const scene = saved.scenes[0];
+      expect(scene?.sound).toEqual({ asset: "dddd0000", volume: 1, loop: false });
+      expect(scene?.cues).toEqual(cues);
+      expect(scene?.fields.seconds).toBe(40);
+      expect(saved.assets).toEqual([voiceover]);
+    });
+
+    it("takes it off with one Undo and keeps the file in the project", async () => {
+      const make = vi.fn(async () => ({
+        state: "done" as const, asset: voiceover, assets: [voiceover], cues,
+      })); // biome-ignore format: a sample
+      const { update } = maker(make);
+      fireEvent.click(screen.getByRole("radio", { name: "Speech" }));
+      fireEvent.change(screen.getByLabelText("What should it say?"), {
+        target: { value: "Try it." },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Make the voiceover" }));
+      await lastSaved(update);
+      update.mockClear();
+      fireEvent.click(screen.getByRole("button", { name: /^Undo/ }));
+      const back = await lastSaved(update);
+      expect(back.scenes[0]?.sound ?? null).toBeNull();
+      expect(back.scenes[0]?.fields.seconds).not.toBe(40);
+      expect(back.assets).toEqual([voiceover]);
+    });
+
+    it("says why it could not be made and keeps what was typed", async () => {
+      const make = vi.fn(async () => {
+        throw new Error("Set up the speech models first.");
+      });
+      const { update } = maker(make);
+      fireEvent.click(screen.getByRole("radio", { name: "Speech" }));
+      fireEvent.change(screen.getByLabelText("What should it say?"), {
+        target: { value: "Try it." },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Make the voiceover" }));
+      expect(await screen.findByText(/Set up the speech models first/)).toBeTruthy();
+      expect((screen.getByLabelText("What should it say?") as HTMLTextAreaElement).value).toBe(
+        "Try it.",
+      );
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it("follows a long make, and stopping it leaves the project as it was", async () => {
+      const make = vi.fn(async () => ({ state: "working" as const, job_id: "j1", progress: 0.25 }));
+      const stopMake = vi.fn(async () => ({ state: "stopped" as const }));
+      const makeStatus = vi.fn(async () => ({ state: "working" as const, job_id: "j1" }));
+      const { update } = maker(make, { stopMake, makeStatus });
+      fireEvent.change(screen.getByLabelText("What should it show?"), {
+        target: { value: "A can" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Make the picture" }));
+      expect(await screen.findByText(/Making the picture… 25%/)).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+      expect(await screen.findByRole("button", { name: "Make the picture" })).toBeTruthy();
+      await waitFor(() => expect(stopMake).toHaveBeenCalledWith("j1"), { timeout: 3000 });
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it("puts a made picture behind the scene or on it", async () => {
+      const made = {
+        id: "eeee0000", kind: "image" as const, name: "A can.jpg", file: "eeee0000.jpg", seconds: 0,
+        width: 10, height: 10, has_audio: false, codec: "",
+      }; // biome-ignore format: a sample
+      const make = vi.fn(async () => ({
+        state: "done" as const, asset: made, assets: [made], cues: [],
+      })); // biome-ignore format: a sample
+      const { update } = maker(make);
+      fireEvent.change(screen.getByLabelText("What should it show?"), {
+        target: { value: "A can" },
+      });
+      fireEvent.click(screen.getByRole("radio", { name: "On the scene" }));
+      fireEvent.click(screen.getByRole("button", { name: "Make the picture" }));
+      const saved = await lastSaved(update);
+      expect(saved.scenes[0]?.images).toEqual([{ asset: "eeee0000" }]);
+    });
+  });
   const saved = async (update: ReturnType<typeof vi.fn>) => {
     await waitFor(() => expect(update).toHaveBeenCalled(), { timeout: 2000 });
     return update.mock.calls.at(-1)?.[1] as SceneDocument;

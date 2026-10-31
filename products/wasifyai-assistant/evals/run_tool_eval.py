@@ -659,8 +659,14 @@ def applied(action: str, params: dict, document: dict) -> tuple[dict | None, str
             return scenes.duplicate(document, motion.SceneRefIn(**given).scene_id)[0], ""
         if action == "motion.remove_scene":
             return scenes.remove(document, motion.SceneRefIn(**given).scene_id), ""
+        if action == "motion.make_file":  # nothing is made here: only whether it would be taken
+            f = motion.MakeFileIn(**given)
+            if f.use in ("background", "place", "sound"):
+                scenes.find(document, str(f.scene_id))
+            return {**document, "make_what": f.what, "make_use": f.use, "make_text": f.text,
+                    "make_captions": f.captions}, ""  # fmt: skip
         return document, ""  # motion.undo and video_builder.render change no words here
-    except (templates.SlotError, ValidationError, TypeError) as e:
+    except (templates.SlotError, ValidationError, TypeError, KeyError) as e:
         return None, str(e)[:200]
 
 

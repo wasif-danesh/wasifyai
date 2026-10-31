@@ -123,8 +123,12 @@ export type Scene = {
   kind: string;
   caption: string;
   transition: "none" | "fade" | "slide";
+  /** Where its parts go on the picture, in percent; a part not named stays where it was designed. */
+  arrange?: Record<string, PlacedPart>;
   fields: Record<string, unknown>;
 };
+
+export type PlacedPart = { x: number; y: number; w: number; scale: number };
 
 /** A project of scenes: what the slots of a project with `template: "scenes"` are. */
 export type SceneDocument = {

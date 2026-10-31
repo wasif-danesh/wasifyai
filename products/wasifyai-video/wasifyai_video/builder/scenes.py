@@ -46,7 +46,7 @@ def change(
     **more: Any,
 ) -> dict[str, Any]:  # fmt: skip
     """Change the given fields of one scene; the rest stay. `more` is its caption or transition
-    (None leaves it as it is)."""
+    or where its parts go (None leaves it as it is)."""
     n = find(document, scene_id)
     scenes = list(document["scenes"])
     scene = scenes[n]

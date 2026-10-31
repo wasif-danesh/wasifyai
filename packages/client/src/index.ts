@@ -284,6 +284,7 @@ export {
   type BuilderDraft,
   type BuilderFormat,
   type BuilderProject,
+  type PlacedPart,
   type Scene,
   type SceneDocument,
   type BuilderRender,

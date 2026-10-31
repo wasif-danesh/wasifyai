@@ -179,6 +179,9 @@ class SceneIn(Strict):
     name: str = Field("", max_length=60, description="A short name for the scene.")
     caption: str = Field("", max_length=140, description="Words along the bottom of the scene.")
     transition: Transition = Field("fade", description="How the scene starts.")
+    arrange: dict[str, dict[str, float]] | None = Field(
+        None, description="Where the scene's parts go: part -> x, y, w (percent) and scale."
+    )
     fields: dict[str, Any] = Field(
         description=(
             "The template's words and settings, exactly as they should be shown, without shape and "
@@ -221,6 +224,13 @@ class ChangeSceneIn(SceneRefIn):
     name: str | None = Field(None, max_length=60, description="A new name for the scene.")
     caption: str | None = Field(None, max_length=140, description="Words along the bottom.")
     transition: Transition | None = Field(None, description="How the scene starts.")
+    arrange: dict[str, dict[str, float]] | None = Field(
+        None,
+        description=(
+            "Where the scene's parts go: part -> x, y, w (percent of the picture) and scale. "
+            "Empty puts them back where they were designed."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -499,7 +509,7 @@ async def _add_scene(p: AddSceneIn, ctx: ActionContext) -> Outcome:
         ctx, p.composition_id, "The scene was added.",
         lambda d: scenes.add(
             d, p.kind, p.fields, p.name, p.position,
-            {"caption": p.caption, "transition": p.transition},
+            {"caption": p.caption, "transition": p.transition, "arrange": p.arrange},
         ),
     )  # fmt: skip
 
@@ -508,7 +518,8 @@ async def _change_scene(p: ChangeSceneIn, ctx: ActionContext) -> Outcome:
     return await _edit(
         ctx, p.composition_id, "The scene was changed.",
         lambda d: scenes.change(
-            d, p.scene_id, p.fields, p.name, caption=p.caption, transition=p.transition
+            d, p.scene_id, p.fields, p.name,
+            caption=p.caption, transition=p.transition, arrange=p.arrange,
         ),
     )  # fmt: skip
 

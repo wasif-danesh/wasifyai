@@ -23,6 +23,7 @@ fit the tool's schema. One JSON line per case, then a summary per kind and per c
 import argparse
 import asyncio
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -632,7 +633,7 @@ def applied(action: str, params: dict, document: dict) -> tuple[dict | None, str
             return templates.normalize_slots(templates.SCENES, {**document, **changes}), ""
         if action == "motion.change_scene":
             q = motion.ChangeSceneIn(**given)
-            more = {"caption": q.caption, "transition": q.transition}
+            more = {"caption": q.caption, "transition": q.transition, "arrange": q.arrange}
             return scenes.change(document, q.scene_id, q.fields, q.name, **more), ""
         if action == "motion.add_scene":
             r = motion.AddSceneIn(**given)
@@ -686,6 +687,14 @@ def judge_editor(case: dict, message: dict, document: dict) -> tuple[bool, str]:
         if name == "min_scenes":
             if len(made["scenes"]) < value:
                 return False, f"only {len(made['scenes'])} scenes"
+            continue
+        placed = re.fullmatch(r"scene_(\d+)_(\w+?)_(\w+?)_(under|over)", name)
+        if placed:  # scene_2_title_y_under: where the second scene's title was placed
+            rect = made["scenes"][int(placed[1]) - 1]["arrange"].get(placed[2])
+            at = rect[placed[3]] if rect else None
+            fine = at is not None and (at < value if placed[4] == "under" else at > value)
+            if not fine:
+                return False, f"{name} is {at!r}; params {shown}"
             continue
         got = len(made["scenes"]) if name == "scene_count" else made.get(name)
         if name.startswith("scene_") and name != "scene_count":  # scene_2_seconds, of the second

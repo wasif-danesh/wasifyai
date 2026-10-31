@@ -3291,6 +3291,25 @@
             "title": "Transition",
             "type": "string"
           },
+          "arrange": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": {
+                    "type": "number"
+                  },
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Where the scene's parts go: part -> x, y, w (percent) and scale.",
+            "title": "Arrange"
+          },
           "fields": {
             "additionalProperties": true,
             "description": "The template's words and settings, exactly as they should be shown, without shape and font (those are set for the whole project). `seconds` is 5 if not given.",
@@ -3519,6 +3538,25 @@
             "default": null,
             "description": "How the scene starts.",
             "title": "Transition"
+          },
+          "arrange": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": {
+                    "type": "number"
+                  },
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Where the scene's parts go: part -> x, y, w (percent of the picture) and scale. Empty puts them back where they were designed.",
+            "title": "Arrange"
           }
         },
         "required": [
@@ -4529,6 +4567,25 @@
                 "title": "Transition",
                 "type": "string"
               },
+              "arrange": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "additionalProperties": {
+                        "type": "number"
+                      },
+                      "type": "object"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Where the scene's parts go: part -> x, y, w (percent) and scale.",
+                "title": "Arrange"
+              },
               "fields": {
                 "additionalProperties": true,
                 "description": "The template's words and settings, exactly as they should be shown, without shape and font (those are set for the whole project). `seconds` is 5 if not given.",
@@ -4921,6 +4978,25 @@
                 ],
                 "title": "Transition",
                 "type": "string"
+              },
+              "arrange": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "additionalProperties": {
+                        "type": "number"
+                      },
+                      "type": "object"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Where the scene's parts go: part -> x, y, w (percent) and scale.",
+                "title": "Arrange"
               },
               "fields": {
                 "additionalProperties": true,

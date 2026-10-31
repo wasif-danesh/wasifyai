@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import type { BuilderProject, SceneDocument, VideoBuilderApi } from "@wasifyai/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatScreenProps } from "../../chat/ChatScreen";
+import { ArrangeOverlay, laidOut, moved, placeOf, resized } from "./ArrangeOverlay";
 import { type EditorAssistant, SceneEditor } from "./SceneEditor";
 import { ScenesStart } from "./ScenesStart";
 import { lengthOf, newSceneId, sceneAt, startOf, withWorkedOut } from "./use-scene-editor";
@@ -512,5 +513,110 @@ describe("the first screen", () => {
     expect(onEmpty).toHaveBeenCalledWith("portrait");
     fireEvent.click(screen.getByRole("button", { name: "Quote" }));
     expect(onOne).toHaveBeenCalledWith("quote");
+  });
+});
+
+describe("arranging on the preview", () => {
+  const box = { x: 20, y: 30, w: 60, h: 10 };
+  const place = { x: 20, y: 30, w: 60, scale: 1 };
+
+  it("works out moves that stay on the picture", () => {
+    expect(placeOf(box)).toEqual(place);
+    expect(placeOf(box, { ...place, x: 5 }).x).toBe(5);
+    expect(moved(place, 10, 5, -5)).toEqual({ ...place, x: 25, y: 25 });
+    expect(moved(place, 10, 500, 500)).toEqual({ ...place, x: 40, y: 90 });
+    expect(moved(place, 10, -500, -500)).toEqual({ ...place, x: 0, y: 0 });
+  });
+
+  it("makes letters grow with the box, within limits", () => {
+    expect(resized(place, 15)).toEqual({ ...place, w: 75, scale: 1.25 });
+    expect(resized(place, 500).x).toBe(20);
+    expect(resized(place, 500).w).toBe(80);
+    expect(resized({ ...place, scale: 2.9 }, 30).scale).toBe(3);
+  });
+
+  it("moves the words together for a layout, leaving the caption", () => {
+    const parts = {
+      bar: { x: 40, y: 40, w: 20, h: 2 },
+      title: { x: 10, y: 45, w: 80, h: 10 },
+      subtitle: { x: 0, y: 0, w: 0, h: 0 },
+      caption: { x: 8, y: 90, w: 84, h: 5 },
+    };
+    const top = laidOut("top", parts, {});
+    expect(top.bar?.y).toBe(10);
+    expect(top.title?.y).toBe(15);
+    expect(top.caption).toBeUndefined();
+    expect(top.subtitle).toBeUndefined();
+    expect(laidOut("bottom", parts, {}).title?.y).toBe(80);
+    expect(laidOut("middle", parts, {}).bar?.y).toBe(42.5);
+    expect(laidOut("top", {}, { title: place })).toEqual({ title: place });
+  });
+
+  function overlay(placed = {}) {
+    const onLive = vi.fn();
+    const onCommit = vi.fn();
+    render(
+      <ArrangeOverlay
+        ratio={1}
+        parts={{ title: box }}
+        placed={placed}
+        onLive={onLive}
+        onCommit={onCommit}
+      />,
+    );
+    return { onLive, onCommit, part: screen.getByRole("button", { name: /Move the title/ }) };
+  }
+
+  it("moves with the arrow keys, further with shift, and resizes with plus and minus", () => {
+    const { onCommit, part } = overlay();
+    fireEvent.keyDown(part, { key: "ArrowRight" });
+    expect(onCommit).toHaveBeenLastCalledWith("title", { ...place, x: 21 }, "arrange:title");
+    fireEvent.keyDown(part, { key: "ArrowDown", shiftKey: true });
+    expect(onCommit).toHaveBeenLastCalledWith("title", { ...place, y: 35 }, "arrange:title");
+    fireEvent.keyDown(part, { key: "+" });
+    expect(onCommit.mock.lastCall?.[1].scale).toBe(1.05);
+    fireEvent.keyDown(part, { key: "a" });
+    expect(onCommit).toHaveBeenCalledTimes(3);
+  });
+
+  it("says when a part is too close to the edge for a video to be made", () => {
+    render(
+      <ArrangeOverlay
+        ratio={16 / 9}
+        parts={{ title: { x: 20, y: 3, w: 60, h: 10 }, subtitle: box }}
+        placed={{}}
+        onLive={() => {}}
+        onCommit={() => {}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /Move the title.*too close/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /under the title.*too close/ })).toBeNull();
+  });
+
+  it("does not catch keys or draw boxes for what the page has not reported", () => {
+    render(
+      <ArrangeOverlay ratio={1} parts={null} placed={{}} onLive={() => {}} onCommit={() => {}} />,
+    );
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("offers the layouts, and going back to the design", () => {
+    const update = vi.fn(async (_id: string, slots: unknown) => project(slots as SceneDocument));
+    const api = {
+      update,
+      live: vi.fn(async () => ({ url: "x", expires_at: Date.now() / 1000 + 3600 })),
+    } as unknown as VideoBuilderApi;
+    const placedFilm = { ...film, scenes: [{ ...first, arrange: { title: place } }] };
+    render(
+      <SceneEditor
+        api={api}
+        project={project(placedFilm)}
+        catalogue={catalogue}
+        onBack={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "As designed" }));
+    expect(screen.getByRole("button", { name: "Undo: Back to the design" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Arrange" })).toBeTruthy();
   });
 });

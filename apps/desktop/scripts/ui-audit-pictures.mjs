@@ -31,6 +31,9 @@
 //   apps/desktop/scripts/ui-audit.sh light motion-assistant     The editor's assistant (ADR-0096 MX3) on the real language
 //                                                                model: a brief, edits in words, Undo, a video; on this
 //                                                                computer's data, and it deletes what it made
+//   apps/desktop/scripts/ui-audit.sh light motion-arrange       Arranging (ADR-0096 MX4): drag and resize on the real
+//                                                                preview, and a real video; prints where each says it
+//                                                                is; use a throwaway DESKTOP_DATA_DIR
 //   apps/desktop/scripts/ui-audit.sh light motion-editor        The Motion graphics editor (ADR-0096 MX2): a new project,
 //                                                                edits, playback, Undo, axe, a phone width and a real
 //                                                                video; use a throwaway DESKTOP_DATA_DIR
@@ -244,6 +247,101 @@ for (const scheme of ["light", "dark"]) {
       await page.waitForTimeout(400);
       await shot(page, "image-made-more");
       await page.keyboard.press("Escape");
+    });
+  }
+  if (names.has("motion-arrange")) {
+    // Arranging (ADR-0096 MX4): drag a title and resize it on the real preview; the page, the document
+    // and a real video must agree on where it is. Run it on a throwaway DESKTOP_DATA_DIR.
+    await attempt("motion-arrange", async () => {
+      const seen = { errors: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      await open(page, "/video/builder");
+      await page.getByRole("button", { name: "Start empty" }).click();
+      const player = page.locator("hyperframes-player");
+      await page.waitForFunction(
+        () => document.querySelector("hyperframes-player")?.duration > 0,
+        null,
+        {
+          timeout: 30000,
+        },
+      );
+      await page.getByRole("radio", { name: "16:9" }).click();
+      await page.getByRole("radio", { name: "Scene 1" }).click();
+      await page.getByLabel(/^Title/).fill("Moved to the corner");
+      await page.getByLabel(/^A line under it/).fill("This line stays");
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      await page.getByRole("radio", { name: "Arrange" }).click();
+      const part = page.getByRole("button", { name: /Move the title\./ });
+      await part.waitFor({ timeout: 15000 });
+      await page.waitForTimeout(3500);
+      await shot(page, "motion-arrange-before");
+      const film = await player.boundingBox();
+      const from = await part.boundingBox();
+      // drag it to the top left, inside the safe area
+      const start = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
+      await page.mouse.move(start.x, start.y);
+      await page.mouse.down();
+      await page.mouse.move(
+        film.x + film.width * 0.1 + from.width / 2,
+        film.y + film.height * 0.18 + from.height / 2,
+        { steps: 8 },
+      );
+      await page.mouse.up();
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      await page.waitForTimeout(3500);
+      // then make it bigger with the corner
+      const moved = await part.boundingBox();
+      await page.mouse.move(moved.x + moved.width, moved.y + moved.height);
+      await page.mouse.down();
+      await page.mouse.move(moved.x + moved.width * 0.8, moved.y + moved.height, { steps: 4 });
+      await page.mouse.up();
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      await page.waitForTimeout(3500);
+      await shot(page, "motion-arrange-after");
+      // arrow keys: one Undo for the lot
+      await part.focus();
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press("ArrowUp");
+      await page.keyboard.press("ArrowUp");
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      await page.waitForTimeout(1500);
+      const id = (await player.getAttribute("src")).match(/live\/([0-9a-f]{32})\./)[1];
+      const project = await engine(`/products/wasifyai-video/builder/projects/${id}`);
+      seen.document = project.slots.scenes[0].arrange;
+      const frame = page.frames().find((f) => f.url().includes("/live/"));
+      seen.page = await frame.evaluate(() => {
+        const box = document.getElementById("root").getBoundingClientRect();
+        const r = document.querySelector("[data-slot$=title]").getBoundingClientRect();
+        const m = document.querySelector(".mask").getBoundingClientRect();
+        const pc = (a, b) => Math.round((a / b) * 1000) / 10;
+        return {
+          letters: [
+            pc(r.left - box.left, box.width),
+            pc(r.top - box.top, box.height),
+            pc(r.width, box.width),
+            pc(r.height, box.height),
+          ],
+          mask: [
+            pc(m.left - box.left, box.width),
+            pc(m.top - box.top, box.height),
+            pc(m.width, box.width),
+            pc(m.height, box.height),
+          ],
+        };
+      });
+      const AxeBuilder = require("@axe-core/playwright").default;
+      const axe = await new AxeBuilder({ page })
+        .include("[data-slot=scene-editor]")
+        .exclude("hyperframes-player")
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .analyze();
+      seen.axe = axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      await page.getByRole("button", { name: "Make the video" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 180000 });
+      seen.video = await dialog.locator("video").getAttribute("src");
+      console.log(`ARRANGE ${JSON.stringify(seen)}`);
     });
   }
   if (names.has("motion-assistant")) {

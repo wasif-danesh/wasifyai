@@ -39,6 +39,7 @@ import { Segmented } from "../../components/segmented";
 import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../../save";
 import { FormField } from "../FormField";
 import { toDraft } from "../slots";
+import { ArrangeOverlay, type MeasuredPart, laidOut } from "./ArrangeOverlay";
 import { LivePreview, type LivePreviewHandle } from "./LivePreview";
 import { lengthOf, sceneAt, startOf, useSceneEditor } from "./use-scene-editor";
 
@@ -64,6 +65,22 @@ const FIRST_WORDS: Record<string, Record<string, string | number>> = {
 /** The actions whose result the screen reads back. Making the video changes nothing here. */
 const CHANGES_THE_PROJECT =
   /^motion\.(set_project|add_scene|change_scene|move_scene|duplicate_scene|remove_scene|undo)$/;
+
+const LAYOUTS = [
+  { where: "design", label: "As designed" },
+  { where: "top", label: "Top" },
+  { where: "middle", label: "Middle" },
+  { where: "bottom", label: "Bottom" },
+] as const;
+const MEASURE_AFTER_MS = [400, 900, 1600, 3000];
+
+/** A moment in a scene with everything on it: the same idea as the engine's `hold`. */
+function settledMoment(scene: Scene): number {
+  const seconds = Number(scene.fields.seconds) || 0;
+  if (scene.kind === "captions") return Math.min(1, seconds / 2);
+  if (scene.kind === "lower_third") return (0.7 + seconds - 0.6) / 2;
+  return Math.max(0, seconds - 0.1);
+}
 
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
@@ -156,6 +173,49 @@ export function SceneEditor({
     setTime(moment);
     shown.current.seek(moment);
   }, [selected]);
+
+  // arranging: the scene with everything on it, and where the page says its parts are now
+  const [mode, setMode] = useState<"watch" | "arrange">("watch");
+  const [measured, setMeasured] = useState<Record<string, MeasuredPart> | null>(null);
+  const scenePlace = scene ? `${scene.id}:${index}:${doc.shape}` : "";
+  const settled = scene ? startOf(doc, index) + settledMoment(scene) : 0;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a save reloads the page, so it is asked again
+  useEffect(() => {
+    if (mode !== "arrange" || !selected) return;
+    setTime(settled);
+    player.current?.seek(settled);
+    const timers = MEASURE_AFTER_MS.map((ms) =>
+      setTimeout(() => {
+        void player.current?.measure(selected).then((parts) => {
+          if (parts) setMeasured(parts);
+        });
+      }, ms),
+    );
+    return () => {
+      for (const timer of timers) clearTimeout(timer);
+    };
+  }, [mode, selected, scenePlace, settled, e.revision]);
+
+  /** A layout, or back to the design: from where the parts are now. */
+  const layOut = useCallback(
+    async (where: "design" | "top" | "middle" | "bottom") => {
+      if (!scene) return;
+      if (where === "design") {
+        e.changeScene(scene.id, "Back to the design", (s) => ({ ...s, arrange: {} }));
+        return;
+      }
+      player.current?.pause();
+      const moment = startOf(doc, index) + settledMoment(scene);
+      setTime(moment);
+      player.current?.seek(moment);
+      await new Promise((go) => setTimeout(go, 150));
+      const parts = await player.current?.measure(scene.id);
+      if (!parts) return;
+      const next = laidOut(where, parts, scene.arrange ?? {});
+      e.changeScene(scene.id, "Change the layout", (s) => ({ ...s, arrange: next }));
+    },
+    [scene, doc, index, e.changeScene],
+  );
 
   const goTo = useCallback(
     (id: string) => {
@@ -369,6 +429,21 @@ export function SceneEditor({
             >
               <ChevronRight className="size-4" aria-hidden="true" />
             </Button>
+            <div className="ms-auto">
+              <Segmented
+                size="sm"
+                label="Watch or arrange"
+                value={mode}
+                onValueChange={(v) => {
+                  player.current?.pause();
+                  setMode(v as "watch" | "arrange");
+                }}
+                options={[
+                  { value: "watch", label: "Watch" },
+                  { value: "arrange", label: "Arrange" },
+                ]}
+              />
+            </div>
           </div>
           <div className="grid min-h-0 flex-1 place-items-center overflow-hidden rounded-lg bg-muted p-2">
             <LivePreview
@@ -379,6 +454,24 @@ export function SceneEditor({
               at={time}
               onTime={onTime}
               onPlaying={setPlaying}
+              over={
+                mode === "arrange" && scene && !busy ? (
+                  <ArrangeOverlay
+                    parts={measured}
+                    placed={scene.arrange ?? {}}
+                    ratio={shape.width / shape.height}
+                    onLive={(part, rect) => player.current?.place(scene.id, part, rect)}
+                    onCommit={(part, rect, together) =>
+                      e.changeScene(
+                        scene.id,
+                        "Move on the scene",
+                        (s) => ({ ...s, arrange: { ...s.arrange, [part]: rect } }),
+                        together,
+                      )
+                    }
+                  />
+                ) : null
+              }
             />
           </div>
           <div className="flex items-center gap-2">
@@ -386,7 +479,11 @@ export function SceneEditor({
               type="button"
               size="icon-sm"
               aria-label={playing ? "Pause" : "Play"}
-              onClick={() => (playing ? player.current?.pause() : player.current?.play())}
+              onClick={() => {
+                setMode("watch");
+                if (playing) player.current?.pause();
+                else player.current?.play();
+              }}
             >
               {playing ? (
                 <Pause className="size-4" aria-hidden="true" />
@@ -418,7 +515,9 @@ export function SceneEditor({
             <span className="w-9 text-muted-foreground text-xs tabular-nums">{clock(total)}</span>
           </div>
           <p className="m-0 text-muted-foreground text-xs">
-            The preview is close. The video you make is the final word.
+            {mode === "arrange"
+              ? "Drag a part to move it, or a corner to resize it. Keep words inside the dashed line."
+              : "The preview is close. The video you make is the final word."}
           </p>
         </main>
         <aside
@@ -482,6 +581,7 @@ export function SceneEditor({
                 onChange={(label, change, together) =>
                   e.changeScene(scene.id, label, change, together)
                 }
+                onLayout={(where) => void layOut(where)}
                 onDuplicate={() => e.duplicateScene(scene.id)}
                 onRemove={() => e.removeScene(scene.id)}
               />
@@ -618,6 +718,7 @@ function SceneDetails({
   onFocus,
   onBlur,
   onChange,
+  onLayout,
   onDuplicate,
   onRemove,
 }: {
@@ -628,6 +729,7 @@ function SceneDetails({
   onFocus: () => void;
   onBlur: () => void;
   onChange: (label: string, change: (s: Scene) => Scene, together?: string) => void;
+  onLayout: (where: "design" | "top" | "middle" | "bottom") => void;
   onDuplicate: () => void;
   onRemove: () => void;
 }) {
@@ -755,6 +857,25 @@ function SceneDetails({
           }
           options={TRANSITIONS}
         />
+      </div>
+      <div className="grid gap-1">
+        <span className="font-medium text-sm">Where the words go</span>
+        <div className="flex flex-wrap gap-1.5">
+          {LAYOUTS.map(({ where, label }) => (
+            <Button
+              key={where}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onLayout(where)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+        <p className="m-0 text-muted-foreground text-xs">
+          Then move anything yourself with Arrange, above the preview.
+        </p>
       </div>
       <div className="flex gap-2">
         <Button type="button" variant="outline" size="sm" className="flex-1" onClick={onDuplicate}>

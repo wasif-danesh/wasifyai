@@ -9,6 +9,7 @@ content policy keeps it from reaching anything but this address."""
 
 import hashlib
 import hmac
+import json
 import re
 from collections.abc import Mapping
 from pathlib import Path
@@ -45,9 +46,52 @@ def verify(key: str, token: str, now: float) -> str | None:
     return cid
 
 
-def with_runtime(page: str) -> str:
-    """The page as the player needs it: the same page, plus the script the player talks to."""
-    return page.replace(_GSAP_TAG, f'{_GSAP_TAG}\n<script src="vendor/{RUNTIME}"></script>', 1)
+# Answers the editor's questions about where the parts of a scene are, and moves one while it is
+# dragged. Only the page's parent is listened to, and nothing is kept: the real place is in the
+# document, and comes back in the page's own rules when the page loads again.
+_ARRANGE_SCRIPT = """<script>
+(() => {
+  const parts = %s;
+  const root = () => document.getElementById("root").getBoundingClientRect();
+  addEventListener("message", (e) => {
+    if (e.source !== window.parent || !e.data || !parts[e.data.scene]) return;
+    const known = parts[e.data.scene];
+    if (e.data.type === "wasify-place" && known[e.data.part]) {
+      const el = document.querySelector(known[e.data.part]);
+      if (!el) return;
+      const r = e.data.rect;
+      Object.assign(el.style, {
+        position: "absolute", left: r.x + "%%", top: r.y + "%%", width: r.w + "%%", right: "auto",
+        bottom: "auto", maxWidth: "none", margin: "0", zoom: String(r.scale),
+      });
+    }
+    if (e.data.type !== "wasify-measure") return;
+    const box = root();
+    const found = {};
+    for (const [part, selector] of Object.entries(known)) {
+      const el = document.querySelector(selector);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      found[part] = {
+        x: ((r.left - box.left) / box.width) * 100,
+        y: ((r.top - box.top) / box.height) * 100,
+        w: (r.width / box.width) * 100,
+        h: (r.height / box.height) * 100,
+      };
+    }
+    window.parent.postMessage({ type: "wasify-parts", scene: e.data.scene, parts: found }, "*");
+  });
+})();
+</script>"""
+
+
+def with_runtime(page: str, parts: Mapping[str, Mapping[str, str]] | None = None) -> str:
+    """The page as the player needs it: the same page, plus the script the player talks to, and for
+    a project of scenes, the one the editor talks to. What is drawn does not change."""
+    page = page.replace(_GSAP_TAG, f'{_GSAP_TAG}\n<script src="vendor/{RUNTIME}"></script>', 1)
+    if not parts:
+        return page
+    return page.replace("</body>", _ARRANGE_SCRIPT % json.dumps(parts) + "\n</body>", 1)
 
 
 def media_type(name: str) -> str:

@@ -410,3 +410,56 @@ async def test_a_film_is_written_changed_and_made_through_the_actions_in_the_rea
         assert (clip.width, clip.height) == templates.SHAPES["portrait"]
     finally:
         await database.dispose()
+
+
+async def test_a_part_placed_on_the_picture_is_there_in_the_video_and_passes_the_check(
+    tmp_path, engine
+):
+    film = {
+        "scenes": [
+            {
+                "kind": "title",
+                "fields": {"title": "Moved here", "theme": "midnight", "seconds": 3},
+                "arrange": {"title": {"x": 10, "y": 20, "w": 40, "scale": 0.8}},
+            },
+            {
+                "kind": "quote",
+                "caption": "Up top",
+                "fields": {
+                    "quote": "Words",
+                    "author": "Someone",
+                    "theme": "midnight",
+                    "seconds": 4,
+                },
+                "arrange": {
+                    "quote": {"x": 50, "y": 60, "w": 40, "scale": 1.5},
+                    "caption": {"x": 20, "y": 15, "w": 60},
+                },
+            },
+        ]
+    }
+    folder, slots = write(tmp_path, engine, templates.SCENES, film)
+    report = await checked(engine, folder, templates.SCENES, slots)
+    assert report["ok"], report["message"]
+    out = tmp_path / "placed.mp4"
+    assert (await engine.render(folder, out, extra_args=("--format", "mp4"))).ok
+
+    def bright(at: float) -> tuple[float, float, float, float]:
+        width, height, data = frame_at(out, at)
+        xs, ys = [], []
+        for y in range(height):
+            for x in range(width):
+                at_ = (y * width + x) * 3
+                if data[at_] > 200 and data[at_ + 1] > 200 and data[at_ + 2] > 200:
+                    xs.append(x)
+                    ys.append(y)
+        assert xs, "nothing bright in the frame"
+        w, h = width / 100, height / 100
+        return min(xs) / w, min(ys) / h, max(xs) / w, max(ys) / h
+
+    left, top, right, bottom = bright(2.5)
+    # the box is 10% to 50% across, and a title is centred in its box
+    assert left > 9.5 and right < 50.5 and 20 < top < 30 and bottom < 35, (left, top, right, bottom)
+    left, top, right, bottom = bright(6.5)
+    # the quote and its caption are in the places given, not the template's
+    assert top < 25 and bottom > 60, (top, bottom)

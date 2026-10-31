@@ -15,6 +15,7 @@ Change the words, length or look of one scene. Give only what changes; the rest 
 
 1. Open the project in **Motion graphics** and choose the scene.
 2. Change it on the right. It saves by itself, and the preview follows.
+3. To move its words, choose **Arrange** above the preview and drag them, or use **Where the words go**.
 
 ## Fields
 
@@ -24,10 +25,12 @@ Change the words, length or look of one scene. Give only what changes; the rest 
 - `name`: A new name for the scene.
 - `caption`: Words along the bottom of the scene.
 - `transition`: How the scene starts: none, fade or slide.
+- `arrange`: Where its parts go: for each part, x, y and w as percent of the picture, and scale. Empty puts them back as designed.
 
 ## Limits
 
 - Shape and letters are set for the whole project, not for one scene.
+- Keep words inside the dashed line when arranging, or the video will not be made.
 
 ## Needs
 

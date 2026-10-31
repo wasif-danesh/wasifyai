@@ -742,6 +742,18 @@ _SCENE_ID = re.compile(r"[0-9a-f]{8}")
 TRANSITIONS = ("none", "fade", "slide")  # how a scene starts
 _TRANSITION_SECONDS = 0.4
 MAX_CAPTION = 140
+# the parts of a scene that can be placed on the picture (ADR-0096 MX4): their names, by kind, and
+# where each is in the template's markup
+CAPTION_PART = ".scene-caption"
+PARTS: dict[str, dict[str, str]] = {
+    "title": {"bar": ".bar", "title": ".mask", "subtitle": ".sub"},
+    "quote": {"mark": ".mark", "quote": ".quote", "author": ".by"},
+    "chart": {"title": ".title", "rows": ".rows"},
+    "lower_third": {"strap": "#third"},
+    "captions": {"captions": "#caps"},
+}
+_MIN_WIDTH, _MIN_SCALE, _MAX_SCALE = 3.0, 0.4, 3.0
+_PLACED_LEFT, _PLACED_WIDTH = 8.0, 84.0  # a part given only its height on the picture
 
 
 def scene_slots(document: dict[str, Any], scene: dict[str, Any]) -> dict[str, Any]:
@@ -762,10 +774,77 @@ def new_scene_id() -> str:
     return uuid.uuid4().hex[:8]
 
 
+def parts_of(kind: str) -> dict[str, str]:
+    """The parts of a kind of scene that can be placed, and the caption along its bottom."""
+    return {**PARTS[kind], "caption": CAPTION_PART}
+
+
+def _normalize_arrange(kind: str, raw: Any, n: int) -> dict[str, dict[str, float]]:
+    """Where a scene's parts go, as shares of the picture in percent: left, top, width, and how much
+    bigger than designed. A part that is not named stays where the template puts it."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise SlotError(f"Scene {n}: where its parts go could not be read.")
+    known = parts_of(kind)
+    out: dict[str, dict[str, float]] = {}
+    for part, rect in raw.items():
+        if part not in known:
+            names = ", ".join(known)
+            raise SlotError(f"Scene {n} has no part called {part}. It has: {names}.")
+        if not isinstance(rect, dict) or set(rect) - {"x", "y", "w", "scale"}:
+            raise SlotError(f"Scene {n}: a part is placed with x, y, w and scale.")
+        try:
+            x = float(rect.get("x", _PLACED_LEFT))
+            y = float(rect.get("y", 0))
+            w = float(rect.get("w", _PLACED_WIDTH))
+            scale = float(rect.get("scale", 1))
+        except (TypeError, ValueError):
+            raise SlotError(f"Scene {n}: a part is placed with numbers.") from None
+        w = max(_MIN_WIDTH, min(100.0, w))
+        out[part] = {
+            "x": round(max(0.0, min(100.0 - w, x)), 2),
+            "y": round(max(0.0, min(100.0, y)), 2),
+            "w": round(w, 2),
+            "scale": round(max(_MIN_SCALE, min(_MAX_SCALE, scale)), 3),
+        }
+    return out
+
+
+def part_selector(scene_id: str, kind: str, part: str) -> str:
+    """Where a part is on the page, the same in its rule and for the live preview."""
+    found = parts_of(kind)[part]
+    inner = f"#s{scene_id}-{found[1:]}" if found.startswith("#") else found
+    return f"#scene-{scene_id} {inner}"
+
+
+def _arrange_rules(scene: dict[str, Any]) -> str:
+    rules = []
+    for part, r in scene.get("arrange", {}).items():
+        rules.append(
+            f"  {part_selector(scene['id'], scene['kind'], part)} {{ position: absolute; "
+            f"left: {r['x']}%; top: {r['y']}%; right: auto; bottom: auto; width: {r['w']}%; "
+            f"max-width: none; margin: 0; zoom: {r['scale']}; }}"
+        )
+    return "\n".join(rules)
+
+
+def live_parts(document: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """Every scene's parts and where they are, for the live preview to report and move."""
+    return {
+        scene["id"]: {
+            part: part_selector(scene["id"], scene["kind"], part)
+            for part in parts_of(scene["kind"])
+        }
+        for scene in document["scenes"]
+    }
+
+
 def _normalize_scene(raw: Any, n: int, shape: str, font: str, seen: set[str]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise SlotError(f"Scene {n} is not a scene.")
-    extra = sorted(set(raw) - {"id", "name", "kind", "fields", "caption", "transition"})
+    allowed = {"id", "name", "kind", "fields", "caption", "transition", "arrange"}
+    extra = sorted(set(raw) - allowed)
     if extra:
         raise SlotError(f"A scene has no setting called {extra[0]}.")
     kind = raw.get("kind")
@@ -799,6 +878,7 @@ def _normalize_scene(raw: Any, n: int, shape: str, font: str, seen: set[str]) ->
         "kind": kind,
         "caption": _text(raw.get("caption"), "caption", MAX_CAPTION, False),
         "transition": transition,
+        "arrange": _normalize_arrange(kind, raw.get("arrange"), n),
         "fields": {k: v for k, v in slots.items() if k not in _WHOLE_PROJECT},
     }
 
@@ -949,6 +1029,9 @@ def _render_scenes(document: dict[str, Any]) -> str:
             "transparent" if clear else f"linear-gradient(135deg, {look.top}, {look.bottom})"
         )
         rules.append(css)
+        placed = _arrange_rules(scene)
+        if placed:
+            rules.append(placed)
         if scene["caption"]:
             body += (
                 f'\n<div class="scene-caption"><span data-slot="{scene["id"]}-caption">'
@@ -1026,7 +1109,8 @@ SCENES_TEMPLATE = Template(
 
 __all__ = [
     "FONT_FILES", "FONTS", "FORMATS", "FPS", "SHAPES", "TEMPLATES", "THEMES", "Expect", "Field",
-    "SCENES", "SlotError", "Template", "as_scenes", "describe", "expected", "formats_of", "get",
+    "PARTS", "SCENES", "SlotError", "Template", "as_scenes", "describe", "expected", "formats_of",
+    "get",
     "is_transparent", "normalize_slots", "parse_number", "preview_times", "render_html",
     "scene_slots", "scene_starts", "title_of",
 ]  # fmt: skip

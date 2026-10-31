@@ -5,7 +5,7 @@ import html
 import re
 
 import pytest
-from wasifyai_video.builder import scenes, templates
+from wasifyai_video.builder import live, scenes, templates
 from wasifyai_video.builder.templates import SCENES, SlotError
 
 DOC = {
@@ -240,3 +240,67 @@ def test_a_copy_keeps_the_captions_and_how_it_starts():
         changed["scenes"][0]["caption"] == "new" and changed["scenes"][0]["transition"] == "slide"
     )
     assert scenes.change(changed, d["scenes"][0]["id"], {})["scenes"][0]["caption"] == "new"
+
+
+def test_a_part_goes_where_it_is_placed_and_the_rest_stay():
+    one = {
+        "kind": "title",
+        "fields": {"title": "Hi", "subtitle": "There"},
+        "arrange": {"title": {"x": 10, "y": 20, "w": 50, "scale": 1.5}},
+    }
+    d = templates.normalize_slots(SCENES, {"scenes": [one]})
+    sid = d["scenes"][0]["id"]
+    assert d["scenes"][0]["arrange"]["title"] == {"x": 10, "y": 20, "w": 50, "scale": 1.5}
+    page = templates.render_html(SCENES, d)
+    assert (
+        f"#scene-{sid} .mask {{ position: absolute; left: 10.0%; top: 20.0%;" in page
+        and "zoom: 1.5;" in page
+    )
+    assert f"#scene-{sid} .sub {{ position: absolute" not in page
+    assert templates.normalize_slots(SCENES, d) == d
+
+
+def test_a_part_is_kept_on_the_picture_and_named_parts_only():
+    def placed(rect):
+        one = {"kind": "title", "fields": {"title": "Hi"}, "arrange": {"title": rect}}
+        return templates.normalize_slots(SCENES, {"scenes": [one]})["scenes"][0]["arrange"]["title"]
+
+    assert placed({"x": 90, "y": 300, "w": 50, "scale": 99}) == {
+        "x": 50.0, "y": 100.0, "w": 50.0, "scale": 3.0,
+    }  # fmt: skip
+    assert placed({"y": 10}) == {"x": 8.0, "y": 10.0, "w": 84.0, "scale": 1.0}
+    bad = {"kind": "title", "fields": {"title": "Hi"}, "arrange": {"logo": {"y": 1}}}
+    with pytest.raises(SlotError, match="no part called logo. It has: bar, title, subtitle"):
+        templates.normalize_slots(SCENES, {"scenes": [bad]})
+    with pytest.raises(SlotError, match="with numbers"):
+        templates.normalize_slots(
+            SCENES, {"scenes": [{**bad, "arrange": {"title": {"y": "high; color: red"}}}]}
+        )
+
+
+@pytest.mark.parametrize("kind", list(templates.PARTS))
+def test_the_page_can_find_every_part_of_every_kind(kind):
+    fields = {
+        "title": {"title": "T", "subtitle": "S"},
+        "quote": {"quote": "Q", "author": "A"},
+        "chart": {"title": "T", "data": "A, 1\nB, 2"},
+        "lower_third": {"name": "N", "role": "R"},
+        "captions": {"lines": "L"},
+    }[kind]
+    d = templates.normalize_slots(
+        SCENES, {"scenes": [{"kind": kind, "fields": fields, "caption": "C"}]}
+    )
+    page = templates.render_html(SCENES, d)
+    for part, selector in templates.live_parts(d)[d["scenes"][0]["id"]].items():
+        inner = selector.split(" ", 1)[1]
+        marker = f'id="{inner[1:]}"' if inner.startswith("#") else inner[1:]
+        assert marker in page, f"{kind}: {part}"
+
+
+def test_the_live_page_only_adds_what_the_player_and_the_editor_talk_to():
+    d = doc()
+    page = templates.render_html(SCENES, d)
+    with_all = live.with_runtime(page, templates.live_parts(d))
+    assert "wasify-measure" in with_all and "hyperframe.runtime.iife.js" in with_all
+    assert "wasify-measure" not in page, "what is rendered has no such thing"
+    assert "wasify-measure" not in live.with_runtime(page)

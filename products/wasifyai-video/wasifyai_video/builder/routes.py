@@ -329,7 +329,14 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
             raise HTTPException(403, "This preview has run out. Open the project again.")
         headers = {"Content-Security-Policy": live.CONTENT_POLICY, **live.NO_SNIFF}
         if name == "index.html":
-            page = live.with_runtime(templates.render_html(found["template"], found["slots"]))
+            parts = (
+                templates.live_parts(found["slots"])
+                if found["template"] == templates.SCENES
+                else None
+            )
+            page = live.with_runtime(
+                templates.render_html(found["template"], found["slots"]), parts
+            )
             return Response(
                 page, media_type="text/html", headers={**headers, "Cache-Control": "no-store"}
             )

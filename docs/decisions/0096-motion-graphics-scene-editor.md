@@ -1,7 +1,7 @@
 # ADR-0096: Motion graphics becomes a scene editor for promotion and social content, with the assistant built in
 
 - **Status:** Accepted (owner, 2026-10-31: all five decisions of the plan as recommended; the mockup,
-  `docs/spikes/motion-editor-mockup.html`, approved with its recommended answers the same day). Stages MX1 to MX3 built 2026-10-31; see "Built".
+  `docs/spikes/motion-editor-mockup.html`, approved with its recommended answers the same day). Stages MX1 to MX4 built 2026-10-31; see "Built".
 - **Date:** 2026-10-31
 - **Asked by:** the owner, 2026-10-31: bring the features of KinoFold (`~/Projects/kinofold`, the owner's own project on HyperFrames) into
   Motion graphics, similar to the planned Creative Studio, for product promotion, social media and marketing content, with the chat
@@ -104,3 +104,15 @@ Model-written compositions (MG2), a multi-track timeline, posting to social netw
   - The word check called a big serif title cut off: redrawing large letters' edges changes up to 0.9% of them. The limit now scales with the word (a test keeps real cuts caught). This one was already there for one-off titles.
 - **Checked for real** (`apps/desktop/scripts/ui-audit.sh light motion-assistant`, on the chosen model, Qwen3.8 27B MLX, in Chromium with the real engine): a brief became a first version of 4 scenes in about 25 to 40 s; "make this scene 3 seconds", a square version undone from its card, an added end card; the discount request changed nothing and asked; "make the video" showed the card, and a video was made. The clock, the player and the page agree after every change. The walk deletes what it made.
 - **Not checked:** the packaged Tauri window, the web on a running stack, and languages other than English. Whether the wording is good enough for a real campaign is the owner's to say.
+
+**MX4, 2026-10-31: arranging on the preview.**
+
+- A scene has `arrange`: for a part (`templates.PARTS`, by kind, plus the caption), its left, top and width as percent of the picture, and a scale. A part not named stays where the template puts it, and an empty `arrange` is the design. It becomes an ordinary rule of the page (`part_selector`, `_arrange_rules`), so the check, the render and the preview all read the same thing. Scale is CSS `zoom`, which keeps the percentages; the picture measurements below show it.
+- **The overlay** (`scenes/ArrangeOverlay.tsx`) is over the player, because the page is on another origin on the desktop. The page reports where its parts are and moves one during a drag, by `postMessage` from its parent only (`live.py`). That script is in the preview's page and never in what is rendered. What stays is the document, saved when the drag ends.
+- Watch and Arrange above the preview. Drag a part, drag its corner to resize it (the letters grow with the box), or use the arrow keys (Shift for further, plus and minus to resize), with one Undo for a run of keys. Layouts under the scene's details (As designed, Top, Middle, Bottom) write ordinary places, so anything can still be moved.
+- **The guide is the word check's margin:** 6% of the width on every side, so it is taller in percent on a wide picture. The first guide was 6% of the height, and a title inside it was refused. A part outside the guide now turns red and says so.
+- The assistant can place parts too (`arrange` on `motion.change_scene`); two evaluation cases.
+- **Checked for real** (`apps/desktop/scripts/ui-audit.sh light motion-arrange` on a throwaway folder, the window's code in Chromium): a title dragged and resized with the mouse, then keys. The document says x 10, y 18, width 45; the page measures the same; in the exported video the letters are at x 10.3, width 44.5, as they are on the preview. axe has no violations. `test_video_builder_templates.py` proves a placed part through the check and a render.
+- **In WebKit** (the spike's small program): a placed, scaled title on a page with the editor's script loads, seeks and draws in its place. Dragging was not driven there.
+- **The evaluation**, now 22 cases on Qwen3 8B: 21 of 22, first answer only. The one that failed wrote a look that does not exist; that is refused in words and the model is told to fix it.
+- **Not checked:** the packaged Tauri window, touch on a real phone, and the web on a running stack.

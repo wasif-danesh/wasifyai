@@ -8,6 +8,7 @@ code view."""
 import asyncio
 import hashlib
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from wasifyai_platform_sdk import Identity, RouteDeps, parse_ids
 
-from wasifyai_video.builder import check, projects, templates
+from wasifyai_video.builder import check, live, projects, templates
 from wasifyai_video.builder.runtime import (
     NotAvailable,
     NotFound,
@@ -47,6 +48,8 @@ class RenderIn(BaseModel):
 
 class ProjectPatch(BaseModel):
     slots: dict[str, Any]
+    # "scenes" turns a project made from one template into a project of scenes (ADR-0096)
+    template: str | None = Field(None, max_length=40)
 
 
 class Attachment(BaseModel):
@@ -211,11 +214,16 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
     ) -> dict[str, Any]:
         guard()
         current = composition(identity, cid)
-        slots = slots_or_422(current["template"], {**current["slots"], **body.slots})
+        template, before = current["template"], current["slots"]
+        if body.template not in (None, template, templates.SCENES):
+            raise HTTPException(422, {"code": "bad_slot", "message": "That cannot be changed."})
+        if body.template == templates.SCENES and template != templates.SCENES:
+            template, before = templates.SCENES, templates.as_scenes(template, before)
+        slots = slots_or_422(template, {**before, **body.slots})
         found = await asyncio.to_thread(
             store_for(deps.state).update_composition,
             identity.tenant_id, identity.user_id, cid,
-            title=templates.title_of(current["template"], slots), slots=slots,
+            title=templates.title_of(template, slots), slots=slots, template=template,
         )  # fmt: skip
         await index_composition(deps, identity, found)
         return await project_out(identity, found, detail=True)
@@ -276,6 +284,51 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
                 else:
                     findings = await asyncio.to_thread(engine.lint, folder)
         return {"ok": not findings, "findings": findings}
+
+    @router.post("/projects/{cid}/live")
+    async def live_address(cid: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """Where the player finds this project (ADR-0096 decision 3): a frame cannot send the
+        person's token in a header, so a short-lived signed one is in the address."""
+        guard()
+        composition(identity, cid)
+        key = await asyncio.to_thread(store_for(deps.state).live_key)
+        expires = int(time.time()) + live.LIFETIME_S
+        token = live.sign(key, cid, expires)
+        return {
+            "path": f"/products/{PRODUCT_ID}/builder/live/{token}/index.html",
+            "expires_at": expires,
+        }
+
+    @router.get("/live/{token}/{name:path}")
+    async def live_file(token: str, name: str) -> Response:
+        """The project's page and the few files it needs, for the player's frame. The token says
+        which project, and was signed for its owner; nothing else is served here."""
+        guard()
+        store = store_for(deps.state)
+        key = await asyncio.to_thread(store.live_key)
+        cid = live.verify(key, token, time.time())
+        found = await asyncio.to_thread(store.owned_composition, cid) if cid else None
+        if found is None:
+            raise HTTPException(403, "This preview has run out. Open the project again.")
+        headers = {"Content-Security-Policy": live.CONTENT_POLICY, **live.NO_SNIFF}
+        if name == "index.html":
+            page = live.with_runtime(templates.render_html(found["template"], found["slots"]))
+            return Response(
+                page, media_type="text/html", headers={**headers, "Cache-Control": "no-store"}
+            )
+        owner = Identity(found["tenant_id"], found["user_id"])
+        with deps.acting_as(owner, PRODUCT_ID):
+            try:
+                kit = await engine_for(deps.state).live_kit()
+            except RuntimeError as e:
+                raise HTTPException(409, {"code": "not_ready", "message": str(e)}) from None
+        data = kit.get(name.removeprefix("vendor/")) if name.startswith("vendor/") else None
+        if data is None:
+            raise HTTPException(404, "not part of this preview")
+        return Response(
+            data, media_type=live.media_type(name),
+            headers={**headers, "Cache-Control": "private, max-age=3600"},
+        )  # fmt: skip
 
     @router.get("/projects/{cid}/preview")
     async def preview(

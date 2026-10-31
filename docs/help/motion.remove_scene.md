@@ -13,7 +13,8 @@ Take one scene out of a video project. Undo brings it back.
 
 ## Steps in the app
 
-1. Ask the assistant to remove the scene.
+1. Open the project in **Motion graphics** and choose the scene.
+2. Choose **Remove**. Undo brings it back.
 
 ## Fields
 

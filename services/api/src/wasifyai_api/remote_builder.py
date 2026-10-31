@@ -85,6 +85,7 @@ class RemoteBuilderEngine:
         self._usage = usage
         self._timeout = timeout_s
         self._standin: Path | None = None
+        self._kit: dict[str, bytes] | None = None
 
     # ---- what the product asks before it starts ---------------------------------------------
 
@@ -215,6 +216,16 @@ class RemoteBuilderEngine:
         except _Failed as e:
             return {"ok": False, "message": e.message, "items": []}
         return meta["report"]  # type: ignore[no-any-return]
+
+    async def live_kit(self) -> dict[str, bytes]:
+        """What the player's page loads besides itself, fetched from a worker once."""
+        if self._kit is None:
+            try:
+                files, meta = await self._run(builder_wire.KIT, {})
+            except _Failed as e:
+                raise RuntimeError(e.message) from None
+            self._kit = {name: files[f"file-{n}"] for n, name in enumerate(meta["names"])}
+        return self._kit
 
     async def lint(self, project: Path) -> list[dict[str, Any]]:
         html = (project / "index.html").read_text()

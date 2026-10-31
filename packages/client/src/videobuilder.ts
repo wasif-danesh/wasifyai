@@ -38,7 +38,7 @@ export type BuilderComponent = {
 };
 
 export type BuilderShape = "landscape" | "portrait" | "square";
-export type BuilderTheme = "midnight" | "sunrise" | "forest" | "paper";
+export type BuilderTheme = "midnight" | "sunrise" | "forest" | "paper" | "night" | "sage" | "pulse";
 export type BuilderFormat = "mp4" | "webm" | "mov";
 
 /** One thing the person fills in; the window builds its form from these. */
@@ -116,6 +116,25 @@ export type BuilderRender = {
   finished_at: string | null;
 };
 
+/** One scene of a project of scenes (ADR-0096): one of the templates, with its own words and look. */
+export type Scene = {
+  id: string;
+  name: string;
+  kind: string;
+  caption: string;
+  transition: "none" | "fade" | "slide";
+  fields: Record<string, unknown>;
+};
+
+/** A project of scenes: what the slots of a project with `template: "scenes"` are. */
+export type SceneDocument = {
+  name: string;
+  shape: BuilderShape;
+  font: string;
+  seconds: number;
+  scenes: Scene[];
+};
+
 export type BuilderProject = {
   id: string;
   title: string;
@@ -132,6 +151,8 @@ export type BuilderProject = {
   can_undo: boolean;
   /** the page the template makes of the words: the read-only code view (only when one project is opened) */
   code?: string;
+  /** every project read as scenes: one made from a template is one scene (only when one project is open) */
+  document?: SceneDocument;
 };
 
 export type BuilderStatus = {
@@ -174,8 +195,18 @@ export type VideoBuilderApi = {
   get(id: string): Promise<BuilderProject>;
   /** Turn a description into a template and its fields, with the chosen language model. Saves nothing. */
   draft(request: DraftRequest): Promise<BuilderDraft>;
-  create(template: string, slots: BuilderSlots): Promise<BuilderProject>;
-  update(id: string, slots: BuilderSlots): Promise<BuilderProject>;
+  create(
+    template: string,
+    slots: BuilderSlots | { scenes: Partial<Scene>[] },
+  ): Promise<BuilderProject>;
+  /** Change a project. With `template: "scenes"`, one made from a template becomes a project of scenes. */
+  update(
+    id: string,
+    slots: BuilderSlots | SceneDocument,
+    template?: "scenes",
+  ): Promise<BuilderProject>;
+  /** The address the player opens this project at: short-lived, and for a frame (ADR-0096). */
+  live(id: string): Promise<{ url: string; expires_at: number }>;
   /** Bring back the words as they were before the last change. */
   undo(id: string): Promise<BuilderProject>;
   /** Check the words on the screen against the typed words, without making the video. */
@@ -194,14 +225,19 @@ export type VideoBuilderApiOptions = {
   /** The web: the component is on a worker, set up by whoever runs the service, so there is nothing to
    * install from the page and its state is read from the product's status. */
   hosted?: boolean;
+  /** Where the player finds an engine path: the window's engine address. The web's proxy by default. */
+  address?: (path: string) => string | Promise<string>;
 };
 
 export function createVideoBuilderApi(
   transport: Transport,
   options: VideoBuilderApiOptions | string = {},
 ): VideoBuilderApi {
-  const { product = VIDEO_BUILDER_PRODUCT_ID, hosted = false } =
-    typeof options === "string" ? { product: options } : options;
+  const {
+    product = VIDEO_BUILDER_PRODUCT_ID,
+    hosted = false,
+    address = (path: string) => `/api${path}`,
+  } = typeof options === "string" ? { product: options } : options;
   const base = `/products/${product}/builder`;
 
   async function json<T>(path: string, init?: RequestInit): Promise<T> {
@@ -264,8 +300,18 @@ export function createVideoBuilderApi(
     draft: (request) => json<BuilderDraft>(`${base}/draft`, send("POST", request)),
     create: (template, slots) =>
       json<BuilderProject>(`${base}/projects`, send("POST", { template, slots })),
-    update: (id, slots) =>
-      json<BuilderProject>(`${base}/projects/${enc(id)}`, send("PATCH", { slots })),
+    update: (id, slots, template) =>
+      json<BuilderProject>(
+        `${base}/projects/${enc(id)}`,
+        send("PATCH", template ? { slots, template } : { slots }),
+      ),
+    async live(id) {
+      const found = await json<{ path: string; expires_at: number }>(
+        `${base}/projects/${enc(id)}/live`,
+        send("POST"),
+      );
+      return { url: await address(found.path), expires_at: found.expires_at };
+    },
     undo: (id) => json<BuilderProject>(`${base}/projects/${enc(id)}/undo`, { method: "POST" }),
     check: (id) => json<BuilderCheck>(`${base}/projects/${enc(id)}/check`, { method: "POST" }),
     async remove(id) {

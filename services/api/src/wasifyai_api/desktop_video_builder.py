@@ -40,6 +40,20 @@ class VideoBuilderService:
         self.installer = vb.VideoBuilderInstaller(data_dir)
         self.language: Any = None  # the chosen chat model (set by the app); `complete` asks it
         self.usage: Any = None  # records the tokens it used
+        self._kit: dict[str, bytes] | None = None
+
+    async def live_kit(self) -> dict[str, bytes]:
+        """What the player's page loads besides itself (`live.py`), read once."""
+        if self._kit is None:
+            from wasifyai_video.builder.live import RUNTIME, kit_files
+            from wasifyai_video.builder.templates import FONT_FILES
+
+            found, gsap = self.install(), self.gsap()
+            if found is None or gsap is None:
+                raise RuntimeError("Motion graphics needs to be set up again.")
+            runtime = found.app / "node_modules" / "hyperframes" / "dist" / RUNTIME
+            self._kit = await asyncio.to_thread(kit_files, gsap, runtime, self.fonts(FONT_FILES))
+        return self._kit
 
     def install(self) -> vb.VideoBuilderInstall | None:
         return vb.find_install(self.data_dir, self.installer.pins)

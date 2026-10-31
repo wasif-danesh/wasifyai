@@ -196,3 +196,47 @@ def test_adding_moving_duplicating_and_removing_a_scene():
     only = templates.as_scenes("title", templates.normalize_slots("title", {"title": "x"}))
     with pytest.raises(SlotError, match="at least one scene"):
         scenes.remove(only, only["scenes"][0]["id"])
+
+
+def test_a_scene_has_its_own_captions_and_they_must_be_on_the_screen():
+    one = {"kind": "title", "fields": {"title": "Hi", "seconds": 4}, "caption": 'Say "hi" <now>'}
+    d = templates.normalize_slots(SCENES, {"scenes": [one]})
+    sid = d["scenes"][0]["id"]
+    assert (f"{sid}-caption", 'Say "hi" <now>', 3.9) in {
+        (e.slot, e.text, e.at) for e in templates.expected(SCENES, d)
+    }
+    page = templates.render_html(SCENES, d)
+    assert f'data-slot="{sid}-caption">Say &quot;hi&quot; &lt;now&gt;<' in page
+    assert 'Say "hi" <now>' in templates.describe(SCENES, d)
+    with pytest.raises(SlotError, match="too long"):
+        templates.normalize_slots(SCENES, {"scenes": [{**one, "caption": "x" * 141}]})
+
+
+@pytest.mark.parametrize(
+    ("kind", "said"), [("none", None), ("fade", "opacity: 0"), ("slide", " y: ")]
+)
+def test_a_scene_starts_the_way_it_says(kind, said):
+    one = {"kind": "lower_third", "fields": {"name": "Hi"}, "transition": kind}
+    page = templates.render_html(SCENES, templates.normalize_slots(SCENES, {"scenes": [one]}))
+    root = f'tl.from("#scene-'
+    assert (root in page and said in page) if said else root not in page
+    with pytest.raises(SlotError, match="start with"):
+        templates.normalize_slots(SCENES, {"scenes": [{**one, "transition": "spin"}]})
+
+
+def test_a_copy_keeps_the_captions_and_how_it_starts():
+    d = templates.normalize_slots(
+        SCENES,
+        {
+            "scenes": [
+                {"kind": "title", "fields": {"title": "x"}, "caption": "c", "transition": "fade"}
+            ]
+        },
+    )
+    copied, copy = scenes.duplicate(d, d["scenes"][0]["id"])
+    assert copied["scenes"][1]["caption"] == "c" and copied["scenes"][1]["transition"] == "fade"
+    changed = scenes.change(d, d["scenes"][0]["id"], {}, caption="new", transition="slide")
+    assert (
+        changed["scenes"][0]["caption"] == "new" and changed["scenes"][0]["transition"] == "slide"
+    )
+    assert scenes.change(changed, d["scenes"][0]["id"], {})["scenes"][0]["caption"] == "new"

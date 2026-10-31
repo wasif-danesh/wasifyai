@@ -48,6 +48,7 @@ TemplateId = Literal["title", "quote", "chart", "lower_third", "captions"]
 Format = Literal["mp4", "webm", "mov"]
 Shape = Literal["landscape", "portrait", "square"]
 Font = Literal["sans", "serif"]
+Transition = Literal["none", "fade", "slide"]
 
 
 def _fields_help() -> str:
@@ -160,6 +161,8 @@ class MotionOut(BaseModel):
 class SceneIn(Strict):
     kind: TemplateId = Field(description="What the scene is: one of the five templates.")
     name: str = Field("", max_length=60, description="A short name for the scene.")
+    caption: str = Field("", max_length=140, description="Words along the bottom of the scene.")
+    transition: Transition = Field("fade", description="How the scene starts.")
     fields: dict[str, Any] = Field(
         description=(
             "The template's words and settings, exactly as they should be shown, without shape and "
@@ -195,6 +198,8 @@ class ChangeSceneIn(SceneRefIn):
         default_factory=dict, description="Only the fields of this scene that change."
     )
     name: str | None = Field(None, max_length=60, description="A new name for the scene.")
+    caption: str | None = Field(None, max_length=140, description="Words along the bottom.")
+    transition: Transition | None = Field(None, description="How the scene starts.")
 
 
 class MoveSceneIn(SceneRefIn):
@@ -443,14 +448,19 @@ async def _edit(
 async def _add_scene(p: AddSceneIn, ctx: ActionContext) -> Outcome:
     return await _edit(
         ctx, p.composition_id, "The scene was added.",
-        lambda d: scenes.add(d, p.kind, p.fields, p.name, p.position),
+        lambda d: scenes.add(
+            d, p.kind, p.fields, p.name, p.position,
+            {"caption": p.caption, "transition": p.transition},
+        ),
     )  # fmt: skip
 
 
 async def _change_scene(p: ChangeSceneIn, ctx: ActionContext) -> Outcome:
     return await _edit(
         ctx, p.composition_id, "The scene was changed.",
-        lambda d: scenes.change(d, p.scene_id, p.fields, p.name),
+        lambda d: scenes.change(
+            d, p.scene_id, p.fields, p.name, caption=p.caption, transition=p.transition
+        ),
     )  # fmt: skip
 
 

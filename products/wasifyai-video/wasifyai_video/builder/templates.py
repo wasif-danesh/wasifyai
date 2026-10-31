@@ -41,6 +41,9 @@ THEMES: dict[str, tuple[str, str, str, str]] = {
     "sunrise": ("#2a0f2e", "#7a2f3b", "#fff4e6", "#ffb347"),
     "forest": ("#0d1f16", "#1f4d3a", "#f1faf4", "#5ad19a"),
     "paper": ("#f6f1e7", "#e4dccb", "#1d1b17", "#c2410c"),
+    "night": ("#0b1426", "#3c3266", "#f8f8f6", "#8fb4ff"),
+    "sage": ("#d8e0c5", "#9bac95", "#27302a", "#2f6650"),
+    "pulse": ("#4a2060", "#181820", "#f8f6fb", "#ff7ab6"),
 }
 # font -> (family, file in vendor/fonts, css stack): files from the component's npm packages.
 FONTS: dict[str, tuple[str, str, str]] = {
@@ -736,6 +739,9 @@ MAX_SCENES = 30
 SCENE_SECONDS = 5  # how long a scene is when no length is given (a template's own default is 30)
 _WHOLE_PROJECT = ("shape", "font")  # set once for the project, not per scene
 _SCENE_ID = re.compile(r"[0-9a-f]{8}")
+TRANSITIONS = ("none", "fade", "slide")  # how a scene starts
+_TRANSITION_SECONDS = 0.4
+MAX_CAPTION = 140
 
 
 def scene_slots(document: dict[str, Any], scene: dict[str, Any]) -> dict[str, Any]:
@@ -759,7 +765,7 @@ def new_scene_id() -> str:
 def _normalize_scene(raw: Any, n: int, shape: str, font: str, seen: set[str]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise SlotError(f"Scene {n} is not a scene.")
-    extra = sorted(set(raw) - {"id", "name", "kind", "fields"})
+    extra = sorted(set(raw) - {"id", "name", "kind", "fields", "caption", "transition"})
     if extra:
         raise SlotError(f"A scene has no setting called {extra[0]}.")
     kind = raw.get("kind")
@@ -784,10 +790,15 @@ def _normalize_scene(raw: Any, n: int, shape: str, font: str, seen: set[str]) ->
         else new_scene_id()
     )
     seen.add(scene_id)
+    transition = raw.get("transition", "none")
+    if transition not in TRANSITIONS:
+        raise SlotError(f"Scene {n} must start with one of: {', '.join(TRANSITIONS)}.")
     return {
         "id": scene_id,
         "name": _text(raw.get("name"), "scene name", 60, False) or template.title,
         "kind": kind,
+        "caption": _text(raw.get("caption"), "caption", MAX_CAPTION, False),
+        "transition": transition,
         "fields": {k: v for k, v in slots.items() if k not in _WHOLE_PROJECT},
     }
 
@@ -842,16 +853,31 @@ def as_scenes(template: str, slots: dict[str, Any]) -> dict[str, Any]:
 def _scenes_expected(document: dict[str, Any]) -> list[Expect]:
     out = []
     for scene, start in zip(document["scenes"], scene_starts(document), strict=True):
-        for e in TEMPLATES[scene["kind"]].expected(scene_slots(document, scene)):
+        template = TEMPLATES[scene["kind"]]
+        slots = scene_slots(document, scene)
+        for e in template.expected(slots):
             out.append(Expect(f"{scene['id']}-{e.slot}", e.text, round(start + e.at, 2)))
+        if scene["caption"]:
+            at = round(start + template.hold(slots), 2)
+            out.append(Expect(f"{scene['id']}-caption", scene["caption"], at))
     return out
 
 
 def _scenes_words(document: dict[str, Any]) -> str:
-    said = [
-        TEMPLATES[scene["kind"]].words(scene_slots(document, scene)) for scene in document["scenes"]
-    ]
+    said = []
+    for scene in document["scenes"]:
+        said.append(TEMPLATES[scene["kind"]].words(scene_slots(document, scene)))
+        said.append(scene["caption"])
     return ". ".join(x.rstrip(".") for x in [document["name"], *said] if x)
+
+
+def poster_time(template: str, slots: dict[str, Any]) -> float:
+    """The moment a video's poster shows. A film's first frame can be black (it may fade in), so its
+    poster is the first scene with everything on the screen."""
+    if template != SCENES:
+        return 0
+    scene = slots["scenes"][0]
+    return TEMPLATES[scene["kind"]].hold(scene_slots(slots, scene))
 
 
 def is_transparent(template: str, slots: dict[str, Any]) -> bool:
@@ -893,6 +919,21 @@ def _scoped(scene: str, start: int, css: str, body: str, script: str) -> tuple[s
     return f"  #{root} {{\n{with_ids(css)}\n  }}", body, script
 
 
+def _transition(kind: str, root: str, height: int) -> str:
+    """How a scene comes in: the first thing on its timeline, finished before its words are read."""
+    if kind == "fade":
+        return (
+            f'    tl.from("{root}", {{ opacity: 0, duration: {_TRANSITION_SECONDS}, '
+            'ease: "none" }, 0);\n'
+        )
+    if kind == "slide":
+        return (
+            f'    tl.from("{root}", {{ opacity: 0, y: {round(height * 0.04)}, '
+            f'duration: {_TRANSITION_SECONDS}, ease: "power2.out" }}, 0);\n'
+        )
+    return ""
+
+
 def _render_scenes(document: dict[str, Any]) -> str:
     width, height = SHAPES[document["shape"]]
     family, file, _ = FONTS[document["font"]]
@@ -908,6 +949,11 @@ def _render_scenes(document: dict[str, Any]) -> str:
             "transparent" if clear else f"linear-gradient(135deg, {look.top}, {look.bottom})"
         )
         rules.append(css)
+        if scene["caption"]:
+            body += (
+                f'\n<div class="scene-caption"><span data-slot="{scene["id"]}-caption">'
+                f"{_e(scene['caption'])}</span></div>"
+            )
         parts.append(
             f'<div id="scene-{scene["id"]}" class="clip scene" data-start="{start}" '
             f'data-duration="{seconds}" data-track-index="0" '
@@ -923,7 +969,7 @@ def _render_scenes(document: dict[str, Any]) -> str:
             f"""{hide}{show}  film.set("{root}", {{ visibility: "hidden" }}, {start + seconds});
   (() => {{
     const tl = gsap.timeline();
-{script}
+{_transition(scene["transition"], root, height)}{script}
     tl.to({{}}, {{ duration: 0.01 }}, {seconds} - 0.01);
     film.add(tl, {start});
   }})();"""
@@ -943,6 +989,10 @@ def _render_scenes(document: dict[str, Any]) -> str:
     background: {"transparent" if clear else "#000"}; }}
   #root {{ position: relative; width: {width}px; height: {height}px; overflow: hidden; }}
   .scene {{ position: absolute; inset: 0; overflow: hidden; }}
+  .scene-caption {{ position: absolute; left: 8%; right: 8%; bottom: 5%; text-align: center;
+    font-size: {round(min(width, height) * 0.036)}px; line-height: 1.5; color: #fff; }}
+  .scene-caption span {{ background: rgba(0,0,0,0.68); padding: 0.25em 0.6em; border-radius: 0.3em;
+    -webkit-box-decoration-break: clone; box-decoration-break: clone; }}
 {newline.join(rules)}
 </style></head><body>
 <div id="root" data-composition-id="main" data-start="0" data-duration="{seconds}"

@@ -13,8 +13,8 @@ Change the words, length or look of one scene. Give only what changes; the rest 
 
 ## Steps in the app
 
-1. Ask the assistant for the change.
-2. Choose Make the video when you are happy with it.
+1. Open the project in **Motion graphics** and choose the scene.
+2. Change it on the right. It saves by itself, and the preview follows.
 
 ## Fields
 
@@ -22,6 +22,8 @@ Change the words, length or look of one scene. Give only what changes; the rest 
 - `scene_id`: The scene.
 - `fields`: Only the fields that change.
 - `name`: A new name for the scene.
+- `caption`: Words along the bottom of the scene.
+- `transition`: How the scene starts: none, fade or slide.
 
 ## Limits
 

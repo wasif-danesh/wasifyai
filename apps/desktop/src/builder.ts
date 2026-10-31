@@ -3,4 +3,6 @@
 import { createVideoBuilderApi } from "@wasifyai/client";
 import { transport } from "./api";
 
-export const videoBuilder = createVideoBuilderApi(transport);
+export const videoBuilder = createVideoBuilderApi(transport, {
+  address: async (path) => `${await transport.base()}${path}`,
+});

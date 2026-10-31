@@ -7,5 +7,6 @@ INSPECT = "builder.inspect"  # template + slots + spec in; the exact-text report
 SNAPSHOT = "builder.snapshot"  # template + slots + `at` in; one PNG out (`still`)
 RENDER = "builder.render"  # template + slots + format in; the video out (`video`) and the numbers
 LINT = "builder.lint"  # an HTML page in (params `html`); the findings out (meta)
-KINDS = [INSPECT, SNAPSHOT, RENDER, LINT]
+KIT = "builder.kit"  # nothing in; the library, the player's runtime and the fonts out, one per file
+KINDS = [INSPECT, SNAPSHOT, RENDER, LINT, KIT]
 COMPONENT = "video_builder"  # the key of a worker's `components` entry

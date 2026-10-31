@@ -155,6 +155,9 @@ const CATALOGUE: TemplateCatalogue = {
     sunrise: { from: "#2a0f2e", to: "#7a2f3b", ink: "#fff", accent: "#ffb347" },
     forest: { from: "#0d1f16", to: "#1f4d3a", ink: "#fff", accent: "#5ad19a" },
     paper: { from: "#f6f1e7", to: "#e4dccb", ink: "#111", accent: "#c2410c" },
+    night: { from: "#0b1426", to: "#3c3266", ink: "#fff", accent: "#8fb4ff" },
+    sage: { from: "#d8e0c5", to: "#9bac95", ink: "#111", accent: "#2f6650" },
+    pulse: { from: "#4a2060", to: "#181820", ink: "#fff", accent: "#ff7ab6" },
   },
   fonts: { sans: "Inter", serif: "Source Serif 4" },
 };
@@ -226,6 +229,7 @@ function api(over: Partial<VideoBuilderApi> = {}): VideoBuilderApi {
     templates: vi.fn().mockResolvedValue(CATALOGUE),
     list: vi.fn().mockResolvedValue([project()]),
     get: vi.fn().mockResolvedValue(project()),
+    live: vi.fn().mockResolvedValue({ url: "http://engine/live", expires_at: 9e9 }),
     create: vi.fn().mockImplementation(async (template, s) =>
       project({
         template,

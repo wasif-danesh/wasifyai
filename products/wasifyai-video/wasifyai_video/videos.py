@@ -557,7 +557,7 @@ def ffmpeg_path() -> str:
 _SIZE = re.compile(r"Video:.*?,\s*(\d{2,5})x(\d{2,5})")
 
 
-async def poster_of(mp4: bytes) -> tuple[int, int, bytes]:
+async def poster_of(mp4: bytes, at: float = 0) -> tuple[int, int, bytes]:
     """The clip's size and a small JPEG of its first frame, both from ffmpeg."""
     exe = ffmpeg_path()
     with tempfile.TemporaryDirectory(prefix="wasifyai-video-") as tmp:
@@ -565,7 +565,7 @@ async def poster_of(mp4: bytes) -> tuple[int, int, bytes]:
         src.write_bytes(mp4)
         try:
             proc = await asyncio.create_subprocess_exec(
-                exe, "-hide_banner", "-y", "-i", str(src), "-frames:v", "1",
+                exe, "-hide_banner", "-y", "-ss", f"{at:g}", "-i", str(src), "-frames:v", "1",
                 "-vf", f"scale='min({POSTER_PX},iw)':-2", "-q:v", "4", str(out),
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
             )  # fmt: skip

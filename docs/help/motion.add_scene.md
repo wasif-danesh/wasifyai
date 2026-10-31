@@ -13,8 +13,9 @@ Add one scene to a video project, at the end or at a position you choose. A proj
 
 ## Steps in the app
 
-1. Ask the assistant to add the scene.
-2. Check it, then choose Make the video.
+1. Open the project in **Motion graphics**.
+2. Under **Add**, choose what the scene is, or choose **+ Add a scene**.
+3. Write its words.
 
 ## Fields
 

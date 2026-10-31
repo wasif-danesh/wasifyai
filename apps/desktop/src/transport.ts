@@ -8,6 +8,8 @@ const REFRESH_BEFORE_MS = 60_000;
 export type EngineTransport = Transport & {
   /** Forget the token: the engine was restarted and has a new address and secret. */
   invalidate(): void;
+  /** The engine's address, for what cannot go through `fetch` (the preview's frame). */
+  base(): Promise<string>;
 };
 
 /**
@@ -49,6 +51,9 @@ export function createEngineTransport(
   return {
     invalidate() {
       session = null;
+    },
+    async base() {
+      return (await current()).base_url;
     },
     async fetch(path, init) {
       const res = await send(await current(), path, init);

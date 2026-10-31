@@ -6,6 +6,7 @@ The files of a composition are in a folder next to this database (`projects.py`)
 makes is a clip in the video product's table (`mode = "composition"`), linked here by `video_id`."""
 
 import json
+import secrets
 import tempfile
 import uuid
 from collections.abc import Iterator
@@ -181,6 +182,24 @@ class BuilderStore:
                 conn.execute(
                     "UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),)
                 )
+
+    def live_key(self) -> str:
+        """The key that signs a preview's address (`live.py`): one for this store, so every copy of
+        the service on the web accepts what another signed."""
+        with self._connect() as db:
+            db.execute(
+                "INSERT INTO meta VALUES ('live_key', ?) ON CONFLICT (key) DO NOTHING",
+                (secrets.token_hex(32),),
+            )
+            row = db.execute("SELECT value FROM meta WHERE key = 'live_key'").fetchone()
+        return str(row["value"])
+
+    def owned_composition(self, cid: str) -> dict[str, Any] | None:
+        """A composition by its id alone: only for a signed preview address, which names no owner
+        (the address was signed for the owner, and holds no more than fits in a path segment)."""
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM compositions WHERE id=?", (cid,)).fetchone()
+        return self._composition(row) if row is not None else None
 
     def fail_stale(self, before: str, message: str) -> int:
         """Fail renders still working since before `before`: nobody is working on them (a service

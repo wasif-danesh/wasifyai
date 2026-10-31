@@ -311,6 +311,53 @@ export function useVideoBuilder(api: VideoBuilderApi) {
     }
   }, [api, patch, state.render]);
 
+  /** A new project of scenes (ADR-0096), opened in the editor. */
+  const startScenes = useCallback(async () => {
+    try {
+      const made = await api.create("scenes", {
+        scenes: [
+          { kind: "title", transition: "fade", fields: { title: "Your first scene", seconds: 5 } },
+        ],
+      });
+      patch({
+        selected: made.id,
+        project: made,
+        render: null,
+        stills: [],
+        check: null,
+        error: null,
+      });
+    } catch (e) {
+      patch({ error: say(e, "The project could not be started.") });
+    }
+  }, [api, patch]);
+
+  /** A project made from one template becomes a project of scenes; Undo in the editor turns it back. */
+  const toScenes = useCallback(
+    async (id: string) => {
+      try {
+        const made = await api.update(id, {}, "scenes");
+        patch({
+          selected: made.id,
+          project: made,
+          render: null,
+          stills: [],
+          check: null,
+          error: null,
+        });
+      } catch (e) {
+        patch({ error: say(e, "The project could not be changed.") });
+      }
+    },
+    [api, patch],
+  );
+
+  /** Back from the editor to the list, which has its changes. */
+  const leaveEditor = useCallback(async () => {
+    patch({ selected: null, project: null, render: null });
+    await refresh();
+  }, [patch, refresh]);
+
   const remove = useCallback(
     async (id: string) => {
       try {
@@ -334,6 +381,9 @@ export function useVideoBuilder(api: VideoBuilderApi) {
 
   return {
     state,
+    startScenes,
+    toScenes,
+    leaveEditor,
     install,
     open,
     draftFrom,

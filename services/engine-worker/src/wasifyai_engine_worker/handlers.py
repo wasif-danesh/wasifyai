@@ -280,6 +280,14 @@ async def _render(service: Any, w: Work) -> dict[str, Any]:
     return numbers
 
 
+async def _kit(service: Any, w: Work) -> dict[str, Any]:
+    """What a live preview loads: the API only has the words (ADR-0096)."""
+    kit = await service.live_kit()
+    for number, (_, data) in enumerate(sorted(kit.items())):
+        await w.put(f"file-{number}", data, "application/octet-stream")
+    return {"names": sorted(kit)}
+
+
 async def _lint(service: Any, w: Work) -> dict[str, Any]:
     folder = w.folder / "lint"
     await asyncio.to_thread(folder.mkdir)
@@ -546,6 +554,7 @@ HANDLERS: dict[str, Handler] = {
     builder_wire.SNAPSHOT: _snapshot,
     builder_wire.RENDER: _render,
     builder_wire.LINT: _lint,
+    builder_wire.KIT: _kit,
     model3d_wire.MATTE: _matte,
     model3d_wire.GENERATE: _generate,
     train_wire.VIDEO: _train_video,

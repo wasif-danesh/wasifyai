@@ -1,7 +1,7 @@
 # ADR-0096: Motion graphics becomes a scene editor for promotion and social content, with the assistant built in
 
 - **Status:** Accepted (owner, 2026-10-31: all five decisions of the plan as recommended; the mockup,
-  `docs/spikes/motion-editor-mockup.html`, approved with its recommended answers the same day). Stage MX1 built 2026-10-31; see "Built".
+  `docs/spikes/motion-editor-mockup.html`, approved with its recommended answers the same day). Stages MX1 and MX2 built 2026-10-31; see "Built".
 - **Date:** 2026-10-31
 - **Asked by:** the owner, 2026-10-31: bring the features of KinoFold (`~/Projects/kinofold`, the owner's own project on HyperFrames) into
   Motion graphics, similar to the planned Creative Studio, for product promotion, social media and marketing content, with the chat
@@ -76,4 +76,14 @@ Model-written compositions (MG2), a multi-track timeline, posting to social netw
 - Edits are `builder/scenes.py`; the actions are `motion.write_scenes`, `motion.add_scene`, `motion.change_scene`, `motion.move_scene`, `motion.duplicate_scene`, `motion.remove_scene` and `motion.undo`. The project route returns `document` for every project.
 - **Limits:** 30 scenes and 90 seconds in all. A scene with no length is 5 seconds. A film is transparent only if every scene is.
 - **Checked for real** (`services/api/tests/test_video_builder_templates.py`, the pinned browser and sandbox): a five-scene film passes the check and each scene shows its own background; a wrong word in a later scene is caught; the 20 hard text cases pass as scenes; each of the five templates looks the same as a one-scene project, frame compared; three scenes made through the actions on SQLite and on Postgres. The worker path is tested on a stand-in worker, not a running stack.
-- **Not built yet:** the editor screen (MX2). Until then the Motion graphics screen shows a scene project as a read-only list, and the code view shows the page.
+
+**MX2, 2026-10-31: the editor screen.**
+
+- `packages/ui/src/videobuilder/scenes/`: `SceneEditor.tsx` (the screen, the same on the desktop and the web), `use-scene-editor.ts` (one document, one selection, Undo that groups a typing session, a save queue), `LivePreview.tsx` (the player, loaded only when this screen opens). The left panel has Add and Looks for now; the assistant, arranging, media, Make and Brand are later stages, and no tool is shown before it works.
+- **The preview** is `POST /builder/projects/{cid}/live` and `GET /builder/live/{token}/...` (`builder/live.py`). The token is `<project>.<expiry>.<signature>`, 76 characters, because the web's proxy allows 80 in a path segment; it is signed with a key in the store's `meta` table, so every API replica accepts it. The page comes with a tight content policy. Its other files come from `engine.live_kit()`: on the web the API has only the words, so it fetches them once from a worker (`builder.kit`). **Byte ranges are not served yet** because a words-only page does not need them; MX5 adds them with media.
+- **Undo:** the screen keeps its own steps, with Redo, for this visit, then falls back to the versions kept with the project. Saves are 500 ms after the last change and never overlap. The engine's answer only fills in what it works out (lengths, default names), never the words being typed. A change the engine refuses stays on the screen, marked "Not saved", with its reason, and a video does not start until it is fixed.
+- **Added to the document:** captions per scene (checked like any other words) and how a scene starts (cut, fade, slide). Added looks: night, sage, pulse. A film's poster is the first scene with everything on screen, because its first frame can be black.
+- **The layout follows the room the editor has, not the window** (a container query), because the desktop's sidebar stays beside it.
+- **Checked for real** (`apps/desktop/scripts/ui-audit.sh light motion-editor`, the desktop's window code on Vite in Chromium with the real engine, player and sandbox, on a throwaway data folder): a new project, three scenes edited, a look, captions, a slide, play across a scene boundary with the selection following, Undo and Redo, axe with no violations, the smallest window (720 x 520) with no sideways scroll, and a real 15 s video that passed the word check, its frames looked at. In WebKit (the small test program of the spike, under the window's rules plus `frame-src`): the same page loads and seeks and looks the same, with the shipped font.
+- **On the web:** `apps/web/e2e/motion-editor.spec.ts` runs the shared screen through the BFF's addresses at desktop and phone sizes with axe, against a mocked engine. The worker's `builder.kit` is tested on a stand-in.
+- **Not checked:** the packaged Tauri window itself, the web on a running stack, and a keyboard-only walk by a person. The owner's run in the real window is this stage's last gate.

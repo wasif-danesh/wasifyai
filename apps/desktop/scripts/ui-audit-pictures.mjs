@@ -28,6 +28,9 @@
 //   apps/desktop/scripts/ui-audit.sh light u10-make             Teach's front door, a real notebook report as a card,
 //                                                                a real Motion graphics video on the frame, and a real
 //                                                                3D picture check (its cut-out) on the stage
+//   apps/desktop/scripts/ui-audit.sh light motion-editor        The Motion graphics editor (ADR-0096 MX2): a new project,
+//                                                                edits, playback, Undo, axe, a phone width and a real
+//                                                                video; use a throwaway DESKTOP_DATA_DIR
 //   apps/desktop/scripts/ui-audit.sh light styles-make          Styles (ADR-0091 S2): the section, the Add menu, Train's
 //                                                                style chosen and a real picture made with it, then
 //                                                                the section on Edit, Inpaint and Reference
@@ -238,6 +241,91 @@ for (const scheme of ["light", "dark"]) {
       await page.waitForTimeout(400);
       await shot(page, "image-made-more");
       await page.keyboard.press("Escape");
+    });
+  }
+  if (names.has("motion-editor")) {
+    // The Motion graphics editor (ADR-0096 MX2): from a new project to a real video, in this window, with the
+    // real engine, the real player and the real sandbox. Run it on a throwaway DESKTOP_DATA_DIR.
+    await attempt("motion-editor", async () => {
+      const seen = { errors: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      await open(page, "/video/builder");
+      await page.getByRole("button", { name: "Video with scenes" }).click();
+      const player = page.locator("hyperframes-player");
+      await player.waitFor({ timeout: 30000 });
+      await page.waitForFunction(
+        () => document.querySelector("hyperframes-player")?.duration > 0,
+        null,
+        {
+          timeout: 30000,
+        },
+      );
+      seen.first = await player.evaluate((p) => ({
+        duration: p.duration,
+        src: p.getAttribute("src"),
+      }));
+      await page.getByRole("radio", { name: "9:16" }).click();
+      await page.getByLabel("Project name").fill("Northbean launch");
+      await page.getByLabel(/^Title/).fill("Mornings are hard.");
+      await page.getByRole("button", { name: /^Quote/ }).click();
+      await page.getByLabel(/^Quote/).fill("Smooth, not bitter.");
+      await page.getByRole("button", { name: /^Animated title/ }).click();
+      await page.getByLabel(/^Title/).fill("Try Northbean.");
+      await page.getByLabel(/^Captions/).fill("Twenty percent off your first box.");
+      await page.getByRole("radio", { name: "Slide" }).click();
+      await page.getByRole("radio", { name: "Looks" }).click();
+      await page.getByRole("button", { name: "forest" }).click();
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      await page.waitForFunction(
+        () => document.querySelector("hyperframes-player")?.duration >= 15,
+        null,
+        {
+          timeout: 30000,
+        },
+      );
+      seen.afterEdits = await player.evaluate((p) => p.duration);
+      await page.waitForTimeout(2500); // the player loads the saved page again
+      seen.at = await player.evaluate((p) => p.currentTime);
+      await shot(page, "motion-editor");
+      // play across a scene boundary: the selection follows the film
+      await page.getByRole("button", { name: "Scene 1, " }).click();
+      await page.getByRole("button", { name: "Play" }).click();
+      await page.waitForFunction(
+        () => document.querySelector("hyperframes-player")?.currentTime > 5.5,
+        null,
+        {
+          timeout: 20000,
+        },
+      );
+      seen.selectedWhilePlaying = await page.getByText(/^Scene \d of \d$/).innerText();
+      await page.getByRole("button", { name: "Pause" }).click();
+      // a keyboard walk reaches the main controls; undo takes back one thing
+      await page.getByRole("button", { name: /^Undo/ }).click();
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      await page.getByRole("button", { name: "Redo" }).click();
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      const AxeBuilder = require("@axe-core/playwright").default;
+      const axe = await new AxeBuilder({ page })
+        .include("[data-slot=scene-editor]")
+        .exclude("hyperframes-player")
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .analyze();
+      seen.axe = axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      // the smallest window the app allows
+      await page.setViewportSize({ width: 720, height: 520 });
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: join(OUT, "motion-editor-small.png") });
+      seen.smallOverflow = await page
+        .locator("[data-slot=scene-editor]")
+        .evaluate((el) => el.scrollWidth > el.clientWidth);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.getByRole("button", { name: "Make the video" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 180000 });
+      await shot(page, "motion-editor-made");
+      seen.check = await dialog.getByText(/Checked:/).innerText();
+      seen.video = await dialog.locator("video").getAttribute("src");
+      console.log(`MOTION ${JSON.stringify(seen)}`);
     });
   }
   if (scheme === "light" && names.has("styles-make")) {

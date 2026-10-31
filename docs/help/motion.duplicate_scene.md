@@ -13,7 +13,8 @@ Copy one scene, right after itself, to change the copy.
 
 ## Steps in the app
 
-1. Ask the assistant to copy the scene.
+1. Open the project in **Motion graphics** and choose the scene.
+2. Choose **Duplicate**.
 
 ## Fields
 

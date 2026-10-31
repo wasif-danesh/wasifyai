@@ -13,8 +13,8 @@ Move one scene earlier or later in a video project.
 
 ## Steps in the app
 
-1. Ask the assistant to move the scene.
-2. Choose Make the video to see it in its new place.
+1. Open the project in **Motion graphics**.
+2. Drag the scene along **Your scenes**, or use the arrows above them.
 
 ## Fields
 

@@ -19,7 +19,7 @@ from wasifyai_platform_sdk import Identity, RouteDeps, RouteUsage, RunError, sea
 from wasifyai_video.builder import check, draft, projects, templates
 from wasifyai_video.builder.store import BuilderStore, NotFound
 from wasifyai_video.index import index_text
-from wasifyai_video.videos import VideoRecord, poster_of, video_store
+from wasifyai_video.videos import PosterError, VideoRecord, poster_of, video_store
 
 log = logging.getLogger(__name__)
 
@@ -325,7 +325,12 @@ class RenderManager:
         assert deps.storage is not None, "storage is required"
         slots = found["slots"]
         data = await asyncio.to_thread(mp4.read_bytes)
-        width, height, poster = await poster_of(data)
+        try:
+            width, height, poster = await poster_of(
+                data, templates.poster_time(found["template"], slots)
+            )
+        except PosterError:  # that moment could not be read: the first frame will do
+            width, height, poster = await poster_of(data)
         video_id = str(uuid.uuid4())
         seconds = int(slots["seconds"])
         prompt = templates.describe(found["template"], slots)

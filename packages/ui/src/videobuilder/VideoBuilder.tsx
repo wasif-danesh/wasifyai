@@ -23,14 +23,12 @@ import { Notice } from "../components/notice";
 import { Stage } from "../components/stage";
 import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../save";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
+import { FormField } from "./FormField";
 import { PromptBox } from "./PromptBox";
+import { SceneEditor } from "./scenes/SceneEditor";
 import { type Draft, blankDraft, fromDraft, lengths, missing, startFrom, toDraft } from "./slots";
 import { NEW, templateOf, useVideoBuilder } from "./use-video-builder";
 
-const INPUT =
-  "flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30";
-
-const SHAPE_HINTS: Record<string, string> = { landscape: "16:9", portrait: "9:16", square: "1:1" };
 const FORMAT_LABELS: Record<BuilderFormat, string> = {
   mp4: "MP4",
   webm: "WebM, transparent",
@@ -132,8 +130,26 @@ export function VideoBuilder({
       selected={state.selected}
       onOpen={(id) => void b.open(id)}
       onNew={() => void b.open(NEW)}
+      onNewScenes={() => void b.startScenes()}
     />
   );
+  if (state.project?.template === "scenes" && state.catalogue) {
+    return (
+      <div data-workspace className={FRAME}>
+        <SceneEditor
+          key={state.project.id}
+          api={api}
+          project={state.project}
+          catalogue={state.catalogue}
+          videos={videos}
+          canSave={canSave}
+          downloadHref={downloadHref}
+          onBack={() => void b.leaveEditor()}
+          onOpenLibrary={onOpenLibrary}
+        />
+      </div>
+    );
+  }
   // the make frame (ADR-0093 U10): say it or fill in the form on the left, the video on the stage, the
   // projects under it; the say-it-then-check flow is unchanged
   return (
@@ -271,12 +287,14 @@ function ProjectList({
   selected,
   onOpen,
   onNew,
+  onNewScenes,
 }: {
   projects: BuilderProject[];
   catalogue: TemplateCatalogue | null;
   selected: string | null;
   onOpen: (id: string) => void;
   onNew: () => void;
+  onNewScenes: () => void;
 }) {
   const kind = (id: string) =>
     id === "scenes" ? "Scenes" : (catalogue?.templates.find((t) => t.id === id)?.title ?? id);
@@ -284,9 +302,14 @@ function ProjectList({
     <nav aria-label="Your video projects" className="grid min-w-0 gap-2">
       <div className="flex items-center justify-between gap-3">
         <h2 className="m-0 font-semibold text-sm">Your videos</h2>
-        <Button type="button" variant="outline" size="sm" onClick={onNew}>
-          <Plus className="size-4" /> New video
-        </Button>
+        <span className="flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onNewScenes}>
+            <Plus className="size-4" /> Video with scenes
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={onNew}>
+            <Plus className="size-4" /> One graphic
+          </Button>
+        </span>
       </div>
       {projects.length === 0 ? (
         <p className="m-0 text-muted-foreground text-sm">Nothing made here yet.</p>
@@ -315,117 +338,6 @@ function ProjectList({
 
 // ---- one project -----------------------------------------------------------------------------
 
-type FieldProps = {
-  info: FieldInfo;
-  value: string;
-  catalogue: TemplateCatalogue | null;
-  onChange: (value: string) => void;
-};
-
-/** One field of the form, built from what the engine said about it. */
-function FormField({ info, value, catalogue, onChange }: FieldProps) {
-  const id = useId();
-  const optional = info.required ? null : (
-    <span className="font-normal text-muted-foreground"> (optional)</span>
-  );
-  if (info.kind === "text") {
-    return (
-      <div className={field}>
-        <label className={fieldLabel} htmlFor={id}>
-          {info.label}
-          {optional}
-        </label>
-        <input
-          id={id}
-          className={INPUT}
-          value={value}
-          maxLength={info.max_chars}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      </div>
-    );
-  }
-  if (info.kind === "longtext" || info.kind === "lines" || info.kind === "rows") {
-    return (
-      <div className={field}>
-        <label className={fieldLabel} htmlFor={id}>
-          {info.label}
-          {optional}
-        </label>
-        <textarea
-          id={id}
-          className={cn(INPUT, "min-h-24 font-[inherit]")}
-          rows={info.kind === "longtext" ? 3 : 6}
-          value={value}
-          maxLength={info.kind === "longtext" ? info.max_chars : undefined}
-          spellCheck={info.kind !== "rows"}
-          onChange={(e) => onChange(e.target.value)}
-        />
-        {info.hint ? <p className={hint}>{info.hint}</p> : null}
-      </div>
-    );
-  }
-  if (info.kind === "seconds") {
-    return (
-      <fieldset className={cn(field, "m-0 border-0 p-0")}>
-        <legend className={cn(fieldLabel, "mb-1.5")}>{info.label}</legend>
-        <div className={cn(chips, "items-center")}>
-          {lengths(info.min, info.max).map((n) => (
-            <Chip key={n} aria-pressed={Number(value) === n} onClick={() => onChange(String(n))}>
-              {n} seconds
-            </Chip>
-          ))}
-          <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            or
-            <input
-              id={id}
-              type="number"
-              inputMode="numeric"
-              min={info.min}
-              max={info.max}
-              aria-label={`${info.label} in seconds`}
-              className={cn(INPUT, "w-20 py-1")}
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-            />
-            seconds
-          </label>
-        </div>
-        <p className={hint}>
-          From {info.min} to {info.max} seconds.
-        </p>
-      </fieldset>
-    );
-  }
-  return (
-    <fieldset className={cn(field, "m-0 border-0 p-0")}>
-      <legend className={cn(fieldLabel, "mb-1.5")}>{info.label}</legend>
-      <div className={chips}>
-        {info.choices.map((c) => {
-          const colours = info.id === "theme" ? catalogue?.themes[c.id as "midnight"] : undefined;
-          return (
-            <Chip key={c.id} aria-pressed={value === c.id} onClick={() => onChange(c.id)}>
-              {colours ? (
-                <span
-                  aria-hidden="true"
-                  className="me-1.5 inline-block size-3 rounded-full border align-middle"
-                  style={{
-                    background: `linear-gradient(135deg, ${colours.from}, ${colours.accent})`,
-                  }}
-                />
-              ) : null}
-              {c.label}
-              {info.id === "shape" && SHAPE_HINTS[c.id] ? (
-                <span className="opacity-85"> {SHAPE_HINTS[c.id]}</span>
-              ) : null}
-            </Chip>
-          );
-        })}
-      </div>
-    </fieldset>
-  );
-}
-
 function CheckNotice({ check }: { check: BuilderCheck }) {
   if (check.ok) {
     return (
@@ -444,30 +356,6 @@ function CheckNotice({ check }: { check: BuilderCheck }) {
           ))
         : check.message}
     </Notice>
-  );
-}
-
-/** A project of scenes (ADR-0096), written by the assistant or another app. The editor is the next stage (MX2). */
-function ScenesSummary({ project }: { project: BuilderProject }) {
-  const scenes = (project.slots.scenes ?? []) as unknown as {
-    id: string;
-    name: string;
-    fields: { seconds: number };
-  }[];
-  return (
-    <section aria-label="Scenes" className="grid max-w-xl gap-3 p-6">
-      <h1 className="m-0 font-semibold text-lg tracking-tight">{project.title}</h1>
-      <ol className="m-0 grid list-decimal gap-1 ps-5 text-sm">
-        {scenes.map((scene) => (
-          <li key={scene.id}>
-            {scene.name}, {scene.fields.seconds} seconds
-          </li>
-        ))}
-      </ol>
-      <p className="m-0 text-muted-foreground text-sm">
-        Ask the assistant to change these scenes or to make the video.
-      </p>
-    </section>
   );
 }
 
@@ -508,7 +396,6 @@ function Editor({
     } else setDraft(blankDraft(template));
   }, [project, template, drafted]);
 
-  if (project?.template === "scenes") return <ScenesSummary project={project} />;
   if (!template) return null;
   const slots = fromDraft(template, draft);
   const dirty =
@@ -678,6 +565,16 @@ function Editor({
         >
           Preview
         </Button>
+        {project ? (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={working}
+            onClick={() => void api.toScenes(project.id)}
+          >
+            Add more scenes
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="outline"

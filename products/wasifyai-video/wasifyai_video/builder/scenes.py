@@ -19,29 +19,40 @@ def _with(document: dict[str, Any], scenes: list[dict[str, Any]]) -> dict[str, A
     return templates.normalize_slots(templates.SCENES, {**document, "scenes": scenes})
 
 
-def add(
-    document: dict[str, Any], kind: str, fields: dict[str, Any], name: str = "",
-    at: int | None = None,
-) -> tuple[dict[str, Any], str]:  # fmt: skip
-    """A new scene at position `at` (from 0; the end if not given), and its id."""
+def _unused_id(document: dict[str, Any]) -> str:
     scene_id = templates.new_scene_id()
     while any(s["id"] == scene_id for s in document["scenes"]):
         scene_id = templates.new_scene_id()
+    return scene_id
+
+
+def add(
+    document: dict[str, Any], kind: str, fields: dict[str, Any], name: str = "",
+    at: int | None = None, more: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], str]:  # fmt: skip
+    """A new scene at position `at` (from 0; the end if not given), and its id."""
+    scene_id = _unused_id(document)
     scenes = list(document["scenes"])
     where = len(scenes) if at is None else max(0, min(at, len(scenes)))
-    scenes.insert(where, {"id": scene_id, "kind": kind, "name": name, "fields": fields})
+    scenes.insert(
+        where,
+        {"id": scene_id, "kind": kind, "name": name, "fields": fields, **(more or {})},
+    )
     return _with(document, scenes), scene_id
 
 
 def change(
-    document: dict[str, Any], scene_id: str, fields: dict[str, Any], name: str | None = None
-) -> dict[str, Any]:
-    """Change the given fields of one scene; the rest stay."""
+    document: dict[str, Any], scene_id: str, fields: dict[str, Any], name: str | None = None,
+    **more: Any,
+) -> dict[str, Any]:  # fmt: skip
+    """Change the given fields of one scene; the rest stay. `more` is its caption or transition
+    (None leaves it as it is)."""
     n = find(document, scene_id)
     scenes = list(document["scenes"])
     scene = scenes[n]
     scenes[n] = {
         **scene,
+        **{k: v for k, v in more.items() if v is not None},
         "name": scene["name"] if name is None else name,
         "fields": {**scene["fields"], **fields},
     }
@@ -58,8 +69,10 @@ def move(document: dict[str, Any], scene_id: str, to: int) -> dict[str, Any]:
 def duplicate(document: dict[str, Any], scene_id: str) -> tuple[dict[str, Any], str]:
     """A copy right after the scene, and the copy's id."""
     n = find(document, scene_id)
-    scene = document["scenes"][n]
-    return add(document, scene["kind"], dict(scene["fields"]), scene["name"], n + 1)
+    copy = {**document["scenes"][n], "id": _unused_id(document)}
+    scenes = list(document["scenes"])
+    scenes.insert(n + 1, copy)
+    return _with(document, scenes), copy["id"]
 
 
 def remove(document: dict[str, Any], scene_id: str) -> dict[str, Any]:

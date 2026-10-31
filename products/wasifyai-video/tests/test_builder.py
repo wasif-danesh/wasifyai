@@ -5,6 +5,7 @@ stand-in render engine (the real browser: `services/api/tests/test_video_builder
 
 import asyncio
 import json
+import re
 import sqlite3
 import time
 from pathlib import Path
@@ -29,7 +30,7 @@ from wasifyai_platform_sdk.actions.model import Readiness, need_runtime
 from wasifyai_platform_sdk.actions.testing import FakeActionHost
 from wasifyai_platform_sdk.sqlite import create_sqlite_engine
 from wasifyai_video.actions import actions, library_kinds
-from wasifyai_video.builder import projects, templates
+from wasifyai_video.builder import live, projects, templates
 from wasifyai_video.builder.index import BuilderIndexSource, words_of
 from wasifyai_video.builder.runtime import store_for
 from wasifyai_video.builder.store import LEFT_RUNNING, BuilderStore, NotFound, NothingToUndo
@@ -158,6 +159,9 @@ def test_a_file_made_before_versions_and_checks_is_upgraded_and_keeps_its_projec
 
 class FakeEngine:
     """The component's side, scripted: what `state.video_builder` offers the product."""
+
+    async def live_kit(self) -> dict[str, bytes]:
+        return {"gsap.min.js": b"//gsap", live.RUNTIME: b"//runtime", "fonts/inter.woff2": b"wOF2"}
 
     def __init__(self, tmp: Path):
         self.gsap_file = tmp / "gsap.min.js"
@@ -1037,3 +1041,79 @@ async def test_scene_actions_refuse_in_words(arig):
     assert worded.status == "refused" and "Scene 1" in worded.text
     store_for(arig.state).get_composition("t1", "u1", cid)  # a refused change changed nothing
     assert store_for(arig.state).version_count(cid) == 0
+
+
+# ---- the live preview (ADR-0096 decision 3) ------------------------------------------------------
+
+
+def live_path(client, cid: str) -> str:
+    made = client.post(f"{BASE}/projects/{cid}/live")
+    assert made.status_code == 200, made.text
+    return made.json()["path"]
+
+
+def scene_project(client) -> dict[str, Any]:
+    made = client.post(f"{BASE}/projects", json={"template": "scenes", "slots": SCENE_PROJECT})
+    assert made.status_code == 201, made.text
+    return made.json()
+
+
+def test_the_player_gets_the_page_and_its_files_from_a_signed_address_only(rig):
+    project = scene_project(rig)
+    path = live_path(rig, project["id"])
+    token = path.split("/")[-2]
+    assert re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._~-]{0,79}", token), "the web's proxy takes it"
+    page = rig.get(path)
+    assert page.status_code == 200 and page.headers["content-type"].startswith("text/html")
+    assert "Mornings are hard." in page.text
+    assert 'src="vendor/hyperframe.runtime.iife.js"' in page.text
+    policy = page.headers["content-security-policy"]
+    assert "default-src 'none'" in policy and "connect-src 'self'" in policy
+    assert page.headers["cache-control"] == "no-store"
+    base = path.removesuffix("index.html")
+    assert (
+        rig.get(f"{base}vendor/gsap.min.js").headers["content-type"].startswith("text/javascript")
+    )
+    assert rig.get(f"{base}vendor/fonts/inter.woff2").status_code == 200
+    assert rig.get(f"{base}vendor/../../secret").status_code in (403, 404)
+    assert rig.get(f"{base}slots.json").status_code == 404
+
+
+def test_a_changed_or_old_preview_address_opens_nothing(rig):
+    project = scene_project(rig)
+    path = live_path(rig, project["id"])
+    token = path.split("/")[-2]
+    cid, expires, signature = token.split(".")
+    later = f"{cid}.{int(expires) + 999}.{signature}"
+    assert rig.get(path.replace(token, later)).status_code == 403
+    assert rig.get(path.replace(token, "not-a-token")).status_code == 403
+    store = store_for(rig.app_state)
+    old = live.sign(store.live_key(), cid, 1000)
+    assert rig.get(path.replace(token, old)).status_code == 403
+
+
+def test_only_the_owner_can_get_a_preview_address(rig):
+    project = scene_project(rig)
+    other = rig.post(f"{BASE}/projects/{project['id']}/live", headers={"x-user": "u2"})
+    assert other.status_code == 404
+
+
+def test_a_preview_shows_the_latest_words(rig):
+    project = scene_project(rig)
+    path = live_path(rig, project["id"])
+    changed = {**project["slots"], "name": "New name"}
+    changed["scenes"][0]["fields"]["title"] = "Changed words"
+    assert rig.patch(f"{BASE}/projects/{project['id']}", json={"slots": changed}).status_code == 200
+    assert "Changed words" in rig.get(path).text
+
+
+def test_a_template_project_is_turned_into_scenes_by_the_window(rig):
+    old = create(rig)
+    made = rig.patch(f"{BASE}/projects/{old['id']}", json={"slots": {}, "template": "scenes"})
+    assert made.status_code == 200, made.text
+    assert made.json()["template"] == "scenes"
+    assert made.json()["slots"]["scenes"][0]["fields"]["title"] == "Launch day"
+    back = rig.post(f"{BASE}/projects/{old['id']}/undo").json()
+    assert back["template"] == "title"
+    refused = rig.patch(f"{BASE}/projects/{old['id']}", json={"slots": {}, "template": "quote"})
+    assert refused.status_code == 422

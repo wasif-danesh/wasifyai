@@ -426,3 +426,52 @@ async def test_a_connection_transcribes_a_file_under_its_folder_and_nothing_outs
     assert (both.status, both.code) == ("refused", "invalid_input")
     neither = await h.go("speech.transcribe", {})
     assert (neither.status, neither.code) == ("refused", "invalid_input")
+
+
+# ---- the beats of a song (ADR-0090 CS1) --------------------------------------------------------
+
+
+class FakeAnalysis:
+    """The analysis tool's answer; the real one runs in its own environment."""
+
+    supported = True
+    Failed = RuntimeError
+
+    def __init__(self):
+        self.calls = 0
+
+    def ready(self):
+        return True
+
+    async def analyse(self, data: bytes):
+        self.calls += 1
+        return {
+            "seconds": 8.0, "bpm": 120.0, "beats": [0.5, 1.0, 1.5], "downbeats": [0.5],
+            "sections": [{"start": 0.0, "end": 8.0, "energy": 0.1, "label": "mid"}], "tool": "fake",
+        }  # fmt: skip
+
+
+async def test_the_beats_of_a_song_are_found_once_and_kept_with_it(tmp_path, ctx):  # noqa: F811
+    h = Harness(tmp_path)
+    tool = FakeAnalysis()
+    h.rig.state.music_analysis = tool
+    made = await h.go(
+        "music.generate", {"description": "a song about the sea", "instrumental": True}
+    )
+    assert made.ok, made.text
+    song = made.output["track_id"]
+    first = await h.go("music.analyse", {"track_id": song, "lyrics": "[verse]\nOne line sung\n"})
+    assert first.ok, first.text
+    assert first.output["bpm"] == 120.0 and first.output["beats"] == [0.5, 1.0, 1.5]
+    assert [x["text"] for x in first.output["lines"]] == [
+        "One line sung"
+    ]  # the typed words, no mark
+    again = await h.go("music.analyse", {"track_id": song, "lyrics": "[verse]\nOne line sung\n"})
+    assert again.ok and tool.calls == 1
+
+
+async def test_beats_of_a_song_that_is_not_there_is_an_answer_not_a_crash(tmp_path, ctx):  # noqa: F811
+    h = Harness(tmp_path)
+    h.rig.state.music_analysis = FakeAnalysis()
+    r = await h.go("music.analyse", {"track_id": "nope"})
+    assert not r.ok

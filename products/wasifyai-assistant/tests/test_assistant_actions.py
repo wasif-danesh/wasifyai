@@ -370,6 +370,15 @@ class _Change(BaseModel):
     words: str = ""
 
 
+class _CreativeProject(BaseModel):
+    project_id: str
+
+
+class _CreativeChange(BaseModel):
+    project_id: str
+    words: str = ""
+
+
 def _docked_rig(tmp_path, turns):
     """A rig whose catalogue has a screen to read, a change, something costly and something else."""
     host = FakeHost()
@@ -391,6 +400,13 @@ def _docked_rig(tmp_path, turns):
         told["changes"].append(p.model_dump())
         return Outcome.ok({"scene_id": "aaaaaaaa"}, "Changed.")
 
+    async def read_named(p: _CreativeProject, ctx):
+        return Outcome.ok({"brief": "A plan.", "actions": ["t.change_named"]}, "Read.")
+
+    async def change_named(p: _CreativeChange, ctx):
+        told["changes"].append(p.model_dump())
+        return Outcome.ok({}, "Changed.")
+
     async def make(p: _Change, ctx):
         told["made"].append(p.model_dump())
         return Outcome.ok({}, "Made.")
@@ -408,6 +424,8 @@ def _docked_rig(tmp_path, turns):
                 *builtin_actions(), *image_actions(), action("t.read", "read", _Project, read),
                 action("t.change", "change", _Change, change),
                 action("t.make", "make", _Change, make, ("costly",)),
+                action("t.read_named", "read", _CreativeProject, read_named),
+                action("t.change_named", "change", _CreativeChange, change_named),
             ]
         ),
         host,
@@ -457,6 +475,16 @@ async def test_docked_a_change_applies_at_once_on_the_project_on_the_screen(tmp_
     await rig.turn_with(dict(DOCKED))
     assert await rig.paused() is None, "no card for a change here"
     assert told["changes"] == [{"composition_id": "project-1", "words": "x"}]
+
+
+async def test_docked_a_product_that_says_project_id_gets_the_project_on_the_screen(tmp_path, ctx):
+    # Creative Studio says project_id where Motion graphics says composition_id
+    wrong = _propose("t.change_named", words="x", project_id="someone-elses")
+    rig, told = _docked_rig(tmp_path, [wrong, {"text": "Done."}])
+    screen = {"action_id": "t.read_named", "params": {"project_id": "plan-1"}}
+    await rig.turn_with({**DOCKED, "working_on": screen})
+    assert await rig.paused() is None, "no card for a change here"
+    assert told["changes"] == [{"project_id": "plan-1", "words": "x"}]
 
 
 async def test_docked_something_costly_still_asks(tmp_path, ctx):

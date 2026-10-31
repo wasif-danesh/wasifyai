@@ -381,6 +381,669 @@
       "help": "docs/help/audiobook.plan.md"
     },
     {
+      "id": "creative.add_media",
+      "title": "Add to a project",
+      "summary": "Make a creation from the library part of a Creative Studio project.",
+      "description": "Tag a picture, clip, song, speech, lip sync, 3D model or motion graphic from the library with a project of Creative Studio, so it shows in that project's media rail. The creation itself stays in the library and is not copied.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Project Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "image",
+              "video",
+              "track",
+              "speech",
+              "lipsync",
+              "model3d",
+              "composition"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "item_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Item Id",
+            "type": "string"
+          },
+          "shot_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The shot it is meant for, if any.",
+            "title": "Shot Id"
+          }
+        },
+        "required": [
+          "project_id",
+          "kind",
+          "item_id"
+        ],
+        "title": "MediaIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "kind",
+          "item_id"
+        ],
+        "title": "MediaOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "project_id": "1f8d2c3b4a5e4f60a7b8c9d0e1f20314",
+          "kind": "image",
+          "item_id": "0b7c1f9e-0000-4000-8000-000000000000"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-creative"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-creative",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/creative.add_media.md"
+    },
+    {
+      "id": "creative.edit_plan",
+      "title": "Change a plan",
+      "summary": "Change the shots of a plan: words, motion, cuts, or add and remove shots.",
+      "description": "Change the plan of a project from Creative Studio: what a shot shows, whether it holds, animates or sings, its place or camera; remove or add a shot; move a cut by whole beats. Every plan stays whole: the shots still cover the song and only people of its cast appear. Each call can be undone on the screen.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Project Id",
+            "type": "string"
+          },
+          "edits": {
+            "description": "Changes, in order. {op: 'set_shot', shot_id, shows?, motion?, place?, camera?, note?, who?}, {op: 'delete_shot', shot_id}, {op: 'add_shot', after, shows?} or {op: 'move_cut', shot_id, by_beats}. Motion is Hold, Animate or Sing.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Edits",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "edits"
+        ],
+        "title": "EditIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "shots": {
+            "title": "Shots",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "revision",
+          "shots"
+        ],
+        "title": "EditOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "project_id": "1f8d2c3b4a5e4f60a7b8c9d0e1f20314",
+          "edits": [
+            {
+              "op": "set_shot",
+              "shot_id": "s1",
+              "motion": "Animate"
+            }
+          ]
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-creative"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-creative",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/creative.edit_plan.md"
+    },
+    {
+      "id": "creative.plan",
+      "title": "Plan a music video",
+      "summary": "Turn a song and an idea into an editable plan of shots. Nothing is made yet.",
+      "description": "Plan a music video of a song in the library: the cuts follow the beats, and every shot says what is seen, who is in it, where, how the camera moves and whether it holds or moves. It takes about a minute with an 8B chat model, longer with a larger one. No pictures or clips are made. Use it when the person wants a music video or a plan for one; they can then change it in Creative Studio. Returns the project and its first shots.",
+      "input": {
+        "$defs": {
+          "Brief": {
+            "additionalProperties": false,
+            "properties": {
+              "track_id": {
+                "description": "The song, from Your music.",
+                "maxLength": 64,
+                "minLength": 1,
+                "title": "Track Id",
+                "type": "string"
+              },
+              "idea": {
+                "description": "What the video is about, in a line.",
+                "maxLength": 600,
+                "minLength": 3,
+                "title": "Idea",
+                "type": "string"
+              },
+              "style": {
+                "default": "",
+                "description": "The look: warm film photo, for instance.",
+                "maxLength": 120,
+                "title": "Style",
+                "type": "string"
+              },
+              "cast": {
+                "items": {
+                  "$ref": "#/$defs/Person"
+                },
+                "maxItems": 8,
+                "title": "Cast",
+                "type": "array"
+              },
+              "places": {
+                "description": "Where it happens; left empty, the writer chooses.",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 12,
+                "title": "Places",
+                "type": "array"
+              },
+              "lyrics": {
+                "anyOf": [
+                  {
+                    "maxLength": 20000,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The words of the song; left out, those it was made with.",
+                "title": "Lyrics"
+              },
+              "shape": {
+                "default": "landscape",
+                "enum": [
+                  "landscape",
+                  "portrait",
+                  "square"
+                ],
+                "title": "Shape",
+                "type": "string"
+              },
+              "cut_speed": {
+                "default": 0,
+                "description": "-2 few long shots, +2 many short ones.",
+                "maximum": 2,
+                "minimum": -2,
+                "title": "Cut Speed",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "track_id",
+              "idea"
+            ],
+            "title": "Brief",
+            "type": "object"
+          },
+          "Person": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "description": "What the person is called.",
+                "maxLength": 60,
+                "minLength": 1,
+                "title": "Name",
+                "type": "string"
+              },
+              "look": {
+                "default": "",
+                "description": "How they look, words used again in every picture.",
+                "maxLength": 240,
+                "title": "Look",
+                "type": "string"
+              },
+              "photos_only": {
+                "default": false,
+                "description": "They are only ever seen in photographs, never there in person.",
+                "title": "Photos Only",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "title": "Person",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "brief": {
+            "$ref": "#/$defs/Brief",
+            "description": "The song, the idea, who is in it and where."
+          },
+          "title": {
+            "default": "",
+            "description": "A name for the project.",
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "brief"
+        ],
+        "title": "PlanIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "shots": {
+            "title": "Shots",
+            "type": "integer"
+          },
+          "plain_shots": {
+            "description": "Shots that fell back to plain words, for a person to rewrite.",
+            "title": "Plain Shots",
+            "type": "integer"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "shots_preview": {
+            "description": "The first shots: start, end, shows.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Shots Preview",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "uri",
+          "title",
+          "shots",
+          "plain_shots",
+          "seconds",
+          "shots_preview"
+        ],
+        "title": "PlanOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "brief": {
+            "track_id": "0b7c1f9e-0000-4000-8000-000000000000",
+            "idea": "A woman drives home at dawn"
+          }
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-creative"
+        },
+        {
+          "kind": "chat",
+          "name": ""
+        },
+        {
+          "kind": "runtime",
+          "name": "music_analysis"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-creative",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/creative.plan.md"
+    },
+    {
+      "id": "creative.read_project",
+      "title": "Read a plan",
+      "summary": "Read the plan of a project: its parts and every shot.",
+      "description": "Read the plan of a project from Creative Studio: its idea, its cast, its parts and every shot with its times, motion, camera, place and words. The assistant in the project's Ask tab works from this.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Project Id",
+            "type": "string"
+          },
+          "shot_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The shot the person has selected.",
+            "title": "Shot Id"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "title": "ReadIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "brief": {
+            "title": "Brief",
+            "type": "string"
+          },
+          "actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Actions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "title",
+          "brief",
+          "actions"
+        ],
+        "title": "ReadOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "project_id": "1f8d2c3b4a5e4f60a7b8c9d0e1f20314"
+        }
+      ],
+      "effect": "read",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-creative"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-creative",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/creative.read_project.md"
+    },
+    {
+      "id": "creative.remove_media",
+      "title": "Take out of a project",
+      "summary": "Take a creation out of a Creative Studio project; it stays in the library.",
+      "description": "Take a creation out of a project of Creative Studio. It stays in the library.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Project Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "image",
+              "video",
+              "track",
+              "speech",
+              "lipsync",
+              "model3d",
+              "composition"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "item_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Item Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "kind",
+          "item_id"
+        ],
+        "title": "RemoveMediaIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "kind",
+          "item_id"
+        ],
+        "title": "MediaOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "project_id": "1f8d2c3b4a5e4f60a7b8c9d0e1f20314",
+          "kind": "image",
+          "item_id": "0b7c1f9e-0000-4000-8000-000000000000"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-creative"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-creative",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/creative.remove_media.md"
+    },
+    {
+      "id": "creative.undo",
+      "title": "Undo a change to a plan",
+      "summary": "Take back the last change to a plan.",
+      "description": "Take back the last change to the plan of a project from Creative Studio.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "title": "ProjectIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "revision"
+        ],
+        "title": "UndoOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "project_id": "1f8d2c3b4a5e4f60a7b8c9d0e1f20314"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-creative"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-creative",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/creative.undo.md"
+    },
+    {
       "id": "decision.decide",
       "title": "Decide with a model I taught",
       "summary": "Ask a decision model for its answer to a question about some texts.",
@@ -1956,7 +2619,8 @@
               "notebook",
               "composition",
               "model3d",
-              "lora"
+              "lora",
+              "creative_project"
             ],
             "title": "Kind",
             "type": "string"
@@ -2041,7 +2705,8 @@
               "notebook",
               "composition",
               "model3d",
-              "lora"
+              "lora",
+              "creative_project"
             ],
             "title": "Kind",
             "type": "string"
@@ -2140,7 +2805,8 @@
               "notebook",
               "composition",
               "model3d",
-              "lora"
+              "lora",
+              "creative_project"
             ],
             "title": "Kind",
             "type": "string"
@@ -2262,7 +2928,8 @@
               "notebook",
               "composition",
               "model3d",
-              "lora"
+              "lora",
+              "creative_project"
             ],
             "title": "Kind",
             "type": "string"
@@ -2386,7 +3053,8 @@
               "notebook",
               "composition",
               "model3d",
-              "lora"
+              "lora",
+              "creative_project"
             ],
             "title": "Kind",
             "type": "string"
@@ -6058,6 +6726,142 @@
       ],
       "consent": "",
       "help": "docs/help/motion.write_scenes.md"
+    },
+    {
+      "id": "music.analyse",
+      "title": "Find the beats of a song",
+      "summary": "Find a song's beats, downbeats, sections and when its lines are sung.",
+      "description": "Work out what a video needs to know about a song of the library: its tempo, beats and downbeats, its sections (start, end, how loud, no names like verse or chorus) and when each typed line is sung. Nothing leaves this computer. It takes a few seconds and is kept with the song. Lines may have no times, for instance in a language the speech model does not know.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "track_id": {
+            "description": "The song in Your music.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Track Id",
+            "type": "string"
+          },
+          "lyrics": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The words of the song, typed. Left out, the words the song was made with are used. Speech recognition only gives their times; it never changes them.",
+            "title": "Lyrics"
+          }
+        },
+        "required": [
+          "track_id"
+        ],
+        "title": "AnalyseIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "track_id": {
+            "title": "Track Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "bpm": {
+            "title": "Bpm",
+            "type": "number"
+          },
+          "beats": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Beats",
+            "type": "array"
+          },
+          "downbeats": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Downbeats",
+            "type": "array"
+          },
+          "sections": {
+            "description": "start, end and an energy label (low, mid, high). No names like verse or chorus.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Sections",
+            "type": "array"
+          },
+          "lines": {
+            "description": "The typed lines: text, start, end.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "lines_timed": {
+            "description": "False when the times of the lines could not be found.",
+            "title": "Lines Timed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "track_id",
+          "title",
+          "seconds",
+          "bpm",
+          "beats",
+          "downbeats",
+          "sections",
+          "lines",
+          "lines_timed"
+        ],
+        "title": "AnalyseOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "track_id": "0b7c1f9e-0000-4000-8000-000000000000"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        },
+        {
+          "kind": "runtime",
+          "name": "music_analysis"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-voice",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/music.analyse.md"
     },
     {
       "id": "music.generate",

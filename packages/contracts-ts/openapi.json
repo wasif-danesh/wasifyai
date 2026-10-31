@@ -1,6 +1,41 @@
 {
   "components": {
     "schemas": {
+      "AddMedia": {
+        "additionalProperties": false,
+        "properties": {
+          "item_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Item Id",
+            "type": "string"
+          },
+          "kind": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Kind",
+            "type": "string"
+          },
+          "shot_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shot Id"
+          }
+        },
+        "required": [
+          "kind",
+          "item_id"
+        ],
+        "title": "AddMedia",
+        "type": "object"
+      },
       "AdminUser": {
         "properties": {
           "created_at": {
@@ -372,6 +407,20 @@
         "title": "Binding",
         "type": "object"
       },
+      "Body_add_asset_products_wasifyai_video_builder_projects__cid__assets_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_add_asset_products_wasifyai_video_builder_projects__cid__assets_post",
+        "type": "object"
+      },
       "Body_add_picture_products_wasifyai_voice_pictures_post": {
         "properties": {
           "file": {
@@ -503,6 +552,20 @@
         "title": "Body_import_video_products_wasifyai_video_videos_import_post",
         "type": "object"
       },
+      "Body_set_brand_logo_products_wasifyai_video_builder_brand_logo_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_set_brand_logo_products_wasifyai_video_builder_brand_logo_post",
+        "type": "object"
+      },
       "Body_upload_products_wasifyai_notebooks_notebooks__nid__documents_upload_post": {
         "properties": {
           "files": {
@@ -531,6 +594,86 @@
         "title": "Body_upload_products_wasifyai_notebooks_notebooks__nid__documents_upload_post",
         "type": "object"
       },
+      "Brief": {
+        "additionalProperties": false,
+        "properties": {
+          "cast": {
+            "items": {
+              "$ref": "#/components/schemas/Person"
+            },
+            "maxItems": 8,
+            "title": "Cast",
+            "type": "array"
+          },
+          "cut_speed": {
+            "default": 0,
+            "description": "-2 few long shots, +2 many short ones.",
+            "maximum": 2.0,
+            "minimum": -2.0,
+            "title": "Cut Speed",
+            "type": "integer"
+          },
+          "idea": {
+            "description": "What the video is about, in a line.",
+            "maxLength": 600,
+            "minLength": 3,
+            "title": "Idea",
+            "type": "string"
+          },
+          "lyrics": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The words of the song; left out, those it was made with.",
+            "title": "Lyrics"
+          },
+          "places": {
+            "description": "Where it happens; left empty, the writer chooses.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Places",
+            "type": "array"
+          },
+          "shape": {
+            "default": "landscape",
+            "enum": [
+              "landscape",
+              "portrait",
+              "square"
+            ],
+            "title": "Shape",
+            "type": "string"
+          },
+          "style": {
+            "default": "",
+            "description": "The look: warm film photo, for instance.",
+            "maxLength": 120,
+            "title": "Style",
+            "type": "string"
+          },
+          "track_id": {
+            "description": "The song, from Your music.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Track Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "track_id",
+          "idea"
+        ],
+        "title": "Brief",
+        "type": "object"
+      },
       "CaptionsIn": {
         "properties": {
           "again": {
@@ -555,6 +698,36 @@
           }
         },
         "title": "CaptionsIn",
+        "type": "object"
+      },
+      "ChangeProject": {
+        "additionalProperties": false,
+        "properties": {
+          "brief": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Brief"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ChangeProject",
         "type": "object"
       },
       "ChatOptions": {
@@ -851,6 +1024,21 @@
           }
         },
         "title": "ConnectionPatch",
+        "type": "object"
+      },
+      "ConversationIn": {
+        "properties": {
+          "conversation_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Conversation Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id"
+        ],
+        "title": "ConversationIn",
         "type": "object"
       },
       "ConversationList": {
@@ -1305,6 +1493,25 @@
         "title": "DraftIn",
         "type": "object"
       },
+      "Edits": {
+        "properties": {
+          "edits": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Edits",
+            "type": "array"
+          }
+        },
+        "required": [
+          "edits"
+        ],
+        "title": "Edits",
+        "type": "object"
+      },
       "EnhanceIn": {
         "properties": {
           "kind": {
@@ -1571,6 +1778,33 @@
           "action"
         ],
         "title": "FormAnswer",
+        "type": "object"
+      },
+      "Get": {
+        "properties": {
+          "bytes": {
+            "minimum": 1.0,
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "file": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "File",
+            "type": "string"
+          },
+          "repo": {
+            "maxLength": 200,
+            "title": "Repo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "file",
+          "bytes"
+        ],
+        "title": "Get",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -2066,6 +2300,21 @@
         "title": "JobState",
         "type": "object"
       },
+      "KeepConversation": {
+        "properties": {
+          "conversation_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Conversation Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id"
+        ],
+        "title": "KeepConversation",
+        "type": "object"
+      },
       "LauncherIn": {
         "properties": {
           "enabled": {
@@ -2077,6 +2326,21 @@
           "enabled"
         ],
         "title": "LauncherIn",
+        "type": "object"
+      },
+      "Look": {
+        "properties": {
+          "repo": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Repo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "title": "Look",
         "type": "object"
       },
       "MakeIn": {
@@ -2117,6 +2381,17 @@
           "input_id"
         ],
         "title": "MakeIn",
+        "type": "object"
+      },
+      "MakePlan": {
+        "properties": {
+          "again": {
+            "default": false,
+            "title": "Again",
+            "type": "boolean"
+          }
+        },
+        "title": "MakePlan",
         "type": "object"
       },
       "Me": {
@@ -2713,6 +2988,25 @@
         "title": "NewNotebook",
         "type": "object"
       },
+      "NewProject": {
+        "additionalProperties": false,
+        "properties": {
+          "brief": {
+            "$ref": "#/components/schemas/Brief"
+          },
+          "title": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "brief"
+        ],
+        "title": "NewProject",
+        "type": "object"
+      },
       "NodeEvent": {
         "properties": {
           "event": {
@@ -2881,6 +3175,36 @@
         "title": "OverviewVoices",
         "type": "object"
       },
+      "Person": {
+        "additionalProperties": false,
+        "properties": {
+          "look": {
+            "default": "",
+            "description": "How they look, words used again in every picture.",
+            "maxLength": 240,
+            "title": "Look",
+            "type": "string"
+          },
+          "name": {
+            "description": "What the person is called.",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "photos_only": {
+            "default": false,
+            "description": "They are only ever seen in photographs, never there in person.",
+            "title": "Photos Only",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "Person",
+        "type": "object"
+      },
       "PlanBook": {
         "additionalProperties": false,
         "properties": {
@@ -2927,6 +3251,18 @@
             "additionalProperties": true,
             "title": "Slots",
             "type": "object"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
           }
         },
         "required": [
@@ -3067,6 +3403,18 @@
             "maxLength": 8,
             "title": "Format",
             "type": "string"
+          },
+          "quality": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality"
           }
         },
         "title": "RenderIn",
@@ -3288,7 +3636,8 @@
               "voice",
               "composition",
               "model3d",
-              "lora"
+              "lora",
+              "creative_project"
             ],
             "title": "Kind",
             "type": "string"
@@ -3782,6 +4131,42 @@
         "title": "ServerPatch",
         "type": "object"
       },
+      "ShapesIn": {
+        "properties": {
+          "format": {
+            "default": "mp4",
+            "maxLength": 8,
+            "title": "Format",
+            "type": "string"
+          },
+          "quality": {
+            "anyOf": [
+              {
+                "maxLength": 12,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality"
+          },
+          "shapes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Shapes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "shapes"
+        ],
+        "title": "ShapesIn",
+        "type": "object"
+      },
       "SortIn": {
         "properties": {
           "texts": {
@@ -3844,6 +4229,26 @@
             "$ref": "#/components/schemas/DoneEvent"
           }
         ]
+      },
+      "StartIn": {
+        "properties": {
+          "shape": {
+            "default": "portrait",
+            "maxLength": 20,
+            "title": "Shape",
+            "type": "string"
+          },
+          "start": {
+            "maxLength": 40,
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start"
+        ],
+        "title": "StartIn",
+        "type": "object"
       },
       "TestOutcome": {
         "properties": {
@@ -4189,6 +4594,17 @@
           "quantity"
         ],
         "title": "UsageTotal",
+        "type": "object"
+      },
+      "UseBrandIn": {
+        "properties": {
+          "use": {
+            "default": true,
+            "title": "Use",
+            "type": "boolean"
+          }
+        },
+        "title": "UseBrandIn",
         "type": "object"
       },
       "ValidationError": {
@@ -5210,6 +5626,194 @@
         ]
       }
     },
+    "/admin/styles": {
+      "get": {
+        "operationId": "admin_list_admin_styles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Admin List Admin Styles Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Admin List",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/styles/hub/download": {
+      "post": {
+        "operationId": "admin_download_admin_styles_hub_download_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Get"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Admin Download Admin Styles Hub Download Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Admin Download",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/styles/hub/downloads/{job_id}": {
+      "get": {
+        "operationId": "admin_job_admin_styles_hub_downloads__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Admin Job Admin Styles Hub Downloads  Job Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Admin Job",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/styles/hub/files": {
+      "post": {
+        "operationId": "admin_files_admin_styles_hub_files_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Look"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Admin Files Admin Styles Hub Files Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Admin Files",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/styles/{style_id}": {
+      "delete": {
+        "operationId": "admin_delete_admin_styles__style_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "style_id",
+            "required": true,
+            "schema": {
+              "title": "Style Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Admin Delete",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/usage": {
       "get": {
         "operationId": "usage_report_admin_usage_get",
@@ -5921,7 +6525,8 @@
                     "voice",
                     "composition",
                     "model3d",
-                    "lora"
+                    "lora",
+                    "creative_project"
                   ],
                   "type": "string"
                 },
@@ -7018,6 +7623,772 @@
         "summary": "Search Update",
         "tags": [
           "wasifyai-assistant"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects": {
+      "get": {
+        "operationId": "list_projects_products_wasifyai_creative_creative_projects_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Projects Products Wasifyai Creative Creative Projects Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Projects",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      },
+      "post": {
+        "operationId": "add_project_products_wasifyai_creative_creative_projects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewProject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add Project Products Wasifyai Creative Creative Projects Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Project",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}": {
+      "delete": {
+        "operationId": "remove_project_products_wasifyai_creative_creative_projects__item__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Project",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      },
+      "get": {
+        "operationId": "get_project_products_wasifyai_creative_creative_projects__item__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Project Products Wasifyai Creative Creative Projects  Item  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Project",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      },
+      "patch": {
+        "operationId": "change_project_products_wasifyai_creative_creative_projects__item__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeProject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Change Project Products Wasifyai Creative Creative Projects  Item  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change Project",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/conversation": {
+      "put": {
+        "description": "The Ask tab's chat, so that coming back finds it.",
+        "operationId": "keep_conversation_products_wasifyai_creative_creative_projects__item__conversation_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeepConversation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Keep Conversation Products Wasifyai Creative Creative Projects  Item  Conversation Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Keep Conversation",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/edits": {
+      "post": {
+        "operationId": "edit_plan_products_wasifyai_creative_creative_projects__item__edits_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Edits"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Edit Plan Products Wasifyai Creative Creative Projects  Item  Edits Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Plan",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/log": {
+      "get": {
+        "description": "What the writer was asked and what came back: how a person understands a bad plan.",
+        "operationId": "planning_log_products_wasifyai_creative_creative_projects__item__log_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Planning Log Products Wasifyai Creative Creative Projects  Item  Log Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Planning Log",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/media": {
+      "get": {
+        "operationId": "list_media_products_wasifyai_creative_creative_projects__item__media_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Media Products Wasifyai Creative Creative Projects  Item  Media Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Media",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      },
+      "post": {
+        "operationId": "add_media_products_wasifyai_creative_creative_projects__item__media_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddMedia"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add Media Products Wasifyai Creative Creative Projects  Item  Media Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Media",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/media/{kind}/{media_id}": {
+      "delete": {
+        "operationId": "remove_media_products_wasifyai_creative_creative_projects__item__media__kind___media_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "media_id",
+            "required": true,
+            "schema": {
+              "title": "Media Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Remove Media Products Wasifyai Creative Creative Projects  Item  Media  Kind   Media Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Media",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/parts/{beat}/rewrite": {
+      "post": {
+        "description": "Try another idea for this part; the other shots stay. Follow it with GET.",
+        "operationId": "rewrite_products_wasifyai_creative_creative_projects__item__parts__beat__rewrite_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "beat",
+            "required": true,
+            "schema": {
+              "title": "Beat",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rewrite Products Wasifyai Creative Creative Projects  Item  Parts  Beat  Rewrite Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rewrite",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/plan": {
+      "post": {
+        "description": "Write the plan, or go on with one that stopped. Follow it with GET.",
+        "operationId": "make_plan_products_wasifyai_creative_creative_projects__item__plan_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MakePlan"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Make Plan Products Wasifyai Creative Creative Projects  Item  Plan Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make Plan",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/plan/stop": {
+      "post": {
+        "operationId": "stop_plan_products_wasifyai_creative_creative_projects__item__plan_stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Stop Plan Products Wasifyai Creative Creative Projects  Item  Plan Stop Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop Plan",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/undo": {
+      "post": {
+        "operationId": "undo_products_wasifyai_creative_creative_projects__item__undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Undo Products Wasifyai Creative Creative Projects  Item  Undo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/status": {
+      "get": {
+        "operationId": "status_products_wasifyai_creative_creative_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Status Products Wasifyai Creative Creative Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Status",
+        "tags": [
+          "wasifyai-creative"
         ]
       }
     },
@@ -12124,6 +13495,137 @@
         ]
       }
     },
+    "/products/wasifyai-video/builder/brand": {
+      "get": {
+        "operationId": "get_brand_products_wasifyai_video_builder_brand_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Brand Products Wasifyai Video Builder Brand Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Brand",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      },
+      "put": {
+        "operationId": "set_brand_products_wasifyai_video_builder_brand_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Brand Products Wasifyai Video Builder Brand Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Brand",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/brand/logo": {
+      "get": {
+        "operationId": "get_brand_logo_products_wasifyai_video_builder_brand_logo_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Brand Logo",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      },
+      "post": {
+        "description": "The logo: a picture, checked as any file is, kept for this person's projects.",
+        "operationId": "set_brand_logo_products_wasifyai_video_builder_brand_logo_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_set_brand_logo_products_wasifyai_video_builder_brand_logo_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Brand Logo Products Wasifyai Video Builder Brand Logo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Brand Logo",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
     "/products/wasifyai-video/builder/draft": {
       "post": {
         "description": "What a description (and perhaps a CSV file) means as a template and its fields. Nothing\nis saved: the window shows the form filled in, and the person checks it.",
@@ -12163,6 +13665,147 @@
           }
         },
         "summary": "Draft Project",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/live/{token}/{name}": {
+      "get": {
+        "description": "The project's page and the few files it needs, for the player's frame. The token says\nwhich project, and was signed for its owner; nothing else is served here.",
+        "operationId": "live_file_products_wasifyai_video_builder_live__token___name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Live File",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/make-jobs/{job_id}": {
+      "get": {
+        "operationId": "make_status_products_wasifyai_video_builder_make_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Make Status Products Wasifyai Video Builder Make Jobs  Job Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make Status",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/make-jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "make_cancel_products_wasifyai_video_builder_make_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Make Cancel Products Wasifyai Video Builder Make Jobs  Job Id  Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make Cancel",
         "tags": [
           "wasifyai-video",
           "wasifyai-video"
@@ -12270,6 +13913,51 @@
           }
         },
         "summary": "Create Project",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/projects/from-start": {
+      "post": {
+        "description": "A project from a starting point: a set of scenes with words to replace.",
+        "operationId": "create_from_start_products_wasifyai_video_builder_projects_from_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create From Start Products Wasifyai Video Builder Projects From Start Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create From Start",
         "tags": [
           "wasifyai-video",
           "wasifyai-video"
@@ -12408,6 +14096,173 @@
         ]
       }
     },
+    "/products/wasifyai-video/builder/projects/{cid}/assets": {
+      "post": {
+        "description": "A file for this project: checked, kept under its owner, and listed in the document.",
+        "operationId": "add_asset_products_wasifyai_video_builder_projects__cid__assets_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_add_asset_products_wasifyai_video_builder_projects__cid__assets_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add Asset Products Wasifyai Video Builder Projects  Cid  Assets Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Asset",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/projects/{cid}/assets/{asset_id}": {
+      "delete": {
+        "description": "A file out of the project, and out of every scene that used it. Undo brings the scenes\nback, not the file.",
+        "operationId": "remove_asset_products_wasifyai_video_builder_projects__cid__assets__asset_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Remove Asset Products Wasifyai Video Builder Projects  Cid  Assets  Asset Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Asset",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/projects/{cid}/brand": {
+      "post": {
+        "description": "What this project's document would be with the brand on it, and its files with the logo\namong them. The window puts it in its own document, one Undo step, like a made file.",
+        "operationId": "use_brand_products_wasifyai_video_builder_projects__cid__brand_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UseBrandIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Use Brand Products Wasifyai Video Builder Projects  Cid  Brand Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Use Brand",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
     "/products/wasifyai-video/builder/projects/{cid}/check": {
       "post": {
         "description": "The exact-text check: does the screen say what was typed (ADR-0079 decision 7).",
@@ -12454,6 +14309,62 @@
         ]
       }
     },
+    "/products/wasifyai-video/builder/projects/{cid}/conversation": {
+      "put": {
+        "description": "The editor's chat for this project (ADR-0096): found again when it is opened.",
+        "operationId": "keep_conversation_products_wasifyai_video_builder_projects__cid__conversation_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Keep Conversation Products Wasifyai Video Builder Projects  Cid  Conversation Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Keep Conversation",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
     "/products/wasifyai-video/builder/projects/{cid}/lint": {
       "post": {
         "operationId": "lint_project_products_wasifyai_video_builder_projects__cid__lint_post",
@@ -12493,6 +14404,110 @@
           }
         },
         "summary": "Lint Project",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/projects/{cid}/live": {
+      "post": {
+        "description": "Where the player finds this project (ADR-0096 decision 3): a frame cannot send the\nperson's token in a header, so a short-lived signed one is in the address.",
+        "operationId": "live_address_products_wasifyai_video_builder_projects__cid__live_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Live Address Products Wasifyai Video Builder Projects  Cid  Live Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Live Address",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/projects/{cid}/make": {
+      "post": {
+        "description": "Make something for this project: the person pressed the button, so nothing asks again.\nA long make is a job; the window puts the file where it wants it, so its own saves and\nthis cannot overwrite each other (ADR-0096 MX6).",
+        "operationId": "make_file_products_wasifyai_video_builder_projects__cid__make_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Make File Products Wasifyai Video Builder Projects  Cid  Make Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make File",
         "tags": [
           "wasifyai-video",
           "wasifyai-video"
@@ -12615,6 +14630,61 @@
           }
         },
         "summary": "Start Render",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/projects/{cid}/render-shapes": {
+      "post": {
+        "operationId": "start_render_shapes_products_wasifyai_video_builder_projects__cid__render_shapes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cid",
+            "required": true,
+            "schema": {
+              "title": "Cid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShapesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Start Render Shapes Products Wasifyai Video Builder Projects  Cid  Render Shapes Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Render Shapes",
         "tags": [
           "wasifyai-video",
           "wasifyai-video"
@@ -12799,6 +14869,36 @@
           }
         },
         "summary": "List Templates",
+        "tags": [
+          "wasifyai-video",
+          "wasifyai-video"
+        ]
+      }
+    },
+    "/products/wasifyai-video/builder/voices": {
+      "get": {
+        "description": "The person's saved voices, for a voiceover. None where speech is not served.",
+        "operationId": "voices_products_wasifyai_video_builder_voices_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "title": "Response Voices Products Wasifyai Video Builder Voices Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Voices",
         "tags": [
           "wasifyai-video",
           "wasifyai-video"
@@ -15141,6 +17241,30 @@
           }
         },
         "summary": "Resume Run"
+      }
+    },
+    "/styles": {
+      "get": {
+        "description": "The styles an admin added, for everyone signed in: chosen in a picture, not changed.",
+        "operationId": "list_styles_styles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Styles Styles Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Styles",
+        "tags": [
+          "styles"
+        ]
       }
     }
   }

@@ -35,6 +35,7 @@ import { runningJobs } from "./jobs";
 import { resolveItem, titleFor } from "./menu";
 import { CreatePage } from "./pages/Create";
 import { CreationsPage, navFor, toolFor } from "./pages/Creations";
+import { CreativePage } from "./pages/Creative";
 import { HomePage } from "./pages/Home";
 import { Model3dPage } from "./pages/Model3d";
 import { ModelsPage } from "./pages/Models";
@@ -366,6 +367,7 @@ export function Shell() {
                 />
               ) : null}
               {route === "videobuilder" ? <VideoBuilderPage go={go} /> : null}
+              {route === "creative" ? <CreativePage go={go} /> : null}
               {route === "model3d" ? <Model3dPage go={go} /> : null}
               {route === "train" ? (
                 <TrainPage

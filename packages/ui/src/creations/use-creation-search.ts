@@ -33,6 +33,7 @@ async function cards(
       lipsync: ids("lipsync"),
       model3d: ids("model3d"),
       composition: ids("composition"),
+      creative_project: ids("creative_project"),
       notebook: ids("notebook"),
       taught: response.results.filter((r) => taught.has(r.kind)).map((r) => r.id),
     },
@@ -76,7 +77,7 @@ async function cards(
       createdAt: lipsync.created_at,
       lipsync,
     });
-  const { models3d, compositions, notebooks, taught: models } = found.others;
+  const { models3d, compositions, creativeProjects, notebooks, taught: models } = found.others;
   for (const model3d of models3d)
     byKey.set(`model3d:${model3d.id}`, {
       kind: "model3d",
@@ -90,6 +91,13 @@ async function cards(
       id: composition.id,
       createdAt: composition.updated_at || composition.created_at,
       composition,
+    });
+  for (const project of creativeProjects)
+    byKey.set(`creative_project:${project.id}`, {
+      kind: "creative_project",
+      id: project.id,
+      createdAt: project.updated_at || project.created_at,
+      project,
     });
   for (const notebook of notebooks)
     byKey.set(`notebook:${notebook.id}`, {

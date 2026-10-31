@@ -15,7 +15,13 @@ beforeAll(() => {
 });
 
 const when = "2026-10-20T10:00:00Z";
-const NONE = { models3d: [], compositions: [], notebooks: [], taught: [] };
+const NONE = {
+  models3d: [],
+  compositions: [],
+  creativeProjects: [],
+  notebooks: [],
+  taught: [],
+};
 
 const picture = (over: Partial<ImageSummary> = {}): ImageSummary => ({
   id: "i1",

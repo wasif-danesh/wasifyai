@@ -1,0 +1,9 @@
+# Finding beats, downbeats and sections in a song (ADR-0090, CS1): beat_this and librosa, in an environment of
+# their own, because PyTorch must not touch the engine's packages. It runs on the processor (under 2 s for a
+# 90 s song, docs/spikes/creative-cs0.md). Compile with scripts/lock-music-analysis.sh and commit the result.
+beat-this==1.1.0
+torch
+torchaudio
+soundfile
+librosa
+numpy

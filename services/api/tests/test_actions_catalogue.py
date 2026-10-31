@@ -53,7 +53,7 @@ def menu() -> tuple[dict[str, str], dict[str, str]]:
         for iid, ilabel in re.findall(r'id: "([\w.]+)", label: "([^"]+)"', body):
             items[iid] = f"{glabel} › {ilabel}"
     for iid, ilabel in re.findall(
-        r'\{ id: "(chat|motion|model3d|library|models|train)", label: "([^"]+)"', text
+        r'\{ id: "(chat|creative|motion|model3d|library|models|train)", label: "([^"]+)"', text
     ):
         items[iid] = ilabel
     return items, groups
@@ -172,7 +172,9 @@ def test_the_first_set_is_there(catalogue):
     # scene and motion.undo (ADR-0096)
     # 65 with motion.make_file (ADR-0096 MX6)
     # 69 with motion.read_brand, set_brand, use_brand and start_from (ADR-0096 MX7)
-    assert 35 <= len(ids) <= 69
+    # 72 with music.analyse, creative.plan and creative.edit_plan (ADR-0090 CS1)
+    # 76 with creative.read_project, undo, add_media and remove_media (ADR-0090 screen)
+    assert 35 <= len(ids) <= 76
     for expected in (
         "library.search", "library.list", "library.get", "library.export", "library.rename",
         "library.delete", "image.generate", "image.edit", "video.generate", "video.animate",

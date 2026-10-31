@@ -1,5 +1,6 @@
 import type {
   BuilderProject,
+  CreativeProject,
   ImageSummary,
   LipSyncCard,
   Model3d,
@@ -24,6 +25,7 @@ export type Entry =
   | { kind: "lipsync"; id: string; createdAt: string; lipsync: LipSyncCard }
   | { kind: "model3d"; id: string; createdAt: string; model3d: Model3d }
   | { kind: "composition"; id: string; createdAt: string; composition: BuilderProject }
+  | { kind: "creative_project"; id: string; createdAt: string; project: CreativeProject }
   | { kind: "notebook"; id: string; createdAt: string; notebook: NotebookSummary }
   | { kind: "taught"; id: string; createdAt: string; taught: TrainedModel };
 
@@ -37,6 +39,7 @@ export type Filter =
   | "lipsyncs"
   | "models3d"
   | "compositions"
+  | "creativeProjects"
   | "notebooks"
   | "taught";
 
@@ -58,6 +61,7 @@ export function kindOf(filter: Filter): string | undefined {
     lipsyncs: "lipsync",
     models3d: "model3d",
     compositions: "composition",
+    creativeProjects: "creative_project",
     notebooks: "notebook",
     taught: "taught",
   } as const;
@@ -75,6 +79,7 @@ export const FILTER_KIND: Record<Filter, Entry["kind"] | null> = {
   lipsyncs: "lipsync",
   models3d: "model3d",
   compositions: "composition",
+  creativeProjects: "creative_project",
   notebooks: "notebook",
   taught: "taught",
 };
@@ -89,6 +94,7 @@ export const KIND_LABEL: Record<Entry["kind"], string> = {
   lipsync: "Lip sync",
   model3d: "3D model",
   composition: "Motion graphics",
+  creative_project: "Creative Studio",
   notebook: "Notebook",
   taught: "Taught model",
 };
@@ -187,6 +193,19 @@ export function toRow(entry: Entry): Row {
         detail: entry.composition.template,
         status: "done",
       };
+    case "creative_project":
+      return {
+        ...base,
+        kindLabel: KIND_LABEL.creative_project,
+        title: entry.project.title || "Creative Studio",
+        detail: entry.project.brief.idea,
+        status:
+          entry.project.status === "planned"
+            ? "done"
+            : entry.project.status === "planning"
+              ? "working"
+              : "failed",
+      };
     case "notebook":
       return {
         ...base,
@@ -231,6 +250,13 @@ export type CreationsNav = {
   /** which actions `use` takes for an entry */
   canUse?(entry: Entry, action: UseAction): boolean;
 };
+
+/** An entry's picture or poster, when it has one. */
+export function coverOf(entry: Entry): string | null {
+  if (entry.kind === "image") return entry.image.thumb_url;
+  if (entry.kind === "video") return entry.video.poster_url ?? null;
+  return null;
+}
 
 /** The last `n` things made, of every kind, newest first (the home's Recent; ADR-0093 U9). */
 export function latestEntries(recent: Recent, n: number): Entry[] {

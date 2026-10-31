@@ -419,6 +419,9 @@ class LocalTextProvider:
                         "type": "json_schema",
                         "json_schema": {"name": "reply", "schema": schema, "strict": True},
                     }
+                    # a reply held to a schema has no room for thinking aloud (CS0)
+                    if fields := self._thinking_fields(route.external, False):
+                        extra["extra_body"] = fields
                 stream = await client.chat.completions.create(
                     model=route.model,
                     stream=True,

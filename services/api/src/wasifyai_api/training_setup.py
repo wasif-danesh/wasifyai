@@ -232,6 +232,8 @@ class TrainingSetup:
     """What the engine holds for the trainer's component: what is there, what it would take, and
     the install."""
 
+    step_text = STEP_TEXT  # what each step says on the screen; not a field
+
     data_dir: Path
     lock: Path | None = None  # the hashed requirements; None where this build has none
     uv: str | None = None
@@ -321,10 +323,10 @@ class TrainingSetup:
         if confirm_bytes != self.missing_bytes():
             raise InstallError("The size shown is out of date. Look at it again.")
         if self.running:
-            raise InstallError("The trainer is already being set up.")
+            raise InstallError("It is already being set up.")
         if self.missing_bytes() == 0:
-            raise InstallError("The trainer is already set up.")
-        self.progress = Progress("installing", STEPS[0], STEP_TEXT["disk"], 0, confirm_bytes)
+            raise InstallError("It is already set up.")
+        self.progress = Progress("installing", STEPS[0], self.step_text["disk"], 0, confirm_bytes)
         self._task = asyncio.create_task(self._run())
 
     def cancel(self) -> bool:
@@ -357,7 +359,7 @@ class TrainingSetup:
         self.progress = Progress(
             "installing",
             step,
-            STEP_TEXT[step],
+            self.step_text[step],
             p.done_bytes if done is None else done,
             p.total_bytes,
         )

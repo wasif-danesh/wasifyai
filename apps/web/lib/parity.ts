@@ -21,6 +21,11 @@ export const PARITY: Record<string, Parity> = {
     status: "live",
     note: "shared My creations screen (search by meaning, a filter for each kind, cards or a table); the desktop's Library is the same screen",
   },
+  creative: {
+    status: "soon",
+    note: "Creative Studio (ADR-0090): desktop first; the web needs the analysis tool and the plan job on an engine worker",
+    accepted: "owner, 2026-10-24 (ADR-0090)",
+  },
   model3d: {
     status: "live",
     note: "shared Model3d screen; Pixal3D runs as a job on an engine worker (ADR-0087, P3), rows in Postgres, files in storage",

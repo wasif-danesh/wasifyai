@@ -56,6 +56,7 @@ class EngineServices:
     audio: Any = None  # a SpeechEngine: the desktop's runtime, or hosted and worker speech
     video_builder: Any = None  # the Motion graphics render engine (ADR-0077)
     model3d: Any = None  # the 3D engine (ADR-0080)
+    music_analysis: Any = None  # the tool that finds a song's beats (ADR-0090)
     training: Any = None  # the picture trainer (ADR-0073)
     video_training: Any = None
     language_training: Any = None  # the writing trainer (ADR-0074)
@@ -92,6 +93,8 @@ class EngineServices:
     notebooks_runtime: Any = None
     builder_renders: Any = None
     model3d_jobs: Any = None
+    creative_store: Any = None  # Creative Studio's projects (ADR-0090)
+    creative_jobs: Any = None
     model3d_notices: Any = None
     training_runs: Any = None
     training_captions: Any = None

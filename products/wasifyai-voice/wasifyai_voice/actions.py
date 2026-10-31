@@ -33,6 +33,7 @@ from wasifyai_platform_sdk.actions import (
     RunBinding,
     need_model,
     need_product,
+    need_runtime,
 )
 from wasifyai_platform_sdk.actions.helpers import need_deps, save_copy
 from wasifyai_platform_sdk.folders import PathRefused
@@ -40,7 +41,7 @@ from wasifyai_platform_sdk.media_upload import process_audio
 from wasifyai_platform_sdk.uploads import UploadError
 from wasifyai_platform_sdk.voice_models import MAX_DESCRIPTION_CHARS, MAX_SPEAK_CHARS
 
-from wasifyai_voice import audio_input, audiobook, dubbing, export, reference
+from wasifyai_voice import audio_input, audiobook, dubbing, export, lyric_timing, reference
 from wasifyai_voice.runtime import PRODUCT_ID, NotAvailable, engine_for, store_for
 from wasifyai_voice.store import NotFound, VoiceStore, new_id
 
@@ -382,6 +383,87 @@ async def _transcribe(p: TranscribeIn, ctx: ActionContext) -> Outcome:
         "The recording was written down and saved to the library as a transcript:\n"
         + text[:OUTPUT_TEXT_CHARS],
     )  # fmt: skip
+
+
+# ---- music.analyse ----------------------------------------------------------------------------
+
+
+class AnalyseIn(Strict):
+    track_id: str = Field(min_length=1, max_length=64, description="The song in Your music.")
+    lyrics: str | None = Field(
+        None, max_length=20000,
+        description="The words of the song, typed. Left out, the words the song was made with are "
+        "used. Speech recognition only gives their times; it never changes them.",
+    )  # fmt: skip
+
+
+class AnalyseOut(BaseModel):
+    track_id: str
+    title: str
+    seconds: float
+    bpm: float
+    beats: list[float]
+    downbeats: list[float]
+    sections: list[dict[str, Any]] = Field(
+        description="start, end and an energy label (low, mid, high). No names like verse or "
+        "chorus."
+    )
+    lines: list[dict[str, Any]] = Field(description="The typed lines: text, start, end.")
+    lines_timed: bool = Field(description="False when the times of the lines could not be found.")
+
+
+async def _line_times(ctx: ActionContext, data: bytes, lyrics: str) -> list[dict[str, Any]]:
+    """The typed lines with their times. A song that cannot be followed keeps its beats: a speech
+    model that is not there, or does not know the language, leaves the lines without times."""
+    if not lyric_timing.lyric_lines(lyrics):
+        return []
+    try:
+        eng = _engine(ctx)
+        chosen = eng.resolve("transcribe", None)
+        wav, _ = await audio_input.at_rate(data, "audio.wav", 16000, 1)
+        heard = await eng.transcribe(chosen, wav, check_transcribe(chosen, None))
+    except (ActionRefused, VoiceEngineError, VoiceRequestError, audio_input.AudioInputError):
+        log.info("the lines of a song could not be timed", exc_info=True)
+        return []
+    segments = [{"start": s.start, "end": s.end, "text": s.text} for s in heard.segments]
+    return lyric_timing.timed_lines(lyrics, segments)
+
+
+async def _analyse(p: AnalyseIn, ctx: ActionContext) -> Outcome:
+    state, store = _state(ctx), _store(ctx)
+    tool = state.music_analysis
+    data, row = await _recording(ctx, "track", p.track_id)
+    who = (ctx.actor.tenant_id, ctx.actor.user_id, p.track_id)
+    lyrics = row["lyrics"] if p.lyrics is None else p.lyrics
+    kept = await asyncio.to_thread(store.get_analysis, *who)
+    found = kept["analysis"] if kept else None
+    if found is None:
+        try:
+            found = await tool.analyse(data)
+        except tool.Failed as e:
+            return Outcome.error(str(e), "analysis_failed")
+    if kept and kept["lyrics"] == lyrics:
+        lines = kept["lines"]
+    else:
+        lines = await _line_times(ctx, data, lyrics)
+    if not kept or kept["lyrics"] != lyrics:
+        await asyncio.to_thread(store.set_analysis, *who, found, lyrics, lines)
+    timed = bool(lines)
+    if not timed:
+        lines = [
+            {"text": text, "start": None, "end": None} for text in lyric_timing.lyric_lines(lyrics)
+        ]
+    result = {
+        "track_id": p.track_id, "title": row["title"], "seconds": found["seconds"],
+        "bpm": found["bpm"], "beats": found["beats"], "downbeats": found["downbeats"],
+        "sections": found["sections"], "lines": lines, "lines_timed": timed,
+    }  # fmt: skip
+    return Outcome.ok(
+        result,
+        f"{row['title']}: about {found['bpm']:.0f} beats a minute, "
+        f"{len(found['sections'])} sections"
+        + (f", {len(lines)} lines with times." if timed else "; the lines have no times."),
+    )
 
 
 # ---- voice.* ----------------------------------------------------------------------------------
@@ -991,6 +1073,20 @@ def actions() -> list[Action]:
             effect="make", flags=("private",), requires=(HERE, need_model("separate")), long=True,
             product=PRODUCT_ID, ui="music.separate",
             bind=_run("parts", _separate_input, _tracks_result("parts"), _check_source),
+        ),
+        Action(
+            id="music.analyse", title="Find the beats of a song",
+            summary="Find a song's beats, downbeats, sections and when its lines are sung.",
+            description=(
+                "Work out what a video needs to know about a song of the library: its tempo, beats "
+                "and downbeats, its sections (start, end, how loud, no names like verse or chorus) "
+                "and when each typed line is sung. Nothing leaves this computer. It takes a few "
+                "seconds and is kept with the song. Lines may have no times, for instance in a "
+                "language the speech model does not know."
+            ),
+            input=AnalyseIn, output=AnalyseOut, examples=({"track_id": SAMPLE_ID},),
+            effect="make", flags=("private",), requires=(HERE, need_runtime("music_analysis")),
+            long=True, product=PRODUCT_ID, bind=CallBinding(_analyse), ui="creative",
         ),
         Action(
             id="dub.script", title="Write the dub script",

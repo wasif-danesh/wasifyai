@@ -8,6 +8,7 @@
 import {
   BookOpen,
   Box,
+  Clapperboard,
   FilePlus2,
   FileText,
   Film,
@@ -97,6 +98,7 @@ export const MENU_GROUPS: MenuGroupDef[] = [
 /** The single items above and below the groups. */
 export const CHAT_ITEM: MenuItemDef = { id: "chat", label: "New chat", icon: SquarePen };
 export const EXTRA_ITEMS: MenuItemDef[] = [
+  { id: "creative", label: "Creative Studio", icon: Clapperboard },
   { id: "motion", label: "Motion graphics", icon: Shapes },
   { id: "model3d", label: "3D model", icon: Box },
   { id: "library", label: "Library", icon: Library },

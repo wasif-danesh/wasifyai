@@ -72,6 +72,7 @@ export function MyCreations({
     !recent.lipsyncs.length &&
     !recent.others?.models3d.length &&
     !recent.others?.compositions.length &&
+    !recent.others?.creativeProjects.length &&
     !recent.others?.notebooks.length &&
     !recent.others?.taught.length;
 

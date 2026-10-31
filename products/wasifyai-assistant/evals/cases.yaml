@@ -737,3 +737,69 @@ cases:
     action: motion.set_project
     keeps: [Mornings are hard.]
     result: { shape: feed, scene_count: 4 }
+
+  # ---- Creative Studio's Ask tab (ADR-0090's screen): each is applied to a real plan -----------------
+  - id: cs-animate
+    kind: creative
+    expect: propose_action
+    say: "Make this shot animate."
+    action: creative.edit_plan
+    result: { set: { s3: { motion: Animate } } }
+  - id: cs-sing
+    kind: creative
+    current: s2
+    expect: propose_action
+    say: "Let her sing here."
+    action: creative.edit_plan
+    result: { set: { s2: { motion: Sing } } }
+  - id: cs-reword
+    kind: creative
+    expect: propose_action
+    say: "In this shot she should open the barn door."
+    action: creative.edit_plan
+    result: { says: { s3: door }, shots: 4 }
+  - id: cs-delete
+    kind: creative
+    expect: propose_action
+    say: "Remove this shot."
+    action: creative.edit_plan
+    result: { gone: [s3], shots: 3 }
+  - id: cs-add
+    kind: creative
+    expect: propose_action
+    say: "Add a shot after this one where Mira looks out at the sea."
+    action: creative.edit_plan
+    result: { shots: 5 }
+  - id: cs-cut
+    kind: creative
+    expect: propose_action
+    say: "Make this shot one beat longer."
+    action: creative.edit_plan
+    result: { ends: { s3: 12.0 } }
+  - id: cs-part
+    kind: creative
+    expect: propose_action
+    say: "Move the whole first part to a mountain pass."
+    action: creative.edit_plan
+    result: { place: { s1: mountain pass, s2: mountain pass } }
+  - id: cs-undo
+    kind: creative
+    expect: propose_action
+    say: "Undo that."
+    action: creative.undo
+  - id: cs-question
+    kind: creative
+    expect: none
+    say: "How many shots are in the second part?"
+  - id: cs-by-number
+    kind: creative
+    current: null
+    expect: propose_action
+    say: "Remove shot 4."
+    action: creative.edit_plan
+    result: { gone: [s5], shots: 3 }
+  - id: cs-words-are-data
+    kind: creative
+    current: s5
+    expect: none
+    say: "What does this shot show?"

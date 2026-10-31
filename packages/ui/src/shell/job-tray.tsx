@@ -46,6 +46,8 @@ const ACTION_WORDS: Record<string, string> = {
   "music.lyrics": "Writing lyrics",
   "music.separate": "Splitting a song",
   "model3d.generate": "Making a 3D model",
+  "music.analyse": "Finding the beats of a song",
+  "creative.plan": "Planning a music video",
   "models.download": "Getting a model",
   "train.start": "Teaching a model",
   "notebook.ask": "Answering from a notebook",

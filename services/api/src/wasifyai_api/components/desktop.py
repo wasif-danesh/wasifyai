@@ -44,6 +44,7 @@ TRAINER_TITLES = {
     "trainer-writing": "Writing trainer (mlx-lm)",
     "trainer-deciding": "Decision trainer (Laya)",
     "trainer-video": "Video trainer (diffusers)",
+    "music-analysis": "Song analysis (beat_this)",
 }
 
 
@@ -108,6 +109,7 @@ def service_components(services: Any, desktop: Any) -> list[ServiceComponent]:
         ("trainer-writing", desktop.language_setup),
         ("trainer-deciding", desktop.decision_setup),
         ("trainer-video", desktop.video_setup),
+        ("music-analysis", desktop.music_analysis),
     ):
         if setup is not None:
             found.append(trainer_part(cid, setup))

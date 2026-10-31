@@ -89,7 +89,7 @@
 | [0087](0087-engine-workers-run-the-desktops-capabilities-for-the-web.md) | Engine workers run the desktop's capabilities for the web | Accepted for P0 and P1 |
 | [0088](0088-one-job-per-person-before-go-live.md) | One job per person across everything before go live, built so the rule can loosen | Accepted (not built) |
 | [0089](0089-models-page-as-tabs-and-tables.md) | The Models page is tabs with a table each, on the desktop and the web | Accepted |
-| [0090](0090-creative-studio.md) | Creative Studio: one project from an idea to a finished video (a plan, shots, a cut), Maestro's concepts built on our own parts; nothing copied | Accepted (2026-10-24; nothing built, CS0 waits for the owner) |
+| [0090](0090-creative-studio.md) | Creative Studio: one project from an idea to a finished video (a plan, shots, a cut), Maestro's concepts built on our own parts; nothing copied | Accepted (2026-10-24; CS0 done, CS1 and the screen amendment's first stage built 2026-10-31, desktop only; CS2 next) |
 | [0091](0091-styles-in-the-image-screens.md) | Styles (LoRAs) in the image screens: add, check, stack and reuse them (Unsloth's features as ideas, nothing copied) | Accepted (2026-10-25; nothing built, S0 waits for the owner) |
 | [0092](0092-principals-scopes-and-the-secret-store.md) | Principals, scopes and the secret store: who is calling, what they may do, where keys live (stages F3 and F4 of the 2026-10-27 plan; API keys were dropped on 2026-10-28) | Proposed (F3 and F4 built 2026-10-27) |
 | [0093](0093-one-shell-one-make-screen.md) | One shell and one make screen for every product: the UI audit of 2026-10-27 and its plan (`docs/ui-improvement-plan.md`, stages U0 to U12) | Accepted (2026-10-30; U0 to U12 built) |

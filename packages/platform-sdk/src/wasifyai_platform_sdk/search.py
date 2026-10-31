@@ -26,6 +26,7 @@ CreationKind = Literal[
     "composition",
     "model3d",
     "lora",
+    "creative_project",
 ]
 KINDS: tuple[str, ...] = (
     "song",

@@ -205,6 +205,8 @@ export {
 export { type MenuLink, SideMenu, type SideMenuProps } from "./shell/SideMenu";
 export type { RecentChat, Recents } from "./shell/RecentChats";
 export { VideoBuilder, type VideoBuilderProps } from "./videobuilder/VideoBuilder";
+export { Creative, type CreativeProps, type CreativeSong } from "./creative/Creative";
+export type { CreativeAssistant, CreativeScreen } from "./creative/MakePanel";
 export { Model3d, type Model3dProps } from "./model3d/Model3d";
 export type { CandidateApi } from "./model3d/Candidates";
 export {

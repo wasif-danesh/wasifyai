@@ -110,6 +110,7 @@ The rest of what is built on the desktop is one page per area under `docs/deskto
 - [Speech, music, lip sync, dubbing and audiobooks](desktop/voice.md)
 - [Video and Video Builder](desktop/video.md)
 - [3D models](desktop/model3d.md)
+- [Creative Studio](desktop/creative.md)
 - [Other apps: the MCP server and the launcher](desktop/connections.md)
 
 ## Updates of the app

@@ -248,6 +248,15 @@ concepts:
       - { lang: es, text: "un modelo 3D de una taza con forma de rana verde" }
       - { lang: en, text: "3D model of a frog coffee cup" }
       - { lang: bn, text: "সবুজ ব্যাঙের আকারের কফি মগের থ্রিডি মডেল" }
+  - id: dawn-drive-video-plan
+    items:
+      - { kind: creative_project, lang: en, text: "Drive home at dawn. A music video plan. Mira drives a grey car along an empty coast road, stops at a petrol station, and reads an old letter as the sun comes up." }
+      - { kind: song, lang: es, text: "Conduciendo al amanecer. Balada de carretera. Vuelvo a casa por la costa vacía con una carta vieja." }
+      - { kind: image, lang: de, text: "Ein grauer Wagen auf einer leeren Küstenstraße im Morgengrauen, die Sonne geht über dem Meer auf" }
+    queries:
+      - { lang: en, text: "the music video plan about driving along the coast at sunrise" }
+      - { lang: fr, text: "le clip d'une femme qui conduit sur la côte à l'aube" }
+      - { lang: es, text: "plan de un videoclip de un viaje en coche al amanecer" }
 nomatch:
   - { lang: en, text: "a submarine exploring a deep sea trench" }
   - { lang: es, text: "una panadera amasando pan en la cocina" }

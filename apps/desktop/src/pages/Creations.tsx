@@ -38,6 +38,7 @@ export function navFor(go: (r: Route) => void, handOff?: HandOff): CreationsNav 
     lipsync: "lipsync",
     model3d: "model3d",
     composition: "videobuilder",
+    creative_project: "creative",
     taught: "train",
   } as const satisfies Record<string, Route>;
   const make = {

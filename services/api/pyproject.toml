@@ -28,7 +28,7 @@ dependencies = [
 # The desktop profile runs the media worker inside the engine process (ADR-0056). The notebooks
 # product is named so that its own packages (the chunker, the search model runtime, Word and PDF
 # writers) and the video product's (a still from each clip) are in the hashed lock the app installs from (scripts/build-engine-bundle.sh).
-desktop = ["wasifyai-media-worker", "wasifyai-notebooks", "wasifyai-voice", "wasifyai-video", "wasifyai-model3d", "wasifyai-training"]
+desktop = ["wasifyai-media-worker", "wasifyai-notebooks", "wasifyai-voice", "wasifyai-video", "wasifyai-model3d", "wasifyai-training", "wasifyai-creative"]
 
 [build-system]
 requires = ["hatchling"]

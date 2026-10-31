@@ -34,6 +34,86 @@
   "body": "# Find the chapters\n\nAction: `audiobook.plan`\n\n## What it is for\n\nFind the chapters of a long text and how long each takes to read aloud. Nothing is spoken.\n\n## Steps in the app\n\n1. Open **Voice › Audiobook**.\n2. Paste or open the text and choose **Find the chapters**; they are listed on the right to read and change.\n\n## Fields\n\n- `text`: The book.\n- `target`: About how long a chapter is, when the text has no headings.\n\n## Limits\n\n- Up to 400,000 characters; 200 chapters.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- How many chapters is this book?\n\n## Problems\n\n- **Too long** Split the text into two books."
  },
  {
+  "action": "creative.add_media",
+  "title": "Add to a project",
+  "screen": "creative",
+  "synonyms": [
+   "add to the project",
+   "use this picture in the video",
+   "add from the library",
+   "put this in the project"
+  ],
+  "body": "# Add to a project\n\nAction: `creative.add_media`\n\n## What it is for\n\nMake a picture, clip, song, speech, lip sync, 3D model or motion graphic from the Library part of a project in Creative Studio, so it shows in that project's media rail. Nothing is copied: it stays in the Library.\n\n## Steps in the app\n\n1. Open the project in **Creative Studio**.\n2. Select a shot, if it is meant for one.\n3. Open the **Add** tab and choose the thing.\n\n## Fields\n\n- `project_id`: The project.\n- `kind`: `image`, `video`, `track`, `speech`, `lipsync`, `model3d` or `composition`.\n- `item_id`: The thing in the Library.\n- `shot_id`: The shot it is meant for, if any.\n\n## Limits\n\n- Dropping in a file from outside the Library comes with the Shots step.\n- Being in the rail does not put a thing in the video yet: the Shots and Cut steps do that.\n\n## Needs\n\n- The thing in your Library.\n\n## Examples\n\n- Add a picture of the red barn to shot 3.\n\n## Problems\n\n- \"That is not in the library\": it was deleted."
+ },
+ {
+  "action": "creative.edit_plan",
+  "title": "Change a plan",
+  "screen": "creative",
+  "synonyms": [
+   "change a shot",
+   "edit the plan",
+   "rewrite a shot",
+   "move a cut",
+   "delete a shot",
+   "add a shot",
+   "change the motion",
+   "undo a plan change"
+  ],
+  "body": "# Change a plan\n\nAction: `creative.edit_plan`\n\n## What it is for\n\nChange the plan of a project in Creative Studio: what a shot shows, whether it holds, animates or sings,\nits place or camera; remove or add a shot; move a cut by whole beats. The plan stays whole: the shots\nstill cover the song from start to end, and only people of the cast appear. Each change can be undone.\n\n## Steps in the app\n\n1. Open **Creative Studio** and open a project.\n2. Change the words of a shot, its motion or its place. Use the arrows to move a cut by one beat, or\n   remove or add a shot.\n3. Choose **Undo** to take a change back.\n\nOr ask in the **Ask** tab: select a shot and say what should change. The change applies at once, and its card\nhas its own **Undo**.\n\n## Fields\n\n- `project_id`: The project.\n- `edits`: The changes, in order. Each has `op`: `set_shot` (with `shot_id` and the fields to change),\n  `delete_shot` (`shot_id`), `add_shot` (`after`, a shot's id, and `shows`) or `move_cut` (`shot_id` and\n  `by_beats`, a whole number; the cut at the end of that shot moves).\n\n## Limits\n\n- A change that would break the plan is refused as a whole, and nothing changes.\n- Cuts move by whole beats, so they stay on the music. Dragging comes later.\n- Changing how fast it cuts means planning again.\n\n## Needs\n\n- A project with a plan.\n\n## Examples\n\n- In my dawn drive project, make shot 3 animate.\n- Move the cut after shot 5 one beat later and remove shot 6.\n\n## Problems\n\n- **That would leave a shot with no length** A cut cannot move past the next one. Move it fewer beats.\n- **The last shot ends with the song** The end of the last shot cannot move.\n- **There is no plan to change yet** Plan the project first."
+ },
+ {
+  "action": "creative.plan",
+  "title": "Plan a music video",
+  "screen": "creative",
+  "synonyms": [
+   "music video",
+   "plan a music video",
+   "video for my song",
+   "shot list",
+   "storyboard",
+   "plan shots",
+   "cut to the beat",
+   "make a video from a song",
+   "creative studio"
+  ],
+  "body": "# Plan a music video\n\nAction: `creative.plan`\n\n## What it is for\n\nTurn a song and an idea into a plan you can change: the cuts follow the beats, and each shot says what\nis seen, who is in it, where, how the camera moves and whether it holds or moves. Only words are made at\nthis stage, no pictures or clips. Your typed lyrics stay exactly as you wrote them.\n\n## Steps in the app\n\n1. Open **Creative Studio**.\n2. Choose **New project**. Pick a song from Your music, say what the video is about, and add the look,\n   the people and the places. Type the song's words if you have them. Choose the shape and how fast it\n   cuts.\n3. Choose **Plan it**. You can stop at any time and go on later from where it stopped.\n4. Read the plan, then change it: see `creative.edit_plan`.\n\n## Fields\n\n- `brief.track_id`: The song in Your music.\n- `brief.idea`: What the video is about.\n- `brief.style`: The look, in your own words.\n- `brief.cast`: The people, each with a `name`, fixed words for how they look (`look`) and\n  `photos_only` when they are only ever seen in photographs.\n- `brief.places`: The places, in the order the story visits them.\n- `brief.lyrics`: The words of the song, typed.\n- `brief.shape`: landscape, portrait or square.\n- `brief.cut_speed`: From -2 (few long shots) to 2 (many short ones). 0 is the middle.\n- `title`: A name for the project.\n\n## Limits\n\n- The time depends on the chat model you chose. Measured on an M5 Pro with Qwen3-8B: 44 s for a 3-minute\n  song, 31 to 49 s for a 90 second one. A 27B model on Ollama took about 9 minutes for 90 seconds.\n- The writing is a first draft. Details can drift from shot to shot, and some lines cannot be filmed;\n  expect to change some of them. A shot the model could not write gets plain words and a mark, so you\n  can see which ones to rewrite.\n- Changing how fast it cuts means planning again.\n- At this stage nothing is drawn. Shots and the cut come in later stages.\n- Desktop only for now.\n\n## Needs\n\n- Music analysis set up (about 970 MB, shown before it starts).\n- A language model, chosen with the model button.\n- A song in Your music.\n\n## Examples\n\n- Plan a music video for my song \"Drive home\": a woman drives home along the coast at dawn.\n- Make a shot list for this track, vertical, with fast cuts.\n\n## Problems\n\n- **The plan stopped when the app closed** It keeps what it had. Open the project and choose **Go on**.\n- **Choose a language model first** The plan is written by the model you chose.\n- **It is very slow** Choose a smaller chat model with the model button; 8B is the size it was measured on.\n- **Some shots are marked plain** The model's sentence did not pass the checks, so the shot says what the\n  beat says. Rewrite it, or choose **Try another idea** on that part.\n- **A plan is already being made** One plan at a time. Wait for it or stop it."
+ },
+ {
+  "action": "creative.read_project",
+  "title": "Read a plan",
+  "screen": "creative",
+  "synonyms": [
+   "read the plan",
+   "what shots are in this video",
+   "what does the plan say",
+   "show the shots"
+  ],
+  "body": "# Read a plan\n\nAction: `creative.read_project`\n\n## What it is for\n\nRead the plan of a project in Creative Studio: its idea, its cast, its parts, and every shot with its times, motion, camera, place and words. The assistant in the project's Ask tab works from this.\n\n## Steps in the app\n\n1. Open **Creative Studio** and open a project. The plan is on the screen.\n\n## Fields\n\n- `project_id`: The project.\n- `shot_id`: The shot the person has selected, if any.\n\n## Limits\n\n- It only reads.\n\n## Needs\n\n- Nothing else.\n\n## Examples\n\n- \"What happens in the second part?\"\n\n## Problems\n\n- \"That project is not in the library\": it was deleted, or it belongs to someone else."
+ },
+ {
+  "action": "creative.remove_media",
+  "title": "Take out of a project",
+  "screen": "creative",
+  "synonyms": [
+   "take out of the project",
+   "remove from the project",
+   "take this out of the rail"
+  ],
+  "body": "# Take out of a project\n\nAction: `creative.remove_media`\n\n## What it is for\n\nTake a thing out of a project in Creative Studio. It stays in the Library.\n\n## Steps in the app\n\n1. Open the project in **Creative Studio**.\n2. In the media rail, choose the cross on the thing.\n\n## Fields\n\n- `project_id`: The project.\n- `kind`: What kind of thing it is.\n- `item_id`: The thing in the Library.\n\n## Limits\n\n- The project's song cannot be taken out here. Change the song in the brief.\n\n## Needs\n\n- Nothing else.\n\n## Examples\n\n- Take the second picture out of this project.\n\n## Problems\n\n- \"That project is not in the library\": it was deleted, or it belongs to someone else."
+ },
+ {
+  "action": "creative.undo",
+  "title": "Undo a change to a plan",
+  "screen": "creative",
+  "synonyms": [
+   "undo the plan",
+   "take that back",
+   "go back a change",
+   "undo that change"
+  ],
+  "body": "# Undo a change to a plan\n\nAction: `creative.undo`\n\n## What it is for\n\nTake back the last change to the plan of a project in Creative Studio.\n\n## Steps in the app\n\n1. Open the project in **Creative Studio**.\n2. Choose **Undo** above the plan, or **Undo** on the assistant's card in the Ask tab.\n\n## Fields\n\n- `project_id`: The project.\n\n## Limits\n\n- The last 30 plans of a project are kept, so it goes back that far.\n- It cannot go back past the first plan.\n\n## Needs\n\n- A project with a change to take back.\n\n## Examples\n\n- \"Undo that.\"\n\n## Problems\n\n- \"There is nothing to undo\": this is the project's first plan.\n- \"The plan is being written\": wait for it to finish, or stop it."
+ },
+ {
   "action": "decision.decide",
   "title": "Decide with a model I taught",
   "screen": "train",
@@ -522,6 +602,23 @@
    "several scenes"
   ],
   "body": "# Write a video of several scenes\n\nAction: `motion.write_scenes`\n\n## What it is for\n\nStart a video made of several scenes, one after another: for a product promotion, an advert or a social post. Each scene is a title, a quote, a chart, a name strap or captions, and has its own words, length and look. Nothing is drawn until you make the video. Open it in **Motion graphics** to change it scene by scene.\n\n## Steps in the app\n\n1. Open **Motion graphics** and choose **Video with scenes**, or ask the assistant for the video you want.\n2. Write each scene, and see it in the preview.\n3. Choose **Make the video**.\n\n## Fields\n\n- `name`: The project's name.\n- `shape`: landscape, portrait or square, for the whole video.\n- `font`: sans or serif, for the whole video.\n- `scenes`: The scenes in order. Each has a `kind` (title, quote, chart, lower_third or captions), its `fields`, and an optional `name`, `caption` and `transition` (none, fade or slide). A scene is 5 seconds unless `seconds` says otherwise.\n\n## Limits\n\n- Up to 30 scenes and 90 seconds in all.\n- Your words are shown exactly as given.\n\n## Needs\n\n- Writing a project needs nothing else. Motion graphics must be set up to make the video.\n\n## Examples\n\n- \"A 15 second vertical ad for my coffee, three scenes.\"\n\n## Problems\n\n- A scene or project that does not fit is refused, and the message says what to change. Nothing changes until it is right."
+ },
+ {
+  "action": "music.analyse",
+  "title": "Find the beats of a song",
+  "screen": "creative",
+  "synonyms": [
+   "find the beats",
+   "beat detection",
+   "tempo of a song",
+   "bpm",
+   "downbeats",
+   "song sections",
+   "time the lyrics",
+   "when are the lines sung",
+   "analyse a song"
+  ],
+  "body": "# Find the beats of a song\n\nAction: `music.analyse`\n\n## What it is for\n\nWork out what a music video needs to know about a song in Your music: its tempo, every beat and\ndownbeat, where its sections start and end and how loud each one is, and when each typed line is\nsung. The answer is kept with the song, so asking again is instant. Sections have no names such as\nverse or chorus: the tool gives where they change and how loud they are, nothing more.\n\n## Steps in the app\n\n1. Open **Creative Studio**.\n2. Choose **New project**, pick a song and type its words if you have them.\n3. Choose **Plan it**. The song is analysed first, as the first step of the plan.\n\n## Fields\n\n- `track_id`: The song in Your music.\n- `lyrics`: The words of the song, typed. Left out, the words the song was made with are used.\n  Speech recognition only finds when they are sung. It never changes them.\n\n## Limits\n\n- Beat times come from beat_this on the computer's processor; a 90 second song takes a few seconds.\n- A steady song gives steady beats. On a song with a loose rhythm the beats can be uneven, and nobody\n  has checked them against a person tapping along.\n- Line times work in the languages the speech model knows, in practice English today. Bengali gets\n  its words but no times. Lines with no times still appear in the plan.\n\n## Needs\n\n- Music analysis set up (a download of about 970 MB, shown before it starts). Only Apple-silicon Macs\n  for now.\n- A speech model only for line times; without one the beats still work.\n\n## Examples\n\n- Find the beats of my song \"Drive home\".\n- What is the tempo of this track, and when does the first line start?\n\n## Problems\n\n- **Set up music analysis first** The download has not been done. Creative Studio offers it, with its\n  size.\n- **The lines have no times** The speech model could not follow the words in fewer than a quarter of\n  the lines. The plan still works; place the words yourself.\n- **Song not found** The song was deleted, or belongs to another account."
  },
  {
   "action": "music.generate",

@@ -3,6 +3,7 @@ import {
   AudioLines,
   BookOpen,
   Box,
+  Clapperboard,
   GraduationCap,
   type LucideIcon,
   Mic,
@@ -81,6 +82,7 @@ const picture = cn(coverTile, "rounded-lg");
 const ICON: Partial<Record<Entry["kind"], LucideIcon>> = {
   model3d: Box,
   composition: Shapes,
+  creative_project: Clapperboard,
   notebook: BookOpen,
   taught: GraduationCap,
 };

@@ -34,6 +34,7 @@ LIBRARY_KINDS = (
     "composition",
     "model3d",
     "lora",
+    "creative_project",
 )
 Kind = Literal[
     "image",
@@ -47,6 +48,7 @@ Kind = Literal[
     "composition",
     "model3d",
     "lora",
+    "creative_project",
 ]
 MAX_STATUS_LINES = 12
 MAX_WAIT = 50.0

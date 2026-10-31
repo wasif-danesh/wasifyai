@@ -128,7 +128,8 @@ def test_what_this_computer_can_do_says_what_is_missing(engine):
     assert states["library.search"]["state"] == "ready"
     speak = states["speech.speak"]
     assert speak["state"] == "needs_setup" and speak["step"]  # no speech model on a fresh install
-    assert "speech.speak" in r.text
+    # the words list the first few, in order, and say how many more
+    assert "audiobook.make" in r.text and "more." in r.text
     assert "disk_free_bytes" in r.output["facts"]
     setup = engine.run("speech.speak", {"text": "Hello"})
     assert setup.status == "needs_setup" and setup.setup.ui == "models"  # type: ignore[union-attr]

@@ -35,7 +35,8 @@ describe("the window's side menu", () => {
     for (const [id, route] of Object.entries(ROUTES)) {
       expect(routePath(route), id).toBeTruthy();
       expect(
-        ids.includes(id) || ["motion", "model3d", "library", "models", "train"].includes(id),
+        ids.includes(id) ||
+          ["creative", "motion", "model3d", "library", "models", "train"].includes(id),
         id,
       ).toBe(true);
     }

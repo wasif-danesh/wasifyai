@@ -12,6 +12,7 @@ members = [
     "wasifyai-api",
     "wasifyai-assistant",
     "wasifyai-contracts",
+    "wasifyai-creative",
     "wasifyai-engine-worker",
     "wasifyai-image",
     "wasifyai-media-worker",
@@ -3254,6 +3255,7 @@ dependencies = [
 
 [package.optional-dependencies]
 desktop = [
+    { name = "wasifyai-creative" },
     { name = "wasifyai-media-worker" },
     { name = "wasifyai-model3d" },
     { name = "wasifyai-notebooks" },
@@ -3282,6 +3284,7 @@ requires-dist = [
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
     { name = "wasifyai-contracts", editable = "packages/contracts" },
+    { name = "wasifyai-creative", marker = "extra == 'desktop'", editable = "products/wasifyai-creative" },
     { name = "wasifyai-media-worker", marker = "extra == 'desktop'", editable = "services/media-worker" },
     { name = "wasifyai-model3d", marker = "extra == 'desktop'", editable = "products/wasifyai-model3d" },
     { name = "wasifyai-notebooks", marker = "extra == 'desktop'", editable = "products/wasifyai-notebooks" },
@@ -3323,6 +3326,23 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "pydantic", specifier = ">=2.9" }]
+
+[[package]]
+name = "wasifyai-creative"
+version = "0.0.0"
+source = { editable = "products/wasifyai-creative" }
+dependencies = [
+    { name = "langgraph" },
+    { name = "pydantic" },
+    { name = "wasifyai-platform-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "langgraph", specifier = ">=0.6" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
+]
 
 [[package]]
 name = "wasifyai-engine-worker"

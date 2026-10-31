@@ -1,8 +1,9 @@
 # ADR-0090: Creative Studio: one project that goes from an idea to a finished video (a plan, shots, a cut), built from Maestro's concepts on our own parts
 
-- **Status:** Accepted (owner, 2026-10-24: "I'll go with your pick" on all seven questions, recorded in "Owner's answers" below). **Nothing is
-  built or started; stage CS0 (the measuring spike) starts only when the owner says.** "Creative Studio" is the owner's working name.
-- **Order and shared parts:** ADR-0096 (2026-10-31): the Motion graphics editor is built first; its screen frame, media rail, Make panel and docked assistant are shared with this product. The consent, safeguard and terms parts below were removed by ADR-0094. CS0 still waits for the owner.
+- **Status:** Accepted (owner, 2026-10-24: "I'll go with your pick" on all seven questions, recorded in "Owner's answers" below). **CS0 is
+  done: the owner watched the excerpts on 2026-10-31 and said go (`docs/spikes/creative-cs0.md`). Its results are written into the decisions
+  below. CS1 is built (2026-10-31; "Built" below): a song becomes an editable plan on the desktop. The screen amendment was accepted the same day and its first stage is built ("The screen" under "Built"); CS2 is next.** "Creative Studio" is the owner's working name.
+- **Order and shared parts:** ADR-0096 (2026-10-31): the Motion graphics editor is built first; its screen frame, media rail, Make panel and docked assistant are shared with this product. The consent, safeguard and terms parts below were removed by ADR-0094.
 - **Date:** 2026-10-24
 - **Asked by:** the owner, 2026-10-24: study Maestro's Creative studio, Director and video editor, **do not use its code**, and plan how to
   adopt the concept.
@@ -59,7 +60,7 @@ plan, which shot is which, and the cut.
   sometimes a short animated clip, rarely a sung close-up** (the "motion level": Hold, Animate, Sing). The product must say so.
 * **Our planner is a 9B model** (ADR-0078), not a 27B one. That makes a *smaller* schema and *more* code checks the right trade.
 * **One model in memory at a time, one job per person** (ADR-0088). No overnight queue of many projects in v1; one project at a time.
-* **Mac first, English only in v1** (the lyrics may be any language the speech model knows).
+* **Mac first, English only in v1** (the lyrics may be any language a person can type; timed words come from the speech model, and CS0 found English works and Bengali does not).
 * **We have an assistant and an action catalogue.** Everything a person can do must also be an action (ADR-0068), so the assistant or
   an agent can say "make a music video of this song" and a person is still asked before anything costly.
 
@@ -84,35 +85,42 @@ plan, which shot is which, and the cut.
    remade only when the person says so.
 3. **The parts of the document.**
    * **Brief:** the skill (music video or story), the source (a song from Your music, a recording, or a written story), a one-line
-     idea and a style, a shape (landscape, vertical, square), a target length, the cast and places the person named, a language
-     note, and the review mode (Auto or Review each step).
-   * **Facts (made by code, not by the model):** for a song: length, tempo, beats, downbeats, sections with an energy label, timed
-     lyrics, and where each cut falls; for a story: a *story bible* of title, tone, ending, the cast and places.
-   * **Plan:** an *arc* (a few lines per section: what is seen, why, where, which camera) and *shots*. A shot has: id, start and end
-     (song seconds, snapped), a kind (*story*, *performance*, *b-roll*, *words*), what is shown in plain words, who is in it (cast
-     ids), the place, the camera (framing and movement), how it ends (so the next can start from it), how it continues (*independent*,
-     *starts from the last picture*), the lyric or spoken line it matches, the **motion level** (*Hold*, *Animate*, *Sing*) and
-     a note. Nothing about a model is in it.
+     idea and a style, a shape (landscape, vertical, square), a target length, the cast and places the person named, the typed lyrics
+     when the song has them, a language note, and the review mode (Auto or Review each step).
+   * **Facts (made by code, not by the model):** for a song: length, tempo, beats, downbeats, sections with their boundaries and an energy label (no
+     verse or chorus names: the tool does not give them), timed lyrics, and where each cut falls; for a story: a *story bible* of title, tone, ending, the cast and places.
+   * **Plan:** *beats* (what happens, and who) and *shots*. A shot has: id, start and end (song seconds, snapped), the beat it belongs
+     to, what is shown in plain words, who is in it (cast ids), the place, the camera (framing and movement), the lyric or spoken line
+     it matches, the **motion level** (*Hold*, *Animate*, *Sing*), a mark when it is a plain fallback row, and a note. Only *beats* and
+     *what is shown* come from the writer; code fills in the rest and the person can change any of it. Nothing about a model is in it.
+     A shot kind and how a shot ends and continues are left out: they were not in the schema that worked.
    * **Shots made:** per shot, the stills (one or more takes), the clip takes, which take is chosen, and what each cost in seconds.
    * **Cut:** the timeline (decision 7) and the exports.
-4. **Planning works like this, because the model is small.** (a) Code lays out the **slots** (decision 5). (b) The writer makes the
-   **arc** for the whole song first (a short JSON list the app gives it a schema for), then the **shots** in small batches. (c) Code
-   checks each row: times cover the song with no gap, cast and places exist, no filler phrases, no verbatim repeats unless the
+4. **Planning works like this, because the model is small.** (a) Code lays out the **slots** (decision 5). (b) Code sets the order of places, the
+   camera (a repeating cycle of framings, each with its own instruction) and the motion level (about 1 shot in 6 Animate). The writer
+   answers two questions, with array lengths set by the code: the **beats** for the whole song first
+   (`{"beats":[{"what","who"}]}`), then **one sentence per shot** in small batches (`{"shots":["..."]}`). The engine's schema support is
+   required: without it all 24 rows fell back in CS0. Letting the writer fill every field stayed valid but read as repetitive, stuck in one
+   place and ahead of the story. (c) Code checks each row: times cover the song with no gap, cast and places exist, no filler phrases, no verbatim repeats unless the
    writer marked a repeat on purpose with a reason, an action stays in one place. (d) A bad row is repaired a bounded number of times
    and otherwise replaced by a plain fallback row the person can see is plain. (e) Every batch is a **checkpoint**; a crash resumes
    at the first unfinished batch. (f) The **planning log** (what was asked, what came back) is shown, because it is how a person
-   understands a bad plan. Whether the 9B model can do this well on a Mac is **measured in stage CS0** before anything is built.
+   understands a bad plan. CS1 runs Qwen3.5-9B and Qwen3-8B again and chooses: on one run each in CS0, 8B
+   did at least as well (a plan for 24 shots in about 25 s on either).
 5. **Cuts come from the music, and the person can move them.** A pure, tested function takes the analysis (beats, downbeats, sections,
    timed words, optionally who sings) and the video model's longest clip, and returns slots: cut times scored on musical cues,
    snapped to beats and to the video frame grid, with a **cut speed** control from -2 (few, longer) to +2 (many, shorter). A slot
    longer than a clip can be is split at a beat. A clip is made a little longer when needed and trimmed, so the music never drifts.
-   Beat and section analysis needs a tool we do not ship yet (stage CS0 tries candidates; **nothing enters
-   the dependencies without the owner's yes**, CLAUDE.md "Ask before").
+   **Analysis is beat_this (CS1 tries the small checkpoint first) with librosa for sections**, chosen by CS0; allin1 would not build. It
+   needs PyTorch, about 900 MB, so **it enters the dependencies only with the owner's yes**, CLAUDE.md "Ask before". **Typed lyrics are the
+   text**; speech gives only their timing, because misheard words leaked into shots in CS0. A song without typed lyrics in a language
+   the speech model cannot follow is cut on beats and sections alone.
 6. **Draft first, motion later, always honest.** The order is cheapest first and the person can stop after any step:
    *Plan → Look (stills for every shot) → Preview (the stills cut on the beats over the song with ffmpeg camera moves) → Draft excerpt
    (animate a chosen stretch at the small setting) → Make it better (animate or sing chosen shots at the final setting)*.
    Before each **Start** the screen says in words: how many shots at each motion level, the time as a range ("about"), corrected
-   after the first shot, the disk it will use, the model still to download (with size), and whether it fits (`fits`,
+   after the first shot (CS0's starting figures for a 3-minute song: preview about 15 minutes with plain stills and about 30 with
+   reference pictures, draft motion about 40 minutes more, final motion about 2.4 hours more), the disk it will use, the model still to download (with size), and whether it fits (`fits`,
    `tight`, `too_big`, ADR-0063). A step that cannot fit is not offered. Nothing is downloaded without the usual click.
 7. **Cut is a small, real timeline, not a full editor in v1.** One picture track (the shots in order, each with the chosen take), one
    audio track (the song), one caption track (lyrics or text, drawn with Motion graphics). The person can reorder, trim, split, swap a
@@ -131,7 +139,9 @@ plan, which shot is which, and the cut.
 10. **Characters keep a face and a voice across shots.** A *character* (a shared library, not only this project) is: a name, a look in
     words (including clothes, repeated exactly in every prompt), one to three reference pictures, optionally a **Train** LoRA, and
     optionally a saved voice. Shots that show a character use the *Reference* mode of the image product with that character's pictures,
-    and a *Sing* shot uses the voice. The code, not the model, decides which shots a character appears in (it comes from the plan).
+    and a *Sing* shot uses the voice. Reference is the default and plain stills are the faster choice: plain holds hair and clothes but
+    the face varies. **Objects and places get fixed words too**, repeated in every prompt, because the car changed from shot to shot in
+    CS0. A cast member can be **seen only in photos**, so the picture prompt never draws them as present. The code, not the model, decides which shots a character appears in (it comes from the plan).
     A picture of a real person asks the same "who is this" question as lip sync does today (ADR-0044); a made-up character asks nothing.
 11. **Models are bindings, not code.** Planner and shot writers ask for `caps.text.chat`; stills for `caps.image.generate` or
     `caps.image.reference`; animate for `caps.video.animate` or `caps.video.extend`; sing for `caps.video.lipsync`; the song for the
@@ -160,7 +170,7 @@ the top bar (ADR-0086), one per model the project uses.
    sentence, a length, a motion level; drag a cut; delete or add a shot; **try another idea for this part**. Cut speed slider.
    Nothing is made yet. A note says what the planning log shows.
 3. **Shots.** The stills as a grid. **Redo**, replace with a picture of your own, or choose another take. This is the cheap place to
-   say "no, not that". Then **Preview the whole song**, **Draft a 30 second piece** (the chorus is pre-picked) and, later, **Make it
+   say "no, not that". Then **Preview the whole song**, **Draft a 30 second piece** (the loudest section is pre-picked) and, later, **Make it
    better**. The honest panel before each.
 4. **Cut.** The timeline and the video. Reorder, trim, swap takes, captions on or off, **Make the video**, **Save a copy**.
 5. At the top of every step: **Auto / Review each step**, and a **Stop** that keeps what is done.
@@ -203,19 +213,19 @@ with a project.
   a hosted provider is not in this ADR). ADR-0047 safeguards apply through `await caps.safeguards_on()`.
 * **Prompt injection:** lyrics and story text are data; they reach the writer inside a prompt and cannot call tools; the plan is parsed
   as JSON and validated.
-* **Maestro:** its code and guides are **not used**; its ideas are used as ideas. A beat or section tool is chosen by CS0 (nothing enters the
-  dependencies without the owner's yes).
+* **Maestro:** its code and guides are **not used**; its ideas are used as ideas. CS0 chose beat_this and librosa (they enter the dependencies only with the
+  owner's yes).
 
 ## What exists, what is missing
 
 | Need | We have | Missing |
 |---|---|---|
-| Plan writer | Qwen3.5-9B through the chat gateway | schema-constrained output for plans (to verify in CS0), the plan schema and validators, the guides |
-| Song analysis | Parakeet (timed words), HTDemucs (vocal stem) | beats, downbeats, sections (a tool, unreviewed), the cut layout function |
+| Plan writer | Qwen3.5-9B through the chat gateway | the plan schema and validators, the guides (the engine's schema support works, CS0) |
+| Song analysis | Parakeet (timed words), HTDemucs (vocal stem) | beats, downbeats, sections (beat_this and librosa, waiting for the owner's yes), the cut layout function |
 | Stills | klein 4B create, edit, inpaint, reference | a batch-by-shot job, consistency by reference pictures, takes |
-| Clips | LTX 0.9.5 animate and extend | a per-shot job with takes; a longer clip is a trimmed one |
-| Sing | MuseTalk | a per-shot job with the vocal slice |
-| Titles and captions | Motion graphics (HyperFrames) | a caption track fed from the timed words |
+| Clips | LTX 0.9.5 animate and extend | a per-shot job with takes; a draft setting (15 steps, 0.125 MP, about 50 s for 5 s; the product has none today); a longer clip is a trimmed one |
+| Sing | MuseTalk (20 s sung in about 140 s; only the mouth moves; its 16 kHz mono sound is thrown away and the song laid over) | a per-shot job with the slice, and a rule in the plan for which shots sing |
+| Titles and captions | Motion graphics (HyperFrames) | a timed caption track fed from typed lyrics and timed words: the `captions` template gives every line the same 2, 3 or 4 s, and MX6's `cues` are on opaque scenes |
 | Cut | bundled ffmpeg | a timeline document, a render graph compiler, proxies and a waveform |
 | Characters | Reference mode, Voices, Train | a shared character library with pictures, look, voice and LoRA |
 | Project, jobs, resume | job manager patterns (3D, Motion graphics), SQLite stores | the project store, child jobs, checkpoints, revisions |
@@ -225,15 +235,101 @@ with a project.
 
 | Stage | What | Size | Done when |
 |---|---|---|---|
-| **CS0** | **Spike, measured, no product code in the repo.** On the owner's Mac, in a throwaway folder: (a) beat, downbeat and section tools on three songs (sung English, instrumental, another language); (b) Qwen3.5-9B plans the same songs and two stories with our smaller schema: does it stay valid JSON (with the engine's schema support), cover the timeline, stay in the cast; how many rows need repair; a person's read of the shots; (c) klein stills for 12 shots with and without character reference pictures, and the preview cut on the beats; (d) LTX clips for six of them at draft and final settings; (e) MuseTalk on a sung vocal for 20 s; (f) a 60 s ffmpeg cut with captions from Motion graphics. Downloads are deleted afterwards and the disk used is reported. The owner watches two excerpts and says whether this works as a fast, honest draft | 3 | `docs/spikes/creative-cs0.md` with a measured table, the schema that worked, a go or no-go. **No-go ends here** and the ADR is amended |
-| **CS1** | Project store and document, `music.analyse`, the cut-layout function, the brief and **Plan** view, plan writer with checks and checkpoints, the planning log, actions, help files, **search registration and eval row**, `creative_project` kind | 7 | a song becomes an editable plan on this Mac in the CS0-measured time; a crash mid-plan resumes; the search checklist in full |
-| **CS2** | **Shots** view: stills per shot, characters (pictures and look), takes, redo, out-of-date marks, Preview cut over the song, the honest panel, one job with child jobs, cancel keeps work, disk preflight | 7 | a 3-minute preview in about the estimated time; kill and resume redoes only missing shots |
-| **CS3** | **Cut** view: the small timeline, ffmpeg render graph, captions, take swap, undo, export, save a copy | 6 | the owner exports a finished video of a real song from the screens only |
-| **CS4** | Motion: Animate at draft and final settings, the draft excerpt, Make it better, the time estimate corrected from the first shot | 4 | a 30 s draft in about the estimate; estimate within 25% of the real time |
-| **CS5** | Sing: performance shots with MuseTalk and the consent answers; the Story skill (story bible, cast and places, narration or spoken lines with saved voices) | 6 | a story with two characters and a narrated voice; a song with four sung close-ups |
+| **CS0** | **Done 2026-10-31: go.** **Spike, measured, no product code in the repo.** On the owner's Mac, in a throwaway folder: (a) beat, downbeat and section tools on three songs (sung English, instrumental, another language); (b) Qwen3.5-9B plans the same songs and two stories with our smaller schema: does it stay valid JSON (with the engine's schema support), cover the timeline, stay in the cast; how many rows need repair; a person's read of the shots; (c) klein stills for 12 shots with and without character reference pictures, and the preview cut on the beats; (d) LTX clips for six of them at draft and final settings; (e) MuseTalk on a sung vocal for 20 s; (f) a 60 s ffmpeg cut with captions from Motion graphics. Downloads are deleted afterwards and the disk used is reported. The owner watches two excerpts and says whether this works as a fast, honest draft | 3 | `docs/spikes/creative-cs0.md` with a measured table, the schema that worked, a go or no-go. **No-go ends here** and the ADR is amended |
+| **CS1** | Project store and document, `music.analyse` (once the owner has said yes to PyTorch), typed lyrics, the choice of 9B or 8B, the cut-layout function, the brief and **Plan** view, plan writer with checks and checkpoints, the planning log, actions, help files, **search registration and eval row**, `creative_project` kind | 7 | a song becomes an editable plan on this Mac in the CS0-measured time; a crash mid-plan resumes; the search checklist in full |
+| **CS2** | **Shots** view: stills per shot, characters (pictures and look, seen only in photos), fixed words for objects and places, takes, redo, out-of-date marks, Preview cut over the song, the honest panel, one job with child jobs, cancel keeps work, disk preflight | 7 | a 3-minute preview in about the estimated time; kill and resume redoes only missing shots |
+| **CS3** | **Cut** view: the small timeline, ffmpeg render graph, a timed caption track, take swap, undo, export, save a copy | 6 | the owner exports a finished video of a real song from the screens only |
+| **CS4** | Motion: a draft setting for Animate, Animate at draft and final settings, the draft excerpt, Make it better, the time estimate corrected from the first shot | 4 | a 30 s draft in about the estimate; estimate within 25% of the real time |
+| **CS5** | Sing: a plan rule for which shots sing, performance shots with MuseTalk and the consent answers; the Story skill (story bible, cast and places, narration or spoken lines with saved voices) | 6 | a story with two characters and a narrated voice; a song with four sung close-ups |
 | **CS6** | Polish: a picture-reading checker with a redo offer, the fuller editor (tracks, speed, opacity, transforms, markers), the round trip as a new take, desktop checklist, web decision | 6 | the owner makes three videos from their own material and says whether the drafts were fast and honest enough |
 
-Total to a usable v1 (CS1 to CS4): about 24 working days after CS0. CS0 alone is the cheap way to find out whether it is worth it.
+Total to a usable v1 (CS1 to CS4): about 24 working days after CS0. The sizes are from before CS0 and ADR-0096's shared parts; they are worked out again at CS1.
+
+## Built
+
+### CS1 (2026-10-31; desktop only)
+
+A song and an idea become an editable plan of shots, in the window and through the actions `music.analyse`, `creative.plan` and `creative.edit_plan`.
+
+- **Song analysis** is the optional component `music-analysis`: beat_this 1.1.0 with its small checkpoint, librosa and CPU PyTorch in their own environment, from a hashed lock (`products/wasifyai-voice/analysis/`, `scripts/lock-music-analysis.sh`). 926 MB on disk. The answer is kept with the song (voice schema v6).
+- **Typed lyrics are the text.** Parakeet only gives times, on the full mix with no separation, and the times are per stretch of speech, so they are rough. Under 25% of the words matched, the lines have no times (`lyric_timing.py`). Bengali gets no times, as CS0 found.
+- **The product** is `products/wasifyai-creative/`: `layout.py` (the cuts), `document.py` (the brief, the checks, the edits), `writer.py`, `store.py` (projects, revisions, checkpoints, planning log), `runtime.py` (the plan as a job, search). The screen is `packages/ui/src/creative/`.
+- **Who writes:** the chat model the person chose, not one fixed here. This is the answer to "9B or 8B" for now, see below.
+- **A crash** marks a running plan `interrupted`, with its checkpoints kept. The person presses **Go on**; nothing is spent by itself.
+- **Search:** kind `creative_project`, added to the index on every change and removed on delete, with a corpus row.
+
+Measured on this Mac (M5 Pro, 64 GB) through a real engine on a throwaway folder, with `apps/desktop/scripts/ui-audit.sh light creative` for the window:
+
+| Check | Result |
+|---|---|
+| Plan, 3-minute song, 49 shots, Qwen3-8B | **44 s**, 1 fallback row (CS0 worked out about 1 minute) |
+| Plan, 90 s songs, Qwen3-8B | 36 s and 43 s (English, 25 shots), 49 s (instrumental, 45 shots), 31 s (Bengali, 27 shots) |
+| Plan, 90 s song, 25 shots, **qwen3.8:27b on Ollama** (the model chosen on this Mac) | **529 s** |
+| Beats and sections, 90 s song | about 4 s on the first run, kept after that; with line times about 10 s |
+| Engine killed with `kill -9` at part 3 of 8 | Marked `interrupted`; **Go on** asked only parts 3 to 8, 16 s |
+| Stop during a plan | Stops at once, can go on |
+| Window walk: brief, plan, edit, move a cut, Undo twice, the log | Works; axe has nothing to say on the list, the brief or the plan; no sideways scroll at 390 px once the side menu is hidden |
+
+**What the real runs changed that unit tests had not shown:**
+
+- The search answer's list of kinds did not have the new kind, so a hit gave a 500.
+- The model pasted the sung line into the shot. It is now told the line is for the mood only.
+- The length limit cut sentences mid-word. It went from 150 to 180 characters, the model is told under 20 words, and a sentence cut at the limit is asked for again.
+- A shot's `who` was only found by name. It now also matches the end of a phrase of how the person looks ("green jacket").
+- A beat's `who` is now limited to the names in the cast.
+
+**9B or 8B:** 8B is the size measured and it is good enough to start from. 9B was not run again: it was deleted after CS0 and is a 5.68 GB download that needs the owner's yes. The screen says the time depends on the model.
+
+**Not done, on purpose:**
+
+- At the end of CS1 the screen amendment was still Proposed; it is built now, under "The screen" below. Plan, Shots and Cut are at the top, the last two off.
+- Cuts move by whole beats with buttons, no dragging.
+- Deleting a project keeps its song, with no question about it.
+- The story skill stays in CS5.
+
+**Not checked:**
+
+- The real Tauri window (a WKWebView stand-in was used) and the shipped app's bundle.
+- Whether the beats are right, by a measure.
+- Search by meaning: the desktop's index is `local-hash/v1`, which matches words, for every kind (`docs/desktop-profile.md`). So a project is found by its words, and a French search does not find an English project on the desktop.
+- A fresh download: the install took 20 s because uv's cache already had the packages.
+
+**Plan quality, read by me on the runs above:** a person can start from these and will edit them. Details still drift, some lines cannot be shot ("Mira's face shows determination"), and repeated actions are common in a long part.
+
+### The screen (2026-10-31; desktop only)
+
+The CS1 row of the amendment's stage table, built after the owner accepted it.
+
+**What works:**
+
+- **One screen for a project:** Make panel on the left, the plan as the stage in the middle, the media rail on the right. It is a new frame in `packages/ui/src/creative/` (`ProjectView`, `MakePanel`, `MediaRail`, `use-project-media`). Motion graphics' `SceneEditor` was not refactored to share it.
+- **Top bar, as in the mockup:** model button, title, "Plan N · saved", Plan, Shots and Cut in the middle (the last two off), Planning log, and Make the stills (off). From 85rem wide it sits in the window's bar; below that, under it.
+- **Make panel tabs:** Image, Video, Voice, Music, Titles, 3D, Add, Ask, with arrow keys. On a narrow screen it is a sheet under the stage with the tabs as a dock.
+- **Ask:** the chat, docked on the project through `creative.read_project`. It sees the plan afresh before each model call, and which shot is selected. Changes apply at once. Each change's card has its own Undo, which takes back that change and any after it. The chat stays alive while another tab shows.
+- **Add:** pick from the Library. The item is tagged with the project and the selected shot, not copied.
+- **Media rail:** the library filtered by this project, newest first, with the song always there. A thing deleted from the Library goes from the rail too.
+- **New actions:** `creative.read_project`, `creative.undo`, `creative.add_media`, `creative.remove_media` (76 in the catalogue). The assistant's docking now takes a screen's `project_id` as well as Motion graphics' `composition_id`.
+
+**Measured and checked (on Qwen3-8B, through the real screen):** "Make this shot animate" changed the selected shot and the stage showed it. The card's Undo took it back. A question changed nothing. Axe found nothing on the plan, Add, Ask or phone-width views, and there was no sideways scroll at 390 px. The evaluation `run_tool_eval.py --only cs-` passes 11 of 11, including the step after a change.
+
+**What the real model found (unit tests could not):**
+
+- It first passed 4 of 10. It sent `add_shot` as the action, changed things when only asked a question, and copied the example's shot id, so it changed the wrong shot. The guide's examples now show the selected shot's own id.
+- It took back its own change and reported "back to Hold" when the shot was already on Animate. An edit that changes nothing is now refused in words, the guide says never to undo unless asked, and the evaluation checks that step.
+- The screen says "Shot 4" by position while ids can differ after a delete, so the plan the model reads carries both.
+- The first item in Add was the project's own song. It is now marked as already added.
+
+**Differs from the mockup:**
+
+- "Review each step" is left out: it does nothing until there are steps to review, in CS2.
+- Cut speed stays in the brief, because changing it means planning again.
+- Parts keep their headings over the grid of shot cards, because "Try another idea" works per part.
+- The shots' picture areas are empty, and shots are added from a button on each card instead of a last card.
+- The word check's "image" count went from 28 to 30 for the Image tab and the Images menu, the names the owner approved.
+
+**Not built, in their stages:** CS2: the Image and Video tabs, file drop in Add, the preview stage, Shots. CS3: the Music tab, Voice captions, Titles tab, timeline, Cut. CS5: the rest of Voice, Lip sync. CS6: the 3D tab, phone polish. Those tabs say which step brings them and open the screen that makes it today.
+
+**Not checked:** the real Tauri window (a WKWebView stand-in was used). Other chat models: only 8B was evaluated, and the owner's selected 27B on Ollama was not. Qwen3.5-9B was not retested.
 
 ## Web
 
@@ -253,14 +349,14 @@ job per person (ADR-0088), and need the GPU host (P7). `docs/web-parity-ledger.m
 
 ## Risks
 
-* **Quality may disappoint.** LTX 0.9.5 motion is gentle; character consistency across shots is the weakest part of picture pipelines;
-  MuseTalk has never been tried on singing. CS0 measures before 24 days are spent. Mitigation: the goal is an honest draft and Hold
-  is acceptable on its own.
-* **A 9B model may not plan well enough.** Maestro's history shows that small local models drift and need many code checks. Mitigation:
-  a small schema, the code owns the facts, repairs touch only bad rows, the person is the reviewer; if CS0 shows it cannot, the plan
-  falls back to a template-driven plan the person fills in.
-* **Time.** A 3-minute song is estimated at about 10 to 15 minutes for the preview and 1.5 to 2.5 hours for full motion on this Mac
-  (estimates from measured parts, not measured end to end). 16 and 32 GB Macs are unmeasured.
+* **Quality may disappoint.** LTX 0.9.5 motion is gentle; faces hold reasonably with reference pictures but objects and places drift;
+  MuseTalk on singing is a still portrait with a moving mouth (CS0). The owner accepted this as a draft. Mitigation: the goal is an honest
+  draft and Hold is acceptable on its own.
+* **A small model may not plan well enough.** CS0: with most of the plan owned by code it stays in order and uses every place, but details
+  still drift ("grey car" then "red car") and some lines cannot be shot. Mitigation: a small schema, the code owns the facts, repairs touch
+  only bad rows, the person is the reviewer and will edit.
+* **Time.** A 3-minute song is about 15 minutes for a plain preview, about 30 with reference pictures and about 2.4 hours more for full
+  motion on this Mac (worked out from CS0's measured parts, not measured end to end). 16 and 32 GB Macs are unmeasured.
 * **Scope creep toward a full editor.** The decision keeps v1 to one picture track, a song and captions.
 * **Copying by accident.** The rule: nothing is copied; the study records ideas only; prompts, guides and
   schemas are written fresh; a reviewer checks the diff of each stage for anything that reads like theirs.
@@ -290,10 +386,12 @@ The owner took the recommendation on every question.
 
 ## Open questions for the owner
 
-None. What CS0 will decide with measurements (not owner questions): whether the 9B writer can fill the plan schema reliably, which beat and
-section tool to use, the real times of the preview and the draft, and whether character consistency by reference pictures is good enough.
+Answered 2026-10-31: yes to PyTorch and beat_this (about 900 MB; 926 MB as installed). CS0 answered the rest
+(`docs/spikes/creative-cs0.md`).
 
-## Amendment: the screen, and how every product plugs into it (2026-10-24, owner; **Proposed**, waits for the owner's look at the mockup)
+## Amendment: the screen, and how every product plugs into it (2026-10-24, owner; **Accepted** 2026-10-31)
+
+**Accepted 2026-10-31.** The owner: "Yes to the screen amendment with your three recommendations: Titles tab, the Plan, Shots, Cut buttons, and the mockup as it is. Build it into Creative Studio." What is built so far is under "Built" as "The screen".
 
 **The ask.** The owner showed Maestro's Studio screen (a tool column on the left that makes things, a big preview in the middle, a rail
 of everything made on the right) and asked for a similar, friendly screen that lets a person use **all of our products and tools** inside
@@ -325,7 +423,7 @@ not a tab):
 | **Titles** | the Motion graphics templates (title, quote, bar chart, lower third, captions) | an overlay with sound off, or a clip | CS3 |
 | **3D** | a 3D model from a picture | later: a turn-around clip (the product does not make one yet, backlog) | CS6 |
 | **Add** | pick from Library, or drop a file from this computer | any picture, clip or sound | CS2 |
-| **Ask** | the assistant, with this project open ("make the chorus shots moodier") | changes to the plan (`creative.edit_plan`) | CS1 |
+| **Ask** | the assistant, with this project open ("make the last part moodier") | changes to the plan (`creative.edit_plan`) | CS1 |
 
 Train stays its own screen (training takes long); a trained character or style is **chosen** in the Make panel (decision 10). Notebooks stay
 their own screen; a person can paste their text in the brief. Models and Library stay where they are.
@@ -356,7 +454,7 @@ their own screen; a person can paste their text in the brief. Models and Library
 | CS5 | the rest of the Voice tab and Lip sync | +1 |
 | CS6 | the 3D tab (when a turn-around clip exists), the phone polish | +1 |
 
-**Open questions for the owner (with my recommendation)**
+**Questions for the owner, answered 2026-10-31: all three as recommended.**
 1. **The tab for Motion graphics is called Titles** in the mockup (the screen keeps its name, **Motion graphics**, in the side menu). OK? Recommend yes: on
    a timeline people think "titles", and the tab opens the same templates.
 2. **Is the three-step button (Plan, Shots, Cut) at the top the right way to move between steps**, or do you prefer Maestro's two-mode toggle

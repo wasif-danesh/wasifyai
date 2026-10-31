@@ -123,7 +123,7 @@ class Settings(BaseSettings):
             if not self.products_enabled:
                 self.products_enabled = (
                     "wasifyai-image,wasifyai-video,wasifyai-assistant,wasifyai-notebooks,"
-                    "wasifyai-voice,wasifyai-model3d,wasifyai-training"
+                    "wasifyai-voice,wasifyai-model3d,wasifyai-training,wasifyai-creative"
                 )
         return self
 

@@ -386,6 +386,27 @@ parts:
           sha256: 7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5
           source: huggingface.co
           folder: qwen3-4b-q4km
+  music-analysis:
+    pins:
+      schema: 1
+      tool:
+        id: beat-this
+        version: 1.1.0
+        source: pypi.org
+        packages_bytes: 960000000
+        python: '3.12'
+      base:
+        id: beat-this-small0
+        title: Beat tracking model (beat_this small)
+        repo: cloud.cp.jku.at
+        revision: small0
+        source: cloud.cp.jku.at
+        folder: beat-this
+        url: https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp
+        files:
+        - path: small0.ckpt
+          size: 8451101
+          sha256: 6074be2c4d490c5f6101fcc374a1ec72ae93456e23bb6019783b849f5dc7d47b
   trainer-deciding:
     pins:
       schema: 1

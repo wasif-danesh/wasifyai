@@ -880,6 +880,7 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     s.decision_setup = desktop.decision_setup  # its component, set up on request
     s.video_training = desktop.teaching_video  # diffusers on a Mac (ADR-0073)
     s.video_setup = desktop.video_setup  # its component, set up on request
+    s.music_analysis = desktop.music_analysis  # finds a song's beats (ADR-0090)
     if desktop.video_builder is not None:  # and the model it asks to fill a template
         desktop.video_builder.language = desktop.language
         desktop.video_builder.usage = s.usage

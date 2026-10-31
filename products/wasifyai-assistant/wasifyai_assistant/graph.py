@@ -532,9 +532,10 @@ def build_assistant_graph(
         docked = state.get("working_on") if isinstance(state.get("working_on"), dict) else None
         # the project on the screen: known from the start, because a turn that waited for a card
         # goes on without asking the screen again
-        docked_project = (
-            str((docked.get("params") or {}).get("composition_id") or "") if docked else ""
-        )
+        docked_params = (docked.get("params") or {}) if docked else {}
+        # a screen names its project by its product's own word
+        docked_key = "project_id" if "project_id" in docked_params else "composition_id"
+        docked_project = str(docked_params.get(docked_key) or "")
 
         async def dock() -> str:
             """What the screen says now: asked again before every model call, so the model sees
@@ -645,7 +646,7 @@ def build_assistant_graph(
                 # the project on the screen, whatever the model wrote
                 args = {
                     **args,
-                    "params": {**(args.get("params") or {}), "composition_id": docked_project},
+                    "params": {**(args.get("params") or {}), docked_key: docked_project},
                 }
             if policy is None or tainted:
                 # the chat's setting, except that after outside text everything asks

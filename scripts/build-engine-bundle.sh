@@ -14,8 +14,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${1:-$ROOT/apps/desktop/engine-bundle}"
-PACKAGES="wasifyai-contracts wasifyai-platform-sdk wasifyai-api wasifyai-media-worker wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice wasifyai-training wasifyai-model3d"
-PRODUCTS="wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice wasifyai-training wasifyai-model3d"
+PACKAGES="wasifyai-contracts wasifyai-platform-sdk wasifyai-api wasifyai-media-worker wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice wasifyai-training wasifyai-model3d wasifyai-creative"
+PRODUCTS="wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice wasifyai-training wasifyai-model3d wasifyai-creative"
 
 cd "$ROOT"
 rm -rf "$OUT"
@@ -100,6 +100,15 @@ if [ ! -f "$TRAINER_SRC/decision-requirements-aarch64-apple-darwin.lock" ]; then
   exit 1
 fi
 cp "$TRAINER_SRC"/decision-requirements-*.lock "$OUT/products/wasifyai-training/trainer/"
+
+# Song analysis (ADR-0090): beat_this, librosa and PyTorch, the same way (scripts/lock-music-analysis.sh writes the lock).
+ANALYSIS_SRC="products/wasifyai-voice/analysis"
+if [ ! -f "$ANALYSIS_SRC/requirements-aarch64-apple-darwin.lock" ]; then
+  echo "no song analysis lock file in $ANALYSIS_SRC: run scripts/lock-music-analysis.sh first" >&2
+  exit 1
+fi
+mkdir -p "$OUT/products/wasifyai-voice/analysis"
+cp "$ANALYSIS_SRC"/requirements-*.lock "$OUT/products/wasifyai-voice/analysis/"
 
 # The video trainer (ADR-0073, video amendment): PyTorch with diffusers and peft, the same way
 # (scripts/lock-video-trainer.sh writes the lock).

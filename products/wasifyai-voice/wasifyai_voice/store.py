@@ -16,7 +16,7 @@ from typing import Any
 
 from wasifyai_platform_sdk.sqlstore import PostgresStoreDb, SqliteStoreDb, StoreDb
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 _SPEECHES = """
 CREATE TABLE speeches(
@@ -61,6 +61,14 @@ CREATE TABLE tracks(
   edit TEXT NOT NULL DEFAULT '{}');
 CREATE INDEX tracks_owner ON tracks(tenant_id, user_id, created_at DESC);
 """
+# what was found in a song (ADR-0090): kept with the song, so it is only worked out once
+_ANALYSES = """
+CREATE TABLE IF NOT EXISTS track_analyses (
+    track_id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
+    analysis TEXT NOT NULL, lyrics TEXT NOT NULL DEFAULT '', lines TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL
+);
+"""
 _CLIPS = """
 CREATE TABLE clips(
   id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
@@ -76,7 +84,7 @@ CREATE TABLE pictures(
   width INTEGER NOT NULL, height INTEGER NOT NULL, created_at TEXT NOT NULL);
 """
 _SCHEMA = "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);" + (
-    _SPEECHES + _TRANSCRIPTS + _VOICES + _TRACKS + _CLIPS
+    _SPEECHES + _TRANSCRIPTS + _VOICES + _TRACKS + _CLIPS + _ANALYSES
 )
 # what version 2 adds to a version 1 file: how a speech was made, and saved voices
 _V2_UPGRADE = (
@@ -177,6 +185,8 @@ class VoiceStore:
                     db.executescript("BEGIN;" + _V4_UPGRADE + "COMMIT;")
                 if version < 5:  # version 5 adds lip sync clips and the pictures they are made from
                     db.executescript("BEGIN;" + _CLIPS + "COMMIT;")
+                if version < 6:  # version 6 keeps what was found in a song (ADR-0090)
+                    db.executescript("BEGIN;" + _ANALYSES + "COMMIT;")
                 if version < SCHEMA_VERSION:
                     db.execute(
                         "UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),)
@@ -196,7 +206,7 @@ class VoiceStore:
             )
             if fresh:
                 conn.execute("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-                for ddl in (_SPEECHES, _TRANSCRIPTS, _VOICES, _TRACKS, _CLIPS):
+                for ddl in (_SPEECHES, _TRANSCRIPTS, _VOICES, _TRACKS, _CLIPS, _ANALYSES):
                     conn.execute(ddl)
                 conn.execute("INSERT INTO meta VALUES ('schema', ?)", (str(SCHEMA_VERSION),))
                 return
@@ -204,6 +214,12 @@ class VoiceStore:
         version = int(row["value"]) if row else 0
         if version > SCHEMA_VERSION or version < 1:
             raise RuntimeError("the voice tables were made by a newer version of this app")
+        if version < 6:
+            with self.db.transaction() as conn:
+                conn.execute(_ANALYSES)
+                conn.execute(
+                    "UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),)
+                )
 
     @contextmanager
     def _connect(self) -> Iterator[Any]:
@@ -474,7 +490,35 @@ class VoiceStore:
         gone = self.get_track(tenant, user, tid)
         with self._connect() as db:
             db.execute("DELETE FROM tracks WHERE id = ?", (tid,))
+            db.execute("DELETE FROM track_analyses WHERE track_id = ?", (tid,))
         return gone
+
+    # ---- what was found in a song (ADR-0090) ---------------------------------------------------
+
+    def get_analysis(self, tenant: str, user: str, tid: str) -> dict[str, Any] | None:
+        with self._connect() as db:
+            r = db.execute(
+                "SELECT * FROM track_analyses WHERE track_id = ? AND tenant_id = ? AND user_id = ?",
+                (tid, tenant, user),
+            ).fetchone()
+        if r is None:
+            return None
+        return {
+            "analysis": json.loads(r["analysis"]),
+            "lyrics": r["lyrics"],
+            "lines": json.loads(r["lines"]),
+        }
+
+    def set_analysis(
+        self, tenant: str, user: str, tid: str, analysis: dict[str, Any], lyrics: str,
+        lines: list[dict[str, Any]],
+    ) -> None:  # fmt: skip
+        with self._connect() as db:
+            db.execute("DELETE FROM track_analyses WHERE track_id = ?", (tid,))
+            db.execute(
+                "INSERT INTO track_analyses VALUES (?,?,?,?,?,?,?)",
+                (tid, tenant, user, json.dumps(analysis), lyrics, json.dumps(lines), now()),
+            )
 
     # ---- lip sync clips (V5) ----------------------------------------------------------------
 

@@ -1,6 +1,7 @@
 // My creations (ADR-0040, ADR-0041): every kind a person made, listed and searched in one place. The product list routes and
 // `/creations/search` are the same on the web and the desktop; only the transport differs.
 import type { SearchResponse } from "@wasifyai/contracts";
+import type { CreativeProject } from "./creative";
 import type { ImagePage, ImageSummary } from "./images";
 import type { Model3d } from "./model3d";
 import type { NotebookSummary } from "./notebooks";
@@ -35,6 +36,7 @@ export type CreationKind =
   | "lipsync"
   | "model3d"
   | "composition"
+  | "creative_project"
   | "notebook"
   | "taught";
 
@@ -46,6 +48,7 @@ export const TAUGHT_KINDS = ["lora", "writing", "decision"] as const;
 export type Others = {
   models3d: Model3d[];
   compositions: BuilderProject[];
+  creativeProjects: CreativeProject[];
   notebooks: NotebookSummary[];
   taught: TrainedModel[];
 };
@@ -97,7 +100,13 @@ export type CreationsApi = {
   addRecording(file: File): Promise<SongCard>;
 };
 
-const NONE: Others = { models3d: [], compositions: [], notebooks: [], taught: [] };
+const NONE: Others = {
+  models3d: [],
+  compositions: [],
+  creativeProjects: [],
+  notebooks: [],
+  taught: [],
+};
 
 const VOICE = "/products/wasifyai-voice";
 
@@ -120,10 +129,13 @@ export function createCreationsApi(transport: Transport): CreationsApi {
     optional(json<{ items: T[] }>(`${VOICE}/${route}?${query}`, signal));
   /** the kinds that live in their own tools: every one optional (a service may not offer it) */
   async function others(signal?: AbortSignal): Promise<Others> {
-    const [models3d, compositions, notebooks, taught] = await Promise.all([
+    const [models3d, compositions, creativeProjects, notebooks, taught] = await Promise.all([
       optional(json<{ items: Model3d[] }>("/products/wasifyai-model3d/m3d/models", signal)),
       optional(
         json<{ items: BuilderProject[] }>("/products/wasifyai-video/builder/projects", signal),
+      ),
+      optional(
+        json<{ items: CreativeProject[] }>("/products/wasifyai-creative/creative/projects", signal),
       ),
       optional(json<NotebookSummary[]>("/products/wasifyai-notebooks/notebooks", signal)),
       optional(
@@ -133,6 +145,7 @@ export function createCreationsApi(transport: Transport): CreationsApi {
     return {
       models3d: models3d?.items ?? [],
       compositions: compositions?.items ?? [],
+      creativeProjects: creativeProjects?.items ?? [],
       notebooks: Array.isArray(notebooks) ? notebooks : [],
       taught: taught?.models ?? [],
     };
@@ -211,7 +224,12 @@ export function createCreationsApi(transport: Transport): CreationsApi {
         has("lipsync") ? voice<VoiceClip>("clips", q("lipsync"), signal) : null,
       ]);
       // the tools' own kinds are few: their lists are read whole and the hits picked out
-      const wantedOthers = has("model3d") || has("composition") || has("notebook") || has("taught");
+      const wantedOthers =
+        has("model3d") ||
+        has("composition") ||
+        has("creative_project") ||
+        has("notebook") ||
+        has("taught");
       const all = wantedOthers ? await others(signal) : NONE;
       const pick = <T extends { id: string }>(items: T[], kind: CreationKind) => {
         const set = new Set(ids[kind] ?? []);
@@ -227,6 +245,7 @@ export function createCreationsApi(transport: Transport): CreationsApi {
         others: {
           models3d: pick(all.models3d, "model3d"),
           compositions: pick(all.compositions, "composition"),
+          creativeProjects: pick(all.creativeProjects, "creative_project"),
           notebooks: pick(all.notebooks, "notebook"),
           taught: pick(all.taught, "taught"),
         },
@@ -263,6 +282,7 @@ export function createCreationsApi(transport: Transport): CreationsApi {
         lipsync: `${VOICE}/clips/${at}`,
         model3d: `/products/wasifyai-model3d/m3d/models/${at}`,
         composition: `/products/wasifyai-video/builder/projects/${at}`,
+        creative_project: `/products/wasifyai-creative/creative/projects/${at}`,
         notebook: `/products/wasifyai-notebooks/notebooks/${at}`,
         taught: `/products/wasifyai-training/train/models/${at}`,
       }[kind];

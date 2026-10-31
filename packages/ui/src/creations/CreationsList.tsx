@@ -53,6 +53,7 @@ const FILTERS: { value: Filter; label: string; whenAny?: boolean }[] = [
   // the tools' own kinds show up once there is one
   { value: "models3d", label: "3D models", whenAny: true },
   { value: "compositions", label: "Motion graphics", whenAny: true },
+  { value: "creativeProjects", label: "Creative Studio", whenAny: true },
   { value: "notebooks", label: "Notebooks", whenAny: true },
   { value: "taught", label: "Taught models", whenAny: true },
 ];
@@ -161,6 +162,12 @@ export function CreationsList({
         id: composition.id,
         createdAt: composition.updated_at || composition.created_at,
         composition,
+      })),
+      ...(others?.creativeProjects ?? []).map((project) => ({
+        kind: "creative_project" as const,
+        id: project.id,
+        createdAt: project.updated_at || project.created_at,
+        project,
       })),
       ...(others?.notebooks ?? []).map((notebook) => ({
         kind: "notebook" as const,

@@ -4,6 +4,7 @@ import { type CreationKind, type CreationsApi, type MadeFrom, when } from "@wasi
 import {
   BookOpen,
   Box,
+  Clapperboard,
   ExternalLink,
   Film,
   GraduationCap,
@@ -24,7 +25,7 @@ import { Player } from "../components/player";
 import { Spinner } from "../components/spinner";
 import { fileNameFor, savedText, useSaveCopy } from "../save";
 import { clock } from "../voice/format";
-import { type CreationsNav, type Entry, KIND_LABEL, type UseAction, toRow } from "./model";
+import { type CreationsNav, type Entry, KIND_LABEL, type UseAction, coverOf, toRow } from "./model";
 
 /** The kind the products' routes and the search index use for an entry. */
 export function apiKindOf(entry: Entry): CreationKind {
@@ -80,17 +81,18 @@ function entriesOf(found: MadeFrom): Entry[] {
   ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
-const ICON = { model3d: Box, composition: Shapes, notebook: BookOpen, taught: GraduationCap };
+const ICON = {
+  model3d: Box,
+  composition: Shapes,
+  creative_project: Clapperboard,
+  notebook: BookOpen,
+  taught: GraduationCap,
+};
 
 /** A small tile for a related entry: its picture or poster when it has one, else its kind. */
 function Tile({ entry, onOpen }: { entry: Entry; onOpen: (entry: Entry) => void }) {
   const row = toRow(entry);
-  const cover =
-    entry.kind === "image"
-      ? entry.image.thumb_url
-      : entry.kind === "video"
-        ? (entry.video.poster_url ?? null)
-        : null;
+  const cover = coverOf(entry);
   return (
     <button
       type="button"

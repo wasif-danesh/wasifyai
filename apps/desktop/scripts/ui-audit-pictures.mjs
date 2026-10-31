@@ -31,6 +31,9 @@
 //   apps/desktop/scripts/ui-audit.sh light motion-assistant     The editor's assistant (ADR-0096 MX3) on the real language
 //                                                                model: a brief, edits in words, Undo, a video; on this
 //                                                                computer's data, and it deletes what it made
+//   apps/desktop/scripts/ui-audit.sh light creative             Creative Studio (ADR-0090 CS1): a brief, a real plan on the
+//                                                                chosen chat model, edits, Undo, axe, a phone width; needs a
+//                                                                song in Your music and a throwaway DESKTOP_DATA_DIR
 //   apps/desktop/scripts/ui-audit.sh light motion-pack          The marketing pack (ADR-0096 MX7): a starting point, a
 //                                                                brand with a real logo, every shape made for real;
 //                                                                needs MOTION_FIXTURES and a throwaway DESKTOP_DATA_DIR
@@ -379,6 +382,136 @@ for (const scheme of ["light", "dark"]) {
       console.log(`MEDIA ${JSON.stringify(seen)}`);
     });
   }
+  if (names.has("creative")) {
+    await attempt("creative", async () => {
+      const seen = { errors: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      const axe = async () => {
+        const AxeBuilder = require("@axe-core/playwright").default;
+        const found = await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+          .analyze();
+        return found.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      };
+      await open(page, "/creative");
+      await page.getByRole("heading", { name: "Creative Studio" }).waitFor({ timeout: 15000 });
+      await page.waitForTimeout(600);
+      await shot(page, "creative-list");
+      seen.axeList = await axe();
+      await page.getByRole("button", { name: "New project" }).first().click();
+      await page.getByRole("combobox", { name: "Song" }).click();
+      await page.getByRole("option").first().click();
+      await page
+        .getByLabel("What is the video about?")
+        .fill("A woman leaves the city in a borrowed grey car and drives the long way home");
+      await page.getByRole("button", { name: "Add a person" }).click();
+      await page.getByLabel("Name of person 1").fill("Mira");
+      await page.getByLabel("How Mira looks").fill("a woman in her thirties, green jacket");
+      await page
+        .getByLabel(/^Places/)
+        .fill("a city street at dawn\na petrol station\na coast road");
+      await shot(page, "creative-brief", 1300);
+      seen.axeBrief = await axe();
+      const started = Date.now();
+      await page.getByRole("button", { name: "Plan it" }).click();
+      await page.getByRole("region", { name: "Progress" }).waitFor({ timeout: 15000 });
+      await shot(page, "creative-planning");
+      await page.getByRole("textbox", { name: "What shot 1 shows" }).waitFor({ timeout: 300000 });
+      seen.planned_s = Math.round((Date.now() - started) / 1000);
+      await page.waitForTimeout(400);
+      await shot(page, "creative-plan", 900);
+      seen.axePlan = await axe();
+      const plan = page.getByRole("region", { name: "The plan" });
+      const saved = (n) => page.getByText(`Plan ${n} · saved`).waitFor({ timeout: 120000 });
+      const box = page.getByRole("textbox", { name: "What shot 2 shows" });
+      await box.fill("Mira turns the key in the grey car at the kerb.");
+      await box.blur();
+      await page.waitForTimeout(500);
+      seen.edited = await page.getByRole("textbox", { name: "What shot 2 shows" }).inputValue();
+      await page.getByRole("button", { name: "End shot 1 one beat later" }).click();
+      await page.waitForTimeout(500);
+      await plan.getByRole("button", { name: "Undo" }).click();
+      await page.waitForTimeout(500);
+      await plan.getByRole("button", { name: "Undo" }).click();
+      await page.waitForTimeout(500);
+      seen.undone = await page.getByRole("textbox", { name: "What shot 2 shows" }).inputValue();
+      await page.getByRole("button", { name: "Planning log" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Close" }).waitFor();
+      await page.waitForTimeout(500);
+      await shot(page, "creative-log");
+      await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+      // the tabs: arrow keys, the ones to come, then Add from the Library
+      const make = page.getByRole("tablist", { name: "Make something for this project" });
+      seen.tabs = await make.getByRole("tab").allTextContents();
+      await make.getByRole("tab", { name: "Ask" }).focus();
+      await page.keyboard.press("ArrowLeft");
+      await page.waitForTimeout(200);
+      seen.arrowTo = await make.locator('[aria-selected="true"]').textContent();
+      await make.getByRole("tab", { name: "Titles" }).click();
+      seen.titlesSay = await page.getByText(/come with the Cut step/).textContent();
+      await page.getByRole("button", { name: "Shot 3", exact: true }).click();
+      await make.getByRole("tab", { name: "Add" }).click();
+      const first = page.getByRole("button", { name: /^Add: / }).first();
+      await first.waitFor({ timeout: 15000 });
+      seen.added = await first.getAttribute("aria-label");
+      await first.click();
+      const rail = page.getByRole("complementary", { name: "Media of this project" });
+      await rail.getByRole("button", { name: /^Take out of this project/ }).waitFor();
+      seen.rail = await rail.getByRole("listitem").allInnerTexts();
+      await page.waitForTimeout(800);
+      await shot(page, "creative-add", 900);
+      seen.axeAdd = await axe();
+      // Ask, with the real model: a change on the selected shot, shown at once, and its card's Undo
+      await make.getByRole("tab", { name: "Ask" }).click();
+      // a shot the plan has on Hold: the plan sets some to Animate by itself
+      const motions = page.getByRole("combobox", { name: /^Motion of shot \d+$/ });
+      const count = await motions.count();
+      let held = 0;
+      for (let i = 0; i < count && !held; i++) {
+        if ((await motions.nth(i).textContent()) === "Hold") held = i + 1;
+      }
+      const motion = page.getByRole("combobox", { name: `Motion of shot ${held}`, exact: true });
+      seen.askShot = held;
+      await page.getByRole("button", { name: `Shot ${held}`, exact: true }).click();
+      await page.getByPlaceholder("Ask anything").last().fill("Make this shot animate.");
+      await page.keyboard.press("Enter");
+      await saved(2);
+      seen.askMotion = await motion.textContent();
+      await page.waitForTimeout(3000);
+      await shot(page, "creative-ask", 900);
+      seen.axeAsk = await axe();
+      const panel = page.getByRole("complementary", { name: "Make panel" });
+      seen.askCards = await panel.getByRole("button", { name: /^undo/i }).allTextContents();
+      await panel.getByRole("button", { name: "Undo", exact: true }).first().click();
+      await saved(1);
+      seen.askUndone = await motion.textContent();
+      await page.getByPlaceholder("Ask anything").last().fill("What does this shot show?");
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(15000);
+      seen.askedChanged = (await page.getByText("Plan 1 · saved").count()) === 0;
+      await shot(page, "creative-ask-question", 900);
+      // the rest of the width steps: stacked, the tabs as a dock
+      await page.setViewportSize({ width: 1000, height: 800 });
+      await page.waitForTimeout(400);
+      await shot(page, "creative-1000");
+      await page.getByRole("button", { name: "Hide the side menu" }).click();
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.waitForTimeout(400);
+      seen.phoneOverflow = await page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+      );
+      seen.axePhone = await axe();
+      await page.screenshot({ path: join(OUT, "creative-plan-phone.png") });
+      await page
+        .getByRole("tablist", { name: "Make something for this project" })
+        .scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(OUT, "creative-make-phone.png") });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      console.log(JSON.stringify(seen, null, 1));
+    });
+  }
+
   if (names.has("motion-pack")) {
     // The marketing pack (ADR-0096 MX7): a starting point, a brand set up with a real logo, and one
     // project made in every shape. MOTION_FIXTURES has can.png. Run it on a throwaway DESKTOP_DATA_DIR.

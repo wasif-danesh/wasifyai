@@ -68,6 +68,8 @@ from wasifyai_api.language_setup import LOCK_NAME as LANGUAGE_LOCK_NAME
 from wasifyai_api.language_setup import LanguageSetup
 from wasifyai_api.lipsync_runtime import LipSyncSidecar
 from wasifyai_api.llama_server import LlamaServer
+from wasifyai_api.music_analysis_setup import LOCK_NAME as ANALYSIS_LOCK_NAME
+from wasifyai_api.music_analysis_setup import MusicAnalysis
 from wasifyai_api.own_keys import OwnKeysService
 from wasifyai_api.own_keys_media import KeyedMediaRouter
 from wasifyai_api.runs import RunManager
@@ -122,6 +124,7 @@ class DesktopBackends:
     language_setup: LanguageSetup | None = None  # the writing trainer's component
     writing: MlxLmTrainer | None = None  # the language trainer: mlx-lm on a Mac (ADR-0074)
     decision_setup: DecisionSetup | None = None  # the decision trainer's component
+    music_analysis: MusicAnalysis | None = None  # the song analysis component (ADR-0090)
     deciding: LayaTrainer | None = None  # the decision trainer: Laya on a Mac (ADR-0075)
     video_setup: VideoSetup | None = None  # the video trainer's component
     teaching_video: LtxTrainer | None = None  # the video trainer: diffusers on a Mac (ADR-0073)
@@ -252,6 +255,12 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         cache_dir=cache if cache.is_dir() else None,
         base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
     )
+    music_analysis = MusicAnalysis(
+        root,
+        lock=products / "wasifyai-voice" / "analysis" / ANALYSIS_LOCK_NAME,
+        uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
+        cache_dir=cache if cache.is_dir() else None,
+    )
     video_setup = VideoSetup(
         root,
         lock=products / "wasifyai-training" / "trainer" / VIDEO_LOCK_NAME,
@@ -280,6 +289,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         language_setup=language_setup,
         writing=make_language_trainer(settings.desktop_dir),
         decision_setup=decision_setup,
+        music_analysis=music_analysis,
         deciding=make_decision_trainer(settings.desktop_dir),
         video_setup=video_setup,
         teaching_video=teaching_video,

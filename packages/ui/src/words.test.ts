@@ -10,7 +10,9 @@ import { AVOID, appearsHere, makeLabel, makingLabel, plural } from "./words";
  * later stage lowers a number when it rewrites a screen; this test keeps a number from going up. Lower a number
  * here when the run says it can be lowered.
  */
-const BASELINE: Record<string, number> = { generate: 1, image: 28, asset: 0, Takes: 3 };
+// "image" went from 28 to 30 for Creative Studio's Image tab and its pointer to the Images menu, the names the owner
+// approved in ADR-0090's mockup
+const BASELINE: Record<string, number> = { generate: 1, image: 30, asset: 0, Takes: 3 };
 
 function files(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {

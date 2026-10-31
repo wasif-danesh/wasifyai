@@ -57,6 +57,7 @@ web job's test step fail without one. The desktop's actions are held to the same
 |---|---|---|---|
 | `chat` | live | the shared chat |  |
 | `library` | live | shared My creations screen (search by meaning, a filter for each kind, cards or a table); the desktop's Library is the same screen |  |
+| `creative` | soon | Creative Studio (ADR-0090): desktop first; the web needs the analysis tool and the plan job on an engine worker | owner, 2026-10-24 (ADR-0090) |
 | `model3d` | live | shared Model3d screen; Pixal3D runs as a job on an engine worker (ADR-0087, P3), rows in Postgres, files in storage |  |
 | `motion` | live | shared VideoBuilder screen; the sandboxed render runs as a job on an engine worker (ADR-0087, P4), rows in Postgres, videos are library clips |  |
 | `models` | live | for admins, Admin > Models and workers is the Models page (the same tab table, over the workers' models, with the picker on the voice, music and lip sync screens for everyone); other people use the pickers. The models.* actions need the desktop's model service, so the web assistant does not offer them |  |

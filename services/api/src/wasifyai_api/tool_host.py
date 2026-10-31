@@ -217,6 +217,19 @@ class ApiToolHost:
                     ui="model3d",
                 )
             return Readiness.ready()
+        if need.kind == "runtime" and need.name == "music_analysis":
+            tool = state.music_analysis
+            if tool is None or not tool.supported:
+                return Readiness.unavailable(
+                    "Finding the beats of a song is not available on this kind of computer yet."
+                )
+            if not tool.ready():
+                return Readiness.needs_setup(
+                    "Set up song analysis first (a download of about 970 MB, shown before it "
+                    "starts).",
+                    ui="creative",
+                )
+            return Readiness.ready()
         if need.kind == "notebooks":
             here = state.desktop_dir or state.notebooks_web
             if not here:

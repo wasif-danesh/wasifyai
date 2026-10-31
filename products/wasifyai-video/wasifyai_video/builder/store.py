@@ -308,6 +308,20 @@ class BuilderStore:
             )
         return self.get_composition(tenant, user, cid)
 
+    def set_assets(
+        self, tenant: str, user: str, cid: str, assets: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """The files of a project of scenes. Adding one is not a change Undo takes back: the file
+        stays with the project, whichever version of the scenes is on the screen."""
+        found = self.get_composition(tenant, user, cid)
+        slots = {**found["slots"], "assets": assets}
+        with self._connect() as db:
+            db.execute(
+                "UPDATE compositions SET slots=?, updated_at=? WHERE id=?",
+                (json.dumps(slots), now(), cid),
+            )
+        return self.get_composition(tenant, user, cid)
+
     def set_conversation(self, tenant: str, user: str, cid: str, conversation: str) -> None:
         """The chat that belongs to this project, found again when it is opened."""
         self.get_composition(tenant, user, cid)
@@ -333,9 +347,18 @@ class BuilderStore:
             if row is None:
                 raise NothingToUndo(cid)
             db.execute("DELETE FROM versions WHERE id=?", (row["id"],))
+            slots = json.loads(row["slots"])
+            if "assets" in current["slots"] and "scenes" in slots:
+                slots["assets"] = current["slots"]["assets"]  # the files are today's
             db.execute(
                 "UPDATE compositions SET title=?, template=?, slots=?, updated_at=? WHERE id=?",
-                (row["title"], row["template"] or current["template"], row["slots"], now(), cid),
+                (
+                    row["title"],
+                    row["template"] or current["template"],
+                    json.dumps(slots),
+                    now(),
+                    cid,
+                ),
             )
         return self.get_composition(tenant, user, cid)
 

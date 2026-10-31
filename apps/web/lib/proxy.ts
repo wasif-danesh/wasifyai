@@ -35,7 +35,13 @@ export async function proxy(
   if (!identity) return Response.json({ detail: "sign in required" }, { status: 401 });
   const init: RequestInit & { duplex?: "half" } = {
     method: opts.method ?? req.method,
-    headers: { ...opts.headers, ...identity, ...traceHeaders(req) },
+    headers: {
+      ...opts.headers,
+      ...identity,
+      ...traceHeaders(req),
+      // a media player asks for a file in pieces
+      ...(req.headers.get("range") ? { range: req.headers.get("range") as string } : {}),
+    },
     body: opts.body,
     signal: req.signal,
     cache: "no-store",
@@ -51,6 +57,10 @@ export async function proxy(
     "content-length",
     "cache-control",
     "x-content-type-options",
+    // what the player's page needs (ADR-0096): its own limits, and a video in pieces
+    "content-security-policy",
+    "accept-ranges",
+    "content-range",
   ]) {
     const value = upstream.headers.get(name);
     if (value) headers[name] = value;

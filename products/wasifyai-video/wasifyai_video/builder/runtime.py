@@ -16,7 +16,7 @@ from typing import Any
 
 from wasifyai_platform_sdk import Identity, RouteDeps, RouteUsage, RunError, search_text
 
-from wasifyai_video.builder import check, draft, projects, templates
+from wasifyai_video.builder import check, draft, media, projects, templates
 from wasifyai_video.builder.store import BuilderStore, NotFound
 from wasifyai_video.index import index_text
 from wasifyai_video.videos import PosterError, VideoRecord, poster_of, video_store
@@ -26,6 +26,9 @@ log = logging.getLogger(__name__)
 PRODUCT_ID = "wasifyai-video"  # the library the renders go to
 PROGRESS = re.compile(r"(\d{1,3})\s*%")
 MIME = {"mp4": "video/mp4", "webm": "video/webm", "mov": "video/quicktime"}
+
+
+QUALITIES = ("draft", "standard", "high")  # HyperFrames' own words for them
 
 
 class NotAvailable(Exception):
@@ -115,6 +118,23 @@ STOPPED = "It was stopped before it finished. Make it again."
 EV_RENDER = "builder.render"  # the usage event a finished video records
 
 
+async def put_files_beside(
+    deps: RouteDeps, identity: Identity, found: dict[str, Any], folder: Path, engine: Any
+) -> None:
+    """A project's files, next to its page, for what opens it on this machine. A worker's engine
+    gets them with the job (`remote_builder`)."""
+    if getattr(engine, "carries_files", False) or deps.storage is None:
+        return
+    owner = (identity.tenant_id, PRODUCT_ID, identity.user_id)
+    for asset in found["slots"].get("assets") or []:
+        target = folder / "assets" / asset["file"]
+        if await asyncio.to_thread(target.exists):
+            continue
+        data = await deps.storage.get_for(owner, media.rel_path(found["id"], asset["file"]))
+        await asyncio.to_thread(target.parent.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(target.write_bytes, data)
+
+
 class RenderManager:
     """Starts, follows and cancels renders. One at a time on this computer: a render holds a
     browser and a few gigabytes, and the person's models need the memory too."""
@@ -143,7 +163,9 @@ class RenderManager:
         """What a render is doing: `checking` the words, then `drawing` the video."""
         return self._stage.get(rid)
 
-    async def start(self, identity: Identity, cid: str, fmt: str = "mp4") -> dict[str, Any]:
+    async def start(
+        self, identity: Identity, cid: str, fmt: str = "mp4", quality: str | None = None
+    ) -> dict[str, Any]:
         state = self._deps.state
         engine = engine_for(state)
         store = store_for(state)
@@ -157,22 +179,27 @@ class RenderManager:
         found = store.get_composition(identity.tenant_id, identity.user_id, cid)
         template = templates.get(found["template"])
         formats = templates.formats_of(found["template"], found["slots"])
+        if quality is not None and quality not in QUALITIES:
+            raise Refused("bad_quality", f"The quality must be one of: {', '.join(QUALITIES)}.")
         if fmt not in formats:
             raise Refused(
                 "bad_format",
                 f"{template.title} can be made as {', '.join(formats)}, not {fmt}.",
             )
-        folder = self._write(identity, found, engine)
+        folder = await self._write_all(identity, found, engine)
         row = store.add_render(
             identity.tenant_id, identity.user_id, cid,
             {"fps": templates.FPS, "seconds": found["slots"]["seconds"], "fit": fit["verdict"],
-             "format": fmt},
+             "format": fmt, **({"quality": quality} if quality else {})},
         )  # fmt: skip
         self._progress[row["id"]] = 0.0
         self._owners[row["id"]] = self._who(identity)
         self._stage[row["id"]] = "checking"
         self._jobs[row["id"]] = asyncio.create_task(
-            self._acting(identity, self._run(identity, found, folder, row["id"], engine, fmt))
+            self._acting(
+                identity,
+                self._run(identity, found, folder, row["id"], engine, fmt, quality=quality),
+            )
         )
         return row
 
@@ -196,6 +223,11 @@ class RenderManager:
                 "Motion graphics needs to be set up again: it has new fonts.",
             )
         projects.write_project(folder, found["template"], found["slots"], gsap, fonts)
+        return folder
+
+    async def _write_all(self, identity: Identity, found: dict[str, Any], engine: Any) -> Path:
+        folder = self._write(identity, found, engine)
+        await put_files_beside(self._deps, identity, found, folder, engine)
         return folder
 
     async def cancel(self, identity: Identity, rid: str) -> bool:
@@ -223,7 +255,7 @@ class RenderManager:
                 found = store.get_composition(who.tenant_id, who.user_id, row["composition_id"])
                 if row["check"] is None:
                     raise NotFound(rid)
-                folder = self._write(who, found, engine)
+                folder = await self._write_all(who, found, engine)
             except (NotFound, Refused):
                 store.finish_render(rid, "failed", error=STOPPED)
                 continue
@@ -231,8 +263,12 @@ class RenderManager:
             self._owners[rid] = self._who(who)
             self._stage[rid] = "drawing"
             fmt = row["settings"].get("format", "mp4")
+            quality = row["settings"].get("quality")
             self._jobs[rid] = asyncio.create_task(
-                self._acting(who, self._run(who, found, folder, rid, engine, fmt, resume=True))
+                self._acting(
+                    who,
+                    self._run(who, found, folder, rid, engine, fmt, resume=True, quality=quality),
+                )
             )
             picked += 1
         return picked
@@ -258,6 +294,7 @@ class RenderManager:
         engine: Any,
         fmt: str,
         resume: bool = False,
+        quality: str | None = None,
     ) -> None:
         store = store_for(self._deps.state)
         # a worker's engine finds the drawing again by the render's id: a restart does not lose it
@@ -283,14 +320,15 @@ class RenderManager:
                     store.finish_render(rid, "failed", error=report["message"])
                     return
             self._stage[rid] = "drawing"
-            result = await engine.render(folder, out, on_progress, ("--format", fmt), **again)
+            args = ("--format", fmt, *(("--quality", quality) if quality else ()))
+            result = await engine.render(folder, out, on_progress, args, **again)
             if not result.ok and result.reason == "failed":
                 # the browser's own worker gave up (seen once under load, never when idle): one
                 # more try; a limit, a refusal or a cancel is never tried again
                 log.warning("a render failed, trying again: %s", getattr(result, "log_tail", ""))
                 self._progress.pop(rid, None)
                 last = 0.0
-                result = await engine.render(folder, out, on_progress, ("--format", fmt))
+                result = await engine.render(folder, out, on_progress, args)
             if not result.ok:
                 status = "cancelled" if result.reason == "cancelled" else "failed"
                 store.finish_render(

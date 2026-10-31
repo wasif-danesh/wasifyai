@@ -84,7 +84,8 @@ export const LivePreview = forwardRef<
     };
   }, [load]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the element exists only once it has loaded
+  const hasUrl = Boolean(url);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the element exists only once it has loaded and has an address
   useEffect(() => {
     const player = host.current;
     if (!player) return;
@@ -113,7 +114,7 @@ export const LivePreview = forwardRef<
       player.removeEventListener("ended", paused);
       player.removeEventListener("error", broke);
     };
-  }, [loaded]);
+  }, [loaded, hasUrl]);
 
   // a new page starts at 0:00, and it takes the player a moment to reach it: the film stays where
   // it was. Asked a few times, because the player has no event for a page it loads again.

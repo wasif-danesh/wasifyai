@@ -29,7 +29,7 @@ from wasifyai_api.services import services_of
 
 # what a render holds, measured on the owner's Mac (docs/spikes/video-builder-v1.md): 0.6 GB for a
 # plain composition by `ps`, 1.8 to 3 GB by V0's sampler; the fit check uses the larger figure
-RENDER_NEED_GB = 3.0
+RENDER_NEED_GB = 5.0
 
 
 class VideoBuilderService:

@@ -241,3 +241,4 @@ export type {
 } from "./creations/model";
 export { handDraft, takeDraft } from "./draft";
 export { HomeStart, type QuickStartId } from "./chat/HomeStart";
+export { mediaLibrary } from "./videobuilder/scenes/media-library";

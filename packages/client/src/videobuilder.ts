@@ -125,10 +125,36 @@ export type Scene = {
   transition: "none" | "fade" | "slide";
   /** Where its parts go on the picture, in percent; a part not named stays where it was designed. */
   arrange?: Record<string, PlacedPart>;
+  background?: SceneBackground | null;
+  images?: { asset: string }[];
+  sound?: SceneSound | null;
   fields: Record<string, unknown>;
 };
 
 export type PlacedPart = { x: number; y: number; w: number; scale: number };
+
+/** A file of a project of scenes, as the engine wrote it down when it was added. */
+export type ProjectAsset = {
+  id: string;
+  kind: "image" | "video" | "audio";
+  name: string;
+  file: string;
+  seconds: number;
+  width: number;
+  height: number;
+  has_audio: boolean;
+  codec: string;
+};
+export type SceneBackground = {
+  asset: string;
+  fit: "cover" | "contain";
+  x: number;
+  y: number;
+  trim: number;
+  volume: number;
+};
+export type SceneSound = { asset: string; volume: number; loop: boolean };
+export type RenderQuality = "draft" | "standard" | "high";
 
 /** A project of scenes: what the slots of a project with `template: "scenes"` are. */
 export type SceneDocument = {
@@ -137,6 +163,8 @@ export type SceneDocument = {
   font: string;
   seconds: number;
   scenes: Scene[];
+  assets?: ProjectAsset[];
+  soundtrack?: (SceneSound & { start: number }) | null;
 };
 
 export type BuilderProject = {
@@ -223,7 +251,11 @@ export type VideoBuilderApi = {
   lint(id: string): Promise<{ ok: boolean; findings: LintFinding[] }>;
   /** A still of the project at `at` seconds (the middle moment when left out), as an object URL. */
   preview(id: string, at?: number): Promise<string>;
-  render(id: string, format?: BuilderFormat): Promise<BuilderRender>;
+  render(id: string, format?: BuilderFormat, quality?: RenderQuality): Promise<BuilderRender>;
+  /** A photo, clip or sound for a project of scenes: checked, kept, and listed in its document. */
+  addAsset(id: string, file: File): Promise<{ asset: ProjectAsset; assets: ProjectAsset[] }>;
+  /** A file out of the project and out of every scene that used it. */
+  removeAsset(id: string, assetId: string): Promise<BuilderProject>;
   renderStatus(renderId: string): Promise<BuilderRender>;
   cancel(renderId: string): Promise<BuilderRender>;
 };
@@ -343,11 +375,20 @@ export function createVideoBuilderApi(
       if (!res.ok) throw new HttpError(res.status, await errorMessage(res));
       return URL.createObjectURL(await res.blob());
     },
-    render: (id, format) =>
+    render: (id, format, quality) =>
       json<BuilderRender>(
         `${base}/projects/${enc(id)}/render`,
-        format ? send("POST", { format }) : { method: "POST" },
+        format || quality
+          ? send("POST", { ...(format ? { format } : {}), ...(quality ? { quality } : {}) })
+          : { method: "POST" },
       ),
+    addAsset(id, file) {
+      const form = new FormData();
+      form.append("file", file);
+      return json(`${base}/projects/${enc(id)}/assets`, { method: "POST", body: form });
+    },
+    removeAsset: (id, assetId) =>
+      json<BuilderProject>(`${base}/projects/${enc(id)}/assets/${enc(assetId)}`, send("DELETE")),
     renderStatus: (rid) => json<BuilderRender>(`${base}/renders/${enc(rid)}`),
     cancel: (rid) => json<BuilderRender>(`${base}/renders/${enc(rid)}/cancel`, { method: "POST" }),
   };

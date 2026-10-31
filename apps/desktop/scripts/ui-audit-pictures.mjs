@@ -31,6 +31,9 @@
 //   apps/desktop/scripts/ui-audit.sh light motion-assistant     The editor's assistant (ADR-0096 MX3) on the real language
 //                                                                model: a brief, edits in words, Undo, a video; on this
 //                                                                computer's data, and it deletes what it made
+//   apps/desktop/scripts/ui-audit.sh light motion-media         Media and sound (ADR-0096 MX5): real files through the
+//                                                                screen and a real video; needs MOTION_FIXTURES and a
+//                                                                throwaway DESKTOP_DATA_DIR
 //   apps/desktop/scripts/ui-audit.sh light motion-arrange       Arranging (ADR-0096 MX4): drag and resize on the real
 //                                                                preview, and a real video; prints where each says it
 //                                                                is; use a throwaway DESKTOP_DATA_DIR
@@ -249,6 +252,127 @@ for (const scheme of ["light", "dark"]) {
       await page.keyboard.press("Escape");
     });
   }
+  if (names.has("motion-media")) {
+    // Media and sound (ADR-0096 MX5): a real picture, clip and sound added through the screen, then a real
+    // video. MOTION_FIXTURES names a folder with can.png, clip-h264.mp4, music.wav and voice.wav. Run it on
+    // a throwaway DESKTOP_DATA_DIR.
+    await attempt("motion-media", async () => {
+      const seen = { errors: [] };
+      const fixtures = process.env.MOTION_FIXTURES;
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      const saved = async () => {
+        await page.waitForTimeout(700);
+        await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      };
+      await open(page, "/video/builder");
+      await page.getByRole("button", { name: "Start empty" }).click();
+      const player = page.locator("hyperframes-player");
+      await page.waitForFunction(
+        () => document.querySelector("hyperframes-player")?.duration > 0,
+        null,
+        {
+          timeout: 30000,
+        },
+      );
+      await page.getByRole("radio", { name: "16:9" }).click();
+      await page.getByRole("radio", { name: "Media", exact: true }).click();
+      const add = page.getByLabel("Add a photo or clip");
+      await add.setInputFiles(join(fixtures, "can.png"));
+      await page.getByRole("button", { name: "can.png" }).waitFor({ timeout: 30000 });
+      await add.setInputFiles(join(fixtures, "clip-h264.mp4"));
+      await page.getByRole("button", { name: "clip-h264.mp4" }).waitFor({ timeout: 60000 });
+      await page.getByRole("button", { name: "can.png" }).click();
+      await page.getByRole("button", { name: "Place on scene" }).click();
+      await saved();
+      // a second scene, with the clip behind it, trimmed, with its own sound
+      await page.getByRole("radio", { name: "Add", exact: true }).click();
+      await page.getByRole("button", { name: /^Animated title/ }).click();
+      await saved();
+      await page.getByRole("radio", { name: "Media", exact: true }).click();
+      await page.getByRole("button", { name: "clip-h264.mp4" }).click();
+      await page.getByRole("button", { name: "Use as background" }).click();
+      await page.getByRole("radio", { name: /^Scene 2/ }).click();
+      await page.getByLabel(/Starts .* seconds in/).fill("3");
+      await page.getByLabel("Its own sound").fill("0.5");
+      await saved();
+      // a sound on the scene, music for the whole video
+      await page.getByRole("radio", { name: "Sound", exact: true }).click();
+      await page.getByLabel("Add a sound").setInputFiles(join(fixtures, "voice.wav"));
+      await page.getByLabel("Repeat it to fill the scene").waitFor({ timeout: 30000 });
+      await saved();
+      await page.getByLabel("Add a music file").setInputFiles(join(fixtures, "music.wav"));
+      await page.getByLabel("Repeat", { exact: true }).waitFor({ timeout: 60000 });
+      await saved();
+      await page.waitForTimeout(4000);
+      await shot(page, "motion-media");
+      const frame = () => page.frames().find((f) => f.url().includes("/live/"));
+      seen.page = await frame().evaluate(() => ({
+        film: window.__timelines?.main?.time(),
+        videos: [...document.querySelectorAll("video")].map((v) => ({
+          ready: v.readyState,
+          error: v.error?.message ?? null,
+          at: v.currentTime,
+        })),
+        audios: document.querySelectorAll("audio").length,
+        images: [...document.querySelectorAll("img")].map((i) => i.naturalWidth),
+      }));
+      // playing: the clip moves in the preview
+      page.on("console", (m) => {
+        if (["error", "warning"].includes(m.type())) seen.errors.push(m.text().slice(0, 200));
+      });
+      await player.evaluate((p) => {
+        window.__seen = [];
+        for (const name of ["play", "pause", "ended", "error", "waiting", "ready"]) {
+          p.addEventListener(name, () => window.__seen.push([name, p.currentTime]));
+        }
+      });
+      const before = await player.evaluate((p) => p.currentTime);
+      await page.getByRole("button", { name: "Play" }).click();
+      await page.waitForTimeout(2500);
+      seen.playing = {
+        before,
+        after: await player.evaluate((p) => [p.currentTime, p.paused, window.__seen]),
+        button: await page
+          .locator('[aria-label="Play"],[aria-label="Pause"]')
+          .getAttribute("aria-label"),
+        videos: await frame().evaluate(() =>
+          [...document.querySelectorAll("video")].map((v) => [
+            v.currentTime,
+            v.paused,
+            v.readyState,
+            v.networkState,
+          ]),
+        ),
+        audios: await frame().evaluate(() =>
+          [...document.querySelectorAll("audio")].map((v) => [
+            v.currentTime,
+            v.paused,
+            v.readyState,
+            v.networkState,
+            v.error?.message ?? null,
+          ]),
+        ),
+      };
+      console.log(`MEDIAPLAY ${JSON.stringify(seen)}`);
+      if (await page.getByRole("button", { name: "Pause" }).count()) {
+        await page.getByRole("button", { name: "Pause" }).click();
+      }
+      const AxeBuilder = require("@axe-core/playwright").default;
+      const axe = await new AxeBuilder({ page })
+        .include("[data-slot=scene-editor]")
+        .exclude("hyperframes-player")
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .analyze();
+      seen.axe = axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      await page.getByRole("button", { name: "Make the video" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Make the video" }).click();
+      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 240000 });
+      await shot(page, "motion-media-made");
+      seen.check = await dialog.getByText(/Checked:/).innerText();
+      console.log(`MEDIA ${JSON.stringify(seen)}`);
+    });
+  }
   if (names.has("motion-arrange")) {
     // Arranging (ADR-0096 MX4): drag a title and resize it on the real preview; the page, the document
     // and a real video must agree on where it is. Run it on a throwaway DESKTOP_DATA_DIR.
@@ -339,6 +463,7 @@ for (const scheme of ["light", "dark"]) {
       seen.axe = axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
       await page.getByRole("button", { name: "Make the video" }).click();
       const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Make the video" }).click();
       await dialog.getByText("Your video is in the Library").waitFor({ timeout: 180000 });
       seen.video = await dialog.locator("video").getAttribute("src");
       console.log(`ARRANGE ${JSON.stringify(seen)}`);
@@ -547,6 +672,7 @@ for (const scheme of ["light", "dark"]) {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.getByRole("button", { name: "Make the video" }).click();
       const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Make the video" }).click();
       await dialog.getByText("Your video is in the Library").waitFor({ timeout: 180000 });
       await shot(page, "motion-editor-made");
       seen.check = await dialog.getByText(/Checked:/).innerText();

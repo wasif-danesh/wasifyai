@@ -55,7 +55,7 @@ in your library so you can change it. Motion graphics is experimental.
 ## Needs
 
 - Motion graphics set up (a download of about 320 MB, shown before it starts; FFmpeg is part of it) and
-  about 3 GB of free memory. Only Apple-silicon Macs for now.
+  about 5 GB of free memory. Only Apple-silicon Macs for now.
 
 ## Examples
 

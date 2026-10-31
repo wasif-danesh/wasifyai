@@ -34,7 +34,7 @@ earlier version is kept, and **Undo the last change** on the Motion graphics scr
 
 ## Needs
 
-- Motion graphics set up and about 3 GB of free memory, to make the video again.
+- Motion graphics set up and about 5 GB of free memory, to make the video again.
 
 ## Examples
 

@@ -196,6 +196,33 @@ describe("the editor", () => {
     expect(screen.getByText("Scene 1 of 2")).toBeTruthy();
   });
 
+  it("hears the player even when its address comes after its script", async () => {
+    let answer: (a: { url: string; expires_at: number }) => void = () => {};
+    rig({
+      live: vi.fn(
+        () =>
+          new Promise((go) => {
+            answer = go;
+          }),
+      ),
+    } as never);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    await act(async () =>
+      answer({ url: "http://engine/live", expires_at: Date.now() / 1000 + 3600 }),
+    );
+    const player = await waitFor(() => {
+      const found = document.querySelector("hyperframes-player");
+      expect(found).toBeTruthy();
+      return found as Element;
+    });
+    await act(async () => {
+      player.dispatchEvent(new Event("play"));
+    });
+    expect(screen.getByRole("button", { name: "Pause" })).toBeTruthy();
+  });
+
   it("selecting a scene shows its details", async () => {
     rig();
     fireEvent.click(screen.getByRole("button", { name: /Scene 2, Proof/ }));
@@ -305,7 +332,10 @@ describe("the editor", () => {
     const { update, api } = rig();
     fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: "Last words" } });
     fireEvent.click(screen.getByRole("button", { name: "Make the video" }));
-    await waitFor(() => expect(api.render).toHaveBeenCalled());
+    const asked = screen.getByRole("dialog");
+    fireEvent.click(within(asked).getByRole("radio", { name: "Draft" }));
+    fireEvent.click(within(asked).getByRole("button", { name: "Make the video" }));
+    await waitFor(() => expect(api.render).toHaveBeenCalledWith("p".repeat(32), "mp4", "draft"));
     expect(update).toHaveBeenCalledTimes(1);
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Checking the words on the screen…")).toBeTruthy();
@@ -318,6 +348,9 @@ describe("the editor", () => {
     const { api } = rig({ update } as never);
     fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Make the video" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Make the video" }),
+    );
     await waitFor(() => expect(update).toHaveBeenCalled());
     await act(async () => {
       await vi.advanceTimersByTimeAsync(50);
@@ -495,6 +528,7 @@ describe("the first screen", () => {
     expect(onBrief).toHaveBeenCalledWith(
       "A short video about an offer, clear about what it is. Our new tea.",
       "square",
+      undefined,
     );
   });
 
@@ -618,5 +652,107 @@ describe("arranging on the preview", () => {
     fireEvent.click(screen.getByRole("button", { name: "As designed" }));
     expect(screen.getByRole("button", { name: "Undo: Back to the design" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "Arrange" })).toBeTruthy();
+  });
+});
+
+describe("a project's files", () => {
+  const picture = {
+    id: "aaaa0000", kind: "image" as const, name: "can.jpg", file: "aaaa0000.jpg", seconds: 0,
+    width: 10, height: 10, has_audio: false, codec: "",
+  }; // biome-ignore format: a sample
+  const clip = {
+    id: "bbbb0000", kind: "video" as const, name: "pour.mp4", file: "bbbb0000.mp4", seconds: 8,
+    width: 10, height: 10, has_audio: true, codec: "hevc",
+  }; // biome-ignore format: a sample
+  const song = {
+    id: "cccc0000", kind: "audio" as const, name: "song.m4a", file: "cccc0000.m4a", seconds: 8,
+    width: 0, height: 0, has_audio: false, codec: "aac",
+  }; // biome-ignore format: a sample
+
+  function withFiles(assets = [picture, clip, song]) {
+    const update = vi.fn(async (_id: string, slots: unknown) =>
+      project({ ...(slots as SceneDocument), assets }),
+    );
+    const api = {
+      update,
+      live: vi.fn(async () => ({
+        url: "http://engine/live/t/index.html",
+        expires_at: Date.now() / 1000 + 3600,
+      })),
+      addAsset: vi.fn(async () => ({ asset: picture, assets: [...assets, picture] })),
+      removeAsset: vi.fn(async () => project({ ...film, assets: [] })),
+    } as unknown as VideoBuilderApi;
+    render(
+      <SceneEditor
+        api={api}
+        project={project({ ...film, assets })}
+        catalogue={catalogue}
+        onBack={() => {}}
+      />,
+    );
+    return { api, update };
+  }
+  const tool = (name: string) => fireEvent.click(screen.getByRole("radio", { name }));
+  const saved = async (update: ReturnType<typeof vi.fn>) => {
+    await waitFor(() => expect(update).toHaveBeenCalled(), { timeout: 2000 });
+    return update.mock.calls.at(-1)?.[1] as SceneDocument;
+  };
+
+  it("uses a picture as a background and places it on a scene", async () => {
+    const { update } = withFiles();
+    tool("Media");
+    fireEvent.click(screen.getByRole("button", { name: "can.jpg" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use as background" }));
+    fireEvent.click(screen.getByRole("button", { name: "Place on scene" }));
+    const sent = await saved(update);
+    expect(sent.scenes[0]?.background?.asset).toBe("aaaa0000");
+    expect(sent.scenes[0]?.images).toEqual([{ asset: "aaaa0000" }]);
+    expect(screen.getByText("Behind: can.jpg")).toBeTruthy();
+    expect(screen.getByText("Placed: can.jpg")).toBeTruthy();
+  });
+
+  it("says when a clip may not play in the preview, and offers its trim and its sound", async () => {
+    withFiles();
+    tool("Media");
+    fireEvent.click(screen.getByRole("button", { name: "pour.mp4" }));
+    expect(screen.getByText(/This clip is hevc/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Place on scene" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Use as background" }));
+    expect(screen.getByLabelText(/Starts 0 seconds in/)).toBeTruthy();
+    expect(screen.getByLabelText("Its own sound")).toBeTruthy();
+  });
+
+  it("gives a scene its own sound, and the whole video its music", async () => {
+    const { update } = withFiles();
+    tool("Sound");
+    fireEvent.click(screen.getAllByRole("button", { name: "song.m4a" })[0] as HTMLElement);
+    expect(screen.getByLabelText("Repeat it to fill the scene")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: "song.m4a" }).at(-1) as HTMLElement);
+    const sent = await saved(update);
+    expect(sent.scenes[0]?.sound?.asset).toBe("cccc0000");
+    expect(sent.soundtrack).toEqual({ asset: "cccc0000", volume: 0.4, loop: true, start: 0 });
+    expect(screen.getByLabelText("Repeat")).toBeTruthy();
+  });
+
+  it("adds a file from this computer, and says why when it cannot", async () => {
+    const { api } = withFiles();
+    tool("Media");
+    const file = new File(["x"], "new.png");
+    fireEvent.change(screen.getByLabelText("Add a photo or clip"), { target: { files: [file] } });
+    await waitFor(() => expect(api.addAsset).toHaveBeenCalledWith("p".repeat(32), file));
+    (api.addAsset as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("Too big."));
+    fireEvent.change(screen.getByLabelText("Add a photo or clip"), { target: { files: [file] } });
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Too big."));
+  });
+
+  it("removes a file from the project and from its scenes, as one Undo", async () => {
+    const { api } = withFiles();
+    tool("Media");
+    fireEvent.click(screen.getByRole("button", { name: "can.jpg" }));
+    fireEvent.click(screen.getByRole("button", { name: /Remove from the project/ }));
+    await waitFor(() => expect(api.removeAsset).toHaveBeenCalledWith("p".repeat(32), "aaaa0000"));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Undo: Remove a file" })).toBeTruthy(),
+    );
   });
 });

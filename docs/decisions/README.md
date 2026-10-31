@@ -95,6 +95,6 @@
 | [0093](0093-one-shell-one-make-screen.md) | One shell and one make screen for every product: the UI audit of 2026-10-27 and its plan (`docs/ui-improvement-plan.md`, stages U0 to U12) | Accepted (2026-10-30; U0 to U12 built) |
 | [0094](0094-no-safeguards-marks-or-licence-data-in-v1.md) | No safeguards, marks, consent gates, terms or licence data in v1 | Accepted (2026-10-29) |
 | [0095](0095-own-provider-keys-per-product.md) | The person's own provider keys, one per product (mockup `docs/spikes/own-keys-mockup.html`) | Proposed (mockup approved 2026-10-29; real-key tests at release) |
-| [0096](0096-motion-graphics-scene-editor.md) | Motion graphics becomes a scene editor for promotion and social content, with the assistant built in (mockup `docs/spikes/motion-editor-mockup.html`) | Accepted (2026-10-31; mockup approved; MX1 to MX4 built) |
+| [0096](0096-motion-graphics-scene-editor.md) | Motion graphics becomes a scene editor for promotion and social content, with the assistant built in (mockup `docs/spikes/motion-editor-mockup.html`) | Accepted (2026-10-31; mockup approved; MX1 to MX5 built) |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

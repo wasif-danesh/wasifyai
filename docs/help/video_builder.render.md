@@ -27,6 +27,10 @@ in the Library. It takes seconds to a minute for a short video and only one is m
 - `composition_id`: The project to make.
 - `format`: mp4, webm or mov, as the template allows (a title, quote or chart is an MP4).
 
+## Quality
+
+Draft is fastest, High is the usual choice, and Best takes longest. Field `quality`: draft, standard or high.
+
 ## Limits
 
 - One video at a time. Choose Cancel to stop one that is running; nothing is kept.
@@ -35,7 +39,7 @@ in the Library. It takes seconds to a minute for a short video and only one is m
 ## Needs
 
 - Motion graphics set up (Motion graphics; FFmpeg is part of it) and enough free memory (about
-  3 GB).
+  5 GB).
 
 ## Examples
 

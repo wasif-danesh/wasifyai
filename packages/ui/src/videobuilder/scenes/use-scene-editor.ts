@@ -4,6 +4,7 @@
 import type {
   BuilderProject,
   BuilderRender,
+  RenderQuality,
   Scene,
   SceneDocument,
   VideoBuilderApi,
@@ -58,7 +59,7 @@ export function withWorkedOut(local: SceneDocument, saved: SceneDocument): Scene
       fields: { ...scene.fields, seconds: from.fields.seconds },
     };
   });
-  return { ...local, scenes };
+  return { ...local, scenes, assets: saved.assets };
 }
 
 export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
@@ -356,17 +357,55 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
     return () => clearInterval(poll);
   }, [api, renderId]);
 
-  const make = useCallback(async () => {
-    setProblem(null);
-    try {
-      if (timer.current) clearTimeout(timer.current);
+  /** A file for the project. It stays whichever version of the scenes is on the screen. */
+  const addFile = useCallback(
+    async (file: File) => {
       await saveNow();
-      if (dirty.current) return; // the last change could not be saved: `problem` says why
-      setRender(await api.render(project.id, "mp4"));
-    } catch (e) {
-      setProblem(say(e, "The video could not be started."));
-    }
-  }, [api, project.id, saveNow]);
+      const { asset, assets } = await api.addAsset(project.id, file);
+      if (!alive.current) return undefined;
+      const next = { ...latest.current, assets };
+      latest.current = next;
+      setDocument(next);
+      return asset;
+    },
+    [api, project.id, saveNow],
+  );
+
+  /** A file out of the project, and out of the scenes that used it: one Undo step for the scenes. */
+  const removeFile = useCallback(
+    async (assetId: string) => {
+      try {
+        await saveNow();
+        const found = await api.removeAsset(project.id, assetId);
+        const next = found.slots as unknown as SceneDocument;
+        if (!alive.current) return;
+        const before = latest.current;
+        setPast((p) => [...p, { label: "Remove a file", document: before }]);
+        setFuture([]);
+        latest.current = next;
+        setDocument(next);
+        setRevision((r) => r + 1);
+      } catch (e) {
+        setProblem(say(e, "That file could not be removed."));
+      }
+    },
+    [api, project.id, saveNow],
+  );
+
+  const make = useCallback(
+    async (quality?: RenderQuality) => {
+      setProblem(null);
+      try {
+        if (timer.current) clearTimeout(timer.current);
+        await saveNow();
+        if (dirty.current) return; // the last change could not be saved: `problem` says why
+        setRender(await api.render(project.id, "mp4", quality));
+      } catch (e) {
+        setProblem(say(e, "The video could not be started."));
+      }
+    },
+    [api, project.id, saveNow],
+  );
 
   const cancel = useCallback(async () => {
     if (!render) return;
@@ -396,6 +435,8 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
     redo,
     adopt,
     undoOfTool,
+    addFile,
+    removeFile,
     changeScene,
     moveScene,
     addScene,

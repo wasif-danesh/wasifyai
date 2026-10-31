@@ -18,6 +18,11 @@ const MIME = {
   ".css": "text/css",
   ".woff2": "font/woff2",
   ".json": "application/json",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".mp4": "video/mp4",
+  ".mov": "video/quicktime",
+  ".webm": "video/webm",
 };
 
 const server = http.createServer((req, res) => {
@@ -72,6 +77,21 @@ try {
   page.on("response", (r) => r.status() >= 400 && console.log(`NOTE HTTP ${r.status()} ${r.url()}`));
   await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "load" });
   await page.evaluate(() => document.fonts.ready);
+  // pictures and clips, so that nothing changes between one picture of the page and the next
+  await page.evaluate(() =>
+    Promise.race([
+      new Promise((done) => setTimeout(done, 5000)),
+      Promise.all(
+        [...document.querySelectorAll("img, video")].map((el) => {
+          if (el.tagName === "IMG" ? el.complete : el.readyState >= 2) return null;
+          return new Promise((done) => {
+            el.addEventListener("error", done);
+            el.addEventListener(el.tagName === "IMG" ? "load" : "loadeddata", done);
+          });
+        }),
+      ),
+    ]),
+  );
   await page.waitForFunction(() => Boolean(window.__timelines?.main), { polling: 100, timeout: 10000 });
   const fonts = await page.evaluate(() => [...document.fonts].map((f) => `${f.family}:${f.status}`));
   const items = [];

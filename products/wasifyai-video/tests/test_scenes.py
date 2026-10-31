@@ -95,7 +95,7 @@ def test_the_page_has_every_scene_at_its_own_time_with_nothing_shared():
     assert len(ids) == len(set(ids))
     for slot in re.findall(r'data-slot="([^"]+)"', page):
         assert slot.split("-")[0] in (a, b, c)
-    assert 'data-start="0" data-duration="4" data-track-index="1"' in page
+    assert 'data-start="0" data-duration="4" data-track-index="4"' in page
     assert "film.add(tl, 9)" in page and 'window.__timelines["main"] = film' in page
 
 
@@ -304,3 +304,93 @@ def test_the_live_page_only_adds_what_the_player_and_the_editor_talk_to():
     assert "wasify-measure" in with_all and "hyperframe.runtime.iife.js" in with_all
     assert "wasify-measure" not in page, "what is rendered has no such thing"
     assert "wasify-measure" not in live.with_runtime(page)
+
+
+ASSETS = [
+    {"id": "aaaa0000", "kind": "image", "name": "can", "file": "aaaa0000.png", "seconds": 0,
+     "width": 100, "height": 200, "has_audio": False, "codec": ""},
+    {"id": "bbbb0000", "kind": "video", "name": "pour", "file": "bbbb0000.mp4", "seconds": 12,
+     "width": 1920, "height": 1080, "has_audio": True, "codec": "h264"},
+    {"id": "cccc0000", "kind": "audio", "name": "song", "file": "cccc0000.m4a", "seconds": 7,
+     "width": 0, "height": 0, "has_audio": False, "codec": "aac"},
+]  # fmt: skip
+
+
+def media_doc(**scene) -> dict:
+    one = {"kind": "title", "fields": {"title": "Hi", "seconds": 5}, **scene}
+    return templates.normalize_slots(SCENES, {"assets": ASSETS, "scenes": [one]})
+
+
+def test_a_video_behind_a_scene_starts_where_it_should_with_its_own_sound():
+    d = media_doc(
+        background={"asset": "bbbb0000", "trim": 3, "volume": 0.5, "fit": "contain", "x": 10}
+    )
+    page = templates.render_html(SCENES, d)
+    assert 'data-media-start="3.0" data-has-audio="true" data-volume="0.5"' in page
+    assert 'src="assets/bbbb0000.mp4"' in page and "object-fit: contain" in page
+    silent = templates.render_html(SCENES, media_doc(background={"asset": "bbbb0000"}))
+    assert " muted " in silent and "data-has-audio" not in silent
+
+
+def test_a_picture_is_placed_and_can_be_moved_like_any_part():
+    d = media_doc(images=[{"asset": "aaaa0000"}])
+    assert d["scenes"][0]["arrange"]["image-0"]["w"] == 30
+    page = templates.render_html(SCENES, d)
+    assert 'src="assets/aaaa0000.png"' in page and "placed-0" in page
+    assert "image-0" in templates.live_parts(d)[d["scenes"][0]["id"]]
+    moved = media_doc(images=[{"asset": "aaaa0000"}], arrange={"image-0": {"x": 1, "y": 2, "w": 9}})
+    assert moved["scenes"][0]["arrange"]["image-0"]["x"] == 1
+    gone = media_doc(images=[], arrange={"image-0": {"x": 1}})
+    assert gone["scenes"][0]["arrange"] == {}, "the place of a picture that left goes with it"
+
+
+def test_sounds_play_in_their_time_and_loop_to_fill_it():
+    d = media_doc(sound={"asset": "cccc0000", "volume": 0.5})
+    page = templates.render_html(SCENES, d)
+    assert (
+        'data-start="0.0" data-duration="5" ' in page
+        or 'data-start="0.0" data-duration="5.0"' in page
+    )
+    looped = templates.normalize_slots(
+        SCENES,
+        {"assets": ASSETS,
+         "soundtrack": {"asset": "cccc0000", "start": 1, "loop": True, "volume": 0.4},
+         "scenes": [{"kind": "title", "fields": {"title": "Hi", "seconds": 20}}]},
+    )  # fmt: skip
+    page = templates.render_html(SCENES, looped)
+    assert 'id="sound-2"' in page and 'data-start="15.0" data-duration="5.0"' in page
+
+
+def test_a_file_that_is_gone_leaves_its_scene_working():
+    one = {"kind": "title", "fields": {"title": "Hi"}, "background": {"asset": "dddd0000"},
+           "images": [{"asset": "dddd0000"}], "sound": {"asset": "dddd0000"}}  # fmt: skip
+    d = templates.normalize_slots(SCENES, {"assets": ASSETS, "scenes": [one]})
+    assert d["scenes"][0]["background"] is None and d["scenes"][0]["images"] == []
+    assert d["scenes"][0]["sound"] is None
+    assert "dddd0000" not in templates.render_html(SCENES, d)
+
+
+@pytest.mark.parametrize(
+    "file", ['"><script>x</script>.png', "../../etc/passwd", "aaaa0000.exe", "aaaa0000.png/x"]
+)
+def test_a_file_name_that_is_not_ours_never_reaches_the_page(file):
+    bad = {**ASSETS[0], "file": file}
+    d = templates.normalize_slots(
+        SCENES,
+        {"assets": [bad], "scenes": [
+            {"kind": "title", "fields": {"title": "Hi"}, "background": {"asset": "aaaa0000"}}
+        ]},
+    )  # fmt: skip
+    assert d["assets"] == [] and file not in templates.render_html(SCENES, d)
+
+
+def test_a_film_with_media_or_sound_is_only_an_mp4():
+    only = {"kind": "lower_third", "fields": {"name": "Hi"}}
+    plain = templates.normalize_slots(SCENES, {"assets": ASSETS, "scenes": [only]})
+    assert templates.is_transparent(SCENES, plain)
+    behind = {**only, "background": {"asset": "aaaa0000"}}
+    d = templates.normalize_slots(SCENES, {"assets": ASSETS, "scenes": [behind]})
+    assert not templates.is_transparent(SCENES, d) and templates.formats_of(SCENES, d) == ("mp4",)
+    heard = {**only, "sound": {"asset": "cccc0000"}}
+    d = templates.normalize_slots(SCENES, {"assets": ASSETS, "scenes": [heard]})
+    assert templates.formats_of(SCENES, d) == ("mp4",)

@@ -32,7 +32,7 @@ export function ScenesStart({
   disabled,
 }: {
   catalogue: TemplateCatalogue | null;
-  onBrief: (brief: string, shape: BuilderShape) => void;
+  onBrief: (brief: string, shape: BuilderShape, picture?: File) => void;
   onEmpty: (shape: BuilderShape) => void;
   onOneGraphic: (template: string) => void;
   disabled?: boolean;
@@ -40,6 +40,7 @@ export function ScenesStart({
   const [text, setText] = useState("");
   const [shape, setShape] = useState<BuilderShape>("portrait");
   const [start, setStart] = useState<string | null>(null);
+  const [picture, setPicture] = useState<File | null>(null);
   const chosen = STARTS.find(([name]) => name === start)?.[1] ?? "";
   const brief = [chosen, text.trim()].filter(Boolean).join(" ");
   return (
@@ -59,6 +60,15 @@ export function ScenesStart({
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
+        <label className="flex w-fit cursor-pointer items-center gap-2 rounded-full border px-3 py-1 text-xs hover:bg-muted">
+          {picture ? picture.name : "Add a picture of it"}
+          <input
+            type="file"
+            className="sr-only"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(e) => setPicture(e.target.files?.[0] ?? null)}
+          />
+        </label>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Segmented
             size="sm"
@@ -79,7 +89,7 @@ export function ScenesStart({
             <Button
               type="button"
               disabled={disabled || !brief}
-              onClick={() => onBrief(brief, shape)}
+              onClick={() => onBrief(brief, shape, picture ?? undefined)}
             >
               Make a first version
             </Button>

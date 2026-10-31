@@ -105,6 +105,9 @@ class RenderIn(CompositionIn):
         "mp4",
         description="mp4, or webm or mov (transparent) for a lower third or captions.",
     )
+    quality: Literal["draft", "standard", "high"] | None = Field(
+        None, description="draft is fastest, high is best. standard if not given."
+    )
 
 
 class Finding(BaseModel):
@@ -182,6 +185,16 @@ class SceneIn(Strict):
     arrange: dict[str, dict[str, float]] | None = Field(
         None, description="Where the scene's parts go: part -> x, y, w (percent) and scale."
     )
+    background: dict[str, Any] | None = Field(
+        None,
+        description="A file behind the scene: asset, fit (cover, contain), x, y, trim, volume.",
+    )
+    images: list[dict[str, Any]] | None = Field(
+        None, description="Pictures on the scene: [{asset}]. Placed with arrange as image-0 and on."
+    )
+    sound: dict[str, Any] | None = Field(
+        None, description="A sound during the scene: asset, volume (0 to 1), loop."
+    )
     fields: dict[str, Any] = Field(
         description=(
             "The template's words and settings, exactly as they should be shown, without shape and "
@@ -231,6 +244,16 @@ class ChangeSceneIn(SceneRefIn):
             "Empty puts them back where they were designed."
         ),
     )
+    background: dict[str, Any] | None = Field(
+        None,
+        description="A file behind the scene: asset, fit (cover, contain), x, y, trim, volume.",
+    )
+    images: list[dict[str, Any]] | None = Field(
+        None, description="Pictures on the scene: [{asset}]. Placed with arrange as image-0 and on."
+    )
+    sound: dict[str, Any] | None = Field(
+        None, description="A sound during the scene: asset, volume (0 to 1), loop."
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -246,6 +269,9 @@ class SetProjectIn(CompositionIn):
     name: str | None = Field(None, max_length=80, description="The project's name.")
     shape: Shape | None = Field(None, description="The shape of the whole video.")
     font: Font | None = Field(None, description="The letters of the whole video.")
+    soundtrack: dict[str, Any] | None = Field(
+        None, description="Music for the whole video: asset, volume, start, loop."
+    )
     scenes: list[SceneIn] | None = Field(
         None, max_length=templates.MAX_SCENES,
         description="All the scenes, in order, replacing the ones there now.",
@@ -348,13 +374,13 @@ async def _lint(p: CompositionIn, ctx: ActionContext) -> Outcome:
 
 
 async def _made(
-    ctx: ActionContext, cid: str, fmt: str
+    ctx: ActionContext, cid: str, fmt: str, quality: str | None = None
 ) -> tuple[Outcome | None, dict[str, Any] | None]:
     """Make the video of a project: (what to return if it did not work, the finished render)."""
     deps = need_deps(ctx)
     manager = manager_for(deps)
     try:
-        row = await manager.start(ctx.actor, cid, fmt)
+        row = await manager.start(ctx.actor, cid, fmt, quality)
     except Refused as e:
         return Outcome.refused(e.message, e.code), None
     try:
@@ -370,7 +396,7 @@ async def _made(
 
 
 async def _render(p: RenderIn, ctx: ActionContext) -> Outcome:
-    failed, done = await _made(ctx, p.composition_id, p.format)
+    failed, done = await _made(ctx, p.composition_id, p.format, p.quality)
     if failed is not None or done is None:
         return failed or Outcome.error("The video could not be made.", "render_failed")
     found = _found(ctx, p.composition_id)
@@ -509,7 +535,10 @@ async def _add_scene(p: AddSceneIn, ctx: ActionContext) -> Outcome:
         ctx, p.composition_id, "The scene was added.",
         lambda d: scenes.add(
             d, p.kind, p.fields, p.name, p.position,
-            {"caption": p.caption, "transition": p.transition, "arrange": p.arrange},
+            {
+                "caption": p.caption, "transition": p.transition, "arrange": p.arrange,
+                "background": p.background, "images": p.images, "sound": p.sound,
+            },
         ),
     )  # fmt: skip
 
@@ -520,6 +549,7 @@ async def _change_scene(p: ChangeSceneIn, ctx: ActionContext) -> Outcome:
         lambda d: scenes.change(
             d, p.scene_id, p.fields, p.name,
             caption=p.caption, transition=p.transition, arrange=p.arrange,
+            background=p.background, images=p.images, sound=p.sound,
         ),
     )  # fmt: skip
 

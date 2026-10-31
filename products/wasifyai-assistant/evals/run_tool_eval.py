@@ -600,6 +600,13 @@ async def run_remote(
 EDITOR_PROJECT = {
     "name": "Northbean launch",
     "shape": "portrait",
+    "assets": [
+        {"id": "aaaa0000", "kind": "image", "name": "can.png", "file": "aaaa0000.png"},
+        {"id": "bbbb0000", "kind": "video", "name": "pouring.mp4", "file": "bbbb0000.mp4",
+         "seconds": 8, "has_audio": True},
+        {"id": "cccc0000", "kind": "audio", "name": "calm song.mp3", "file": "cccc0000.mp3",
+         "seconds": 30},
+    ],
     "scenes": [
         {"id": "aaaaaaaa", "name": "Hook", "kind": "title", "transition": "fade",
          "fields": {"title": "Mornings are hard.", "subtitle": "Your coffee should not be.",
@@ -633,11 +640,17 @@ def applied(action: str, params: dict, document: dict) -> tuple[dict | None, str
             return templates.normalize_slots(templates.SCENES, {**document, **changes}), ""
         if action == "motion.change_scene":
             q = motion.ChangeSceneIn(**given)
-            more = {"caption": q.caption, "transition": q.transition, "arrange": q.arrange}
+            more = {
+                "caption": q.caption, "transition": q.transition, "arrange": q.arrange,
+                "background": q.background, "images": q.images, "sound": q.sound,
+            }  # fmt: skip
             return scenes.change(document, q.scene_id, q.fields, q.name, **more), ""
         if action == "motion.add_scene":
             r = motion.AddSceneIn(**given)
-            more = {"caption": r.caption, "transition": r.transition}
+            more = {
+                "caption": r.caption, "transition": r.transition, "arrange": r.arrange,
+                "background": r.background, "images": r.images, "sound": r.sound,
+            }  # fmt: skip
             return scenes.add(document, r.kind, r.fields, r.name, r.position, more)[0], ""
         if action == "motion.move_scene":
             m = motion.MoveSceneIn(**given)
@@ -687,6 +700,18 @@ def judge_editor(case: dict, message: dict, document: dict) -> tuple[bool, str]:
         if name == "min_scenes":
             if len(made["scenes"]) < value:
                 return False, f"only {len(made['scenes'])} scenes"
+            continue
+        used = re.fullmatch(r"scene_(\d+)_uses_(\w+)", name)
+        if used:  # scene_2_uses_background: the file it should now use
+            have = made["scenes"][int(used[1]) - 1].get(used[2])
+            have = have[0] if isinstance(have, list) and have else have
+            if not isinstance(have, dict) or have.get("asset") != value:
+                return False, f"{name} is {have!r}; params {shown}"
+            continue
+        if name == "soundtrack_asset":
+            have = (made.get("soundtrack") or {}).get("asset")
+            if have != value:
+                return False, f"the soundtrack is {have!r}; params {shown}"
             continue
         placed = re.fullmatch(r"scene_(\d+)_(\w+?)_(\w+?)_(under|over)", name)
         if placed:  # scene_2_title_y_under: where the second scene's title was placed

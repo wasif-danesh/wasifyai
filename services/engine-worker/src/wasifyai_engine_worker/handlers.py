@@ -236,9 +236,16 @@ def _page(service: Any, w: Work, template: str, slots: dict[str, Any]) -> Path:
     return folder
 
 
+async def _files_of(w: Work) -> None:
+    """A project's pictures, clips and sounds, next to its page (`project/assets/...`)."""
+    for name in w.job.files:
+        await w.file(name)
+
+
 async def _inspect(service: Any, w: Work) -> dict[str, Any]:
     p = w.job.params
     folder = await asyncio.to_thread(_page, service, w, p["template"], p["slots"])
+    await _files_of(w)
     report = await service.inspect(folder, p["spec"])
     return {"report": report}
 
@@ -246,6 +253,7 @@ async def _inspect(service: Any, w: Work) -> dict[str, Any]:
 async def _snapshot(service: Any, w: Work) -> dict[str, Any]:
     p = w.job.params
     folder = await asyncio.to_thread(_page, service, w, p["template"], p["slots"])
+    await _files_of(w)
     work = w.folder / "still"
     res = await service.snapshot(folder, work, float(p["at"]))
     pngs = sorted(work.rglob("*.png")) if res.ok else []
@@ -261,6 +269,7 @@ async def _render(service: Any, w: Work) -> dict[str, Any]:
     p = w.job.params
     fmt = str(p.get("format", "mp4"))
     folder = await asyncio.to_thread(_page, service, w, p["template"], p["slots"])
+    await _files_of(w)
     out = w.folder / f"video.{fmt}"
     seen = re.compile(r"(\d{1,3})\s*%")
 
@@ -269,7 +278,9 @@ async def _render(service: Any, w: Work) -> dict[str, Any]:
         if hits:
             w.report_soon(min(int(hits[-1]), 100) / 100, "Drawing")
 
-    res = await service.render(folder, out, on_progress, ("--format", fmt))
+    quality = str(p.get("quality") or "")
+    args = ("--format", fmt, *(("--quality", quality) if quality else ()))
+    res = await service.render(folder, out, on_progress, args)
     numbers = {
         "seconds": res.seconds, "peak_rss_bytes": res.peak_rss_bytes,
         "blocked_count": res.blocked_count, "reason": res.reason, "message": res.message,

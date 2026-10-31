@@ -3310,6 +3310,51 @@
             "description": "Where the scene's parts go: part -> x, y, w (percent) and scale.",
             "title": "Arrange"
           },
+          "background": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "A file behind the scene: asset, fit (cover, contain), x, y, trim, volume.",
+            "title": "Background"
+          },
+          "images": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Pictures on the scene: [{asset}]. Placed with arrange as image-0 and on.",
+            "title": "Images"
+          },
+          "sound": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "A sound during the scene: asset, volume (0 to 1), loop.",
+            "title": "Sound"
+          },
           "fields": {
             "additionalProperties": true,
             "description": "The template's words and settings, exactly as they should be shown, without shape and font (those are set for the whole project). `seconds` is 5 if not given.",
@@ -3557,6 +3602,51 @@
             "default": null,
             "description": "Where the scene's parts go: part -> x, y, w (percent of the picture) and scale. Empty puts them back where they were designed.",
             "title": "Arrange"
+          },
+          "background": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "A file behind the scene: asset, fit (cover, contain), x, y, trim, volume.",
+            "title": "Background"
+          },
+          "images": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Pictures on the scene: [{asset}]. Placed with arrange as image-0 and on.",
+            "title": "Images"
+          },
+          "sound": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "A sound during the scene: asset, volume (0 to 1), loop.",
+            "title": "Sound"
           }
         },
         "required": [
@@ -4586,6 +4676,51 @@
                 "description": "Where the scene's parts go: part -> x, y, w (percent) and scale.",
                 "title": "Arrange"
               },
+              "background": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "A file behind the scene: asset, fit (cover, contain), x, y, trim, volume.",
+                "title": "Background"
+              },
+              "images": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Pictures on the scene: [{asset}]. Placed with arrange as image-0 and on.",
+                "title": "Images"
+              },
+              "sound": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "A sound during the scene: asset, volume (0 to 1), loop.",
+                "title": "Sound"
+              },
               "fields": {
                 "additionalProperties": true,
                 "description": "The template's words and settings, exactly as they should be shown, without shape and font (those are set for the whole project). `seconds` is 5 if not given.",
@@ -4659,6 +4794,20 @@
             "default": null,
             "description": "The letters of the whole video.",
             "title": "Font"
+          },
+          "soundtrack": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Music for the whole video: asset, volume, start, loop.",
+            "title": "Soundtrack"
           },
           "scenes": {
             "anyOf": [
@@ -4997,6 +5146,51 @@
                 "default": null,
                 "description": "Where the scene's parts go: part -> x, y, w (percent) and scale.",
                 "title": "Arrange"
+              },
+              "background": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "A file behind the scene: asset, fit (cover, contain), x, y, trim, volume.",
+                "title": "Background"
+              },
+              "images": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Pictures on the scene: [{asset}]. Placed with arrange as image-0 and on.",
+                "title": "Images"
+              },
+              "sound": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "A sound during the scene: asset, volume (0 to 1), loop.",
+                "title": "Sound"
               },
               "fields": {
                 "additionalProperties": true,
@@ -7532,6 +7726,24 @@
             ],
             "title": "Format",
             "type": "string"
+          },
+          "quality": {
+            "anyOf": [
+              {
+                "enum": [
+                  "draft",
+                  "standard",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "draft is fastest, high is best. standard if not given.",
+            "title": "Quality"
           }
         },
         "required": [

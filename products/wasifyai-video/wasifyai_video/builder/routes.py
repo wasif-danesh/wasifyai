@@ -6,17 +6,18 @@ rendered (they need the component's GSAP); its page is generated from its words 
 code view."""
 
 import asyncio
+import contextlib
 import hashlib
 import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 from wasifyai_platform_sdk import Identity, RouteDeps, parse_ids
 
-from wasifyai_video.builder import check, live, projects, templates
+from wasifyai_video.builder import check, live, media, projects, templates
 from wasifyai_video.builder.runtime import (
     NotAvailable,
     NotFound,
@@ -27,6 +28,7 @@ from wasifyai_video.builder.runtime import (
     make_draft,
     manager_for,
     not_ready,
+    put_files_beside,
     root_for,
     store_for,
 )
@@ -35,6 +37,7 @@ from wasifyai_video.videos import video_store
 
 PRODUCT_ID = "wasifyai-video"
 PREVIEW_AT_MAX = float(templates.MAX_SECONDS)
+LIVE_PIECE_BYTES = 8 * 1024 * 1024  # the most of a file sent for one request from the player
 
 
 class ProjectIn(BaseModel):
@@ -44,6 +47,7 @@ class ProjectIn(BaseModel):
 
 class RenderIn(BaseModel):
     format: str = Field("mp4", max_length=8)
+    quality: str | None = Field(None, max_length=12)
 
 
 class ProjectPatch(BaseModel):
@@ -223,7 +227,10 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
             raise HTTPException(422, {"code": "bad_slot", "message": "That cannot be changed."})
         if body.template == templates.SCENES and template != templates.SCENES:
             template, before = templates.SCENES, templates.as_scenes(template, before)
-        slots = slots_or_422(template, {**before, **body.slots})
+        wanted = dict(body.slots)
+        if template == templates.SCENES:  # the files are only changed by adding or removing one
+            wanted["assets"] = before.get("assets") or []
+        slots = slots_or_422(template, {**before, **wanted})
         found = await asyncio.to_thread(
             store_for(deps.state).update_composition,
             identity.tenant_id, identity.user_id, cid,
@@ -231,6 +238,65 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         )  # fmt: skip
         await index_composition(deps, identity, found)
         return await project_out(identity, found, detail=True)
+
+    @router.post("/projects/{cid}/assets", status_code=201)
+    async def add_asset(
+        cid: str,
+        file: UploadFile = File(...),  # noqa: B008
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        """A file for this project: checked, kept under its owner, and listed in the document."""
+        guard()
+        found = composition(identity, cid)
+        if found["template"] != templates.SCENES:
+            raise HTTPException(409, {"code": "not_scenes", "message": "Add more scenes first."})
+        limiter = deps.state.upload_limiter
+        if limiter is not None and not await limiter.allow(identity.tenant_id, identity.user_id):
+            raise HTTPException(429, "Too many uploads. Please wait a while and try again.")
+        data = await file.read(media.MAX_BYTES + 1)
+        try:
+            checked = await asyncio.to_thread(media.check_upload, data, file.filename or "")
+        except media.MediaError as e:
+            raise HTTPException(422, {"code": "bad_file", "message": str(e)}) from None
+        assert deps.storage is not None, "storage is required"
+        await deps.storage.put_for(
+            (identity.tenant_id, PRODUCT_ID, identity.user_id),
+            media.rel_path(cid, checked.asset["file"]),
+            checked.data,
+            media.MEDIA_TYPES.get(Path(checked.asset["file"]).suffix, "application/octet-stream"),
+        )
+        store = store_for(deps.state)
+        assets = [*(found["slots"].get("assets") or []), checked.asset]
+        if len(assets) > templates.MAX_ASSETS:
+            raise HTTPException(
+                422, {"code": "bad_file", "message": "A project can hold 60 files. Remove one."}
+            )
+        await asyncio.to_thread(store.set_assets, identity.tenant_id, identity.user_id, cid, assets)
+        return {"asset": checked.asset, "assets": assets}
+
+    @router.delete("/projects/{cid}/assets/{asset_id}")
+    async def remove_asset(
+        cid: str, asset_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """A file out of the project, and out of every scene that used it. Undo brings the scenes
+        back, not the file."""
+        guard()
+        found = composition(identity, cid)
+        kept = [a for a in found["slots"].get("assets") or [] if a["id"] != asset_id]
+        gone = [a for a in found["slots"].get("assets") or [] if a["id"] == asset_id]
+        if not gone:
+            raise HTTPException(404, "that file is not in this project")
+        slots = slots_or_422(templates.SCENES, {**found["slots"], "assets": kept})
+        updated = await asyncio.to_thread(
+            store_for(deps.state).update_composition,
+            identity.tenant_id, identity.user_id, cid,
+            title=found["title"], slots=slots,
+        )  # fmt: skip
+        assert deps.storage is not None, "storage is required"
+        owner = (identity.tenant_id, PRODUCT_ID, identity.user_id)
+        with contextlib.suppress(FileNotFoundError):
+            await deps.storage.delete_for(owner, media.rel_path(cid, gone[0]["file"]))
+        return await project_out(identity, updated, detail=True)
 
     @router.put("/projects/{cid}/conversation")
     async def keep_conversation(
@@ -276,6 +342,7 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
                 409, {"code": "busy", "message": "A video is being made. Try again in a moment."}
             )
         folder = await asyncio.to_thread(write_files, identity, found, engine)
+        await put_files_beside(deps, identity, found, folder, engine)
         with deps.acting_as(identity, PRODUCT_ID):
             return await check.run_check(engine, folder, found["template"], found["slots"])
 
@@ -302,6 +369,35 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
                     findings = await asyncio.to_thread(engine.lint, folder)
         return {"ok": not findings, "findings": findings}
 
+    async def live_asset(
+        found: dict[str, Any], file: str, request: Request, headers: dict[str, str]
+    ) -> Response:
+        """One of the project's files, for the player: in pieces, as a media element asks."""
+        if not any(a["file"] == file for a in found["slots"].get("assets") or []):
+            raise HTTPException(404, "not part of this preview")
+        assert deps.storage is not None, "storage is required"
+        owner = (found["tenant_id"], PRODUCT_ID, found["user_id"])
+        rel = media.rel_path(found["id"], file)
+        kind = media.MEDIA_TYPES.get(Path(file).suffix, "application/octet-stream")
+        out = {**headers, "Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600"}
+        try:
+            size = await deps.storage.size_for(owner, rel)
+            try:
+                asked = media.parse_range(request.headers.get("range"), size, LIVE_PIECE_BYTES)
+            except ValueError:
+                raise HTTPException(
+                    416, "outside the file", headers={"Content-Range": f"bytes */{size}"}
+                ) from None
+            if asked is None:
+                data = await deps.storage.get_for(owner, rel)
+                return Response(data, media_type=kind, headers=out)
+            first, last = asked
+            data = await deps.storage.read_range_for(owner, rel, first, last)
+        except FileNotFoundError:
+            raise HTTPException(404, "not part of this preview") from None
+        out["Content-Range"] = f"bytes {first}-{last}/{size}"
+        return Response(data, status_code=206, media_type=kind, headers=out)
+
     @router.post("/projects/{cid}/live")
     async def live_address(cid: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
         """Where the player finds this project (ADR-0096 decision 3): a frame cannot send the
@@ -317,7 +413,7 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         }
 
     @router.get("/live/{token}/{name:path}")
-    async def live_file(token: str, name: str) -> Response:
+    async def live_file(token: str, name: str, request: Request) -> Response:
         """The project's page and the few files it needs, for the player's frame. The token says
         which project, and was signed for its owner; nothing else is served here."""
         guard()
@@ -340,6 +436,8 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
             return Response(
                 page, media_type="text/html", headers={**headers, "Cache-Control": "no-store"}
             )
+        if name.startswith("assets/"):
+            return await live_asset(found, name.removeprefix("assets/"), request, headers)
         owner = Identity(found["tenant_id"], found["user_id"])
         with deps.acting_as(owner, PRODUCT_ID):
             try:
@@ -370,6 +468,7 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
             at = templates.preview_times(found["template"], found["slots"])[1]
         at = min(at, float(found["slots"]["seconds"]))
         folder = await asyncio.to_thread(write_files, identity, found, engine)
+        await put_files_beside(deps, identity, found, folder, engine)
         key = hashlib.sha256(f"{found['template']}|{found['slots']}|{at:g}".encode()).hexdigest()[
             :16
         ]
@@ -408,7 +507,9 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         guard()
         composition(identity, cid)
         try:
-            row = await manager_for(deps).start(identity, cid, body.format if body else "mp4")
+            row = await manager_for(deps).start(
+                identity, cid, body.format if body else "mp4", body.quality if body else None
+            )
         except Refused as e:
             raise refuse(e) from None
         return await render_out(identity, row)
@@ -448,7 +549,7 @@ async def delete_composition(deps: RouteDeps, identity: Identity, cid: str) -> b
     rows, and out of search), its folder, and the composition itself. False if there is none."""
     store = store_for(deps.state)
     try:
-        store.get_composition(identity.tenant_id, identity.user_id, cid)
+        found = store.get_composition(identity.tenant_id, identity.user_id, cid)
     except NotFound:
         return False
     manager = manager_for(deps)
@@ -476,6 +577,11 @@ async def delete_composition(deps: RouteDeps, identity: Identity, cid: str) -> b
         await deps.unindex(identity, PRODUCT_ID, vid)
     folder = projects.project_dir(root_for(deps.state), identity.tenant_id, identity.user_id, cid)
     await asyncio.to_thread(projects.remove_project, folder)
+    if deps.storage is not None:
+        owner = (identity.tenant_id, PRODUCT_ID, identity.user_id)
+        for asset in found["slots"].get("assets") or []:
+            with contextlib.suppress(FileNotFoundError):
+                await deps.storage.delete_for(owner, media.rel_path(cid, asset["file"]))
     await deps.unindex(identity, PRODUCT_ID, cid)
     return True
 

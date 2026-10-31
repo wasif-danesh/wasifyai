@@ -8,6 +8,7 @@ import type {
   BuilderShape,
   BuilderSlots,
   BuilderTheme,
+  RenderQuality,
   Scene,
   SceneDocument,
   TemplateCatalogue,
@@ -41,6 +42,13 @@ import { FormField } from "../FormField";
 import { toDraft } from "../slots";
 import { ArrangeOverlay, type MeasuredPart, laidOut } from "./ArrangeOverlay";
 import { LivePreview, type LivePreviewHandle } from "./LivePreview";
+import {
+  BackgroundDetails,
+  FilmSoundtrack,
+  type MediaLibrary,
+  MediaTools,
+  SoundTools,
+} from "./MediaTools";
 import { lengthOf, sceneAt, startOf, useSceneEditor } from "./use-scene-editor";
 
 const SIZES: Record<BuilderShape, { width: number; height: number; label: string }> = {
@@ -123,6 +131,7 @@ export function SceneEditor({
   onOpenLibrary,
   assistant,
   brief,
+  library,
 }: {
   api: VideoBuilderApi;
   project: BuilderProject;
@@ -135,6 +144,8 @@ export function SceneEditor({
   assistant?: EditorAssistant;
   /** What the person asked for on the first screen: sent to the assistant when the editor opens. */
   brief?: string;
+  /** What can be brought in from the person's Library. */
+  library?: MediaLibrary;
 }) {
   const e = useSceneEditor(api, project);
   const [panel, setPanel] = useState<"assistant" | "scene">(brief ? "assistant" : "scene");
@@ -147,7 +158,7 @@ export function SceneEditor({
     Math.min(0.9, (Number(doc.scenes[0]?.fields.seconds) || 0) / 2),
   );
   const [playing, setPlaying] = useState(false);
-  const [tool, setTool] = useState<"add" | "looks">("add");
+  const [tool, setTool] = useState<"add" | "media" | "sound" | "looks">("add");
   const [making, setMaking] = useState(false);
   const shape = SIZES[doc.shape];
   const index = Math.max(
@@ -245,6 +256,7 @@ export function SceneEditor({
   const stopForEdit = useCallback(() => player.current?.pause(), []);
 
   const url = e.live ? `${e.live.url}?v=${e.revision}` : null;
+  const filesBase = e.live ? e.live.url.replace(/index\.html$/, "") : null;
 
   const [conversation, setConversation] = useState(project.conversation_id ?? null);
   const keepConversation = useCallback(
@@ -339,7 +351,6 @@ export function SceneEditor({
           disabled={busy}
           onClick={() => {
             setMaking(true);
-            void e.make();
           }}
         >
           Make the video
@@ -364,9 +375,11 @@ export function SceneEditor({
               label="Tools"
               className="w-full"
               value={tool}
-              onValueChange={(v) => setTool(v as "add" | "looks")}
+              onValueChange={(v) => setTool(v as "add" | "media" | "sound" | "looks")}
               options={[
                 { value: "add", label: "Add" },
+                { value: "media", label: "Media" },
+                { value: "sound", label: "Sound" },
                 { value: "looks", label: "Looks" },
               ]}
             />
@@ -374,6 +387,41 @@ export function SceneEditor({
           <div className="grid flex-1 content-start gap-3 overflow-auto p-3 pt-1">
             {tool === "add" ? (
               <AddTools catalogue={catalogue} onAdd={e.addScene} />
+            ) : tool === "media" ? (
+              <MediaTools
+                doc={doc}
+                scene={scene}
+                number={index + 1}
+                base={filesBase}
+                library={library}
+                onFile={async (file) => {
+                  await e.addFile(file);
+                }}
+                onRemoveFile={(id) => void e.removeFile(id)}
+                onChangeScene={(label, change) => {
+                  if (scene) e.changeScene(scene.id, label, change);
+                }}
+                onCapture={async () => {
+                  player.current?.pause();
+                  const url = await api.preview(project.id, time);
+                  const blob = await (await fetch(url)).blob();
+                  URL.revokeObjectURL(url);
+                  await e.addFile(
+                    new File([blob], `Scene ${index + 1}.png`, { type: "image/png" }),
+                  );
+                }}
+              />
+            ) : tool === "sound" ? (
+              <SoundTools
+                doc={doc}
+                scene={scene}
+                number={index + 1}
+                library={undefined}
+                onFile={e.addFile}
+                onChangeScene={(label, change) => {
+                  if (scene) e.changeScene(scene.id, label, change);
+                }}
+              />
             ) : (
               <LooksTools
                 catalogue={catalogue}
@@ -581,6 +629,7 @@ export function SceneEditor({
                 onChange={(label, change, together) =>
                   e.changeScene(scene.id, label, change, together)
                 }
+                doc={doc}
                 onLayout={(where) => void layOut(where)}
                 onDuplicate={() => e.duplicateScene(scene.id)}
                 onRemove={() => e.removeScene(scene.id)}
@@ -610,6 +659,15 @@ export function SceneEditor({
               })
             }
           />
+          <div className="px-2 pb-2">
+            <FilmSoundtrack
+              doc={doc}
+              onFile={e.addFile}
+              onChange={(label, track) =>
+                e.apply(label, (d) => ({ ...d, soundtrack: track }), "soundtrack")
+              }
+            />
+          </div>
         </section>
       </div>
       {making ? (
@@ -718,10 +776,12 @@ function SceneDetails({
   onFocus,
   onBlur,
   onChange,
+  doc,
   onLayout,
   onDuplicate,
   onRemove,
 }: {
+  doc: SceneDocument;
   scene: Scene;
   number: number;
   catalogue: TemplateCatalogue;
@@ -858,6 +918,7 @@ function SceneDetails({
           options={TRANSITIONS}
         />
       </div>
+      <BackgroundDetails scene={scene} doc={doc} onChange={onChange} />
       <div className="grid gap-1">
         <span className="font-medium text-sm">Where the words go</span>
         <div className="flex flex-wrap gap-1.5">
@@ -1023,6 +1084,8 @@ function MakeDialog({
   onClose: () => void;
 }) {
   const { render, problem } = editor;
+  const [quality, setQuality] = useState<RenderQuality>("standard");
+  const [started, setStarted] = useState(false);
   const save = useSaveCopy();
   const [saved, setSaved] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -1048,7 +1111,28 @@ function MakeDialog({
     <Modal label="Make the video" onClose={onClose}>
       <div className="grid gap-3">
         {done ? <p className="m-0 font-medium">Your video is in the Library.</p> : null}
-        {working || !render ? (
+        {!started && !render ? (
+          <div className="grid gap-2">
+            <span className="font-medium text-sm">Quality</span>
+            <Segmented
+              size="sm"
+              label="Quality"
+              className="w-full"
+              value={quality}
+              onValueChange={(v) => setQuality(v as RenderQuality)}
+              options={[
+                { value: "draft", label: "Draft" },
+                { value: "standard", label: "High" },
+                { value: "high", label: "Best" },
+              ]}
+            />
+            <p className="m-0 text-muted-foreground text-xs">
+              A video takes about as long to make as it is to watch. Best takes longer. The words on
+              the screen are checked first.
+            </p>
+          </div>
+        ) : null}
+        {started && (working || !render) && !problem ? (
           <div className="grid gap-1.5">
             <p className="m-0 text-sm">
               {!render
@@ -1118,8 +1202,23 @@ function MakeDialog({
               Open in Library
             </Button>
           ) : null}
-          <Button type="button" onClick={onClose}>
-            {working ? "Keep working" : "Close"}
+          {!started && !render ? (
+            <Button
+              type="button"
+              onClick={() => {
+                setStarted(true);
+                void editor.make(quality);
+              }}
+            >
+              Make the video
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant={!started && !render ? "outline" : "default"}
+            onClick={onClose}
+          >
+            {working ? "Keep working" : !started && !render ? "Not now" : "Close"}
           </Button>
         </div>
       </div>

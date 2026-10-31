@@ -86,6 +86,7 @@ class RemoteBuilderEngine:
         self._timeout = timeout_s
         self._standin: Path | None = None
         self._kit: dict[str, bytes] | None = None
+        self.carries_files = True  # a project's files go with each job, not next to a page here
 
     # ---- what the product asks before it starts ---------------------------------------------
 
@@ -152,13 +153,15 @@ class RemoteBuilderEngine:
     async def _run(
         self, kind: str, params: dict[str, Any],
         on_progress: Callable[[float, str], None] | None = None,
-        job_key: str | None = None, resume: bool = False,
+        job_key: str | None = None, resume: bool = False, project: Path | None = None,
     ) -> tuple[dict[str, bytes], dict[str, Any]]:  # fmt: skip
         ctx = require_context()
         job_id = job_key or str(uuid4())
         prefix = object_key(ctx.tenant_id, ctx.product_id, ctx.user_id, "engine", job_id)
         outputs: list[str] = []
         try:
+            inputs = {} if resume or project is None else await self._job_files(project, prefix)
+            outputs.extend(inputs.values())  # the copies go when the job does
             if resume:  # sent before a restart: only its outcome is awaited
                 # one replica follows a job after a restart (stage J3); another waits its turn
                 await self._queue.resume_turn(job_id)
@@ -174,6 +177,7 @@ class RemoteBuilderEngine:
                         user_id=ctx.user_id,
                         prefix=prefix,
                         params=params,
+                        files=inputs,
                     )  # fmt: skip
                 )
 
@@ -211,11 +215,29 @@ class RemoteBuilderEngine:
         template, slots = self._composition(project)
         try:
             _, meta = await self._run(
-                builder_wire.INSPECT, {"template": template, "slots": slots, "spec": spec}
+                builder_wire.INSPECT,
+                {"template": template, "slots": slots, "spec": spec},
+                project=project,
             )
         except _Failed as e:
             return {"ok": False, "message": e.message, "items": []}
         return meta["report"]  # type: ignore[no-any-return]
+
+    async def _job_files(self, project: Path, prefix: str) -> dict[str, str]:
+        """A project's files, copied under the job's prefix, which is all a worker may read. Their
+        keys come from the owner and the project, never from the document (ADR-0096 MX5)."""
+        ctx = require_context()
+        raw = json.loads((project / "slots.json").read_text())
+        files: dict[str, str] = {}
+        for asset in raw.get("assets") or []:
+            name = asset["file"]
+            source = object_key(
+                ctx.tenant_id, ctx.product_id, ctx.user_id, "motion", project.name, name
+            )
+            copy = f"{prefix}/in/{name}"
+            await self._storage.copy(source, copy)
+            files[f"project/assets/{name}"] = copy
+        return files
 
     async def live_kit(self) -> dict[str, bytes]:
         """What the player's page loads besides itself, fetched from a worker once."""
@@ -236,7 +258,9 @@ class RemoteBuilderEngine:
         template, slots = self._composition(project)
         try:
             files, meta = await self._run(
-                builder_wire.SNAPSHOT, {"template": template, "slots": slots, "at": at}
+                builder_wire.SNAPSHOT,
+                {"template": template, "slots": slots, "at": at},
+                project=project,
             )
         except _Failed as e:
             return RenderResult(False, e.code, e.message)
@@ -256,6 +280,7 @@ class RemoteBuilderEngine:
     ) -> RenderResult:
         template, slots = self._composition(project)
         fmt = extra_args[extra_args.index("--format") + 1] if "--format" in extra_args else "mp4"
+        quality = extra_args[extra_args.index("--quality") + 1] if "--quality" in extra_args else ""
 
         def told(fraction: float, label: str) -> None:
             if on_progress is not None:
@@ -264,10 +289,11 @@ class RemoteBuilderEngine:
         try:
             files, meta = await self._run(
                 builder_wire.RENDER,
-                {"template": template, "slots": slots, "format": fmt},
+                {"template": template, "slots": slots, "format": fmt, "quality": quality},
                 told,
                 job_key,
                 resume,
+                project,
             )
         except _Failed as e:
             return RenderResult(False, e.code, e.message)

@@ -1202,3 +1202,141 @@ async def test_a_scene_is_read_wherever_a_small_model_put_its_settings(arig):
         "motion.change_scene", {"composition_id": cid, "scene_id": sid, "colour": "red"}
     )
     assert wrong.status == "refused" and "colour" in wrong.text
+
+
+# ---- a project's files (ADR-0096 MX5) ------------------------------------------------------------
+
+
+def a_png() -> bytes:
+    import io
+
+    from PIL import Image
+
+    out = io.BytesIO()
+    Image.new("RGB", (40, 80), (200, 100, 50)).save(out, "PNG")
+    return out.getvalue()
+
+
+def add_file(client, cid: str, data: bytes, name: str = "can.png", **kw):
+    return client.post(f"{BASE}/projects/{cid}/assets", files={"file": (name, data)}, **kw)
+
+
+def test_a_picture_is_checked_kept_listed_and_served_to_the_preview_only_by_its_address(rig):
+    project = scene_project(rig)
+    made = add_file(rig, project["id"], a_png())
+    assert made.status_code == 201, made.text
+    asset = made.json()["asset"]
+    assert asset["kind"] == "image" and asset["file"].endswith(".jpg") and asset["width"] == 40
+    assert rig.get(f"{BASE}/projects/{project['id']}").json()["slots"]["assets"] == [asset]
+    base = live_path(rig, project["id"]).removesuffix("index.html")
+    whole = rig.get(f"{base}assets/{asset['file']}")
+    assert whole.status_code == 200 and whole.headers["content-type"] == "image/jpeg"
+    assert whole.headers["accept-ranges"] == "bytes"
+    piece = rig.get(f"{base}assets/{asset['file']}", headers={"range": "bytes=2-5"})
+    assert piece.status_code == 206 and piece.content == whole.content[2:6]
+    assert piece.headers["content-range"] == f"bytes 2-5/{len(whole.content)}"
+    outside = rig.get(f"{base}assets/{asset['file']}", headers={"range": "bytes=99999999-"})
+    assert outside.status_code == 416
+    assert rig.get(f"{base}assets/other.png").status_code == 404
+    assert rig.get(f"{BASE}/live/nope/assets/{asset['file']}").status_code == 403
+
+
+@pytest.mark.parametrize("data", [b"<script>alert(1)</script>", b"not a picture at all", b""])
+def test_a_file_that_is_nothing_we_know_is_refused_in_words(rig, data):
+    project = scene_project(rig)
+    bad = add_file(rig, project["id"], data, "photo.png")
+    assert bad.status_code == 422
+    assert not rig.get(f"{BASE}/projects/{project['id']}").json()["slots"]["assets"]
+
+
+def test_a_real_clip_and_a_real_sound_are_read_for_what_they_are(rig):
+    from video_rig import mp4
+
+    project = scene_project(rig)
+    clip = add_file(rig, project["id"], mp4(), "pour.MOV.mp4")
+    assert clip.status_code == 201, clip.text
+    asset = clip.json()["asset"]
+    assert asset["kind"] == "video" and asset["seconds"] > 0 and asset["codec"]
+
+
+def test_nothing_in_a_document_can_add_or_change_a_file(rig):
+    project = scene_project(rig)
+    asset = add_file(rig, project["id"], a_png()).json()["asset"]
+    slots = rig.get(f"{BASE}/projects/{project['id']}").json()["slots"]
+    forged = {**asset, "id": "ffff0000", "file": "ffff0000.png"}
+    changed = rig.patch(
+        f"{BASE}/projects/{project['id']}", json={"slots": {**slots, "assets": [forged]}}
+    ).json()
+    assert changed["slots"]["assets"] == [asset]
+
+
+def test_undo_brings_back_scenes_and_keeps_the_files(rig):
+    project = scene_project(rig)
+    cid = project["id"]
+    slots = rig.patch(f"{BASE}/projects/{cid}", json={"slots": {"name": "Second"}}).json()["slots"]
+    asset = add_file(rig, cid, a_png()).json()["asset"]
+    back = rig.post(f"{BASE}/projects/{cid}/undo").json()
+    assert back["slots"]["name"] == "Northbean launch" and back["slots"]["assets"] == [asset]
+    assert slots["name"] == "Second"
+
+
+def test_removing_a_file_takes_it_out_of_every_scene_and_undo_brings_only_the_scenes_back(rig):
+    project = scene_project(rig)
+    cid = project["id"]
+    asset = add_file(rig, cid, a_png()).json()["asset"]
+    slots = rig.get(f"{BASE}/projects/{cid}").json()["slots"]
+    slots["scenes"][0]["background"] = {"asset": asset["id"]}
+    used = rig.patch(f"{BASE}/projects/{cid}", json={"slots": slots}).json()
+    assert used["slots"]["scenes"][0]["background"]["asset"] == asset["id"]
+    gone = rig.delete(f"{BASE}/projects/{cid}/assets/{asset['id']}")
+    assert gone.status_code == 200 and gone.json()["slots"]["scenes"][0]["background"] is None
+    assert gone.json()["slots"]["assets"] == []
+    assert rig.delete(f"{BASE}/projects/{cid}/assets/{asset['id']}").status_code == 404
+    other = scene_project(rig)["id"]
+    assert rig.delete(f"{BASE}/projects/{other}/assets/{asset['id']}").status_code == 404
+
+
+def test_a_project_with_files_is_written_with_them_and_deleting_it_removes_them(rig):
+    project = scene_project(rig)
+    cid = project["id"]
+    asset = add_file(rig, cid, a_png()).json()["asset"]
+    slots = rig.get(f"{BASE}/projects/{cid}").json()["slots"]
+    slots["scenes"][0]["background"] = {"asset": asset["id"]}
+    rig.patch(f"{BASE}/projects/{cid}", json={"slots": slots})
+    started = rig.post(f"{BASE}/projects/{cid}/render", json={"format": "mp4", "quality": "draft"})
+    assert started.status_code == 202, started.text
+    done = wait_for(rig, started.json()["id"])
+    assert done["status"] == "done", done
+    state = rig.app_state
+    folder = projects.project_dir(state.desktop_dir / "video-builder", "t1", "u1", cid)
+    assert (folder / "assets" / asset["file"]).is_file()
+    assert "--quality" in state.video_builder.rendered[-1][1]
+    wrong = rig.post(f"{BASE}/projects/{cid}/render", json={"format": "mp4", "quality": "ultra"})
+    assert wrong.status_code == 409 and "quality" in wrong.text
+    assert rig.delete(f"{BASE}/projects/{cid}").status_code == 204
+
+
+async def test_the_assistant_can_use_a_file_by_its_id(arig):
+    made = await arig.go("motion.write_scenes", SCENE_PROJECT)
+    cid, first = made.output["composition_id"], made.output["scenes"][0]["id"]
+    store = store_for(arig.state)
+    asset = {"id": "aaaa0000", "kind": "image", "name": "can", "file": "aaaa0000.png", "seconds": 0}
+    store.set_assets("t1", "u1", cid, [asset])
+    read = await arig.go("motion.read_project", {"composition_id": cid})
+    assert 'id=aaaa0000 image name="can"' in read.output["brief"]
+    changed = await arig.go(
+        "motion.change_scene",
+        {"composition_id": cid, "scene_id": first, "background": {"asset": "aaaa0000"}},
+    )
+    assert changed.status == "ok", changed
+    assert (
+        store.get_composition("t1", "u1", cid)["slots"]["scenes"][0]["background"]["asset"]
+        == "aaaa0000"
+    )
+    tracked = await arig.go(
+        "motion.set_project", {"composition_id": cid, "soundtrack": {"asset": "aaaa0000"}}
+    )
+    assert (
+        tracked.status == "ok"
+        and store.get_composition("t1", "u1", cid)["slots"]["soundtrack"] is None
+    )

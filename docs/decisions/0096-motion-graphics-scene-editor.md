@@ -1,7 +1,7 @@
 # ADR-0096: Motion graphics becomes a scene editor for promotion and social content, with the assistant built in
 
 - **Status:** Accepted (owner, 2026-10-31: all five decisions of the plan as recommended; the mockup,
-  `docs/spikes/motion-editor-mockup.html`, approved with its recommended answers the same day). Stages MX1 to MX4 built 2026-10-31; see "Built".
+  `docs/spikes/motion-editor-mockup.html`, approved with its recommended answers the same day). Stages MX1 to MX5 built 2026-10-31; see "Built".
 - **Date:** 2026-10-31
 - **Asked by:** the owner, 2026-10-31: bring the features of KinoFold (`~/Projects/kinofold`, the owner's own project on HyperFrames) into
   Motion graphics, similar to the planned Creative Studio, for product promotion, social media and marketing content, with the chat
@@ -116,3 +116,16 @@ Model-written compositions (MG2), a multi-track timeline, posting to social netw
 - **In WebKit** (the spike's small program): a placed, scaled title on a page with the editor's script loads, seeks and draws in its place. Dragging was not driven there.
 - **The evaluation**, now 22 cases on Qwen3 8B: 21 of 22, first answer only. The one that failed wrote a look that does not exist; that is refused in words and the model is told to fix it.
 - **Not checked:** the packaged Tauri window, touch on a real phone, and the web on a running stack.
+
+**MX5, 2026-10-31: media and sound.**
+
+- A project has `assets`; a scene has `background` (fit, position, trim, its own sound), `images` (parts `image-0` and on, placed like any part) and `sound`; the project has `soundtrack`. All are on the one page: `<img>`, `<video>` and `<audio>` clips with their times (a loop is the file again, clip after clip).
+- **A file's key is never read from a document:** it is `motion/<project>/<file>` under its owner, and `file` must look like what the engine writes (`[0-9a-f]{8}.<ext>`). The window's saves cannot add or change a file, because the route keeps the project's list. A file that is gone from the project is dropped from a scene, not refused, because Undo can bring back a scene from before it was removed. Undo keeps today's files.
+- **Uploads (`builder/media.py`):** type from the first bytes. A picture is decoded and written again, keeping transparency. A clip or sound must be read by ffmpeg, told its format, with only the file protocol, and is kept as it came. Up to 100 MB, because the web's proxy lets 110 through.
+- **In a render:** on the desktop the files are copied next to the page. On the web, `remote_builder` copies them under the job's prefix, the only place a worker may read, and the handler puts them next to the page; the copies go with the job.
+- **In the preview:** `assets/<file>` on the signed address, in pieces of up to 8 MB (`Storage.read_range`, `parse_range`).
+- **Also:** the quality choice (Draft, High, Best are HyperFrames' draft, standard, high); `RENDER_NEED_GB` is 5; the word check waits for pictures and clips, so nothing changes between its pictures; From Library for pictures and clips; a picture on the first screen becomes a file of the project and the assistant is told; the assistant can use files by id (`background`, `images`, `sound`, `soundtrack`), and is told only those ids.
+- **Bugs found on the way:** the web's proxy dropped the preview's content policy, and did not pass ranges: both fixed, so the policy claimed in MX2 now holds on the web. The player's events were not heard when its script loaded before its address, so Play did not turn into Pause.
+- **Checked for real:** a three-scene film with a placed picture, a trimmed clip with its own sound, a scene's sound and a looping soundtrack, through the real sandbox and word check. Measured in the video: the picture and the clip are where they should be, each tone is present only where it should be (`test_video_builder_templates.py`). The **same film through the worker's own handler**, with its files in storage and a file outside the job refused. Through the real screen (`ui-audit.sh light motion-media`, the window's code in Chromium): files added, placed, trimmed, sounds set; in the preview the clip plays from its trim and both sounds keep time with the film; a real H.264 and AAC video was made; axe has no violations.
+- **The evaluation**, now 25 cases on Qwen3 8B, with three about files: 25 of 25, first answer only. Earlier runs varied by a case or two.
+- **Not checked:** the packaged Tauri window, video and sound in WebKit (the preview there may differ; the export is the final word), the web on a running stack, From Library in a real window, and listening: tones were measured, not heard. Music from the Library is not offered yet, because the Library has no download address for it on the web.

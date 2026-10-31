@@ -22,6 +22,7 @@ Change a video project's name, shape or letters, or replace all its scenes at on
 - `name`: The project's name.
 - `shape`: landscape, portrait or square.
 - `font`: sans or serif.
+- `soundtrack`: Music for the whole video: a file of the project by its id, with volume, start and loop.
 - `scenes`: All the scenes in order, replacing the ones there now.
 
 ## Limits

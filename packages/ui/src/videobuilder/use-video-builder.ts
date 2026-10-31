@@ -320,7 +320,7 @@ export function useVideoBuilder(api: VideoBuilderApi) {
 
   /** A new project of scenes (ADR-0096), opened in the editor. */
   const startScenes = useCallback(
-    async (shape?: BuilderShape, brief?: string) => {
+    async (shape?: BuilderShape, brief?: string, picture?: File) => {
       try {
         const made = await api.create("scenes", {
           ...(shape ? { shape } : {}),
@@ -332,14 +332,19 @@ export function useVideoBuilder(api: VideoBuilderApi) {
             },
           ],
         });
+        // a picture for the brief is a file of the project, which the assistant is told about
+        if (picture) await api.addAsset(made.id, picture);
+        const opened = picture ? await api.get(made.id) : made;
+        const asked =
+          brief && picture ? `${brief} Use the picture I added, ${picture.name}.` : brief;
         patch({
           selected: made.id,
-          project: made,
+          project: opened,
           render: null,
           stills: [],
           check: null,
           error: null,
-          brief: brief ?? null,
+          brief: asked ?? null,
         });
       } catch (e) {
         patch({ error: say(e, "The project could not be started.") });

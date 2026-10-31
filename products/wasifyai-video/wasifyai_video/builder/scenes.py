@@ -70,6 +70,7 @@ def duplicate(document: dict[str, Any], scene_id: str) -> tuple[dict[str, Any], 
     """A copy right after the scene, and the copy's id."""
     n = find(document, scene_id)
     copy = {**document["scenes"][n], "id": _unused_id(document)}
+    # the same film has its files once: the copy only refers to them
     scenes = list(document["scenes"])
     scenes.insert(n + 1, copy)
     return _with(document, scenes), copy["id"]

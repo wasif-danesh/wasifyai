@@ -650,3 +650,22 @@ cases:
     action: motion.change_scene
     keeps: [Steeped for 18 hours.]
     result: { scene_2_title_scale_over: 1.05 }
+  - id: ed-background-clip
+    kind: editor
+    expect: propose_action
+    say: "Use the pouring clip behind this scene."
+    action: motion.change_scene
+    result: { scene_2_uses_background: bbbb0000 }
+  - id: ed-place-picture
+    kind: editor
+    expect: propose_action
+    say: "Put the can on this scene."
+    action: motion.change_scene
+    result: { scene_2_uses_images: aaaa0000 }
+  - id: ed-soundtrack
+    kind: editor
+    expect: propose_action
+    say: "Use the calm song as music for the whole video."
+    action: motion.set_project
+    keeps: [Mornings are hard.]
+    result: { soundtrack_asset: cccc0000, scene_count: 4 }

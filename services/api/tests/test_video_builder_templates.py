@@ -9,7 +9,10 @@ clipped word is caught, and the transparent files decode with a real alpha chann
 Skipped unless a component is installed: set `WASIFYAI_VIDEO_BUILDER_HOME` to
 `<app data>/components/video-builder` (CI installs it with `scripts/ci-video-builder.py`)."""
 
+import array
+import cmath
 import json
+import math
 import os
 import subprocess
 from pathlib import Path
@@ -30,7 +33,7 @@ from wasifyai_platform_sdk.actions import ActionExecutor, ActionRegistry, builti
 from wasifyai_platform_sdk.actions.testing import FakeActionHost
 from wasifyai_platform_sdk.sqlite import create_sqlite_engine
 from wasifyai_video.actions import actions, library_kinds
-from wasifyai_video.builder import check, projects, templates
+from wasifyai_video.builder import check, media, projects, templates
 from wasifyai_video.builder.store import BuilderStore
 from wasifyai_video.videos import video_store
 
@@ -463,3 +466,135 @@ async def test_a_part_placed_on_the_picture_is_there_in_the_video_and_passes_the
     left, top, right, bottom = bright(6.5)
     # the quote and its caption are in the places given, not the template's
     assert top < 25 and bottom > 60, (top, bottom)
+
+
+# ---- a film with its files (ADR-0096 MX5) --------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def media_files(tmp_path_factory) -> dict[str, dict[str, Any]]:
+    """A picture, a clip with a 440 Hz sound, sounds of 220 and 880 Hz, checked as uploads are."""
+    folder = tmp_path_factory.mktemp("media")
+    ffmpeg = tool("ffmpeg")
+
+    def make(name: str, *args: str) -> bytes:
+        path = folder / name
+        subprocess.run([ffmpeg, "-v", "error", "-y", *args, str(path)], check=True)
+        return path.read_bytes()
+
+    made = {
+        "pic": make(
+            "pic.png", "-f", "lavfi", "-i", "color=c=0xd9925a:s=200x400:d=1", "-frames:v", "1"
+        ),
+        "clip": make(
+            "clip.mp4", "-f", "lavfi", "-i", "color=c=0x00ff00:s=640x360:r=30:d=6",
+            "-f", "lavfi", "-i", "sine=f=440:d=6", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+        ),
+        "music": make("music.wav", "-f", "lavfi", "-i", "sine=f=220:d=4"),
+        "voice": make("voice.wav", "-f", "lavfi", "-i", "sine=f=880:d=2"),
+    }  # fmt: skip
+    return {k: {"data": v, "checked": media.check_upload(v, f"{k}.bin")} for k, v in made.items()}
+
+
+def media_film(files: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    ids = {k: v["checked"].asset["id"] for k, v in files.items()}
+    return {
+        "assets": [v["checked"].asset for v in files.values()],
+        "soundtrack": {"asset": ids["music"], "volume": 0.4, "loop": True},
+        "scenes": [
+            {"kind": "title", "fields": {"title": "A picture", "seconds": 3},
+             "images": [{"asset": ids["pic"]}],
+             "arrange": {"image-0": {"x": 70, "y": 20, "w": 15}}},
+            {"kind": "title", "fields": {"title": "A clip", "seconds": 3},
+             "background": {"asset": ids["clip"], "trim": 1, "volume": 0.5}},
+            {"kind": "title", "fields": {"title": "A sound", "seconds": 3},
+             "sound": {"asset": ids["voice"], "volume": 0.8}},
+        ],
+    }  # fmt: skip
+
+
+def power(path: Path, start: float, hertz: int) -> float:
+    """How loud one tone is in a stretch of the video's sound (dB; about -100 when it is absent)."""
+    raw = subprocess.run(
+        [tool("ffmpeg"), "-v", "error", "-ss", str(start), "-t", "0.5", "-i", str(path), "-ac", "1",
+         "-ar", "8000", "-f", "f32le", "-"],
+        capture_output=True, check=True,
+    ).stdout  # fmt: skip
+    samples = array.array("f")
+    samples.frombytes(raw[: len(raw) // 4 * 4])
+    total = sum(v * cmath.exp(-2j * math.pi * hertz * i / 8000) for i, v in enumerate(samples))
+    return 20 * math.log10(max(abs(total) / max(1, len(samples)) * 2, 1e-5))
+
+
+def pixel(path: Path, at: float, x: float, y: float) -> tuple[int, ...]:
+    width, height, data = frame_at(path, at)
+    i = (int(y * height) * width + int(x * width)) * 3
+    return tuple(data[i : i + 3])
+
+
+def assert_media_film(out: Path) -> None:
+    r, g, b = pixel(out, 1.5, 0.77, 0.3)
+    assert r > 180 and b < 140, ("the picture, where it was placed", r, g, b)
+    r, g, b = pixel(out, 4.5, 0.9, 0.9)
+    assert g > 180 and r < 100, ("the clip behind the second scene", r, g, b)
+    assert power(out, 1, 220) > -40, "the soundtrack plays from the start"
+    assert power(out, 1, 440) < -60 and power(out, 1, 880) < -60
+    assert power(out, 4, 440) > -40, "the clip's own sound, in its scene only"
+    assert power(out, 7, 880) > -40, "the scene's sound, in its scene only"
+    assert power(out, 7, 440) < -60
+    assert power(out, 7, 220) > -40, "the soundtrack goes on, repeating"
+
+
+async def test_a_film_with_a_picture_a_clip_and_sounds_is_all_in_the_video(
+    tmp_path, engine, media_files
+):
+    folder, slots = write(tmp_path, engine, templates.SCENES, media_film(media_files))
+    (folder / "assets").mkdir()
+    for f in media_files.values():
+        (folder / "assets" / f["checked"].asset["file"]).write_bytes(f["checked"].data)
+    assert engine.lint(folder) == []
+    report = await checked(engine, folder, templates.SCENES, slots)
+    assert report["ok"], report["message"]
+    out = tmp_path / "film.mp4"
+    result = await engine.render(folder, out, extra_args=("--format", "mp4", "--quality", "draft"))
+    assert result.ok, result.message
+    assert result.blocked == []
+    assert_media_film(out)
+
+
+async def test_a_worker_makes_the_same_film_from_files_in_storage(tmp_path, engine, media_files):
+    """The web's path, for real: the worker's own handler, the real sandbox, the files in storage
+    under the job's prefix, as `remote_builder` puts them there."""
+    handlers = pytest.importorskip("wasifyai_engine_worker.handlers")
+    from wasifyai_platform_sdk import memory_storage
+    from wasifyai_platform_sdk.engine_jobs import EngineJob
+
+    slots = templates.normalize_slots(templates.SCENES, media_film(media_files))
+    storage = memory_storage()
+    prefix = "t1/wasifyai-video/u1/engine/job-1"
+    files = {}
+    for f in media_files.values():
+        name = f["checked"].asset["file"]
+        await storage.put(f"{prefix}/in/{name}", f["checked"].data)
+        files[f"project/assets/{name}"] = f"{prefix}/in/{name}"
+    job = EngineJob(
+        id="job-1", kind="builder.render", tenant_id="t1", product_id="wasifyai-video",
+        user_id="u1", prefix=prefix, files=files,
+        params={"template": templates.SCENES, "slots": slots, "format": "mp4", "quality": "draft"},
+    )  # fmt: skip
+    work = handlers.Work(job, storage, tmp_path / "work")
+    (tmp_path / "work").mkdir()
+    numbers = await handlers._render(engine, work)
+    assert numbers["ok"], numbers["message"]
+    out = tmp_path / "from-worker.mp4"
+    out.write_bytes(await storage.get(work.outputs["video"]))
+    assert_media_film(out)
+    # a file outside the job's prefix is refused, whatever a job names
+    other = EngineJob(
+        id="job-2", kind="builder.render", tenant_id="t1", product_id="wasifyai-video",
+        user_id="u1", prefix=prefix, files={"project/assets/x.png": "t2/secret/x.png"},
+        params={},
+    )  # fmt: skip
+    with pytest.raises(handlers.Refused):
+        await handlers.Work(other, storage, tmp_path / "work2").file("project/assets/x.png")

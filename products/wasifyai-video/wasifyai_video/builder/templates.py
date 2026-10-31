@@ -753,6 +753,9 @@ PARTS: dict[str, dict[str, str]] = {
     "captions": {"captions": "#caps"},
 }
 _MIN_WIDTH, _MIN_SCALE, _MAX_SCALE = 3.0, 0.4, 3.0
+MAX_ASSETS, MAX_PLACED = 60, 6
+_FILE = re.compile(r"[0-9a-f]{8}\.(png|jpg|mp4|mov|webm|m4a|mp3|wav|ogg|flac)")
+_PLACED_START = {"x": 35.0, "y": 25.0, "w": 30.0, "scale": 1.0}  # a picture just put on a scene
 _PLACED_LEFT, _PLACED_WIDTH = 8.0, 84.0  # a part given only its height on the picture
 
 
@@ -774,21 +777,107 @@ def new_scene_id() -> str:
     return uuid.uuid4().hex[:8]
 
 
-def parts_of(kind: str) -> dict[str, str]:
-    """The parts of a kind of scene that can be placed, and the caption along its bottom."""
-    return {**PARTS[kind], "caption": CAPTION_PART}
+def parts_of(kind: str, pictures: int = 0) -> dict[str, str]:
+    """The parts of a kind of scene that can be placed, its caption, and the pictures put on it."""
+    placed = {f"image-{i}": f".placed-{i}" for i in range(pictures)}
+    return {**PARTS[kind], "caption": CAPTION_PART, **placed}
 
 
-def _normalize_arrange(kind: str, raw: Any, n: int) -> dict[str, dict[str, float]]:
+def _number(value: Any, low: float, high: float, default: float) -> float:
+    try:
+        return round(max(low, min(high, float(value))), 3)
+    except (TypeError, ValueError):
+        return default
+
+
+def _used(raw: Any, assets: dict[str, dict[str, Any]], kinds: tuple[str, ...]) -> dict | None:
+    """A file a scene uses. One that is gone from the project is dropped, not refused: Undo can
+    bring back a scene from before a file was removed."""
+    if not isinstance(raw, dict):
+        return None
+    asset = assets.get(str(raw.get("asset")))
+    return asset if asset is not None and asset["kind"] in kinds else None
+
+
+def _background(raw: Any, assets: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    asset = _used(raw, assets, ("image", "video"))
+    if asset is None:
+        return None
+    return {
+        "asset": asset["id"],
+        "fit": "contain" if raw.get("fit") == "contain" else "cover",
+        "x": _number(raw.get("x"), 0, 100, 50),
+        "y": _number(raw.get("y"), 0, 100, 50),
+        "trim": _number(raw.get("trim"), 0, max(0, asset["seconds"] - 0.1), 0),
+        "volume": _number(raw.get("volume"), 0, 1, 0) if asset["has_audio"] else 0,
+    }
+
+
+def _images(raw: Any, assets: dict[str, dict[str, Any]]) -> list[dict[str, str]]:
+    out = []
+    for item in raw if isinstance(raw, list) else []:
+        asset = _used(item, assets, ("image",))
+        if asset is not None and len(out) < MAX_PLACED:
+            out.append({"asset": asset["id"]})
+    return out
+
+
+def _sound(raw: Any, assets: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    asset = _used(raw, assets, ("audio", "video"))
+    if asset is None:
+        return None
+    return {
+        "asset": asset["id"],
+        "volume": _number(raw.get("volume"), 0, 1, 0.8),
+        "loop": bool(raw.get("loop")),
+    }
+
+
+def _soundtrack(raw: Any, assets: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    found = _sound(raw, assets)
+    return {**found, "start": _number(raw.get("start"), 0, MAX_SECONDS, 0)} if found else None
+
+
+def _normalize_assets(raw: Any) -> list[dict[str, Any]]:
+    """The files of a project as the engine wrote them. `file` goes into the page, so it must look
+    like what the engine makes; the rest is what the screen shows and the page needs."""
+    out = []
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict) or not _FILE.fullmatch(str(item.get("file"))):
+            continue
+        if str(item.get("kind")) not in ("image", "video", "audio"):
+            continue
+        out.append(
+            {
+                "id": str(item["file"]).split(".")[0],
+                "kind": item["kind"],
+                "name": _text(item.get("name"), "file name", 120, False) or "My file",
+                "file": item["file"],
+                "seconds": _number(item.get("seconds"), 0, 100_000, 0),
+                "width": int(_number(item.get("width"), 0, 100_000, 0)),
+                "height": int(_number(item.get("height"), 0, 100_000, 0)),
+                "has_audio": bool(item.get("has_audio")),
+                "codec": re.sub(r"[^\w]", "", str(item.get("codec") or ""))[:20],
+            }
+        )
+    return out[:MAX_ASSETS]
+
+
+def _normalize_arrange(
+    kind: str, raw: Any, n: int, pictures: int = 0
+) -> dict[str, dict[str, float]]:
     """Where a scene's parts go, as shares of the picture in percent: left, top, width, and how much
     bigger than designed. A part that is not named stays where the template puts it."""
     if raw is None:
-        return {}
+        raw = {}
     if not isinstance(raw, dict):
         raise SlotError(f"Scene {n}: where its parts go could not be read.")
-    known = parts_of(kind)
+    known = parts_of(kind, pictures)
     out: dict[str, dict[str, float]] = {}
-    for part, rect in raw.items():
+    # a picture is always placed: it has no place in the design
+    with_pictures = {f"image-{i}": _PLACED_START for i in range(pictures)}
+    gone = {p for p in raw if p.startswith("image-") and p not in known}
+    for part, rect in {**with_pictures, **{k: v for k, v in raw.items() if k not in gone}}.items():
         if part not in known:
             names = ", ".join(known)
             raise SlotError(f"Scene {n} has no part called {part}. It has: {names}.")
@@ -811,18 +900,19 @@ def _normalize_arrange(kind: str, raw: Any, n: int) -> dict[str, dict[str, float
     return out
 
 
-def part_selector(scene_id: str, kind: str, part: str) -> str:
+def part_selector(scene_id: str, kind: str, part: str, pictures: int = 0) -> str:
     """Where a part is on the page, the same in its rule and for the live preview."""
-    found = parts_of(kind)[part]
+    found = parts_of(kind, pictures)[part]
     inner = f"#s{scene_id}-{found[1:]}" if found.startswith("#") else found
     return f"#scene-{scene_id} {inner}"
 
 
 def _arrange_rules(scene: dict[str, Any]) -> str:
     rules = []
+    pictures = len(scene.get("images", []))
     for part, r in scene.get("arrange", {}).items():
         rules.append(
-            f"  {part_selector(scene['id'], scene['kind'], part)} {{ position: absolute; "
+            f"  {part_selector(scene['id'], scene['kind'], part, pictures)} {{ position: absolute; "
             f"left: {r['x']}%; top: {r['y']}%; right: auto; bottom: auto; width: {r['w']}%; "
             f"max-width: none; margin: 0; zoom: {r['scale']}; }}"
         )
@@ -833,17 +923,23 @@ def live_parts(document: dict[str, Any]) -> dict[str, dict[str, str]]:
     """Every scene's parts and where they are, for the live preview to report and move."""
     return {
         scene["id"]: {
-            part: part_selector(scene["id"], scene["kind"], part)
-            for part in parts_of(scene["kind"])
+            part: part_selector(scene["id"], scene["kind"], part, len(scene.get("images", [])))
+            for part in parts_of(scene["kind"], len(scene.get("images", [])))
         }
         for scene in document["scenes"]
     }
 
 
-def _normalize_scene(raw: Any, n: int, shape: str, font: str, seen: set[str]) -> dict[str, Any]:
+def _normalize_scene(
+    raw: Any, n: int, shape: str, font: str, seen: set[str],
+    assets: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:  # fmt: skip
     if not isinstance(raw, dict):
         raise SlotError(f"Scene {n} is not a scene.")
-    allowed = {"id", "name", "kind", "fields", "caption", "transition", "arrange"}
+    allowed = {
+        "id", "name", "kind", "fields", "caption", "transition", "arrange", "background",
+        "images", "sound",
+    }  # fmt: skip
     extra = sorted(set(raw) - allowed)
     if extra:
         raise SlotError(f"A scene has no setting called {extra[0]}.")
@@ -869,6 +965,8 @@ def _normalize_scene(raw: Any, n: int, shape: str, font: str, seen: set[str]) ->
         else new_scene_id()
     )
     seen.add(scene_id)
+    found = assets or {}
+    images = _images(raw.get("images"), found)
     transition = raw.get("transition", "none")
     if transition not in TRANSITIONS:
         raise SlotError(f"Scene {n} must start with one of: {', '.join(TRANSITIONS)}.")
@@ -878,7 +976,10 @@ def _normalize_scene(raw: Any, n: int, shape: str, font: str, seen: set[str]) ->
         "kind": kind,
         "caption": _text(raw.get("caption"), "caption", MAX_CAPTION, False),
         "transition": transition,
-        "arrange": _normalize_arrange(kind, raw.get("arrange"), n),
+        "arrange": _normalize_arrange(kind, raw.get("arrange"), n, len(images)),
+        "background": _background(raw.get("background"), found),
+        "images": images,
+        "sound": _sound(raw.get("sound"), found),
         "fields": {k: v for k, v in slots.items() if k not in _WHOLE_PROJECT},
     }
 
@@ -886,7 +987,9 @@ def _normalize_scene(raw: Any, n: int, shape: str, font: str, seen: set[str]) ->
 def _normalize_scenes(raw: dict[str, Any]) -> dict[str, Any]:
     """The document of a project of scenes, checked and completed. Its length comes from its
     scenes. A scene keeps its id; one without an id, or with one already used, gets a new one."""
-    extra = sorted(set(raw) - {"name", "shape", "font", "scenes", "seconds"})
+    extra = sorted(
+        set(raw) - {"name", "shape", "font", "scenes", "seconds", "assets", "soundtrack"}
+    )
     if extra:
         raise SlotError(f"A project of scenes has no setting called {extra[0]}.")
     shape, font = raw.get("shape", "landscape"), raw.get("font", "sans")
@@ -900,7 +1003,9 @@ def _normalize_scenes(raw: dict[str, Any]) -> dict[str, Any]:
     if len(given) > MAX_SCENES:
         raise SlotError(f"A project can have at most {MAX_SCENES} scenes.")
     seen: set[str] = set()
-    scenes = [_normalize_scene(s, n, shape, font, seen) for n, s in enumerate(given, 1)]
+    assets = _normalize_assets(raw.get("assets"))
+    by_id = {a["id"]: a for a in assets}
+    scenes = [_normalize_scene(s, n, shape, font, seen, by_id) for n, s in enumerate(given, 1)]
     seconds = sum(s["fields"]["seconds"] for s in scenes)
     if seconds > MAX_SECONDS:
         raise SlotError(
@@ -913,6 +1018,8 @@ def _normalize_scenes(raw: dict[str, Any]) -> dict[str, Any]:
         "font": font,
         "seconds": seconds,
         "scenes": scenes,
+        "assets": assets,
+        "soundtrack": _soundtrack(raw.get("soundtrack"), by_id),
     }
 
 
@@ -963,13 +1070,18 @@ def poster_time(template: str, slots: dict[str, Any]) -> float:
 def is_transparent(template: str, slots: dict[str, Any]) -> bool:
     """Whether the picture has no background. A film is, only if every scene in it is."""
     if template == SCENES:
-        return all(TEMPLATES[s["kind"]].transparent for s in slots["scenes"])
+        return all(
+            TEMPLATES[s["kind"]].transparent and not s.get("background") and not s.get("images")
+            for s in slots["scenes"]
+        )
     return get(template).transparent
 
 
 def formats_of(template: str, slots: dict[str, Any]) -> tuple[str, ...]:
     if template == SCENES:
         kinds = {s["kind"] for s in slots["scenes"]}
+        if slots.get("soundtrack") or any(s.get("sound") for s in slots["scenes"]):
+            return ("mp4",)
         if is_transparent(template, slots):
             return TEMPLATES[sorted(kinds)[0]].formats
         return ("mp4",)
@@ -993,7 +1105,7 @@ def _scoped(scene: str, start: int, css: str, body: str, script: str) -> tuple[s
     body = re.sub(r'\bid="([\w-]+)"', rf'id="{prefix}\1"', body)
     body = re.sub(r'\bdata-slot="([\w-]+)"', rf'data-slot="{scene}-\1"', body)
     body = body.replace('data-start="0"', f'data-start="{start}"')
-    body = body.replace('data-track-index="0"', 'data-track-index="1"')
+    body = body.replace('data-track-index="0"', 'data-track-index="4"')
     script = re.sub(r'getElementById\("([\w-]+)"\)', rf'getElementById("{prefix}\1")', script)
     script = with_ids(script).replace('".', f'"#{root} .')
     return f"  #{root} {{\n{with_ids(css)}\n  }}", body, script
@@ -1014,8 +1126,77 @@ def _transition(kind: str, root: str, height: int) -> str:
     return ""
 
 
+def _scene_media(scene: dict[str, Any], start: int, assets: dict[str, dict[str, Any]]) -> str:
+    """The scene's background and the pictures on it, under its words. Their files are next to the
+    page (`media.py`); `file` was checked when the document was."""
+    seconds = scene["fields"]["seconds"]
+    timing = f'data-start="{start}" data-duration="{seconds}"'
+    sid = f"s{scene['id']}"
+    out = []
+    back = scene.get("background")
+    if back:
+        asset = assets[back["asset"]]
+        style = f"object-fit: {back['fit']}; object-position: {back['x']}% {back['y']}%;"
+        src = f'src="assets/{asset["file"]}"'
+        if asset["kind"] == "image":
+            out.append(
+                f'<img id="{sid}-back" class="clip scene-back" {timing} data-track-index="2" '
+                f'{src} style="{style}" alt="">'
+            )
+        else:
+            trim = f' data-media-start="{back["trim"]}"' if back["trim"] else ""
+            sound = (
+                f' data-has-audio="true" data-volume="{back["volume"]}"'
+                if back["volume"] > 0
+                else " muted"
+            )
+            out.append(
+                f'<video id="{sid}-back" class="clip scene-back" {timing} data-track-index="2"'
+                f'{trim}{sound} {src} style="{style}" playsinline></video>'
+            )
+    for i, placed in enumerate(scene.get("images", [])):
+        asset = assets[placed["asset"]]
+        out.append(
+            f'<img id="{sid}-placed-{i}" class="clip placed placed-{i}" {timing} '
+            f'data-track-index="3" src="assets/{asset["file"]}" alt="">'
+        )
+    return "\n".join(out)
+
+
+def _sound_clips(document: dict[str, Any], assets: dict[str, dict[str, Any]]) -> str:
+    """The sounds: each scene's during that scene, and the soundtrack from where it starts. A loop
+    is the file again, one clip after another, because a clip has one start and one length."""
+    out: list[str] = []
+
+    def add(sound: dict[str, Any], start: float, length: float) -> None:
+        asset = assets[sound["asset"]]
+        each = asset["seconds"] or length
+        at = 0.0
+        while at < length:
+            run = min(each, length - at)
+            track = 10 + len(out)
+            out.append(
+                f'<audio id="sound-{len(out)}" class="clip" data-start="{round(start + at, 3)}" '
+                f'data-duration="{round(run, 3)}" data-track-index="{track}" '
+                f'data-volume="{sound["volume"]}" src="assets/{asset["file"]}"></audio>'
+            )
+            at += each
+            if not sound["loop"]:
+                break
+
+    starts = scene_starts(document)
+    for scene, start in zip(document["scenes"], starts, strict=True):
+        if scene.get("sound"):
+            add(scene["sound"], start, scene["fields"]["seconds"])
+    track = document.get("soundtrack")
+    if track and track["start"] < document["seconds"]:
+        add(track, track["start"], document["seconds"] - track["start"])
+    return "\n".join(out)
+
+
 def _render_scenes(document: dict[str, Any]) -> str:
     width, height = SHAPES[document["shape"]]
+    assets = {a["id"]: a for a in document.get("assets", [])}
     family, file, _ = FONTS[document["font"]]
     clear = is_transparent(SCENES, document)
     rules, parts, scripts = [], [], []
@@ -1041,7 +1222,7 @@ def _render_scenes(document: dict[str, Any]) -> str:
             f'<div id="scene-{scene["id"]}" class="clip scene" data-start="{start}" '
             f'data-duration="{seconds}" data-track-index="0" '
             f'style="background: {background}; color: {look.ink}; font-family: {look.stack};">\n'
-            f"{body}\n</div>"
+            f"{_scene_media(scene, start, assets)}\n{body}\n</div>"
         )
         # the film itself shows each scene only in its own time: the renderer hides clips, but the
         # exact-text check opens the page without the renderer's runtime
@@ -1072,6 +1253,8 @@ def _render_scenes(document: dict[str, Any]) -> str:
     background: {"transparent" if clear else "#000"}; }}
   #root {{ position: relative; width: {width}px; height: {height}px; overflow: hidden; }}
   .scene {{ position: absolute; inset: 0; overflow: hidden; }}
+  .scene-back {{ position: absolute; inset: 0; width: 100%; height: 100%; }}
+  .placed {{ position: absolute; height: auto; }}
   .scene-caption {{ position: absolute; left: 8%; right: 8%; bottom: 5%; text-align: center;
     font-size: {round(min(width, height) * 0.036)}px; line-height: 1.5; color: #fff; }}
   .scene-caption span {{ background: rgba(0,0,0,0.68); padding: 0.25em 0.6em; border-radius: 0.3em;
@@ -1081,6 +1264,7 @@ def _render_scenes(document: dict[str, Any]) -> str:
 <div id="root" data-composition-id="main" data-start="0" data-duration="{seconds}"
      data-width="{width}" data-height="{height}">
 {newline.join(parts)}
+{_sound_clips(document, assets)}
 </div>
 <script>
   const film = gsap.timeline({{ paused: true }});

@@ -2,10 +2,21 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { BuilderProject, SceneDocument, VideoBuilderApi } from "@wasifyai/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SceneEditor } from "./SceneEditor";
+import type { ChatScreenProps } from "../../chat/ChatScreen";
+import { type EditorAssistant, SceneEditor } from "./SceneEditor";
+import { ScenesStart } from "./ScenesStart";
 import { lengthOf, newSceneId, sceneAt, startOf, withWorkedOut } from "./use-scene-editor";
 
 vi.mock("./vendor/hyperframes-player.global.js", () => ({}));
+
+// the chat has its own tests: here, what the editor gives it and does with what it reports
+let chat: ChatScreenProps;
+vi.mock("../../chat/ChatScreen", () => ({
+  ChatScreen: (props: ChatScreenProps) => {
+    chat = props;
+    return <div>The chat</div>;
+  },
+}));
 
 const THEME = { from: "#000", to: "#111", ink: "#fff", accent: "#f00" };
 const seconds = {
@@ -312,5 +323,194 @@ describe("the editor", () => {
     });
     expect(api.render).not.toHaveBeenCalled();
     expect(within(screen.getByRole("dialog")).getByText("Scene 1: Write a title.")).toBeTruthy();
+  });
+});
+
+describe("the assistant in the editor", () => {
+  const ASSISTANT = { runs: {}, api: {}, images: {} } as unknown as EditorAssistant;
+  const after: SceneDocument = {
+    ...film,
+    name: "After the assistant",
+    scenes: [{ ...first, fields: { ...first.fields, title: "Changed by it" } }],
+  };
+
+  function docked(over: Partial<VideoBuilderApi> = {}, brief?: string) {
+    const update = vi.fn(async (_id: string, slots: unknown) => project(slots as SceneDocument));
+    const api = {
+      update,
+      live: vi.fn(async () => ({
+        url: "http://engine/live",
+        expires_at: Date.now() / 1000 + 3600,
+      })),
+      get: vi.fn(async () => project(after)),
+      keepConversation: vi.fn(async () => {}),
+      ...over,
+    } as unknown as VideoBuilderApi;
+    render(
+      <SceneEditor
+        api={api}
+        project={{ ...project(), conversation_id: "c-1" }}
+        catalogue={catalogue}
+        onBack={() => {}}
+        assistant={ASSISTANT}
+        brief={brief}
+      />,
+    );
+    return { api, update };
+  }
+  const changed = (id = "t1", output: Record<string, unknown> = {}) =>
+    act(async () => {
+      chat.onToolResult?.({
+        id,
+        name: "propose_action",
+        status: "ok",
+        output: { action_id: "motion.change_scene", ...output },
+      });
+    });
+
+  it("tells the chat which project and scene, and reopens the project's own chat", () => {
+    docked();
+    expect(chat.conversationId).toBe("c-1");
+    expect(chat.runInput).toEqual({
+      working_on: {
+        action_id: "motion.read_project",
+        params: { composition_id: "p".repeat(32), scene_id: "aaaaaaaa" },
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Scene 2, Proof/ }));
+    const on = chat.runInput?.working_on as { params: { scene_id: string } };
+    expect(on.params.scene_id).toBe("bbbbbbbb");
+  });
+
+  it("sends the brief once, with the chat in view", () => {
+    docked({}, "A promo for tea");
+    expect(chat.firstMessage).toBe("A promo for tea");
+    expect(screen.getByText("The chat").closest("[hidden]")).toBeNull();
+  });
+
+  it("opens on the scene's details when there is no brief, keeping the chat alive", () => {
+    docked();
+    expect(screen.getByText("The chat").closest("[hidden]")).not.toBeNull();
+    expect(screen.getByLabelText("Scene name")).toBeTruthy();
+  });
+
+  it("remembers a new chat with the project", async () => {
+    const { api } = docked();
+    await act(async () => chat.onConversation?.("c-2", "Title"));
+    expect(api.keepConversation).toHaveBeenCalledWith("p".repeat(32), "c-2");
+  });
+
+  it("saves what was typed before the assistant reads the project", async () => {
+    const { update } = docked();
+    fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: "Just typed" } });
+    await act(async () => {
+      await chat.beforeTurn?.();
+    });
+    const sent = update.mock.calls.at(-1)?.[1] as SceneDocument;
+    expect(sent.scenes[0]?.fields.title).toBe("Just typed");
+  });
+
+  it("shows what the assistant changed, as one Undo step of its own", async () => {
+    docked();
+    await changed();
+    await waitFor(() =>
+      expect((screen.getByLabelText("Project name") as HTMLInputElement).value).toBe(
+        "After the assistant",
+      ),
+    );
+    expect((screen.getByLabelText(/^Title/) as HTMLInputElement).value).toBe("Changed by it");
+    fireEvent.click(screen.getByRole("button", { name: "Undo: The assistant's change" }));
+    expect((screen.getByLabelText(/^Title/) as HTMLInputElement).value).toBe("First");
+  });
+
+  it("goes to the scene the assistant just added", async () => {
+    const added = { ...after, scenes: [first, { ...first, id: "cccccccc" }] };
+    docked({ get: vi.fn(async () => project(added)) } as never);
+    await changed("t1", { scene_id: "cccccccc" });
+    await waitFor(() => expect(screen.getByText("Scene 2 of 2")).toBeTruthy());
+  });
+
+  it("does not read the project back for what changes nothing, or what failed", async () => {
+    const { api } = docked();
+    await act(async () => {
+      chat.onToolResult?.({
+        id: "a",
+        name: "propose_action",
+        status: "ok",
+        output: { action_id: "video_builder.render" },
+      });
+      chat.onToolResult?.({
+        id: "b",
+        name: "propose_action",
+        status: "refused",
+        output: { action_id: "motion.change_scene" },
+      });
+    });
+    expect(api.get).not.toHaveBeenCalled();
+  });
+
+  it("undoes from the change's own card, also what came after it", async () => {
+    docked();
+    await changed("t1");
+    await waitFor(() => expect(chat.undoOfTool?.("t1")?.undone).toBe(false));
+    expect(chat.undoOfTool?.("from-an-earlier-visit")).toBeNull();
+    await act(async () => chat.undoOfTool?.("t1")?.undo());
+    expect(chat.undoOfTool?.("t1")?.undone).toBe(true);
+    expect((screen.getByLabelText(/^Title/) as HTMLInputElement).value).toBe("First");
+  });
+
+  it("keeps the person out of the project while the assistant works", async () => {
+    docked();
+    await act(async () => chat.onWorking?.(true));
+    expect(
+      (screen.getByRole("button", { name: "Make the video" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(screen.getByLabelText("Scene name").closest("[inert]")).not.toBeNull();
+    await act(async () => chat.onWorking?.(false));
+    expect(screen.getByLabelText("Scene name").closest("[inert]")).toBeNull();
+  });
+});
+
+describe("the first screen", () => {
+  it("sends the brief with a starting point and the shape", () => {
+    const onBrief = vi.fn();
+    render(
+      <ScenesStart
+        catalogue={catalogue}
+        onBrief={onBrief}
+        onEmpty={() => {}}
+        onOneGraphic={() => {}}
+      />,
+    );
+    expect(
+      (screen.getByRole("button", { name: "Make a first version" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.change(screen.getByLabelText("Describe your video"), {
+      target: { value: "Our new tea." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Sale or offer" }));
+    fireEvent.click(screen.getByRole("radio", { name: "1:1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Make a first version" }));
+    expect(onBrief).toHaveBeenCalledWith(
+      "A short video about an offer, clear about what it is. Our new tea.",
+      "square",
+    );
+  });
+
+  it("can start empty, or make just one graphic", () => {
+    const onEmpty = vi.fn();
+    const onOne = vi.fn();
+    render(
+      <ScenesStart
+        catalogue={catalogue}
+        onBrief={() => {}}
+        onEmpty={onEmpty}
+        onOneGraphic={onOne}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Start empty" }));
+    expect(onEmpty).toHaveBeenCalledWith("portrait");
+    fireEvent.click(screen.getByRole("button", { name: "Quote" }));
+    expect(onOne).toHaveBeenCalledWith("quote");
   });
 });

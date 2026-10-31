@@ -52,6 +52,10 @@ class ProjectPatch(BaseModel):
     template: str | None = Field(None, max_length=40)
 
 
+class ConversationIn(BaseModel):
+    conversation_id: str = Field(min_length=1, max_length=64)
+
+
 class Attachment(BaseModel):
     name: str = Field("", max_length=200)
     text: str = Field("", max_length=60_000)
@@ -227,6 +231,19 @@ def build_builder_routes(deps: RouteDeps) -> APIRouter:
         )  # fmt: skip
         await index_composition(deps, identity, found)
         return await project_out(identity, found, detail=True)
+
+    @router.put("/projects/{cid}/conversation")
+    async def keep_conversation(
+        cid: str, body: ConversationIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """The editor's chat for this project (ADR-0096): found again when it is opened."""
+        guard()
+        composition(identity, cid)
+        await asyncio.to_thread(
+            store_for(deps.state).set_conversation,
+            identity.tenant_id, identity.user_id, cid, body.conversation_id,
+        )  # fmt: skip
+        return {"conversation_id": body.conversation_id}
 
     @router.post("/projects/{cid}/undo")
     async def undo_project(cid: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:

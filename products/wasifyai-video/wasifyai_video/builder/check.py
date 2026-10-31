@@ -18,6 +18,8 @@ MIN_OPACITY = 0.75  # the templates dim a second line to 0.8; a word still fadin
 MIN_INK = 20  # pixels that change when the element is hidden: fewer means nothing is drawn
 MAX_CUT = 80  # pixels that change when every clip is removed: more means something is cut off
 # (a clip layer redraws the headline rule of Bengali letters a little differently: 40 pixels)
+MAX_CUT_SHARE = 0.015  # for big letters, this share of what is drawn: redrawing their edges changes
+# up to 0.9% of them (85 pixels of 13,877, a serif title), and the tail of one "y" is about 3%
 
 
 def _norm(text: str) -> str:
@@ -69,7 +71,7 @@ def compare(
                 {"slot": e.slot, "code": "not_drawn",
                  "message": f"{_quote(e.text)} is in the page but nothing is drawn for it."}
             )  # fmt: skip
-        elif int(got.get("clipped", 0)) > MAX_CUT:
+        elif int(got.get("clipped", 0)) > max(MAX_CUT, int(got.get("inked", 0)) * MAX_CUT_SHARE):
             problems.append(
                 {"slot": e.slot, "code": "clipped",
                  "message": f"Part of {_quote(e.text)} is cut off."}

@@ -4101,6 +4101,98 @@
       "help": "docs/help/motion.move_scene.md"
     },
     {
+      "id": "motion.read_project",
+      "title": "Read a video project",
+      "summary": "What a video project's scenes say, for working on it.",
+      "description": "Read a Motion graphics project: its shape, length and each scene's id, kind, words, length and look. The editor's assistant works from this.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "composition_id": {
+            "description": "The video project, as returned when it was created.",
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "scene_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{8}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The scene the person is on, if any.",
+            "title": "Scene Id"
+          }
+        },
+        "required": [
+          "composition_id"
+        ],
+        "title": "ReadProjectIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "composition_id": {
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "brief": {
+            "title": "Brief",
+            "type": "string"
+          },
+          "actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Actions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "composition_id",
+          "title",
+          "brief",
+          "actions"
+        ],
+        "title": "ReadProjectOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "composition_id": "0b7c1f9e000040008000000000000000"
+        }
+      ],
+      "effect": "read",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-video",
+      "ui": "motion",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/motion.read_project.md"
+    },
+    {
       "id": "motion.remove_scene",
       "title": "Remove a scene",
       "summary": "Take a scene out of a video project.",
@@ -4389,6 +4481,264 @@
       ],
       "consent": "",
       "help": "docs/help/motion.revise.md"
+    },
+    {
+      "id": "motion.set_project",
+      "title": "Change the whole project",
+      "summary": "Change the name or shape of a video project, or write all its scenes.",
+      "description": "Change a Motion graphics project's name, shape or letters, or replace all its scenes at once, as when turning a brief into a first version. Give only what changes. Nothing is rendered. title: A title and a line under it, animated in on a colour you pick. Fields: title (text, up to 80 characters, required); subtitle (text, up to 140 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). quote: A quote that appears word by word, with who said it. Fields: quote (text, up to 220 characters, required); author (text, up to 60 characters); shape (landscape/portrait/square); seconds (seconds, 4 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). chart: Bars that grow, from your own numbers. Each number is shown exactly as you type it. Fields: title (text, up to 80 characters, required); data (lines like 'Sales, 120', up to 8); shape (landscape/portrait/square); seconds (seconds, 5 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). lower_third: A name strap for the bottom of a video. Transparent, to lay over footage. Fields: name (text, up to 60 characters, required); role (text, up to 80 characters); shape (landscape/portrait/square); seconds (seconds, 3 to 90); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif). captions: Your own words as captions, one after another. Transparent, to lay over footage. Fields: lines (one caption per line, up to 45 lines); per_line (2/3/4); shape (landscape/portrait/square); theme (midnight/sunrise/forest/paper/night/sage/pulse); font (sans/serif).",
+      "input": {
+        "$defs": {
+          "SceneIn": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "description": "What the scene is: one of the five templates.",
+                "enum": [
+                  "title",
+                  "quote",
+                  "chart",
+                  "lower_third",
+                  "captions"
+                ],
+                "title": "Kind",
+                "type": "string"
+              },
+              "name": {
+                "default": "",
+                "description": "A short name for the scene.",
+                "maxLength": 60,
+                "title": "Name",
+                "type": "string"
+              },
+              "caption": {
+                "default": "",
+                "description": "Words along the bottom of the scene.",
+                "maxLength": 140,
+                "title": "Caption",
+                "type": "string"
+              },
+              "transition": {
+                "default": "fade",
+                "description": "How the scene starts.",
+                "enum": [
+                  "none",
+                  "fade",
+                  "slide"
+                ],
+                "title": "Transition",
+                "type": "string"
+              },
+              "fields": {
+                "additionalProperties": true,
+                "description": "The template's words and settings, exactly as they should be shown, without shape and font (those are set for the whole project). `seconds` is 5 if not given.",
+                "title": "Fields",
+                "type": "object"
+              }
+            },
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "title": "SceneIn",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "composition_id": {
+            "description": "The video project, as returned when it was created.",
+            "maxLength": 32,
+            "minLength": 32,
+            "pattern": "^[0-9a-f]{32}$",
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The project's name.",
+            "title": "Name"
+          },
+          "shape": {
+            "anyOf": [
+              {
+                "enum": [
+                  "landscape",
+                  "portrait",
+                  "square"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The shape of the whole video.",
+            "title": "Shape"
+          },
+          "font": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sans",
+                  "serif"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The letters of the whole video.",
+            "title": "Font"
+          },
+          "scenes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/SceneIn"
+                },
+                "maxItems": 30,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "All the scenes, in order, replacing the ones there now.",
+            "title": "Scenes"
+          }
+        },
+        "required": [
+          "composition_id"
+        ],
+        "title": "SetProjectIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "SceneOut": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "kind": {
+                "title": "Kind",
+                "type": "string"
+              },
+              "seconds": {
+                "title": "Seconds",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "kind",
+              "seconds"
+            ],
+            "title": "SceneOut",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "composition_id": {
+            "title": "Composition Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "shape": {
+            "title": "Shape",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "integer"
+          },
+          "scenes": {
+            "items": {
+              "$ref": "#/$defs/SceneOut"
+            },
+            "title": "Scenes",
+            "type": "array"
+          },
+          "scene_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Scene Id"
+          }
+        },
+        "required": [
+          "composition_id",
+          "product_id",
+          "uri",
+          "title",
+          "shape",
+          "seconds",
+          "scenes"
+        ],
+        "title": "ScenesOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "composition_id": "0b7c1f9e000040008000000000000000",
+          "shape": "square"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-video",
+      "ui": "motion",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/motion.set_project.md"
     },
     {
       "id": "motion.undo",

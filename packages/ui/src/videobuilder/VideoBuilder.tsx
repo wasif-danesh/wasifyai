@@ -25,7 +25,8 @@ import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../save";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
 import { FormField } from "./FormField";
 import { PromptBox } from "./PromptBox";
-import { SceneEditor } from "./scenes/SceneEditor";
+import { type EditorAssistant, SceneEditor } from "./scenes/SceneEditor";
+import { ScenesStart } from "./scenes/ScenesStart";
 import { type Draft, blankDraft, fromDraft, lengths, missing, startFrom, toDraft } from "./slots";
 import { NEW, templateOf, useVideoBuilder } from "./use-video-builder";
 
@@ -48,6 +49,9 @@ export type VideoBuilderProps = {
   /** Where the work is done: on this computer (the desktop) or on a service's worker (the web). */
   place?: "device" | "service";
   onOpenLibrary?: () => void;
+  /** The assistant, docked in the editor (ADR-0096 MX3): without it, the editor has no chat and the
+   * first screen is the one-graphic form. */
+  assistant?: EditorAssistant;
 };
 
 /** Experimental: write a video from a template (title, quote, chart, name strap, captions),
@@ -59,6 +63,7 @@ export function VideoBuilder({
   downloadHref,
   place = "device",
   onOpenLibrary,
+  assistant,
 }: VideoBuilderProps) {
   const b = useVideoBuilder(api);
   const { state } = b;
@@ -146,7 +151,25 @@ export function VideoBuilder({
           downloadHref={downloadHref}
           onBack={() => void b.leaveEditor()}
           onOpenLibrary={onOpenLibrary}
+          assistant={assistant}
+          brief={state.brief ?? undefined}
         />
+      </div>
+    );
+  }
+  if (assistant && state.selected === null && !state.oneGraphic) {
+    return (
+      <div data-workspace className="h-[calc(100dvh-3rem)] overflow-auto">
+        <ScenesStart
+          catalogue={state.catalogue}
+          onBrief={(brief, shape) => void b.startScenes(shape, brief)}
+          onEmpty={(shape) => void b.startScenes(shape)}
+          onOneGraphic={(template) => b.openOneGraphic(template)}
+        />
+        <div className="mx-auto w-full max-w-3xl px-[clamp(1rem,4vw,2.5rem)] pb-8">
+          {notices}
+          {recent}
+        </div>
       </div>
     );
   }

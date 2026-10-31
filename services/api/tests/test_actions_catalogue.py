@@ -168,8 +168,9 @@ def test_the_first_set_is_there(catalogue):
     # 51 with decision.decide (ADR-0075 decision 7), the one action a taught decision model adds;
     # 52 with external.call (ADR-0070 decision 8), the one action behind every outside tool;
     # 55 with styles.list, styles.add_from_hub and styles.remove (ADR-0091 decision 12);
-    # 62 with motion.write_scenes, the five changes to one scene and motion.undo (ADR-0096)
-    assert 35 <= len(ids) <= 62
+    # 64 with motion.write_scenes, motion.set_project, motion.read_project, the five changes to one
+    # scene and motion.undo (ADR-0096)
+    assert 35 <= len(ids) <= 64
     for expected in (
         "library.search", "library.list", "library.get", "library.export", "library.rename",
         "library.delete", "image.generate", "image.edit", "video.generate", "video.animate",

@@ -230,6 +230,7 @@ function api(over: Partial<VideoBuilderApi> = {}): VideoBuilderApi {
     list: vi.fn().mockResolvedValue([project()]),
     get: vi.fn().mockResolvedValue(project()),
     live: vi.fn().mockResolvedValue({ url: "http://engine/live", expires_at: 9e9 }),
+    keepConversation: vi.fn(),
     create: vi.fn().mockImplementation(async (template, s) =>
       project({
         template,

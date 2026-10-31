@@ -17,7 +17,8 @@ const RENEW_BEFORE_S = 300;
 
 export type SaveState = "saved" | "saving" | "failed";
 
-type Step = { label: string; document: SceneDocument };
+/** One Undo step; `toolId` when the assistant made it, so its card in the chat can undo it. */
+type Step = { label: string; document: SceneDocument; toolId?: string };
 
 export const say = (e: unknown, fallback: string) =>
   e instanceof Error && e.message ? e.message : fallback;
@@ -81,6 +82,7 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saving = useRef<Promise<void> | null>(null);
   const dirty = useRef(false);
+  const madeByTools = useRef(new Set<string>());
 
   useEffect(() => {
     alive.current = true;
@@ -172,9 +174,7 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
   }, []);
 
   const keepSelection = useCallback((d: SceneDocument) => {
-    setSelected((id) =>
-      d.scenes.some((s) => s.id === id) ? id : (d.scenes[d.scenes.length - 1]?.id ?? ""),
-    );
+    setSelected((id) => (d.scenes.some((s) => s.id === id) ? id : (d.scenes[0]?.id ?? "")));
   }, []);
 
   const undo = useCallback(async () => {
@@ -205,6 +205,55 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
       setProblem(say(e, "That could not be undone."));
     }
   }, [past, keepSelection, saveSoon, saveNow, api, project.id]);
+
+  /** What the assistant just changed, read from the engine: one Undo step of its own. */
+  const adopt = useCallback(
+    async (toolId: string, label: string, sceneId?: string) => {
+      try {
+        const found = await api.get(project.id);
+        const next = found.slots as unknown as SceneDocument;
+        if (!alive.current || !next.scenes) return;
+        const before = latest.current;
+        group.current = null;
+        setPast((p) => [...p.slice(1 - KEEP_STEPS), { label, document: before, toolId }]);
+        setFuture([]);
+        madeByTools.current.add(toolId);
+        latest.current = next;
+        setDocument(next);
+        if (sceneId && next.scenes.some((s) => s.id === sceneId)) setSelected(sceneId);
+        else keepSelection(next);
+        setCanUndoSaved(found.can_undo);
+        setRevision((r) => r + 1);
+      } catch (e) {
+        if (alive.current) setProblem(say(e, "The assistant's change could not be read."));
+      }
+    },
+    [api, project.id, keepSelection],
+  );
+
+  /** Undo on a change's card: back to before that change, and so also before the ones after it. */
+  const undoOfTool = useCallback(
+    (toolId: string) => {
+      if (!madeByTools.current.has(toolId)) return null; // from an earlier visit, or nothing changed
+      const at = past.findIndex((s) => s.toolId === toolId);
+      return {
+        undone: at < 0,
+        undo: () => {
+          const step = past[at];
+          if (!step) return;
+          const now = latest.current;
+          group.current = null;
+          setPast(past.slice(0, at));
+          setFuture((f) => [...f, { label: step.label, document: now }]);
+          latest.current = step.document;
+          setDocument(step.document);
+          keepSelection(step.document);
+          saveSoon();
+        },
+      };
+    },
+    [past, keepSelection, saveSoon],
+  );
 
   const redo = useCallback(() => {
     group.current = null;
@@ -345,6 +394,8 @@ export function useSceneEditor(api: VideoBuilderApi, project: BuilderProject) {
     endGroup,
     undo,
     redo,
+    adopt,
+    undoOfTool,
     changeScene,
     moveScene,
     addScene,

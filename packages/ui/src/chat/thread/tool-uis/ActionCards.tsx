@@ -5,6 +5,7 @@ import { Button } from "../../../components/button";
 import { Spinner } from "../../../components/spinner";
 // The cards of the meta-tools (ADR-0071 decision 3): what a proposed action came to, the guides how_to found, and the
 // button open_screen offers. Plain text only: everything shown came from the assistant or the app's own files.
+import { useThreadEnv } from "../env";
 import { JobProgress } from "./JobProgress";
 
 type Tool = Extract<ChatPart, { type: "tool" }>;
@@ -39,6 +40,7 @@ export function ActionResultCard({
   onOpenCreation?: (kind: string, id: string) => void;
   onOpenScreen?: (screenId: string) => void;
 }) {
+  const { undoOfTool } = useThreadEnv();
   if (tool.status === "running") {
     return (
       <JobProgress
@@ -51,6 +53,7 @@ export function ActionResultCard({
   const out = tool.output ?? {};
   const message = typeof out.message === "string" ? out.message : "";
   const made = tool.status === "ok" ? creationOf(out) : null;
+  const change = tool.status === "ok" ? undoOfTool?.(tool.id) : null;
   const setup = typeof out.setup === "string" ? out.setup : "";
   const screen = typeof out.screen === "string" ? out.screen : "";
   return (
@@ -68,6 +71,17 @@ export function ActionResultCard({
       </p>
       {setup ? <p className="text-muted-foreground">{setup}</p> : null}
       <div className="flex flex-wrap gap-2">
+        {change ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={change.undone}
+            onClick={change.undo}
+          >
+            {change.undone ? "Undone" : "Undo"}
+          </Button>
+        ) : null}
         {made && onOpenCreation ? (
           <Button
             type="button"

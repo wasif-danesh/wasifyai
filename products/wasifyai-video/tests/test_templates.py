@@ -331,3 +331,16 @@ async def test_a_check_that_cannot_run_is_a_failure_and_not_a_pass():
     assert (
         good["ok"] is True and good["checked"] == 2 and "exactly what you wrote" in good["message"]
     )
+
+
+def test_a_big_word_is_not_called_cut_off_for_how_its_edges_are_redrawn():
+    slots = templates.normalize_slots("title", {"title": "Try Fizzleaf", "font": "serif"})
+    seen = {
+        "slot": "title", "at": templates.expected("title", slots)[0].at, "found": True,
+        "text": "Try Fizzleaf", "shown": True, "opacity": 1, "inside": True,
+    }  # fmt: skip
+    assert check.compare("title", slots, [{**seen, "inked": 13877, "clipped": 85}]) == []
+    cut = check.compare("title", slots, [{**seen, "inked": 13877, "clipped": 400}])
+    assert cut[0]["code"] == "clipped", "the tail of a letter is still caught"
+    small = check.compare("title", slots, [{**seen, "inked": 900, "clipped": 90}])
+    assert small[0]["code"] == "clipped", "and small words keep the plain limit"

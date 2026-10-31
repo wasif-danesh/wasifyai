@@ -16,6 +16,7 @@ import asyncio
 import inspect
 import logging
 import re
+from dataclasses import replace
 from typing import Any, Literal, TypedDict, cast
 from uuid import UUID
 
@@ -61,6 +62,7 @@ from wasifyai_assistant.tools import (
     EDITED,
     EXTERNAL_TOOLS,
     MOVED_ON,
+    ORIGIN,
     POLICY,
     PROPOSE,
     TOOL_DEFINITIONS,
@@ -161,6 +163,9 @@ class AssistantState(TypedDict, total=False):
     # this computer) or "auto" (no card); deleting and anything that needs the person's word
     # always ask
     approval: str
+    # the screen this chat is docked in (the Motion graphics editor, ADR-0096): a read action to
+    # call for what the model is told, `{"action_id", "params"}`. What it answers decides the rest.
+    working_on: dict[str, Any]
     # files attached to this message (ADR-0083, CO2): `[{id, name}]` of uploads made just before
     attachments: list[dict[str, Any]]
     # where in the conversation's tree this turn goes (ADR-0082, stage CU2): left out, the turn goes
@@ -207,12 +212,16 @@ def model_messages(
     attached: dict[str, Attached] | None = None,
     features: str = "",
     external: list[str] | None = None,
+    instead: str = "",
 ) -> list[dict[str, Any]]:
     """The conversation as OpenAI-style messages (assistant text and tool calls, tool results).
     `attached`: what the person attached, as the model is given it (`attachments.py`).
     `features`: the list of actions the model may propose (`features.actions_prompt`).
-    `external`: the names of the outside servers when the pair of tools is offered (ADR-0070)."""
-    prompt = SYSTEM_PROMPT + features + (WEB_PROMPT if search else "") + external_prompt(external)
+    `external`: the names of the outside servers when the pair of tools is offered (ADR-0070).
+    `instead`: what a screen this chat is docked in tells the model, in place of the rest."""
+    prompt = instead or (
+        SYSTEM_PROMPT + features + (WEB_PROMPT if search else "") + external_prompt(external)
+    )
     if attachments_in(history):
         prompt += ATTACH_PROMPT
     out: list[dict[str, Any]] = [{"role": "system", "content": prompt}]
@@ -328,6 +337,20 @@ def openable_urls(history: list[Message]) -> set[str]:
                     if isinstance(r, dict) and isinstance(r.get("url"), str):
                         urls.add(norm_url(r["url"]))
     return urls
+
+
+def docked_outcome(done: ToolOutcome) -> ToolOutcome:
+    """In a screen, a refused change is said plainly to the model: the person sees the project, and
+    a model that took the refusal for a success told them it was done when nothing had changed."""
+    if done.status not in ("refused", "error"):
+        return done
+    return replace(
+        done,
+        text=(
+            f"Nothing was changed: {done.text} Fix this and call propose_action again. If you "
+            "cannot, tell the person it was not done. Do not say it is done."
+        ),
+    )
 
 
 def build_assistant_graph(
@@ -506,6 +529,33 @@ def build_assistant_graph(
             {a.id for a in catalogue.registry.for_surface("assistant")} if catalogue else set()
         )
         features = actions_prompt(served)
+        docked = state.get("working_on") if isinstance(state.get("working_on"), dict) else None
+        # the project on the screen: known from the start, because a turn that waited for a card
+        # goes on without asking the screen again
+        docked_project = (
+            str((docked.get("params") or {}).get("composition_id") or "") if docked else ""
+        )
+
+        async def dock() -> str:
+            """What the screen says now: asked again before every model call, so the model sees
+            its own changes. It offers only `propose_action` and the actions the screen names."""
+            nonlocal served, tools
+            if docked is None or catalogue is None:
+                return ""
+            action_id, params = str(docked.get("action_id", "")), docked.get("params")
+            found = next(
+                (a for a in catalogue.registry.for_surface("assistant") if a.id == action_id), None
+            )
+            if found is None or found.effect != "read" or not isinstance(params, dict):
+                raise RunError("invalid_request", "That screen cannot be read.")
+            who = Identity(tenant_id=ctx.tenant_id, user_id=ctx.user_id)
+            read = await catalogue.run_action(action_id, params, ORIGIN, actor=who)
+            if read.status != "ok":
+                raise RunError("not_found", read.text or "That project is not there any more.")
+            served = served & set(read.output.get("actions", []))
+            tools = [t for t in tools or [] if t["function"]["name"] == PROPOSE]
+            return str(read.output.get("brief") or "")
+
         thinking = bool(state.get("thinking"))
         approval = str(state.get("approval") or "ask")
         reply_id = client_id(state.get("client_reply_id"))
@@ -588,9 +638,22 @@ def build_assistant_graph(
                     )
                     return ToolOutcome("refused", {"message": msg}, msg)
                 args = {**args, "url": norm_url(str(args.get("url", "")))}  # as it was checked
+            if docked_project and c["name"] == PROPOSE:
+                if str(args.get("action_id")) not in served:
+                    msg = "That cannot be done from here. Only change this project."
+                    return ToolOutcome("refused", {"message": msg}, msg)
+                # the project on the screen, whatever the model wrote
+                args = {
+                    **args,
+                    "params": {**(args.get("params") or {}), "composition_id": docked_project},
+                }
             if policy is None or tainted:
                 # the chat's setting, except that after outside text everything asks
                 policy = ASK if tainted else POLICIES.get(approval, ASK)
+                if docked_project and not tainted:
+                    # a screen's changes apply at once: the person sees them and can undo them;
+                    # what costly still follows the chat's setting
+                    policy = policy.model_copy(update={"change": "auto"})
             if c["name"] == CALL_EXTERNAL and await trusted_read_only(args):
                 # ADR-0070 decision 4: a tool the person trusts to only read runs unasked, taint
                 # or not (the one relaxation of the taint rule)
@@ -607,10 +670,12 @@ def build_assistant_graph(
                 thought = ""
                 calls: list[Any] = []
                 write({"type": "node", "node": "agent", "status": "started", "label": "Thinking"})
+                instead = await dock()
+                allow_tools = tools if round_no < MAX_ROUNDS else None
                 try:
                     async for chunk in caps.text.chat(
                         "chat",
-                        model_messages(history, search, attached, features, external),
+                        model_messages(history, search, attached, features, external, instead),
                         allow_tools,
                         thinking=thinking,
                     ):
@@ -736,6 +801,8 @@ def build_assistant_graph(
                     outcome = (
                         found if isinstance(found, ToolOutcome) else outcome_of(c["name"], found)
                     )
+                    if docked_project and c["name"] == PROPOSE:
+                        outcome = docked_outcome(outcome)
                     if c["name"] in WEB_TOOLS and outcome.status == "ok":
                         tainted, taint_from = True, "the web"
                         if c["name"] == "web_search":

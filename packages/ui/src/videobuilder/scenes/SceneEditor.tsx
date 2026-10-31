@@ -3,6 +3,7 @@
 // the film in the middle, the selected scene on the right, the scenes along the bottom. MX3 adds the
 // assistant beside the scene's details, MX4 arranging on the preview, MX5 and MX6 more tools on the left.
 import type {
+  AssistantApi,
   BuilderProject,
   BuilderShape,
   BuilderSlots,
@@ -26,7 +27,9 @@ import {
   Trash2,
   Undo2,
 } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { ChatScreen, type ChatScreenProps } from "../../chat/ChatScreen";
+import type { ChatToolResult } from "../../chat/thread/use-thread-chat";
 import { cn } from "../../cn";
 import { Button } from "../../components/button";
 import { Modal } from "../../components/dialog";
@@ -58,6 +61,10 @@ const FIRST_WORDS: Record<string, Record<string, string | number>> = {
   captions: { lines: "Your first line", per_line: "3" },
 };
 
+/** The actions whose result the screen reads back. Making the video changes nothing here. */
+const CHANGES_THE_PROJECT =
+  /^motion\.(set_project|add_scene|change_scene|move_scene|duplicate_scene|remove_scene|undo)$/;
+
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
@@ -68,6 +75,26 @@ const firstWords = (scene: Scene) => {
   return String(text ?? "");
 };
 
+/** What the app gives the editor so the assistant can be docked in it (ADR-0096 MX3). */
+export type EditorAssistant = Pick<
+  ChatScreenProps,
+  | "runs"
+  | "images"
+  | "tracks"
+  | "notices"
+  | "blockedReason"
+  | "onNeedModel"
+  | "onOpenSettings"
+  | "model"
+> & { api: AssistantApi };
+
+const SUGGESTIONS = [
+  "Shorten this scene",
+  "Add an end card",
+  "Try a calmer look",
+  "Make a square version",
+];
+
 export function SceneEditor({
   api,
   project,
@@ -77,6 +104,8 @@ export function SceneEditor({
   downloadHref,
   onBack,
   onOpenLibrary,
+  assistant,
+  brief,
 }: {
   api: VideoBuilderApi;
   project: BuilderProject;
@@ -86,11 +115,20 @@ export function SceneEditor({
   downloadHref?: (videoId: string) => string;
   onBack: () => void;
   onOpenLibrary?: () => void;
+  assistant?: EditorAssistant;
+  /** What the person asked for on the first screen: sent to the assistant when the editor opens. */
+  brief?: string;
 }) {
   const e = useSceneEditor(api, project);
+  const [panel, setPanel] = useState<"assistant" | "scene">(brief ? "assistant" : "scene");
+  // while the assistant works, the project is its: a save from here would undo what it just did
+  const [busy, setBusy] = useState(false);
   const { document: doc, selected } = e;
   const player = useRef<LivePreviewHandle>(null);
-  const [time, setTime] = useState(0);
+  // a moment in, not the very start: a film that fades in is black at 0:00
+  const [time, setTime] = useState(() =>
+    Math.min(0.9, (Number(doc.scenes[0]?.fields.seconds) || 0) / 2),
+  );
   const [playing, setPlaying] = useState(false);
   const [tool, setTool] = useState<"add" | "looks">("add");
   const [making, setMaking] = useState(false);
@@ -148,6 +186,40 @@ export function SceneEditor({
 
   const url = e.live ? `${e.live.url}?v=${e.revision}` : null;
 
+  const [conversation, setConversation] = useState(project.conversation_id ?? null);
+  const keepConversation = useCallback(
+    (id: string) => {
+      setConversation((known) => {
+        if (known !== id) void api.keepConversation(project.id, id).catch(() => {});
+        return id;
+      });
+    },
+    [api, project.id],
+  );
+  const workingOn = useMemo(
+    () => ({
+      working_on: {
+        action_id: "motion.read_project",
+        params: { composition_id: project.id, scene_id: selected || undefined },
+      },
+    }),
+    [project.id, selected],
+  );
+  const adopt = e.adopt;
+  const onToolResult = useCallback(
+    (result: ChatToolResult) => {
+      const action = String(result.output?.action_id ?? "");
+      if (result.status !== "ok" || !CHANGES_THE_PROJECT.test(action)) return;
+      const sceneId = result.output?.scene_id;
+      void adopt(
+        result.id,
+        "The assistant's change",
+        typeof sceneId === "string" ? sceneId : undefined,
+      );
+    },
+    [adopt],
+  );
+
   return (
     <div className="@container flex min-h-0 flex-1 flex-col" data-slot="scene-editor">
       <header className="flex flex-wrap items-center gap-2 border-b bg-background px-3 py-2">
@@ -183,7 +255,7 @@ export function SceneEditor({
           type="button"
           variant="ghost"
           size="icon-sm"
-          disabled={!e.canUndo}
+          disabled={!e.canUndo || busy}
           aria-label={e.undoLabel ? `Undo: ${e.undoLabel}` : "Undo"}
           title={e.undoLabel ? `Undo: ${e.undoLabel}` : "Undo"}
           onClick={() => void e.undo()}
@@ -194,7 +266,7 @@ export function SceneEditor({
           type="button"
           variant="ghost"
           size="icon-sm"
-          disabled={!e.canRedo}
+          disabled={!e.canRedo || busy}
           aria-label="Redo"
           title="Redo"
           onClick={e.redo}
@@ -204,6 +276,7 @@ export function SceneEditor({
         <Button
           type="button"
           size="sm"
+          disabled={busy}
           onClick={() => {
             setMaking(true);
             void e.make();
@@ -222,6 +295,7 @@ export function SceneEditor({
       <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto @4xl:grid-cols-[15rem_minmax(0,1fr)_18rem] @4xl:overflow-hidden @6xl:grid-cols-[16rem_minmax(0,1fr)_20rem]">
         <aside
           aria-label="Add to your video"
+          inert={busy}
           className="order-3 flex min-h-0 flex-col border-t @4xl:order-1 @4xl:border-e @4xl:border-t-0"
         >
           <div className="p-2">
@@ -348,27 +422,77 @@ export function SceneEditor({
           </p>
         </main>
         <aside
-          aria-label={`Scene ${index + 1}`}
-          className="order-4 min-h-0 overflow-auto border-t p-3 @4xl:order-3 @4xl:border-s @4xl:border-t-0"
+          aria-label="Assistant and scene details"
+          className="order-4 flex min-h-[28rem] flex-col border-t @4xl:order-3 @4xl:min-h-0 @4xl:border-s @4xl:border-t-0"
         >
-          {scene ? (
-            <SceneDetails
-              key={scene.id}
-              scene={scene}
-              number={index + 1}
-              catalogue={catalogue}
-              canRemove={doc.scenes.length > 1}
-              onFocus={stopForEdit}
-              onBlur={e.endGroup}
-              onChange={(label, change, together) =>
-                e.changeScene(scene.id, label, change, together)
-              }
-              onDuplicate={() => e.duplicateScene(scene.id)}
-              onRemove={() => e.removeScene(scene.id)}
-            />
+          {assistant ? (
+            <div className="p-2">
+              <Segmented
+                size="sm"
+                label="Assistant or scene details"
+                className="w-full"
+                value={panel}
+                onValueChange={(v) => setPanel(v as "assistant" | "scene")}
+                options={[
+                  { value: "assistant", label: "Assistant" },
+                  { value: "scene", label: `Scene ${index + 1}` },
+                ]}
+              />
+            </div>
           ) : null}
+          {assistant ? (
+            // kept while the other tab shows: a chat that is working must not be stopped by a click
+            <div hidden={panel !== "assistant"} className="min-h-0 flex-1">
+              <ChatScreen
+                runs={assistant.runs}
+                assistant={assistant.api}
+                images={assistant.images}
+                tracks={assistant.tracks}
+                notices={assistant.notices}
+                blockedReason={assistant.blockedReason}
+                onNeedModel={assistant.onNeedModel}
+                onOpenSettings={assistant.onOpenSettings}
+                model={assistant.model}
+                examples={SUGGESTIONS}
+                conversationId={conversation}
+                onConversation={keepConversation}
+                runInput={workingOn}
+                beforeTurn={e.saveNow}
+                onToolResult={onToolResult}
+                onWorking={setBusy}
+                undoOfTool={e.undoOfTool}
+                firstMessage={brief}
+              />
+            </div>
+          ) : null}
+          <div
+            hidden={Boolean(assistant) && panel !== "scene"}
+            inert={busy}
+            className="min-h-0 flex-1 overflow-auto p-3"
+          >
+            {scene ? (
+              <SceneDetails
+                key={scene.id}
+                scene={scene}
+                number={index + 1}
+                catalogue={catalogue}
+                canRemove={doc.scenes.length > 1}
+                onFocus={stopForEdit}
+                onBlur={e.endGroup}
+                onChange={(label, change, together) =>
+                  e.changeScene(scene.id, label, change, together)
+                }
+                onDuplicate={() => e.duplicateScene(scene.id)}
+                onRemove={() => e.removeScene(scene.id)}
+              />
+            ) : null}
+          </div>
         </aside>
-        <section aria-label="Your scenes" className="order-2 border-t @4xl:order-4 @4xl:col-span-3">
+        <section
+          aria-label="Your scenes"
+          inert={busy}
+          className="order-2 border-t @4xl:order-4 @4xl:col-span-3"
+        >
           <SceneStrip
             doc={doc}
             selected={selected}

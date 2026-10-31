@@ -13,7 +13,7 @@ Bring a video project back as it was before the last change. Use it again to go 
 
 ## Steps in the app
 
-1. Choose **Undo the last change** on the Motion graphics screen, or ask the assistant.
+1. Choose Undo in the bar of the Motion graphics editor, or on the assistant's card for that change, or ask the assistant.
 
 ## Fields
 

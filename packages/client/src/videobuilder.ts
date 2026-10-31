@@ -153,6 +153,8 @@ export type BuilderProject = {
   code?: string;
   /** every project read as scenes: one made from a template is one scene (only when one project is open) */
   document?: SceneDocument;
+  /** the chat with the editor's assistant about this project */
+  conversation_id?: string | null;
 };
 
 export type BuilderStatus = {
@@ -197,7 +199,7 @@ export type VideoBuilderApi = {
   draft(request: DraftRequest): Promise<BuilderDraft>;
   create(
     template: string,
-    slots: BuilderSlots | { scenes: Partial<Scene>[] },
+    slots: BuilderSlots | { shape?: BuilderShape; scenes: Partial<Scene>[] },
   ): Promise<BuilderProject>;
   /** Change a project. With `template: "scenes"`, one made from a template becomes a project of scenes. */
   update(
@@ -207,6 +209,8 @@ export type VideoBuilderApi = {
   ): Promise<BuilderProject>;
   /** The address the player opens this project at: short-lived, and for a frame (ADR-0096). */
   live(id: string): Promise<{ url: string; expires_at: number }>;
+  /** Keep which chat belongs to this project. */
+  keepConversation(id: string, conversationId: string): Promise<void>;
   /** Bring back the words as they were before the last change. */
   undo(id: string): Promise<BuilderProject>;
   /** Check the words on the screen against the typed words, without making the video. */
@@ -305,6 +309,12 @@ export function createVideoBuilderApi(
         `${base}/projects/${enc(id)}`,
         send("PATCH", template ? { slots, template } : { slots }),
       ),
+    async keepConversation(id, conversationId) {
+      await json(
+        `${base}/projects/${enc(id)}/conversation`,
+        send("PUT", { conversation_id: conversationId }),
+      );
+    },
     async live(id) {
       const found = await json<{ path: string; expires_at: number }>(
         `${base}/projects/${enc(id)}/live`,

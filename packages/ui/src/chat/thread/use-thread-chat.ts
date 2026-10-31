@@ -42,8 +42,19 @@ export type ThreadChatOptions = {
   attachedFiles?: AttachmentInfo[];
   /** A message was sent: what was attached to it belongs to it now, and the box lets go. */
   onSend?: () => void;
+  /** Done before a turn starts (a docked screen saves what the person just typed). */
+  beforeTurn?: () => Promise<void>;
+  /** A tool finished (a docked screen reads what the assistant just changed). */
+  onToolResult?: (result: ChatToolResult) => void;
   /** How long a lost connection is tried again (for tests; the defaults are meant for people). */
   reconnect?: Pick<FollowOptions, "attempts" | "delay">;
+};
+
+export type ChatToolResult = {
+  id: string;
+  name: string;
+  status: string;
+  output: Record<string, unknown>;
 };
 
 /** One run: what it sent, how to follow it, and how to do it again (Try again after a failure). */
@@ -62,6 +73,8 @@ export function useThreadChat({
   runInput,
   attachedFiles,
   onSend,
+  beforeTurn,
+  onToolResult,
   reconnect,
 }: ThreadChatOptions) {
   const [state, dispatchRaw] = useReducer(treeReducer, initialTree);
@@ -79,6 +92,10 @@ export function useThreadChat({
   files.current = attachedFiles;
   const sent = useRef(onSend);
   sent.current = onSend;
+  const before = useRef(beforeTurn);
+  before.current = beforeTurn;
+  const toolDone = useRef(onToolResult);
+  toolDone.current = onToolResult;
   const pacing = useRef(reconnect);
   pacing.current = reconnect;
 
@@ -106,6 +123,9 @@ export function useThreadChat({
             signal: ctrl.signal,
             onEvent: (event) => {
               dispatch({ type: "event", event });
+              if (event.event === "tool_result") {
+                toolDone.current?.(event.data as unknown as ChatToolResult);
+              }
               if (event.event === "done") {
                 const s = local.current.chat;
                 if (s.phase === "idle" && s.conversationId)
@@ -168,6 +188,7 @@ export function useThreadChat({
       // a file with no words is a message too (the engine names the chat after the file)
       if ((!message && !files.current?.length) || local.current.chat.phase === "working") return;
       await closeCard();
+      await before.current?.();
       const parentId = opts.parentId === undefined ? local.current.headId : opts.parentId;
       const userId = newId();
       const replyId = newId();
@@ -214,6 +235,7 @@ export function useThreadChat({
       if (!conversation || !node || node.message.role !== "user") return;
       if (local.current.chat.phase === "working") return;
       await closeCard();
+      await before.current?.();
       const replyId = newId();
       const input: Record<string, unknown> = {
         ...extra.current,

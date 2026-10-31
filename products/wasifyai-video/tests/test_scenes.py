@@ -218,7 +218,7 @@ def test_a_scene_has_its_own_captions_and_they_must_be_on_the_screen():
 def test_a_scene_starts_the_way_it_says(kind, said):
     one = {"kind": "lower_third", "fields": {"name": "Hi"}, "transition": kind}
     page = templates.render_html(SCENES, templates.normalize_slots(SCENES, {"scenes": [one]}))
-    root = f'tl.from("#scene-'
+    root = 'tl.from("#scene-'
     assert (root in page and said in page) if said else root not in page
     with pytest.raises(SlotError, match="start with"):
         templates.normalize_slots(SCENES, {"scenes": [{**one, "transition": "spin"}]})

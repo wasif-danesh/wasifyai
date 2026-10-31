@@ -14,7 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from wasifyai_platform_sdk.actions import (
     Action,
     ActionContext,
@@ -28,7 +28,7 @@ from wasifyai_platform_sdk.actions import (
 )
 from wasifyai_platform_sdk.actions.helpers import need_deps
 
-from wasifyai_video.builder import scenes, templates
+from wasifyai_video.builder import editor, scenes, templates
 from wasifyai_video.builder.routes import delete_composition
 from wasifyai_video.builder.runtime import (
     NotFound,
@@ -158,6 +158,22 @@ class MotionOut(BaseModel):
     checked: bool
 
 
+def _into_fields(known: set[str], raw: Any) -> Any:
+    """A scene's words and settings, wherever a small model put them: its fields beside `fields`,
+    and what belongs to the scene inside it. Anything that is neither is still refused by name when
+    the scene is checked."""
+    if not isinstance(raw, dict):
+        return raw
+    inside = raw.get("fields")
+    fields: dict[str, Any] = inside if isinstance(inside, dict) else {}
+    kept = {k: v for k, v in raw.items() if k in known and k != "fields"}
+    beside = {k: v for k, v in raw.items() if k not in known}
+    merged = {**beside, **fields}
+    # the shape and the letters are the whole project's: a scene that names them changes nothing
+    out = {k: v for k, v in merged.items() if k not in known and k not in ("shape", "font")}
+    return {**{k: v for k, v in merged.items() if k in known}, **kept, "fields": out}
+
+
 class SceneIn(Strict):
     kind: TemplateId = Field(description="What the scene is: one of the five templates.")
     name: str = Field("", max_length=60, description="A short name for the scene.")
@@ -169,6 +185,11 @@ class SceneIn(Strict):
             "font (those are set for the whole project). `seconds` is 5 if not given."
         )
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _gather(cls, raw: Any) -> Any:
+        return _into_fields(set(cls.model_fields), raw)
 
 
 class WriteScenesIn(Strict):
@@ -201,9 +222,37 @@ class ChangeSceneIn(SceneRefIn):
     caption: str | None = Field(None, max_length=140, description="Words along the bottom.")
     transition: Transition | None = Field(None, description="How the scene starts.")
 
+    @model_validator(mode="before")
+    @classmethod
+    def _gather(cls, raw: Any) -> Any:
+        return _into_fields(set(cls.model_fields), raw)
+
 
 class MoveSceneIn(SceneRefIn):
     position: int = Field(ge=0, description="Where it goes, from 0.")
+
+
+class SetProjectIn(CompositionIn):
+    name: str | None = Field(None, max_length=80, description="The project's name.")
+    shape: Shape | None = Field(None, description="The shape of the whole video.")
+    font: Font | None = Field(None, description="The letters of the whole video.")
+    scenes: list[SceneIn] | None = Field(
+        None, max_length=templates.MAX_SCENES,
+        description="All the scenes, in order, replacing the ones there now.",
+    )  # fmt: skip
+
+
+class ReadProjectIn(CompositionIn):
+    scene_id: str | None = Field(
+        None, pattern="^[0-9a-f]{8}$", description="The scene the person is on, if any."
+    )
+
+
+class ReadProjectOut(BaseModel):
+    composition_id: str
+    title: str
+    brief: str
+    actions: list[str]
 
 
 class SceneOut(BaseModel):
@@ -483,6 +532,27 @@ async def _remove_scene(p: SceneRefIn, ctx: ActionContext) -> Outcome:
     )
 
 
+async def _set_project(p: SetProjectIn, ctx: ActionContext) -> Outcome:
+    def change(d: dict[str, Any]) -> dict[str, Any]:
+        given = p.model_dump(exclude={"composition_id"}, exclude_none=True)
+        return templates.normalize_slots(templates.SCENES, {**d, **given})
+
+    return await _edit(ctx, p.composition_id, "The project was changed.", change)
+
+
+async def _read_project(p: ReadProjectIn, ctx: ActionContext) -> Outcome:
+    found = _found(ctx, p.composition_id)
+    document = templates.as_scenes(found["template"], found["slots"])
+    return Outcome.ok(
+        {
+            "composition_id": found["id"], "title": found["title"],
+            "brief": editor.brief(document, p.scene_id, _fields_help()),
+            "actions": list(editor.ACTIONS),
+        },
+        f'This is the project "{found["title"]}".',
+    )  # fmt: skip
+
+
 async def _undo(p: CompositionIn, ctx: ActionContext) -> Outcome:
     deps = need_deps(ctx)
     try:
@@ -527,6 +597,27 @@ def actions() -> list[Action]:
             ]},),
             effect="make", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
             bind=CallBinding(_write_scenes), ui="motion",
+        ),
+        Action(
+            id="motion.read_project", title="Read a video project",
+            summary="What a video project's scenes say, for working on it.",
+            description=(
+                "Read a Motion graphics project: its shape, length and each scene's id, kind, "
+                "words, length and look. The editor's assistant works from this."
+            ),
+            input=ReadProjectIn, output=ReadProjectOut, examples=({"composition_id": SAMPLE_ID},),
+            effect="read", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+            bind=CallBinding(_read_project, check=_check_composition), ui="motion",
+        ),
+        _scene_action(
+            "motion.set_project", "Change the whole project",
+            "Change the name or shape of a video project, or write all its scenes.",
+            "Change a Motion graphics project's name, shape or letters, or replace all its scenes "
+            "at once, as when turning a brief into a first version. Give only what changes. "
+            "Nothing is rendered. " + _fields_help(),
+            SetProjectIn,
+            {"composition_id": SAMPLE_ID, "shape": "square"},
+            _set_project,
         ),
         _scene_action(
             "motion.add_scene", "Add a scene",

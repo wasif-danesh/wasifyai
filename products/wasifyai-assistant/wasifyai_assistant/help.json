@@ -373,6 +373,17 @@
   "body": "# Move a scene\n\nAction: `motion.move_scene`\n\n## What it is for\n\nMove one scene earlier or later in a video project.\n\n## Steps in the app\n\n1. Open the project in **Motion graphics**.\n2. Drag the scene along **Your scenes**, or use the arrows above them.\n\n## Fields\n\n- `composition_id`: The project.\n- `scene_id`: The scene.\n- `position`: Where it goes, from 0.\n\n## Limits\n\n- A position past the end puts the scene last.\n\n## Needs\n\n- Nothing else: the change is only written down. Motion graphics must be set up to make the video.\n\n## Examples\n\n- \"Put the quote first.\"\n\n## Problems\n\n- A scene or project that does not fit is refused, and the message says what to change. Nothing changes until it is right."
  },
  {
+  "action": "motion.read_project",
+  "title": "Read a video project",
+  "screen": "motion",
+  "synonyms": [
+   "what does this video say",
+   "read the project",
+   "what scenes are in this video"
+  ],
+  "body": "# Read a video project\n\nAction: `motion.read_project`\n\n## What it is for\n\nRead a video project: its shape, its length, and each scene's words, length and look. The assistant in the Motion graphics editor works from this.\n\n## Steps in the app\n\n1. Open the project in **Motion graphics**.\n\n## Fields\n\n- `composition_id`: The project.\n- `scene_id`: The scene the person is on, if any.\n\n## Limits\n\n- It only reads.\n\n## Needs\n\n- Nothing else.\n\n## Examples\n\n- \"What does this video say?\"\n\n## Problems\n\n- **That video project does not exist** It may have been deleted; open Motion graphics to see what is left."
+ },
+ {
   "action": "motion.remove_scene",
   "title": "Remove a scene",
   "screen": "motion",
@@ -400,6 +411,20 @@
   "body": "# Change a motion graphic\n\nAction: `motion.revise`\n\n## What it is for\n\nChange a project you made with Motion graphics and make the video again. Give only what changes: the\nrest stays as it was. The new words are checked against what you typed before anything is drawn. The\nearlier version is kept, and **Undo the last change** on the Motion graphics screen brings it back\n(the last 20 changes are kept).\n\n## Steps in the app\n\n1. Open **Motion graphics** and open the project.\n2. Change the words or the look in the form.\n3. Choose Make the video. Use Undo the last change if you prefer how it was.\n\n## Fields\n\n- `composition_id`: The project to change.\n- `fields`: Only the fields that change, as for Make a motion graphic.\n- `format`: mp4, webm or mov, as the template allows.\n- `render`: Set to false to change the project without making the video again.\n\n## Limits\n\n- A change always asks you first when an assistant proposes it.\n- Twenty earlier versions are kept for each project; older ones are dropped.\n\n## Needs\n\n- Motion graphics set up and about 3 GB of free memory, to make the video again.\n\n## Examples\n\n- Use the forest look for the project \"Launch day\".\n- Fix the spelling of the name in a lower third.\n\n## Problems\n\n- **The length must be between 3 and 90 seconds** Choose a length in the range the message names.\n- **The project does not exist** It may have been deleted; open Motion graphics to see what is left.\n- **The words on the screen are not exactly what you wrote** The change was kept but no video was\n  made; change the words and try again, or choose Undo."
  },
  {
+  "action": "motion.set_project",
+  "title": "Change the whole project",
+  "screen": "motion",
+  "synonyms": [
+   "change the shape",
+   "make it square",
+   "make a vertical version",
+   "rename the project",
+   "write all the scenes",
+   "first version from a brief"
+  ],
+  "body": "# Change the whole project\n\nAction: `motion.set_project`\n\n## What it is for\n\nChange a video project's name, shape or letters, or replace all its scenes at once, as the assistant does when it turns a brief into a first version.\n\n## Steps in the app\n\n1. Open the project in **Motion graphics**.\n2. Change the name or the shape in the bar at the top, or ask the assistant.\n\n## Fields\n\n- `composition_id`: The project.\n- `name`: The project's name.\n- `shape`: landscape, portrait or square.\n- `font`: sans or serif.\n- `scenes`: All the scenes in order, replacing the ones there now.\n\n## Limits\n\n- Up to 30 scenes and 90 seconds in all.\n\n## Needs\n\n- Nothing else: the change is only written down. Motion graphics must be set up to make the video.\n\n## Examples\n\n- \"Make a square version.\"\n\n## Problems\n\n- A scene or project that does not fit is refused, and the message says what to change. Nothing changes until it is right."
+ },
+ {
   "action": "motion.undo",
   "title": "Undo the last change",
   "screen": "motion",
@@ -410,7 +435,7 @@
    "bring it back",
    "put it back"
   ],
-  "body": "# Undo the last change\n\nAction: `motion.undo`\n\n## What it is for\n\nBring a video project back as it was before the last change. Use it again to go further back.\n\n## Steps in the app\n\n1. Choose **Undo the last change** on the Motion graphics screen, or ask the assistant.\n\n## Fields\n\n- `composition_id`: The project.\n\n## Limits\n\n- Twenty earlier versions are kept for each project; older ones are dropped.\n- A video already made stays in the Library.\n\n## Needs\n\n- Nothing else: the change is only written down. Motion graphics must be set up to make the video.\n\n## Examples\n\n- \"Undo that.\"\n\n## Problems\n\n- A scene or project that does not fit is refused, and the message says what to change. Nothing changes until it is right."
+  "body": "# Undo the last change\n\nAction: `motion.undo`\n\n## What it is for\n\nBring a video project back as it was before the last change. Use it again to go further back.\n\n## Steps in the app\n\n1. Choose Undo in the bar of the Motion graphics editor, or on the assistant's card for that change, or ask the assistant.\n\n## Fields\n\n- `composition_id`: The project.\n\n## Limits\n\n- Twenty earlier versions are kept for each project; older ones are dropped.\n- A video already made stays in the Library.\n\n## Needs\n\n- Nothing else: the change is only written down. Motion graphics must be set up to make the video.\n\n## Examples\n\n- \"Undo that.\"\n\n## Problems\n\n- A scene or project that does not fit is refused, and the message says what to change. Nothing changes until it is right."
  },
  {
   "action": "motion.write_scenes",

@@ -26,6 +26,8 @@ type PlayerElement = HTMLElement & {
 };
 
 /** Keeps the player out of the first screen's bundle; a test passes its own. */
+const SEEK_AFTER_LOAD_MS = [300, 700, 1200, 2000, 3500];
+
 const loadPlayer = () => import("./vendor/hyperframes-player.global.js");
 
 export const LivePreview = forwardRef<
@@ -46,6 +48,7 @@ export const LivePreview = forwardRef<
   const host = useRef<PlayerElement | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const atNow = useRef(at);
   atNow.current = at;
   const told = useRef({ onTime, onPlaying });
@@ -71,24 +74,46 @@ export const LivePreview = forwardRef<
     if (!player) return;
     const ready = () => player.seek?.(atNow.current);
     const time = () => told.current.onTime(Number(player.currentTime) || 0);
-    const playing = () => told.current.onPlaying(true);
-    const paused = () => told.current.onPlaying(false);
+    const started = () => {
+      setIsPlaying(true);
+      told.current.onPlaying(true);
+    };
+    const paused = () => {
+      setIsPlaying(false);
+      told.current.onPlaying(false);
+    };
     const broke = () => setFailed(true);
     player.addEventListener("ready", ready);
     player.addEventListener("timeupdate", time);
-    player.addEventListener("play", playing);
+    player.addEventListener("play", started);
     player.addEventListener("pause", paused);
     player.addEventListener("ended", paused);
     player.addEventListener("error", broke);
     return () => {
       player.removeEventListener("ready", ready);
       player.removeEventListener("timeupdate", time);
-      player.removeEventListener("play", playing);
+      player.removeEventListener("play", started);
       player.removeEventListener("pause", paused);
       player.removeEventListener("ended", paused);
       player.removeEventListener("error", broke);
     };
   }, [loaded]);
+
+  // a new page starts at 0:00, and it takes the player a moment to reach it: the film stays where
+  // it was. Asked a few times, because the player has no event for a page it loads again.
+  const playing = useRef(false);
+  playing.current = isPlaying;
+  useEffect(() => {
+    if (!url) return;
+    const timers = SEEK_AFTER_LOAD_MS.map((ms) =>
+      setTimeout(() => {
+        if (!playing.current) host.current?.seek?.(atNow.current);
+      }, ms),
+    );
+    return () => {
+      for (const timer of timers) clearTimeout(timer);
+    };
+  }, [url]);
 
   useImperativeHandle(
     ref,

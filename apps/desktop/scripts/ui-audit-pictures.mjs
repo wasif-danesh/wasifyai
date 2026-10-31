@@ -28,6 +28,9 @@
 //   apps/desktop/scripts/ui-audit.sh light u10-make             Teach's front door, a real notebook report as a card,
 //                                                                a real Motion graphics video on the frame, and a real
 //                                                                3D picture check (its cut-out) on the stage
+//   apps/desktop/scripts/ui-audit.sh light motion-assistant     The editor's assistant (ADR-0096 MX3) on the real language
+//                                                                model: a brief, edits in words, Undo, a video; on this
+//                                                                computer's data, and it deletes what it made
 //   apps/desktop/scripts/ui-audit.sh light motion-editor        The Motion graphics editor (ADR-0096 MX2): a new project,
 //                                                                edits, playback, Undo, axe, a phone width and a real
 //                                                                video; use a throwaway DESKTOP_DATA_DIR
@@ -241,6 +244,131 @@ for (const scheme of ["light", "dark"]) {
       await page.waitForTimeout(400);
       await shot(page, "image-made-more");
       await page.keyboard.press("Escape");
+    });
+  }
+  if (names.has("motion-assistant")) {
+    // The assistant in the editor (ADR-0096 MX3): the real language model, from a brief to a video. It
+    // leaves nothing behind: the project and its chat are deleted at the end.
+    await attempt("motion-assistant", async () => {
+      const seen = { errors: [], said: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      const scenes = () =>
+        page.locator('[aria-label="Your scenes"] [aria-label^="Scene "]').count();
+      const say = async (text) => {
+        const box = page.getByPlaceholder("Ask anything").last();
+        await box.fill(text);
+        await box.press("Enter");
+      };
+      const idle = async () => {
+        await page.waitForTimeout(800);
+        await page.waitForFunction(() => !document.querySelector("[inert]"), null, {
+          timeout: 180000,
+        });
+        await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+        await page.waitForTimeout(4500);
+        // what the player is really showing: the screen's clock, its own, and the page behind it
+        seen.preview = seen.preview ?? [];
+        seen.preview.push({
+          clock: await page.locator("input[aria-label='Move through the video']").inputValue(),
+          player: await page
+            .locator("hyperframes-player")
+            .evaluate((p) => [p.currentTime, p.duration, p.ready]),
+          page: await Promise.all(
+            page
+              .frames()
+              .filter((f) => f.url().includes("/live/"))
+              .map((f) =>
+                f.evaluate(() => ({
+                  film: window.__timelines?.main?.time(),
+                  shown: [...document.querySelectorAll(".scene")]
+                    .filter(
+                      (s) =>
+                        getComputedStyle(s).visibility !== "hidden" &&
+                        getComputedStyle(s).display !== "none",
+                    )
+                    .map((s) => [s.id, getComputedStyle(s).opacity]),
+                })),
+              ),
+          ),
+        });
+      };
+      await open(page, "/video/builder");
+      await shot(page, "motion-start");
+      await page
+        .getByLabel("Describe your video")
+        .fill(
+          "A 20 second vertical ad for our sparkling tea, Fizzleaf. Calm, for people who want less sugar.",
+        );
+      const start = Date.now();
+      await page.getByRole("button", { name: "Make a first version" }).click();
+      await page.locator("[data-slot=scene-editor]").waitFor();
+      await page.waitForFunction(
+        () =>
+          document.querySelectorAll('[aria-label="Your scenes"] [aria-label^="Scene "]').length > 1,
+        null,
+        { timeout: 180000 },
+      );
+      seen.firstVersionSeconds = Math.round((Date.now() - start) / 1000);
+      await idle();
+      seen.scenesAfterBrief = await scenes();
+      seen.words = await page.locator('[aria-label="Your scenes"]').innerText();
+      await shot(page, "motion-assistant");
+      await say("Make this scene 3 seconds long.");
+      await idle();
+      seen.afterShorten = await page.locator('[aria-label="Your scenes"]').innerText();
+      await say("Make a square version.");
+      await idle();
+      seen.shapeSquare = await page
+        .getByRole("radio", { name: "1:1" })
+        .getAttribute("aria-checked");
+      // Undo on the change's own card
+      await page.getByRole("button", { name: "Undo", exact: true }).last().click();
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      seen.shapeAfterUndo = await page
+        .getByRole("radio", { name: "9:16" })
+        .getAttribute("aria-checked");
+      await say("Add an end card that says Try Fizzleaf.");
+      await idle();
+      seen.scenesAfterAdd = await scenes();
+      await shot(page, "motion-assistant-edits");
+      await say("Add our discount to the end card.");
+      await idle();
+      seen.scenesAfterDiscount = await scenes();
+      seen.lastAnswer = (
+        await page
+          .locator('[data-slot="scene-editor"] [data-role="assistant"]')
+          .last()
+          .innerText()
+          .catch(() => "")
+      ).slice(0, 300);
+      await say("OK, make the video now.");
+      const run = page.getByRole("button", { name: /^(Run|Make|Yes|Go ahead)/ }).last();
+      await run.waitFor({ timeout: 120000 });
+      await shot(page, "motion-assistant-card");
+      seen.cardShown = true;
+      const id = (await page.locator("hyperframes-player").getAttribute("src")).match(
+        /live\/([0-9a-f]{32})\./,
+      )[1];
+      await run.click();
+      await page.waitForTimeout(90000);
+      await shot(page, "motion-assistant-made");
+      const project = await engine(`/products/wasifyai-video/builder/projects/${id}`);
+      seen.renders = (project?.renders ?? []).map((r) => [r.status, r.check?.ok, r.error]);
+      seen.savedWords = project?.title;
+      await fetch(`${BASE}/products/wasifyai-video/builder/projects/${id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${TOKEN}` },
+      });
+      if (project?.conversation_id) {
+        await fetch(
+          `${BASE}/products/wasifyai-assistant/conversations/${project.conversation_id}`,
+          {
+            method: "DELETE",
+            headers: { authorization: `Bearer ${TOKEN}` },
+          },
+        );
+      }
+      console.log(`MOTIONCHAT ${JSON.stringify(seen)}`);
     });
   }
   if (names.has("motion-editor")) {

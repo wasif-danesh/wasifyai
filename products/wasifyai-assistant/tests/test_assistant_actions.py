@@ -1,7 +1,9 @@
 """The meta-tools (ADR-0071 decision 3) run catalogue actions (ADR-0068) through the one executor;
 the help corpus answers how_to; the card is drawn from the action's own schema."""
 
+import pytest
 from assistant_rig import FakeHost, Rig
+from pydantic import BaseModel, ConfigDict
 from wasifyai_assistant import help as guides
 from wasifyai_assistant.tools import (
     ASK,
@@ -18,9 +20,14 @@ from wasifyai_assistant.tools import (
 )
 from wasifyai_image.actions import actions as image_actions
 from wasifyai_notebooks.actions import actions as notebook_actions
+from wasifyai_platform_sdk import RunError
 from wasifyai_platform_sdk.actions import (
+    Action,
+    ActionExecutor,
     ActionRegistry,
     ActionResult,
+    CallBinding,
+    Outcome,
     Readiness,
     builtin_actions,
     decide,
@@ -348,3 +355,145 @@ async def test_a_guide_says_what_this_computer_is_missing(tmp_path, ctx):
     )
     told = rig.model.chats[1]["messages"][-1]["content"]
     assert "This computer: needs a step first: Get a speech model in the Model hub." in told
+
+
+# ---- docked in a screen (the Motion graphics editor, ADR-0096 MX3) -------------------------------
+
+
+class _Project(BaseModel):
+    composition_id: str
+    scene_id: str | None = None
+
+
+class _Change(BaseModel):
+    composition_id: str
+    words: str = ""
+
+
+def _docked_rig(tmp_path, turns):
+    """A rig whose catalogue has a screen to read, a change, something costly and something else."""
+    host = FakeHost()
+    rig = Rig(tmp_path, turns, host)
+    told = {"reads": 0, "changes": [], "made": []}
+
+    async def read(p: _Project, ctx):
+        told["reads"] += 1
+        return Outcome.ok(
+            {
+                "composition_id": p.composition_id,
+                "brief": f"The project, read {told['reads']} times, scene {p.scene_id}.",
+                "actions": ["t.change", "t.make"],
+            },
+            "Read.",
+        )
+
+    async def change(p: _Change, ctx):
+        told["changes"].append(p.model_dump())
+        return Outcome.ok({"scene_id": "aaaaaaaa"}, "Changed.")
+
+    async def make(p: _Change, ctx):
+        told["made"].append(p.model_dump())
+        return Outcome.ok({}, "Made.")
+
+    def action(action_id, effect, given, call, flags=()):
+        return Action(
+            id=action_id, title=action_id, summary=action_id, description=action_id, input=given,
+            output=_Anything, effect=effect, flags=flags, product="p", bind=CallBinding(call),
+            ui_exempt="a stand-in for a screen's action",
+        )  # fmt: skip
+
+    rig.executor = ActionExecutor(
+        ActionRegistry(
+            [
+                *builtin_actions(), *image_actions(), action("t.read", "read", _Project, read),
+                action("t.change", "change", _Change, change),
+                action("t.make", "make", _Change, make, ("costly",)),
+            ]
+        ),
+        host,
+        usage=rig.usage,
+    )  # fmt: skip
+    rig.caps.extras["actions"] = rig.executor
+    return rig, told
+
+
+class _Anything(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+def _propose(action_id, **params):
+    return {
+        "text": "",
+        "tool_calls": [{"name": PROPOSE, "arguments": {"action_id": action_id, "params": params}}],
+    }
+
+
+DOCKED = {
+    "text": "Shorten it",
+    "approvals": True,
+    "working_on": {
+        "action_id": "t.read",
+        "params": {"composition_id": "project-1", "scene_id": "aaaaaaaa"},
+    },
+}
+
+
+async def test_docked_the_model_is_told_the_project_afresh_and_offered_only_its_changes(
+    tmp_path, ctx
+):
+    rig, told = _docked_rig(tmp_path, [_propose("t.change", words="x"), {"text": "Done."}])
+    final, _ = await rig.turn_with(dict(DOCKED))
+    assert final["status"] == "done" and told["reads"] == 2, "asked again after its own change"
+    chats = rig.model.chats
+    assert chats[0]["messages"][0]["content"] == "The project, read 1 times, scene aaaaaaaa."
+    assert chats[1]["messages"][0]["content"].startswith("The project, read 2 times")
+    assert [t["function"]["name"] for t in chats[0]["tools"]] == [PROPOSE]
+
+
+async def test_docked_a_change_applies_at_once_on_the_project_on_the_screen(tmp_path, ctx):
+    # the model names another project: the one on the screen is used
+    wrong = _propose("t.change", words="x", composition_id="someone-elses")
+    rig, told = _docked_rig(tmp_path, [wrong, {"text": "Done."}])
+    await rig.turn_with(dict(DOCKED))
+    assert await rig.paused() is None, "no card for a change here"
+    assert told["changes"] == [{"composition_id": "project-1", "words": "x"}]
+
+
+async def test_docked_something_costly_still_asks(tmp_path, ctx):
+    rig, told = _docked_rig(tmp_path, [_propose("t.make"), {"text": "Done."}])
+    await rig.turn_with(dict(DOCKED))
+    assert await rig.paused() is not None and told["made"] == []
+    await rig.answer({"approved": True})
+    assert told["made"] == [{"composition_id": "project-1", "words": ""}]
+
+
+async def test_docked_nothing_else_can_be_proposed(tmp_path, ctx):
+    rig, told = _docked_rig(
+        tmp_path, [_propose("image.generate", prompt="a fox"), {"text": "I cannot."}]
+    )
+    _, events = await rig.turn_with(dict(DOCKED))
+    results = [e for e in events if e.get("type") == "tool_result"]
+    assert results[0]["status"] == "refused" and await rig.paused() is None
+
+
+async def test_docked_only_a_read_can_be_the_screen(tmp_path, ctx):
+    rig, told = _docked_rig(tmp_path, [{"text": "Hello."}])
+    forged = {**DOCKED, "working_on": {"action_id": "t.change", "params": {"composition_id": "x"}}}
+    with pytest.raises(RunError):
+        await rig.turn_with(forged)
+    assert told["changes"] == []
+
+
+async def test_outside_a_screen_a_change_still_asks(tmp_path, ctx):
+    rig, told = _docked_rig(tmp_path, [_propose("t.change", composition_id="x"), {"text": "Ok."}])
+    await rig.turn_with({"text": "Change it", "approvals": True})
+    assert await rig.paused() is not None and told["changes"] == []
+
+
+async def test_docked_a_refused_change_tells_the_model_nothing_changed(tmp_path, ctx):
+    bad = _propose("t.change", words=123)  # the action's own schema refuses it
+    rig, told = _docked_rig(tmp_path, [bad, {"text": "It was not done."}])
+    await rig.turn_with(dict(DOCKED))
+    said = rig.model.chats[1]["messages"][-1]["content"]
+    assert said.startswith("Nothing was changed:") and "Do not say it is done" in said
+    assert told["changes"] == []

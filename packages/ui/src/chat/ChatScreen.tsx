@@ -12,7 +12,7 @@ import { textOf } from "./thread/convert";
 import { ThreadEnvProvider } from "./thread/env";
 import { preloadMarkdown } from "./thread/markdown/Markdown";
 import { useChatRuntime } from "./thread/use-chat-runtime";
-import { useThreadChat } from "./thread/use-thread-chat";
+import { type ChatToolResult, useThreadChat } from "./thread/use-thread-chat";
 
 export type ChatScreenProps = {
   runs: Pick<RunClient, "startRun" | "watchRun"> & Partial<Pick<RunClient, "cancelRun">>;
@@ -49,6 +49,18 @@ export type ChatScreenProps = {
   model?: ReactNode;
   /** Which options of the box this screen can offer: a Thinking switch only for a model that can think (ADR-0083). */
   composerOptions?: ComposerOptionsAvailable;
+  /** Sent with every message by a screen this chat is docked in (ADR-0096: the project it is working on). */
+  runInput?: Record<string, unknown>;
+  /** A docked screen: saves its own changes before a turn starts. */
+  beforeTurn?: () => Promise<void>;
+  /** A docked screen: reads what the assistant just changed. */
+  onToolResult?: (result: ChatToolResult) => void;
+  /** A docked screen: the assistant has started or finished. */
+  onWorking?: (working: boolean) => void;
+  /** A docked screen: Undo on the card of a change. */
+  undoOfTool?: (toolId: string) => { undone: boolean; undo: () => void } | null;
+  /** Sent once when the chat opens (the brief of a new project). */
+  firstMessage?: string;
 };
 
 /**
@@ -75,6 +87,12 @@ export function ChatScreen({
   title,
   model,
   composerOptions,
+  runInput,
+  beforeTurn,
+  onToolResult,
+  onWorking,
+  undoOfTool,
+  firstMessage,
 }: ChatScreenProps) {
   // the markdown renderer is a separate chunk: fetch it now, while the person is still typing the first message
   useEffect(() => {
@@ -90,10 +108,22 @@ export function ChatScreen({
     api: assistant,
     conversationId,
     onConversation,
-    runInput: options.runInput,
+    runInput: runInput ? { ...options.runInput, ...runInput } : options.runInput,
     attachedFiles: options.attach.files,
     onSend: options.attach.clear,
+    beforeTurn,
+    onToolResult,
   });
+  const askedFirst = useRef(false);
+  useEffect(() => {
+    if (!firstMessage || askedFirst.current) return;
+    askedFirst.current = true;
+    void chat.send(firstMessage);
+  }, [firstMessage, chat.send]);
+  const working = chat.state.chat.phase === "working";
+  useEffect(() => {
+    onWorking?.(working);
+  }, [working, onWorking]);
   // a file still going up is not sent without: the message waits until it is there
   const runtime = useChatRuntime(chat, {
     blocked: Boolean(blockedReason) || options.attach.busy,
@@ -110,6 +140,7 @@ export function ChatScreen({
       onDecide: (approved: boolean, params?: Record<string, unknown>) =>
         void chat.answer(approved, false, params),
       onAutoRun: () => options.setApproval("auto"),
+      undoOfTool,
     }),
     [
       images,
@@ -120,6 +151,7 @@ export function ChatScreen({
       options.thinking,
       options.setApproval,
       chat.answer,
+      undoOfTool,
     ],
   );
   const last = state.chat.messages[state.chat.messages.length - 1];

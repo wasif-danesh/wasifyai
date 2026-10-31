@@ -22,6 +22,8 @@ export type ThreadEnv = {
   onOpenScreen?: (screenId: string) => void;
   /** The person ticked "Don't ask again in this chat" on a card: the chat stops asking before it makes things */
   onAutoRun?: () => void;
+  /** A change the assistant made in a screen it is docked in: can it still be undone from its card, and how */
+  undoOfTool?: (toolId: string) => { undone: boolean; undo: () => void } | null;
   /** The notebook chat (CU4) is a plain back-and-forth: no edit, no "answer again", no versions. */
   linear?: boolean;
   /** What a waiting answer says (default: "Thinking…"). */

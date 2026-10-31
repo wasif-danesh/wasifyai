@@ -8,6 +8,7 @@ import type {
   BuilderFormat,
   BuilderProject,
   BuilderRender,
+  BuilderShape,
   BuilderSlots,
   BuilderStatus,
   DraftRequest,
@@ -44,6 +45,10 @@ export type BuilderState = {
   check: BuilderCheck | null;
   loading: boolean;
   error: string | null;
+  /** what the person asked the assistant for, on the first screen: sent when the editor opens */
+  brief: string | null;
+  /** the person chose one graphic on the first screen, not a video of scenes */
+  oneGraphic: boolean;
 };
 
 /** The template of the open project, or of the draft. */
@@ -75,6 +80,8 @@ export function useVideoBuilder(api: VideoBuilderApi) {
     check: null,
     loading: true,
     error: null,
+    brief: null,
+    oneGraphic: false,
   });
   const patch = useCallback((p: Partial<BuilderState>) => setState((s) => ({ ...s, ...p })), []);
   const alive = useRef(true);
@@ -312,25 +319,34 @@ export function useVideoBuilder(api: VideoBuilderApi) {
   }, [api, patch, state.render]);
 
   /** A new project of scenes (ADR-0096), opened in the editor. */
-  const startScenes = useCallback(async () => {
-    try {
-      const made = await api.create("scenes", {
-        scenes: [
-          { kind: "title", transition: "fade", fields: { title: "Your first scene", seconds: 5 } },
-        ],
-      });
-      patch({
-        selected: made.id,
-        project: made,
-        render: null,
-        stills: [],
-        check: null,
-        error: null,
-      });
-    } catch (e) {
-      patch({ error: say(e, "The project could not be started.") });
-    }
-  }, [api, patch]);
+  const startScenes = useCallback(
+    async (shape?: BuilderShape, brief?: string) => {
+      try {
+        const made = await api.create("scenes", {
+          ...(shape ? { shape } : {}),
+          scenes: [
+            {
+              kind: "title",
+              transition: "fade",
+              fields: { title: "Your first scene", seconds: 5 },
+            },
+          ],
+        });
+        patch({
+          selected: made.id,
+          project: made,
+          render: null,
+          stills: [],
+          check: null,
+          error: null,
+          brief: brief ?? null,
+        });
+      } catch (e) {
+        patch({ error: say(e, "The project could not be started.") });
+      }
+    },
+    [api, patch],
+  );
 
   /** A project made from one template becomes a project of scenes; Undo in the editor turns it back. */
   const toScenes = useCallback(
@@ -354,7 +370,7 @@ export function useVideoBuilder(api: VideoBuilderApi) {
 
   /** Back from the editor to the list, which has its changes. */
   const leaveEditor = useCallback(async () => {
-    patch({ selected: null, project: null, render: null });
+    patch({ selected: null, project: null, render: null, brief: null });
     await refresh();
   }, [patch, refresh]);
 
@@ -382,6 +398,9 @@ export function useVideoBuilder(api: VideoBuilderApi) {
   return {
     state,
     startScenes,
+    openOneGraphic: (template: string) => {
+      patch({ oneGraphic: true, selected: NEW, project: null, render: null, draft: template });
+    },
     toScenes,
     leaveEditor,
     install,

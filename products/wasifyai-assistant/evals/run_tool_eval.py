@@ -11,7 +11,10 @@ A `guide`, `status` or `safety` case goes on: the tools the model called are ans
 app answers them (`how_to` and `app_status` for real, from the shipped help corpus; searches and
 the web from the case's script; a proposal stops at the card), and the final answer is judged.
 A case with `extra_tools` is sent that many extra, unrelated tools (the remote tools of ADR-0070)
-to see whether the choice still holds. A `remote` case (stage C2) connects a catalogue of
+to see whether the choice still holds.
+An `editor` case (ADR-0096, MX3) is sent what the Motion graphics
+editor's assistant is sent, and is judged on the change it proposes, applied to the project for
+real. A `remote` case (stage C2) connects a catalogue of
 `remote_tools` outside tools (5 or 40) behind `external_tools`, as decision 8 of ADR-0070 has it,
 and is judged on the `call_external` the model reaches: the right server and tool, arguments that
 fit the tool's schema. One JSON line per case, then a summary per kind and per catalogue size.
@@ -49,7 +52,7 @@ LOOKUPS = (
     "app_status",
 )  # reads of the app's own files and state: never wrong, only slower
 # the kinds, and whether the case goes on after the first answer
-KINDS = ("tool", "guide", "status", "safety", "remote")
+KINDS = ("tool", "guide", "status", "safety", "remote", "editor")
 
 # the outside servers' tools (ADR-0070): server, name, arguments (name: type), required,
 # what it does
@@ -593,8 +596,127 @@ async def run_remote(
     }  # fmt: skip
 
 
+EDITOR_PROJECT = {
+    "name": "Northbean launch",
+    "shape": "portrait",
+    "scenes": [
+        {"id": "aaaaaaaa", "name": "Hook", "kind": "title", "transition": "fade",
+         "fields": {"title": "Mornings are hard.", "subtitle": "Your coffee should not be.",
+                    "seconds": 4, "theme": "night"}},
+        {"id": "bbbbbbbb", "name": "Product", "kind": "title", "transition": "fade",
+         "caption": "We steep it for eighteen hours.",
+         "fields": {"title": "Steeped for 18 hours.", "subtitle": "Never heated. Never rushed.",
+                    "seconds": 6, "theme": "night"}},
+        {"id": "cccccccc", "name": "Proof", "kind": "quote", "transition": "none",
+         "fields": {"quote": "Smooth, not bitter.", "author": "A customer", "seconds": 5,
+                    "theme": "forest"}},
+        {"id": "dddddddd", "name": "End card", "kind": "title", "transition": "fade",
+         "fields": {"title": "Try Northbean.", "subtitle": "northbean.example", "seconds": 5,
+                    "theme": "forest"}},
+    ],
+}  # fmt: skip
+
+
+def applied(action: str, params: dict, document: dict) -> tuple[dict | None, str]:
+    """A proposed change made for real on the project, through the action's own input: (the new
+    document, what went wrong)."""
+    from pydantic import ValidationError
+    from wasifyai_video.builder import actions as motion
+    from wasifyai_video.builder import scenes, templates
+
+    given = {**params, "composition_id": "0" * 32}
+    try:
+        if action == "motion.set_project":
+            p = motion.SetProjectIn(**given)
+            changes = p.model_dump(exclude={"composition_id"}, exclude_none=True)
+            return templates.normalize_slots(templates.SCENES, {**document, **changes}), ""
+        if action == "motion.change_scene":
+            q = motion.ChangeSceneIn(**given)
+            more = {"caption": q.caption, "transition": q.transition}
+            return scenes.change(document, q.scene_id, q.fields, q.name, **more), ""
+        if action == "motion.add_scene":
+            r = motion.AddSceneIn(**given)
+            more = {"caption": r.caption, "transition": r.transition}
+            return scenes.add(document, r.kind, r.fields, r.name, r.position, more)[0], ""
+        if action == "motion.move_scene":
+            m = motion.MoveSceneIn(**given)
+            return scenes.move(document, m.scene_id, m.position), ""
+        if action == "motion.duplicate_scene":
+            return scenes.duplicate(document, motion.SceneRefIn(**given).scene_id)[0], ""
+        if action == "motion.remove_scene":
+            return scenes.remove(document, motion.SceneRefIn(**given).scene_id), ""
+        return document, ""  # motion.undo and video_builder.render change no words here
+    except (templates.SlotError, ValidationError, TypeError) as e:
+        return None, str(e)[:200]
+
+
+def judge_editor(case: dict, message: dict, document: dict) -> tuple[bool, str]:
+    """The change the model proposed: the right action, and when it is really applied, the project
+    is valid and says what the case wants. `keeps` words must still be there, `gone` must not."""
+    calls = calls_of(message)
+    if case.get("expect") == "none":
+        if calls:
+            return False, f"changed something: {calls[0]['function']['arguments'][:160]}"
+        return True, "answered in words"
+    if not calls:
+        return False, f"no change, said: {(message.get('content') or '')[:160]!r}"
+    try:
+        args = json.loads(calls[0]["function"].get("arguments") or "{}")
+    except ValueError:
+        return False, "arguments are not JSON"
+    action = str(args.get("action_id"))
+    wanted = case["action"] if isinstance(case["action"], list) else [case["action"]]
+    if action not in wanted:
+        return False, f"proposed {action}, wanted {wanted}"
+    params = args.get("params") if isinstance(args.get("params"), dict) else {}
+    made, problem = applied(action, params, document)
+    if made is None:
+        return False, f"refused when applied: {problem}; params {json.dumps(params)[:200]}"
+    from wasifyai_video.builder import templates
+
+    said = templates.describe(templates.SCENES, made)
+    for word in case.get("keeps") or []:
+        if str(word) not in said:
+            return False, f"lost {word!r}: {said[:200]}"
+    for word in case.get("gone") or []:
+        if str(word) in said:
+            return False, f"still has {word!r}"
+    shown = json.dumps(params, ensure_ascii=False)[:220]
+    for name, value in (case.get("result") or {}).items():
+        if name == "min_scenes":
+            if len(made["scenes"]) < value:
+                return False, f"only {len(made['scenes'])} scenes"
+            continue
+        got = len(made["scenes"]) if name == "scene_count" else made.get(name)
+        if name.startswith("scene_") and name != "scene_count":  # scene_2_seconds, of the second
+            _, n, field = name.split("_", 2)
+            scene = made["scenes"][int(n) - 1]
+            got = scene["fields"].get(field, scene.get(field))
+        if got != value:
+            return False, f"{name} is {got!r}, wanted {value!r}; params {shown}"
+    return True, f"{action} applied"
+
+
+async def run_editor(client: httpx.AsyncClient, base: str, model: str, case: dict) -> dict:
+    from wasifyai_video.builder import editor, templates
+    from wasifyai_video.builder.actions import _fields_help
+
+    document = templates.normalize_slots(templates.SCENES, EDITOR_PROJECT)
+    prompt = editor.brief(document, case.get("current", "bbbbbbbb"), _fields_help())
+    tools = [t for t in TOOL_DEFINITIONS if t["function"]["name"] == "propose_action"]
+    messages = [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": case["say"]},
+    ]
+    message, seconds, tokens = await ask(client, base, model, messages, tools)
+    ok, detail = judge_editor(case, message, document)
+    return {"ok": ok, "detail": detail, "seconds": seconds, "tokens": tokens}
+
+
 async def run_case(client: httpx.AsyncClient, base: str, model: str, case: dict) -> dict:
     kind = case.get("kind", "tool")
+    if kind == "editor":
+        return await run_editor(client, base, model, case)
     tools = [*TOOL_DEFINITIONS, *extra_tools(int(case.get("extra_tools") or 0))]
     if not case.get("search"):
         tools = [t for t in tools if not t["function"]["name"].startswith("web_")]

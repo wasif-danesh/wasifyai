@@ -17,7 +17,7 @@ from typing import Any
 
 from wasifyai_platform_sdk.sqlstore import PostgresStoreDb, SqliteStoreDb, StoreDb, ddl_for
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 KEEP_VERSIONS = 20  # earlier versions of a composition that can be brought back
 
 _VERSIONS = """
@@ -32,7 +32,7 @@ CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE compositions(
   id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
   title TEXT NOT NULL, template TEXT NOT NULL, slots TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, conversation_id TEXT);
 CREATE INDEX compositions_owner ON compositions(tenant_id, user_id, updated_at DESC);
 CREATE TABLE renders(
   id TEXT PRIMARY KEY, composition_id TEXT NOT NULL, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
@@ -54,6 +54,8 @@ ALTER TABLE versions ADD COLUMN template TEXT;
 UPDATE versions SET template =
   (SELECT template FROM compositions c WHERE c.id = versions.composition_id);
 """
+# what version 4 adds: the chat with the editor's assistant, one for each project (ADR-0096)
+_V4_UPGRADE = "ALTER TABLE compositions ADD COLUMN conversation_id TEXT;"
 
 LEFT_RUNNING = "The app was closed while this video was being made."
 
@@ -149,6 +151,8 @@ class BuilderStore:
                 db.executescript("BEGIN;" + _V2_UPGRADE + "COMMIT;")
             elif version == 2:
                 db.executescript("BEGIN;" + _V3_UPGRADE + "COMMIT;")
+            if version < 4:
+                db.executescript("BEGIN;" + _V4_UPGRADE + "COMMIT;")
             if version < SCHEMA_VERSION:
                 db.execute("UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),))
 
@@ -175,10 +179,12 @@ class BuilderStore:
                 raise RuntimeError(
                     "the Motion graphics tables were made by a newer version of this app"
                 )
-            if int(row["value"]) == 2:
-                for statement in _V3_UPGRADE.split(";"):
-                    if statement.strip():
-                        conn.execute(statement)
+            version = int(row["value"])
+            upgrades = (_V3_UPGRADE if version == 2 else "") + (_V4_UPGRADE if version < 4 else "")
+            for statement in upgrades.split(";"):
+                if statement.strip():
+                    conn.execute(statement)
+            if version < SCHEMA_VERSION:
                 conn.execute(
                     "UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),)
                 )
@@ -232,7 +238,8 @@ class BuilderStore:
         cid, stamp = new_id(), now()
         with self._connect() as db:
             db.execute(
-                "INSERT INTO compositions VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT INTO compositions(id, tenant_id, user_id, title, template, slots, "
+                "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
                 (cid, tenant, user, title, template, json.dumps(slots), stamp, stamp),
             )
         return self.get_composition(tenant, user, cid)
@@ -300,6 +307,12 @@ class BuilderStore:
                 ),
             )
         return self.get_composition(tenant, user, cid)
+
+    def set_conversation(self, tenant: str, user: str, cid: str, conversation: str) -> None:
+        """The chat that belongs to this project, found again when it is opened."""
+        self.get_composition(tenant, user, cid)
+        with self._connect() as db:
+            db.execute("UPDATE compositions SET conversation_id=? WHERE id=?", (conversation, cid))
 
     def version_count(self, cid: str) -> int:
         with self._connect() as db:

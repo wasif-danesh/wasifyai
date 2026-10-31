@@ -1,7 +1,7 @@
 # ADR-0096: Motion graphics becomes a scene editor for promotion and social content, with the assistant built in
 
 - **Status:** Accepted (owner, 2026-10-31: all five decisions of the plan as recommended; the mockup,
-  `docs/spikes/motion-editor-mockup.html`, approved with its recommended answers the same day). Stages MX1 and MX2 built 2026-10-31; see "Built".
+  `docs/spikes/motion-editor-mockup.html`, approved with its recommended answers the same day). Stages MX1 to MX3 built 2026-10-31; see "Built".
 - **Date:** 2026-10-31
 - **Asked by:** the owner, 2026-10-31: bring the features of KinoFold (`~/Projects/kinofold`, the owner's own project on HyperFrames) into
   Motion graphics, similar to the planned Creative Studio, for product promotion, social media and marketing content, with the chat
@@ -87,3 +87,20 @@ Model-written compositions (MG2), a multi-track timeline, posting to social netw
 - **Checked for real** (`apps/desktop/scripts/ui-audit.sh light motion-editor`, the desktop's window code on Vite in Chromium with the real engine, player and sandbox, on a throwaway data folder): a new project, three scenes edited, a look, captions, a slide, play across a scene boundary with the selection following, Undo and Redo, axe with no violations, the smallest window (720 x 520) with no sideways scroll, and a real 15 s video that passed the word check, its frames looked at. In WebKit (the small test program of the spike, under the window's rules plus `frame-src`): the same page loads and seeks and looks the same, with the shipped font.
 - **On the web:** `apps/web/e2e/motion-editor.spec.ts` runs the shared screen through the BFF's addresses at desktop and phone sizes with axe, against a mocked engine. The worker's `builder.kit` is tested on a stand-in.
 - **Not checked:** the packaged Tauri window itself, the web on a running stack, and a keyboard-only walk by a person. The owner's run in the real window is this stage's last gate.
+
+**MX3, 2026-10-31: the assistant in the editor.**
+
+- The right column has two tabs, Assistant and Scene, and the chat stays alive under the other tab. The shared `ChatScreen` gained what a docked chat needs: `runInput`, `beforeTurn` (the editor saves first), `onToolResult`, `onWorking`, `undoOfTool` and `firstMessage`. A project keeps its own chat (`compositions.conversation_id`, schema 4).
+- **How it knows the project:** each message carries `working_on`, naming a read action (`motion.read_project`). The graph calls it before every model call, so the model sees its own changes. What it returns replaces the prompt and decides what may be proposed (`builder/editor.py`). Only `propose_action` is offered. Only a read action can be named, the project on the screen replaces whatever the model wrote, and the person owns it because the read runs as them.
+- **Decision 4 as built:** a change runs without a card and is one Undo step, in the bar and on its own card in the chat. `video_builder.render` is costly and still shows a card. After outside text the taint rule still asks for everything. While the assistant works the editor's panels are inert, so a save cannot overwrite what it just did.
+- **First screen:** "What do you want to promote?" with a shape, seven starting points that add to the brief, Start empty, and the five one-off graphics. The starting points only add words for now; MX7 makes them ready-made sets of scenes. **Attaching a picture to a brief waits for MX5**, with media.
+- **The evaluation** (`products/wasifyai-assistant/evals`, kind `editor`, 20 cases, each change applied to a real project through the action's own input). On Qwen3 8B Q4_K_M, first answer only: 6 of 20 at first, 20 of 20 after the fixes below (the runs before the last fix gave 18 and 19, so expect some variation). The brief, the discount it must not invent, and the words that look like instructions all pass.
+- **What the real runs changed:**
+  - The model puts a scene's settings beside `fields`, and the scene's own settings inside it. The actions now read both, and refuse by name what is neither.
+  - It rewrote the whole project to change one thing, and invented "10% off". The guide now has worked examples and a firmer rule.
+  - It took a refusal for success and said "Done". A refused change now tells it plainly that nothing changed.
+  - The film went back to 0:00 on every reload because the player has no event for a page it loads again, and a film that fades in showed black. The preview now asks again a few times after each load, and opens a moment in.
+  - After a first version the selection fell on the last scene, so "this scene" meant the end card.
+  - The word check called a big serif title cut off: redrawing large letters' edges changes up to 0.9% of them. The limit now scales with the word (a test keeps real cuts caught). This one was already there for one-off titles.
+- **Checked for real** (`apps/desktop/scripts/ui-audit.sh light motion-assistant`, on the chosen model, Qwen3.8 27B MLX, in Chromium with the real engine): a brief became a first version of 4 scenes in about 25 to 40 s; "make this scene 3 seconds", a square version undone from its card, an added end card; the discount request changed nothing and asked; "make the video" showed the card, and a video was made. The clock, the player and the page agree after every change. The walk deletes what it made.
+- **Not checked:** the packaged Tauri window, the web on a running stack, and languages other than English. Whether the wording is good enough for a real campaign is the owner's to say.

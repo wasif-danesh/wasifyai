@@ -486,6 +486,92 @@
       "help": "docs/help/creative.add_media.md"
     },
     {
+      "id": "creative.choose_take",
+      "title": "Choose a shot's take",
+      "summary": "Choose which take of a shot is used.",
+      "description": "Choose which still or clip of a shot of Creative Studio is used in the preview.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Project Id",
+            "type": "string"
+          },
+          "shot_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Shot Id",
+            "type": "string"
+          },
+          "take_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Take Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "shot_id",
+          "take_id"
+        ],
+        "title": "ChooseTakeIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "missing": {
+            "description": "Shots with no still yet.",
+            "title": "Missing",
+            "type": "integer"
+          },
+          "out_of_date": {
+            "description": "Shots whose still was made before the shot changed.",
+            "title": "Out Of Date",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "missing",
+          "out_of_date"
+        ],
+        "title": "ShotsOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "project_id": "1f8d2c3b4a5e4f60a7b8c9d0e1f20314",
+          "shot_id": "s1",
+          "take_id": "0b7c1f9e-0000-4000-8000-000000000000"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-creative"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-creative",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/creative.choose_take.md"
+    },
+    {
       "id": "creative.edit_plan",
       "title": "Change a plan",
       "summary": "Change the shots of a plan: words, motion, cuts, or add and remove shots.",
@@ -573,6 +659,95 @@
       "help": "docs/help/creative.edit_plan.md"
     },
     {
+      "id": "creative.make_shots",
+      "title": "Make the stills of a plan",
+      "summary": "Make a picture for every shot of a plan that has none. Costly: many pictures.",
+      "description": "Make the still of every shot of a Creative Studio plan that has none, as one job. With reference, which is the default, people get two pictures first so every shot starts from the same face; a 3-minute song takes about 30 minutes, or about 15 with plain. Each picture is saved as it is made, and stopping keeps them. Use it when the person wants to see their plan as pictures.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Project Id",
+            "type": "string"
+          },
+          "mode": {
+            "default": "reference",
+            "description": "reference keeps faces steadier and takes about twice as long as plain.",
+            "enum": [
+              "plain",
+              "reference"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "redo_out_of_date": {
+            "default": false,
+            "description": "Also make again the stills whose shot changed.",
+            "title": "Redo Out Of Date",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "title": "MakeShotsIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "missing": {
+            "description": "Shots with no still yet.",
+            "title": "Missing",
+            "type": "integer"
+          },
+          "out_of_date": {
+            "description": "Shots whose still was made before the shot changed.",
+            "title": "Out Of Date",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "missing",
+          "out_of_date"
+        ],
+        "title": "ShotsOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "project_id": "1f8d2c3b4a5e4f60a7b8c9d0e1f20314"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private",
+        "costly"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-creative"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-creative",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/creative.make_shots.md"
+    },
+    {
       "id": "creative.plan",
       "title": "Plan a music video",
       "summary": "Turn a song and an idea into an editable plan of shots. Nothing is made yet.",
@@ -620,6 +795,15 @@
                 "title": "Places",
                 "type": "array"
               },
+              "fixed": {
+                "description": "Objects and places that must look the same in every shot.",
+                "items": {
+                  "$ref": "#/$defs/Fixed"
+                },
+                "maxItems": 12,
+                "title": "Fixed",
+                "type": "array"
+              },
               "lyrics": {
                 "anyOf": [
                   {
@@ -660,6 +844,31 @@
             "title": "Brief",
             "type": "object"
           },
+          "Fixed": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "description": "An object or place: the car.",
+                "maxLength": 60,
+                "minLength": 1,
+                "title": "Name",
+                "type": "string"
+              },
+              "words": {
+                "description": "How it looks, used again in every picture of it.",
+                "maxLength": 200,
+                "minLength": 1,
+                "title": "Words",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "words"
+            ],
+            "title": "Fixed",
+            "type": "object"
+          },
           "Person": {
             "additionalProperties": false,
             "properties": {
@@ -682,6 +891,15 @@
                 "description": "They are only ever seen in photographs, never there in person.",
                 "title": "Photos Only",
                 "type": "boolean"
+              },
+              "pictures": {
+                "description": "Pictures of them from the library, so every shot starts from the same face.",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 3,
+                "title": "Pictures",
+                "type": "array"
               }
             },
             "required": [
@@ -798,6 +1016,78 @@
       "help": "docs/help/creative.plan.md"
     },
     {
+      "id": "creative.preview",
+      "title": "Preview a music video",
+      "summary": "Join a plan's stills with camera moves, cut on the beats, over the song.",
+      "description": "Join the chosen stills of a Creative Studio plan into a video over the song, with a camera move on each and cuts on the plan's times. It takes under a minute. A shot with no still is black. It is a draft to watch, not the finished video.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "title": "ProjectIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "missing": {
+            "description": "Shots with no still yet.",
+            "title": "Missing",
+            "type": "integer"
+          },
+          "out_of_date": {
+            "description": "Shots whose still was made before the shot changed.",
+            "title": "Out Of Date",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "missing",
+          "out_of_date"
+        ],
+        "title": "ShotsOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "project_id": "1f8d2c3b4a5e4f60a7b8c9d0e1f20314"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-creative"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-creative",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/creative.preview.md"
+    },
+    {
       "id": "creative.read_project",
       "title": "Read a plan",
       "summary": "Read the plan of a project: its parts and every shot.",
@@ -888,6 +1178,96 @@
       ],
       "consent": "",
       "help": "docs/help/creative.read_project.md"
+    },
+    {
+      "id": "creative.redo_shot",
+      "title": "Make a shot's still again",
+      "summary": "Make another take of one shot's still; the old take is kept.",
+      "description": "Make another still of one shot of a Creative Studio plan. The old one stays as a take, and the new one is used. It takes under a minute.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Project Id",
+            "type": "string"
+          },
+          "shot_id": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Shot Id",
+            "type": "string"
+          },
+          "mode": {
+            "default": "reference",
+            "enum": [
+              "plain",
+              "reference"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "shot_id"
+        ],
+        "title": "RedoShotIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "missing": {
+            "description": "Shots with no still yet.",
+            "title": "Missing",
+            "type": "integer"
+          },
+          "out_of_date": {
+            "description": "Shots whose still was made before the shot changed.",
+            "title": "Out Of Date",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "missing",
+          "out_of_date"
+        ],
+        "title": "ShotsOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "project_id": "1f8d2c3b4a5e4f60a7b8c9d0e1f20314",
+          "shot_id": "s1"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private",
+        "costly"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-creative"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-creative",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/creative.redo_shot.md"
     },
     {
       "id": "creative.remove_media",

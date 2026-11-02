@@ -38,6 +38,20 @@ class Person(BaseModel):
     photos_only: bool = Field(
         False, description="They are only ever seen in photographs, never there in person."
     )
+    pictures: list[str] = Field(
+        default_factory=list,
+        max_length=3,
+        description="Pictures of them from the library, so every shot starts from the same face.",
+    )
+
+
+class Fixed(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=60, description="An object or place: the car.")
+    words: str = Field(
+        min_length=1, max_length=200, description="How it looks, used again in every picture of it."
+    )
 
 
 class Brief(BaseModel):
@@ -53,6 +67,11 @@ class Brief(BaseModel):
         default_factory=list,
         max_length=12,
         description="Where it happens; left empty, the writer chooses.",
+    )
+    fixed: list[Fixed] = Field(
+        default_factory=list,
+        max_length=12,
+        description="Objects and places that must look the same in every shot.",
     )
     lyrics: str | None = Field(
         None,
@@ -167,4 +186,7 @@ def index_words(
     cast = [f"{p['name']} {p.get('look', '')}" for p in brief.get("cast", [])]
     shots = [s["shows"] for s in (plan or {}).get("shots", [])]
     places = (plan or {}).get("places") or brief.get("places", [])
-    return [title, brief.get("idea", ""), brief.get("style", ""), *cast, *places, *shots, lyrics]
+    fixed = [f"{f['name']} {f['words']}" for f in brief.get("fixed", [])]
+    return [
+        title, brief.get("idea", ""), brief.get("style", ""), *cast, *fixed, *places, *shots, lyrics,
+    ]  # fmt: skip

@@ -819,6 +819,11 @@ def judge_creative(case: dict, message: dict) -> tuple[bool, str]:
     if action == "creative.undo":
         return True, "undo"
     params = args.get("params") if isinstance(args.get("params"), dict) else {}
+    if action == "creative.make_shots":
+        return True, "make the stills"
+    if action == "creative.redo_shot":
+        wanted = case["result"]["shot"]
+        return params.get("shot_id") == wanted, f"redo {params.get('shot_id')}, wanted {wanted}"
     shown = json.dumps(params)[:300]
     row = CREATIVE_ROW
     try:

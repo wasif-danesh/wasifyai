@@ -1020,6 +1020,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-creative/creative/characters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Characters
+         * @description People used in earlier projects, so they can be used again.
+         */
+        get: operations["characters_products_wasifyai_creative_creative_characters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-creative/creative/projects": {
         parameters: {
             query?: never;
@@ -1206,6 +1226,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-creative/creative/projects/{item}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make Preview
+         * @description Join the chosen stills over the song. Follow it with GET.
+         */
+        post: operations["make_preview_products_wasifyai_creative_creative_projects__item__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-creative/creative/projects/{item}/shots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make Stills
+         * @description Make what is missing. Follow it with GET; a stop keeps what is made.
+         */
+        post: operations["make_stills_products_wasifyai_creative_creative_projects__item__shots_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-creative/creative/projects/{item}/shots/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estimate
+         * @description Before Start: how many, how long, how much disk, whether it fits.
+         */
+        get: operations["estimate_products_wasifyai_creative_creative_projects__item__shots_estimate_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-creative/creative/projects/{item}/shots/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop Stills */
+        post: operations["stop_stills_products_wasifyai_creative_creative_projects__item__shots_stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-creative/creative/projects/{item}/shots/{shot}/chosen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Choose Take */
+        put: operations["choose_take_products_wasifyai_creative_creative_projects__item__shots__shot__chosen_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-creative/creative/projects/{item}/shots/{shot}/redo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Redo Shot */
+        post: operations["redo_shot_products_wasifyai_creative_creative_projects__item__shots__shot__redo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-creative/creative/projects/{item}/undo": {
         parameters: {
             query?: never;
@@ -1251,6 +1382,27 @@ export interface paths {
         get: operations["list_images_products_wasifyai_image_images_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-image/images/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Image
+         * @description Add a picture of the person's to their library. It is decoded and stored again as a clean
+         *     PNG: the file is never kept as sent.
+         */
+        post: operations["import_image_products_wasifyai_image_images_import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4117,6 +4269,11 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_import_image_products_wasifyai_image_images_import_post */
+        Body_import_image_products_wasifyai_image_images_import_post: {
+            /** File */
+            file: string;
+        };
         /** Body_import_track_products_wasifyai_voice_tracks_import_post */
         Body_import_track_products_wasifyai_voice_tracks_import_post: {
             /** File */
@@ -4151,6 +4308,11 @@ export interface components {
              * @default 0
              */
             cut_speed: number;
+            /**
+             * Fixed
+             * @description Objects and places that must look the same in every shot.
+             */
+            fixed?: components["schemas"]["Fixed"][];
             /**
              * Idea
              * @description What the video is about, in a line.
@@ -4256,6 +4418,11 @@ export interface components {
             reason: string;
             /** Same */
             same?: boolean | null;
+        };
+        /** ChooseTake */
+        ChooseTake: {
+            /** Take Id */
+            take_id: string;
         };
         /** ConfirmReader */
         ConfirmReader: {
@@ -4550,6 +4717,19 @@ export interface components {
             /** Secret */
             secret: boolean;
         };
+        /** Fixed */
+        Fixed: {
+            /**
+             * Name
+             * @description An object or place: the car.
+             */
+            name: string;
+            /**
+             * Words
+             * @description How it looks, used again in every picture of it.
+             */
+            words: string;
+        };
         /** FixedPortIn */
         FixedPortIn: {
             /** Port */
@@ -4832,6 +5012,20 @@ export interface components {
              * @default false
              */
             again: boolean;
+        };
+        /** MakeStills */
+        MakeStills: {
+            /**
+             * Mode
+             * @default reference
+             * @enum {string}
+             */
+            mode: "plain" | "reference";
+            /**
+             * Redo Out Of Date
+             * @default false
+             */
+            redo_out_of_date: boolean;
         };
         /** Me */
         Me: {
@@ -5124,6 +5318,11 @@ export interface components {
              * @default false
              */
             photos_only: boolean;
+            /**
+             * Pictures
+             * @description Pictures of them from the library, so every shot starts from the same face.
+             */
+            pictures?: string[];
         };
         /** PlanBook */
         PlanBook: {
@@ -5222,6 +5421,15 @@ export interface components {
             thread_id: string;
             /** Ts */
             ts?: string;
+        };
+        /** RedoShot */
+        RedoShot: {
+            /**
+             * Mode
+             * @default reference
+             * @enum {string}
+             */
+            mode: "plain" | "reference";
         };
         /** RenderIn */
         RenderIn: {
@@ -7739,6 +7947,28 @@ export interface operations {
             };
         };
     };
+    characters_products_wasifyai_creative_creative_characters_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     list_projects_products_wasifyai_creative_creative_projects_get: {
         parameters: {
             query?: {
@@ -7843,7 +8073,9 @@ export interface operations {
     };
     remove_project_products_wasifyai_creative_creative_projects__item__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                with_media?: boolean;
+            };
             header?: never;
             path: {
                 item: string;
@@ -8223,6 +8455,221 @@ export interface operations {
             };
         };
     };
+    make_preview_products_wasifyai_creative_creative_projects__item__preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    make_stills_products_wasifyai_creative_creative_projects__item__shots_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MakeStills"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    estimate_products_wasifyai_creative_creative_projects__item__shots_estimate_get: {
+        parameters: {
+            query?: {
+                mode?: "plain" | "reference";
+                redo_out_of_date?: boolean;
+            };
+            header?: never;
+            path: {
+                item: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_stills_products_wasifyai_creative_creative_projects__item__shots_stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    choose_take_products_wasifyai_creative_creative_projects__item__shots__shot__chosen_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item: string;
+                shot: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChooseTake"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redo_shot_products_wasifyai_creative_creative_projects__item__shots__shot__redo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item: string;
+                shot: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RedoShot"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     undo_products_wasifyai_creative_creative_projects__item__undo_post: {
         parameters: {
             query?: never;
@@ -8300,6 +8747,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImagePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_image_products_wasifyai_image_images_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_image_products_wasifyai_image_images_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageSummary"];
                 };
             };
             /** @description Validation Error */

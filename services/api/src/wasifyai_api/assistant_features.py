@@ -25,6 +25,27 @@ FEATURES = ROOT / "products" / "wasifyai-assistant" / "wasifyai_assistant" / "fe
 HELP = FEATURES.with_name("help.json")
 # screens that are not a thing to make: this chat, and the two the assistant has tools for
 LEFT_OUT = {"chat", "library", "models"}
+# What a screen is for, in words, where its actions alone give a person the wrong picture: a screen
+# with several jobs that are not all actions (Train has four cards and two actions), or a screen
+# whose actions are steps of one job. Keyed by menu item id; a test checks the keys and the words.
+ABOUT = {
+    "creative": (
+        "turn a song and an idea into a plan for a music video, shot by shot; change the plan, "
+        "make a picture for each shot, and preview the cut"
+    ),
+    "motion": (
+        "describe a video and the assistant lays out its scenes (titles, quotes, charts, your own "
+        "pictures and clips); change any scene, set a brand look and a shape (16:9, 9:16, 4:5 or "
+        "1:1), then make the video"
+    ),
+    "train": (
+        "teach it something of your own, learnt on this computer, in four ways: a character or "
+        "style for pictures (from 15 to 25 pictures), your way of writing (from examples of "
+        "questions and answers), a model that decides (yes or no, a category or a score, from "
+        "texts with the right answer), or a look or motion for video (from pictures and short "
+        "clips)"
+    ),
+}
 
 
 def menu_paths() -> dict[str, str]:
@@ -36,7 +57,10 @@ def menu_paths() -> dict[str, str]:
     ):
         for iid, ilabel in re.findall(r'id: "([\w.]+)", label: "([^"]+)"', body):
             paths[iid] = f"{glabel} › {ilabel}"
-    for iid, ilabel in re.findall(r'\{ id: "(motion|model3d|train)", label: "([^"]+)"', text):
+    extra = re.search(r"EXTRA_ITEMS[^=]*=\s*\[(.*?)\];", text, re.S)
+    # the single items below the groups: Creative Studio, Motion graphics, 3D model, Train models
+    items = re.findall(r'\{ id: "(\w+)", label: "([^"]+)"', extra.group(1) if extra else "")
+    for iid, ilabel in items:
         paths[iid] = ilabel
     return paths
 
@@ -53,6 +77,8 @@ def build() -> list[dict[str, list[str] | str]]:
         )
         row["actions"].append(a.id)  # type: ignore[union-attr]
         row["does"].append(a.title)  # type: ignore[union-attr]
+        if a.ui in ABOUT:
+            row["about"] = ABOUT[a.ui]
     order = {item: n for n, item in enumerate(paths)}  # the menu's own order
     return [rows[item] for item in sorted(rows, key=order.__getitem__)]
 

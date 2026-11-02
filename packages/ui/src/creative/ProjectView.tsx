@@ -1,7 +1,7 @@
 "use client";
 // One project on one screen (the amendment to ADR-0090): the Make panel, the stage, the media rail, and the
 // steps in the top bar. In the Plan step the stage is the plan, with its song strip, parts and shots, and
-// planning with its progress and Stop, or going on after a stop or a crash.
+// planning with its progress and Stop, or going on after a stop or a crash. In the Shots step it is the stills.
 import type {
   CreativeApi,
   CreativeProject,
@@ -10,12 +10,14 @@ import type {
   Shot,
   ShotMotion,
   SongFacts,
+  StillMode,
 } from "@wasifyai/client";
 import { ArrowLeft, ChevronLeft, ChevronRight, Plus, Trash2, Undo2 } from "lucide-react";
 import {
   type ReactNode,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -30,12 +32,20 @@ import { Segmented } from "../components/segmented";
 import { Select } from "../components/select";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
+import { coverOf, indexKindOf } from "../creations/model";
 import { actions, hint } from "../styles";
 import { PageHeader } from "../window-bar";
-import { AnalysisCard, BriefForm, useAnalysis } from "./BriefForm";
+import { AnalysisCard, BriefForm, type LibraryPicture, useAnalysis } from "./BriefForm";
 import type { CreativeSong } from "./Creative";
-import { type CreativeAssistant, type CreativeScreen, MakePanel } from "./MakePanel";
+import {
+  type AddedFile,
+  type CreativeAssistant,
+  type CreativeScreen,
+  MakePanel,
+  type MakePanelMakers,
+} from "./MakePanel";
 import { MediaRail } from "./MediaRail";
+import { ShotsStage } from "./ShotsStage";
 import { type ProjectCreations, useProjectMedia } from "./use-project-media";
 
 const POLL_MS = 1000;
@@ -45,10 +55,10 @@ const MOTIONS = [
   { value: "Sing", label: "Sing" },
 ];
 const SOON = "Comes in a later stage of Creative Studio";
-// the later steps of ADR-0090: shown so the shape of the work can be seen, off until they are built
+// the last step of ADR-0090 is shown so the shape of the work can be seen, off until it is built
 const STEPS = [
   { value: "plan", label: "Plan" },
-  { value: "shots", label: <span title={SOON}>Shots</span>, disabled: true },
+  { value: "shots", label: "Shots" },
   { value: "cut", label: <span title={SOON}>Cut</span>, disabled: true },
 ];
 
@@ -77,6 +87,9 @@ export function ProjectView({
   songs,
   id,
   model,
+  modelOfTab,
+  makers,
+  addFile,
   assistant,
   creations,
   onBack,
@@ -87,6 +100,9 @@ export function ProjectView({
   songs: () => Promise<CreativeSong[]>;
   id: string;
   model?: ReactNode;
+  modelOfTab?: (tab: string) => ReactNode | undefined;
+  makers?: MakePanelMakers;
+  addFile?: (file: File) => Promise<AddedFile>;
   assistant?: CreativeAssistant;
   creations?: ProjectCreations;
   onBack: () => void;
@@ -100,12 +116,17 @@ export function ProjectView({
   const [selected, setSelected] = useState<string | null>(null);
   const [chatWorking, setChatWorking] = useState(false);
   const [showLog, setShowLog] = useState(false);
+  const [step, setStep] = useState("plan");
+  const [tab, setTab] = useState<string>(assistant ? "ask" : "add");
+  const [mode, setMode] = useState<StillMode>("reference");
   const wide = useSyncExternalStore(roomy.subscribe, roomy.now);
   const analysis = useAnalysis(api);
-  const live = project?.live ?? false;
+  const live = (project?.live ?? false) || (project?.shots_live ?? false);
   const trackId = project?.brief.track_id;
   const revision = project?.revision ?? 0;
-  const media = useProjectMedia(api, creations, id, trackId);
+  const pictures = useMemo(() => picturesOf(creations), [creations]);
+  const made = Object.values(project?.shots?.takes ?? {}).reduce((n, t) => n + t.length, 0);
+  const media = useProjectMedia(api, creations, id, trackId, made);
   // the revision each of the assistant's changes made, so its card can take that change back
   const madeByTools = useRef(new Map<string, number>());
 
@@ -153,6 +174,7 @@ export function ProjectView({
       void act(async () => {
         const fresh = await api.get(id);
         if (action === "creative.edit_plan") madeByTools.current.set(toolId, fresh.revision);
+        if (action === "creative.make_shots" || action === "creative.redo_shot") setStep("shots");
         return fresh;
       });
     },
@@ -193,12 +215,42 @@ export function ProjectView({
   const ready = analysis.state?.state === "ready";
   const shots = project.plan?.shots ?? [];
   const at = shots.findIndex((s) => s.id === selected);
-  const bar = <ProjectBar project={project} onBack={onBack} onLog={() => setShowLog(true)} />;
+  const covers = new Map(
+    media.entries.map((e) => [`${indexKindOf(e.kind)}:${e.id}`, coverOf(e) ?? undefined]),
+  );
+  const coverAt = (kind: string, item: string) => covers.get(`${kind}:${item}`);
+  const stillOf = (shot: string) => {
+    const take = project.shots.takes[shot]?.find((t) => t.chosen);
+    return take ? coverAt(take.kind, take.item_id) : undefined;
+  };
+  const toShots = () => {
+    setStep("shots");
+    if (makers?.image && tab !== "video") setTab("image");
+    if (!selected && shots[0]) setSelected(shots[0].id);
+  };
+  const bar = (
+    <ProjectBar
+      project={project}
+      step={step}
+      onStep={(next) => (next === "shots" ? toShots() : setStep(next))}
+      onBack={onBack}
+      onLog={() => setShowLog(true)}
+      onMain={
+        step === "shots"
+          ? () =>
+              void act(async () => {
+                const made = await api.preview(project.id);
+                return made;
+              })
+          : toShots
+      }
+    />
+  );
   return (
     <div className="@container flex h-full min-h-0 flex-1 flex-col" data-slot="creative-project">
       <PageHeader title={wide} className="flex h-14 shrink-0 items-center gap-4 border-b px-6 pt-1">
         <div className="flex min-w-0 flex-1 items-center gap-3 ps-2 text-sm">
-          <div className="shrink-0">{model}</div>
+          <div className={wide ? "shrink-0" : "min-w-0"}>{modelOfTab?.(tab) ?? model}</div>
           {wide ? bar : null}
         </div>
       </PageHeader>
@@ -217,11 +269,17 @@ export function ProjectView({
             selectedName={at < 0 ? null : `shot ${at + 1}`}
             assistant={assistant}
             creations={creations}
+            tab={tab}
+            onTab={setTab}
+            makers={makers}
+            addFile={addFile}
             added={
               new Set([`track:${trackId}`, ...media.tags.map((m) => `${m.kind}:${m.item_id}`)])
             }
             problem={media.problem}
-            onAdd={(kind, item) => void media.add(kind, item, selected ?? undefined)}
+            onAdd={
+              (kind, item) => void media.add(kind, item, selected ?? undefined).then(read) // it may be a take of the shot
+            }
             onOpenScreen={onOpenScreen}
             onChanged={onChanged}
             onWorking={setChatWorking}
@@ -229,7 +287,7 @@ export function ProjectView({
           />
         </aside>
         <section
-          aria-label="The plan"
+          aria-label={step === "shots" ? "The shots" : "The plan"}
           inert={chatWorking}
           className="order-1 grid content-start gap-4 p-4 @4xl:order-none @4xl:min-h-0 @4xl:overflow-auto"
         >
@@ -240,6 +298,7 @@ export function ProjectView({
               initial={project.brief}
               initialTitle={project.title}
               submitLabel="Save and plan again"
+              pictures={pictures}
               onMakeSong={onMakeSong}
               onCancel={() => setChanging(false)}
               onSubmit={async (title, brief) => {
@@ -255,48 +314,65 @@ export function ProjectView({
                   {problem}
                 </Notice>
               ) : null}
-              <div className="grid gap-0.5">
-                <p className="m-0 font-semibold text-lg">{project.brief.idea}</p>
-                <p className={`${hint} m-0`}>{factsLine(project)}</p>
-              </div>
-              {song ? (
-                <Player src={song.url} title={song.title} duration={song.seconds} waveform />
-              ) : null}
-              {live ? (
-                <WorkingCard
-                  label={project.stage || "Planning"}
-                  onCancel={() => void act(() => api.stop(project.id))}
-                >
-                  <JobMeter
-                    title="Planning"
-                    text={`${Math.round(project.progress * 100)}%`}
-                    value={project.progress}
-                    label="Planning progress"
-                  />
-                </WorkingCard>
-              ) : null}
-              {!live && project.status !== "planned" ? (
-                <>
-                  <AnalysisCard analysis={analysis} />
-                  <Stopped
-                    project={project}
-                    ready={ready}
-                    onGo={(again) => void act(() => api.plan(project.id, again))}
-                    onChange={() => setChanging(true)}
-                  />
-                </>
-              ) : null}
-              {project.plan && (project.status === "planned" || (live && project.revision > 0)) ? (
-                <PlanBody
-                  project={project}
+              {step === "shots" ? (
+                <ShotsStage
                   api={api}
-                  busy={live}
+                  project={project}
                   selected={selected}
                   onSelect={setSelected}
+                  mode={mode}
+                  onMode={setMode}
+                  coverOf={coverAt}
                   act={act}
-                  onChangeBrief={() => setChanging(true)}
                 />
-              ) : null}
+              ) : (
+                <>
+                  <div className="grid gap-0.5">
+                    <p className="m-0 font-semibold text-lg">{project.brief.idea}</p>
+                    <p className={`${hint} m-0`}>{factsLine(project)}</p>
+                  </div>
+                  {song ? (
+                    <Player src={song.url} title={song.title} duration={song.seconds} waveform />
+                  ) : null}
+                  {project.live ? (
+                    <WorkingCard
+                      label={project.stage || "Planning"}
+                      onCancel={() => void act(() => api.stop(project.id))}
+                    >
+                      <JobMeter
+                        title="Planning"
+                        text={`${Math.round(project.progress * 100)}%`}
+                        value={project.progress}
+                        label="Planning progress"
+                      />
+                    </WorkingCard>
+                  ) : null}
+                  {!project.live && project.status !== "planned" ? (
+                    <>
+                      <AnalysisCard analysis={analysis} />
+                      <Stopped
+                        project={project}
+                        ready={ready}
+                        onGo={(again) => void act(() => api.plan(project.id, again))}
+                        onChange={() => setChanging(true)}
+                      />
+                    </>
+                  ) : null}
+                  {project.plan &&
+                  (project.status === "planned" || (project.live && project.revision > 0)) ? (
+                    <PlanBody
+                      project={project}
+                      api={api}
+                      busy={project.live}
+                      selected={selected}
+                      onSelect={setSelected}
+                      act={act}
+                      onChangeBrief={() => setChanging(true)}
+                      stillOf={stillOf}
+                    />
+                  ) : null}
+                </>
+              )}
             </>
           )}
         </section>
@@ -318,6 +394,19 @@ export function ProjectView({
   );
 }
 
+/** The pictures of the library, for choosing what a person looks like. */
+export function picturesOf(creations?: ProjectCreations) {
+  if (!creations) return undefined;
+  return async (): Promise<LibraryPicture[]> => {
+    const recent = await creations.recent();
+    return (recent.images?.images ?? []).map((image) => ({
+      id: image.id,
+      url: image.thumb_url,
+      title: image.prompt,
+    }));
+  };
+}
+
 function factsLine(project: CreativeProject): string {
   const { facts, plan, brief } = project;
   const seconds = facts.seconds ?? 0;
@@ -334,13 +423,21 @@ function factsLine(project: CreativeProject): string {
 
 function ProjectBar({
   project,
+  step,
+  onStep,
   onBack,
   onLog,
+  onMain,
 }: {
   project: CreativeProject;
+  step: string;
+  onStep: (step: string) => void;
   onBack: () => void;
   onLog: () => void;
+  onMain: () => void;
 }) {
+  const busy = project.live || project.shots_live;
+  const hasStills = Object.values(project.shots.takes).some((t) => t.length > 0);
   return (
     <>
       <Button type="button" variant="ghost" size="icon" aria-label="Back" onClick={onBack}>
@@ -351,7 +448,14 @@ function ProjectBar({
         {project.revision ? `Plan ${project.revision} · saved` : "Not planned yet"}
       </span>
       <span className="grow" />
-      <Segmented label="Step" value="plan" onValueChange={() => {}} options={STEPS} />
+      <Segmented
+        label="Step"
+        value={step}
+        onValueChange={onStep}
+        options={STEPS.map((s) =>
+          s.value === "shots" ? { ...s, disabled: !project.revision } : s,
+        )}
+      />
       <span className="grow" />
       <Button
         type="button"
@@ -362,11 +466,14 @@ function ProjectBar({
       >
         Planning log
       </Button>
-      <span title={SOON}>
-        <Button type="button" size="sm" disabled>
-          Make the stills
-        </Button>
-      </span>
+      <Button
+        type="button"
+        size="sm"
+        disabled={busy || !project.revision || (step === "shots" && !hasStills)}
+        onClick={onMain}
+      >
+        {step === "shots" ? "Preview the whole song" : "Make the stills"}
+      </Button>
     </>
   );
 }
@@ -503,7 +610,9 @@ function PlanBody({
   onSelect,
   act,
   onChangeBrief,
+  stillOf,
 }: {
+  stillOf: (shot: string) => string | undefined;
   project: CreativeProject;
   api: CreativeApi;
   busy: boolean;
@@ -580,6 +689,7 @@ function PlanBody({
                   selected={s.id === selected}
                   onSelect={() => onSelect(s.id)}
                   edit={edit}
+                  still={stillOf(s.id)}
                 />
               ))}
             </ol>
@@ -612,7 +722,9 @@ function ShotCard({
   selected,
   onSelect,
   edit,
+  still,
 }: {
+  still?: string;
   shot: Shot;
   number: number;
   last: boolean;
@@ -629,8 +741,11 @@ function ShotCard({
       className={`grid content-start gap-2 rounded-lg border bg-surface p-3 ${selected ? "border-primary ring-1 ring-primary" : ""}`}
       onFocusCapture={onSelect}
     >
-      {/* where the shot's still goes in the Shots step */}
-      <div aria-hidden className="aspect-[5/2] rounded-md bg-muted" />
+      {still ? (
+        <img src={still} alt="" className="aspect-[5/2] w-full rounded-md object-cover" />
+      ) : (
+        <div aria-hidden className="aspect-[5/2] rounded-md bg-muted" />
+      )}
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <button
           type="button"

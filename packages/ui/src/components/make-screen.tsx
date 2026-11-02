@@ -19,6 +19,7 @@ export function MakeScreen({
   action,
   stage,
   recent,
+  panel = false,
   className,
 }: {
   /** the tool's own heading inside the ask column (the bar carries the product's name) */
@@ -30,8 +31,25 @@ export function MakeScreen({
   action: ReactNode;
   stage: ReactNode;
   recent?: ReactNode;
+  /** inside another screen's panel: one narrow column, the result under the ask, no recent */
+  panel?: boolean;
   className?: string;
 }) {
+  if (panel) {
+    return (
+      <div data-slot="make-screen" className={cn("flex min-h-0 flex-1 flex-col", className)}>
+        <div className="grid min-h-0 flex-1 content-start gap-4 overflow-auto p-3">
+          <section aria-label="Ask" className="grid gap-4">
+            {ask}
+          </section>
+          <section aria-label="Result" className="grid min-w-0 place-items-center">
+            {stage}
+          </section>
+        </div>
+        <div className="shrink-0 border-t p-3">{action}</div>
+      </div>
+    );
+  }
   return (
     <div
       data-slot="make-screen"

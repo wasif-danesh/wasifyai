@@ -222,6 +222,37 @@
     ]
   },
   {
+    "screen": "creative",
+    "where": "Creative Studio",
+    "actions": [
+      "creative.add_media",
+      "creative.choose_take",
+      "creative.edit_plan",
+      "creative.make_shots",
+      "creative.plan",
+      "creative.preview",
+      "creative.read_project",
+      "creative.redo_shot",
+      "creative.remove_media",
+      "creative.undo",
+      "music.analyse"
+    ],
+    "does": [
+      "Add to a project",
+      "Choose a shot's take",
+      "Change a plan",
+      "Make the stills of a plan",
+      "Plan a music video",
+      "Preview a music video",
+      "Read a plan",
+      "Make a shot's still again",
+      "Take out of a project",
+      "Undo a change to a plan",
+      "Find the beats of a song"
+    ],
+    "about": "turn a song and an idea into a plan for a music video, shot by shot; change the plan, make a picture for each shot, and preview the cut"
+  },
+  {
     "screen": "motion",
     "where": "Motion graphics",
     "actions": [
@@ -265,7 +296,8 @@
       "Write a video project",
       "Check a video project",
       "Make the video"
-    ]
+    ],
+    "about": "describe a video and the assistant lays out its scenes (titles, quotes, charts, your own pictures and clips); change any scene, set a brand look and a shape (16:9, 9:16, 4:5 or 1:1), then make the video"
   },
   {
     "screen": "model3d",
@@ -287,6 +319,7 @@
     "does": [
       "Decide with a model I taught",
       "Teach a character or style"
-    ]
+    ],
+    "about": "teach it something of your own, learnt on this computer, in four ways: a character or style for pictures (from 15 to 25 pictures), your way of writing (from examples of questions and answers), a model that decides (yes or no, a category or a score, from texts with the right answer), or a look or motion for video (from pictures and short clips)"
   }
 ]

@@ -512,6 +512,20 @@
         "title": "Body_dictate_products_wasifyai_voice_dictation_post",
         "type": "object"
       },
+      "Body_import_image_products_wasifyai_image_images_import_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_image_products_wasifyai_image_images_import_post",
+        "type": "object"
+      },
       "Body_import_track_products_wasifyai_voice_tracks_import_post": {
         "properties": {
           "file": {
@@ -612,6 +626,15 @@
             "minimum": -2.0,
             "title": "Cut Speed",
             "type": "integer"
+          },
+          "fixed": {
+            "description": "Objects and places that must look the same in every shot.",
+            "items": {
+              "$ref": "#/components/schemas/Fixed"
+            },
+            "maxItems": 12,
+            "title": "Fixed",
+            "type": "array"
           },
           "idea": {
             "description": "What the video is about, in a line.",
@@ -833,6 +856,22 @@
           "prompt"
         ],
         "title": "CheckedPicture",
+        "type": "object"
+      },
+      "ChooseTake": {
+        "additionalProperties": false,
+        "properties": {
+          "take_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Take Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "take_id"
+        ],
+        "title": "ChooseTake",
         "type": "object"
       },
       "ConfirmReader": {
@@ -1736,6 +1775,31 @@
         "title": "FieldView",
         "type": "object"
       },
+      "Fixed": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "An object or place: the car.",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "words": {
+            "description": "How it looks, used again in every picture of it.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Words",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "words"
+        ],
+        "title": "Fixed",
+        "type": "object"
+      },
       "FixedPortIn": {
         "properties": {
           "port": {
@@ -2392,6 +2456,27 @@
           }
         },
         "title": "MakePlan",
+        "type": "object"
+      },
+      "MakeStills": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "default": "reference",
+            "enum": [
+              "plain",
+              "reference"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "redo_out_of_date": {
+            "default": false,
+            "title": "Redo Out Of Date",
+            "type": "boolean"
+          }
+        },
+        "title": "MakeStills",
         "type": "object"
       },
       "Me": {
@@ -3197,6 +3282,15 @@
             "description": "They are only ever seen in photographs, never there in person.",
             "title": "Photos Only",
             "type": "boolean"
+          },
+          "pictures": {
+            "description": "Pictures of them from the library, so every shot starts from the same face.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Pictures",
+            "type": "array"
           }
         },
         "required": [
@@ -3394,6 +3488,22 @@
           "text"
         ],
         "title": "ReasoningEvent",
+        "type": "object"
+      },
+      "RedoShot": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "default": "reference",
+            "enum": [
+              "plain",
+              "reference"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "RedoShot",
         "type": "object"
       },
       "RenderIn": {
@@ -7626,6 +7736,30 @@
         ]
       }
     },
+    "/products/wasifyai-creative/creative/characters": {
+      "get": {
+        "description": "People used in earlier projects, so they can be used again.",
+        "operationId": "characters_products_wasifyai_creative_creative_characters_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Characters Products Wasifyai Creative Creative Characters Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Characters",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
     "/products/wasifyai-creative/creative/projects": {
       "get": {
         "operationId": "list_projects_products_wasifyai_creative_creative_projects_get",
@@ -7742,6 +7876,16 @@
             "schema": {
               "title": "Item",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "with_media",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "With Media",
+              "type": "boolean"
             }
           }
         ],
@@ -8325,6 +8469,345 @@
         ]
       }
     },
+    "/products/wasifyai-creative/creative/projects/{item}/preview": {
+      "post": {
+        "description": "Join the chosen stills over the song. Follow it with GET.",
+        "operationId": "make_preview_products_wasifyai_creative_creative_projects__item__preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Make Preview Products Wasifyai Creative Creative Projects  Item  Preview Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make Preview",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/shots": {
+      "post": {
+        "description": "Make what is missing. Follow it with GET; a stop keeps what is made.",
+        "operationId": "make_stills_products_wasifyai_creative_creative_projects__item__shots_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MakeStills"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Make Stills Products Wasifyai Creative Creative Projects  Item  Shots Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make Stills",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/shots/estimate": {
+      "get": {
+        "description": "Before Start: how many, how long, how much disk, whether it fits.",
+        "operationId": "estimate_products_wasifyai_creative_creative_projects__item__shots_estimate_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "default": "reference",
+              "enum": [
+                "plain",
+                "reference"
+              ],
+              "title": "Mode",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "redo_out_of_date",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Redo Out Of Date",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Estimate Products Wasifyai Creative Creative Projects  Item  Shots Estimate Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Estimate",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/shots/stop": {
+      "post": {
+        "operationId": "stop_stills_products_wasifyai_creative_creative_projects__item__shots_stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Stop Stills Products Wasifyai Creative Creative Projects  Item  Shots Stop Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop Stills",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/shots/{shot}/chosen": {
+      "put": {
+        "operationId": "choose_take_products_wasifyai_creative_creative_projects__item__shots__shot__chosen_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shot",
+            "required": true,
+            "schema": {
+              "title": "Shot",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChooseTake"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Choose Take Products Wasifyai Creative Creative Projects  Item  Shots  Shot  Chosen Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Choose Take",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/shots/{shot}/redo": {
+      "post": {
+        "operationId": "redo_shot_products_wasifyai_creative_creative_projects__item__shots__shot__redo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shot",
+            "required": true,
+            "schema": {
+              "title": "Shot",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedoShot"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Redo Shot Products Wasifyai Creative Creative Projects  Item  Shots  Shot  Redo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Redo Shot",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
     "/products/wasifyai-creative/creative/projects/{item}/undo": {
       "post": {
         "operationId": "undo_products_wasifyai_creative_creative_projects__item__undo_post",
@@ -8493,6 +8976,48 @@
           }
         },
         "summary": "List Images",
+        "tags": [
+          "wasifyai-image"
+        ]
+      }
+    },
+    "/products/wasifyai-image/images/import": {
+      "post": {
+        "description": "Add a picture of the person's to their library. It is decoded and stored again as a clean\nPNG: the file is never kept as sent.",
+        "operationId": "import_image_products_wasifyai_image_images_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_image_products_wasifyai_image_images_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Image",
         "tags": [
           "wasifyai-image"
         ]

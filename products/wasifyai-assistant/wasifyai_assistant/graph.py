@@ -16,6 +16,7 @@ import asyncio
 import inspect
 import logging
 import re
+from collections.abc import Collection
 from dataclasses import replace
 from typing import Any, Literal, TypedDict, cast
 from uuid import UUID
@@ -46,7 +47,7 @@ from wasifyai_assistant.attachments import (
     user_content,
     valid_id,
 )
-from wasifyai_assistant.features import actions_prompt
+from wasifyai_assistant.features import actions_prompt, focus_prompt
 from wasifyai_assistant.store import (
     HEAD,
     PRODUCT_ID,
@@ -89,10 +90,12 @@ TITLE_CHARS = 60
 SYSTEM_PROMPT = (
     "You are Wasify AI, a helpful assistant inside a creative app that runs on the person's own "
     "computer. Answer in the language the person writes in, clearly and briefly. "
-    "When the person asks how to do something, or whether the app can, call how_to and "
-    "app_status, then answer only from what they return: give the steps, name the screens and "
-    "fields exactly as written, and say which step this computer is missing. Never describe a "
-    "feature that is not in the guides. End such an answer by offering to do it for them. "
+    "When the person asks how to do something, whether the app can, or what the app or one of "
+    "its screens is or can do, call how_to and app_status, then answer only from what they "
+    "return and from the screens listed below: give the steps, name the screens and fields "
+    "exactly as written, and say which step this computer is missing. Never describe a "
+    "feature that is not in the guides, and never answer about the app from general knowledge. "
+    "End such an answer by offering to do it for them. "
     "When the person asks you to make, change or get something (draw, paint, say, compose, "
     "make a video), call propose_action at once with the action's id and its params, without "
     "looking it up first: they see a card and decide, and nothing is made until they do. "
@@ -213,14 +216,22 @@ def model_messages(
     features: str = "",
     external: list[str] | None = None,
     instead: str = "",
+    served: Collection[str] = (),
 ) -> list[dict[str, Any]]:
     """The conversation as OpenAI-style messages (assistant text and tool calls, tool results).
     `attached`: what the person attached, as the model is given it (`attachments.py`).
     `features`: the list of actions the model may propose (`features.actions_prompt`).
     `external`: the names of the outside servers when the pair of tools is offered (ADR-0070).
-    `instead`: what a screen this chat is docked in tells the model, in place of the rest."""
+    `instead`: what a screen this chat is docked in tells the model, in place of the rest.
+    `served`: the actions this engine serves; a message that names a screen with several jobs gets
+    that screen's line again (`features.focus_prompt`)."""
+    last = next((m.text() for m in reversed(history) if m.role == "user"), "")
     prompt = instead or (
-        SYSTEM_PROMPT + features + (WEB_PROMPT if search else "") + external_prompt(external)
+        SYSTEM_PROMPT
+        + features
+        + (WEB_PROMPT if search else "")
+        + external_prompt(external)
+        + focus_prompt(last, served)
     )
     if attachments_in(history):
         prompt += ATTACH_PROMPT
@@ -676,7 +687,9 @@ def build_assistant_graph(
                 try:
                     async for chunk in caps.text.chat(
                         "chat",
-                        model_messages(history, search, attached, features, external, instead),
+                        model_messages(
+                            history, search, attached, features, external, instead, served
+                        ),
                         allow_tools,
                         thinking=thinking,
                     ):

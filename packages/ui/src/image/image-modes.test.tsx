@@ -14,6 +14,9 @@ const api: ImagesApi = {
   async list() {
     return { images: [], next_before: null };
   },
+  async importImage() {
+    throw new Error("not used");
+  },
   async search() {
     return [];
   },

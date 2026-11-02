@@ -1,18 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Creative Studio (ADR-0090): the shared screen on this window's engine.
+// Creative Studio (ADR-0090): the shared screen on this window's engine. The Image and Video tabs of its Make panel
+// are the same make screens as the Images and Video pages, in one column, and what they make goes to the project.
+import type { ImageMode, VideoMode } from "@wasifyai/client";
 import {
   Creative,
   type CreativeScreen,
+  ImageWorkspace,
+  type MakePanelMakers,
   ModelSelect,
   type ModelSelectHandle,
+  Notice,
+  Segmented,
+  VideoWorkspace,
   useChoicesFor,
 } from "@wasifyai/ui";
-import { useRef } from "react";
-import { assistantApi, client, creationsApi, voiceApi } from "../api";
+import { useMemo, useRef, useState } from "react";
+import { assistantApi, client, creationsApi, stylesApi, voiceApi } from "../api";
 import { ChatStart } from "../choices/ChatStart";
+import { useGroupReady } from "../choices/use-ready";
 import { creative } from "../creative";
+import { useImageEngine, useModelOf } from "../engine-hooks";
 import { images } from "../images";
 import type { Route } from "../router";
+import { useVideoLooks } from "../video-looks";
+import { videos } from "../videos";
 
 const songs = async () => {
   const tracks = await voiceApi.tracks({ limit: 200 });
@@ -34,14 +45,171 @@ const SCREENS: Record<CreativeScreen, Route> = {
   model3d: "model3d",
 };
 
+const IMAGE_MODES = [
+  { value: "text", label: "Create" },
+  { value: "image", label: "Edit" },
+  { value: "inpaint", label: "Inpaint" },
+  { value: "reference", label: "Reference" },
+];
+const VIDEO_MODES = [
+  { value: "text", label: "Create" },
+  { value: "image", label: "Animate" },
+  { value: "extend", label: "Extend" },
+];
+
+function fitOf(model: ReturnType<typeof useModelOf>, real: boolean) {
+  const tooBig = real && model?.fit?.verdict === "too_big";
+  const tight = real && model?.fit?.verdict === "tight";
+  return {
+    blockedReason: tooBig && model?.fit ? `${model.title} will not fit. ${model.fit.reason}` : null,
+    notices:
+      tight && model?.fit ? (
+        <Notice tone="warn" title="This computer is tight on memory">
+          {model.fit.reason}
+        </Notice>
+      ) : null,
+  };
+}
+
+function ImageMaker({
+  onMade,
+  ensure,
+  keyed,
+  go,
+}: {
+  onMade: (id: string) => void;
+  ensure: () => boolean;
+  keyed: boolean;
+  go: (r: Route) => void;
+}) {
+  const [mode, setMode] = useState<ImageMode>("text");
+  const model = useModelOf("wasifyai-image");
+  const engine = useImageEngine();
+  const { blockedReason, notices } = fitOf(model, engine?.state === "installed" && !keyed);
+  return (
+    <>
+      <div className="overflow-x-auto border-b p-2">
+        <Segmented
+          label="What to make"
+          size="sm"
+          value={mode}
+          onValueChange={(v) => setMode(v as ImageMode)}
+          options={IMAGE_MODES}
+        />
+      </div>
+      <div className="min-h-0 flex-1">
+        <ImageWorkspace
+          key={mode}
+          panel
+          mode={mode}
+          runs={client}
+          images={images}
+          notices={notices}
+          beforeMake={ensure}
+          onMade={onMade}
+          onOpenLibrary={() => go("library")}
+          stylesApi={stylesApi}
+          onOpenFolders={() => go("settings")}
+          canSave
+          blockedReason={blockedReason}
+        />
+      </div>
+    </>
+  );
+}
+
+function VideoMaker({
+  onMade,
+  ensure,
+  keyed,
+  go,
+}: {
+  onMade: (id: string) => void;
+  ensure: () => boolean;
+  keyed: boolean;
+  go: (r: Route) => void;
+}) {
+  const [mode, setMode] = useState<Exclude<VideoMode, "import">>("text");
+  const model = useModelOf("wasifyai-video");
+  const engine = useImageEngine();
+  const looks = useVideoLooks();
+  const { blockedReason, notices } = fitOf(model, engine?.state === "installed" && !keyed);
+  return (
+    <>
+      <div className="overflow-x-auto border-b p-2">
+        <Segmented
+          label="What to make"
+          size="sm"
+          value={mode}
+          onValueChange={(v) => setMode(v as Exclude<VideoMode, "import">)}
+          options={VIDEO_MODES}
+        />
+      </div>
+      <div className="min-h-0 flex-1">
+        <VideoWorkspace
+          key={mode}
+          panel
+          mode={mode}
+          runs={client}
+          videos={videos}
+          canSave
+          hint="A 5 second clip takes a few minutes on a fast Mac. It is made on this computer."
+          onOpenLibrary={() => go("videos")}
+          blockedReason={blockedReason}
+          beforeMake={ensure}
+          onMade={onMade}
+          looks={looks}
+          notices={notices}
+        />
+      </div>
+    </>
+  );
+}
+
+async function addFile(file: File) {
+  if (file.type.startsWith("image/")) {
+    return { kind: "image", id: (await images.importImage(file)).id };
+  }
+  if (file.type.startsWith("video/")) {
+    return { kind: "video", id: (await videos.importVideo(file)).id };
+  }
+  return { kind: "track", id: (await creationsApi.addRecording(file)).id };
+}
+
 export function CreativePage({ go }: { go: (r: Route) => void }) {
   const choices = useChoicesFor("chat");
   const picker = useRef<ModelSelectHandle>(null);
+  const imageChoices = useChoicesFor("images");
+  const imagePicker = useRef<ModelSelectHandle>(null);
+  const image = useGroupReady(imageChoices, imagePicker);
+  const videoChoices = useChoicesFor("video");
+  const videoPicker = useRef<ModelSelectHandle>(null);
+  const video = useGroupReady(videoChoices, videoPicker);
+  const makers = useMemo<MakePanelMakers>(
+    () => ({
+      image: (onMade) => (
+        <ImageMaker onMade={onMade} ensure={image.ensure} keyed={image.keyed} go={go} />
+      ),
+      video: (onMade) => (
+        <VideoMaker onMade={onMade} ensure={video.ensure} keyed={video.keyed} go={go} />
+      ),
+    }),
+    [image.ensure, image.keyed, video.ensure, video.keyed, go],
+  );
   return (
     <Creative
       api={creative}
       songs={songs}
       model={<ModelSelect group="chat" api={choices} handleRef={picker} />}
+      modelOfTab={(tab) =>
+        tab === "image" ? (
+          <ModelSelect group="images" api={imageChoices} handleRef={imagePicker} />
+        ) : tab === "video" ? (
+          <ModelSelect group="video" api={videoChoices} handleRef={videoPicker} />
+        ) : undefined
+      }
+      makers={makers}
+      addFile={addFile}
       onMakeSong={() => go("music")}
       creations={creationsApi}
       onOpenScreen={(screen) => go(SCREENS[screen])}

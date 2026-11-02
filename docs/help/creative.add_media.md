@@ -26,6 +26,9 @@ Make a picture, clip, song, speech, lip sync, 3D model or motion graphic from th
 
 ## Limits
 
+- Added to a selected shot, a picture or clip is a version of it. It is used only if the shot had none; choose it under
+  **Shots** otherwise.
+
 - Dropping in a file from outside the Library comes with the Shots step.
 - Being in the rail does not put a thing in the video yet: the Shots and Cut steps do that.
 

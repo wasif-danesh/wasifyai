@@ -67,9 +67,12 @@ export function ConfirmDialog({
   destructive = true,
   onConfirm,
   onCancel,
+  children,
 }: {
   title: string;
   message?: ReactNode;
+  /** a choice that goes with the question */
+  children?: ReactNode;
   confirmLabel?: string;
   destructive?: boolean;
   onConfirm: () => void;
@@ -78,6 +81,7 @@ export function ConfirmDialog({
   return (
     <Modal label={title} onClose={onCancel}>
       {message ? <p className="m-0 text-muted-foreground">{message}</p> : null}
+      {children}
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel

@@ -3,7 +3,7 @@
 where the product has no folder every route answers 404. Every query is scoped by tenant and user."""
 
 import asyncio
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -18,6 +18,8 @@ from wasifyai_creative.runtime import (
     manager_for,
     store_for,
 )
+from wasifyai_creative.shots import view as shots_view
+from wasifyai_creative.stills import REFERENCE
 from wasifyai_creative.store import NotFound
 
 PRODUCT_ID = "wasifyai-creative"
@@ -57,6 +59,25 @@ class AddMedia(BaseModel):
     shot_id: str | None = Field(None, max_length=32)
 
 
+class MakeStills(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["plain", "reference"] = REFERENCE
+    redo_out_of_date: bool = False
+
+
+class RedoShot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["plain", "reference"] = REFERENCE
+
+
+class ChooseTake(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    take_id: str = Field(min_length=1, max_length=64)
+
+
 def title_of(given: str, brief: Brief) -> str:
     if given:
         return given
@@ -93,7 +114,24 @@ def build_routes(deps: RouteDeps) -> APIRouter:
 
     def out(row: dict[str, Any], identity: Identity) -> dict[str, Any]:
         found = {k: v for k, v in row.items() if k not in ("tenant_id", "user_id")}
-        found["live"] = manager_for(deps).active(identity) == row["id"]
+        jobs = manager_for(deps)
+        found["live"] = jobs.active(identity) == row["id"]
+        found["shots"] = shots_view(store(), row)
+        if found["shots"]["preview"]:
+            del found["shots"]["preview"]["rel"]
+        found["shots_live"] = jobs.shots.active(identity) == row["id"]
+        return found
+
+    async def shown(row: dict[str, Any], identity: Identity) -> dict[str, Any]:
+        """One project with a link to its preview."""
+        found = out(row, identity)
+        preview = found["shots"]["preview"]
+        if preview:
+            owner = (identity.tenant_id, PRODUCT_ID, identity.user_id)
+            kept = store().preview_of(row["id"])
+            preview["url"] = (
+                await deps.storage.url_for(owner, kept["rel"]) if deps.storage and kept else None
+            )
         return found
 
     def row_or_404(identity: Identity, item: str) -> dict[str, Any]:
@@ -104,6 +142,11 @@ def build_routes(deps: RouteDeps) -> APIRouter:
 
     def refuse(e: Refused) -> HTTPException:
         return HTTPException(409, {"code": e.code, "message": e.message})
+
+    @router.get("/characters")
+    async def characters(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """People used in earlier projects, so they can be used again."""
+        return {"items": store().characters(identity.tenant_id, identity.user_id)}
 
     @router.get("/status")
     async def status(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
@@ -130,6 +173,9 @@ def build_routes(deps: RouteDeps) -> APIRouter:
     async def add_project(
         body: NewProject, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
+        store().keep_characters(
+            identity.tenant_id, identity.user_id, body.brief.model_dump()["cast"]
+        )
         row = store().add(
             identity.tenant_id, identity.user_id, title_of(body.title, body.brief),
             body.brief.model_dump(),
@@ -139,7 +185,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
 
     @router.get("/projects/{item}")
     async def get_project(item: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
-        return out(row_or_404(identity, item), identity)
+        return await shown(row_or_404(identity, item), identity)
 
     @router.patch("/projects/{item}")
     async def change_project(
@@ -149,15 +195,18 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         if manager_for(deps).active(identity) == item:
             raise HTTPException(409, {"code": "busy", "message": "The plan is being written."})
         brief = body.brief.model_dump() if body.brief else row["brief"]
+        store().keep_characters(identity.tenant_id, identity.user_id, brief.get("cast", []))
         store().set_brief(item, body.title or row["title"], brief)
         fresh = row_or_404(identity, item)
         await add_to_search(deps.state, identity, fresh)
         return out(fresh, identity)
 
     @router.delete("/projects/{item}", status_code=204)
-    async def remove_project(item: str, identity: Identity = Depends(deps.identity)) -> None:
+    async def remove_project(
+        item: str, with_media: bool = False, identity: Identity = Depends(deps.identity)
+    ) -> None:
         row_or_404(identity, item)
-        await delete_project(deps, identity, item)
+        await delete_project(deps, identity, item, with_media=with_media)
 
     # ---- the plan ------------------------------------------------------------------------------
 
@@ -255,6 +304,74 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         params = {"project_id": item, "kind": kind, "item_id": media_id}
         await run_media("creative.remove_media", params, identity)
         return {"items": await asyncio.to_thread(store().media_of, item)}
+
+    # ---- the shots ------------------------------------------------------------------------------
+
+    @router.get("/projects/{item}/shots/estimate")
+    async def estimate(
+        item: str,
+        mode: Literal["plain", "reference"] = REFERENCE,
+        redo_out_of_date: bool = False,
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        """Before Start: how many, how long, how much disk, whether it fits."""
+        row = row_or_404(identity, item)
+        return await manager_for(deps).shots.estimate(row, mode, redo_out_of_date)
+
+    @router.post("/projects/{item}/shots", status_code=202)
+    async def make_stills(
+        item: str, body: MakeStills, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Make what is missing. Follow it with GET; a stop keeps what is made."""
+        row = row_or_404(identity, item)
+        try:
+            await manager_for(deps).shots.start_stills(
+                identity, row, body.mode, body.redo_out_of_date
+            )
+        except Refused as e:
+            raise refuse(e) from None
+        return await shown(row_or_404(identity, item), identity)
+
+    @router.post("/projects/{item}/shots/stop")
+    async def stop_stills(item: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        row_or_404(identity, item)
+        await manager_for(deps).shots.stop_and_wait(identity, item)
+        return await shown(row_or_404(identity, item), identity)
+
+    @router.post("/projects/{item}/shots/{shot}/redo", status_code=202)
+    async def redo_shot(
+        item: str, shot: str, body: RedoShot, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        row = row_or_404(identity, item)
+        try:
+            await manager_for(deps).shots.start_redo(identity, row, shot, body.mode)
+        except Refused as e:
+            raise refuse(e) from None
+        return await shown(row_or_404(identity, item), identity)
+
+    @router.put("/projects/{item}/shots/{shot}/chosen")
+    async def choose_take(
+        item: str, shot: str, body: ChooseTake, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        row = row_or_404(identity, item)
+        if not any(
+            t["id"] == body.take_id and t["shot_id"] == shot for t in store().takes_of(item)
+        ):
+            raise HTTPException(404, "that take is not of this shot")
+        store().choose_take(item, shot, body.take_id)
+        return await shown(row, identity)
+
+    @router.post("/projects/{item}/preview", status_code=202)
+    async def make_preview(
+        item: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Join the chosen stills over the song. Follow it with GET."""
+        row = row_or_404(identity, item)
+        try:
+            manager_for(deps).shots.start_preview(identity, row)
+        except Refused as e:
+            raise refuse(e) from None
+        return await shown(row_or_404(identity, item), identity)
 
     @router.get("/projects/{item}/log")
     async def planning_log(

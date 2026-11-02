@@ -122,7 +122,10 @@ def _marks(person: dict[str, Any]) -> list[str]:
 def who_in(sentence: str, cast: list[dict[str, Any]]) -> list[str]:
     low = sentence.lower()
     return [
-        p["name"] for p in cast if any(re.search(rf"\b{re.escape(m)}\b", low) for m in _marks(p))
+        # also Mira's, and the Miras the model sometimes writes
+        p["name"]
+        for p in cast
+        if any(re.search(rf"\b{re.escape(m)}(?:['’]?s)?\b", low) for m in _marks(p))
     ]
 
 

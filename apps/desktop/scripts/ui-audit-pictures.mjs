@@ -34,6 +34,9 @@
 //   apps/desktop/scripts/ui-audit.sh light creative             Creative Studio (ADR-0090 CS1): a brief, a real plan on the
 //                                                                chosen chat model, edits, Undo, axe, a phone width; needs a
 //                                                                song in Your music and a throwaway DESKTOP_DATA_DIR
+//   apps/desktop/scripts/ui-audit.sh light creative-shots       The Shots step (ADR-0090 CS2): a real redo, takes, the Image, Video and
+//                                                                Add tabs, a real file added, axe, a phone. Needs a project "cs2 real" with
+//                                                                its stills in a throwaway DESKTOP_DATA_DIR, and CS2_FILES with mine.png
 //   apps/desktop/scripts/ui-audit.sh light motion-pack          The marketing pack (ADR-0096 MX7): a starting point, a
 //                                                                brand with a real logo, every shape made for real;
 //                                                                needs MOTION_FIXTURES and a throwaway DESKTOP_DATA_DIR
@@ -382,6 +385,117 @@ for (const scheme of ["light", "dark"]) {
       console.log(`MEDIA ${JSON.stringify(seen)}`);
     });
   }
+  // the Shots step, on a project that already has its stills (ADR-0090 CS2): a real redo, a take chosen, the tabs
+  if (names.has("creative-shots")) {
+    await attempt("creative-shots", async () => {
+      const seen = { errors: [], console: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      page.on("console", (m) => m.type() === "error" && seen.console.push(m.text().slice(0, 200)));
+      const axe = async () => {
+        const AxeBuilder = require("@axe-core/playwright").default;
+        const found = await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+          .analyze();
+        return found.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      };
+      await open(page, "/creative");
+      await page.getByRole("button", { name: /^cs2 real/ }).click();
+      await page.getByRole("radio", { name: "Shots" }).waitFor({ timeout: 15000 });
+      await page.waitForTimeout(1500);
+      await shot(page, "creative-plan-stills", 900);
+      await page.getByRole("radio", { name: "Shots" }).click();
+      await page.getByRole("button", { name: "Shot 1", exact: false }).first().click();
+      await page.waitForTimeout(2500);
+      await shot(page, "creative-shots", 900);
+      seen.axeShots = await axe();
+      seen.preview = await page
+        .locator("video")
+        .first()
+        .evaluate(async (v) => {
+          await new Promise((r) =>
+            v.readyState > 0 ? r() : v.addEventListener("loadedmetadata", r),
+          );
+          return { seconds: v.duration, width: v.videoWidth, height: v.videoHeight };
+        });
+      const stage = page.getByRole("region", { name: "The shots" });
+      const started = Date.now();
+      await stage.getByRole("button", { name: "Make it again" }).click();
+      await page.getByRole("button", { name: "Version 2 of shot 1" }).waitFor({ timeout: 300000 });
+      seen.redo_s = Math.round((Date.now() - started) / 1000);
+      await page.waitForTimeout(800);
+      await shot(page, "creative-take", 900);
+      seen.chosenAfterRedo = await page
+        .getByRole("button", { name: "Version 2 of shot 1" })
+        .getAttribute("aria-pressed");
+      await page.getByRole("button", { name: "Version 1 of shot 1" }).click();
+      await page.waitForTimeout(800);
+      seen.chosenBack = await page
+        .getByRole("button", { name: "Version 1 of shot 1" })
+        .getAttribute("aria-pressed");
+      seen.previewStale = await page.getByText(/The shots have changed since/).count();
+      const make = page.getByRole("tablist", { name: "Make something for this project" });
+      await make.getByRole("tab", { name: "Image" }).click();
+      await page.waitForTimeout(800);
+      seen.imageTabSays = await page.getByText(/What you make here is a version of shot 1/).count();
+      seen.imageButton = await page.getByRole("button", { name: /Make the picture/ }).count();
+      await shot(page, "creative-tab-image", 900);
+      seen.axeImage = await axe();
+      await make.getByRole("tab", { name: "Video" }).click();
+      await page.waitForTimeout(800);
+      seen.videoButton = await page.getByRole("button", { name: /Make the (video|clip)/ }).count();
+      await shot(page, "creative-tab-video", 900);
+      seen.axeVideo = await axe();
+      await make.getByRole("tab", { name: "Add" }).click();
+      await page.waitForTimeout(800);
+      await page
+        .getByLabel("Choose a picture, clip or sound to add")
+        .setInputFiles(join(process.env.CS2_FILES ?? ".", "mine.png"));
+      await page.getByRole("button", { name: "Version 3 of shot 1" }).waitFor({ timeout: 30000 });
+      seen.dropped = await page
+        .getByRole("button", { name: "Version 3 of shot 1" })
+        .getAttribute("aria-pressed");
+      await shot(page, "creative-tab-add", 900);
+      seen.axeAdd = await axe();
+      console.log(`CREATIVESHOTS ${JSON.stringify(seen)}`);
+    });
+  }
+
+  if (names.has("creative-shots") || names.has("creative-shots-phone")) {
+    await attempt("creative-shots-phone", async () => {
+      const seen = {};
+      // the smallest the desktop window goes (tauri.conf.json)
+      await page.setViewportSize({ width: 720, height: 700 });
+      await open(page, "/creative");
+      await page.getByRole("button", { name: /^cs2 real/ }).click();
+      await page.getByRole("radio", { name: "Shots" }).click();
+      await page.waitForTimeout(2000);
+      const wide = () =>
+        page.evaluate(() => {
+          const over = document.documentElement.scrollWidth - window.innerWidth;
+          const who = [...document.querySelectorAll("body *")]
+            .filter(
+              (e) => e.getBoundingClientRect().right > window.innerWidth + 1 && e.checkVisibility(),
+            )
+            .slice(0, 6)
+            .map((e) => `${e.tagName}.${String(e.className).slice(0, 60)}`);
+          return { over, who };
+        });
+      await page.screenshot({ path: join(OUT, "creative-shots-phone.png") });
+      const make = page.getByRole("tablist", { name: "Make something for this project" });
+      for (const tab of ["Image", "Video", "Add"]) {
+        await make.getByRole("tab", { name: tab }).click();
+        await page.waitForTimeout(500);
+        seen[tab] = await wide();
+      }
+      await make.getByRole("tab", { name: "Image" }).click();
+      await make.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: join(OUT, "creative-tab-image-phone.png") });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      console.log(`CREATIVEPHONE ${JSON.stringify(seen)}`);
+    });
+  }
+
   if (names.has("creative")) {
     await attempt("creative", async () => {
       const seen = { errors: [] };

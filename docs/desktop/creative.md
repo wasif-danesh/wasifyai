@@ -1,6 +1,6 @@
 # Creative Studio on the desktop
 
-ADR-0090. At stage CS1 a project ends at a plan of words. Stills, clips and the cut come in later stages.
+ADR-0090. At stage CS2 a project goes as far as a preview over the song: stills with camera moves, cut on the plan. Clips and the cut come in later stages.
 
 ## How a plan is made
 
@@ -32,3 +32,8 @@ DESKTOP_DATA_DIR=<throwaway> apps/desktop/scripts/ui-audit.sh light creative
 ```
 
 The throwaway folder links `models`, `components`, `engine` and `comfyui-data` from the app's data and holds a `sqlite3 .backup` of `wasifyai.db`, plus `secrets.key`. It needs a song in Your music and a chat model chosen. The walk's `unregisterListener` page error comes from the stand-in window.
+
+## The Shots step (CS2)
+
+Choose **Make the stills**. The panel says how many, how long and how much disk, and refuses what will not fit. Reference pictures are the default (about 40 s a still here); Plain is about twice as fast.
+Each still is a picture in your Library, saved as it is made, so **Stop** or a crash loses only the one under way and **Go on** makes only what is missing. Measured: 55 shots in 37 minutes, preview in 9 seconds. `creative.db` keeps takes, the chosen take, the run, the preview and people; the preview file is under the product's storage at `previews/<project>/`.

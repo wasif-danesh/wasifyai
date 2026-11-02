@@ -19,7 +19,7 @@ from wasifyai_platform_sdk.actions import (
 )
 from wasifyai_platform_sdk.actions.helpers import need_deps
 
-from wasifyai_creative import editor
+from wasifyai_creative import editor, stills
 from wasifyai_creative.document import Brief, EditRefused
 from wasifyai_creative.routes import edit_project, title_of
 from wasifyai_creative.runtime import (
@@ -31,6 +31,7 @@ from wasifyai_creative.runtime import (
     manager_for,
     store_for,
 )
+from wasifyai_creative.shots import view
 from wasifyai_creative.store import NotFound
 
 HERE = need_product(PRODUCT_ID)
@@ -128,6 +129,41 @@ class MediaOut(BaseModel):
     project_id: str
     kind: str
     item_id: str
+
+
+class MakeShotsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str = Field(min_length=32, max_length=32)
+    mode: Literal["plain", "reference"] = Field(
+        "reference",
+        description="reference keeps faces steadier and takes about twice as long as plain.",
+    )
+    redo_out_of_date: bool = Field(
+        False, description="Also make again the stills whose shot changed."
+    )
+
+
+class RedoShotIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str = Field(min_length=32, max_length=32)
+    shot_id: str = Field(min_length=1, max_length=32)
+    mode: Literal["plain", "reference"] = "reference"
+
+
+class ChooseTakeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str = Field(min_length=32, max_length=32)
+    shot_id: str = Field(min_length=1, max_length=32)
+    take_id: str = Field(min_length=1, max_length=64)
+
+
+class ShotsOut(BaseModel):
+    project_id: str
+    missing: int = Field(description="Shots with no still yet.")
+    out_of_date: int = Field(description="Shots whose still was made before the shot changed.")
 
 
 def _item(row: dict[str, Any]) -> LibraryItem:
@@ -245,7 +281,21 @@ async def _add_media(p: MediaIn, ctx: ActionContext) -> Outcome:
     item = await found.get(ctx, p.item_id)
     if item is None:
         return Outcome.refused("That is not in the library.", "not_found")
-    store_for(need_deps(ctx).state).add_media(p.project_id, p.kind, p.item_id, p.shot_id)
+    store = store_for(need_deps(ctx).state)
+    store.add_media(p.project_id, p.kind, p.item_id, p.shot_id)
+    row = _row(ctx, p.project_id)
+    shot = next(
+        (s for s in ((row or {}).get("plan") or {}).get("shots", []) if s["id"] == p.shot_id), None
+    )
+    known = any(
+        t["kind"] == p.kind and t["item_id"] == p.item_id for t in store.takes_of(p.project_id)
+    )
+    if row and shot and p.kind in ("image", "video") and not known:
+        # for a shot it is a take; it becomes the chosen one only if the shot has none, by the person's click
+        store.add_take(
+            p.project_id, shot["id"], p.kind, p.item_id, stills.inputs_of(shot, row["brief"]),
+            item.title or "", "added", None, row["revision"], choose=False,
+        )  # fmt: skip
     return Outcome.ok(
         {"project_id": p.project_id, "kind": p.kind, "item_id": p.item_id},
         f'"{item.title or item.id}" is now part of this project.',
@@ -255,11 +305,95 @@ async def _add_media(p: MediaIn, ctx: ActionContext) -> Outcome:
 async def _remove_media(p: RemoveMediaIn, ctx: ActionContext) -> Outcome:
     if _row(ctx, p.project_id) is None:
         return Outcome.refused(GONE, "not_found")
-    store_for(need_deps(ctx).state).remove_media(p.project_id, p.kind, p.item_id)
+    store = store_for(need_deps(ctx).state)
+    store.remove_media(p.project_id, p.kind, p.item_id)
+    store.remove_takes_of_media(p.project_id, p.kind, p.item_id)
     return Outcome.ok(
         {"project_id": p.project_id, "kind": p.kind, "item_id": p.item_id},
         "It is no longer part of this project. It stays in the library.",
     )
+
+
+async def _make_shots(p: MakeShotsIn, ctx: ActionContext) -> Outcome:
+    deps = need_deps(ctx)
+    row = _row(ctx, p.project_id)
+    if row is None:
+        return Outcome.refused(GONE, "not_found")
+    jobs = manager_for(deps).shots
+    try:
+        await jobs.start_stills(ctx.actor, row, p.mode, p.redo_out_of_date)
+        try:
+            await jobs.wait(ctx.actor, p.project_id)
+        except asyncio.CancelledError:
+            await jobs.stop_and_wait(ctx.actor, p.project_id)
+            raise
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    return _ran(ctx, p.project_id)
+
+
+def _ran(ctx: ActionContext, project: str) -> Outcome:
+    row = _row(ctx, project)
+    if row is None:
+        return Outcome.refused(GONE, "not_found")
+    now = view(store_for(need_deps(ctx).state), row)
+    run = now["run"] or {}
+    if run.get("status") == "failed":
+        return Outcome.error(
+            run.get("error") or "It stopped on a problem. What was made is kept.", "failed"
+        )
+    return Outcome.ok(
+        {
+            "project_id": project,
+            "missing": len(now["missing"]),
+            "out_of_date": len(now["out_of_date"]),
+        },
+        "Done. The pictures are in Creative Studio and your Library."
+        + (f" {len(now['missing'])} shots still have no still." if now["missing"] else ""),
+    )
+
+
+async def _redo_shot(p: RedoShotIn, ctx: ActionContext) -> Outcome:
+    deps = need_deps(ctx)
+    row = _row(ctx, p.project_id)
+    if row is None:
+        return Outcome.refused(GONE, "not_found")
+    jobs = manager_for(deps).shots
+    try:
+        await jobs.start_redo(ctx.actor, row, p.shot_id, p.mode)
+        await jobs.wait(ctx.actor, p.project_id)
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    return _ran(ctx, p.project_id)
+
+
+async def _choose_take(p: ChooseTakeIn, ctx: ActionContext) -> Outcome:
+    store = store_for(need_deps(ctx).state)
+    if _row(ctx, p.project_id) is None:
+        return Outcome.refused(GONE, "not_found")
+    if not any(
+        t["id"] == p.take_id and t["shot_id"] == p.shot_id for t in store.takes_of(p.project_id)
+    ):
+        return Outcome.refused("That take is not of this shot.", "not_found")
+    store.choose_take(p.project_id, p.shot_id, p.take_id)
+    return Outcome.ok(
+        {"project_id": p.project_id, "missing": 0, "out_of_date": 0},
+        "That take is now used for the shot.",
+    )
+
+
+async def _preview(p: ProjectIn, ctx: ActionContext) -> Outcome:
+    deps = need_deps(ctx)
+    row = _row(ctx, p.project_id)
+    if row is None:
+        return Outcome.refused(GONE, "not_found")
+    jobs = manager_for(deps).shots
+    try:
+        jobs.start_preview(ctx.actor, row)
+        await jobs.wait(ctx.actor, p.project_id)
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    return _ran(ctx, p.project_id)
 
 
 async def _list(ctx: ActionContext, limit: int) -> list[LibraryItem]:
@@ -342,6 +476,81 @@ def actions() -> list[Action]:
             requires=(HERE,),
             product=PRODUCT_ID,
             bind=CallBinding(_edit),
+            ui="creative",
+        ),
+        Action(
+            id="creative.make_shots",
+            title="Make the stills of a plan",
+            summary="Make a picture for every shot of a plan that has none. Costly: many pictures.",
+            description=(
+                "Make the still of every shot of a Creative Studio plan that has none, as one job. "
+                "With reference, which is the default, people get two pictures first so every shot "
+                "starts from the same face; a 3-minute song takes about 30 minutes, or about 15 with "
+                "plain. Each picture is saved as it is made, and stopping keeps them. Use it when the "
+                "person wants to see their plan as pictures."
+            ),
+            input=MakeShotsIn,
+            output=ShotsOut,
+            examples=({"project_id": SAMPLE_PROJECT},),
+            effect="make",
+            flags=("private", "costly"),
+            requires=(HERE,),
+            long=True,
+            product=PRODUCT_ID,
+            bind=CallBinding(_make_shots),
+            ui="creative",
+        ),
+        Action(
+            id="creative.redo_shot",
+            title="Make a shot's still again",
+            summary="Make another take of one shot's still; the old take is kept.",
+            description=(
+                "Make another still of one shot of a Creative Studio plan. The old one stays as a "
+                "take, and the new one is used. It takes under a minute."
+            ),
+            input=RedoShotIn,
+            output=ShotsOut,
+            examples=({"project_id": SAMPLE_PROJECT, "shot_id": "s1"},),
+            effect="make",
+            flags=("private", "costly"),
+            requires=(HERE,),
+            long=True,
+            product=PRODUCT_ID,
+            bind=CallBinding(_redo_shot),
+            ui="creative",
+        ),
+        Action(
+            id="creative.choose_take",
+            title="Choose a shot's take",
+            summary="Choose which take of a shot is used.",
+            description="Choose which still or clip of a shot of Creative Studio is used in the preview.",
+            input=ChooseTakeIn,
+            output=ShotsOut,
+            examples=({"project_id": SAMPLE_PROJECT, "shot_id": "s1", "take_id": SAMPLE_ID},),
+            effect="change",
+            requires=(HERE,),
+            product=PRODUCT_ID,
+            bind=CallBinding(_choose_take),
+            ui="creative",
+        ),
+        Action(
+            id="creative.preview",
+            title="Preview a music video",
+            summary="Join a plan's stills with camera moves, cut on the beats, over the song.",
+            description=(
+                "Join the chosen stills of a Creative Studio plan into a video over the song, with a "
+                "camera move on each and cuts on the plan's times. It takes under a minute. A shot "
+                "with no still is black. It is a draft to watch, not the finished video."
+            ),
+            input=ProjectIn,
+            output=ShotsOut,
+            examples=({"project_id": SAMPLE_PROJECT},),
+            effect="make",
+            flags=("private",),
+            requires=(HERE,),
+            long=True,
+            product=PRODUCT_ID,
+            bind=CallBinding(_preview),
             ui="creative",
         ),
         Action(

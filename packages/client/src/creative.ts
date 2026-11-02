@@ -10,7 +10,15 @@ export type CreativeShape = "landscape" | "portrait" | "square";
 export type ShotMotion = "Hold" | "Animate" | "Sing";
 export type ProjectStatus = "draft" | "planning" | "planned" | "failed" | "stopped" | "interrupted";
 
-export type CastMember = { name: string; look: string; photos_only: boolean };
+export type CastMember = {
+  name: string;
+  look: string;
+  photos_only: boolean;
+  /** pictures of them from the library, so every shot starts from the same face */
+  pictures?: string[];
+};
+/** An object or place with words that are used again in every picture of it. */
+export type FixedWords = { name: string; words: string };
 
 export type Brief = {
   track_id: string;
@@ -18,6 +26,7 @@ export type Brief = {
   style: string;
   cast: CastMember[];
   places: string[];
+  fixed?: FixedWords[];
   /** left out, the words the song was made with are used */
   lyrics: string | null;
   shape: CreativeShape;
@@ -74,6 +83,73 @@ export type CreativeProject = {
   updated_at: string;
   /** a plan or a rewrite is running for it now */
   live: boolean;
+  shots: ShotsState;
+  /** stills or a preview are being made for it now */
+  shots_live: boolean;
+};
+
+export type StillMode = "plain" | "reference";
+
+/** One still or clip of a shot. Taken from the library, so it can be deleted there. */
+export type Take = {
+  id: string;
+  kind: "image" | "video";
+  item_id: string;
+  mode: string;
+  seconds: number | null;
+  prompt: string;
+  created_at: string;
+  /** the shot or the brief changed after it was made */
+  out_of_date: boolean;
+  chosen: boolean;
+};
+
+export type ShotsRun = {
+  kind: "stills" | "preview";
+  status: "running" | "done" | "stopped" | "failed" | "interrupted";
+  stage: string;
+  finished: number;
+  total: number;
+  failed: number;
+  error: string | null;
+};
+
+export type ProjectPreview = {
+  url: string | null;
+  seconds: number;
+  /** shots that are black, having no still */
+  empty_shots: number;
+  took_s: number;
+  created_at: string;
+  /** false once a cut or a chosen take changed after it was joined */
+  current: boolean;
+};
+
+export type ShotsState = {
+  takes: Record<string, Take[]>;
+  missing: string[];
+  out_of_date: string[];
+  run: ShotsRun | null;
+  preview: ProjectPreview | null;
+};
+
+/** The honest panel: what making these will take, before it starts. */
+export type StillsEstimate = {
+  count: number;
+  portraits: number;
+  motions: Record<ShotMotion, number>;
+  missing: number;
+  out_of_date: number;
+  seconds_low: number;
+  seconds_high: number;
+  bytes: number;
+  free_bytes: number;
+  fit: "fits" | "tight" | "too_big";
+  /** the time comes from stills made on this computer, not the general figure */
+  measured: boolean;
+  ready: boolean;
+  /** what to do first when the picture model is not ready */
+  step: string | null;
 };
 
 export type PlanEdit =
@@ -117,7 +193,8 @@ export type CreativeApi = {
   get: (id: string) => Promise<CreativeProject>;
   add: (title: string, brief: Brief) => Promise<CreativeProject>;
   change: (id: string, change: { title?: string; brief?: Brief }) => Promise<CreativeProject>;
-  remove: (id: string) => Promise<void>;
+  /** `withMade` also deletes from the library what was made for the project */
+  remove: (id: string, withMade?: boolean) => Promise<void>;
   plan: (id: string, again?: boolean) => Promise<CreativeProject>;
   stop: (id: string) => Promise<CreativeProject>;
   edit: (id: string, edits: PlanEdit[]) => Promise<CreativeProject>;
@@ -128,6 +205,13 @@ export type CreativeApi = {
   media: (id: string) => Promise<ProjectMedia[]>;
   addMedia: (id: string, kind: string, itemId: string, shotId?: string) => Promise<ProjectMedia[]>;
   removeMedia: (id: string, kind: string, itemId: string) => Promise<ProjectMedia[]>;
+  characters: () => Promise<CastMember[]>;
+  estimateStills: (id: string, mode: StillMode, redo: boolean) => Promise<StillsEstimate>;
+  makeStills: (id: string, mode: StillMode, redo: boolean) => Promise<CreativeProject>;
+  stopStills: (id: string) => Promise<CreativeProject>;
+  redoShot: (id: string, shot: string, mode: StillMode) => Promise<CreativeProject>;
+  chooseTake: (id: string, shot: string, take: string) => Promise<CreativeProject>;
+  preview: (id: string) => Promise<CreativeProject>;
 };
 
 type ComponentStatus =
@@ -197,8 +281,10 @@ export function createCreativeApi(transport: Transport): CreativeApi {
     get: (id) => json<CreativeProject>(one(id)),
     add: (title, brief) => post<CreativeProject>(base, { title, brief }),
     change: (id, change) => post<CreativeProject>(one(id), change, "PATCH"),
-    remove: async (id) => {
-      const res = await transport.fetch(one(id), { method: "DELETE" });
+    remove: async (id, withMade = false) => {
+      const res = await transport.fetch(`${one(id)}${withMade ? "?with_media=true" : ""}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new HttpError(res.status, await errorMessage(res));
     },
     plan: (id, again = false) => post<CreativeProject>(`${one(id)}/plan`, { again }),
@@ -226,5 +312,24 @@ export function createCreativeApi(transport: Transport): CreativeApi {
           { method: "DELETE" },
         )
       ).items,
+    characters: async () =>
+      (await json<{ items: CastMember[] }>(`/products/${CREATIVE_PRODUCT_ID}/creative/characters`))
+        .items,
+    estimateStills: (id, mode, redo) =>
+      json<StillsEstimate>(
+        `${one(id)}/shots/estimate?mode=${mode}&redo_out_of_date=${redo ? "true" : "false"}`,
+      ),
+    makeStills: (id, mode, redo) =>
+      post<CreativeProject>(`${one(id)}/shots`, { mode, redo_out_of_date: redo }),
+    stopStills: (id) => post<CreativeProject>(`${one(id)}/shots/stop`),
+    redoShot: (id, shot, mode) =>
+      post<CreativeProject>(`${one(id)}/shots/${encodeURIComponent(shot)}/redo`, { mode }),
+    chooseTake: (id, shot, take) =>
+      post<CreativeProject>(
+        `${one(id)}/shots/${encodeURIComponent(shot)}/chosen`,
+        { take_id: take },
+        "PUT",
+      ),
+    preview: (id) => post<CreativeProject>(`${one(id)}/preview`),
   };
 }

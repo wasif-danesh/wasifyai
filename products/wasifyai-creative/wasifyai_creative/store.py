@@ -15,7 +15,7 @@ from typing import Any
 
 from wasifyai_platform_sdk.sqlstore import SqliteStoreDb, StoreDb
 
-SCHEMA = 1
+SCHEMA = 2
 KEEP_REVISIONS = 30
 KEEP_LOG = 400
 
@@ -40,7 +40,27 @@ CREATE TABLE IF NOT EXISTS plan_log(
 CREATE INDEX IF NOT EXISTS plan_log_project ON plan_log(project_id, id);
 CREATE TABLE IF NOT EXISTS media(
   project_id TEXT NOT NULL, kind TEXT NOT NULL, item_id TEXT NOT NULL, shot_id TEXT,
-  created_at TEXT NOT NULL, PRIMARY KEY (project_id, kind, item_id));
+  made INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
+  PRIMARY KEY (project_id, kind, item_id));
+CREATE TABLE IF NOT EXISTS takes(
+  id TEXT PRIMARY KEY, project_id TEXT NOT NULL, shot_id TEXT NOT NULL, kind TEXT NOT NULL,
+  item_id TEXT NOT NULL, inputs TEXT NOT NULL, prompt TEXT NOT NULL, mode TEXT NOT NULL,
+  seconds DOUBLE PRECISION, revision INTEGER NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS takes_shot ON takes(project_id, shot_id, created_at);
+CREATE TABLE IF NOT EXISTS chosen(
+  project_id TEXT NOT NULL, shot_id TEXT NOT NULL, take_id TEXT NOT NULL,
+  PRIMARY KEY (project_id, shot_id));
+CREATE TABLE IF NOT EXISTS runs(
+  project_id TEXT PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL, stage TEXT NOT NULL,
+  finished INTEGER NOT NULL, total INTEGER NOT NULL, failed INTEGER NOT NULL DEFAULT 0,
+  error TEXT, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS previews(
+  project_id TEXT PRIMARY KEY, rel TEXT NOT NULL, mark TEXT NOT NULL, seconds DOUBLE PRECISION NOT NULL,
+  empty_shots INTEGER NOT NULL, took_s DOUBLE PRECISION NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS characters(
+  tenant_id TEXT NOT NULL, user_id TEXT NOT NULL, name TEXT NOT NULL, look TEXT NOT NULL,
+  pictures TEXT NOT NULL, photos_only INTEGER NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, user_id, name));
 """
 LEFT_RUNNING = "It stopped when the app closed. Go on, and it picks up where it stopped."
 
@@ -61,7 +81,12 @@ class CreativeStore:
     def __init__(self, db: StoreDb):
         self.db = db
         db.open_tables(DDL)
-        db.exec("INSERT INTO meta VALUES ('schema', ?) ON CONFLICT DO NOTHING", (str(SCHEMA),))
+        found = db.one("SELECT value FROM meta WHERE key = 'schema'")
+        if found is None:
+            db.exec("INSERT INTO meta VALUES ('schema', ?)", (str(SCHEMA),))
+        elif int(found["value"]) < 2:  # a project of CS1: what was added to it was not made for it
+            db.exec("ALTER TABLE media ADD COLUMN made INTEGER NOT NULL DEFAULT 0")
+            db.exec("UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA),))
 
     @classmethod
     def in_folder(cls, folder: Path) -> "CreativeStore":
@@ -69,6 +94,10 @@ class CreativeStore:
         store = cls(SqliteStoreDb(folder / "creative.db"))
         store.db.exec(
             "UPDATE projects SET status = 'interrupted', error = ?, stage = '' WHERE status = 'planning'",
+            (LEFT_RUNNING,),
+        )
+        store.db.exec(
+            "UPDATE runs SET status = 'interrupted', error = ?, stage = '' WHERE status = 'running'",
             (LEFT_RUNNING,),
         )
         return store
@@ -133,7 +162,16 @@ class CreativeStore:
             (item, tenant, user),
         )
         if n:
-            for table in ("revisions", "checkpoints", "plan_log", "media"):
+            for table in (
+                "revisions",
+                "checkpoints",
+                "plan_log",
+                "media",
+                "takes",
+                "chosen",
+                "runs",
+                "previews",
+            ):
                 self.db.exec(f"DELETE FROM {table} WHERE project_id = ?", (item,))
         return n > 0
 
@@ -228,12 +266,15 @@ class CreativeStore:
     def keep_conversation(self, item: str, conversation: str) -> None:
         self.db.exec("UPDATE projects SET conversation_id = ? WHERE id = ?", (conversation, item))
 
-    def add_media(self, item: str, kind: str, media_id: str, shot: str | None) -> None:
-        """Tag a thing of the library with this project. The thing itself stays in the library."""
+    def add_media(
+        self, item: str, kind: str, media_id: str, shot: str | None, made: bool = False
+    ) -> None:
+        """Tag a thing of the library with this project. The thing itself stays in the library;
+        `made` says it was made for this project, so deleting the project can offer to delete it."""
         self.db.exec(
-            "INSERT INTO media VALUES (?, ?, ?, ?, ?) ON CONFLICT (project_id, kind, item_id) "
-            "DO UPDATE SET shot_id = excluded.shot_id",
-            (item, kind, media_id, shot, now()),
+            "INSERT INTO media(project_id, kind, item_id, shot_id, made, created_at) VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT (project_id, kind, item_id) DO UPDATE SET shot_id = excluded.shot_id",
+            (item, kind, media_id, shot, int(made), now()),
         )
 
     def remove_media(self, item: str, kind: str, media_id: str) -> None:
@@ -245,11 +286,142 @@ class CreativeStore:
     def media_of(self, item: str) -> list[dict[str, Any]]:
         """Newest first, as the rail shows them."""
         rows = self.db.all(
-            "SELECT kind, item_id, shot_id, created_at FROM media WHERE project_id = ? "
+            "SELECT kind, item_id, shot_id, made, created_at FROM media WHERE project_id = ? "
             "ORDER BY created_at DESC, item_id",
             (item,),
         )
         return [dict(r) for r in rows]
+
+    # ---- takes: the stills and clips of a shot ---------------------------------------------------
+
+    def add_take(
+        self, item: str, shot: str, kind: str, media_id: str, inputs: str, prompt: str, mode: str,
+        seconds: float | None, revision: int, *, choose: bool,
+    ) -> str:  # fmt: skip
+        """A new take, saved at once. The first take of a shot is its chosen one; another becomes
+        chosen only when `choose` says the person asked for it."""
+        take = new_id()
+        self.db.exec(
+            "INSERT INTO takes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (take, item, shot, kind, media_id, inputs, prompt, mode, seconds, revision, now()),
+        )
+        had = self.db.one(
+            "SELECT take_id FROM chosen WHERE project_id = ? AND shot_id = ?", (item, shot)
+        )
+        if choose or had is None:
+            self.choose_take(item, shot, take)
+        return take
+
+    def choose_take(self, item: str, shot: str, take: str) -> None:
+        self.db.exec(
+            "INSERT INTO chosen VALUES (?, ?, ?) ON CONFLICT (project_id, shot_id) "
+            "DO UPDATE SET take_id = excluded.take_id",
+            (item, shot, take),
+        )
+
+    def takes_of(self, item: str) -> list[dict[str, Any]]:
+        """Every take of the project, oldest first."""
+        rows = self.db.all(
+            "SELECT id, shot_id, kind, item_id, inputs, prompt, mode, seconds, revision, created_at "
+            "FROM takes WHERE project_id = ? ORDER BY created_at, id",
+            (item,),
+        )
+        return [dict(r) for r in rows]
+
+    def chosen_of(self, item: str) -> dict[str, str]:
+        rows = self.db.all("SELECT shot_id, take_id FROM chosen WHERE project_id = ?", (item,))
+        return {r["shot_id"]: r["take_id"] for r in rows}
+
+    def remove_takes_of_media(self, item: str, kind: str, media_id: str) -> None:
+        """A thing taken out of the project is no longer a take; its shot falls back to its newest."""
+        rows = self.db.all(
+            "SELECT id, shot_id FROM takes WHERE project_id = ? AND kind = ? AND item_id = ?",
+            (item, kind, media_id),
+        )
+        for row in rows:
+            self.db.exec("DELETE FROM takes WHERE id = ?", (row["id"],))
+            was = self.chosen_of(item).get(row["shot_id"])
+            if was == row["id"]:
+                self.db.exec(
+                    "DELETE FROM chosen WHERE project_id = ? AND shot_id = ?",
+                    (item, row["shot_id"]),
+                )
+                left = self.db.one(
+                    "SELECT id FROM takes WHERE project_id = ? AND shot_id = ? ORDER BY created_at DESC LIMIT 1",
+                    (item, row["shot_id"]),
+                )
+                if left:
+                    self.choose_take(item, row["shot_id"], left["id"])
+
+    # ---- the run: one person's stills or preview, as one job -------------------------------------
+
+    def begin_run(self, item: str, kind: str, stage: str, total: int) -> None:
+        self.db.exec(
+            "INSERT INTO runs VALUES (?, ?, 'running', ?, 0, ?, 0, NULL, ?) ON CONFLICT (project_id) DO UPDATE SET "
+            "kind = excluded.kind, status = 'running', stage = excluded.stage, finished = 0, "
+            "total = excluded.total, failed = 0, error = NULL, updated_at = excluded.updated_at",
+            (item, kind, stage, total, now()),
+        )
+
+    def run_progress(self, item: str, stage: str, finished: int, failed: int) -> None:
+        self.db.exec(
+            "UPDATE runs SET stage = ?, finished = ?, failed = ?, updated_at = ? WHERE project_id = ?",
+            (stage, finished, failed, now(), item),
+        )
+
+    def end_run(self, item: str, status: str, error: str | None) -> None:
+        self.db.exec(
+            "UPDATE runs SET status = ?, error = ?, stage = '', updated_at = ? WHERE project_id = ?",
+            (status, error, now(), item),
+        )
+
+    def run_of(self, item: str) -> dict[str, Any] | None:
+        row = self.db.one(
+            "SELECT kind, status, stage, finished, total, failed, error FROM runs WHERE project_id = ?",
+            (item,),
+        )
+        return dict(row) if row else None
+
+    def set_preview(
+        self, item: str, rel: str, mark: str, seconds: float, empty: int, took: float
+    ) -> None:
+        self.db.exec(
+            "INSERT INTO previews VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (project_id) DO UPDATE SET "
+            "rel = excluded.rel, mark = excluded.mark, seconds = excluded.seconds, "
+            "empty_shots = excluded.empty_shots, took_s = excluded.took_s, created_at = excluded.created_at",
+            (item, rel, mark, seconds, empty, took, now()),
+        )
+
+    def preview_of(self, item: str) -> dict[str, Any] | None:
+        row = self.db.one(
+            "SELECT rel, mark, seconds, empty_shots, took_s, created_at FROM previews WHERE project_id = ?",
+            (item,),
+        )
+        return dict(row) if row else None
+
+    # ---- people: kept across projects (ADR-0090 decision 10) ------------------------------------
+
+    def keep_characters(self, tenant: str, user: str, cast: list[dict[str, Any]]) -> None:
+        for p in cast:
+            self.db.exec(
+                "INSERT INTO characters VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (tenant_id, user_id, name) DO UPDATE SET "
+                "look = excluded.look, pictures = excluded.pictures, photos_only = excluded.photos_only, "
+                "updated_at = excluded.updated_at",
+                (tenant, user, p["name"], p.get("look", ""), json.dumps(p.get("pictures") or []),
+                 int(bool(p.get("photos_only"))), now()),
+            )  # fmt: skip
+
+    def characters(self, tenant: str, user: str) -> list[dict[str, Any]]:
+        rows = self.db.all(
+            "SELECT name, look, pictures, photos_only FROM characters WHERE tenant_id = ? AND user_id = ? "
+            "ORDER BY updated_at DESC",
+            (tenant, user),
+        )
+        return [
+            {"name": r["name"], "look": r["look"], "pictures": json.loads(r["pictures"]),
+             "photos_only": bool(r["photos_only"])}
+            for r in rows
+        ]  # fmt: skip
 
     def undo(self, item: str) -> str | None:
         """Back to the revision before this one; what the undone change was, or None if there is none."""

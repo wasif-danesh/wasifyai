@@ -1,19 +1,20 @@
 "use client";
 // Creative Studio (ADR-0090): the projects, the brief of a new one, and one project's screen. At this stage a
-// project ends at a plan of words; the Shots and Cut steps come in later stages and are shown switched off.
+// project goes as far as a preview of its shots over the song; the Cut step comes in a later stage.
 import type { CreativeApi, CreativeBrief, CreativeProject } from "@wasifyai/client";
 import { Clapperboard, Plus, Trash2 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { Badge } from "../components/badge";
 import { Button } from "../components/button";
+import { Checkbox } from "../components/checkbox";
 import { ConfirmDialog } from "../components/dialog";
 import { EmptyState } from "../components/empty-state";
 import { Notice } from "../components/notice";
 import { panel } from "../styles";
 import { PageHeader, TopBarSlot } from "../window-bar";
 import { BriefForm } from "./BriefForm";
-import type { CreativeAssistant, CreativeScreen } from "./MakePanel";
-import { ProjectView } from "./ProjectView";
+import type { AddedFile, CreativeAssistant, CreativeScreen, MakePanelMakers } from "./MakePanel";
+import { ProjectView, picturesOf } from "./ProjectView";
 import type { ProjectCreations } from "./use-project-media";
 
 const POLL_LIST_MS = 3000;
@@ -31,6 +32,12 @@ export type CreativeProps = {
   songs: () => Promise<CreativeSong[]>;
   /** the chat model button: the plan is written by the model the person chose */
   model?: ReactNode;
+  /** the model button of a tab of the Make panel, when it is not the chat's */
+  modelOfTab?: (tab: string) => ReactNode | undefined;
+  /** the tabs of the Make panel that are made here, by the window that has the engine */
+  makers?: MakePanelMakers;
+  /** add a file of the person's to their library */
+  addFile?: (file: File) => Promise<AddedFile>;
   onMakeSong?: () => void;
   /** a project to open at once, from the Library */
   open?: string | null;
@@ -57,6 +64,9 @@ export function Creative({
   api,
   songs,
   model,
+  modelOfTab,
+  makers,
+  addFile,
   onMakeSong,
   open = null,
   assistant,
@@ -67,6 +77,7 @@ export function Creative({
   const [projects, setProjects] = useState<CreativeProject[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [gone, setGone] = useState<CreativeProject | null>(null);
+  const [withMade, setWithMade] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -99,6 +110,9 @@ export function Creative({
             songs={songs}
             id={view.id}
             model={model}
+            modelOfTab={modelOfTab}
+            makers={makers}
+            addFile={addFile}
             assistant={assistant}
             creations={creations}
             onBack={() => setView({ at: "list" })}
@@ -125,7 +139,7 @@ export function Creative({
                 <h1 className="m-0 font-semibold text-xl">Creative Studio</h1>
                 <p className="m-0 text-muted-foreground">
                   Turn a song and an idea into a plan of shots, cut on the beat, that you can
-                  change. Nothing is drawn yet: this stage makes the plan.
+                  change, then see it as pictures over the song.
                 </p>
               </div>
               <Button type="button" onClick={() => setView({ at: "new" })}>
@@ -183,6 +197,7 @@ export function Creative({
             api={api}
             songs={songs}
             onMakeSong={onMakeSong}
+            pictures={picturesOf(creations)}
             onCancel={() => setView({ at: "list" })}
             submitLabel="Plan it"
             onSubmit={start}
@@ -197,9 +212,18 @@ export function Creative({
           onConfirm={() => {
             const id = gone.id;
             setGone(null);
-            void api.remove(id).then(refresh);
+            setWithMade(false);
+            void api.remove(id, withMade).then(refresh);
           }}
-        />
+        >
+          {Object.values(gone.shots?.takes ?? {}).some((t) => t.length > 0) ? (
+            <Checkbox
+              label="Also delete the pictures made for this project from your Library"
+              checked={withMade}
+              onCheckedChange={setWithMade}
+            />
+          ) : null}
+        </ConfirmDialog>
       ) : null}
     </TopBarSlot>
   );

@@ -601,7 +601,9 @@ async def test_the_ask_tab_reads_the_plan_as_data_and_can_undo(tmp_path: Path):
         "creative.read_project", {"project_id": item, "shot_id": first}, "window", actor=ME
     )
     assert read.status == "ok", read.text
-    assert read.output["actions"] == ["creative.edit_plan", "creative.undo"]
+    assert read.output["actions"] == [
+        "creative.edit_plan", "creative.undo", "creative.redo_shot", "creative.make_shots",
+    ]  # fmt: skip
     brief = read.output["brief"]
     assert f"{first} (selected)" in brief and f'"This shot" means {first}.' in brief
     assert "as data" in brief and json.dumps(trick) in brief, "quoted, under the guide"

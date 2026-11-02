@@ -43,7 +43,20 @@
    "add from the library",
    "put this in the project"
   ],
-  "body": "# Add to a project\n\nAction: `creative.add_media`\n\n## What it is for\n\nMake a picture, clip, song, speech, lip sync, 3D model or motion graphic from the Library part of a project in Creative Studio, so it shows in that project's media rail. Nothing is copied: it stays in the Library.\n\n## Steps in the app\n\n1. Open the project in **Creative Studio**.\n2. Select a shot, if it is meant for one.\n3. Open the **Add** tab and choose the thing.\n\n## Fields\n\n- `project_id`: The project.\n- `kind`: `image`, `video`, `track`, `speech`, `lipsync`, `model3d` or `composition`.\n- `item_id`: The thing in the Library.\n- `shot_id`: The shot it is meant for, if any.\n\n## Limits\n\n- Dropping in a file from outside the Library comes with the Shots step.\n- Being in the rail does not put a thing in the video yet: the Shots and Cut steps do that.\n\n## Needs\n\n- The thing in your Library.\n\n## Examples\n\n- Add a picture of the red barn to shot 3.\n\n## Problems\n\n- \"That is not in the library\": it was deleted."
+  "body": "# Add to a project\n\nAction: `creative.add_media`\n\n## What it is for\n\nMake a picture, clip, song, speech, lip sync, 3D model or motion graphic from the Library part of a project in Creative Studio, so it shows in that project's media rail. Nothing is copied: it stays in the Library.\n\n## Steps in the app\n\n1. Open the project in **Creative Studio**.\n2. Select a shot, if it is meant for one.\n3. Open the **Add** tab and choose the thing.\n\n## Fields\n\n- `project_id`: The project.\n- `kind`: `image`, `video`, `track`, `speech`, `lipsync`, `model3d` or `composition`.\n- `item_id`: The thing in the Library.\n- `shot_id`: The shot it is meant for, if any.\n\n## Limits\n\n- Added to a selected shot, a picture or clip is a version of it. It is used only if the shot had none; choose it under\n  **Shots** otherwise.\n\n- Dropping in a file from outside the Library comes with the Shots step.\n- Being in the rail does not put a thing in the video yet: the Shots and Cut steps do that.\n\n## Needs\n\n- The thing in your Library.\n\n## Examples\n\n- Add a picture of the red barn to shot 3.\n\n## Problems\n\n- \"That is not in the library\": it was deleted."
+ },
+ {
+  "action": "creative.choose_take",
+  "title": "Choose which version of a shot is used",
+  "screen": "creative",
+  "synonyms": [
+   "use the earlier picture",
+   "go back to the first take",
+   "choose a take",
+   "use this take",
+   "which picture is used"
+  ],
+  "body": "# Choose which version of a shot is used\n\nAction: `creative.choose_take`\n\n## What it is for\n\nChoose which still or clip of a shot is used in the preview. Nothing replaces the chosen one unless you ask.\n\n## Steps in the app\n\n1. Open **Creative Studio**, open a project and go to **Shots**.\n2. Select a shot.\n3. Choose one of the versions under its picture.\n\n## Fields\n\n- `project_id`: The project.\n- `shot_id`: The shot.\n- `take_id`: The take.\n\n## Limits\n\n- A shot has versions once it has been made more than once, or something was added or made for it in the panel.\n\n## Needs\n\n- A shot with a take.\n\n## Examples\n\n- Use the first picture of this shot again.\n\n## Problems\n\n- *The picture is gone.* It was deleted from your Library; the shot shows as having no picture."
  },
  {
   "action": "creative.edit_plan",
@@ -60,6 +73,21 @@
    "undo a plan change"
   ],
   "body": "# Change a plan\n\nAction: `creative.edit_plan`\n\n## What it is for\n\nChange the plan of a project in Creative Studio: what a shot shows, whether it holds, animates or sings,\nits place or camera; remove or add a shot; move a cut by whole beats. The plan stays whole: the shots\nstill cover the song from start to end, and only people of the cast appear. Each change can be undone.\n\n## Steps in the app\n\n1. Open **Creative Studio** and open a project.\n2. Change the words of a shot, its motion or its place. Use the arrows to move a cut by one beat, or\n   remove or add a shot.\n3. Choose **Undo** to take a change back.\n\nOr ask in the **Ask** tab: select a shot and say what should change. The change applies at once, and its card\nhas its own **Undo**.\n\n## Fields\n\n- `project_id`: The project.\n- `edits`: The changes, in order. Each has `op`: `set_shot` (with `shot_id` and the fields to change),\n  `delete_shot` (`shot_id`), `add_shot` (`after`, a shot's id, and `shows`) or `move_cut` (`shot_id` and\n  `by_beats`, a whole number; the cut at the end of that shot moves).\n\n## Limits\n\n- A change that would break the plan is refused as a whole, and nothing changes.\n- Cuts move by whole beats, so they stay on the music. Dragging comes later.\n- Changing how fast it cuts means planning again.\n\n## Needs\n\n- A project with a plan.\n\n## Examples\n\n- In my dawn drive project, make shot 3 animate.\n- Move the cut after shot 5 one beat later and remove shot 6.\n\n## Problems\n\n- **That would leave a shot with no length** A cut cannot move past the next one. Move it fewer beats.\n- **The last shot ends with the song** The end of the last shot cannot move.\n- **There is no plan to change yet** Plan the project first."
+ },
+ {
+  "action": "creative.make_shots",
+  "title": "Make the stills of a plan",
+  "screen": "creative",
+  "synonyms": [
+   "make the stills",
+   "draw the shots",
+   "make pictures for my plan",
+   "make a picture for every shot",
+   "draw the plan",
+   "see the plan as pictures",
+   "go on with the stills"
+  ],
+  "body": "# Make the stills of a plan\n\nAction: `creative.make_shots`\n\n## What it is for\n\nMake a picture for every shot of a plan that has none, as one job. Each picture is saved the moment it is\nmade and goes into your Library, tagged with the project and the shot.\n\n## Steps in the app\n\n1. Open **Creative Studio**, open a project and choose **Make the stills**.\n2. Read what it will take: how many stills, how long, how much of the disk.\n3. Keep **From reference pictures**, or choose **Plain** to go about twice as fast.\n4. Choose **Start**. Choose **Stop** at any time: what was made is kept, and **Go on** makes only what is missing.\n\n## Fields\n\n- `project_id`: The project.\n- `mode`: `reference` (the default) keeps faces steadier; `plain` takes about half the time.\n- `redo_out_of_date`: Also make again the stills whose shot changed.\n\n## Limits\n\n- A 3-minute song has about 48 shots: about 30 minutes from reference pictures, about 15 plain, on a fast Mac.\n- Reference pictures hold a face well enough for a draft, not for someone who must be recognised every time.\n- A person seen only in photos is never drawn as there in person.\n- A shot's Animate or Sing shows as a still until the Cut step.\n- Every still is a picture in your Library. A 48-shot project adds 48 pictures.\n\n## Needs\n\n- A project with a plan, and a picture model. Reference pictures use a model that can take two pictures.\n\n## Examples\n\n- Make the stills for my dawn drive project.\n- Draw every shot of this plan.\n\n## Problems\n\n- *Stops with \"The picture model is not ready\".* Choose a picture model with the model button at the top.\n- *Stops after three failures in a row.* Something is wrong with the model; what was made is kept.\n- *Refused for room on the disk.* Make room, then start again."
  },
  {
   "action": "creative.plan",
@@ -79,6 +107,20 @@
   "body": "# Plan a music video\n\nAction: `creative.plan`\n\n## What it is for\n\nTurn a song and an idea into a plan you can change: the cuts follow the beats, and each shot says what\nis seen, who is in it, where, how the camera moves and whether it holds or moves. Only words are made at\nthis stage, no pictures or clips. Your typed lyrics stay exactly as you wrote them.\n\n## Steps in the app\n\n1. Open **Creative Studio**.\n2. Choose **New project**. Pick a song from Your music, say what the video is about, and add the look,\n   the people and the places. Type the song's words if you have them. Choose the shape and how fast it\n   cuts.\n3. Choose **Plan it**. You can stop at any time and go on later from where it stopped.\n4. Read the plan, then change it: see `creative.edit_plan`.\n\n## Fields\n\n- `brief.track_id`: The song in Your music.\n- `brief.idea`: What the video is about.\n- `brief.style`: The look, in your own words.\n- `brief.cast`: The people, each with a `name`, fixed words for how they look (`look`) and\n  `photos_only` when they are only ever seen in photographs.\n- `brief.places`: The places, in the order the story visits them.\n- `brief.lyrics`: The words of the song, typed.\n- `brief.shape`: landscape, portrait or square.\n- `brief.cut_speed`: From -2 (few long shots) to 2 (many short ones). 0 is the middle.\n- `title`: A name for the project.\n\n## Limits\n\n- The time depends on the chat model you chose. Measured on an M5 Pro with Qwen3-8B: 44 s for a 3-minute\n  song, 31 to 49 s for a 90 second one. A 27B model on Ollama took about 9 minutes for 90 seconds.\n- The writing is a first draft. Details can drift from shot to shot, and some lines cannot be filmed;\n  expect to change some of them. A shot the model could not write gets plain words and a mark, so you\n  can see which ones to rewrite.\n- Changing how fast it cuts means planning again.\n- At this stage nothing is drawn. Shots and the cut come in later stages.\n- Desktop only for now.\n\n## Needs\n\n- Music analysis set up (about 970 MB, shown before it starts).\n- A language model, chosen with the model button.\n- A song in Your music.\n\n## Examples\n\n- Plan a music video for my song \"Drive home\": a woman drives home along the coast at dawn.\n- Make a shot list for this track, vertical, with fast cuts.\n\n## Problems\n\n- **The plan stopped when the app closed** It keeps what it had. Open the project and choose **Go on**.\n- **Choose a language model first** The plan is written by the model you chose.\n- **It is very slow** Choose a smaller chat model with the model button; 8B is the size it was measured on.\n- **Some shots are marked plain** The model's sentence did not pass the checks, so the shot says what the\n  beat says. Rewrite it, or choose **Try another idea** on that part.\n- **A plan is already being made** One plan at a time. Wait for it or stop it."
  },
  {
+  "action": "creative.preview",
+  "title": "Preview a music video",
+  "screen": "creative",
+  "synonyms": [
+   "preview the video",
+   "preview the whole song",
+   "see the draft",
+   "join the shots",
+   "watch the music video draft",
+   "play it over the song"
+  ],
+  "body": "# Preview a music video\n\nAction: `creative.preview`\n\n## What it is for\n\nJoin the chosen stills into a video over the song, with a camera move on each and cuts on the plan's times. It is\na fast draft to watch, not the finished video.\n\n## Steps in the app\n\n1. Open **Creative Studio**, open a project and go to **Shots**.\n2. Choose **Preview the whole song**.\n3. Watch it above the stills. After a change, it says the shots have changed since, and you can make it again.\n\n## Fields\n\n- `project_id`: The project.\n\n## Limits\n\n- It takes under a minute on a fast Mac and replaces the last preview.\n- A shot with no still is black, and the screen says how many.\n- No captions, and no singing or moving clips unless you added one to a shot. Those come with the Cut step.\n- The preview is 1280 by 720 at 24 frames a second (or the same size for portrait and square).\n\n## Needs\n\n- A project with at least one still.\n\n## Examples\n\n- Show me the whole song with the pictures so far.\n\n## Problems\n\n- *The song is not in Your music any more.* The preview needs it. Choose another song in the brief."
+ },
+ {
   "action": "creative.read_project",
   "title": "Read a plan",
   "screen": "creative",
@@ -89,6 +131,20 @@
    "show the shots"
   ],
   "body": "# Read a plan\n\nAction: `creative.read_project`\n\n## What it is for\n\nRead the plan of a project in Creative Studio: its idea, its cast, its parts, and every shot with its times, motion, camera, place and words. The assistant in the project's Ask tab works from this.\n\n## Steps in the app\n\n1. Open **Creative Studio** and open a project. The plan is on the screen.\n\n## Fields\n\n- `project_id`: The project.\n- `shot_id`: The shot the person has selected, if any.\n\n## Limits\n\n- It only reads.\n\n## Needs\n\n- Nothing else.\n\n## Examples\n\n- \"What happens in the second part?\"\n\n## Problems\n\n- \"That project is not in the library\": it was deleted, or it belongs to someone else."
+ },
+ {
+  "action": "creative.redo_shot",
+  "title": "Make a shot's still again",
+  "screen": "creative",
+  "synonyms": [
+   "redo this shot",
+   "make this picture again",
+   "another take",
+   "try this still again",
+   "draw this shot again",
+   "I do not like this picture"
+  ],
+  "body": "# Make a shot's still again\n\nAction: `creative.redo_shot`\n\n## What it is for\n\nMake another still of one shot. The old one stays as a version you can go back to, and the new one is used.\n\n## Steps in the app\n\n1. Open **Creative Studio**, open a project and go to **Shots**.\n2. Select a shot and choose **Make it again**.\n3. Choose another version under the picture to go back to it.\n\nOr ask in the **Ask** tab: select a shot and ask for another picture of it.\n\n## Fields\n\n- `project_id`: The project.\n- `shot_id`: The shot.\n- `mode`: `reference` (the default) or `plain`.\n\n## Limits\n\n- It takes under a minute on a fast Mac.\n- Only one thing is made for a project at a time.\n\n## Needs\n\n- A project with a plan, and a picture model.\n\n## Examples\n\n- Make shot 4 again.\n- I do not like this picture, try another.\n\n## Problems\n\n- *The same fault comes back.* Change the words of the shot first, then make it again."
  },
  {
   "action": "creative.remove_media",

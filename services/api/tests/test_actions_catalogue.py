@@ -174,7 +174,8 @@ def test_the_first_set_is_there(catalogue):
     # 69 with motion.read_brand, set_brand, use_brand and start_from (ADR-0096 MX7)
     # 72 with music.analyse, creative.plan and creative.edit_plan (ADR-0090 CS1)
     # 76 with creative.read_project, undo, add_media and remove_media (ADR-0090 screen)
-    assert 35 <= len(ids) <= 76
+    # 80 with creative.make_shots, redo_shot, choose_take and preview (ADR-0090 CS2)
+    assert 35 <= len(ids) <= 80
     for expected in (
         "library.search", "library.list", "library.get", "library.export", "library.rename",
         "library.delete", "image.generate", "image.edit", "video.generate", "video.animate",
@@ -326,3 +327,20 @@ def test_the_assistants_feature_list_is_current():
     )
     wheres = {str(row["where"]) for row in assistant_features.build()}
     assert {"Video › Create", "Voice › Text to speech", "3D model", "Train models"} <= wheres
+    assert {"Creative Studio", "Motion graphics"} <= wheres  # single menu items below the groups
+
+
+def test_screens_with_several_jobs_say_what_they_are_for():
+    """Train has four cards and two actions, so its sentence must name all four jobs.
+    Creative Studio and Motion graphics are one job in steps. The assistant says no less."""
+    from wasifyai_api import assistant_features
+
+    rows = {str(r["screen"]): r for r in assistant_features.build()}
+    assert set(assistant_features.ABOUT) <= set(rows), "ABOUT names a screen that has no row"
+    train = str(rows["train"]["about"])
+    for job in ("character or style", "writing", "decides", "video"):
+        assert job in train, job
+    motion = str(rows["motion"]["about"])
+    assert "scenes" in motion and "make the video" in motion
+    creative = str(rows["creative"]["about"])
+    assert "music video" in creative and "plan" in creative

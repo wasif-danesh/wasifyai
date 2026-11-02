@@ -4,24 +4,29 @@ Every query is scoped by tenant, product and user, and every link is signed fres
 be opened any time (the links themselves expire after an hour)."""
 
 import asyncio
+import logging
 import re
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, ConfigDict
 from wasifyai_platform_sdk import (
     Identity,
     RouteDeps,
     SaveRefused,
     SaveTo,
+    UploadError,
     build_enhance_router,
     parse_ids,
+    process_image,
     write_to_path,
 )
 
 from wasifyai_image import prompts
-from wasifyai_image.images import ImageRecord, ImageStore, image_store
+from wasifyai_image.images import ImageRecord, ImageStore, image_store, thumbnail_of
+from wasifyai_image.index import index_text
 
 PRODUCT_ID = "wasifyai-image"
 CONTENT_TYPES = {
@@ -82,6 +87,10 @@ def save_copy(folder: Path, stem: str, ext: str, data: bytes) -> Path:
             path = folder / f"{stem}-{n}.{ext}"
 
 
+log = logging.getLogger(__name__)
+MAX_IMPORT_BYTES = 40 * 2**20
+
+
 def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
     """`store` is injectable for tests; production reads the shared database."""
     router = APIRouter(tags=[PRODUCT_ID])
@@ -100,6 +109,58 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
             thumb_url=await deps.storage.url(image.thumb_key),
             recipe=image.recipe, favourite=image.favourite, source_id=image.source_id,
         )  # fmt: skip
+
+    @router.post("/images/import", response_model=ImageSummary, status_code=201)
+    async def import_image(
+        file: UploadFile = File(...),  # noqa: B008
+        identity: Identity = Depends(deps.identity),
+    ) -> ImageSummary:
+        """Add a picture of the person's to their library. It is decoded and stored again as a clean
+        PNG: the file is never kept as sent."""
+        if deps.storage is None:
+            raise HTTPException(503, "file storage is not available")
+        limiter = deps.state.upload_limiter
+        if limiter is not None and not await limiter.allow(identity.tenant_id, identity.user_id):
+            raise HTTPException(429, "Too many uploads. Please wait a while and try again.")
+        data = await file.read(MAX_IMPORT_BYTES + 1)
+        if not data:
+            raise HTTPException(422, "No file was sent.")
+        if len(data) > MAX_IMPORT_BYTES:
+            raise HTTPException(
+                413, f"That file is too large. The limit is {MAX_IMPORT_BYTES // 2**20} MB."
+            )
+        try:
+            clean = await asyncio.to_thread(process_image, data)
+        except UploadError as e:
+            raise HTTPException(e.status, e.message) from None
+        width, height, thumb = await thumbnail_of(clean.png)
+        image_id = str(uuid4())
+        title = re.sub(r"\s+", " ", re.sub(r"[_\-\x00-\x1f]+", " ", Path(file.filename or "").stem))
+        title = title.strip()[:120] or "My picture"
+        image_key, thumb_key = f"{image_id}/image.png", f"{image_id}/thumb.jpg"
+        with deps.acting_as(identity, PRODUCT_ID):
+            await deps.storage.put(image_key, clean.png, "image/png")
+            await deps.storage.put(thumb_key, thumb, "image/jpeg")
+        await images().add(
+            ImageRecord(
+                id=image_id, tenant_id=identity.tenant_id, product_id=PRODUCT_ID,
+                user_id=identity.user_id, thread_id=None, run_id=None, mode="import", prompt=title,
+                width=width, height=height, image_key=image_key, thumb_key=thumb_key,
+            )
+        )  # fmt: skip
+        index = deps.state.creation_index  # found in search at once (ADR-0041)
+        if index is not None:
+            try:
+                await index.index(
+                    identity.tenant_id, PRODUCT_ID, identity.user_id, "image", image_id,
+                    index_text(title),
+                )  # fmt: skip
+            except Exception:
+                log.warning("the added picture could not be put in search", exc_info=True)
+        made = await images().get(identity.tenant_id, identity.user_id, image_id)
+        assert made is not None
+        with deps.acting_as(identity, PRODUCT_ID):
+            return await summary(made)
 
     @router.get("/images", response_model=ImagePage)
     async def list_images(

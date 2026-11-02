@@ -169,6 +169,9 @@ export type VideoWorkspaceProps = {
   videos?: Pick<VideosApi, "exportCopy" | "list"> & Partial<Pick<VideosApi, "importVideo">>;
   /** Left of the top bar: the model button. */
   header?: ReactNode;
+  /** inside another screen's panel: no top bar and no recent, and what is made is handed over */
+  panel?: boolean;
+  onMade?: (id: string) => void;
   /** In the ask column, above the fields: setup notices for this app (engine, model, memory). */
   notices?: ReactNode;
   /** When set, the fields are shown but making is refused with this reason. */
@@ -205,6 +208,8 @@ export function VideoWorkspace({
   runs,
   videos,
   header,
+  panel = false,
+  onMade,
   notices,
   blockedReason = null,
   beforeMake,
@@ -263,6 +268,12 @@ export function VideoWorkspace({
     }
   }, [videos]);
   const resultId = phase === "done" ? state.result?.videoId : undefined;
+  const handedOver = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!resultId || handedOver.current === resultId) return;
+    handedOver.current = resultId;
+    onMade?.(resultId);
+  }, [resultId, onMade]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: a finished clip is the trigger to read again
   useEffect(() => {
     void loadRecent();
@@ -555,12 +566,13 @@ export function VideoWorkspace({
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* the model button, in the top bar (ADR-0093, stage U2) */}
-      {header ? (
+      {header && !panel ? (
         <PageHeader className="flex h-14 shrink-0 items-center gap-4 border-b px-6 pt-1">
           <div className="flex min-w-0 items-center gap-2 ps-2 text-sm">{header}</div>
         </PageHeader>
       ) : null}
       <MakeScreen
+        panel={panel}
         title={COPY[mode].title}
         lead={COPY[mode].blurb}
         ask={

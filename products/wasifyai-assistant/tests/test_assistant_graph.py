@@ -811,3 +811,45 @@ def test_the_assistant_is_told_where_the_features_are_but_only_those_this_engine
     assert features_prompt(set()) == ""
     system = model_messages([], features=said)[0]["content"]
     assert system.startswith("You are Wasify AI") and "Video › Create" in system
+
+
+def test_the_assistant_is_told_what_train_creative_studio_and_motion_graphics_are_for():
+    """The model reads `actions_prompt`; the screens' sentences must be in it, and only for the
+    screens this engine serves, so the assistant can describe the whole app."""
+    from wasifyai_assistant.features import actions_prompt
+
+    said = actions_prompt({"train.start", "creative.plan", "motion.make", "image.generate"})
+    assert ". Creative Studio: turn a song and an idea into a plan for a music video" in said
+    assert "Motion graphics: describe a video" in said
+    train = said.split("Train models: ")[1].split("\n")[0]
+    for job in ("pictures", "writing", "decides", "video"):
+        assert job in train, job
+    assert "leave none out" in said  # asked what the app can do, it names every heading and screen
+    assert said.index("Actions you may propose") < said.index(
+        "The app has"
+    )  # the screens come last
+    only_train = actions_prompt({"train.start"})
+    assert "Creative Studio" not in only_train and "Train models: teach it" in only_train
+    assert actions_prompt(set()) == ""
+
+
+def test_a_message_that_names_a_screen_with_several_jobs_gets_that_screens_line_again():
+    from wasifyai_assistant.features import focus_prompt
+
+    served = {"train.start", "creative.plan", "motion.make", "image.generate"}
+    for text, where in (
+        ("What is Creative Studio?", "Creative Studio"),
+        ("what can I teach it in train models", "Train models"),
+        ("Tell me about the Motion graphics screen", "Motion graphics"),
+    ):
+        said = focus_prompt(text, served)
+        assert f"about {where}." in said and "never from general knowledge" in said, text
+    assert "four ways" in focus_prompt("What can I teach it in Train?", served)  # the word alone
+    assert focus_prompt("What is Creative Studio?", {"train.start"}) == ""  # not served here
+    assert focus_prompt("Make a picture of a fox", served) == ""
+    messages = model_messages(
+        [Message("m", "c", 1, "user", [{"type": "text", "text": "What is Creative Studio?"}])],
+        features="",
+        served=served,
+    )
+    assert "about Creative Studio." in messages[0]["content"]

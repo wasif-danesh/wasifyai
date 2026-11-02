@@ -787,6 +787,17 @@ cases:
     expect: propose_action
     say: "Undo that."
     action: creative.undo
+  - id: cs-redo
+    kind: creative
+    expect: propose_action
+    say: "I do not like this picture. Make it again."
+    action: creative.redo_shot
+    result: { shot: s3 }
+  - id: cs-make-all
+    kind: creative
+    expect: propose_action
+    say: "Draw every shot of the plan now."
+    action: creative.make_shots
   - id: cs-question
     kind: creative
     expect: none

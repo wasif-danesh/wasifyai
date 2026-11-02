@@ -5,6 +5,7 @@ never typed by hand. Only the screens whose actions this engine serves are liste
 an app that does not have one is not sent to it."""
 
 import json
+import re
 from collections.abc import Collection
 from functools import cache
 from pathlib import Path
@@ -29,13 +30,61 @@ def _rows() -> list[dict[str, list[str] | str]]:
         return []
 
 
-def features_prompt(served: Collection[str]) -> str:
-    """The sentence about the app's screens, for the screens this engine serves ("" if none)."""
+def _screen_lines(served: Collection[str]) -> list[str]:
+    """One line per screen this engine serves: its menu path, and what it is for."""
     lines = []
     for row in _rows():
         if any(a in served for a in row["actions"]):
-            lines.append(f"{row['where']}: {'; '.join(row['does']).lower()}")
+            says = row.get("about") or "; ".join(row["does"]).lower()  # type: ignore[arg-type]
+            lines.append(f"{row['where']}: {says}")
+    return lines
+
+
+def features_prompt(served: Collection[str]) -> str:
+    """The sentence about the app's screens, for the screens this engine serves ("" if none)."""
+    lines = _screen_lines(served)
     return FEATURES_PROMPT.format(list=" | ".join(lines)) if lines else ""
+
+
+SCREENS_PROMPT = (
+    " The app has {n} screens in its side menu. Each line is its menu path, then what it is "
+    "for:\n{list}\nWhen someone asks what the app can do, or to describe the products, give one "
+    "short sentence for each menu heading (the words before the first ›) and one for each screen "
+    "that has no heading, in this order, and leave none out. When they ask about one screen, "
+    "say everything its line says."
+)
+
+
+def screens_prompt(served: Collection[str]) -> str:
+    """What each screen of the app is for, so the assistant can describe the whole app, not only
+    the actions it may propose ("" if this engine serves none)."""
+    lines = _screen_lines(served)
+    if not lines:
+        return ""
+    numbered = "\n".join(f"{i}. {line}" for i, line in enumerate(lines, 1))
+    return SCREENS_PROMPT.format(n=len(lines), list=numbered)
+
+
+FOCUS_PROMPT = (
+    " The person's last message is about {where}. Its line in the list above is the answer: "
+    "{says}. Answer from that line and the guides; never from general knowledge."
+)
+
+
+def focus_prompt(text: str, served: Collection[str]) -> str:
+    """For a message that names a screen with several jobs (Train, Creative Studio, Motion
+    graphics: the rows that have `about`), that screen's line again, last in the prompt, so even
+    a small model answers from it and not from what it thinks such a screen is ("" if none)."""
+    said = text.lower()
+    out = []
+    for row in _rows():
+        about = row.get("about")
+        if not about or not any(a in served for a in row["actions"]):
+            continue
+        label = str(row["where"]).lower()
+        if label in said or re.search(rf"\b{re.escape(str(row['screen']))}\b", said):
+            out.append(FOCUS_PROMPT.format(where=row["where"], says=about))
+    return "".join(out)
 
 
 def where_of(action_id: str) -> str:
@@ -72,4 +121,5 @@ def actions_prompt(served: Collection[str]) -> str:
             continue
         where = where_of(action_id)
         lines.append(f"{action_id}: {named[action_id]}" + (f"; {where}" if where else ""))
-    return ACTIONS_PROMPT.format(list=" | ".join(lines)) if lines else ""
+    actions = ACTIONS_PROMPT.format(list=" | ".join(lines)) if lines else ""
+    return actions + screens_prompt(served)  # last, so a small model still has it in mind

@@ -10,6 +10,7 @@ import asyncio
 import logging
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from wasifyai_platform_sdk import Identity, RouteDeps, RunContext, search_text, set_context
@@ -17,6 +18,7 @@ from wasifyai_platform_sdk.context import reset_context
 
 from wasifyai_creative.document import index_words
 from wasifyai_creative.layout import lay_out
+from wasifyai_creative.shots import Refused, ShotJobs
 from wasifyai_creative.store import CreativeStore
 from wasifyai_creative.writer import PlanWriter, WriterFailed, rewrite_part, write_plan
 
@@ -29,14 +31,6 @@ MODEL_FAILED = "The model did not answer. Check the chat model and try again."
 
 class NotAvailable(Exception):
     """This deployment has no Creative Studio (desktop first)."""
-
-
-class Refused(Exception):
-    """A request that cannot be done now, with the sentence the person is shown."""
-
-    def __init__(self, code: str, message: str):
-        super().__init__(message)
-        self.code, self.message = code, message
 
 
 def store_for(state: Any) -> CreativeStore:
@@ -79,6 +73,7 @@ class PlanJobs:
     def __init__(self, deps: RouteDeps):
         self._deps = deps
         self._jobs: dict[str, tuple[str, asyncio.Task[None]]] = {}
+        self.shots = ShotJobs(deps, lambda: store_for(deps.state), self.active)
 
     @staticmethod
     def _who(identity: Identity) -> str:
@@ -109,6 +104,8 @@ class PlanJobs:
     def _begin(self, identity: Identity, project_id: str, stage: str, work: Any) -> None:
         if self.active(identity) is not None:
             raise Refused("busy", "A plan is being written. Wait for it, or stop it first.")
+        if self.shots.active(identity) is not None:
+            raise Refused("busy", "Pictures are being made. Wait for them, or stop them first.")
         store_for(self._deps.state).begin(project_id, stage)
 
         async def run() -> None:
@@ -226,10 +223,29 @@ class PlanJobs:
         await self._guarded(identity, row, work)
 
 
-async def delete_project(deps: RouteDeps, identity: Identity, project_id: str) -> bool:
-    """Stops what is being written, removes the project and takes it out of search. The song stays."""
-    await manager_for(deps).stop_and_wait(identity, project_id)
-    gone = store_for(deps.state).delete(identity.tenant_id, identity.user_id, project_id)
-    if gone:
-        await deps.unindex(identity, PRODUCT_ID, project_id)
-    return gone
+async def delete_project(
+    deps: RouteDeps, identity: Identity, project_id: str, *, with_media: bool = False
+) -> bool:
+    """Stops what is being made, removes the project and takes it out of search. The song stays, and so does
+    what was made for it unless `with_media` says the person asked for that to go too."""
+    jobs = manager_for(deps)
+    await jobs.stop_and_wait(identity, project_id)
+    await jobs.shots.stop_and_wait(identity, project_id)
+    store = store_for(deps.state)
+    media = store.media_of(project_id)
+    preview = store.preview_of(project_id)
+    gone = store.delete(identity.tenant_id, identity.user_id, project_id)
+    if not gone:
+        return False
+    await deps.unindex(identity, PRODUCT_ID, project_id)
+    if preview and deps.storage is not None:
+        owner = (identity.tenant_id, PRODUCT_ID, identity.user_id)
+        await deps.storage.delete_for(owner, preview["rel"])
+    executor = deps.state.actions
+    if with_media and executor is not None:
+        ctx = SimpleNamespace(deps=deps, actor=identity, executor=executor)
+        for m in media:
+            kind = executor.library.get(m["kind"])
+            if m["made"] and kind is not None:
+                await kind.delete(ctx, m["item_id"])
+    return True

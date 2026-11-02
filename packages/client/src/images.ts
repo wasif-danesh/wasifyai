@@ -59,6 +59,8 @@ export type ImagesApi = {
   /** Images whose words or meaning match `q`, best first (My creations search, ADR-0041). */
   search(q: string): Promise<ImageSummary[]>;
   get(id: string): Promise<ImageSummary>;
+  /** Add a picture of the person's own to their library. */
+  importImage(file: File): Promise<ImageSummary>;
   remove(id: string): Promise<void>;
   setFavourite(id: string, favourite: boolean): Promise<ImageSummary>;
   /** Save a copy into the person's folder; only the desktop engine offers it. */
@@ -98,6 +100,11 @@ export function createImagesApi(transport: Transport, product = IMAGE_PRODUCT_ID
     },
 
     get: (id) => json<ImageSummary>(`${base}/${encodeURIComponent(id)}`),
+    importImage(file) {
+      const form = new FormData();
+      form.append("file", file);
+      return json<ImageSummary>(`${base}/import`, { method: "POST", body: form });
+    },
 
     async remove(id) {
       const res = await transport.fetch(`${base}/${encodeURIComponent(id)}`, { method: "DELETE" });

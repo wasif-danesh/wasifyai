@@ -43,6 +43,9 @@ function fakeApi(items: ImageSummary[]): ImagesApi & { calls: string[] } {
       const rows = o.favourites ? items.filter((i) => i.favourite) : items;
       return { images: rows, next_before: null };
     },
+    async importImage() {
+      throw new Error("not used");
+    },
     async search() {
       return [];
     },

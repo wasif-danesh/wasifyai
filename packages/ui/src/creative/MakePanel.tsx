@@ -1,7 +1,7 @@
 "use client";
 // The left of the screen: every product as a tab, with arrow keys between them (a sheet under the stage on a
-// phone, with the tabs as a dock). Ask and Add work now. The others say which step brings them and where the
-// same thing is made today.
+// phone, with the tabs as a dock). Image, Video, Add and Ask work now: what they make goes to the shot that is
+// selected. The others say which step brings them and where the same thing is made today.
 import type { CreativeApi, CreativeProject } from "@wasifyai/client";
 import {
   Box,
@@ -12,10 +12,11 @@ import {
   Mic,
   Music,
   Type,
+  Upload,
   Video,
 } from "lucide-react";
 import { Tabs } from "radix-ui";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { ChatScreen } from "../chat/ChatScreen";
 import type { ChatToolResult } from "../chat/thread/use-thread-chat";
 import { cn } from "../cn";
@@ -28,6 +29,8 @@ import { type ProjectCreations, entriesOf } from "./use-project-media";
 
 export type CreativeAssistant = Omit<EditorAssistant, "model">;
 export type CreativeScreen = "image" | "video" | "voice" | "music" | "titles" | "model3d";
+/** A file of the person's, now in their library. */
+export type AddedFile = { kind: string; id: string };
 
 type Waiting = { step: string; today: string };
 const WAITING: Record<CreativeScreen, Waiting> = {
@@ -38,6 +41,11 @@ const WAITING: Record<CreativeScreen, Waiting> = {
   titles: { step: "Titles over the cut come with the Cut step.", today: "Motion graphics" },
   model3d: { step: "3D comes after the Cut step.", today: "3D models" },
 };
+
+/** The tabs made here. The window has the engine and the models, so it draws them; what they make is handed over. */
+export type MakePanelMakers = Partial<
+  Record<"image" | "video", (onMade: (id: string) => void) => ReactNode>
+>;
 
 const TABS: { id: CreativeScreen | "add" | "ask"; label: string; icon: LucideIcon }[] = [
   { id: "image", label: "Image", icon: Image },
@@ -56,7 +64,7 @@ const SUGGESTIONS = [
   "Remove the last shot",
   "Change the place of this shot",
 ];
-const CHANGES_THE_PLAN = /^creative\.(edit_plan|undo)$/;
+const CHANGES_THE_PLAN = /^creative\.(edit_plan|undo|redo_shot|make_shots|choose_take)$/;
 
 export function MakePanel({
   api,
@@ -67,6 +75,10 @@ export function MakePanel({
   creations,
   added,
   problem,
+  tab,
+  onTab,
+  makers,
+  addFile,
   onAdd,
   onOpenScreen,
   onChanged,
@@ -82,13 +94,16 @@ export function MakePanel({
   /** what is already part of the project, as kind:id */
   added: Set<string>;
   problem: string | null;
+  tab: string;
+  onTab: (tab: string) => void;
+  makers?: MakePanelMakers;
+  addFile?: (file: File) => Promise<AddedFile>;
   onAdd: (kind: string, id: string) => void;
   onOpenScreen?: (screen: CreativeScreen) => void;
   onChanged: (toolId: string, action: string) => void;
   onWorking: (working: boolean) => void;
   undoOfTool: (toolId: string) => { undone: boolean; undo: () => void } | null;
 }) {
-  const [tab, setTab] = useState<string>(assistant ? "ask" : "add");
   const [conversation, setConversation] = useState(project.conversation_id ?? null);
   const projectId = project.id;
   const keepConversation = useCallback(
@@ -120,7 +135,7 @@ export function MakePanel({
   return (
     <Tabs.Root
       value={tab}
-      onValueChange={setTab}
+      onValueChange={onTab}
       className="flex h-[34rem] min-h-0 flex-col @4xl:h-full"
     >
       <Tabs.List
@@ -138,27 +153,51 @@ export function MakePanel({
           </Tabs.Trigger>
         ))}
       </Tabs.List>
-      {(Object.keys(WAITING) as CreativeScreen[]).map((screen) => (
-        <Tabs.Content key={screen} value={screen} className="min-h-0 flex-1 overflow-auto p-3">
-          <div className="grid gap-3">
-            <p className="m-0 text-sm">{WAITING[screen].step}</p>
-            <p className={`${hint} m-0`}>
-              Today it is made in {WAITING[screen].today}. Then bring it here with Add.
+      {(["image", "video"] as const).map((screen) => {
+        const maker = makers?.[screen];
+        if (!maker) return null;
+        return (
+          // kept while another tab shows: a picture being made must not be stopped by a click
+          <Tabs.Content
+            key={screen}
+            value={screen}
+            forceMount
+            hidden={tab !== screen}
+            className={cn("min-h-0 flex-1 flex-col", tab === screen ? "flex" : "hidden")}
+          >
+            <p className={`${hint} m-0 border-b px-3 py-1.5`}>
+              {selectedName
+                ? `What you make here is a version of ${selectedName}.`
+                : "Select a shot to make a version for it. Otherwise it joins this project's media."}
             </p>
-            {onOpenScreen ? (
-              <Button type="button" variant="outline" onClick={() => onOpenScreen(screen)}>
-                Open {WAITING[screen].today}
-              </Button>
-            ) : null}
-          </div>
-        </Tabs.Content>
-      ))}
+            {maker((id) => onAdd(screen, id))}
+          </Tabs.Content>
+        );
+      })}
+      {(Object.keys(WAITING) as CreativeScreen[])
+        .filter((screen) => (screen !== "image" && screen !== "video" ? true : !makers?.[screen]))
+        .map((screen) => (
+          <Tabs.Content key={screen} value={screen} className="min-h-0 flex-1 overflow-auto p-3">
+            <div className="grid gap-3">
+              <p className="m-0 text-sm">{WAITING[screen].step}</p>
+              <p className={`${hint} m-0`}>
+                Today it is made in {WAITING[screen].today}. Then bring it here with Add.
+              </p>
+              {onOpenScreen ? (
+                <Button type="button" variant="outline" onClick={() => onOpenScreen(screen)}>
+                  Open {WAITING[screen].today}
+                </Button>
+              ) : null}
+            </div>
+          </Tabs.Content>
+        ))}
       <Tabs.Content value="add" className="min-h-0 flex-1 overflow-auto p-3">
         <AddTab
           creations={creations}
           added={added}
           problem={problem}
           selectedName={selectedName}
+          addFile={addFile}
           onAdd={onAdd}
         />
       </Tabs.Content>
@@ -198,31 +237,92 @@ export function MakePanel({
   );
 }
 
-/** Pick from the library. File drop comes with the Shots step. */
+/** Pick from the library, or drop a file of your own, which then lives in the library too. */
 function AddTab({
   creations,
   added,
   problem,
   selectedName,
+  addFile,
   onAdd,
 }: {
   creations?: ProjectCreations;
   added: Set<string>;
   problem: string | null;
   selectedName: string | null;
+  addFile?: (file: File) => Promise<AddedFile>;
   onAdd: (kind: string, id: string) => void;
 }) {
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [failed, setFailed] = useState(false);
-  useEffect(() => {
+  const [over, setOver] = useState(false);
+  const [adding, setAdding] = useState(0);
+  const [refused, setRefused] = useState<string | null>(null);
+  const read = useCallback(() => {
     if (!creations) return;
     creations
       .recent()
       .then((recent) => setEntries(entriesOf(recent)))
       .catch(() => setFailed(true));
   }, [creations]);
+  useEffect(() => read(), [read]);
+  const take = async (files: Iterable<File>) => {
+    if (!addFile) return;
+    setRefused(null);
+    for (const file of files) {
+      setAdding((n) => n + 1);
+      try {
+        const made = await addFile(file);
+        onAdd(made.kind, made.id);
+      } catch (e) {
+        setRefused(`${file.name}: ${e instanceof Error ? e.message : "it could not be added."}`);
+      } finally {
+        setAdding((n) => n - 1);
+      }
+    }
+    read();
+  };
   return (
     <div className="grid gap-3">
+      {addFile ? (
+        <label
+          data-slot="drop-files"
+          onDragOver={(e) => {
+            e.preventDefault();
+            setOver(true);
+          }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setOver(false);
+            void take(Array.from(e.dataTransfer.files));
+          }}
+          className={cn(
+            "grid cursor-pointer place-items-center gap-1 rounded-md border-2 border-dashed p-4 text-center text-muted-foreground text-xs focus-within:ring-[3px] focus-within:ring-ring/50",
+            over && "border-primary bg-primary/5 text-foreground",
+          )}
+        >
+          <Upload aria-hidden className="size-4" />
+          {adding ? "Adding…" : "Drop a picture, clip or sound here, or choose a file"}
+          <input
+            type="file"
+            multiple
+            accept=".png,.jpg,.jpeg,.webp,video/*,audio/*"
+            aria-label="Choose a picture, clip or sound to add"
+            className="sr-only"
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              void take(files);
+            }}
+          />
+        </label>
+      ) : null}
+      {refused ? (
+        <Notice tone="error" title="It was not added">
+          {refused}
+        </Notice>
+      ) : null}
       <p className={`${hint} m-0`}>
         From your Library{selectedName ? `, marked for ${selectedName}` : ""}. It is not copied.
       </p>

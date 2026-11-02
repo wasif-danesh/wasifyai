@@ -142,6 +142,9 @@ export type ImageWorkspaceProps = {
   images: ImagesApi;
   /** Left of the top bar: the model, for example. */
   header?: ReactNode;
+  /** inside another screen's panel: no top bar and no recent, and what is made is handed over */
+  panel?: boolean;
+  onMade?: (id: string) => void;
   /** Above the form: setup notices for this app. */
   notices?: ReactNode;
   /** Load this recipe into the form once (see `presetOf`). */
@@ -213,6 +216,8 @@ export function ImageWorkspace({
   runs,
   images,
   header,
+  panel = false,
+  onMade,
   notices,
   preset,
   canSave = false,
@@ -288,6 +293,12 @@ export function ImageWorkspace({
 
   // the full record of what was just made: its recipe and favourite flag
   const resultId = state.phase === "done" ? state.result?.imageId : undefined;
+  const handedOver = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!resultId || handedOver.current === resultId) return;
+    handedOver.current = resultId;
+    onMade?.(resultId);
+  }, [resultId, onMade]);
   useEffect(() => {
     if (!resultId) {
       setMade(null);
@@ -640,11 +651,14 @@ export function ImageWorkspace({
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* the model button, in the top bar; the modes and the library are the bar's tabs (ADR-0093, stage U2) */}
-      <PageHeader className="flex h-14 shrink-0 items-center gap-4 border-b px-6 pt-1">
-        <div className="flex min-w-0 items-center gap-2 ps-2 text-sm">{header}</div>
-      </PageHeader>
+      {panel ? null : (
+        <PageHeader className="flex h-14 shrink-0 items-center gap-4 border-b px-6 pt-1">
+          <div className="flex min-w-0 items-center gap-2 ps-2 text-sm">{header}</div>
+        </PageHeader>
+      )}
 
       <MakeScreen
+        panel={panel}
         title={COPY[mode].title}
         lead={COPY[mode].blurb}
         ask={

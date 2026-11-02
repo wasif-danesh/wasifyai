@@ -87,9 +87,39 @@ function project(over: Partial<CreativeProject> = {}): CreativeProject {
     created_at: "",
     updated_at: "",
     live: false,
+    shots: { takes: {}, missing: ["s0", "s1", "s2"], out_of_date: [], run: null, preview: null },
+    shots_live: false,
     ...over,
   };
 }
+
+const take = (id: string, item: string, over = {}) => ({
+  id,
+  kind: "image" as const,
+  item_id: item,
+  mode: "reference",
+  seconds: 30,
+  prompt: "",
+  created_at: "",
+  out_of_date: false,
+  chosen: true,
+  ...over,
+});
+const ESTIMATE = {
+  count: 3,
+  portraits: 1,
+  motions: { Hold: 3, Animate: 0, Sing: 0 },
+  missing: 3,
+  out_of_date: 0,
+  seconds_low: 102,
+  seconds_high: 126,
+  bytes: 10 * 1024 ** 3,
+  free_bytes: 100 * 1024 ** 3,
+  fit: "fits" as const,
+  measured: false,
+  ready: true,
+  step: null,
+};
 
 function api(over: Partial<CreativeApi> = {}): CreativeApi {
   return {
@@ -112,6 +142,13 @@ function api(over: Partial<CreativeApi> = {}): CreativeApi {
     media: vi.fn(async () => []),
     addMedia: vi.fn(async () => []),
     removeMedia: vi.fn(async () => []),
+    characters: vi.fn(async () => []),
+    estimateStills: vi.fn(async () => ESTIMATE),
+    makeStills: vi.fn(async () => project()),
+    stopStills: vi.fn(async () => project()),
+    redoShot: vi.fn(async () => project()),
+    chooseTake: vi.fn(async () => project()),
+    preview: vi.fn(async () => project()),
     ...over,
   };
 }
@@ -341,10 +378,168 @@ describe("Creative Studio", () => {
     expect(await screen.findByText("Write the shots")).toBeInTheDocument();
   });
 
-  it("keeps the step buttons for later stages switched off", async () => {
+  it("keeps the Cut step off and goes to the Shots step with its button", async () => {
+    const user = userEvent.setup();
     render(<Creative api={api()} songs={songs} open="p1" />);
-    expect(await screen.findByRole("radio", { name: "Shots" })).toBeDisabled();
-    expect(screen.getByRole("radio", { name: "Cut" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Make the stills" })).toBeDisabled();
+    expect(await screen.findByRole("radio", { name: "Cut" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Make the stills" }));
+    expect(await screen.findByText("3 stills to make")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview the whole song" })).toBeDisabled();
+  });
+
+  it("says what the stills will take before they start, and starts from reference pictures", async () => {
+    const a = api();
+    const user = userEvent.setup();
+    render(<Creative api={a} songs={songs} open="p1" />);
+    await user.click(await screen.findByRole("radio", { name: "Shots" }));
+    expect(await screen.findByText(/About 2 minutes to 2 minutes/)).toBeInTheDocument();
+    expect(screen.getByText(/1 person gets two pictures first/)).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: "Plain, about twice as fast" }));
+    await waitFor(() => expect(a.estimateStills).toHaveBeenCalledWith("p1", "plain", false));
+    await user.click(screen.getByRole("radio", { name: "From reference pictures" }));
+    await user.click(screen.getByRole("button", { name: "Start" }));
+    expect(a.makeStills).toHaveBeenCalledWith("p1", "reference", false);
+  });
+
+  it("will not start when the picture model is missing or the disk is too small, and says why", async () => {
+    const a = api({
+      estimateStills: vi.fn(async () => ({
+        ...ESTIMATE,
+        ready: false,
+        step: "Choose a picture model first.",
+        fit: "too_big" as const,
+      })),
+    });
+    const user = userEvent.setup();
+    render(<Creative api={a} songs={songs} open="p1" />);
+    await user.click(await screen.findByRole("radio", { name: "Shots" }));
+    expect(await screen.findByText("Choose a picture model first.")).toBeInTheDocument();
+    expect(screen.getByText("There is not enough room on the disk")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+  });
+
+  it("shows the run with its Stop, and what a stop keeps", async () => {
+    const run = {
+      kind: "stills" as const,
+      status: "running" as const,
+      stage: "Making the still of shot 2",
+      finished: 1,
+      total: 3,
+      failed: 0,
+      error: null,
+    };
+    const shots = { takes: {}, missing: ["s1", "s2"], out_of_date: [], preview: null };
+    const a = api({
+      get: vi.fn(async () => project({ shots_live: true, shots: { ...shots, run } })),
+      stopStills: vi.fn(async () =>
+        project({ shots: { ...shots, run: { ...run, status: "stopped" as const } } }),
+      ),
+    });
+    const user = userEvent.setup();
+    render(<Creative api={a} songs={songs} open="p1" />);
+    await user.click(await screen.findByRole("radio", { name: "Shots" }));
+    expect(await screen.findByText("1 of 3")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Stop|Cancel/ }));
+    expect(a.stopStills).toHaveBeenCalledWith("p1");
+    expect(await screen.findByText(/going on makes only what is missing/)).toBeInTheDocument();
+  });
+
+  it("shows the stills with their takes, chooses a take with a click, marks what is out of date, and previews", async () => {
+    const shots = {
+      takes: {
+        s0: [take("a", "pic-1", { chosen: false }), take("b", "pic-2", { out_of_date: true })],
+        s1: [take("c", "pic-1")],
+        s2: [],
+      },
+      missing: ["s2"],
+      out_of_date: ["s0"],
+      run: null,
+      preview: {
+        url: "/preview.mp4",
+        seconds: 6,
+        empty_shots: 1,
+        took_s: 3,
+        created_at: "",
+        current: false,
+      },
+    };
+    const a = api({
+      get: vi.fn(async () => project({ shots })),
+      chooseTake: vi.fn(async () => project({ shots })),
+      redoShot: vi.fn(async () => project({ shots })),
+      preview: vi.fn(async () => project({ shots })),
+      media: vi.fn(async () => [
+        { kind: "image", item_id: "pic-1", shot_id: "s0", created_at: "" },
+      ]),
+    });
+    const creations = {
+      recent: vi.fn(async () => cardsOf([])),
+      cards: vi.fn(async () => cardsOf([picture])),
+    };
+    const user = userEvent.setup();
+    render(<Creative api={a} songs={songs} open="p1" creations={creations} />);
+    await user.click(await screen.findByRole("radio", { name: "Shots" }));
+    expect(await screen.findByText(/1 shot is black, having no still/)).toBeInTheDocument();
+    expect(screen.getByText(/The shots have changed since/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Shot 1, out of date" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Shot 3, no still yet" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Version 1 of shot 1" }));
+    expect(a.chooseTake).toHaveBeenCalledWith("p1", "s0", "a");
+    await user.click(screen.getByRole("button", { name: "Make it again" }));
+    expect(a.redoShot).toHaveBeenCalledWith("p1", "s0", "reference");
+    await user.click(screen.getByRole("button", { name: "Preview the whole song" }));
+    expect(a.preview).toHaveBeenCalledWith("p1");
+  });
+
+  it("gives what a make tab makes to the selected shot, and adds a dropped file", async () => {
+    const a = api({ addMedia: vi.fn(async () => []) });
+    const addFile = vi.fn(async () => ({ kind: "image", id: "new-file" }));
+    const pictureModel = <span>Picture model</span>;
+    const makers = {
+      image: (onMade: (id: string) => void) => (
+        <button type="button" onClick={() => onMade("made-1")}>
+          Pretend it was made
+        </button>
+      ),
+    };
+    const user = userEvent.setup();
+    render(
+      <Creative
+        api={a}
+        songs={songs}
+        open="p1"
+        makers={makers}
+        addFile={addFile}
+        modelOfTab={(tab) => (tab === "image" ? pictureModel : undefined)}
+        model={<span>Chat model</span>}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: "Make the stills" }));
+    expect(await screen.findByText("Picture model")).toBeInTheDocument();
+    expect(screen.getByText(/What you make here is a version of shot 1/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Pretend it was made" }));
+    expect(a.addMedia).toHaveBeenCalledWith("p1", "image", "made-1", "s0");
+    await user.click(screen.getByRole("tab", { name: "Add" }));
+    await user.upload(
+      screen.getByLabelText("Choose a picture, clip or sound to add"),
+      new File(["x"], "mine.png", { type: "image/png" }),
+    );
+    await waitFor(() => expect(addFile).toHaveBeenCalled());
+    await waitFor(() => expect(a.addMedia).toHaveBeenCalledWith("p1", "image", "new-file", "s0"));
+  });
+
+  it("offers people used before and keeps fixed words for objects", async () => {
+    const a = api({
+      list: vi.fn(async () => []),
+      characters: vi.fn(async () => [
+        { name: "Mira", look: "short hair", photos_only: false, pictures: ["x"] },
+      ]),
+    });
+    const user = userEvent.setup();
+    render(<Creative api={a} songs={songs} />);
+    await user.click(await screen.findByRole("button", { name: "New project" }));
+    expect(await screen.findByLabelText("Someone you have used before")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Add an object or place" }));
+    expect(screen.getByLabelText("Name of thing 1")).toBeInTheDocument();
   });
 });

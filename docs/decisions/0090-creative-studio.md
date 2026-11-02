@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (owner, 2026-10-24: "I'll go with your pick" on all seven questions, recorded in "Owner's answers" below). **CS0 is
   done: the owner watched the excerpts on 2026-10-31 and said go (`docs/spikes/creative-cs0.md`). Its results are written into the decisions
-  below. CS1 is built (2026-10-31; "Built" below): a song becomes an editable plan on the desktop. The screen amendment was accepted the same day and its first stage is built ("The screen" under "Built"); CS2 is next.** "Creative Studio" is the owner's working name.
+  below. CS1 is built (2026-10-31; "Built" below): a song becomes an editable plan on the desktop. CS2 is built (2026-11-02): the plan becomes stills and a preview over the song. The screen amendment was accepted the same day and its first stage is built ("The screen" under "Built"); CS2 is next.** "Creative Studio" is the owner's working name.
 - **Order and shared parts:** ADR-0096 (2026-10-31): the Motion graphics editor is built first; its screen frame, media rail, Make panel and docked assistant are shared with this product. The consent, safeguard and terms parts below were removed by ADR-0094.
 - **Date:** 2026-10-24
 - **Asked by:** the owner, 2026-10-24: study Maestro's Creative studio, Director and video editor, **do not use its code**, and plan how to
@@ -321,15 +321,54 @@ The CS1 row of the amendment's stage table, built after the owner accepted it.
 
 **Differs from the mockup:**
 
-- "Review each step" is left out: it does nothing until there are steps to review, in CS2.
+- "Review each step" is left out: it does nothing until there are steps to review (still left out after CS2).
 - Cut speed stays in the brief, because changing it means planning again.
 - Parts keep their headings over the grid of shot cards, because "Try another idea" works per part.
 - The shots' picture areas are empty, and shots are added from a button on each card instead of a last card.
 - The word check's "image" count went from 28 to 30 for the Image tab and the Images menu, the names the owner approved.
 
-**Not built, in their stages:** CS2: the Image and Video tabs, file drop in Add, the preview stage, Shots. CS3: the Music tab, Voice captions, Titles tab, timeline, Cut. CS5: the rest of Voice, Lip sync. CS6: the 3D tab, phone polish. Those tabs say which step brings them and open the screen that makes it today.
+**Not built, in their stages:** CS3: the Music tab, Voice captions, Titles tab, timeline, Cut. CS5: the rest of Voice, Lip sync. CS6: the 3D tab, phone polish. Those tabs say which step brings them and open the screen that makes it today.
 
 **Not checked:** the real Tauri window (a WKWebView stand-in was used). Other chat models: only 8B was evaluated, and the owner's selected 27B on Ollama was not. Qwen3.5-9B was not retested.
+
+### CS2 (2026-11-02; desktop only)
+
+A plan becomes stills and a preview over the song. Measured on this Mac (M5 Pro, 64 GB) with real models: `docs/spikes/creative-cs2-sheet.jpg`
+is a sheet of the preview, and the 3-minute preview itself is `docs/listening/samples/creative-cs2-preview-3min.mp4`.
+
+| Done when | Result |
+|---|---|
+| A 3-minute preview in about the estimated time | 180 s song, 55 shots. The panel said 31.6 to 39.2 min; the stills took **37 min** (reference pictures, mean 38.8 s, 16 to 73 s, with two portraits first). The join took **9 s**, 10 MB. Plan 2.2 min, song 2.3 min |
+| Kill and resume redoes only missing shots | The engine was killed with SIGKILL after 27 stills. It opened as "stopped when the app closed", with 27 kept and 28 missing. Going on made exactly 28: none made again, one take a shot |
+
+**How it works.** `stills.py` holds what a still is asked for, pure: `still_for` (the action and a prompt under the image product's 500 characters, keeping the shot's own
+words first), `inputs_of` (a mark of what a still depends on, so a change marks it out of date), `estimate`. `shots.py` holds the run: `ShotJobs` runs one stills run or
+preview a person at a time, and refuses while a plan is being written (and the other way round). A still is made by the image product's own action with `person_approved`,
+so it is an ordinary picture of the Library, tagged with the project and shot (`media.made`) and kept as a take at once. Stills are the Library's, as the amendment says; the
+earlier "live inside the project" is dropped, so **a 55-shot project adds 55 pictures to the Library**. Deleting a project asks whether they go too.
+
+- **Takes.** The first take of a shot is chosen; Redo chooses its new take, because the person asked. What the Image or Video tab makes, or what is added to a selected shot,
+  is a take that is chosen only if the shot had none. Old takes stay.
+- **People.** A person gets `pictures` (up to three from the Library). In reference mode someone with words and no pictures gets two portraits first. One person uses their two
+  pictures (one picture twice); two people use the first of each. People are kept across projects (`characters`), offered as "Someone you have used".
+- **Seen only in photos.** Left out of the people, their name replaced in the sentence by "someone", or "someone in a photograph" where the sentence names no photo.
+- **Fixed words.** `Brief.fixed` adds a name and words for objects and places, used in every shot that names the thing. In the real run the red car held better than in CS0, though its model still varies.
+- **The honest panel.** Shots by motion, time as a range (corrected from takes once there are some), disk, whether it fits (refused under need + 1 GB, warned under need + 5 GB), and the picture model's readiness; no download starts.
+- **Preview.** ffmpeg, stills with the plan's camera moves, chosen clips trimmed, a missing shot black and counted, frames counted from the song's start so cuts cannot drift. 1280x720 (or the same for portrait and square), 24 fps. It says when the shots have changed since.
+- **Stopping.** Stop or a crash loses only the still under way. Three failures in a row, or a missing model, end the run in words.
+- **Actions** `creative.make_shots`, `redo_shot`, `choose_take`, `preview` (catalogue cap now 80). The Ask tab can call the first two; they ask first. `--only cs-` on real 8B: 13 of 13, twice.
+- **The screen.** Shots is on, Cut stays off. Image and Video tabs are the real make screens in panel layout (`MakeScreen panel`, `onMade`), with Create, Edit, Inpaint, Reference and Create, Animate, Extend; they stay mounted so a run survives a tab change. The model button follows the tab. Add takes dropped files: pictures through a new `POST /images/import` (decoded again as a clean PNG), clips and sound through the existing imports.
+
+**What the real run found:**
+- The writer sometimes writes "Miras face" with no apostrophe, so `who` came out empty, the shot had no person, and a stranger was drawn. Both `who_in` and `stills` now count `Mira's` and `Miras`.
+- "a person in a photograph's face" read badly, hence "someone".
+- The Ask guide needed "there is no creative.add_shot": with four action names, 8B invented that one and `creative.move_cut` (11 of 13 until said).
+- A database of CS1 lacks `media.made`: a guarded migration (schema 2).
+- A hard kill of the engine leaves its ComfyUI child running (a process and memory; a later engine starts its own). This is not new to CS2 and is not fixed here.
+
+**Checked in a browser with the real engine** (walk `creative-shots`, not the Tauri window): a real redo (53 s), takes chosen, the tabs, a real file added as a take that does not replace the chosen one, axe clean on each, no sideways scroll at the window's smallest size.
+
+**Not built:** the good and needs-work marks, "Review each step", Lip sync in the Video tab, a batch of clips (CS4), captions (CS3). **Not checked:** the real window, a person making a picture in the tab and its take landing on the shot with a real model (a stand-in in the screen test), dropped clips and sound with real files, other picture models, whether the preview is good to watch: the owner's watch is the check.
 
 ## Web
 

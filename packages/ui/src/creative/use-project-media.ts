@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { type Entry, latestEntries } from "../creations/model";
 
 const MANY = 200;
+const IDS_A_REQUEST = 50; // the products' list routes take about 2000 characters of ids
 
 /** Every entry of these cards, newest first. */
 export function entriesOf(found: Found): Entry[] {
@@ -35,6 +36,8 @@ export function useProjectMedia(
   creations: ProjectCreations | undefined,
   id: string,
   songId: string | undefined,
+  /** changes when something was made for the project */
+  version = 0,
 ) {
   const [tags, setTags] = useState<ProjectMedia[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -44,12 +47,22 @@ export function useProjectMedia(
     async (now: ProjectMedia[]) => {
       setTags(now);
       if (!creations) return;
-      const ids: Partial<Record<CreationKind, string[]>> = songId ? { track: [songId] } : {};
-      for (const m of now) {
-        const kind = m.kind as CreationKind;
-        ids[kind] = [...(ids[kind] ?? []), m.item_id];
+      const all: [CreationKind, string][] = songId ? [["track", songId]] : [];
+      for (const m of now) all.push([m.kind as CreationKind, m.item_id]);
+      const parts: (typeof all)[] = [];
+      for (let i = 0; i < all.length; i += IDS_A_REQUEST) {
+        parts.push(all.slice(i, i + IDS_A_REQUEST));
       }
-      setEntries(entriesOf(await creations.cards(ids)));
+      const found = await Promise.all(
+        parts.map((part) => {
+          const ids: Partial<Record<CreationKind, string[]>> = {};
+          for (const [kind, item] of part) ids[kind] = [...(ids[kind] ?? []), item];
+          return creations.cards(ids);
+        }),
+      );
+      setEntries(
+        found.flatMap(entriesOf).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
+      );
     },
     [creations, songId],
   );
@@ -66,9 +79,10 @@ export function useProjectMedia(
     [show],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: version says when to read again
   useEffect(() => {
     void run(() => api.media(id));
-  }, [api, id, run]);
+  }, [api, id, run, version]);
 
   return {
     tags,

@@ -7,6 +7,7 @@ import {
   type CreativeApi,
   type CreativeBrief,
   type CreativeShape,
+  type FixedWords,
   gigabytes,
 } from "@wasifyai/client";
 import { Plus, X } from "lucide-react";
@@ -14,6 +15,7 @@ import { useEffect, useState } from "react";
 import { Button } from "../components/button";
 import { Checkbox } from "../components/checkbox";
 import { JobMeter, WorkingCard } from "../components/create";
+import { Modal } from "../components/dialog";
 import { Field } from "../components/field";
 import { Input } from "../components/input";
 import { Notice } from "../components/notice";
@@ -126,12 +128,85 @@ export function AnalysisCard({ analysis }: { analysis: ReturnType<typeof useAnal
   );
 }
 
+export type LibraryPicture = { id: string; url: string; title: string };
+
+/** Up to three pictures of a person from the library. With none, two are made from their words. */
+function PicturesOf({
+  name,
+  chosen,
+  pictures,
+  onChange,
+}: {
+  name: string;
+  chosen: string[];
+  pictures: () => Promise<LibraryPicture[]>;
+  onChange: (next: string[]) => void;
+}) {
+  const [found, setFound] = useState<LibraryPicture[] | null>(null);
+  const open = () => {
+    setFound([]);
+    pictures()
+      .then(setFound)
+      .catch(() => setFound([]));
+  };
+  return (
+    <>
+      <Button type="button" variant="outline" size="sm" onClick={open}>
+        Pictures{chosen.length ? ` (${chosen.length})` : ""}
+      </Button>
+      {found ? (
+        <Modal label={`Pictures of ${name}`} onClose={() => setFound(null)} wide>
+          <div className="grid max-h-[70dvh] gap-3 overflow-auto">
+            <p className={`${hint} m-0`}>
+              Choose up to three. With none, two are made from their words when the stills start.
+            </p>
+            {found.length === 0 ? (
+              <p className={`${hint} m-0`}>There are no pictures in your Library yet.</p>
+            ) : null}
+            <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] gap-2 p-0">
+              {found.map((p) => {
+                const on = chosen.includes(p.id);
+                return (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      aria-pressed={on}
+                      aria-label={p.title}
+                      disabled={!on && chosen.length >= 3}
+                      className={`w-full cursor-pointer rounded-md border-2 p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-50 ${on ? "border-primary" : "border-transparent"}`}
+                      onClick={() =>
+                        onChange(on ? chosen.filter((c) => c !== p.id) : [...chosen, p.id])
+                      }
+                    >
+                      <img
+                        src={p.url}
+                        alt=""
+                        className="aspect-square w-full rounded object-cover"
+                      />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className={actions}>
+              <Button type="button" onClick={() => setFound(null)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+    </>
+  );
+}
+
 const EMPTY: CreativeBrief = {
   track_id: "",
   idea: "",
   style: "",
   cast: [],
   places: [],
+  fixed: [],
   lyrics: null,
   shape: "landscape",
   cut_speed: 0,
@@ -146,9 +221,12 @@ export function BriefForm({
   onSubmit,
   onCancel,
   onMakeSong,
+  pictures,
 }: {
   api: CreativeApi;
   songs: () => Promise<CreativeSong[]>;
+  /** the pictures of the library a person can be drawn from */
+  pictures?: () => Promise<LibraryPicture[]>;
   initial?: CreativeBrief;
   initialTitle?: string;
   submitLabel: string;
@@ -167,6 +245,17 @@ export function BriefForm({
   const change = (part: Partial<CreativeBrief>) => setBrief((b) => ({ ...b, ...part }));
   const person = (i: number, part: Partial<CastMember>) =>
     change({ cast: brief.cast.map((p, k) => (k === i ? { ...p, ...part } : p)) });
+  const fixed = brief.fixed ?? [];
+  const fixedRow = (i: number, part: Partial<FixedWords>) =>
+    change({ fixed: fixed.map((f, k) => (k === i ? { ...f, ...part } : f)) });
+  const [known, setKnown] = useState<CastMember[]>([]);
+  useEffect(() => {
+    api
+      .characters()
+      .then(setKnown)
+      .catch(() => setKnown([]));
+  }, [api]);
+  const usable = known.filter((k) => !brief.cast.some((p) => p.name === k.name));
 
   useEffect(() => {
     songs()
@@ -316,6 +405,14 @@ export function BriefForm({
                 checked={p.photos_only}
                 onCheckedChange={(v) => person(i, { photos_only: v })}
               />
+              {pictures ? (
+                <PicturesOf
+                  name={p.name || `person ${i + 1}`}
+                  chosen={p.pictures ?? []}
+                  pictures={pictures}
+                  onChange={(next) => person(i, { pictures: next })}
+                />
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"
@@ -329,7 +426,20 @@ export function BriefForm({
           </div>
         ))}
         {brief.cast.length < 8 ? (
-          <div>
+          <div className="flex flex-wrap items-center gap-2">
+            {usable.length ? (
+              <Select
+                aria-label="Someone you have used before"
+                className="w-56"
+                value=""
+                placeholder="Someone you have used"
+                options={usable.map((k) => ({ value: k.name, label: k.name }))}
+                onValueChange={(name) => {
+                  const found = usable.find((k) => k.name === name);
+                  if (found) change({ cast: [...brief.cast, found] });
+                }}
+              />
+            ) : null}
             <Button
               type="button"
               variant="outline"
@@ -338,6 +448,53 @@ export function BriefForm({
               }
             >
               <Plus aria-hidden /> Add a person
+            </Button>
+          </div>
+        ) : null}
+      </section>
+      <section className={`${panel} grid gap-3`} aria-labelledby="creative-fixed">
+        <h2 id="creative-fixed" className="m-0 font-semibold text-base">
+          Objects and places that stay the same
+        </h2>
+        <p className={`${hint} m-0`}>
+          Things do not carry over from one picture to the next by themselves. These words are used
+          in every shot that names the thing.
+        </p>
+        {fixed.map((f, i) => (
+          <div key={`fixed-${i.toString()}`} className="grid gap-2 sm:grid-cols-[1fr_2fr_auto]">
+            <Input
+              aria-label={`Name of thing ${i + 1}`}
+              placeholder="The car"
+              maxLength={60}
+              value={f.name}
+              onChange={(e) => fixedRow(i, { name: e.target.value })}
+            />
+            <Input
+              aria-label={`How ${f.name || `thing ${i + 1}`} looks`}
+              placeholder="An old red estate car with a dent in the door"
+              maxLength={200}
+              value={f.words}
+              onChange={(e) => fixedRow(i, { words: e.target.value })}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`Remove ${f.name || `thing ${i + 1}`}`}
+              onClick={() => change({ fixed: fixed.filter((_, k) => k !== i) })}
+            >
+              <X aria-hidden />
+            </Button>
+          </div>
+        ))}
+        {fixed.length < 12 ? (
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => change({ fixed: [...fixed, { name: "", words: "" }] })}
+            >
+              <Plus aria-hidden /> Add an object or place
             </Button>
           </div>
         ) : null}

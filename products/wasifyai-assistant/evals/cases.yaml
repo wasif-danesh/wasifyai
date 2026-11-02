@@ -815,6 +815,23 @@ cases:
     expect: propose_action
     say: "Export the finished video."
     action: creative.export
+  - id: cs-animate-draft
+    kind: creative
+    expect: propose_action
+    say: "Let me see some motion, animate a bit of it."
+    action: creative.animate
+  - id: cs-animate-final
+    kind: creative
+    expect: propose_action
+    say: "Now make the animated shots properly, at full quality."
+    action: creative.animate
+    result: { quality: final }
+  - id: cs-animate-one
+    kind: creative
+    expect: propose_action
+    say: "Make a moving clip of this shot now."
+    action: creative.animate
+    result: { shot: s3 }
   - id: cs-question
     kind: creative
     expect: none

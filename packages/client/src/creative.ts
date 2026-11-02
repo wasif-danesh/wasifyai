@@ -107,7 +107,7 @@ export type Take = {
 };
 
 export type ShotsRun = {
-  kind: "stills" | "preview" | "cut";
+  kind: "stills" | "motion" | "preview" | "cut";
   status: "running" | "done" | "stopped" | "failed" | "interrupted";
   stage: string;
   finished: number;
@@ -242,6 +242,37 @@ export type StillsEstimate = {
   step: string | null;
 };
 
+/** Motion (ADR-0090 CS4): draft is quick and soft, final is sharp and about four times as long. */
+export type MotionQuality = "draft" | "final";
+
+/** The honest panel for clips: which stretch, how many still to make, how long, how much disk. */
+export type MotionEstimate = {
+  quality: MotionQuality;
+  /** clips still to make */
+  count: number;
+  /** shots in the stretch, or marked Animate */
+  shots: number;
+  /** of them, shots with no still to start from */
+  no_still: number;
+  start: number;
+  end: number;
+  /** the stretch was chosen as the song's loudest part */
+  loudest: boolean;
+  sections: { start: number; end: number; label: string }[];
+  seconds_low: number;
+  seconds_high: number;
+  bytes: number;
+  free_bytes: number;
+  fit: "fits" | "tight" | "too_big";
+  /** the time comes from clips made on this computer */
+  measured: boolean;
+  ready: boolean;
+  /** what to do first when the video model is not ready */
+  step: string | null;
+};
+
+export type MotionRequest = { quality: MotionQuality; start?: number; shot_id?: string };
+
 export type PlanEdit =
   | {
       op: "set_shot";
@@ -301,6 +332,9 @@ export type CreativeApi = {
   stopStills: (id: string) => Promise<CreativeProject>;
   redoShot: (id: string, shot: string, mode: StillMode) => Promise<CreativeProject>;
   chooseTake: (id: string, shot: string, take: string) => Promise<CreativeProject>;
+  estimateMotion: (id: string, ask: MotionRequest) => Promise<MotionEstimate>;
+  /** animate a draft excerpt, the shots marked Animate, or one shot; stop with stopStills */
+  makeMotion: (id: string, ask: MotionRequest) => Promise<CreativeProject>;
   preview: (id: string) => Promise<CreativeProject>;
   editCut: (id: string, edits: CutEdit[], note?: string) => Promise<CreativeProject>;
   undoCut: (id: string) => Promise<CreativeProject>;
@@ -419,6 +453,13 @@ export function createCreativeApi(transport: Transport): CreativeApi {
     makeStills: (id, mode, redo) =>
       post<CreativeProject>(`${one(id)}/shots`, { mode, redo_out_of_date: redo }),
     stopStills: (id) => post<CreativeProject>(`${one(id)}/shots/stop`),
+    estimateMotion: (id, ask) => {
+      const query = new URLSearchParams({ quality: ask.quality });
+      if (ask.start !== undefined) query.set("start", String(ask.start));
+      if (ask.shot_id) query.set("shot_id", ask.shot_id);
+      return json<MotionEstimate>(`${one(id)}/motion/estimate?${query}`);
+    },
+    makeMotion: (id, ask) => post<CreativeProject>(`${one(id)}/motion`, ask),
     redoShot: (id, shot, mode) =>
       post<CreativeProject>(`${one(id)}/shots/${encodeURIComponent(shot)}/redo`, { mode }),
     chooseTake: (id, shot, take) =>

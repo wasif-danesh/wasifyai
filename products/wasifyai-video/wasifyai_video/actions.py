@@ -27,7 +27,7 @@ from wasifyai_video.builder.actions import library_kinds as builder_library_kind
 from wasifyai_video.builder.runtime import add_to_search
 from wasifyai_video.index import index_text
 from wasifyai_video.routes import extension_of, file_name, save_copy
-from wasifyai_video.schemas import MAX_PROMPT_CHARS
+from wasifyai_video.schemas import MAX_PROMPT_CHARS, Quality
 from wasifyai_video.videos import PosterError, VideoRecord, poster_of, video_store
 
 PRODUCT_ID = "wasifyai-video"
@@ -53,6 +53,13 @@ class AnimateIn(Strict):
         min_length=1, max_length=MAX_PROMPT_CHARS, description="What should move, in English."
     )
     seconds: Literal[5, 8] = Field(5, description="How long the clip is.")
+    quality: Quality = Field(
+        "final",
+        description=(
+            "final, or draft: about four times as quick and softer, to see the motion before "
+            "making it well."
+        ),
+    )
 
 
 class ExtendIn(Strict):
@@ -118,7 +125,7 @@ async def _animate_input(p: AnimateIn, ctx: ActionContext) -> dict:
     key = await stage_picture(ctx, PRODUCT_ID, await _picture_data(ctx, p.image_id))
     return {
         "mode": "image", "prompt": p.prompt, "image_key": key, "seconds": p.seconds,
-        "source_image_id": p.image_id,
+        "source_image_id": p.image_id, "quality": p.quality,
     }  # fmt: skip
 
 

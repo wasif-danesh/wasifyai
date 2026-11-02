@@ -62,13 +62,16 @@ def test_the_text_workflow_takes_a_size_and_a_length():
 
 def test_the_picture_workflow_holds_the_first_frame_at_full_strength_and_takes_no_size():
     wf = Workflow.load(WORKFLOWS, "ltx-video-2b-i2v")
-    assert set(wf.map.inputs) == {"prompt", "seed", "steps", "length", "image"}
+    assert set(wf.map.inputs) == {"prompt", "seed", "steps", "megapixels", "length", "image"}
     graph = wf.fill({"prompt": "snow falls", "image": "wasifyai-JOB.png", "length": 49})
     loaders = [n for n in graph.values() if n["class_type"] == "LoadImage"]
     assert [n["inputs"]["image"] for n in loaders] == ["wasifyai-JOB.png"]
     # at the template's 0.15 the model ignored the picture and drew the prompt (ADR-0037)
     assert graph["77"]["inputs"]["strength"] == 1.0
     assert graph["77"]["inputs"]["length"] == 49
+    assert graph["79"]["inputs"]["megapixels"] == 0.25  # the final setting is the workflow's own
+    draft = wf.fill({"prompt": "snow falls", "image": "x.png", "steps": 15, "megapixels": 0.125})
+    assert draft["79"]["inputs"]["megapixels"] == 0.125 and draft["71"]["inputs"]["steps"] == 15
 
 
 async def test_an_animate_job_names_the_picture_for_the_worker_and_fills_the_workflow():

@@ -37,6 +37,9 @@
 //   apps/desktop/scripts/ui-audit.sh light creative-shots       The Shots step (ADR-0090 CS2): a real redo, takes, the Image, Video and
 //                                                                Add tabs, a real file added, axe, a phone. Needs a project "cs2 real" with
 //                                                                its stills in a throwaway DESKTOP_DATA_DIR, and CS2_FILES with mine.png
+//   apps/desktop/scripts/ui-audit.sh light creative-motion      Motion (ADR-0090 CS4): the Motion panel and its start, a real draft
+//                                                                clip of one shot, the clip's badge, axe, the smallest window. Needs a project
+//                                                                "cs4 real" with its stills in a throwaway DESKTOP_DATA_DIR
 //   apps/desktop/scripts/ui-audit.sh light creative-cut         The Cut step (ADR-0090 CS3): the timeline's buttons and keys, a title, the
 //                                                                Voice tab, Make the video for real, Save a copy, axe, the smallest window.
 //                                                                Needs a project "cs3 real" with its stills in a throwaway DESKTOP_DATA_DIR
@@ -461,6 +464,82 @@ for (const scheme of ["light", "dark"]) {
       await shot(page, "creative-tab-add", 900);
       seen.axeAdd = await axe();
       console.log(`CREATIVESHOTS ${JSON.stringify(seen)}`);
+    });
+  }
+
+  if (names.has("creative-motion")) {
+    await attempt("creative-motion", async () => {
+      const seen = { errors: [], console: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      page.on("console", (m) => m.type() === "error" && seen.console.push(m.text().slice(0, 200)));
+      const axe = async () => {
+        const AxeBuilder = require("@axe-core/playwright").default;
+        const found = await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+          .analyze();
+        return found.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      };
+      await open(page, "/creative");
+      await page.getByRole("button", { name: /^cs4 real/ }).click();
+      await page.getByRole("radio", { name: "Shots" }).waitFor({ timeout: 15000 });
+      await page.getByRole("radio", { name: "Shots" }).click();
+      const motion = page.getByRole("region", { name: "Motion" });
+      await motion.getByText(/clips? to make|They have their clips/).waitFor({ timeout: 30000 });
+      seen.draftSays = await motion.locator("p").first().innerText();
+      await shot(page, "creative-motion", 900);
+      seen.axeMotion = await axe();
+      await motion.getByRole("combobox", { name: "Where the 30 seconds start" }).click();
+      const options = page.getByRole("option");
+      seen.starts = await options.allInnerTexts();
+      await options.last().click();
+      await page.waitForTimeout(1500);
+      seen.laterSays = await motion.locator("p").first().innerText();
+      await motion.getByRole("radio", { name: "Make it better" }).click();
+      await page.waitForTimeout(1500);
+      seen.betterSays = await motion.locator("p").first().innerText();
+      await shot(page, "creative-motion-better", 900);
+      await motion.getByRole("radio", { name: "Draft 30 seconds" }).click();
+      // a real draft clip of the last shot, which the excerpt did not reach
+      const last = page
+        .getByRole("list")
+        .filter({ has: page.getByRole("button", { name: /^Shot 1\b/ }) })
+        .getByRole("button")
+        .last();
+      seen.lastShot = await last.getAttribute("aria-label");
+      await last.click();
+      const started = Date.now();
+      await page.getByRole("button", { name: "Make a draft clip" }).click();
+      await page
+        .getByText("Making the clips")
+        .or(page.getByText(/^Animating shot/))
+        .first()
+        .waitFor({ timeout: 30000 });
+      await shot(page, "creative-motion-making", 900);
+      seen.axeMaking = await axe();
+      // the Motion panel comes back when the run has ended
+      await motion.waitFor({ state: "visible", timeout: 600000 });
+      seen.run = await page.getByRole("status").allInnerTexts();
+      seen.clip_s = Math.round((Date.now() - started) / 1000);
+      await page.waitForTimeout(1000);
+      seen.lastShotAfter = await last.getAttribute("aria-label");
+      await shot(page, "creative-motion-clip", 900);
+      seen.axeClip = await axe();
+      const make = page.getByRole("tablist", { name: "Make something for this project" });
+      await make.getByRole("tab", { name: "Video" }).click();
+      await page.waitForTimeout(800);
+      seen.settingChips = await page.getByRole("button", { name: /^(Final|Draft)/ }).count();
+      await shot(page, "creative-motion-video-tab", 900);
+      seen.axeVideoTab = await axe();
+      // the desktop window's smallest size
+      await page.setViewportSize({ width: 720, height: 700 });
+      await page.waitForTimeout(800);
+      seen.narrow = await page.evaluate(
+        () => document.documentElement.scrollWidth - window.innerWidth,
+      );
+      seen.motionAtPhone = await motion.count();
+      await page.screenshot({ path: join(OUT, "creative-motion-phone.png") });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      console.log(`CREATIVEMOTION ${JSON.stringify(seen)}`);
     });
   }
 

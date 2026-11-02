@@ -226,6 +226,7 @@
     "where": "Creative Studio",
     "actions": [
       "creative.add_media",
+      "creative.animate",
       "creative.choose_take",
       "creative.cut",
       "creative.edit_cut",
@@ -243,6 +244,7 @@
     ],
     "does": [
       "Add to a project",
+      "Animate a music video's shots",
       "Choose a shot's take",
       "Make a music video",
       "Change a music video's cut",

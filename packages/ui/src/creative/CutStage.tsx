@@ -73,11 +73,10 @@ export function CutStage({
         <RunNotice project={project} />
       )}
       {summary.plan_changed ? (
-        <Notice tone="info" title="The plan has changed since this cut was made">
-          <p className="m-0">
-            The cut keeps its own pieces. Start again to take the plan's shots and times.
-          </p>
-          <div className={`${actions} mt-2`}>
+        <Notice
+          tone="info"
+          title="The plan has changed since this cut was made"
+          actions={
             <Button
               type="button"
               variant="outline"
@@ -87,7 +86,9 @@ export function CutStage({
             >
               Start again from the plan
             </Button>
-          </div>
+          }
+        >
+          The cut keeps its own pieces. Start again to take the plan's shots and times.
         </Notice>
       ) : null}
       {saved ? (
@@ -360,7 +361,7 @@ function CaptionRow({
           key={c.id}
           className="absolute h-8"
           style={{
-            top: `${lanes[n] * 2}rem`,
+            top: `${(lanes[n] ?? 0) * 2}rem`,
             left: `${(c.start / total) * 100}%`,
             width: `${Math.max((c.end - c.start) / total, NARROWEST) * 100}%`,
           }}

@@ -74,6 +74,14 @@ class RedoShot(BaseModel):
     mode: Literal["plain", "reference"] = REFERENCE
 
 
+class MakeMotion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    quality: Literal["draft", "final"] = "draft"
+    start: float | None = Field(None, ge=0, description="Where a draft excerpt starts, in seconds.")
+    shot_id: str | None = Field(None, max_length=32, description="Only this shot.")
+
+
 class CutEdits(BaseModel):
     edits: list[dict[str, Any]] = Field(min_length=1, max_length=50)
     note: str = Field("Changed in the cut", max_length=200)
@@ -387,6 +395,35 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         row = row_or_404(identity, item)
         try:
             manager_for(deps).shots.start_preview(identity, row)
+        except Refused as e:
+            raise refuse(e) from None
+        return await shown(row_or_404(identity, item), identity)
+
+    @router.get("/projects/{item}/motion/estimate")
+    async def motion_estimate(
+        item: str,
+        quality: Literal["draft", "final"] = "draft",
+        start: float | None = None,
+        shot_id: str | None = None,
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        """Before Start: which shots, how many clips, how long, how much disk, whether it fits."""
+        row = row_or_404(identity, item)
+        try:
+            return await manager_for(deps).shots.motion_estimate(row, quality, start, shot_id)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.post("/projects/{item}/motion", status_code=202)
+    async def make_motion(
+        item: str, body: MakeMotion, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Animate a draft excerpt, the shots marked Animate (final), or one shot. Stop with /shots/stop."""
+        row = row_or_404(identity, item)
+        try:
+            await manager_for(deps).shots.start_motion(
+                identity, row, body.quality, body.start, body.shot_id
+            )
         except Refused as e:
             raise refuse(e) from None
         return await shown(row_or_404(identity, item), identity)

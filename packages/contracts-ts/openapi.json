@@ -2485,6 +2485,48 @@
         "title": "MakeIn",
         "type": "object"
       },
+      "MakeMotion": {
+        "additionalProperties": false,
+        "properties": {
+          "quality": {
+            "default": "draft",
+            "enum": [
+              "draft",
+              "final"
+            ],
+            "title": "Quality",
+            "type": "string"
+          },
+          "shot_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only this shot.",
+            "title": "Shot Id"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where a draft excerpt starts, in seconds.",
+            "title": "Start"
+          }
+        },
+        "title": "MakeMotion",
+        "type": "object"
+      },
       "MakePlan": {
         "properties": {
           "again": {
@@ -8592,6 +8634,152 @@
           }
         },
         "summary": "Remove Media",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/motion": {
+      "post": {
+        "description": "Animate a draft excerpt, the shots marked Animate (final), or one shot. Stop with /shots/stop.",
+        "operationId": "make_motion_products_wasifyai_creative_creative_projects__item__motion_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MakeMotion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Make Motion Products Wasifyai Creative Creative Projects  Item  Motion Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make Motion",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/motion/estimate": {
+      "get": {
+        "description": "Before Start: which shots, how many clips, how long, how much disk, whether it fits.",
+        "operationId": "motion_estimate_products_wasifyai_creative_creative_projects__item__motion_estimate_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "quality",
+            "required": false,
+            "schema": {
+              "default": "draft",
+              "enum": [
+                "draft",
+                "final"
+              ],
+              "title": "Quality",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "shot_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Shot Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Motion Estimate Products Wasifyai Creative Creative Projects  Item  Motion Estimate Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Motion Estimate",
         "tags": [
           "wasifyai-creative"
         ]

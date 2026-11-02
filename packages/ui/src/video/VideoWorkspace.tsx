@@ -94,6 +94,8 @@ export type VideoFormValue = {
   shape: string;
   seconds: number;
   imageKey?: string;
+  /** Animate: the draft setting, quicker and softer */
+  draft?: boolean;
   /** Extend video: the clip of the library to carry on */
   source?: VideoSummary;
 };
@@ -238,6 +240,7 @@ export function VideoWorkspace({
   const [edited, setEdited] = useState(false); // Extend: the person wrote their own words
   const [shape, setShape] = useState("landscape");
   const [seconds, setSeconds] = useState(5);
+  const [draft, setDraft] = useState(false);
   const [source, setSource] = useState<VideoSummary | null>(sourceVideo);
   const [chosen, setChosen] = useState<LookChoice[]>([]);
   // a look that was taken away (its model removed) cannot stay chosen
@@ -369,6 +372,7 @@ export function VideoWorkspace({
         imageKey: value.imageKey,
         sourceId: value.source?.id,
         sourceImageId: value.mode === "image" ? (fromLibrary.current ?? undefined) : undefined,
+        draft: value.mode === "image" && value.draft,
       });
     },
     [flow, looks, usable],
@@ -383,9 +387,10 @@ export function VideoWorkspace({
       shape,
       seconds,
       imageKey: mode === "image" ? pic.picture?.key : undefined,
+      draft,
       source: mode === "extend" ? (source ?? undefined) : undefined,
     });
-  }, [valid, working, beforeMake, mode, pic, begin, trimmed, shape, seconds, source]);
+  }, [valid, working, beforeMake, mode, pic, begin, trimmed, shape, seconds, draft, source]);
 
   const shown: Shown | null = picked
     ? shownOf(picked)
@@ -677,6 +682,20 @@ export function VideoWorkspace({
                 </p>
               ) : null}
             </fieldset>
+
+            {mode === "image" ? (
+              <fieldset className="m-0 grid gap-2 border-0 p-0">
+                <legend className="mb-1 font-semibold text-ui-lg">Setting</legend>
+                <div className="flex flex-wrap gap-2">
+                  <Chip aria-pressed={!draft} onClick={() => setDraft(false)}>
+                    Final <span className="opacity-85">sharper</span>
+                  </Chip>
+                  <Chip aria-pressed={draft} onClick={() => setDraft(true)}>
+                    Draft <span className="opacity-85">about four times as quick, softer</span>
+                  </Chip>
+                </div>
+              </fieldset>
+            ) : null}
 
             {mode === "text" ? (
               <fieldset className="m-0 grid gap-2 border-0 p-0">

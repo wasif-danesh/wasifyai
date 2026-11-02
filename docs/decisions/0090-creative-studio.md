@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (owner, 2026-10-24: "I'll go with your pick" on all seven questions, recorded in "Owner's answers" below). **CS0 is
   done: the owner watched the excerpts on 2026-10-31 and said go (`docs/spikes/creative-cs0.md`). Its results are written into the decisions
-  below. CS1 is built (2026-10-31; "Built" below): a song becomes an editable plan on the desktop. CS2 is built (2026-11-02): the plan becomes stills and a preview over the song. CS3 is built the same day: the Cut step, its video at full size, and keeping it in Your videos. The screen amendment was accepted on 2026-10-31 and its first stage is built ("The screen" under "Built"); CS4 is next.** "Creative Studio" is the owner's working name.
+  below. CS1 is built (2026-10-31; "Built" below): a song becomes an editable plan on the desktop. CS2 is built (2026-11-02): the plan becomes stills and a preview over the song. CS3 is built the same day: the Cut step, its video at full size, and keeping it in Your videos. CS4 is built the same day too: motion, a draft of about 30 seconds and Make it better, with an estimate that held within 25% ("CS4" under "Built"); with it the plan to a usable v1 (CS1 to CS4) is built on the desktop. The screen amendment was accepted on 2026-10-31 and its first stage is built ("The screen" under "Built"); CS5 and the web come next.** "Creative Studio" is the owner's working name.
 - **Order and shared parts:** ADR-0096 (2026-10-31): the Motion graphics editor is built first; its screen frame, media rail, Make panel and docked assistant are shared with this product. The consent, safeguard and terms parts below were removed by ADR-0094.
 - **Date:** 2026-10-24
 - **Asked by:** the owner, 2026-10-24: study Maestro's Creative studio, Director and video editor, **do not use its code**, and plan how to
@@ -425,6 +425,50 @@ Make the video for real, Save a copy, axe clean on each, no sideways scroll at t
 **Not built:** putting a library item on the picture track from the screen (the edit exists: `insert` and `use`), Motion graphics templates over the cut, a voiceover, Lip sync,
 crossfades, "Review each step". **Not checked:** the real window, a song made in the Music tab with a real model, clips in the cut with a real model (in the tests a stand-in
 clip), the portrait and square sizes with real pictures, a 3-minute song (worked out: about 40 s to render), whether the cut is good to watch: the owner's watch is the check.
+
+### CS4 (2026-11-02; desktop only)
+
+Motion: clips from the stills, a quick draft first and the shots that animate made well. Measured on this Mac (M5 Pro, 64 GB) with real models (FLUX.2 klein 4B
+stills, LTX-Video 2B 0.9.5 clips) on the 90 s English song from CS0 with its typed words. `docs/spikes/creative-cs4-sheet.jpg` is a sheet of the cut with 13 clips;
+the video is `docs/listening/samples/creative-cs4-cut-90s.mp4` (git-ignored).
+
+| Done when | Result |
+|---|---|
+| A 30 s draft in about the estimate | From 0:00 (9 shots, 33.5 s; 2 already had final clips): **7 draft clips in 400 s** with a stop and Go on, against **316 to 428 s**. From the loudest part on the first run (CS0's figures, nothing measured yet): 9 clips estimated at 405 to 540 s, about 53 s a clip measured |
+| Estimate within 25% of the real time | **Inside the range every time.** Draft from 0:00: 400 s against a middle of 372 s (+8%). Go on after the stop: 254 s against 246 to 332 s. Make it better, 4 final clips from CS0's figures: **676 s** against 560 to 800 s (middle 680 s, -1%). Clips one by one: draft 44 to 74 s (the first after a model load), final 160 to 181 s |
+
+**How it works.** `motion.py` is pure: which shots (the draft excerpt: whole shots from the shot playing at the start until at least 30 s, reaching back near the
+end; Make it better: the shots marked Animate), what a clip is asked for (the still's words, then "Natural, gentle movement" and the camera's move), which still it
+starts from (the chosen one, or the newest still when a clip is chosen), whether a shot already has an up-to-date clip at that setting (a final one counts for a
+draft), and the estimate. `ShotJobs` runs it as kind `motion`, one job a person, like the stills: each clip is the video product's `video.animate`, saved at once as
+a take (mode `draft` or `final`, chosen), tagged with the project and the shot, and kept in Your videos. Stop keeps what is made; Go on makes only the rest.
+
+- **The draft setting.** `video.animate` takes `quality`: `draft` is 15 steps on about 0.125 megapixel (the i2v workflow's new `megapixels` input), `final` is the
+  workflow's own 30 steps on about 0.25. Only Animate has it; the Animate screen of Video has a Final and Draft choice too.
+- **The estimate.** CS0's figures (draft 45 to 60 s, final 140 to 200 s a clip) until a clip at that setting is made here, then the mean of the last 12 at that
+  setting, plus and minus 15%. While a run goes, the working card says the time left from the clips this run made.
+- **Clips are 5 s.** A shorter shot uses the start of its clip (the cut trims it). The owner's lengths for the Video screen are 5 and 8 s, so no shorter clip was added.
+- **Action** `creative.animate` (draft, final, or one shot; catalogue cap now 85). The Ask tab can call it; "make this shot animate" stays a plan change.
+  `--only cs-` on real 8B: 19 of 19, twice, after the guide was reworded (the first wording sent no shot for "this shot", a second sent a shot for "a bit of it").
+- **The screen.** The Shots step has a Motion panel once there are stills: Draft 30 seconds or Make it better, where the 30 seconds start (the loudest part, or a
+  section), the stretch, how many clips, the time, the disk, and why it cannot start. The selected shot has Make a draft clip or Make a clip; a shot with a clip has a
+  Draft clip or Clip badge, in its name for screen readers too.
+
+**What the real run found:**
+- **Stop did not stop the clip being made.** The Creative Studio run stopped, but the video product's run went on, held the one-clip-at-a-time rule, and Go on was
+  refused as busy. The executor now stops a product run when whoever waited for it stops (`_run_child`); a job is still stopped by `cancel_job`. Run again: Stop left
+  the clip "Stopped. Nothing was kept." and Go on made the rest. Stills had the same gap, hidden by being quick.
+- A clip refused because another video is being made (the Video tab) now ends the run at once and says so, instead of counting failures.
+- The walk moved on before its clip was done, and the engine closed under it. A clip whose engine closes stays "working", and the video product refuses new clips for
+  90 minutes (the rule from ADR-0037): older than CS4, not changed here.
+- A clip can draw a little garbled text in a corner (LTX); the redo is the shot's Make a clip.
+
+**Checked in a browser with the real engine** (walk `creative-motion`, not the Tauri window): the Motion panel, its starts and Make it better, a real draft clip of one
+shot from the screen (72 to 106 s), its badge, the Video tab, axe clean on each, no sideways scroll at the window's smallest size (720 wide).
+
+**Not built:** "Review each step", Sing (lip sync, CS5), shorter clips for short shots, motion for a story. **Not checked:** the real window, the portrait and square
+shapes, a 3-minute song (worked out from the measured clips: a draft of every shot about 50 minutes, the Animate shots about 25), whether the drafts are good to
+watch: the owner's watch is the check.
 
 ## Web
 

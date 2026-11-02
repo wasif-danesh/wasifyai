@@ -403,16 +403,28 @@ class ActionExecutor:
         graph_input = await made if asyncio.iscoroutine(made) else made
         assert isinstance(graph_input, dict)
         noun = bind.noun
-        told = False
-        async for ev in self.host.run_product(bind.product_id, graph_input):
-            if not told and ctx.on_run is not None and ev.get("run_id"):
-                ctx.on_run(str(ev["run_id"]))
-                told = True
-            kind = ev.get("event")
-            if kind == "job_progress":
-                ctx.emit(ev)
-            elif kind in ("error", "done"):
-                return self._ended(bind, model, ev)
+        run_id: str | None = None
+        try:
+            async for ev in self.host.run_product(bind.product_id, graph_input):
+                if run_id is None and ev.get("run_id"):
+                    run_id = str(ev["run_id"])
+                    if ctx.on_run is not None:
+                        ctx.on_run(run_id)
+                kind = ev.get("event")
+                if kind == "job_progress":
+                    ctx.emit(ev)
+                elif kind in ("error", "done"):
+                    return self._ended(bind, model, ev)
+        except asyncio.CancelledError:
+            # whoever waited stopped: the run stops too, or it would go on making (and hold the
+            # one-clip-at-a-time rule) with nobody to take what it makes (ADR-0090 CS4). A job
+            # (`on_run`) is stopped by `cancel_job`, which stops its run first.
+            if run_id is not None and ctx.on_run is None:
+                try:
+                    await self.host.cancel_run(ctx.actor.tenant_id, run_id)
+                except Exception:
+                    log.warning("a stopped action's run could not be stopped")
+            raise
         return Outcome.error(f"The {noun} could not be made.")
 
     def _ended(self, bind: RunBinding, model: BaseModel, ev: dict[str, Any]) -> Outcome:

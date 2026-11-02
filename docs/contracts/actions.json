@@ -486,6 +486,116 @@
       "help": "docs/help/creative.add_media.md"
     },
     {
+      "id": "creative.animate",
+      "title": "Animate a music video's shots",
+      "summary": "Set shots moving: a quick 30 second draft, or the Animate shots made well.",
+      "description": "Turn the stills of a Creative Studio plan into short clips. draft animates about 30 seconds of the song quickly and softly (about 50 seconds a shot), to see the motion first; final animates the shots the plan marks Animate, sharp (about 3 minutes a shot). With shot_id, only that shot. Each clip is saved as it is made, used for its shot and kept in Your videos; stopping keeps them.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Project Id",
+            "type": "string"
+          },
+          "quality": {
+            "default": "draft",
+            "description": "draft: about 30 seconds of the song (its loudest part unless start says where), quick and soft. final: the shots the plan marks Animate, sharp and about four times as long.",
+            "enum": [
+              "draft",
+              "final"
+            ],
+            "title": "Quality",
+            "type": "string"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Draft only: where the 30 seconds start.",
+            "title": "Start"
+          },
+          "shot_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Only this shot, made again.",
+            "title": "Shot Id"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "title": "AnimateIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "clips": {
+            "description": "Shots of the plan that now have a clip.",
+            "title": "Clips",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "clips"
+        ],
+        "title": "AnimateOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "project_id": "1f8d2c3b4a5e4f60a7b8c9d0e1f20314"
+        },
+        {
+          "project_id": "1f8d2c3b4a5e4f60a7b8c9d0e1f20314",
+          "quality": "final"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private",
+        "costly"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-creative"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-creative",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/creative.animate.md"
+    },
+    {
       "id": "creative.choose_take",
       "title": "Choose a shot's take",
       "summary": "Choose which take of a shot is used.",
@@ -9315,6 +9425,16 @@
             ],
             "title": "Seconds",
             "type": "integer"
+          },
+          "quality": {
+            "default": "final",
+            "description": "final, or draft: about four times as quick and softer, to see the motion before making it well.",
+            "enum": [
+              "final",
+              "draft"
+            ],
+            "title": "Quality",
+            "type": "string"
           }
         },
         "required": [

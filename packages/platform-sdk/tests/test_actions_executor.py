@@ -501,6 +501,32 @@ async def test_a_direct_call_and_a_child_run_can_both_be_stopped():
     assert host.cancelled_runs == ["run-9"]  # the product run itself was stopped
 
 
+async def test_a_caller_that_stops_waiting_stops_the_product_run_too():
+    # ADR-0090 CS4: a Creative Studio stop left a clip being made, and the next one was refused
+    host = FakeActionHost()
+    ex, *_ = setup(
+        act(
+            "demo.child",
+            effect="make",
+            long=True,
+            bind=RunBinding("wasifyai-demo", "thing", lambda p, c: {}, _result),
+        ),
+        host=host,
+    )
+
+    class Endless:
+        async def __aiter__(self):
+            yield {"event": "node", "run_id": "run-7"}
+            await asyncio.Event().wait()
+
+    host.run_product = lambda pid, gi: Endless()  # type: ignore[method-assign]
+    waiting = asyncio.create_task(run(ex, "demo.child", policy=ApprovalPolicy(make="auto")))
+    await asyncio.sleep(0.05)
+    waiting.cancel()
+    await asyncio.gather(waiting, return_exceptions=True)
+    assert host.cancelled_runs == ["run-7"]
+
+
 # ---- jobs that outlive a restart (stage J3) ---------------------------------------------------
 
 

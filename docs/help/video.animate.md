@@ -15,7 +15,7 @@ Turn a picture of your library into a short clip by saying what should move.
 
 1. Open **Video › Animate an image**.
 2. Choose a picture, or choose **Animate this** under a picture on an Images screen to bring it here.
-3. Say what should move and the length.
+3. Say what should move, the length and the setting: **Final**, or **Draft**, about four times as quick and softer.
 4. Choose **Make the video**.
 
 ## My looks
@@ -27,6 +27,7 @@ If you taught the video model a look or a motion (under **Train models**, in the
 - `image_id`: The picture.
 - `prompt`: What should move.
 - `seconds`: 5 or 8 (5 unless you say otherwise).
+- `quality`: `final` (the default) or `draft`: about four times as quick and softer, to see the motion first.
 
 ## Limits
 

@@ -122,6 +122,25 @@ const ESTIMATE = {
   step: null,
 };
 
+const MOTION = {
+  quality: "draft" as const,
+  count: 2,
+  shots: 3,
+  no_still: 1,
+  start: 0,
+  end: 6,
+  loudest: true,
+  sections: [{ start: 0, end: 6, label: "mid" }],
+  seconds_low: 60,
+  seconds_high: 120,
+  bytes: 4 * 1024 ** 2,
+  free_bytes: 100 * 1024 ** 3,
+  fit: "fits" as const,
+  measured: false,
+  ready: true,
+  step: null,
+};
+
 function api(over: Partial<CreativeApi> = {}): CreativeApi {
   return {
     analysis: vi.fn(async () => ({ state: "ready" as const })),
@@ -149,6 +168,8 @@ function api(over: Partial<CreativeApi> = {}): CreativeApi {
     stopStills: vi.fn(async () => project()),
     redoShot: vi.fn(async () => project()),
     chooseTake: vi.fn(async () => project()),
+    estimateMotion: vi.fn(async () => MOTION),
+    makeMotion: vi.fn(async () => project()),
     preview: vi.fn(async () => project()),
     editCut: vi.fn(async () => project({ cut: cutOf() })),
     undoCut: vi.fn(async () => project({ cut: cutOf() })),
@@ -543,6 +564,104 @@ describe("Creative Studio", () => {
     expect(a.redoShot).toHaveBeenCalledWith("p1", "s0", "reference");
     await user.click(screen.getByRole("button", { name: "Preview the whole song" }));
     expect(a.preview).toHaveBeenCalledWith("p1");
+  });
+
+  it("says what a draft of the motion will take, starts it where asked, and makes it better or one shot's clip", async () => {
+    const shots = {
+      takes: { s0: [take("a", "pic-1")], s1: [take("b", "pic-2")], s2: [] },
+      missing: ["s2"],
+      out_of_date: [],
+      run: null,
+      preview: null,
+    };
+    const a = api({
+      get: vi.fn(async () => project({ shots })),
+      makeMotion: vi.fn(async () => project({ shots })),
+    });
+    const user = userEvent.setup();
+    render(<Creative api={a} songs={songs} open="p1" />);
+    await user.click(await screen.findByRole("radio", { name: "Shots" }));
+    const motion = await screen.findByRole("region", { name: "Motion" });
+    expect(
+      await within(motion).findByText(
+        /0:00 to 0:06: 3 shots\. 2 clips to make, about 60 seconds to 2 minutes/,
+      ),
+    ).toBeInTheDocument();
+    expect(within(motion).getByText("Some shots have no still")).toBeInTheDocument();
+    await user.click(within(motion).getByRole("button", { name: "Draft 30 seconds" }));
+    expect(a.makeMotion).toHaveBeenCalledWith("p1", { quality: "draft", start: undefined });
+    await user.click(within(motion).getByRole("radio", { name: "Make it better" }));
+    await waitFor(() =>
+      expect(a.estimateMotion).toHaveBeenCalledWith("p1", { quality: "final", start: undefined }),
+    );
+    await user.click(within(motion).getByRole("button", { name: "Make it better" }));
+    expect(a.makeMotion).toHaveBeenCalledWith("p1", { quality: "final", start: undefined });
+    await user.click(screen.getByRole("button", { name: "Shot 1" }));
+    await user.click(screen.getByRole("button", { name: "Make a clip" }));
+    expect(a.makeMotion).toHaveBeenCalledWith("p1", { quality: "final", shot_id: "s0" });
+  });
+
+  it("will not animate without the video model, and shows clips and the time left while they are made", async () => {
+    const blocked = api({
+      get: vi.fn(async () =>
+        project({
+          shots: {
+            takes: { s0: [take("a", "pic-1")] },
+            missing: ["s1", "s2"],
+            out_of_date: [],
+            run: null,
+            preview: null,
+          },
+        }),
+      ),
+      estimateMotion: vi.fn(async () => ({
+        ...MOTION,
+        ready: false,
+        step: "Get the video model first.",
+      })),
+    }); // fmt: skip
+    const user = userEvent.setup();
+    const { unmount } = render(<Creative api={blocked} songs={songs} open="p1" />);
+    await user.click(await screen.findByRole("radio", { name: "Shots" }));
+    expect(await screen.findByText("Get the video model first.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Draft 30 seconds" })).toBeDisabled();
+    unmount();
+
+    const clip = take("c", "vid-1", {
+      kind: "video" as const,
+      mode: "draft",
+      seconds: 50,
+      created_at: "2",
+    });
+    const run = {
+      kind: "motion" as const,
+      status: "running" as const,
+      stage: "Animating shot 2",
+      finished: 1,
+      total: 3,
+      failed: 0,
+      error: null,
+    };
+    const live = api({
+      get: vi.fn(async () =>
+        project({
+          shots_live: true,
+          shots: {
+            takes: { s0: [take("a", "pic-1", { chosen: false }), clip] },
+            missing: ["s1", "s2"],
+            out_of_date: [],
+            run,
+            preview: null,
+          },
+        }),
+      ),
+    }); // fmt: skip
+    render(<Creative api={live} songs={songs} open="p1" />);
+    await user.click(await screen.findByRole("radio", { name: "Shots" }));
+    expect(await screen.findByText("1 of 3")).toBeInTheDocument();
+    expect(screen.getByText("Animating shot 2")).toBeInTheDocument();
+    expect(screen.getByText(/About 100 seconds left|About 2 minutes left/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Shot 1, draft clip" })).toBeInTheDocument();
   });
 
   it("gives what a make tab makes to the selected shot, and adds a dropped file", async () => {

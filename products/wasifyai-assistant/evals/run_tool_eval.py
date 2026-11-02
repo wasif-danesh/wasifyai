@@ -823,6 +823,15 @@ def judge_creative(case: dict, message: dict) -> tuple[bool, str]:
         return True, action
     if action == "creative.edit_cut":
         return judge_cut(case, params)
+    if action == "creative.animate":
+        result = case.get("result") or {}
+        got = {k: params.get(k) for k in ("quality", "shot_id")}
+        wanted = {"quality": result.get("quality"), "shot_id": result.get("shot")}
+        # draft is the default, so it may be left out or said
+        same = (got["quality"] or "draft") == (wanted["quality"] or "draft") and got[
+            "shot_id"
+        ] == wanted["shot_id"]
+        return same, f"animate {got}, wanted {wanted}"
     if action == "creative.redo_shot":
         wanted = case["result"]["shot"]
         return params.get("shot_id") == wanted, f"redo {params.get('shot_id')}, wanted {wanted}"

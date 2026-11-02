@@ -43,6 +43,7 @@ from wasifyai_video.index import index_text
 from wasifyai_video.schemas import (
     DEFAULT_SECONDS,
     DEFAULT_SHAPE,
+    DRAFT,
     FPS,
     LENGTHS,
     MAX_PROMPT_CHARS,
@@ -89,6 +90,7 @@ class VideoState(TypedDict, total=False):
     prompt: str
     shape: str
     seconds: int
+    quality: str  # image: final, or draft (quicker and softer)
     image_key: str
     source_id: str  # extend: the clip to carry on
     source_image_id: str  # image: the picture of the library it animates, when it came from there
@@ -214,6 +216,9 @@ def build_video_graph(
             return refuse_with("invalid_request", f"Please choose a length of {lengths} seconds.")
         if mode == "image" and (not key or await find_upload(key) is None):
             return refuse_with("invalid_request", "Please upload your picture again.")
+        quality = state.get("quality") or "final"
+        if quality not in ("final", "draft") or (quality == "draft" and mode != "image"):
+            return refuse_with("invalid_request", "Only Animate has a draft setting.")
         loras, why = check_looks(state.get("loras"))
         if why:
             return refuse_with("invalid_request", why)
@@ -232,6 +237,7 @@ def build_video_graph(
             "prompt": prompt,
             "shape": str(state.get("shape") or DEFAULT_SHAPE),
             "seconds": seconds,
+            "quality": quality,
             "image_key": key if mode == "image" else "",
             "loras": loras,
             "lora_files": lora_files,
@@ -356,6 +362,7 @@ def build_video_graph(
                     image_key=state["image_key"],
                     length=LENGTHS[seconds],
                     seed=seed,
+                    **(DRAFT if state.get("quality") == "draft" else {}),
                     **looks,
                 )
             else:

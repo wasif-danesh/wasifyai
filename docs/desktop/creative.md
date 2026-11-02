@@ -47,3 +47,14 @@ move by a beat, Z undoes, Shift+Z redoes). Voice turns the song's words on or of
 **Make a version to watch** makes the video only; **Make the video** makes it if the cut changed and keeps it in Your videos, a new video every time; **Save a copy** writes
 the last one kept as an MP4. Measured: a 90 s song of 25 stills rendered in 19 s at 1920x1080. `creative.db` keeps the cut's revisions (`cuts`, `cut_revisions`, the last
 30), its latest video (`renders`, under the product's storage at `cuts/<project>/`) and what was kept (`exports`). Captions are burned in by the bundled ffmpeg (libass).
+
+## Motion (CS4)
+
+On the Shots step, once there are stills, the **Motion** panel turns them into clips with the video product's Animate. **Draft 30 seconds** animates the whole shots of
+a stretch of about 30 seconds, from the song's loudest part unless you choose another start; it is the draft setting (15 steps on about an eighth of a megapixel), quick
+and soft. **Make it better** animates the shots the plan marks Animate at the final setting (30 steps, about a quarter megapixel). A selected shot has **Make a clip**.
+Each clip is 5 seconds (a shorter shot uses its start), becomes the shot's chosen version, goes into Your videos, and the still stays as another version. The preview and
+the cut use the clips. Before Start the panel says the stretch, how many clips, the time as a range and the disk; the time comes from CS0's figures until clips are made
+here, then from the last 12 at that setting, and while it runs the panel says the time left from the clips this run made. **Stop** keeps the clips; **Go on** makes only
+the shots with no up-to-date clip at that setting (a final clip counts for a draft). The Animate screen of Video has the same Final and Draft setting.
+

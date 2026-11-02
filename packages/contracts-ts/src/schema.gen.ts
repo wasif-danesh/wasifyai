@@ -1263,6 +1263,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-creative/creative/projects/{item}/motion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make Motion
+         * @description Animate a draft excerpt, the shots marked Animate (final), or one shot. Stop with /shots/stop.
+         */
+        post: operations["make_motion_products_wasifyai_creative_creative_projects__item__motion_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-creative/creative/projects/{item}/motion/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Motion Estimate
+         * @description Before Start: which shots, how many clips, how long, how much disk, whether it fits.
+         */
+        get: operations["motion_estimate_products_wasifyai_creative_creative_projects__item__motion_estimate_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-creative/creative/projects/{item}/parts/{beat}/rewrite": {
         parameters: {
             query?: never;
@@ -5119,6 +5159,25 @@ export interface components {
              */
             title: string;
         };
+        /** MakeMotion */
+        MakeMotion: {
+            /**
+             * Quality
+             * @default draft
+             * @enum {string}
+             */
+            quality: "draft" | "final";
+            /**
+             * Shot Id
+             * @description Only this shot.
+             */
+            shot_id?: string | null;
+            /**
+             * Start
+             * @description Where a draft excerpt starts, in seconds.
+             */
+            start?: number | null;
+        };
         /** MakePlan */
         MakePlan: {
             /**
@@ -8611,6 +8670,80 @@ export interface operations {
                 item: string;
                 kind: string;
                 media_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    make_motion_products_wasifyai_creative_creative_projects__item__motion_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MakeMotion"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    motion_estimate_products_wasifyai_creative_creative_projects__item__motion_estimate_get: {
+        parameters: {
+            query?: {
+                quality?: "draft" | "final";
+                start?: number | null;
+                shot_id?: string | null;
+            };
+            header?: never;
+            path: {
+                item: string;
             };
             cookie?: never;
         };

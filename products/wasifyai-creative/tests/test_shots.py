@@ -119,8 +119,12 @@ class Pictures:
         if self.hold is not None and number >= 3:
             await self.hold.wait()
         if number in self.fail:
-            return SimpleNamespace(status="error", output={}, text="The picture model stopped.")
-        return SimpleNamespace(status="ok", output={"image_id": f"{number:032d}"}, text="")
+            return SimpleNamespace(
+                status="error", output={}, text="The picture model stopped.", code="failed"
+            )
+        return SimpleNamespace(
+            status="ok", output={"image_id": f"{number:032d}"}, text="", code=None
+        )
 
 
 def setup(

@@ -158,7 +158,7 @@ describe("VideoWorkspace", () => {
     }
   });
 
-  it("keeps the picture of the library a clip animates, and forgets it when another is chosen", async () => {
+  it("keeps the picture of the library a clip animates, forgets it when another is chosen, and sends the draft setting", async () => {
     const uploaded = (n: number) =>
       new Response(
         JSON.stringify({
@@ -203,6 +203,7 @@ describe("VideoWorkspace", () => {
           await waitFor(() => expect(n).toBe(2));
         }
         await user.type(screen.getByRole("textbox"), "snow falls");
+        if (replace) await user.click(screen.getByRole("button", { name: /^Draft/ }));
         await waitFor(() =>
           expect(screen.getByRole("button", { name: "Make the video" })).toBeEnabled(),
         );
@@ -216,6 +217,9 @@ describe("VideoWorkspace", () => {
         const body = JSON.parse(String(run?.[1]?.body));
         if (replace) expect(body.input).not.toHaveProperty("source_image_id");
         else expect(body.input.source_image_id).toBe("i-1");
+        // the draft setting is sent only when it is chosen
+        if (replace) expect(body.input.quality).toBe("draft");
+        else expect(body.input).not.toHaveProperty("quality");
         unmount();
       }
     } finally {

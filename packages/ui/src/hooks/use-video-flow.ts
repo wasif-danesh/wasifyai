@@ -34,6 +34,8 @@ export type VideoRequest = {
   sourceId?: string;
   /** image: the picture of the library it animates ("Animate this"), kept as where the clip came from */
   sourceImageId?: string;
+  /** image: the draft setting, about four times as quick and softer (ADR-0090 CS4) */
+  draft?: boolean;
   /** looks the person taught (LoRAs on the video model), each with its strength */
   loras?: { name: string; weight: number }[];
 };
@@ -162,6 +164,7 @@ export function useVideoFlow(api: VideoFlowApi) {
               ...(request.mode === "image" && request.sourceImageId
                 ? { source_image_id: request.sourceImageId }
                 : {}),
+              ...(request.mode === "image" && request.draft ? { quality: "draft" } : {}),
             };
       const body =
         request.loras && request.loras.length > 0 ? { ...input, loras: request.loras } : input;

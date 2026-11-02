@@ -135,6 +135,26 @@ async def test_image_to_video_uses_the_picture_and_deletes_it_afterwards(tmp_pat
     assert rig.asked() == []  # nothing judges the picture
 
 
+async def test_a_draft_clip_takes_fewer_steps_on_a_smaller_picture(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+    up = await put_upload(rig)
+    await Story(rig).start(
+        {"mode": "image", "prompt": "snow falls", "image_key": up.key, "quality": "draft"}
+    )
+    job = rig.sink.submitted[0]
+    assert (job.prompt["steps"], job.prompt["megapixels"]) == (15, 0.125)
+    final = make_rig(tmp_path / "final")
+    up = await put_upload(final)
+    await Story(final).start({"mode": "image", "prompt": "snow falls", "image_key": up.key})
+    assert "megapixels" not in final.sink.submitted[0].prompt
+
+
+async def test_only_animate_has_a_draft_setting(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "quality": "draft"})
+    assert s.state["status"] == "refused" and rig.sink.submitted == []
+
+
 async def test_a_missing_or_foreign_picture_is_refused_up_front(tmp_path, ctx):
     rig = make_rig(tmp_path)
     theirs = await put_upload(rig, user_id="someone-else")

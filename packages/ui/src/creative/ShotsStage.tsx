@@ -4,6 +4,7 @@
 import {
   type CreativeApi,
   type CreativeProject,
+  type MotionQuality,
   type Shot,
   type StillMode,
   type StillsEstimate,
@@ -19,16 +20,12 @@ import { Notice } from "../components/notice";
 import { Segmented } from "../components/segmented";
 import { Spinner } from "../components/spinner";
 import { actions, hint, panel } from "../styles";
+import { MotionPanel, minutes, timeLeft } from "./MotionPanel";
 
 const MODES = [
   { value: "reference", label: "From reference pictures" },
   { value: "plain", label: "Plain, about twice as fast" },
 ];
-
-function minutes(seconds: number): string {
-  if (seconds < 90) return `${Math.round(seconds)} seconds`;
-  return `${Math.round(seconds / 60)} minutes`;
-}
 
 function chosenOf(takes: Take[] | undefined): Take | undefined {
   return takes?.find((t) => t.chosen);
@@ -199,13 +196,19 @@ function Still({ cover, alt }: { cover: string | undefined; alt: string }) {
   );
 }
 
-/** The selected shot, large, with its takes and Redo. */
+function clipWord(take: Take | undefined): string | null {
+  if (take?.kind !== "video") return null;
+  return take.mode === "draft" ? "Draft clip" : take.mode === "final" ? "Clip" : "Clip, added";
+}
+
+/** The selected shot, large, with its takes, Redo and its clip. */
 function Selected({
   api,
   project,
   shot,
   number,
   mode,
+  quality,
   coverOf,
   act,
 }: {
@@ -214,18 +217,31 @@ function Selected({
   shot: Shot;
   number: number;
   mode: StillMode;
+  quality: MotionQuality;
   coverOf: (kind: string, id: string) => string | undefined;
   act: (work: () => Promise<CreativeProject>) => Promise<void>;
 }) {
   const takes = project.shots.takes[shot.id] ?? [];
   const chosen = chosenOf(takes);
   const busy = project.shots_live || project.live;
+  const clip = clipWord(chosen);
   return (
     <section aria-label={`Shot ${number}`} className={`${panel} grid gap-2`}>
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="m-0 font-semibold text-base">Shot {number}</h2>
+        {clip ? <Badge variant="secondary">{clip}</Badge> : null}
         {chosen?.out_of_date ? <Badge variant="destructive">Out of date</Badge> : null}
         <span className="grow" />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy || !takes.some((t) => t.kind === "image")}
+          title={takes.some((t) => t.kind === "image") ? undefined : "Make the still first"}
+          onClick={() => void act(() => api.makeMotion(project.id, { quality, shot_id: shot.id }))}
+        >
+          {quality === "draft" ? "Make a draft clip" : "Make a clip"}
+        </Button>
         <Button
           type="button"
           variant="outline"
@@ -250,7 +266,7 @@ function Selected({
                 <button
                   type="button"
                   aria-pressed={take.chosen}
-                  aria-label={`Version ${i + 1} of shot ${number}${take.out_of_date ? ", out of date" : ""}`}
+                  aria-label={`Version ${i + 1} of shot ${number}${take.kind === "video" ? `, ${clipWord(take)?.toLowerCase()}` : ""}${take.out_of_date ? ", out of date" : ""}`}
                   disabled={busy}
                   onClick={() => void act(() => api.chooseTake(project.id, shot.id, take.id))}
                   className={`w-20 cursor-pointer rounded-md border-2 p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 ${take.chosen ? "border-primary" : "border-transparent"}`}
@@ -289,26 +305,41 @@ export function ShotsStage({
   const run = project.shots.run;
   const at = shots.findIndex((s) => s.id === selected);
   const current = at < 0 ? undefined : shots[at];
+  const [quality, setQuality] = useState<MotionQuality>("draft");
+  const someStills = project.shots.missing.length < shots.length;
+  const left = timeLeft(project);
   return (
     <>
       <RunNotice project={project} />
       <Preview project={project} />
       {project.shots_live && run ? (
         <WorkingCard
-          label={run.stage || "Making the stills"}
+          label={run.stage || (run.kind === "motion" ? "Making the clips" : "Making the stills")}
           onCancel={() => void act(() => api.stopStills(project.id))}
         >
-          {run.kind === "stills" ? (
+          {run.kind === "stills" || run.kind === "motion" ? (
             <JobMeter
-              title="The stills"
+              title={run.kind === "motion" ? "The clips" : "The stills"}
               text={`${run.finished} of ${run.total}`}
               value={run.total ? run.finished / run.total : 0}
-              label="Stills made"
+              label={run.kind === "motion" ? "Clips made" : "Stills made"}
             />
           ) : null}
+          {left ? <p className={`${hint} m-0`}>{left}</p> : null}
         </WorkingCard>
       ) : (
-        <HonestPanel api={api} project={project} mode={mode} onMode={onMode} act={act} />
+        <>
+          <HonestPanel api={api} project={project} mode={mode} onMode={onMode} act={act} />
+          {someStills ? (
+            <MotionPanel
+              api={api}
+              project={project}
+              quality={quality}
+              onQuality={setQuality}
+              act={act}
+            />
+          ) : null}
+        </>
       )}
       {current ? (
         <Selected
@@ -317,6 +348,7 @@ export function ShotsStage({
           shot={current}
           number={at + 1}
           mode={mode}
+          quality={quality}
           coverOf={coverOf}
           act={act}
         />
@@ -331,7 +363,7 @@ export function ShotsStage({
               <button
                 type="button"
                 aria-pressed={on}
-                aria-label={`Shot ${i + 1}${chosen?.out_of_date ? ", out of date" : ""}${takes.length ? "" : ", no still yet"}`}
+                aria-label={`Shot ${i + 1}${chosen?.kind === "video" ? `, ${clipWord(chosen)?.toLowerCase()}` : ""}${chosen?.out_of_date ? ", out of date" : ""}${takes.length ? "" : ", no still yet"}`}
                 onClick={() => onSelect(shot.id)}
                 className={`grid w-full cursor-pointer gap-1 rounded-md border p-1 text-start outline-none hover:border-primary/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 ${on ? "border-primary ring-1 ring-primary" : ""}`}
               >
@@ -341,6 +373,7 @@ export function ShotsStage({
                   {takes.length > 1 ? (
                     <span className="text-muted-foreground">{takes.length} versions</span>
                   ) : null}
+                  {chosen?.kind === "video" ? <Badge variant="secondary">Clip</Badge> : null}
                   {chosen?.out_of_date ? <Badge variant="destructive">Out of date</Badge> : null}
                 </span>
               </button>

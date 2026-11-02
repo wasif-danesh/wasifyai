@@ -161,6 +161,28 @@ class ChooseTakeIn(BaseModel):
     take_id: str = Field(min_length=1, max_length=64)
 
 
+class AnimateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str = Field(min_length=32, max_length=32)
+    quality: Literal["draft", "final"] = Field(
+        "draft",
+        description=(
+            "draft: about 30 seconds of the song (its loudest part unless start says where), quick "
+            "and soft. final: the shots the plan marks Animate, sharp and about four times as long."
+        ),
+    )
+    start: float | None = Field(None, ge=0, description="Draft only: where the 30 seconds start.")
+    shot_id: str | None = Field(
+        None, min_length=1, max_length=32, description="Only this shot, made again."
+    )
+
+
+class AnimateOut(BaseModel):
+    project_id: str
+    clips: int = Field(description="Shots of the plan that now have a clip.")
+
+
 class ShotsOut(BaseModel):
     project_id: str
     missing: int = Field(description="Shots with no still yet.")
@@ -402,6 +424,34 @@ async def _redo_shot(p: RedoShotIn, ctx: ActionContext) -> Outcome:
     except Refused as e:
         return Outcome.refused(e.message, e.code)
     return _ran(ctx, p.project_id)
+
+
+async def _animate(p: AnimateIn, ctx: ActionContext) -> Outcome:
+    deps = need_deps(ctx)
+    row = _row(ctx, p.project_id)
+    if row is None:
+        return Outcome.refused(GONE, "not_found")
+    jobs = manager_for(deps).shots
+    try:
+        await jobs.start_motion(ctx.actor, row, p.quality, p.start, p.shot_id)
+        try:
+            await jobs.wait(ctx.actor, p.project_id)
+        except asyncio.CancelledError:
+            await jobs.stop_and_wait(ctx.actor, p.project_id)
+            raise
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    store = store_for(deps.state)
+    run = store.run_of(p.project_id) or {}
+    if run.get("status") == "failed":
+        return Outcome.error(
+            run.get("error") or "It stopped on a problem. What was made is kept.", "failed"
+        )
+    clips = len({t["shot_id"] for t in store.takes_of(p.project_id) if t["kind"] == "video"})
+    return Outcome.ok(
+        {"project_id": p.project_id, "clips": clips},
+        "Done. The clips are used for their shots in Creative Studio and kept in Your videos.",
+    )
 
 
 async def _choose_take(p: ChooseTakeIn, ctx: ActionContext) -> Outcome:
@@ -654,6 +704,31 @@ def actions() -> list[Action]:
             long=True,
             product=PRODUCT_ID,
             bind=CallBinding(_redo_shot),
+            ui="creative",
+        ),
+        Action(
+            id="creative.animate",
+            title="Animate a music video's shots",
+            summary="Set shots moving: a quick 30 second draft, or the Animate shots made well.",
+            description=(
+                "Turn the stills of a Creative Studio plan into short clips. draft animates about 30 "
+                "seconds of the song quickly and softly (about 50 seconds a shot), to see the motion "
+                "first; final animates the shots the plan marks Animate, sharp (about 3 minutes a "
+                "shot). With shot_id, only that shot. Each clip is saved as it is made, used for its "
+                "shot and kept in Your videos; stopping keeps them."
+            ),
+            input=AnimateIn,
+            output=AnimateOut,
+            examples=(
+                {"project_id": SAMPLE_PROJECT},
+                {"project_id": SAMPLE_PROJECT, "quality": "final"},
+            ),
+            effect="make",
+            flags=("private", "costly"),
+            requires=(HERE,),
+            long=True,
+            product=PRODUCT_ID,
+            bind=CallBinding(_animate),
             ui="creative",
         ),
         Action(

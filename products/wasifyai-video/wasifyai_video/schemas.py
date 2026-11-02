@@ -22,6 +22,12 @@ FPS = 24
 LENGTHS: dict[int, int] = {5: 121, 8: 193}
 DEFAULT_SECONDS = 5
 
+# Animate at the draft setting (ADR-0090 CS4): fewer steps on a smaller picture, about four times
+# as quick and softer (docs/spikes/creative-cs0.md: 48 to 50 s for 5 s, against 142 to 192 s). The
+# final setting is the workflow's own (30 steps, about a quarter megapixel).
+Quality = Literal["final", "draft"]
+DRAFT = {"steps": 15, "megapixels": 0.125}
+
 # Extend video (docs/spikes/video-extend-vx0.md): the last OVERLAP_FRAMES frames of a clip start a
 # new clip of LENGTHS[seconds] frames, which repeats them first. The clip is kept up to those frames
 # and the whole new clip follows, so a round adds LENGTHS[seconds] - OVERLAP_FRAMES frames (112 or

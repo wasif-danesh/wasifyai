@@ -23,7 +23,7 @@ import imageio_ffmpeg
 from wasifyai_platform_sdk import Identity, RouteDeps, RunContext, set_context
 from wasifyai_platform_sdk.context import reset_context
 
-from wasifyai_creative import cutting, stills
+from wasifyai_creative import cutting, motion, stills
 from wasifyai_creative.cut import render_command
 from wasifyai_creative.store import CreativeStore
 
@@ -310,6 +310,140 @@ class ShotJobs:
                 failed += 1
                 in_a_row += 1
                 problem = done.text or "A still could not be made."
+                if done.status == "needs_setup" or in_a_row >= GIVE_UP_AFTER:
+                    store.end_run(item, "failed", f"{problem} What was made is kept.")
+                    return
+            finished += 1
+            store.run_progress(item, "", finished, failed)
+        if failed:
+            store.end_run(item, "failed", f"{failed} could not be made: {problem} Try those again.")
+
+    def _motion_shots(
+        self, row: dict[str, Any], quality: str, start: float | None, shot: str | None
+    ) -> tuple[list[str], float | None]:
+        """Which shots a motion run is for, and where a draft excerpt starts."""
+        shots = (row["plan"] or {}).get("shots", [])
+        if shot is not None:
+            return [shot], None
+        if quality == motion.FINAL:
+            return motion.better(shots), None
+        at = motion.loudest_start(row["facts"].get("sections", [])) if start is None else start
+        return motion.excerpt(shots, at), at
+
+    async def motion_estimate(
+        self, row: dict[str, Any], quality: str, start: float | None, shot: str | None = None
+    ) -> dict[str, Any]:
+        """The honest panel for clips: which shots, how many still to make, the time as a range, the disk, whether it fits."""
+        store = self._store()
+        takes = store.takes_of(row["id"])
+        chosen = store.chosen_of(row["id"])
+        by_id = {s["id"]: s for s in (row["plan"] or {}).get("shots", [])}
+        wanted, at = self._motion_shots(row, quality, start, shot)
+        todo = no_still = 0
+        for sid in wanted:
+            found = by_id.get(sid)
+            if found is None:
+                continue
+            if motion.source_of(takes, chosen, sid) is None:
+                no_still += 1
+            elif not motion.has_clip(takes, sid, quality, stills.inputs_of(found, row["brief"])):
+                todo += 1
+        made = motion.estimate(
+            todo,
+            quality,
+            motion.measured(takes, quality),
+            free_bytes(self._deps.state.desktop_dir or "."),
+        )
+        picked = [by_id[s] for s in wanted if s in by_id]
+        executor = self._executor()
+        action = executor.registry.get("video.animate")
+        ready = await executor.readiness(action) if action else None
+        return {
+            **made, "quality": quality, "count": todo, "shots": len(picked), "no_still": no_still,
+            "start": picked[0]["start"] if picked else 0.0, "end": picked[-1]["end"] if picked else 0.0,
+            "loudest": at is not None and start is None,
+            "sections": [{"start": s["start"], "end": s["end"], "label": s.get("label", "")} for s in row["facts"].get("sections", [])],
+            "ready": bool(ready and ready.state == "ready"),
+            "step": (ready.step or ready.reason or None) if ready else "Clips cannot be made here.",
+        }  # fmt: skip
+
+    async def start_motion(
+        self,
+        identity: Identity,
+        row: dict[str, Any],
+        quality: str,
+        start: float | None,
+        shot: str | None,
+    ) -> None:
+        """Animate the shots: a draft excerpt, Make it better, or one shot. A shot with an up-to-date clip at this setting is skipped,
+        so going on after a stop makes only what is missing."""
+        if not row["plan"]:
+            raise Refused("no_plan", "There is no plan yet.")
+        if shot is not None and not any(s["id"] == shot for s in row["plan"]["shots"]):
+            raise Refused("not_found", "There is no such shot in this plan.")
+        ask = await self.motion_estimate(row, quality, start, shot)
+        if not ask["ready"]:
+            raise Refused("needs_setup", ask["step"] or "The video model is not set up yet.")
+        if ask["fit"] == "too_big":
+            raise Refused("too_big", "There is not enough room on the disk for these clips.")
+        wanted, _ = self._motion_shots(row, quality, start, shot)
+        if shot is None and not ask["count"]:
+            raise Refused(
+                "nothing",
+                "These shots have no stills yet. Make the stills first."
+                if ask["no_still"]
+                else "These shots already have their clips.",
+            )
+        self._begin(
+            identity, row["id"], "motion", "Getting ready", ask["count"] if shot is None else 1,
+            lambda: self._motion(identity, row["id"], wanted, quality, again=shot is not None),
+        )  # fmt: skip
+
+    async def _motion(
+        self, identity: Identity, item: str, wanted: list[str], quality: str, *, again: bool
+    ) -> None:
+        store = self._store()
+        finished = failed = in_a_row = 0
+        problem = ""
+        for shot_id in wanted:
+            row = store.get(identity.tenant_id, identity.user_id, item)
+            shot = next((s for s in row["plan"]["shots"] if s["id"] == shot_id), None)
+            takes = store.takes_of(item)
+            source = motion.source_of(takes, store.chosen_of(item), shot_id) if shot else None
+            mark = stills.inputs_of(shot, row["brief"]) if shot else ""
+            if (
+                shot is None
+                or source is None
+                or (not again and motion.has_clip(takes, shot_id, quality, mark))
+            ):
+                continue  # gone from the plan, no still to start from, or made already
+            number = row["plan"]["shots"].index(shot) + 1
+            store.run_progress(item, f"Animating shot {number}", finished, failed)
+            prompt = motion.clip_prompt(shot, row["brief"])
+            started = time.monotonic()
+            done = await self._executor().run_action(
+                "video.animate",
+                {"image_id": source["item_id"], "prompt": prompt, "seconds": motion.CLIP_S, "quality": quality},
+                "window", actor=identity, person_approved=True,
+            )  # fmt: skip
+            if done.status == "ok" and done.output.get("video_id"):
+                in_a_row = 0
+                clip = done.output["video_id"]
+                store.add_media(item, "video", clip, shot_id, made=True)
+                store.add_take(
+                    item, shot_id, "video", clip, mark, prompt, quality,
+                    round(time.monotonic() - started, 1), row["revision"], choose=True,
+                )  # fmt: skip
+            elif done.code == "busy":
+                store.end_run(
+                    item, "failed",
+                    "Another video is being made. Go on when it is done; the clips made are kept.",
+                )  # fmt: skip
+                return
+            else:
+                failed += 1
+                in_a_row += 1
+                problem = done.text or "A clip could not be made."
                 if done.status == "needs_setup" or in_a_row >= GIVE_UP_AFTER:
                     store.end_run(item, "failed", f"{problem} What was made is kept.")
                     return

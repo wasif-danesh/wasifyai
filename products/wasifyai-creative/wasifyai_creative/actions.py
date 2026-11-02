@@ -19,7 +19,8 @@ from wasifyai_platform_sdk.actions import (
 )
 from wasifyai_platform_sdk.actions.helpers import need_deps
 
-from wasifyai_creative import editor, stills
+from wasifyai_creative import cutting, editor, stills
+from wasifyai_creative.cut import CutRefused, apply_cut_edits
 from wasifyai_creative.document import Brief, EditRefused
 from wasifyai_creative.routes import edit_project, title_of
 from wasifyai_creative.runtime import (
@@ -164,6 +165,42 @@ class ShotsOut(BaseModel):
     project_id: str
     missing: int = Field(description="Shots with no still yet.")
     out_of_date: int = Field(description="Shots whose still was made before the shot changed.")
+
+
+class EditCutIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str = Field(min_length=32, max_length=32)
+    edits: list[dict[str, Any]] = Field(
+        min_length=1, max_length=50,
+        description="Changes to the cut, in order. Pieces: {op: 'move', item_id, to}, {op: 'length', item_id, "
+        "by_beats}, {op: 'split', item_id}, {op: 'fade', item_id, fade}, {op: 'remove', item_id}. Captions: "
+        "{op: 'caption', caption_id, text?, by_beats?}, {op: 'add_caption', kind: 'line'|'title'|'lower', text, "
+        "start, end}, {op: 'remove_caption', caption_id}, {op: 'captions', on}, {op: 'song_lines'} (the song's words where they were sung, again).",
+    )  # fmt: skip
+
+
+class CutOut(BaseModel):
+    project_id: str
+    pieces: int
+    captions: int
+    black_s: float = Field(description="Seconds at the end with no picture.")
+    empty: int = Field(description="Pieces with nothing to show yet.")
+
+
+class ExportIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str = Field(min_length=32, max_length=32)
+    title: str = Field(
+        "", max_length=120, description="What the video is called; left out, the project's name."
+    )
+
+
+class ExportOut(BaseModel):
+    project_id: str
+    video_id: str
+    uri: str
 
 
 def _item(row: dict[str, Any]) -> LibraryItem:
@@ -396,6 +433,106 @@ async def _preview(p: ProjectIn, ctx: ActionContext) -> Outcome:
     return _ran(ctx, p.project_id)
 
 
+def _cut_out(ctx: ActionContext, row: dict[str, Any]) -> dict[str, Any]:
+    now = cutting.view(store_for(need_deps(ctx).state), row) or {}
+    summary = now.get("summary", {})
+    return {
+        "project_id": row["id"], "pieces": len(now.get("items", [])), "captions": len(now.get("captions", [])),
+        "black_s": summary.get("black_tail", 0.0), "empty": summary.get("empty", 0),
+    }  # fmt: skip
+
+
+async def _edit_cut(p: EditCutIn, ctx: ActionContext) -> Outcome:
+    deps = need_deps(ctx)
+    store = store_for(deps.state)
+    row = _row(ctx, p.project_id)
+    if row is None:
+        return Outcome.refused(GONE, "not_found")
+    if manager_for(deps).shots.active(ctx.actor) == p.project_id:
+        return Outcome.refused("The video is being made. Wait for it.", "busy")
+    found = cutting.current(store, row)
+    if found is None:
+        return Outcome.refused("There is no plan yet, so there is no cut.", "no_plan")
+    try:
+        new = apply_cut_edits(
+            found["cut"],
+            p.edits,
+            row["facts"].get("beats", []),
+            cutting.song_s(row),
+            cutting.song_lines(row),
+        )
+    except CutRefused as e:
+        return Outcome.refused(str(e), "bad_edit")
+    except (KeyError, TypeError, ValueError):
+        return Outcome.refused("That change is missing something.", "bad_edit")
+    if new == found["cut"]:
+        return Outcome.refused(
+            "The cut already says that, so there is nothing to change.", "bad_edit"
+        )
+    store.save_cut(row["id"], new, "Changed by the assistant")
+    await add_to_search(deps.state, ctx.actor, row)
+    out = _cut_out(ctx, row)
+    return Outcome.ok(
+        out, f"The cut was changed. It has {out['pieces']} pieces and {out['captions']} captions."
+    )
+
+
+async def _run_cut(ctx: ActionContext, row: dict[str, Any], keep: str | None) -> Outcome | None:
+    jobs = manager_for(need_deps(ctx)).shots
+    try:
+        jobs.start_cut(ctx.actor, row, keep)
+        await jobs.wait(ctx.actor, row["id"])
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    run = store_for(need_deps(ctx).state).run_of(row["id"]) or {}
+    if run.get("status") == "failed":
+        return Outcome.error(run.get("error") or "The video could not be made.", "failed")
+    return None
+
+
+async def _cut(p: ProjectIn, ctx: ActionContext) -> Outcome:
+    row = _row(ctx, p.project_id)
+    if row is None:
+        return Outcome.refused(GONE, "not_found")
+    wrong = await _run_cut(ctx, row, None)
+    if wrong:
+        return wrong
+    out = _cut_out(ctx, row)
+    return Outcome.ok(
+        out,
+        "The video is made. Watch it in Creative Studio's Cut step."
+        + (f" {out['empty']} pieces have no picture yet and are black." if out["empty"] else ""),
+    )
+
+
+async def _export(p: ExportIn, ctx: ActionContext) -> Outcome:
+    row = _row(ctx, p.project_id)
+    if row is None:
+        return Outcome.refused(GONE, "not_found")
+    title = p.title.strip() or row["title"]
+    wrong = await _run_cut(ctx, row, title)
+    if wrong:
+        return wrong
+    kept = store_for(need_deps(ctx).state).exports_of(row["id"])
+    if not kept:
+        return Outcome.error("The video could not be kept.", "failed")
+    video = kept[0]["video_id"]
+    return Outcome.ok(
+        {"project_id": row["id"], "video_id": video, "uri": f"wasify://creation/video/{video}"},
+        f'"{title}" is saved to Your videos as a new video.',
+    )
+
+
+async def _read_video(ctx: ActionContext, item_id: str) -> bytes | None:
+    """The project's latest video, for the video product to keep (creative.export)."""
+    store = store_for(need_deps(ctx).state)
+    try:
+        store.get(ctx.actor.tenant_id, ctx.actor.user_id, item_id)
+    except NotFound:
+        return None
+    return await cutting.read_render(need_deps(ctx), store, ctx.actor, item_id)
+
+
 async def _list(ctx: ActionContext, limit: int) -> list[LibraryItem]:
     rows = await asyncio.to_thread(
         store_for(need_deps(ctx).state).list_projects,
@@ -554,6 +691,68 @@ def actions() -> list[Action]:
             ui="creative",
         ),
         Action(
+            id="creative.edit_cut",
+            title="Change a music video's cut",
+            summary="Move, lengthen, split or fade a piece of the cut, or change its captions.",
+            description=(
+                "Change the cut of a Creative Studio project: move a piece, make it longer or shorter by "
+                "beats, split it, fade into it or take it out, and change, move, add or take out a "
+                "caption or a title. Changing the plan's shots is creative.edit_plan; this is only the cut."
+            ),
+            input=EditCutIn,
+            output=CutOut,
+            examples=(
+                {
+                    "project_id": SAMPLE_PROJECT,
+                    "edits": [{"op": "length", "item_id": "c3", "by_beats": 2}],
+                },
+            ),
+            effect="change",
+            requires=(HERE,),
+            product=PRODUCT_ID,
+            bind=CallBinding(_edit_cut),
+            ui="creative",
+        ),
+        Action(
+            id="creative.cut",
+            title="Make a music video",
+            summary="Make the finished video of a cut: its pictures, the song and the captions.",
+            description=(
+                "Make the video of a Creative Studio project's cut at full size, with the song and the "
+                "captions. It takes about a minute for a 3-minute song of stills. It is kept with the project; "
+                "creative.export keeps it in Your videos."
+            ),
+            input=ProjectIn,
+            output=CutOut,
+            examples=({"project_id": SAMPLE_PROJECT},),
+            effect="make",
+            flags=("private",),
+            requires=(HERE,),
+            long=True,
+            product=PRODUCT_ID,
+            bind=CallBinding(_cut),
+            ui="creative",
+        ),
+        Action(
+            id="creative.export",
+            title="Keep a music video in Your videos",
+            summary="Save a project's finished video to Your videos as a new video.",
+            description=(
+                "Save the finished video of a Creative Studio project to Your videos, making it first "
+                "if the cut has changed. Every time is a new video; the old ones stay."
+            ),
+            input=ExportIn,
+            output=ExportOut,
+            examples=({"project_id": SAMPLE_PROJECT, "title": "Dawn drive"},),
+            effect="make",
+            flags=("private",),
+            requires=(HERE,),
+            long=True,
+            product=PRODUCT_ID,
+            bind=CallBinding(_export),
+            ui="creative",
+        ),
+        Action(
             id="creative.read_project",
             title="Read a plan",
             summary="Read the plan of a project: its parts and every shot.",
@@ -624,7 +823,18 @@ def actions() -> list[Action]:
 
 
 def library_kinds() -> list[LibraryKind]:
-    return [LibraryKind(KIND, PRODUCT_ID, "Creative Studio project", _list, _get, _delete, _rename)]
+    return [
+        LibraryKind(
+            KIND,
+            PRODUCT_ID,
+            "Creative Studio project",
+            _list,
+            _get,
+            _delete,
+            _rename,
+            read=_read_video,
+        )
+    ]
 
 
 __all__ = ["actions", "library_kinds"]

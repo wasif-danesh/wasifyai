@@ -1097,6 +1097,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-creative/creative/projects/{item}/cut/edits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Edit Cut
+         * @description Change the cut: move, lengthen, split, fade, remove or put in a piece, and the captions. `reset` starts it again from the plan.
+         */
+        post: operations["edit_cut_products_wasifyai_creative_creative_projects__item__cut_edits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-creative/creative/projects/{item}/cut/keep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep Video
+         * @description Make the video if it is out of date, then keep it in Your videos: a new video every time.
+         */
+        post: operations["keep_video_products_wasifyai_creative_creative_projects__item__cut_keep_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-creative/creative/projects/{item}/cut/redo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Redo Cut */
+        post: operations["redo_cut_products_wasifyai_creative_creative_projects__item__cut_redo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-creative/creative/projects/{item}/cut/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo Cut */
+        post: operations["undo_cut_products_wasifyai_creative_creative_projects__item__cut_undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-creative/creative/projects/{item}/cut/video": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make Video
+         * @description Make the cut's video at full size, with the song and the captions. Follow it with GET.
+         */
+        post: operations["make_video_products_wasifyai_creative_creative_projects__item__cut_video_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-creative/creative/projects/{item}/edits": {
         parameters: {
             query?: never;
@@ -4514,6 +4608,18 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /** CutEdits */
+        CutEdits: {
+            /** Edits */
+            edits: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Note
+             * @default Changed in the cut
+             */
+            note: string;
+        };
         /** DatasetIn */
         DatasetIn: {
             /**
@@ -4969,6 +5075,14 @@ export interface components {
         KeepConversation: {
             /** Conversation Id */
             conversation_id: string;
+        };
+        /** KeepVideo */
+        KeepVideo: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
         };
         /** LauncherIn */
         LauncherIn: {
@@ -8156,6 +8270,179 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_cut_products_wasifyai_creative_creative_projects__item__cut_edits_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CutEdits"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    keep_video_products_wasifyai_creative_creative_projects__item__cut_keep_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeepVideo"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redo_cut_products_wasifyai_creative_creative_projects__item__cut_redo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_cut_products_wasifyai_creative_creative_projects__item__cut_undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    make_video_products_wasifyai_creative_creative_projects__item__cut_video_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

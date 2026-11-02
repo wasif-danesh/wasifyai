@@ -21,9 +21,9 @@ from fastapi import FastAPI, Header
 from fastapi.testclient import TestClient
 from PIL import Image
 from wasifyai_creative import stills
+from wasifyai_creative.cut import camera_filter
 from wasifyai_creative.routes import build_routes
 from wasifyai_creative.runtime import store_for
-from wasifyai_creative.shots import camera_filter
 from wasifyai_creative.store import CreativeStore
 from wasifyai_platform_sdk import EngineServices, Identity, RouteDeps
 from wasifyai_platform_sdk.storage import LocalFileStorage, ScopedStorage

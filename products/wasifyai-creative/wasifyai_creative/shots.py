@@ -23,13 +23,14 @@ import imageio_ffmpeg
 from wasifyai_platform_sdk import Identity, RouteDeps, RunContext, set_context
 from wasifyai_platform_sdk.context import reset_context
 
-from wasifyai_creative import stills
+from wasifyai_creative import cutting, stills
+from wasifyai_creative.cut import render_command
 from wasifyai_creative.store import CreativeStore
 
 log = logging.getLogger(__name__)
 
 PRODUCT_ID = "wasifyai-creative"
-PREVIEW_FPS = 24
+
 PREVIEW_SIZES = {"landscape": (1280, 720), "portrait": (720, 1280), "square": (960, 960)}
 FFMPEG_TIMEOUT_S = 1800
 GIVE_UP_AFTER = 3  # stills that fail in a row: something is wrong, so stop and say what
@@ -94,16 +95,6 @@ def _measured(takes: list[dict[str, Any]], mode: str) -> float | None:
     return sum(made) / len(made) if made else None
 
 
-def camera_filter(camera: str, frames: int, width: int, height: int) -> str:
-    """A still with a camera move: a push in, a pan or a very slow drift."""
-    z = f"min(1.0+0.10*on/{frames},1.10)" if "push" in camera else "1.04"
-    x = f"(iw-iw/zoom)*on/{frames}" if "pan" in camera else "(iw-iw/zoom)/2"
-    return (
-        f"scale={width * 2}:{height * 2}:force_original_aspect_ratio=increase,crop={width * 2}:{height * 2},"
-        f"zoompan=z='{z}':x='{x}':y='(ih-ih/zoom)/2':d={frames}:s={width}x{height}:fps={PREVIEW_FPS},setsar=1"
-    )
-
-
 def preview_command(
     ffmpeg: str,
     shots: list[dict[str, Any]],
@@ -112,54 +103,16 @@ def preview_command(
     shape: str,
     out: Path,
 ) -> list[str]:
-    """The ffmpeg call. Frames are counted from the song's start, so the cuts never drift from it."""
-    width, height = PREVIEW_SIZES[shape]
-    inputs: list[str] = []
-    parts: list[str] = []
-    labels: list[str] = []
-    n = 0
-    for shot in shots:
-        frames = max(1, round(shot["end"] * PREVIEW_FPS) - round(shot["start"] * PREVIEW_FPS))
-        length = f"{frames / PREVIEW_FPS:.4f}"
-        found = files.get(shot["id"])
-        label = f"v{len(labels)}"
-        end = f"trim=end_frame={frames},setpts=PTS-STARTPTS,format=yuv420p[{label}]"
-        if found is None:
-            inputs += [
-                "-f",
-                "lavfi",
-                "-t",
-                length,
-                "-i",
-                f"color=c=black:s={width}x{height}:r={PREVIEW_FPS}",
-            ]
-            parts.append(f"[{n}:v]setsar=1,{end}")
-        elif found[0] == "image":
-            inputs += [
-                "-loop",
-                "1",
-                "-framerate",
-                str(PREVIEW_FPS),
-                "-t",
-                length,
-                "-i",
-                str(found[1]),
-            ]
-            parts.append(f"[{n}:v]{camera_filter(shot['camera'], frames, width, height)},{end}")
-        else:
-            inputs += ["-stream_loop", "-1", "-t", length, "-i", str(found[1])]
-            parts.append(
-                f"[{n}:v]fps={PREVIEW_FPS},scale={width}:{height}:force_original_aspect_ratio=increase,"
-                f"crop={width}:{height},setsar=1,{end}"
-            )
-        labels.append(f"[{label}]")
-        n += 1
-    graph = ";".join(parts) + ";" + "".join(labels) + f"concat=n={len(labels)}:v=1:a=0[v]"
-    return [
-        ffmpeg, "-nostdin", "-v", "error", "-y", *inputs, "-i", str(song), "-filter_complex", graph,
-        "-map", "[v]", "-map", f"{n}:a", "-t", f"{shots[-1]['end']:.3f}", "-c:v", "libx264", "-preset", "veryfast",
-        "-crf", "26", "-r", str(PREVIEW_FPS), "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out),
+    """The ffmpeg call: each shot for its planned time, the same join as the Cut step's, as a quick draft."""
+    pieces = [
+        {"start": s["start"], "end": s["end"], "camera": s["camera"], "fade": False,
+         "kind": files[s["id"]][0] if s["id"] in files else None,
+         "path": files[s["id"]][1] if s["id"] in files else None}
+        for s in shots
     ]  # fmt: skip
+    return render_command(
+        ffmpeg, pieces, song, shots[-1]["end"], None, PREVIEW_SIZES[shape], out, draft=True
+    )
 
 
 class ShotJobs:
@@ -364,6 +317,50 @@ class ShotJobs:
             store.run_progress(item, "", finished, failed)
         if failed:
             store.end_run(item, "failed", f"{failed} could not be made: {problem} Try those again.")
+
+    def start_cut(self, identity: Identity, row: dict[str, Any], keep: str | None) -> None:
+        """Make the cut's video; with `keep` (its title), also keep it in Your videos, as a new video every time."""
+        found = cutting.view(self._store(), row)
+        if found is None:
+            raise Refused("no_plan", "There is no plan yet.")
+        if not any(p["item_id"] for p in found["items"]):
+            raise Refused("nothing", "There are no pictures in the cut yet. Make the stills first.")
+        made = found["render"] is not None and found["render"]["current"]
+        self._begin(
+            identity, row["id"], "cut", "Getting ready", (0 if made else 1) + (1 if keep else 0) or 1,
+            lambda: self._cut(identity, row["id"], keep, made),
+        )  # fmt: skip
+
+    async def _cut(self, identity: Identity, item: str, keep: str | None, made: bool) -> None:
+        store = self._store()
+        executor = self._executor()
+        finished = 0
+
+        def progress(stage: str) -> None:
+            store.run_progress(item, stage, finished, 0)
+
+        try:
+            mark = (
+                store.render_of(item)["mark"]  # type: ignore[index]
+                if made
+                else await cutting.render(self._deps, executor, store, identity, item, progress)
+            )
+        except cutting.CutFailed as e:
+            raise Refused(e.code, e.message) from None
+        if not made:
+            finished += 1
+        if keep is None:
+            return
+        progress("Keeping it in Your videos")
+        done = await executor.run_action(
+            "video.keep", {"from_kind": "creative_project", "from_id": item, "title": keep},
+            "window", actor=identity, person_approved=True,
+        )  # fmt: skip
+        if done.status != "ok":
+            raise Refused("not_kept", done.text or "The video could not be kept.")
+        store.add_export(item, done.output["video_id"], mark, keep)
+        finished += 1
+        progress("")
 
     def start_preview(self, identity: Identity, row: dict[str, Any]) -> None:
         if not row["plan"]:

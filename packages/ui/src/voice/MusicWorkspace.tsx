@@ -58,6 +58,9 @@ export type MusicWorkspaceProps = {
   onOpenLibrary?: () => void;
   title?: string;
   lead?: string;
+  /** inside another screen's panel: one narrow column and no recent, and what is made is handed over */
+  panel?: boolean;
+  onMade?: (id: string) => void;
 };
 
 const MODE_TEXT: Record<
@@ -124,6 +127,8 @@ export function MusicWorkspace({
   onOpenLibrary,
   title = "Create music",
   lead,
+  panel = false,
+  onMade,
 }: MusicWorkspaceProps) {
   const descId = useId();
   const lyricsId = useId();
@@ -219,6 +224,7 @@ export function MusicWorkspace({
           break;
         }
         setShownId(r.track.id);
+        onMade?.(r.track.id);
         await loadTracks();
       }
     } catch (e) {
@@ -507,6 +513,7 @@ export function MusicWorkspace({
   return (
     <>
       <MakeScreen
+        panel={panel}
         title={title}
         lead={lead}
         ask={
@@ -515,6 +522,7 @@ export function MusicWorkspace({
             <ModelPicker
               models={models}
               task="music"
+              inBody={panel}
               value={chosen?.id ?? null}
               onChange={(id) => {
                 setModelId(id);

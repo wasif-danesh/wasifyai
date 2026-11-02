@@ -37,6 +37,9 @@
 //   apps/desktop/scripts/ui-audit.sh light creative-shots       The Shots step (ADR-0090 CS2): a real redo, takes, the Image, Video and
 //                                                                Add tabs, a real file added, axe, a phone. Needs a project "cs2 real" with
 //                                                                its stills in a throwaway DESKTOP_DATA_DIR, and CS2_FILES with mine.png
+//   apps/desktop/scripts/ui-audit.sh light creative-cut         The Cut step (ADR-0090 CS3): the timeline's buttons and keys, a title, the
+//                                                                Voice tab, Make the video for real, Save a copy, axe, the smallest window.
+//                                                                Needs a project "cs3 real" with its stills in a throwaway DESKTOP_DATA_DIR
 //   apps/desktop/scripts/ui-audit.sh light motion-pack          The marketing pack (ADR-0096 MX7): a starting point, a
 //                                                                brand with a real logo, every shape made for real;
 //                                                                needs MOTION_FIXTURES and a throwaway DESKTOP_DATA_DIR
@@ -82,6 +85,7 @@ const wanted = (name) => names.size === 0 || names.has(name);
 mkdirSync(OUT, { recursive: true });
 
 const polyfill = `
+window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
 window.__TAURI_INTERNALS__ = {
   transformCallback(cb) { const id = Math.floor(Math.random() * 1e9); window["_" + id] = cb; return id; },
   unregisterCallback() {},
@@ -457,6 +461,108 @@ for (const scheme of ["light", "dark"]) {
       await shot(page, "creative-tab-add", 900);
       seen.axeAdd = await axe();
       console.log(`CREATIVESHOTS ${JSON.stringify(seen)}`);
+    });
+  }
+
+  if (names.has("creative-cut")) {
+    await attempt("creative-cut", async () => {
+      const seen = { errors: [], console: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      page.on("console", (m) => m.type() === "error" && seen.console.push(m.text().slice(0, 200)));
+      const axe = async () => {
+        const AxeBuilder = require("@axe-core/playwright").default;
+        const found = await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+          .analyze();
+        return found.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      };
+      await open(page, "/creative");
+      await page.getByRole("button", { name: /^cs3 real/ }).click();
+      await page.getByRole("radio", { name: "Cut" }).click();
+      const pictures = page.getByRole("list", { name: "Pictures" });
+      await pictures.waitFor({ timeout: 15000 });
+      await page.waitForTimeout(1500);
+      await shot(page, "creative-cut", 900);
+      seen.axeCut = await axe();
+      seen.pieces = await pictures.getByRole("button").count();
+      seen.captions = await page
+        .getByRole("list", { name: "Captions" })
+        .getByRole("button")
+        .count();
+      const second = pictures.getByRole("button").nth(1);
+      seen.before = await second.getAttribute("aria-label");
+      await second.click();
+      await page.getByRole("button", { name: "Longer" }).click();
+      await page.waitForTimeout(800);
+      seen.longer = await pictures.getByRole("button").nth(1).getAttribute("aria-label");
+      await page.getByRole("button", { name: "Fade in" }).click();
+      await page.waitForTimeout(800);
+      seen.faded = await pictures.getByRole("button").nth(1).getAttribute("aria-label");
+      await pictures.getByRole("button").nth(1).focus();
+      await page.keyboard.press("z");
+      await page.waitForTimeout(800);
+      seen.afterZ = await pictures.getByRole("button").nth(1).getAttribute("aria-label");
+      await page.keyboard.press("Shift+Z");
+      await page.waitForTimeout(800);
+      seen.afterShiftZ = await pictures.getByRole("button").nth(1).getAttribute("aria-label");
+      await page.keyboard.press("s");
+      await page.waitForTimeout(800);
+      seen.afterS = await pictures.getByRole("button").count();
+      await page.keyboard.press("z");
+      await page.waitForTimeout(800);
+      const make = page.getByRole("tablist", { name: "Make something for this project" });
+      await make.getByRole("tab", { name: "Titles" }).click();
+      await page.getByLabel("Words").fill("Dawn drive");
+      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await page.waitForTimeout(800);
+      seen.title = await page.getByRole("button", { name: /^Title at 0:00: Dawn drive/ }).count();
+      await shot(page, "creative-cut-titles", 900);
+      seen.axeTitles = await axe();
+      await make.getByRole("tab", { name: "Voice" }).click();
+      await page.waitForTimeout(800);
+      seen.voiceLines = await page.getByRole("textbox", { name: /^Words at/ }).count();
+      await shot(page, "creative-cut-voice", 900);
+      seen.axeVoice = await axe();
+      const caption = page.getByRole("list", { name: "Captions" }).getByRole("button").nth(1);
+      await caption.click();
+      await page.getByRole("button", { name: "A beat later" }).click();
+      await page.waitForTimeout(800);
+      seen.captionMoved = await page
+        .getByRole("list", { name: "Captions" })
+        .getByRole("button")
+        .nth(1)
+        .getAttribute("aria-label");
+      const kept = page.getByRole("list", { name: "Kept in Your videos" }).getByRole("listitem");
+      const before = await kept.count();
+      const started = Date.now();
+      await page.getByRole("button", { name: "Make the video" }).click();
+      await kept.nth(before).waitFor({ timeout: 1200000 }); // one more than there were: this one
+      seen.make_s = Math.round((Date.now() - started) / 1000);
+      await page.waitForTimeout(1500);
+      seen.video = await page.getByLabel("The video of the cut").evaluate(async (v) => {
+        await new Promise((r) =>
+          v.readyState > 0 ? r() : v.addEventListener("loadedmetadata", r),
+        );
+        return { seconds: v.duration, width: v.videoWidth, height: v.videoHeight };
+      });
+      await page.getByLabel("The video of the cut").evaluate((v) => {
+        v.currentTime = 1;
+      });
+      await page.waitForTimeout(1500);
+      await shot(page, "creative-cut-made", 900);
+      seen.axeMade = await axe();
+      await page.getByRole("button", { name: "Save a copy" }).click();
+      await page.getByText(/^Saved to /).waitFor({ timeout: 60000 });
+      seen.saved = await page.getByText(/^Saved to /).textContent();
+      await page.setViewportSize({ width: 720, height: 700 });
+      await page.waitForTimeout(1000);
+      seen.narrow = await page.evaluate(
+        () => document.documentElement.scrollWidth - window.innerWidth,
+      );
+      await page.getByRole("region", { name: "Timeline" }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: join(OUT, "creative-cut-phone.png") });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      console.log(`CREATIVECUT ${JSON.stringify(seen)}`);
     });
   }
 

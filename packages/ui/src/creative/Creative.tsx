@@ -38,6 +38,8 @@ export type CreativeProps = {
   makers?: MakePanelMakers;
   /** add a file of the person's to their library */
   addFile?: (file: File) => Promise<AddedFile>;
+  /** Save a copy of a video kept in Your videos */
+  saveVideo?: (videoId: string) => Promise<{ name: string; path: string }>;
   onMakeSong?: () => void;
   /** a project to open at once, from the Library */
   open?: string | null;
@@ -67,6 +69,7 @@ export function Creative({
   modelOfTab,
   makers,
   addFile,
+  saveVideo,
   onMakeSong,
   open = null,
   assistant,
@@ -113,6 +116,7 @@ export function Creative({
             modelOfTab={modelOfTab}
             makers={makers}
             addFile={addFile}
+            saveVideo={saveVideo}
             assistant={assistant}
             creations={creations}
             onBack={() => setView({ at: "list" })}

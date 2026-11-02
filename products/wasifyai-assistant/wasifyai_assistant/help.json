@@ -59,6 +59,40 @@
   "body": "# Choose which version of a shot is used\n\nAction: `creative.choose_take`\n\n## What it is for\n\nChoose which still or clip of a shot is used in the preview. Nothing replaces the chosen one unless you ask.\n\n## Steps in the app\n\n1. Open **Creative Studio**, open a project and go to **Shots**.\n2. Select a shot.\n3. Choose one of the versions under its picture.\n\n## Fields\n\n- `project_id`: The project.\n- `shot_id`: The shot.\n- `take_id`: The take.\n\n## Limits\n\n- A shot has versions once it has been made more than once, or something was added or made for it in the panel.\n\n## Needs\n\n- A shot with a take.\n\n## Examples\n\n- Use the first picture of this shot again.\n\n## Problems\n\n- *The picture is gone.* It was deleted from your Library; the shot shows as having no picture."
  },
  {
+  "action": "creative.cut",
+  "title": "Make a music video",
+  "screen": "creative",
+  "synonyms": [
+   "make the music video",
+   "render the cut",
+   "make the video to watch",
+   "put the cut together",
+   "assemble the video",
+   "finish the video"
+  ],
+  "body": "# Make a music video\n\nAction: `creative.cut`\n\n## What it is for\n\nMake the video of a project's cut at full size: each piece's chosen picture or clip for its length, with its camera\nmove and fades, the song under it, and the captions and titles drawn on. It is kept with the project so you can watch\nit; keeping it in Your videos is `creative.export`.\n\n## Steps in the app\n\n1. Open **Creative Studio**, open a project and go to **Cut**.\n2. Choose **Make a version to watch**.\n3. Watch it on the stage. After a change to the cut, it says the cut has changed since.\n\n## Fields\n\n- `project_id`: The project.\n\n## Limits\n\n- 1920 by 1080 for landscape, 1080 by 1920 for portrait and 1080 by 1080 for square, at 24 frames a second, H.264\n  with AAC sound.\n- On this Mac a 90-second song of stills took 19 seconds, so a 3-minute song takes about a minute; clips take longer.\n- A piece with no picture yet, or whose picture was deleted, is black, and the screen says how many.\n- Captions are drawn with a plain white font with an outline. Motion graphics templates are not drawn over the cut yet.\n- Only one video, set of stills or preview is made at a time.\n\n## Needs\n\n- A project with at least one still.\n\n## Examples\n\n- Put the video together so I can watch it.\n\n## Problems\n\n- *There are no pictures in the cut yet.* Make the stills first, on the Shots step.\n- *The song is not in Your music any more.* Choose another song in the brief."
+ },
+ {
+  "action": "creative.edit_cut",
+  "title": "Change a music video's cut",
+  "screen": "creative",
+  "synonyms": [
+   "change the cut",
+   "move a piece",
+   "make a shot longer",
+   "shorten a shot",
+   "split a shot",
+   "fade in",
+   "take out a piece",
+   "move a caption",
+   "change the words on screen",
+   "add a title",
+   "add a lower third",
+   "turn captions off"
+  ],
+  "body": "# Change a music video's cut\n\nAction: `creative.edit_cut`\n\n## What it is for\n\nChange the cut of a project: the order of its pieces, how long each is, where it splits, where it fades, and the\ncaptions and titles drawn over it. The pictures and the song are not changed: the cut only refers to them.\n\n## Steps in the app\n\n1. Open **Creative Studio**, open a project and go to **Cut**.\n2. Choose a piece in the timeline at the bottom. Use **Longer** and **Shorter** (one beat each), **Split**, **Fade in**,\n   **Move left**, **Move right** or **Take out**.\n3. Choose a caption in the caption row to change its words or move it by a beat. Add titles and lower thirds from the\n   **Titles** tab, and captions from the singing from the **Voice** tab.\n4. **Undo** and **Redo** are next to the timeline. Keys: Z undoes, Shift+Z redoes, S splits, the arrow keys move the\n   chosen piece or caption by a beat.\n\n## Fields\n\n- `project_id`: The project.\n- `edits`: The changes, in order. Pieces: `move` (`item_id`, `to`), `length` (`item_id`, `by_beats`), `split`\n  (`item_id`), `fade` (`item_id`, `fade`), `remove` (`item_id`). Captions: `caption` (`caption_id`, `text`,\n  `by_beats`), `add_caption` (`kind`: line, title or lower; `text`, `start`, `end`), `remove_caption` (`caption_id`),\n  `captions` (`on`).\n\n## Limits\n\n- A piece is at least half a second long, and lengths move on the song's beats.\n- If the pieces end before the song, the rest of the video is black; the screen says how many seconds.\n- One change that cannot be made refuses them all, and nothing changes.\n- The last 30 changes can be undone.\n- Changing the plan's shots is `creative.edit_plan`. A cut made before the plan changed keeps its pieces; the screen\n  says so, and **Start again from the plan** makes the cut afresh.\n\n## Needs\n\n- A project with a plan.\n\n## Examples\n\n- Make the third shot two beats longer.\n- Fade into the chorus shot.\n- Add the title \"Dawn drive\" for the first two seconds.\n\n## Problems\n\n- *The video is being made.* Wait for it, or stop it, then change the cut.\n- *A caption must start before it ends, inside the song.* Give it a start and end within the song's length."
+ },
+ {
   "action": "creative.edit_plan",
   "title": "Change a plan",
   "screen": "creative",
@@ -73,6 +107,20 @@
    "undo a plan change"
   ],
   "body": "# Change a plan\n\nAction: `creative.edit_plan`\n\n## What it is for\n\nChange the plan of a project in Creative Studio: what a shot shows, whether it holds, animates or sings,\nits place or camera; remove or add a shot; move a cut by whole beats. The plan stays whole: the shots\nstill cover the song from start to end, and only people of the cast appear. Each change can be undone.\n\n## Steps in the app\n\n1. Open **Creative Studio** and open a project.\n2. Change the words of a shot, its motion or its place. Use the arrows to move a cut by one beat, or\n   remove or add a shot.\n3. Choose **Undo** to take a change back.\n\nOr ask in the **Ask** tab: select a shot and say what should change. The change applies at once, and its card\nhas its own **Undo**.\n\n## Fields\n\n- `project_id`: The project.\n- `edits`: The changes, in order. Each has `op`: `set_shot` (with `shot_id` and the fields to change),\n  `delete_shot` (`shot_id`), `add_shot` (`after`, a shot's id, and `shows`) or `move_cut` (`shot_id` and\n  `by_beats`, a whole number; the cut at the end of that shot moves).\n\n## Limits\n\n- A change that would break the plan is refused as a whole, and nothing changes.\n- Cuts move by whole beats, so they stay on the music. Dragging comes later.\n- Changing how fast it cuts means planning again.\n\n## Needs\n\n- A project with a plan.\n\n## Examples\n\n- In my dawn drive project, make shot 3 animate.\n- Move the cut after shot 5 one beat later and remove shot 6.\n\n## Problems\n\n- **That would leave a shot with no length** A cut cannot move past the next one. Move it fewer beats.\n- **The last shot ends with the song** The end of the last shot cannot move.\n- **There is no plan to change yet** Plan the project first."
+ },
+ {
+  "action": "creative.export",
+  "title": "Keep a music video in Your videos",
+  "screen": "creative",
+  "synonyms": [
+   "export the music video",
+   "save the music video",
+   "keep the video",
+   "save to my videos",
+   "export as mp4",
+   "save a copy of the video"
+  ],
+  "body": "# Keep a music video in Your videos\n\nAction: `creative.export`\n\n## What it is for\n\nSave a project's finished video to Your videos, where it is a video like any other: it can be played, renamed,\nsearched, saved as a file or deleted there. If the cut changed since the last video was made, it is made first.\n\n## Steps in the app\n\n1. Open **Creative Studio**, open a project and go to **Cut**.\n2. Choose **Make the video** at the top right. It is saved to Your videos when it is done.\n3. **Save a copy** writes the last one kept as an MP4 file, where you choose to keep it if asked.\n\n## Fields\n\n- `project_id`: The project.\n- `title`: What the video is called. Left out, the project's name.\n\n## Limits\n\n- Every time is a new video; the ones kept before stay in Your videos.\n- The same sizes and times as `creative.cut`.\n\n## Needs\n\n- A project with at least one still.\n\n## Examples\n\n- Export the music video.\n- Save it to my videos as \"Dawn drive\".\n\n## Problems\n\n- *The video could not be kept.* There may be no room left on the disk. Free some space and try again."
  },
  {
   "action": "creative.make_shots",
@@ -924,6 +972,17 @@
    "clip"
   ],
   "body": "# Make a video\n\nAction: `video.generate`\n\n## What it is for\n\nMake a short video clip (5 or 8 seconds) from a description.\n\n## Steps in the app\n\n1. Open **Video › Create**.\n2. Describe what happens.\n3. Choose the length and the shape.\n4. Choose **Make the video**. It takes minutes; you can leave the screen, and the clip plays where it appears\n   when it is done. Under it are your recent videos; **Extend this** carries a clip on.\n\n## My looks\n\nIf you taught the video model a look or a motion (under **Train models**, in the Video model training card), the screen shows **My looks**: choose up to two and a strength for each (1.5 is a good start; above 2 can look rough). The app adds each look's magic word to your prompt if it is missing. A look made for another model does not work here; looks are made for LTX-Video 2B only.\n\n## Fields\n\n- `prompt`: What happens in the clip.\n- `shape`: landscape, portrait or square.\n- `seconds`: 5 or 8 (5 unless you say otherwise).\n\n## Limits\n\n- 500 characters.\n- One clip at a time.\n\n## Needs\n\n- The video engine (Models).\n\n## Examples\n\n- Waves rolling onto a beach at sunrise.\n\n## Problems\n\n- **You already have a video being made** Wait for it to finish.\n- **Not set up** Open **Model hub** and set up the video engine."
+ },
+ {
+  "action": "video.keep",
+  "title": "Keep a finished video",
+  "screen": "creative",
+  "synonyms": [
+   "keep a finished video",
+   "save a made video to my videos",
+   "add a video from another product"
+  ],
+  "body": "# Keep a finished video\n\nAction: `video.keep`\n\n## What it is for\n\nSave a finished video that another product made, such as the cut of a Creative Studio project, to Your videos as a\nnew video with a poster frame. It is searchable by its title.\n\n## Steps in the app\n\n1. In **Creative Studio**, a project's **Make the video** uses this. The video then shows in **Your videos**.\n\n## Fields\n\n- `from_kind`: The kind of creation whose video it is, such as `creative_project`.\n- `from_id`: Its id.\n- `title`: What the video is called.\n\n## Limits\n\n- Up to 2 GB.\n- It is always a new video; nothing kept before is replaced.\n\n## Needs\n\n- A finished video in that creation. For a Creative Studio project, its cut made with `creative.cut`.\n\n## Examples\n\n- Keep the music video in my videos.\n\n## Problems\n\n- *There is no finished video there yet.* Make the video first.\n- *That is not a video that can be played.* The file could not be read as a video."
  },
  {
   "action": "video_builder.create",

@@ -1216,6 +1216,31 @@
         "title": "ConversationSummary",
         "type": "object"
       },
+      "CutEdits": {
+        "properties": {
+          "edits": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Edits",
+            "type": "array"
+          },
+          "note": {
+            "default": "Changed in the cut",
+            "maxLength": 200,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "edits"
+        ],
+        "title": "CutEdits",
+        "type": "object"
+      },
       "DatasetIn": {
         "properties": {
           "family": {
@@ -2377,6 +2402,19 @@
           "conversation_id"
         ],
         "title": "KeepConversation",
+        "type": "object"
+      },
+      "KeepVideo": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "default": "",
+            "maxLength": 120,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "KeepVideo",
         "type": "object"
       },
       "LauncherIn": {
@@ -8054,6 +8092,249 @@
           }
         },
         "summary": "Keep Conversation",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/cut/edits": {
+      "post": {
+        "description": "Change the cut: move, lengthen, split, fade, remove or put in a piece, and the captions. `reset` starts it again from the plan.",
+        "operationId": "edit_cut_products_wasifyai_creative_creative_projects__item__cut_edits_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CutEdits"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Edit Cut Products Wasifyai Creative Creative Projects  Item  Cut Edits Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Cut",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/cut/keep": {
+      "post": {
+        "description": "Make the video if it is out of date, then keep it in Your videos: a new video every time.",
+        "operationId": "keep_video_products_wasifyai_creative_creative_projects__item__cut_keep_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeepVideo"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Keep Video Products Wasifyai Creative Creative Projects  Item  Cut Keep Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Keep Video",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/cut/redo": {
+      "post": {
+        "operationId": "redo_cut_products_wasifyai_creative_creative_projects__item__cut_redo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Redo Cut Products Wasifyai Creative Creative Projects  Item  Cut Redo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Redo Cut",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/cut/undo": {
+      "post": {
+        "operationId": "undo_cut_products_wasifyai_creative_creative_projects__item__cut_undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Undo Cut Products Wasifyai Creative Creative Projects  Item  Cut Undo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Cut",
+        "tags": [
+          "wasifyai-creative"
+        ]
+      }
+    },
+    "/products/wasifyai-creative/creative/projects/{item}/cut/video": {
+      "post": {
+        "description": "Make the cut's video at full size, with the song and the captions. Follow it with GET.",
+        "operationId": "make_video_products_wasifyai_creative_creative_projects__item__cut_video_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Make Video Products Wasifyai Creative Creative Projects  Item  Cut Video Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make Video",
         "tags": [
           "wasifyai-creative"
         ]

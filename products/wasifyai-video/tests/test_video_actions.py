@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from video_rig import png
+from video_rig import mp4, png
 from wasifyai_platform_sdk import (
     Identity,
     InMemoryUploadStore,
@@ -53,6 +53,26 @@ def a_picture_kind() -> LibraryKind:
     return LibraryKind("image", "wasifyai-image", "picture", list_, get, delete, read=read)
 
 
+def a_project_kind() -> LibraryKind:
+    """What Creative Studio declares: a project whose cut is a finished video, and one with none."""
+
+    async def list_(c, n):
+        return []
+
+    async def get(c, i):
+        return None
+
+    async def read(c, i):
+        return {"made": mp4((160, 96), 48), "junk": b"not a video"}.get(i)
+
+    async def delete(c, i):
+        return False
+
+    return LibraryKind(
+        "creative_project", "wasifyai-creative", "project", list_, get, delete, read=read
+    )
+
+
 class Rig:
     def __init__(self, tmp_path: Path, engine):
         self.unindexed: list[str] = []
@@ -70,7 +90,11 @@ class Rig:
         self.ex = ActionExecutor(
             ActionRegistry([*builtin_actions(), *actions()]),
             self.host,
-            library={**{k.kind: k for k in library_kinds()}, "image": a_picture_kind()},
+            library={
+                **{k.kind: k for k in library_kinds()},
+                "image": a_picture_kind(),
+                "creative_project": a_project_kind(),
+            },
         )
         self.store = video_store(engine)
 
@@ -224,6 +248,37 @@ async def test_a_clip_still_being_made_is_not_deleted(rig):
     assert await rig.store.get("t1", "u1", VIDEO_ID) is not None
     export = await rig.go("library.export", {"kind": "video", "id": VIDEO_ID})
     assert export.code == "not_found"  # nothing to copy yet
+
+
+async def test_a_finished_video_from_another_product_is_kept_as_a_new_video_every_time(rig):
+    first = await rig.go(
+        "video.keep", {"from_kind": "creative_project", "from_id": "made", "title": "Dawn drive"}
+    )
+    assert first.ok, first.text
+    again = await rig.go(
+        "video.keep", {"from_kind": "creative_project", "from_id": "made", "title": "Dawn drive"}
+    )
+    assert again.ok and again.output["video_id"] != first.output["video_id"]
+    kept = await rig.store.get("t1", "u1", first.output["video_id"])
+    assert (
+        kept
+        and kept.status == "done"
+        and kept.mode == "kept"
+        and (kept.width, kept.height) == (160, 96)
+    )
+    assert (
+        first.output["seconds"] == 2
+        and first.text == '"Dawn drive" is saved to your videos (2 seconds, 160x96).'
+    )
+    async with rig.as_user():
+        assert await rig.state.storage.get(kept.video_key) == mp4((160, 96), 48)
+    for wanted, code in (("none", "not_found"), ("junk", "invalid_input")):
+        r = await rig.go(
+            "video.keep", {"from_kind": "creative_project", "from_id": wanted, "title": "x"}
+        )
+        assert r.code == code, r.text
+    r = await rig.go("video.keep", {"from_kind": "nothing_here", "from_id": "made", "title": "x"})
+    assert r.code == "not_found"
 
 
 def test_every_video_action_is_run_in_this_file():

@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from wasifyai_platform_sdk import Identity, RouteDeps, parse_ids
 
+from wasifyai_creative import cutting
+from wasifyai_creative.cut import CutRefused, apply_cut_edits, default_cut
 from wasifyai_creative.document import Brief, EditRefused, apply_edits, problems
 from wasifyai_creative.runtime import (
     NotAvailable,
@@ -72,6 +74,17 @@ class RedoShot(BaseModel):
     mode: Literal["plain", "reference"] = REFERENCE
 
 
+class CutEdits(BaseModel):
+    edits: list[dict[str, Any]] = Field(min_length=1, max_length=50)
+    note: str = Field("Changed in the cut", max_length=200)
+
+
+class KeepVideo(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str = Field("", max_length=120)
+
+
 class ChooseTake(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -123,15 +136,20 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         return found
 
     async def shown(row: dict[str, Any], identity: Identity) -> dict[str, Any]:
-        """One project with a link to its preview."""
+        """One project with its cut, and links to its preview and its video."""
         found = out(row, identity)
+        owner = (identity.tenant_id, PRODUCT_ID, identity.user_id)
         preview = found["shots"]["preview"]
         if preview:
-            owner = (identity.tenant_id, PRODUCT_ID, identity.user_id)
             kept = store().preview_of(row["id"])
             preview["url"] = (
                 await deps.storage.url_for(owner, kept["rel"]) if deps.storage and kept else None
             )
+        found["cut"] = await asyncio.to_thread(cutting.view, store(), row)
+        made = found["cut"] and found["cut"]["render"]
+        if made:
+            rel = made.pop("rel")
+            made["url"] = await deps.storage.url_for(owner, rel) if deps.storage else None
         return found
 
     def row_or_404(identity: Identity, item: str) -> dict[str, Any]:
@@ -181,7 +199,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             body.brief.model_dump(),
         )  # fmt: skip
         await add_to_search(deps.state, identity, row)
-        return out(row, identity)
+        return await shown(row, identity)
 
     @router.get("/projects/{item}")
     async def get_project(item: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
@@ -199,7 +217,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         store().set_brief(item, body.title or row["title"], brief)
         fresh = row_or_404(identity, item)
         await add_to_search(deps.state, identity, fresh)
-        return out(fresh, identity)
+        return await shown(fresh, identity)
 
     @router.delete("/projects/{item}", status_code=204)
     async def remove_project(
@@ -220,13 +238,13 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             manager_for(deps).start(identity, item, again=body.again)
         except Refused as e:
             raise refuse(e) from None
-        return out(row_or_404(identity, item), identity)
+        return await shown(row_or_404(identity, item), identity)
 
     @router.post("/projects/{item}/plan/stop")
     async def stop_plan(item: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
         row_or_404(identity, item)
         await manager_for(deps).stop_and_wait(identity, item)
-        return out(row_or_404(identity, item), identity)
+        return await shown(row_or_404(identity, item), identity)
 
     @router.post("/projects/{item}/edits")
     async def edit_plan(
@@ -241,7 +259,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             raise HTTPException(422, {"code": "bad_edit", "message": str(e)}) from None
         fresh = row_or_404(identity, item)
         await add_to_search(deps.state, identity, fresh)
-        return out(fresh, identity)
+        return await shown(fresh, identity)
 
     @router.post("/projects/{item}/undo")
     async def undo(item: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
@@ -250,7 +268,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             raise HTTPException(409, {"code": "nothing", "message": "There is nothing to undo."})
         fresh = row_or_404(identity, item)
         await add_to_search(deps.state, identity, fresh)
-        return out(fresh, identity)
+        return await shown(fresh, identity)
 
     @router.post("/projects/{item}/parts/{beat}/rewrite", status_code=202)
     async def rewrite(
@@ -262,7 +280,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             manager_for(deps).rewrite(identity, item, beat)
         except Refused as e:
             raise refuse(e) from None
-        return out(row_or_404(identity, item), identity)
+        return await shown(row_or_404(identity, item), identity)
 
     @router.put("/projects/{item}/conversation")
     async def keep_conversation(
@@ -369,6 +387,92 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         row = row_or_404(identity, item)
         try:
             manager_for(deps).shots.start_preview(identity, row)
+        except Refused as e:
+            raise refuse(e) from None
+        return await shown(row_or_404(identity, item), identity)
+
+    def cut_busy(identity: Identity, item: str) -> None:
+        if manager_for(deps).shots.active(identity) == item:
+            raise HTTPException(
+                409,
+                {
+                    "code": "busy",
+                    "message": "The video is being made. Wait for it, or stop it first.",
+                },
+            )
+
+    @router.post("/projects/{item}/cut/edits")
+    async def edit_cut(
+        item: str, body: CutEdits, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Change the cut: move, lengthen, split, fade, remove or put in a piece, and the captions. `reset` starts it again from the plan."""
+        row = row_or_404(identity, item)
+        cut_busy(identity, item)
+        found = cutting.current(store(), row)
+        if found is None:
+            raise HTTPException(409, {"code": "no_plan", "message": "There is no plan yet."})
+        if any(e.get("op") == "reset" for e in body.edits):
+            new = default_cut(row["plan"], row["facts"])
+        else:
+            try:
+                new = apply_cut_edits(
+                    found["cut"],
+                    body.edits,
+                    row["facts"].get("beats", []),
+                    cutting.song_s(row),
+                    cutting.song_lines(row),
+                )
+            except (CutRefused, KeyError, TypeError, ValueError) as e:
+                message = (
+                    str(e) if isinstance(e, CutRefused) else "That change is missing something."
+                )
+                raise HTTPException(422, {"code": "bad_edit", "message": message}) from None
+        if new == found["cut"]:
+            raise HTTPException(
+                422,
+                {
+                    "code": "bad_edit",
+                    "message": "The cut already says that, so there is nothing to change.",
+                },
+            )
+        store().save_cut(item, new, body.note)
+        await add_to_search(deps.state, identity, row)
+        return await shown(row, identity)
+
+    @router.post("/projects/{item}/cut/undo")
+    async def undo_cut(item: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        row = row_or_404(identity, item)
+        cut_busy(identity, item)
+        if store().step_cut(item, -1) is None:
+            raise HTTPException(409, {"code": "nothing", "message": "There is nothing to undo."})
+        return await shown(row, identity)
+
+    @router.post("/projects/{item}/cut/redo")
+    async def redo_cut(item: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        row = row_or_404(identity, item)
+        cut_busy(identity, item)
+        if store().step_cut(item, 1) is None:
+            raise HTTPException(409, {"code": "nothing", "message": "There is nothing to redo."})
+        return await shown(row, identity)
+
+    @router.post("/projects/{item}/cut/video", status_code=202)
+    async def make_video(item: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """Make the cut's video at full size, with the song and the captions. Follow it with GET."""
+        row = row_or_404(identity, item)
+        try:
+            manager_for(deps).shots.start_cut(identity, row, None)
+        except Refused as e:
+            raise refuse(e) from None
+        return await shown(row_or_404(identity, item), identity)
+
+    @router.post("/projects/{item}/cut/keep", status_code=202)
+    async def keep_video(
+        item: str, body: KeepVideo, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Make the video if it is out of date, then keep it in Your videos: a new video every time."""
+        row = row_or_404(identity, item)
+        try:
+            manager_for(deps).shots.start_cut(identity, row, body.title or row["title"])
         except Refused as e:
             raise refuse(e) from None
         return await shown(row_or_404(identity, item), identity)

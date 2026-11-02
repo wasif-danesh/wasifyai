@@ -1,8 +1,9 @@
 "use client";
 // The left of the screen: every product as a tab, with arrow keys between them (a sheet under the stage on a
-// phone, with the tabs as a dock). Image, Video, Add and Ask work now: what they make goes to the shot that is
-// selected. The others say which step brings them and where the same thing is made today.
-import type { CreativeApi, CreativeProject } from "@wasifyai/client";
+// phone, with the tabs as a dock). Image and Video make a version of the shot that is selected; Music makes a song
+// for the project's media; Voice and Titles are the cut's captions and titles; Add and Ask work on the project.
+// 3D says where the same thing is made today.
+import type { CreativeApi, CreativeProject, CutEdit, CutState } from "@wasifyai/client";
 import {
   Box,
   Image,
@@ -25,6 +26,7 @@ import { Notice } from "../components/notice";
 import { type Entry, coverOf, indexKindOf, toRow } from "../creations/model";
 import { hint } from "../styles";
 import type { EditorAssistant } from "../videobuilder/scenes/SceneEditor";
+import { CaptionsTab, TitlesTab } from "./CutTabs";
 import { type ProjectCreations, entriesOf } from "./use-project-media";
 
 export type CreativeAssistant = Omit<EditorAssistant, "model">;
@@ -36,16 +38,40 @@ type Waiting = { step: string; today: string };
 const WAITING: Record<CreativeScreen, Waiting> = {
   image: { step: "Making a picture for a shot comes with the Shots step.", today: "Images" },
   video: { step: "Making a clip for a shot comes with the Shots step.", today: "Video" },
-  voice: { step: "Voice comes with the Cut step.", today: "Speak" },
-  music: { step: "Music for the cut comes with the Cut step.", today: "Music" },
-  titles: { step: "Titles over the cut come with the Cut step.", today: "Motion graphics" },
+  voice: { step: "Captions from the singing come once there is a plan.", today: "Speak" },
+  music: { step: "Making a song here comes with the app's Music screen.", today: "Music" },
+  titles: { step: "Titles over the cut come once there is a plan.", today: "Motion graphics" },
   model3d: { step: "3D comes after the Cut step.", today: "3D models" },
 };
 
 /** The tabs made here. The window has the engine and the models, so it draws them; what they make is handed over. */
 export type MakePanelMakers = Partial<
-  Record<"image" | "video", (onMade: (id: string) => void) => ReactNode>
+  Record<"image" | "video" | "music", (onMade: (id: string) => void) => ReactNode>
 >;
+
+/** The cut, for the Voice and Titles tabs. */
+export type PanelCut = {
+  state: CutState;
+  /** whether the times of the song's words are known */
+  timed: boolean;
+  busy: boolean;
+  edit: (edits: CutEdit[]) => void;
+  /** where the video is playing now */
+  at: () => number;
+};
+
+const MADE_LINE: Record<"image" | "video" | "music", (name: string | null) => string> = {
+  image: (name) =>
+    name
+      ? `What you make here is a version of ${name}.`
+      : "Select a shot to make a version for it. Otherwise it joins this project's media.",
+  video: (name) =>
+    name
+      ? `What you make here is a version of ${name}.`
+      : "Select a shot to make a version for it. Otherwise it joins this project's media.",
+  music: () =>
+    "What you make here joins this project's media. The video's song is the one in the brief.",
+};
 
 const TABS: { id: CreativeScreen | "add" | "ask"; label: string; icon: LucideIcon }[] = [
   { id: "image", label: "Image", icon: Image },
@@ -64,7 +90,8 @@ const SUGGESTIONS = [
   "Remove the last shot",
   "Change the place of this shot",
 ];
-const CHANGES_THE_PLAN = /^creative\.(edit_plan|undo|redo_shot|make_shots|choose_take)$/;
+const CHANGES_THE_PLAN =
+  /^creative\.(edit_plan|undo|redo_shot|make_shots|choose_take|edit_cut|cut|export)$/;
 
 export function MakePanel({
   api,
@@ -78,6 +105,7 @@ export function MakePanel({
   tab,
   onTab,
   makers,
+  cut,
   addFile,
   onAdd,
   onOpenScreen,
@@ -97,6 +125,7 @@ export function MakePanel({
   tab: string;
   onTab: (tab: string) => void;
   makers?: MakePanelMakers;
+  cut?: PanelCut | null;
   addFile?: (file: File) => Promise<AddedFile>;
   onAdd: (kind: string, id: string) => void;
   onOpenScreen?: (screen: CreativeScreen) => void;
@@ -153,7 +182,7 @@ export function MakePanel({
           </Tabs.Trigger>
         ))}
       </Tabs.List>
-      {(["image", "video"] as const).map((screen) => {
+      {(["image", "video", "music"] as const).map((screen) => {
         const maker = makers?.[screen];
         if (!maker) return null;
         return (
@@ -165,17 +194,19 @@ export function MakePanel({
             hidden={tab !== screen}
             className={cn("min-h-0 flex-1 flex-col", tab === screen ? "flex" : "hidden")}
           >
-            <p className={`${hint} m-0 border-b px-3 py-1.5`}>
-              {selectedName
-                ? `What you make here is a version of ${selectedName}.`
-                : "Select a shot to make a version for it. Otherwise it joins this project's media."}
-            </p>
-            {maker((id) => onAdd(screen, id))}
+            <p className={`${hint} m-0 border-b px-3 py-1.5`}>{MADE_LINE[screen](selectedName)}</p>
+            {maker((id) => onAdd(screen === "music" ? "track" : screen, id))}
           </Tabs.Content>
         );
       })}
       {(Object.keys(WAITING) as CreativeScreen[])
-        .filter((screen) => (screen !== "image" && screen !== "video" ? true : !makers?.[screen]))
+        .filter((screen) =>
+          screen === "image" || screen === "video" || screen === "music"
+            ? !makers?.[screen]
+            : screen === "voice" || screen === "titles"
+              ? !cut
+              : true,
+        )
         .map((screen) => (
           <Tabs.Content key={screen} value={screen} className="min-h-0 flex-1 overflow-auto p-3">
             <div className="grid gap-3">
@@ -191,6 +222,16 @@ export function MakePanel({
             </div>
           </Tabs.Content>
         ))}
+      {cut ? (
+        <>
+          <Tabs.Content value="voice" className="min-h-0 flex-1 overflow-auto p-3">
+            <CaptionsTab cut={cut.state} timed={cut.timed} busy={cut.busy} edit={cut.edit} />
+          </Tabs.Content>
+          <Tabs.Content value="titles" className="min-h-0 flex-1 overflow-auto p-3">
+            <TitlesTab cut={cut.state} busy={cut.busy} edit={cut.edit} at={cut.at} />
+          </Tabs.Content>
+        </>
+      ) : null}
       <Tabs.Content value="add" className="min-h-0 flex-1 overflow-auto p-3">
         <AddTab
           creations={creations}

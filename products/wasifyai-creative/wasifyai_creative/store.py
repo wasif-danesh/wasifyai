@@ -15,7 +15,7 @@ from typing import Any
 
 from wasifyai_platform_sdk.sqlstore import SqliteStoreDb, StoreDb
 
-SCHEMA = 2
+SCHEMA = 3
 KEEP_REVISIONS = 30
 KEEP_LOG = 400
 
@@ -61,6 +61,19 @@ CREATE TABLE IF NOT EXISTS characters(
   tenant_id TEXT NOT NULL, user_id TEXT NOT NULL, name TEXT NOT NULL, look TEXT NOT NULL,
   pictures TEXT NOT NULL, photos_only INTEGER NOT NULL, updated_at TEXT NOT NULL,
   PRIMARY KEY (tenant_id, user_id, name));
+CREATE TABLE IF NOT EXISTS cuts(
+  project_id TEXT PRIMARY KEY, at INTEGER NOT NULL, top INTEGER NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS cut_revisions(
+  project_id TEXT NOT NULL, n INTEGER NOT NULL, cut TEXT NOT NULL, note TEXT NOT NULL,
+  created_at TEXT NOT NULL, PRIMARY KEY (project_id, n));
+CREATE TABLE IF NOT EXISTS renders(
+  project_id TEXT PRIMARY KEY, rel TEXT NOT NULL, mark TEXT NOT NULL, shape TEXT NOT NULL,
+  seconds DOUBLE PRECISION NOT NULL, bytes INTEGER NOT NULL, took_s DOUBLE PRECISION NOT NULL,
+  created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS exports(
+  id TEXT PRIMARY KEY, project_id TEXT NOT NULL, video_id TEXT NOT NULL, mark TEXT NOT NULL,
+  title TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS exports_project ON exports(project_id, created_at);
 """
 LEFT_RUNNING = "It stopped when the app closed. Go on, and it picks up where it stopped."
 
@@ -84,8 +97,11 @@ class CreativeStore:
         found = db.one("SELECT value FROM meta WHERE key = 'schema'")
         if found is None:
             db.exec("INSERT INTO meta VALUES ('schema', ?)", (str(SCHEMA),))
-        elif int(found["value"]) < 2:  # a project of CS1: what was added to it was not made for it
-            db.exec("ALTER TABLE media ADD COLUMN made INTEGER NOT NULL DEFAULT 0")
+        elif int(found["value"]) < SCHEMA:  # the cut's tables (CS3) are made above, as new tables
+            if (
+                int(found["value"]) < 2
+            ):  # a project of CS1: what was added to it was not made for it
+                db.exec("ALTER TABLE media ADD COLUMN made INTEGER NOT NULL DEFAULT 0")
             db.exec("UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA),))
 
     @classmethod
@@ -171,6 +187,10 @@ class CreativeStore:
                 "chosen",
                 "runs",
                 "previews",
+                "cuts",
+                "cut_revisions",
+                "renders",
+                "exports",
             ):
                 self.db.exec(f"DELETE FROM {table} WHERE project_id = ?", (item,))
         return n > 0
@@ -398,6 +418,93 @@ class CreativeStore:
             (item,),
         )
         return dict(row) if row else None
+
+    # ---- the cut: its revisions for undo and redo, its video and what was kept (CS3) ------------
+
+    def cut_of(self, item: str) -> dict[str, Any] | None:
+        """The cut now, with whether there is something to undo or redo; None before the first."""
+        head = self.db.one("SELECT at, top FROM cuts WHERE project_id = ?", (item,))
+        if head is None:
+            return None
+        row = self.db.one(
+            "SELECT cut FROM cut_revisions WHERE project_id = ? AND n = ?", (item, head["at"])
+        )
+        oldest = self.db.one("SELECT MIN(n) AS n FROM cut_revisions WHERE project_id = ?", (item,))
+        return {
+            "cut": json.loads(row["cut"]) if row else None,
+            "can_undo": oldest is not None and oldest["n"] is not None and oldest["n"] < head["at"],
+            "can_redo": head["top"] > head["at"],
+        }
+
+    def save_cut(self, item: str, cut: dict[str, Any], note: str) -> None:
+        """A new revision of the cut. What was undone before it cannot be redone any more."""
+        head = self.db.one("SELECT at FROM cuts WHERE project_id = ?", (item,))
+        n = int(head["at"]) + 1 if head else 1
+        at = now()
+        self.db.exec("DELETE FROM cut_revisions WHERE project_id = ? AND n >= ?", (item, n))
+        self.db.exec(
+            "INSERT INTO cut_revisions VALUES (?, ?, ?, ?, ?)",
+            (item, n, json.dumps(cut), note[:200], at),
+        )
+        self.db.exec(
+            "INSERT INTO cuts VALUES (?, ?, ?, ?) ON CONFLICT (project_id) DO UPDATE SET "
+            "at = excluded.at, top = excluded.top, updated_at = excluded.updated_at",
+            (item, n, n, at),
+        )
+        self.db.exec(
+            "DELETE FROM cut_revisions WHERE project_id = ? AND n <= ?", (item, n - KEEP_REVISIONS)
+        )
+
+    def step_cut(self, item: str, by: int) -> str | None:
+        """Undo (-1) or redo (+1): what was undone or redone, or None when there is nothing."""
+        head = self.db.one("SELECT at, top FROM cuts WHERE project_id = ?", (item,))
+        if head is None:
+            return None
+        to = int(head["at"]) + by
+        target = self.db.one(
+            "SELECT n FROM cut_revisions WHERE project_id = ? AND n = ?", (item, to)
+        )
+        if target is None or to > head["top"]:
+            return None
+        named = self.db.one(
+            "SELECT note FROM cut_revisions WHERE project_id = ? AND n = ?",
+            (item, head["at"] if by < 0 else to),
+        )
+        self.db.exec(
+            "UPDATE cuts SET at = ?, updated_at = ? WHERE project_id = ?", (to, now(), item)
+        )
+        return str(named["note"]) if named else ""
+
+    def set_render(
+        self, item: str, rel: str, mark: str, shape: str, seconds: float, size: int, took: float
+    ) -> None:
+        self.db.exec(
+            "INSERT INTO renders VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (project_id) DO UPDATE SET "
+            "rel = excluded.rel, mark = excluded.mark, shape = excluded.shape, seconds = excluded.seconds, "
+            "bytes = excluded.bytes, took_s = excluded.took_s, created_at = excluded.created_at",
+            (item, rel, mark, shape, seconds, size, took, now()),
+        )
+
+    def render_of(self, item: str) -> dict[str, Any] | None:
+        row = self.db.one(
+            "SELECT rel, mark, shape, seconds, bytes, took_s, created_at FROM renders WHERE project_id = ?",
+            (item,),
+        )
+        return dict(row) if row else None
+
+    def add_export(self, item: str, video_id: str, mark: str, title: str) -> None:
+        self.db.exec(
+            "INSERT INTO exports VALUES (?, ?, ?, ?, ?, ?)",
+            (new_id(), item, video_id, mark, title[:120], now()),
+        )
+
+    def exports_of(self, item: str) -> list[dict[str, Any]]:
+        rows = self.db.all(
+            "SELECT video_id, mark, title, created_at FROM exports WHERE project_id = ? "
+            "ORDER BY created_at DESC",
+            (item,),
+        )
+        return [dict(r) for r in rows]
 
     # ---- people: kept across projects (ADR-0090 decision 10) ------------------------------------
 

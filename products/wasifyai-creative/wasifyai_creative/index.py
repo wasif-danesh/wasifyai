@@ -10,6 +10,7 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import IndexItem, search_text
 
+from wasifyai_creative.cut import captions_of
 from wasifyai_creative.document import index_words
 
 PRODUCT_ID = "wasifyai-creative"
@@ -40,14 +41,25 @@ class CreativeIndexSource:
         if db is None:
             return []
         try:
+            has_cuts = db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'cuts'"
+            ).fetchone()
+            cut = (
+                "(SELECT r.cut FROM cut_revisions r JOIN cuts c ON c.project_id = r.project_id "
+                "AND r.n = c.at WHERE r.project_id = projects.id)"
+                if has_cuts
+                else "NULL"
+            )
             rows = db.execute(
-                "SELECT id, tenant_id, user_id, title, brief, plan, facts FROM projects "
+                f"SELECT id, tenant_id, user_id, title, brief, plan, facts, {cut} FROM projects "
                 "WHERE (? IS NULL OR id > ?) ORDER BY id LIMIT ?",
                 (after, after, limit),
             ).fetchall()
             out = []
-            for i, t, u, title, brief, plan, facts in rows:
-                lyrics = " ".join(x["text"] for x in json.loads(facts or "{}").get("lines", []))
+            for i, t, u, title, brief, plan, facts, kept in rows:
+                lines = json.loads(facts or "{}").get("lines", [])
+                lyrics = " ".join(x["text"] for x in lines)
+                lyrics = f"{lyrics} {captions_of(json.loads(kept) if kept else None)}".strip()
                 words = index_words(
                     title, json.loads(brief), json.loads(plan) if plan else None, lyrics
                 )

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (owner, 2026-10-24: "I'll go with your pick" on all seven questions, recorded in "Owner's answers" below). **CS0 is
   done: the owner watched the excerpts on 2026-10-31 and said go (`docs/spikes/creative-cs0.md`). Its results are written into the decisions
-  below. CS1 is built (2026-10-31; "Built" below): a song becomes an editable plan on the desktop. CS2 is built (2026-11-02): the plan becomes stills and a preview over the song. The screen amendment was accepted the same day and its first stage is built ("The screen" under "Built"); CS2 is next.** "Creative Studio" is the owner's working name.
+  below. CS1 is built (2026-10-31; "Built" below): a song becomes an editable plan on the desktop. CS2 is built (2026-11-02): the plan becomes stills and a preview over the song. CS3 is built the same day: the Cut step, its video at full size, and keeping it in Your videos. The screen amendment was accepted on 2026-10-31 and its first stage is built ("The screen" under "Built"); CS4 is next.** "Creative Studio" is the owner's working name.
 - **Order and shared parts:** ADR-0096 (2026-10-31): the Motion graphics editor is built first; its screen frame, media rail, Make panel and docked assistant are shared with this product. The consent, safeguard and terms parts below were removed by ADR-0094.
 - **Date:** 2026-10-24
 - **Asked by:** the owner, 2026-10-24: study Maestro's Creative studio, Director and video editor, **do not use its code**, and plan how to
@@ -369,6 +369,62 @@ earlier "live inside the project" is dropped, so **a 55-shot project adds 55 pic
 **Checked in a browser with the real engine** (walk `creative-shots`, not the Tauri window): a real redo (53 s), takes chosen, the tabs, a real file added as a take that does not replace the chosen one, axe clean on each, no sideways scroll at the window's smallest size.
 
 **Not built:** the good and needs-work marks, "Review each step", Lip sync in the Video tab, a batch of clips (CS4), captions (CS3). **Not checked:** the real window, a person making a picture in the tab and its take landing on the shot with a real model (a stand-in in the screen test), dropped clips and sound with real files, other picture models, whether the preview is good to watch: the owner's watch is the check.
+
+### CS3 (2026-11-02; desktop only)
+
+The Cut step: a small, real timeline, the finished video and keeping it. Measured on this Mac (M5 Pro, 64 GB) with real models, on the 90 s English
+song from CS0 with its typed words. `docs/spikes/creative-cs3-sheet.jpg` is a sheet of the video; the video itself is
+`docs/listening/samples/creative-cs3-cut-90s.mp4` (git-ignored).
+
+| Done when | Result |
+|---|---|
+| The owner exports a finished video of a real song from the screens only | Done in a browser walk of the real engine (`creative-cut`), from the screens only: Make the video took **21 s** from the click to "Kept in Your videos" (the render alone **19.3 s**) for 90 s at 1920x1080, H.264 with AAC, 22 MB, with 16 timed captions and a title. Save a copy wrote the MP4. **The owner's own export is the check still to do.** Before it: plan 30 s (25 shots), 25 plain stills 9.2 min (22 s each) |
+
+**How it works.** `cut.py` is pure: the cut document, its edits, the captions file and the ffmpeg call. A cut is pieces (each refers to a shot, whose chosen version it shows,
+or to something of the project put in by hand) and captions (`line`, `title`, `lower`), one after another from the song's start. It starts as the plan's shots for their
+planned lengths and the song's timed lines. `cutting.py` holds where a cut stands and the render; `ShotJobs` runs it as kind `cut`, one job a person, like the stills.
+
+- **Edits.** Move, longer or shorter by a beat, split on a beat, fade in, take out, put in, and for captions: change the words, move by a beat, add, take out, on and off, and
+  `song_lines` (the song's words again). A piece is at least 0.5 s. One edit that cannot be made refuses them all. Every change is a revision: Undo and Redo walk the last 30;
+  a change after an undo drops the redo. A cut made before the plan changed keeps its pieces and says so; "Start again from the plan" makes it afresh.
+- **The video.** The preview's join, now shared (`render_command`, `draft` for the preview): each piece for its frames counted from the song's start, the camera move on
+  a still, clips trimmed or looped, a missing picture black and counted, a fade in of 0.3 s, black after the last piece when the pictures end early, then the captions
+  burned in and the song. 1920x1080, 1080x1920 or 1080x1080, 24 fps, CRF 20. It is kept as the project's latest video with a mark of everything drawn, so the screen says
+  when the cut changed since.
+- **Keeping it.** `creative.export` makes the video if the mark changed, then calls the video product's new `video.keep` (a finished video from another product becomes a new
+  video in Your videos, with a poster, searchable by its title) through the creative library kind's new `read`. Every keep is a new video. The project lists what it kept.
+  Save a copy is the video product's existing engine-side export of the last kept video (no dialog).
+- **Actions** `creative.edit_cut`, `creative.cut`, `creative.export`, `video.keep` (catalogue cap now 84). The Ask tab can add a title, hide or show the song's words and
+  export. `--only cs-` on real 8B: 16 of 16, twice.
+- **Search.** Titles and captions the person typed are indexed with the project; the song's words already were.
+- **The screen.** Cut is on once there is a plan. The stage is the video, "Make a version to watch" (render only) and what the timeline means (black at the end, pieces with
+  no picture, pictures past the song). Under it the timeline: a row of pictures sized by length, a row of the song's words, a row of titles, each a labelled list of
+  buttons; words that would touch go on a second line. The chosen piece has Shorter, Longer, Split, Fade in, Move earlier, Move later, Take out and the shot's version; the chosen
+  caption its words, a beat earlier or later, Take out. Keys on the timeline: space plays, S splits, the arrows move by a beat, Z undoes, Shift+Z redoes. The top bar has
+  Save a copy and Make the video. The Make panel's Voice tab is the song's words as captions; Titles adds a title or a lower third where the video is playing; Music is the
+  real music screen in the panel, and what it makes joins the project's media.
+
+**Changed from the decisions, and why:**
+- **Captions are drawn by ffmpeg (libass), not by Motion graphics.** CS0 measured 78 s and 2.3 GB for 60 s of captions as a transparent WebM; here the captions are part of
+  a 19 s render. The words are plain white with an outline, a title larger in the middle, a lower third on a band. Motion graphics templates over the cut are not built.
+- **The Voice tab uses the song's words already timed in the analysis** (typed words are the text, speech only gives the times, as CS0 decided) instead of a new
+  transcription. A song with no typed words has no captions from the singing, and the tab says so; titles still work.
+- **A transition is a cut or a fade in from black**, not a crossfade between two pictures.
+- **The Music tab does not change the video's song.** That is the brief's song; changing it means planning again.
+
+**What the real run found:**
+- An imported song has no typed words, so its lines had no times. The run was started again with the words in the brief.
+- A title at 0:00 covered the first caption on one row: titles now have their own row.
+- The music screen put its model button in the window's top bar even inside the panel, over Make the video: in the panel it is in the body now.
+- A short caption was smaller than the minimum target size (axe): captions are at least 1.5rem wide and go on another line rather than overlap.
+- The walk's stand-in for the window had no event part, so leaving a page threw an error in the browser only; the stand-in has one now.
+
+**Checked in a browser with the real engine** (walk `creative-cut`, not the Tauri window): the timeline's buttons and keys, a title, the Voice tab, a caption moved by a beat,
+Make the video for real, Save a copy, axe clean on each, no sideways scroll at the window's smallest size (720 wide).
+
+**Not built:** putting a library item on the picture track from the screen (the edit exists: `insert` and `use`), Motion graphics templates over the cut, a voiceover, Lip sync,
+crossfades, "Review each step". **Not checked:** the real window, a song made in the Music tab with a real model, clips in the cut with a real model (in the tests a stand-in
+clip), the portrait and square sizes with real pictures, a 3-minute song (worked out: about 40 s to render), whether the cut is good to watch: the owner's watch is the check.
 
 ## Web
 

@@ -819,8 +819,10 @@ def judge_creative(case: dict, message: dict) -> tuple[bool, str]:
     if action == "creative.undo":
         return True, "undo"
     params = args.get("params") if isinstance(args.get("params"), dict) else {}
-    if action == "creative.make_shots":
-        return True, "make the stills"
+    if action in ("creative.make_shots", "creative.export"):
+        return True, action
+    if action == "creative.edit_cut":
+        return judge_cut(case, params)
     if action == "creative.redo_shot":
         wanted = case["result"]["shot"]
         return params.get("shot_id") == wanted, f"redo {params.get('shot_id')}, wanted {wanted}"
@@ -854,6 +856,30 @@ def judge_creative(case: dict, message: dict) -> tuple[bool, str]:
         if shots[shot]["end"] <= end:
             return False, f"{shot} ends at {shots[shot]['end']}; params {shown}"
     return True, f"{action} applied"
+
+
+def judge_cut(case: dict, params: dict) -> tuple[bool, str]:
+    """A change to the cut, applied to the cut the plan starts as."""
+    from wasifyai_creative.cut import CutRefused, apply_cut_edits, default_cut
+
+    row, shown = CREATIVE_ROW, json.dumps(params)[:300]
+    lines = [{"text": "Morning light on the street", "start": 1.0, "end": 3.0}]
+    start = default_cut(row["plan"], {"lines": lines, "lines_timed": True})
+    try:
+        made = apply_cut_edits(
+            start, params.get("edits") or [], row["facts"]["beats"], row["facts"]["seconds"]
+        )
+    except (CutRefused, KeyError, TypeError, ValueError) as e:
+        return False, f"refused: {e}; params {shown}"
+    result = case.get("result") or {}
+    if "title" in result and not any(
+        c["kind"] != "line" and result["title"].lower() in c["text"].lower()
+        for c in made["captions"]
+    ):
+        return False, f"no title {result['title']!r}; params {shown}"
+    if "captions_on" in result and made["captions_on"] != result["captions_on"]:
+        return False, f"captions_on is {made['captions_on']}; params {shown}"
+    return True, "creative.edit_cut applied"
 
 
 async def run_creative(client: httpx.AsyncClient, base: str, model: str, case: dict) -> dict:

@@ -798,6 +798,23 @@ cases:
     expect: propose_action
     say: "Draw every shot of the plan now."
     action: creative.make_shots
+  - id: cs-title
+    kind: creative
+    expect: propose_action
+    say: "Put the title Dawn drive over the first three seconds."
+    action: creative.edit_cut
+    result: { title: Dawn drive }
+  - id: cs-no-words
+    kind: creative
+    expect: propose_action
+    say: "Hide the song's words in the video."
+    action: creative.edit_cut
+    result: { captions_on: false }
+  - id: cs-export
+    kind: creative
+    expect: propose_action
+    say: "Export the finished video."
+    action: creative.export
   - id: cs-question
     kind: creative
     expect: none

@@ -227,7 +227,10 @@
     "actions": [
       "creative.add_media",
       "creative.choose_take",
+      "creative.cut",
+      "creative.edit_cut",
       "creative.edit_plan",
+      "creative.export",
       "creative.make_shots",
       "creative.plan",
       "creative.preview",
@@ -235,12 +238,16 @@
       "creative.redo_shot",
       "creative.remove_media",
       "creative.undo",
-      "music.analyse"
+      "music.analyse",
+      "video.keep"
     ],
     "does": [
       "Add to a project",
       "Choose a shot's take",
+      "Make a music video",
+      "Change a music video's cut",
       "Change a plan",
+      "Keep a music video in Your videos",
       "Make the stills of a plan",
       "Plan a music video",
       "Preview a music video",
@@ -248,7 +255,8 @@
       "Make a shot's still again",
       "Take out of a project",
       "Undo a change to a plan",
-      "Find the beats of a song"
+      "Find the beats of a song",
+      "Keep a finished video"
     ],
     "about": "turn a song and an idea into a plan for a music video, shot by shot; change the plan, make a picture for each shot, and preview the cut"
   },

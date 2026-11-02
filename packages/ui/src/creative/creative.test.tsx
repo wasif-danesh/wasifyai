@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { CreativeApi, CreativeProject } from "@wasifyai/client";
+import type { CreativeApi, CreativeProject, CutState } from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChatScreenProps } from "../chat/ChatScreen";
 import { Creative } from "./Creative";
+import { lanesOf } from "./CutStage";
 
 // the chat has its own tests: here, what the screen gives it and does with what it reports
 let chat: ChatScreenProps;
@@ -149,6 +150,50 @@ function api(over: Partial<CreativeApi> = {}): CreativeApi {
     redoShot: vi.fn(async () => project()),
     chooseTake: vi.fn(async () => project()),
     preview: vi.fn(async () => project()),
+    editCut: vi.fn(async () => project({ cut: cutOf() })),
+    undoCut: vi.fn(async () => project({ cut: cutOf() })),
+    redoCut: vi.fn(async () => project({ cut: cutOf() })),
+    makeVideo: vi.fn(async () => project({ cut: cutOf() })),
+    keepVideo: vi.fn(async () => project({ cut: cutOf() })),
+    ...over,
+  };
+}
+
+const piece = (n: number, over = {}) => ({
+  id: `c${n + 1}`,
+  shot_id: `s${n}`,
+  number: n + 1,
+  start: n * 2,
+  end: n * 2 + 2,
+  length: 2,
+  fade: false,
+  source: null,
+  kind: "image" as const,
+  item_id: `pic-${n}`,
+  camera: "wide",
+  ...over,
+});
+
+function cutOf(over: Partial<CutState> = {}): CutState {
+  return {
+    items: [piece(0), piece(1, { fade: true }), piece(2, { kind: null, item_id: null })],
+    captions: [
+      { id: "t1", kind: "line", text: "Morning on the road", start: 0.5, end: 2.5 },
+      { id: "t2", kind: "title", text: "Dawn drive", start: 4, end: 6 },
+    ],
+    captions_on: true,
+    can_undo: true,
+    can_redo: false,
+    summary: {
+      pictures_end: 6,
+      song_s: 6,
+      black_tail: 0,
+      cut_short: 0,
+      plan_changed: false,
+      empty: 1,
+    },
+    render: null,
+    exports: [],
     ...over,
   };
 }
@@ -267,10 +312,10 @@ describe("Creative Studio", () => {
     within(tabs).getByRole("tab", { name: "Ask" }).focus();
     await user.keyboard("{ArrowLeft}");
     expect(within(tabs).getByRole("tab", { name: "Add" })).toHaveAttribute("aria-selected", "true");
-    await user.click(within(tabs).getByRole("tab", { name: "Titles" }));
-    expect(screen.getByText(/Titles over the cut come with the Cut step/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Open Motion graphics" }));
-    expect(onOpenScreen).toHaveBeenCalledWith("titles");
+    await user.click(within(tabs).getByRole("tab", { name: "3D" }));
+    expect(screen.getByText(/3D comes after the Cut step/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open 3D models" }));
+    expect(onOpenScreen).toHaveBeenCalledWith("model3d");
   });
 
   it("keeps the chat while another tab shows, and tells it the project and the selected shot", async () => {
@@ -378,10 +423,19 @@ describe("Creative Studio", () => {
     expect(await screen.findByText("Write the shots")).toBeInTheDocument();
   });
 
-  it("keeps the Cut step off and goes to the Shots step with its button", async () => {
+  it("keeps the Cut step off until there is a plan and goes to the Shots step with its button", async () => {
     const user = userEvent.setup();
-    render(<Creative api={api()} songs={songs} open="p1" />);
+    const { unmount } = render(
+      <Creative
+        api={api({ get: vi.fn(async () => project({ revision: 0, plan: null, status: "draft" })) })}
+        songs={songs}
+        open="p1"
+      />,
+    );
     expect(await screen.findByRole("radio", { name: "Cut" })).toBeDisabled();
+    unmount();
+    render(<Creative api={api()} songs={songs} open="p1" />);
+    expect(await screen.findByRole("radio", { name: "Cut" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "Make the stills" }));
     expect(await screen.findByText("3 stills to make")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Preview the whole song" })).toBeDisabled();
@@ -541,5 +595,143 @@ describe("Creative Studio", () => {
     expect(await screen.findByLabelText("Someone you have used before")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Add an object or place" }));
     expect(screen.getByLabelText("Name of thing 1")).toBeInTheDocument();
+  });
+
+  it("shows the cut on a timeline, changes the chosen piece and caption, and takes keys", async () => {
+    const withTakes = {
+      ...project().shots,
+      takes: { s0: [take("a", "pic-0"), take("b", "pic-9", { chosen: false })] },
+    };
+    const a = api({ get: vi.fn(async () => project({ cut: cutOf(), shots: withTakes })) });
+    a.editCut = vi.fn(async () => project({ cut: cutOf(), shots: withTakes }));
+    a.chooseTake = vi.fn(async () => project({ cut: cutOf(), shots: withTakes }));
+    const user = userEvent.setup();
+    render(<Creative api={a} songs={songs} open="p1" />);
+    await user.click(await screen.findByRole("radio", { name: "Cut" }));
+    expect(screen.getByText("No video of this cut yet")).toBeInTheDocument();
+    expect(screen.getByText(/1 piece has no picture yet, so it is black/)).toBeInTheDocument();
+    const pictures = screen.getByRole("list", { name: "Pictures" });
+    expect(
+      within(pictures)
+        .getAllByRole("button")
+        .map((b) => b.getAttribute("aria-label")),
+    ).toEqual([
+      "Piece 1: shot 1, 2 s from 0:00",
+      "Piece 2: shot 2, 2 s from 0:02, fades in",
+      "Piece 3: shot 3, 2 s from 0:04, no picture yet",
+    ]); // fmt: skip
+    await user.click(within(pictures).getAllByRole("button")[0]);
+    await user.click(screen.getByRole("button", { name: "Longer" }));
+    expect(a.editCut).toHaveBeenLastCalledWith("p1", [
+      { op: "length", item_id: "c1", by_beats: 1 },
+    ]);
+    await user.click(screen.getByRole("button", { name: "Move later" }));
+    expect(a.editCut).toHaveBeenLastCalledWith("p1", [{ op: "move", item_id: "c1", to: 1 }]);
+    expect(screen.getByRole("button", { name: "Move earlier" })).toBeDisabled();
+    await user.click(screen.getByRole("combobox", { name: "Version of shot 1" }));
+    await user.click(await screen.findByRole("option", { name: "Version 2" }));
+    expect(a.chooseTake).toHaveBeenCalledWith("p1", "s0", "b");
+    within(pictures).getAllByRole("button")[0].focus();
+    await user.keyboard("s");
+    expect(a.editCut).toHaveBeenLastCalledWith("p1", [{ op: "split", item_id: "c1" }]);
+    await user.keyboard("{ArrowLeft}");
+    expect(a.editCut).toHaveBeenLastCalledWith("p1", [
+      { op: "length", item_id: "c1", by_beats: -1 },
+    ]);
+    await user.keyboard("z");
+    expect(a.undoCut).toHaveBeenCalledWith("p1");
+    expect(screen.getByRole("button", { name: /Redo/ })).toBeDisabled();
+    expect(
+      within(screen.getByRole("list", { name: "Captions" })).getAllByRole("button"),
+    ).toHaveLength(1);
+    const titles = screen.getByRole("list", { name: "Titles" });
+    await user.click(within(titles).getByRole("button", { name: "Title at 0:04: Dawn drive" }));
+    const words = screen.getByRole("textbox", { name: "Its words" });
+    await user.clear(words);
+    await user.type(words, "Dawn drive home{Enter}");
+    expect(a.editCut).toHaveBeenLastCalledWith("p1", [
+      { op: "caption", caption_id: "t2", text: "Dawn drive home" },
+    ]);
+    await user.click(screen.getByRole("button", { name: "A beat later" }));
+    expect(a.editCut).toHaveBeenLastCalledWith("p1", [
+      { op: "caption", caption_id: "t2", by_beats: 1 },
+    ]);
+  });
+
+  it("makes the video, says when the cut changed since, keeps it and saves a copy", async () => {
+    const made = {
+      url: "/cut.mp4",
+      shape: "landscape" as const,
+      seconds: 6,
+      bytes: 9,
+      took_s: 4,
+      created_at: "",
+      current: false,
+    }; // fmt: skip
+    const kept = [{ video_id: "v1", title: "Dawn drive", created_at: "2026-11-02T10:00:00Z" }];
+    const a = api({
+      get: vi.fn(async () => project({ cut: cutOf({ render: made, exports: kept }) })),
+      keepVideo: vi.fn(async () => project({ cut: cutOf({ render: made, exports: kept }) })),
+      makeVideo: vi.fn(async () => project({ cut: cutOf({ render: made, exports: kept }) })),
+    });
+    const saveVideo = vi.fn(async () => ({
+      name: "dawn-drive.mp4",
+      path: "/Users/me/Downloads/dawn-drive.mp4",
+    }));
+    const user = userEvent.setup();
+    render(<Creative api={a} songs={songs} open="p1" saveVideo={saveVideo} />);
+    await user.click(await screen.findByRole("radio", { name: "Cut" }));
+    expect(screen.getByLabelText("The video of the cut")).toHaveAttribute("src", "/cut.mp4");
+    expect(screen.getByText(/The cut has changed since/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Make it again to watch" }));
+    expect(a.makeVideo).toHaveBeenCalledWith("p1");
+    await user.click(screen.getByRole("button", { name: "Make the video" }));
+    expect(a.keepVideo).toHaveBeenCalledWith("p1");
+    expect(screen.getByText("Kept in Your videos")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save a copy" }));
+    expect(saveVideo).toHaveBeenCalledWith("v1");
+    expect(
+      await screen.findByText("Saved to /Users/me/Downloads/dawn-drive.mp4."),
+    ).toBeInTheDocument();
+  });
+
+  it("puts the song's words and titles in the Voice and Titles tabs, and says when the plan changed", async () => {
+    const now = project({
+      facts: { seconds: 6, lines_timed: true },
+      cut: cutOf({ summary: { ...cutOf().summary, plan_changed: true, black_tail: 1.5 } }),
+    });
+    const a = api({ get: vi.fn(async () => now), editCut: vi.fn(async () => now) });
+    const user = userEvent.setup();
+    render(<Creative api={a} songs={songs} open="p1" />);
+    await user.click(await screen.findByRole("radio", { name: "Cut" }));
+    expect(screen.getByText(/The pictures end 1.5 s before the song/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Start again from the plan" }));
+    expect(a.editCut).toHaveBeenLastCalledWith("p1", [{ op: "reset" }]);
+    await user.click(screen.getByRole("tab", { name: "Voice" }));
+    await user.click(screen.getByRole("checkbox", { name: "Show the song's words" }));
+    expect(a.editCut).toHaveBeenLastCalledWith("p1", [{ op: "captions", on: false }]);
+    await user.click(screen.getByRole("button", { name: "Take the words from the song again" }));
+    expect(a.editCut).toHaveBeenLastCalledWith("p1", [{ op: "song_lines" }]);
+    await user.click(screen.getByRole("tab", { name: "Titles" }));
+    await user.click(screen.getByRole("radio", { name: "Lower third" }));
+    await user.type(screen.getByLabelText("Words"), "Mira, on the road home");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    expect(a.editCut).toHaveBeenLastCalledWith("p1", [
+      { op: "add_caption", kind: "lower", text: "Mira, on the road home", start: 0, end: 3 },
+    ]);
+  });
+
+  it("puts words that would touch on another line of their row", () => {
+    const at = (start: number, end: number) => ({
+      id: `${start}`,
+      kind: "line" as const,
+      text: "x",
+      start,
+      end,
+    });
+    // 90 s: the narrowest is 1.5 of 36rem, about 3.75 s
+    expect(lanesOf([at(0, 10), at(10, 11), at(12, 20), at(13, 14), at(30, 40)], 90)).toEqual([
+      0, 0, 1, 2, 0,
+    ]);
   });
 });

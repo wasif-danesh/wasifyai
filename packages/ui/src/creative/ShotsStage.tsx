@@ -136,7 +136,7 @@ function HonestPanel({
   );
 }
 
-function RunNotice({ project }: { project: CreativeProject }) {
+export function RunNotice({ project }: { project: CreativeProject }) {
   const run = project.shots.run;
   if (!run || project.shots_live) return null;
   const done = `${run.finished} of ${run.total} done.`;

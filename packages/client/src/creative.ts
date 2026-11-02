@@ -84,8 +84,10 @@ export type CreativeProject = {
   /** a plan or a rewrite is running for it now */
   live: boolean;
   shots: ShotsState;
-  /** stills or a preview are being made for it now */
+  /** stills, a preview or the video are being made for it now */
   shots_live: boolean;
+  /** the Cut step; null while there is no plan. Lists of projects leave it out. */
+  cut?: CutState | null;
 };
 
 export type StillMode = "plain" | "reference";
@@ -105,7 +107,7 @@ export type Take = {
 };
 
 export type ShotsRun = {
-  kind: "stills" | "preview";
+  kind: "stills" | "preview" | "cut";
   status: "running" | "done" | "stopped" | "failed" | "interrupted";
   stage: string;
   finished: number;
@@ -132,6 +134,94 @@ export type ShotsState = {
   run: ShotsRun | null;
   preview: ProjectPreview | null;
 };
+
+export type CaptionKind = "line" | "title" | "lower";
+
+/** One piece of the cut's picture track: a shot's chosen version, or something put there by hand. */
+export type CutPiece = {
+  id: string;
+  shot_id: string | null;
+  /** the shot's number in the plan, when it is one */
+  number: number | null;
+  start: number;
+  end: number;
+  length: number;
+  fade: boolean;
+  source: { kind: "image" | "video"; item_id: string } | null;
+  /** what is shown; null when there is nothing yet, so it is black */
+  kind: "image" | "video" | null;
+  item_id: string | null;
+  camera: string;
+};
+
+export type CutCaption = {
+  id: string;
+  kind: CaptionKind;
+  text: string;
+  start: number;
+  end: number;
+};
+
+export type CutVideo = {
+  url: string | null;
+  shape: CreativeShape;
+  seconds: number;
+  bytes: number;
+  took_s: number;
+  created_at: string;
+  /** false once the cut changed after it was made */
+  current: boolean;
+};
+
+export type CutState = {
+  items: CutPiece[];
+  captions: CutCaption[];
+  captions_on: boolean;
+  can_undo: boolean;
+  can_redo: boolean;
+  summary: {
+    pictures_end: number;
+    song_s: number;
+    /** seconds at the end with no picture */
+    black_tail: number;
+    /** seconds of pictures after the song ends, which are not shown */
+    cut_short: number;
+    plan_changed: boolean;
+    /** pieces with nothing to show yet */
+    empty: number;
+  };
+  render: CutVideo | null;
+  /** the videos kept in Your videos, newest first */
+  exports: { video_id: string; title: string; created_at: string }[];
+};
+
+export type CutEdit =
+  | { op: "move"; item_id: string; to: number }
+  | { op: "length"; item_id: string; by_beats: number }
+  | { op: "split"; item_id: string; at?: number }
+  | { op: "fade"; item_id: string; fade: boolean }
+  | { op: "remove"; item_id: string }
+  | {
+      op: "insert";
+      after: string | null;
+      kind: "image" | "video";
+      item_id: string;
+      length?: number;
+    }
+  | { op: "use"; item_id: string; kind?: "image" | "video"; source_id?: string | null }
+  | {
+      op: "caption";
+      caption_id: string;
+      text?: string;
+      by_beats?: number;
+      start?: number;
+      end?: number;
+    }
+  | { op: "add_caption"; kind: CaptionKind; text: string; start: number; end: number }
+  | { op: "remove_caption"; caption_id: string }
+  | { op: "captions"; on: boolean }
+  | { op: "song_lines" }
+  | { op: "reset" };
 
 /** The honest panel: what making these will take, before it starts. */
 export type StillsEstimate = {
@@ -212,6 +302,13 @@ export type CreativeApi = {
   redoShot: (id: string, shot: string, mode: StillMode) => Promise<CreativeProject>;
   chooseTake: (id: string, shot: string, take: string) => Promise<CreativeProject>;
   preview: (id: string) => Promise<CreativeProject>;
+  editCut: (id: string, edits: CutEdit[], note?: string) => Promise<CreativeProject>;
+  undoCut: (id: string) => Promise<CreativeProject>;
+  redoCut: (id: string) => Promise<CreativeProject>;
+  /** make the cut's video to watch; follow it with get */
+  makeVideo: (id: string) => Promise<CreativeProject>;
+  /** make it if it changed, then keep it in Your videos as a new video; follow it with get */
+  keepVideo: (id: string, title?: string) => Promise<CreativeProject>;
 };
 
 type ComponentStatus =
@@ -331,5 +428,11 @@ export function createCreativeApi(transport: Transport): CreativeApi {
         "PUT",
       ),
     preview: (id) => post<CreativeProject>(`${one(id)}/preview`),
+    editCut: (id, edits, note) =>
+      post<CreativeProject>(`${one(id)}/cut/edits`, note ? { edits, note } : { edits }),
+    undoCut: (id) => post<CreativeProject>(`${one(id)}/cut/undo`),
+    redoCut: (id) => post<CreativeProject>(`${one(id)}/cut/redo`),
+    makeVideo: (id) => post<CreativeProject>(`${one(id)}/cut/video`),
+    keepVideo: (id, title) => post<CreativeProject>(`${one(id)}/cut/keep`, { title: title ?? "" }),
   };
 }

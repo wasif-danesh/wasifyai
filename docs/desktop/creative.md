@@ -1,6 +1,6 @@
 # Creative Studio on the desktop
 
-ADR-0090. At stage CS2 a project goes as far as a preview over the song: stills with camera moves, cut on the plan. Clips and the cut come in later stages.
+ADR-0090. At stage CS3 a project goes from a song to a finished video: a plan, stills, a cut with captions and titles, and the video kept in Your videos. Clips for every shot come in CS4.
 
 ## How a plan is made
 
@@ -37,3 +37,13 @@ The throwaway folder links `models`, `components`, `engine` and `comfyui-data` f
 
 Choose **Make the stills**. The panel says how many, how long and how much disk, and refuses what will not fit. Reference pictures are the default (about 40 s a still here); Plain is about twice as fast.
 Each still is a picture in your Library, saved as it is made, so **Stop** or a crash loses only the one under way and **Go on** makes only what is missing. Measured: 55 shots in 37 minutes, preview in 9 seconds. `creative.db` keeps takes, the chosen take, the run, the preview and people; the preview file is under the product's storage at `previews/<project>/`.
+
+## The Cut step (CS3)
+
+Choose **Cut**. The cut starts as the plan's shots for their planned lengths, with the song's words where they are sung (typed words only: a song with none has no
+captions from the singing). Change it on the timeline under the video: choose a piece or a caption, then use its buttons, or the keys (space plays, S splits, the arrows
+move by a beat, Z undoes, Shift+Z redoes). Voice turns the song's words on or off and puts them back; Titles adds a title or a lower third where the video is playing.
+
+**Make a version to watch** makes the video only; **Make the video** makes it if the cut changed and keeps it in Your videos, a new video every time; **Save a copy** writes
+the last one kept as an MP4. Measured: a 90 s song of 25 stills rendered in 19 s at 1920x1080. `creative.db` keeps the cut's revisions (`cuts`, `cut_revisions`, the last
+30), its latest video (`renders`, under the product's storage at `cuts/<project>/`) and what was kept (`exports`). Captions are burned in by the bundled ffmpeg (libass).

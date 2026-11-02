@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Creative Studio (ADR-0090): the shared screen on this window's engine. The Image and Video tabs of its Make panel
-// are the same make screens as the Images and Video pages, in one column, and what they make goes to the project.
+// and Music tabs are the same make screens as the Images, Video and Music pages, in one column, and what they make
+// goes to the project. Save a copy of the finished video is the engine's, like the Video page's.
 import type { ImageMode, VideoMode } from "@wasifyai/client";
 import {
   Creative,
@@ -9,6 +10,7 @@ import {
   type MakePanelMakers,
   ModelSelect,
   type ModelSelectHandle,
+  MusicWorkspace,
   Notice,
   Segmented,
   VideoWorkspace,
@@ -21,6 +23,7 @@ import { useGroupReady } from "../choices/use-ready";
 import { creative } from "../creative";
 import { useImageEngine, useModelOf } from "../engine-hooks";
 import { images } from "../images";
+import { remembered } from "../remember";
 import type { Route } from "../router";
 import { useVideoLooks } from "../video-looks";
 import { videos } from "../videos";
@@ -166,6 +169,9 @@ function VideoMaker({
   );
 }
 
+// the same model as the Music page uses
+const MUSIC_MODEL = "wasifyai.music.model";
+
 async function addFile(file: File) {
   if (file.type.startsWith("image/")) {
     return { kind: "image", id: (await images.importImage(file)).id };
@@ -193,6 +199,17 @@ export function CreativePage({ go }: { go: (r: Route) => void }) {
       video: (onMade) => (
         <VideoMaker onMade={onMade} ensure={video.ensure} keyed={video.keyed} go={go} />
       ),
+      music: (onMade) => (
+        <MusicWorkspace
+          panel
+          onMade={onMade}
+          api={voiceApi}
+          runs={client}
+          onGetModel={() => go("models")}
+          initialModel={remembered.get(MUSIC_MODEL)}
+          onModelChosen={(id) => remembered.set(MUSIC_MODEL, id)}
+        />
+      ),
     }),
     [image.ensure, image.keyed, video.ensure, video.keyed, go],
   );
@@ -210,6 +227,7 @@ export function CreativePage({ go }: { go: (r: Route) => void }) {
       }
       makers={makers}
       addFile={addFile}
+      saveVideo={(id) => videos.exportCopy(id)}
       onMakeSong={() => go("music")}
       creations={creationsApi}
       onOpenScreen={(screen) => go(SCREENS[screen])}

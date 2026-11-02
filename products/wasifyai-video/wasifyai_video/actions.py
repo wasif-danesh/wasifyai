@@ -3,6 +3,8 @@ make a picture of the library move, carry on a clip of the library, and the libr
 kind of creation."""
 
 import asyncio
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -11,6 +13,7 @@ from wasifyai_platform_sdk.actions import (
     Action,
     ActionContext,
     ActionRefused,
+    CallBinding,
     LibraryItem,
     LibraryKind,
     Outcome,
@@ -21,9 +24,11 @@ from wasifyai_platform_sdk.actions.helpers import need_deps, stage_picture
 
 from wasifyai_video.builder.actions import actions as builder_actions
 from wasifyai_video.builder.actions import library_kinds as builder_library_kinds
+from wasifyai_video.builder.runtime import add_to_search
+from wasifyai_video.index import index_text
 from wasifyai_video.routes import extension_of, file_name, save_copy
 from wasifyai_video.schemas import MAX_PROMPT_CHARS
-from wasifyai_video.videos import VideoRecord, video_store
+from wasifyai_video.videos import PosterError, VideoRecord, poster_of, video_store
 
 PRODUCT_ID = "wasifyai-video"
 Shape = Literal["landscape", "portrait", "square"]
@@ -142,6 +147,78 @@ def _extend_result(outputs: dict, p: ExtendIn) -> Outcome | None:
     return _made(outputs, p.prompt)
 
 
+MAX_KEEP_BYTES = 2 * 2**30
+
+
+class KeepIn(Strict):
+    from_kind: str = Field(
+        min_length=1, max_length=40, pattern=r"^[a-z0-9_]+$",
+        description="The kind of creation whose video it is, such as creative_project.",
+    )  # fmt: skip
+    from_id: str = Field(min_length=1, max_length=64, description="Its id.")
+    title: str = Field(min_length=1, max_length=120, description="What the video is called.")
+
+
+async def _keep(p: KeepIn, ctx: ActionContext) -> Outcome:
+    """A finished video made by another product (a cut of Creative Studio) becomes a video of the
+    library, laid out as the product's own: a new file every time."""
+    deps = need_deps(ctx)
+    kind = ctx.library.get(p.from_kind)
+    data = await kind.read(ctx, p.from_id) if kind and kind.read else None
+    if not data:
+        return Outcome.refused("There is no finished video there yet.", "not_found")
+    if len(data) > MAX_KEEP_BYTES:
+        return Outcome.refused("That video is too large to keep.", "too_large")
+    try:
+        width, height, poster = await poster_of(data)
+    except PosterError:
+        return Outcome.refused("That is not a video that can be played.", "invalid_input")
+    video_id = str(uuid.uuid4())
+    store = video_store(deps.engine)
+    seconds = max(1, round(float(mp4_seconds(data))))
+    await store.add(
+        VideoRecord(
+            id=video_id, tenant_id=ctx.actor.tenant_id, product_id=PRODUCT_ID,
+            user_id=ctx.actor.user_id, thread_id=None, run_id=None, mode="kept", status="working",
+            prompt=p.title, seconds=seconds, frames=seconds * 24, fps=24,
+            created_at=datetime.now(UTC),
+        )
+    )  # fmt: skip
+    try:
+        with deps.acting_as(ctx.actor, PRODUCT_ID):
+            video_key, poster_key = f"{video_id}/video.mp4", f"{video_id}/poster.jpg"
+            await deps.storage.put(video_key, data, "video/mp4")
+            await deps.storage.put(poster_key, poster, "image/jpeg")
+        await store.finish(ctx.actor.tenant_id, video_id, width, height, video_key, poster_key)
+    except Exception:
+        await store.fail(ctx.actor.tenant_id, video_id, "The video could not be saved.")
+        raise
+    await add_to_search(deps.state, ctx.actor, "video", video_id, index_text(p.title))
+    return Outcome.ok(
+        {
+            "video_id": video_id, "product_id": PRODUCT_ID, "prompt": p.title,
+            "uri": f"wasify://creation/video/{video_id}", "seconds": seconds,
+            "width": width, "height": height,
+        },
+        f'"{p.title}" is saved to your videos ({seconds} seconds, {width}x{height}).',
+    )  # fmt: skip
+
+
+def mp4_seconds(mp4: bytes) -> float:
+    """The length an MP4 says it has, from its movie header; 0 when it cannot be read."""
+    at = mp4.find(b"mvhd")
+    if at < 0:
+        return 0.0
+    version = mp4[at + 4]
+    if version == 1:
+        scale = int.from_bytes(mp4[at + 24 : at + 28], "big")
+        length = int.from_bytes(mp4[at + 28 : at + 36], "big")
+    else:
+        scale = int.from_bytes(mp4[at + 16 : at + 20], "big")
+        length = int.from_bytes(mp4[at + 20 : at + 24], "big")
+    return length / scale if scale else 0.0
+
+
 def actions() -> list[Action]:
     return [
         Action(
@@ -178,6 +255,20 @@ def actions() -> list[Action]:
             bind=RunBinding(PRODUCT_ID, "video", _animate_input, _animate_result,
                             check=_animate_check),
             ui="video.animate",
+        ),
+        Action(
+            id="video.keep", title="Keep a finished video",
+            summary="Save a finished video made by another tool to your videos.",
+            description=(
+                "Save the finished video of another creation, such as a Creative Studio project, "
+                "to the person's videos as a new file. It takes a few seconds."
+            ),
+            input=KeepIn, output=VideoOut,
+            examples=(
+                {"from_kind": "creative_project", "from_id": "0" * 32, "title": "Dawn drive"},
+            ),
+            effect="make", flags=("private",), requires=(need_product(PRODUCT_ID),),
+            product=PRODUCT_ID, bind=CallBinding(_keep), ui="creative",
         ),
         Action(
             id="video.extend", title="Extend a video",

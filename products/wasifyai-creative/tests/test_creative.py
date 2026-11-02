@@ -603,6 +603,7 @@ async def test_the_ask_tab_reads_the_plan_as_data_and_can_undo(tmp_path: Path):
     assert read.status == "ok", read.text
     assert read.output["actions"] == [
         "creative.edit_plan", "creative.undo", "creative.redo_shot", "creative.make_shots",
+        "creative.edit_cut", "creative.export",
     ]  # fmt: skip
     brief = read.output["brief"]
     assert f"{first} (selected)" in brief and f'"This shot" means {first}.' in brief

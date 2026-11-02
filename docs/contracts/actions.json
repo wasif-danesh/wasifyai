@@ -572,6 +572,187 @@
       "help": "docs/help/creative.choose_take.md"
     },
     {
+      "id": "creative.cut",
+      "title": "Make a music video",
+      "summary": "Make the finished video of a cut: its pictures, the song and the captions.",
+      "description": "Make the video of a Creative Studio project's cut at full size, with the song and the captions. It takes about a minute for a 3-minute song of stills. It is kept with the project; creative.export keeps it in Your videos.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "title": "ProjectIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "pieces": {
+            "title": "Pieces",
+            "type": "integer"
+          },
+          "captions": {
+            "title": "Captions",
+            "type": "integer"
+          },
+          "black_s": {
+            "description": "Seconds at the end with no picture.",
+            "title": "Black S",
+            "type": "number"
+          },
+          "empty": {
+            "description": "Pieces with nothing to show yet.",
+            "title": "Empty",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "pieces",
+          "captions",
+          "black_s",
+          "empty"
+        ],
+        "title": "CutOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "project_id": "1f8d2c3b4a5e4f60a7b8c9d0e1f20314"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-creative"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-creative",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/creative.cut.md"
+    },
+    {
+      "id": "creative.edit_cut",
+      "title": "Change a music video's cut",
+      "summary": "Move, lengthen, split or fade a piece of the cut, or change its captions.",
+      "description": "Change the cut of a Creative Studio project: move a piece, make it longer or shorter by beats, split it, fade into it or take it out, and change, move, add or take out a caption or a title. Changing the plan's shots is creative.edit_plan; this is only the cut.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Project Id",
+            "type": "string"
+          },
+          "edits": {
+            "description": "Changes to the cut, in order. Pieces: {op: 'move', item_id, to}, {op: 'length', item_id, by_beats}, {op: 'split', item_id}, {op: 'fade', item_id, fade}, {op: 'remove', item_id}. Captions: {op: 'caption', caption_id, text?, by_beats?}, {op: 'add_caption', kind: 'line'|'title'|'lower', text, start, end}, {op: 'remove_caption', caption_id}, {op: 'captions', on}, {op: 'song_lines'} (the song's words where they were sung, again).",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Edits",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "edits"
+        ],
+        "title": "EditCutIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "pieces": {
+            "title": "Pieces",
+            "type": "integer"
+          },
+          "captions": {
+            "title": "Captions",
+            "type": "integer"
+          },
+          "black_s": {
+            "description": "Seconds at the end with no picture.",
+            "title": "Black S",
+            "type": "number"
+          },
+          "empty": {
+            "description": "Pieces with nothing to show yet.",
+            "title": "Empty",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "pieces",
+          "captions",
+          "black_s",
+          "empty"
+        ],
+        "title": "CutOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "project_id": "1f8d2c3b4a5e4f60a7b8c9d0e1f20314",
+          "edits": [
+            {
+              "op": "length",
+              "item_id": "c3",
+              "by_beats": 2
+            }
+          ]
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-creative"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-creative",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/creative.edit_cut.md"
+    },
+    {
       "id": "creative.edit_plan",
       "title": "Change a plan",
       "summary": "Change the shots of a plan: words, motion, cuts, or add and remove shots.",
@@ -657,6 +838,84 @@
       ],
       "consent": "",
       "help": "docs/help/creative.edit_plan.md"
+    },
+    {
+      "id": "creative.export",
+      "title": "Keep a music video in Your videos",
+      "summary": "Save a project's finished video to Your videos as a new video.",
+      "description": "Save the finished video of a Creative Studio project to Your videos, making it first if the cut has changed. Every time is a new video; the old ones stay.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Project Id",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "description": "What the video is called; left out, the project's name.",
+            "maxLength": 120,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "title": "ExportIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "video_id": {
+            "title": "Video Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "video_id",
+          "uri"
+        ],
+        "title": "ExportOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "project_id": "1f8d2c3b4a5e4f60a7b8c9d0e1f20314",
+          "title": "Dawn drive"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-creative"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-creative",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/creative.export.md"
     },
     {
       "id": "creative.make_shots",
@@ -9361,6 +9620,116 @@
       ],
       "consent": "",
       "help": "docs/help/video.generate.md"
+    },
+    {
+      "id": "video.keep",
+      "title": "Keep a finished video",
+      "summary": "Save a finished video made by another tool to your videos.",
+      "description": "Save the finished video of another creation, such as a Creative Studio project, to the person's videos as a new file. It takes a few seconds.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "from_kind": {
+            "description": "The kind of creation whose video it is, such as creative_project.",
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[a-z0-9_]+$",
+            "title": "From Kind",
+            "type": "string"
+          },
+          "from_id": {
+            "description": "Its id.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "From Id",
+            "type": "string"
+          },
+          "title": {
+            "description": "What the video is called.",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_kind",
+          "from_id",
+          "title"
+        ],
+        "title": "KeepIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "video_id": {
+            "title": "Video Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "integer"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "video_id",
+          "product_id",
+          "uri",
+          "prompt",
+          "seconds",
+          "width",
+          "height"
+        ],
+        "title": "VideoOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "from_kind": "creative_project",
+          "from_id": "00000000000000000000000000000000",
+          "title": "Dawn drive"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-video"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-video",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/video.keep.md"
     },
     {
       "id": "video_builder.create",

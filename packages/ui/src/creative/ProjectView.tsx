@@ -1,10 +1,12 @@
 "use client";
 // One project on one screen (the amendment to ADR-0090): the Make panel, the stage, the media rail, and the
 // steps in the top bar. In the Plan step the stage is the plan, with its song strip, parts and shots, and
-// planning with its progress and Stop, or going on after a stop or a crash. In the Shots step it is the stills.
+// planning with its progress and Stop, or going on after a stop or a crash. In the Shots step it is the stills. In
+// the Cut step it is the video, with the timeline under it.
 import type {
   CreativeApi,
   CreativeProject,
+  CutEdit,
   PlanEdit,
   PlanLogEntry,
   Shot,
@@ -37,6 +39,7 @@ import { actions, hint } from "../styles";
 import { PageHeader } from "../window-bar";
 import { AnalysisCard, BriefForm, type LibraryPicture, useAnalysis } from "./BriefForm";
 import type { CreativeSong } from "./Creative";
+import { CutStage, Timeline } from "./CutStage";
 import {
   type AddedFile,
   type CreativeAssistant,
@@ -54,12 +57,10 @@ const MOTIONS = [
   { value: "Animate", label: "Animate" },
   { value: "Sing", label: "Sing" },
 ];
-const SOON = "Comes in a later stage of Creative Studio";
-// the last step of ADR-0090 is shown so the shape of the work can be seen, off until it is built
 const STEPS = [
   { value: "plan", label: "Plan" },
   { value: "shots", label: "Shots" },
-  { value: "cut", label: <span title={SOON}>Cut</span>, disabled: true },
+  { value: "cut", label: "Cut" },
 ];
 
 function clock(seconds: number): string {
@@ -90,6 +91,7 @@ export function ProjectView({
   modelOfTab,
   makers,
   addFile,
+  saveVideo,
   assistant,
   creations,
   onBack,
@@ -103,6 +105,8 @@ export function ProjectView({
   modelOfTab?: (tab: string) => ReactNode | undefined;
   makers?: MakePanelMakers;
   addFile?: (file: File) => Promise<AddedFile>;
+  /** write a kept video as a file where the person keeps them; what it was called and where */
+  saveVideo?: (videoId: string) => Promise<{ name: string; path: string }>;
   assistant?: CreativeAssistant;
   creations?: ProjectCreations;
   onBack: () => void;
@@ -119,6 +123,8 @@ export function ProjectView({
   const [step, setStep] = useState("plan");
   const [tab, setTab] = useState<string>(assistant ? "ask" : "add");
   const [mode, setMode] = useState<StillMode>("reference");
+  const [saved, setSaved] = useState<string | null>(null);
+  const video = useRef<HTMLVideoElement | null>(null);
   const wide = useSyncExternalStore(roomy.subscribe, roomy.now);
   const analysis = useAnalysis(api);
   const live = (project?.live ?? false) || (project?.shots_live ?? false);
@@ -175,6 +181,7 @@ export function ProjectView({
         const fresh = await api.get(id);
         if (action === "creative.edit_plan") madeByTools.current.set(toolId, fresh.revision);
         if (action === "creative.make_shots" || action === "creative.redo_shot") setStep("shots");
+        if (/^creative\.(edit_cut|cut|export)$/.test(action)) setStep("cut");
         return fresh;
       });
     },
@@ -228,6 +235,19 @@ export function ProjectView({
     if (makers?.image && tab !== "video") setTab("image");
     if (!selected && shots[0]) setSelected(shots[0].id);
   };
+  const cut = project.cut ?? null;
+  const busy = project.live || project.shots_live;
+  const editCut = (edits: CutEdit[]) => void act(() => api.editCut(project.id, edits));
+  const lastKept = cut?.exports[0];
+  const saveCopy =
+    saveVideo && lastKept
+      ? () => {
+          setSaved(null);
+          saveVideo(lastKept.video_id)
+            .then((done) => setSaved(`Saved to ${done.path}.`))
+            .catch((e) => setSaved(say(e, "It could not be saved.")));
+        }
+      : undefined;
   const bar = (
     <ProjectBar
       project={project}
@@ -235,14 +255,16 @@ export function ProjectView({
       onStep={(next) => (next === "shots" ? toShots() : setStep(next))}
       onBack={onBack}
       onLog={() => setShowLog(true)}
+      onSave={step === "cut" ? saveCopy : undefined}
       onMain={
         step === "shots"
-          ? () =>
-              void act(async () => {
-                const made = await api.preview(project.id);
-                return made;
-              })
-          : toShots
+          ? () => void act(() => api.preview(project.id))
+          : step === "cut"
+            ? () => {
+                setSaved(null);
+                void act(() => api.keepVideo(project.id));
+              }
+            : toShots
       }
     />
   );
@@ -272,6 +294,17 @@ export function ProjectView({
             tab={tab}
             onTab={setTab}
             makers={makers}
+            cut={
+              cut
+                ? {
+                    state: cut,
+                    timed: Boolean(project.facts.lines_timed),
+                    busy,
+                    edit: editCut,
+                    at: () => video.current?.currentTime ?? 0,
+                  }
+                : null
+            }
             addFile={addFile}
             added={
               new Set([`track:${trackId}`, ...media.tags.map((m) => `${m.kind}:${m.item_id}`)])
@@ -287,7 +320,7 @@ export function ProjectView({
           />
         </aside>
         <section
-          aria-label={step === "shots" ? "The shots" : "The plan"}
+          aria-label={step === "shots" ? "The shots" : step === "cut" ? "The cut" : "The plan"}
           inert={chatWorking}
           className="order-1 grid content-start gap-4 p-4 @4xl:order-none @4xl:min-h-0 @4xl:overflow-auto"
         >
@@ -314,7 +347,28 @@ export function ProjectView({
                   {problem}
                 </Notice>
               ) : null}
-              {step === "shots" ? (
+              {step === "cut" && cut ? (
+                <>
+                  <CutStage
+                    api={api}
+                    project={project}
+                    cut={cut}
+                    act={act}
+                    edit={editCut}
+                    video={video}
+                    saved={saved}
+                  />
+                  <Timeline
+                    api={api}
+                    project={project}
+                    cut={cut}
+                    coverOf={coverAt}
+                    act={act}
+                    edit={editCut}
+                    video={video}
+                  />
+                </>
+              ) : step === "shots" ? (
                 <ShotsStage
                   api={api}
                   project={project}
@@ -427,6 +481,7 @@ function ProjectBar({
   onStep,
   onBack,
   onLog,
+  onSave,
   onMain,
 }: {
   project: CreativeProject;
@@ -434,6 +489,8 @@ function ProjectBar({
   onStep: (step: string) => void;
   onBack: () => void;
   onLog: () => void;
+  /** Save a copy of the last video kept; absent when there is none */
+  onSave?: () => void;
   onMain: () => void;
 }) {
   const busy = project.live || project.shots_live;
@@ -452,9 +509,7 @@ function ProjectBar({
         label="Step"
         value={step}
         onValueChange={onStep}
-        options={STEPS.map((s) =>
-          s.value === "shots" ? { ...s, disabled: !project.revision } : s,
-        )}
+        options={STEPS.map((s) => (s.value === "plan" ? s : { ...s, disabled: !project.revision }))}
       />
       <span className="grow" />
       <Button
@@ -466,13 +521,34 @@ function ProjectBar({
       >
         Planning log
       </Button>
+      {step === "cut" ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!onSave}
+          title={onSave ? undefined : "Make the video first"}
+          onClick={onSave}
+        >
+          Save a copy
+        </Button>
+      ) : null}
       <Button
         type="button"
         size="sm"
-        disabled={busy || !project.revision || (step === "shots" && !hasStills)}
+        disabled={
+          busy ||
+          !project.revision ||
+          (step === "shots" && !hasStills) ||
+          (step === "cut" && !project.cut?.items.some((p) => p.item_id))
+        }
         onClick={onMain}
       >
-        {step === "shots" ? "Preview the whole song" : "Make the stills"}
+        {step === "cut"
+          ? "Make the video"
+          : step === "shots"
+            ? "Preview the whole song"
+            : "Make the stills"}
       </Button>
     </>
   );

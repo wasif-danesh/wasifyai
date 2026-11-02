@@ -16,6 +16,7 @@ from typing import Any
 from wasifyai_platform_sdk import Identity, RouteDeps, RunContext, search_text, set_context
 from wasifyai_platform_sdk.context import reset_context
 
+from wasifyai_creative.cut import captions_of
 from wasifyai_creative.document import index_words
 from wasifyai_creative.layout import lay_out
 from wasifyai_creative.shots import Refused, ShotJobs
@@ -59,7 +60,9 @@ async def add_to_search(state: Any, identity: Identity, row: dict[str, Any]) -> 
     if index is None:
         return
     try:
-        words = index_words(row["title"], row["brief"], row["plan"], lyrics_of(row))
+        found = store_for(state).cut_of(row["id"])
+        lyrics = f"{lyrics_of(row)} {captions_of(found['cut'] if found else None)}".strip()
+        words = index_words(row["title"], row["brief"], row["plan"], lyrics)
         await index.index(
             identity.tenant_id, PRODUCT_ID, identity.user_id, KIND, row["id"], search_text(*words)
         )

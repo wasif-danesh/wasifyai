@@ -542,7 +542,16 @@ clips on the worker in 45 and 15 s, **the cut in 6 s** with both (`docs/spikes/c
 in search, the owner found it first; CS0's song **analysed on the worker and planned in 21 s** (103 bpm, 6 sections, 25 shots). The web media worker needs the model
 folders (`DESKTOP_MODELS_DIR`, `DESKTOP_EXTRA_MODEL_DIRS`) to find FLUX.2 klein.
 
-**Not checked:** the `/creative` page in a browser, the Kubernetes chart (no new values: the workers and the API are the ones already deployed), a GPU host.
+**Not checked:** the Kubernetes chart (no new values: the workers and the API are the ones already deployed), a GPU host.
+
+**Checked in a browser (2026-11-03)**, on the same native stack (stub sign-in, an admin): Song analysis set up from Admin > Models and workers; a 30 s song
+made on the Music screen (80 s on the worker with the model load); a new project planned in **44 s** on gemma4:e4b (11 shots, the beats drawn over the song);
+**11 reference stills in about 7 minutes** on the media worker; the preview joined at once (30 s, 1280x720, plays); **the video at 1920x1080 in 4 s** with the song's
+own words burned in as captions, kept in Your videos, and its download link answers with the same file; Ask changed shot 2's place (Plan 2, with Undo); search finds
+the project, the kept video and the stills. Found and fixed: an open project asked for the styles about once a second (the image panel's style section read them
+again whenever its screen re-rendered), and a join under a second read "Joined in 0 seconds". Seen, not changed: the top bar's tray on the web lists only videos
+being made, so a song, a plan or stills show "Idle"; when the model gateway drops one request the chat model button reads "Select chat model" until it is opened
+again. Not run in the browser: motion clips and Sing.
 
 ## Consequences
 

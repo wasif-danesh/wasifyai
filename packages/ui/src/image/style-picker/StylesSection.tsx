@@ -71,20 +71,23 @@ export function StylesSection({
   const [naming, setNaming] = useState(false);
   const [unlooking, setUnlooking] = useState<Look | null>(null);
 
+  // whether the looks are read, not the function itself: a screen passes a new one on every render, and each
+  // new one read the styles again (the Creative Studio project asked for them about once a second)
+  const withLooks = Boolean(onApplyLook);
   const reload = useCallback(async () => {
     try {
       setList(await api.list());
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "The styles could not be read.");
     }
-    if (onApplyLook) {
+    if (withLooks) {
       try {
         setLooks(await api.looks());
       } catch {
         setLooks([]); // the looks are a convenience: the styles work without them
       }
     }
-  }, [api, onApplyLook]);
+  }, [api, withLooks]);
 
   useEffect(() => {
     void reload();

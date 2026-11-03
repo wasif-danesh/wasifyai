@@ -29,6 +29,9 @@ export function clock(seconds: number): string {
 }
 
 export function minutes(seconds: number): string {
+  // the web's preview of 11 stills joined in less than half a second, which read "0 seconds"
+  if (seconds < 1) return "under a second";
+  if (Math.round(seconds) === 1) return "1 second";
   if (seconds < 90) return `${Math.round(seconds)} seconds`;
   return `${Math.round(seconds / 60)} minutes`;
 }

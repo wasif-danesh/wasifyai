@@ -11,6 +11,7 @@ ENGINES = [
     "image-trainer",
     "decision-trainer",
     "writing-trainer",
+    "music-analysis",
 ]  # the names FETCH_ENGINE accepts
 LIPSYNC_COMPONENT = "lipsync_engine"  # the key of a worker's `components` entry for it
 VIDEO_TRAINER = "video-trainer"  # the video trainer's set-up (a component of `train.video`)

@@ -14,6 +14,7 @@ from typing import Any
 
 from wasifyai_creative.document import ANIMATED_CAMERA, FRAMINGS
 from wasifyai_creative.layout import Slot
+from wasifyai_creative.story import speaker_at
 
 GUIDE = (
     "You write one plain sentence per shot for a short video. Concrete: who, doing what, with which "
@@ -24,6 +25,8 @@ GUIDE = (
 TRIES = 3  # asking for a whole step
 REPAIRS = 2  # asking again for one bad sentence
 SHOTS_PER_BEAT = 3
+SING_CAMERA = "close slow push in"  # a sung shot is a close up of the face (CS0: MuseTalk moves only the mouth)
+STORY_IN_PROMPT = 6000  # characters of a story the writer is shown when it plans the whole of it
 MIN_SENTENCE, MAX_SENTENCE = 25, 180
 SENTENCE_END = re.compile(r"[.!?…。！？।॥][\"'”’)]*$")  # a sentence the length limit cut has none
 # what reads as filler or cannot be shot, seen in the spike's plans
@@ -61,6 +64,20 @@ def _schema_beats(n: int, names: list[str]) -> dict[str, Any]:
 def _schema_lines(n: int) -> dict[str, Any]:
     item = {"type": "string", "minLength": MIN_SENTENCE, "maxLength": MAX_SENTENCE}
     return _object("shots", {"type": "array", "minItems": n, "maxItems": n, "items": item})
+
+
+def _schema_bible() -> dict[str, Any]:
+    text = {"type": "string", "minLength": 3, "maxLength": 160}
+    return {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string", "minLength": 2, "maxLength": 80},
+            "tone": text,
+            "ending": text,
+        },
+        "required": ["title", "tone", "ending"],
+        "additionalProperties": False,
+    }
 
 
 def _object(key: str, value: dict[str, Any]) -> dict[str, Any]:
@@ -129,7 +146,8 @@ def who_in(sentence: str, cast: list[dict[str, Any]]) -> list[str]:
     ]
 
 
-def _head(brief: dict[str, Any]) -> str:
+def _head(brief: dict[str, Any], whole: bool = False) -> str:
+    """What every question starts with. A story adds its bible, and the story itself when the whole of it is planned."""
     people = []
     for p in brief.get("cast", []):
         said = f"{p['name']}: {p.get('look') or 'a person'}"
@@ -137,7 +155,26 @@ def _head(brief: dict[str, Any]) -> str:
             said
             + (", seen only in photographs, never there in person" if p.get("photos_only") else "")
         )
-    return f"Idea: {brief['idea']}\nCast: {'; '.join(people) or 'no people'}\n"
+    head = f"Idea: {brief['idea']}\nCast: {'; '.join(people) or 'no people'}\n"
+    bible = brief.get("bible") or {}
+    if bible:
+        head += f"Story: {bible.get('title', '')}. Tone: {bible.get('tone', '')}. Ending: {bible.get('ending', '')}\n"
+    if whole and brief.get("skill") == "story":
+        head += f"The story, as the narrator reads it:\n{str(brief.get('story') or '')[:STORY_IN_PROMPT]}\n"
+    return head
+
+
+def face_of(name: str, story: bool) -> str:
+    return f"{name}'s face, close up, looking at the camera as they {'speak' if story else 'sing'}"
+
+
+def _with(who: list[str], name: str | None) -> list[str]:
+    return [name, *[w for w in who if w != name]] if name else who
+
+
+def singer_of(brief: dict[str, Any]) -> str | None:
+    """Who sings a song's close ups: the first person of the cast who is there in person."""
+    return next((p["name"] for p in brief.get("cast", []) if not p.get("photos_only")), None)
 
 
 def _route(places: list[str], n: int) -> list[str]:
@@ -186,7 +223,7 @@ class PlanWriter:
             return given
         found = await self._step(
             "places",
-            _head(brief) + "\nName 3 to 5 places where this video happens, in the order they appear. "
+            _head(brief, whole=True) + "\nName 3 to 5 places where this video happens, in the order they appear. "
             "Short and concrete, like 'wet alley' or 'red barn'.",
             _schema_places(5), "places", None,
         )  # fmt: skip
@@ -194,12 +231,35 @@ class PlanWriter:
             raise WriterFailed("The model could not suggest places. Name them in the brief.")
         return [str(p) for p in found]
 
+    async def bible(self, brief: dict[str, Any]) -> dict[str, Any]:
+        """A story's title, tone and ending, so every part of the plan keeps to them. A song has none."""
+        if brief.get("skill") != "story":
+            return {}
+        if "bible" in self._saved:
+            return self._saved["bible"]
+        prompt = _head(brief, whole=True) + (
+            "\nGive this story a short title, its tone in a few words, and how it ends in one sentence."
+        )
+        out: dict[str, Any] = {}
+        for _ in range(TRIES):
+            raw = await self._ask(GUIDE, prompt, _schema_bible())
+            self._log("bible", prompt, raw)
+            found = _parse(raw, "title") and json.loads(
+                re.sub(r"^```(json)?|```$", "", raw.strip()).strip()
+            )
+            if isinstance(found, dict):
+                out = {k: str(found.get(k, ""))[:160] for k in ("title", "tone", "ending")}
+                break
+        self._keep("bible", out)
+        self._saved["bible"] = out
+        return out
+
     async def beats(self, brief: dict[str, Any], route: list[str]) -> list[dict[str, Any]]:
         want = "\n".join(f"{i + 1}. in {p}" for i, p in enumerate(route))
         n = len(route)
         found = await self._step(
             "beats",
-            _head(brief) + f"\nWrite {n} story beats in order, each a different event that moves "
+            _head(brief, whole=True) + f"\nWrite {n} story beats in order, each a different event that moves "
             f"things on, one in each of these places:\n{want}",
             _schema_beats(n, [p["name"] for p in brief.get("cast", [])]), "beats", n,
         )  # fmt: skip
@@ -226,10 +286,15 @@ class PlanWriter:
         if key in self._saved:
             return self._saved[key]
         head = _head(brief)
+        story = brief.get("skill") == "story"
         ask = "\n".join(
             f"{k + 1}. looks at: {r['looks_at']}"
             + (
-                f" (the song says here, for the mood only, not to be quoted: {r['line']})"
+                (
+                    f" (the story says here: {r['line']})"
+                    if story
+                    else f" (the song says here, for the mood only, not to be quoted: {r['line']})"
+                )
                 if r["line"]
                 else ""
             )
@@ -271,6 +336,9 @@ async def write_plan(
     progress: Callable[[str, float], None] = lambda _s, _p: None,
 ) -> dict[str, Any]:
     """The whole plan: places, beats, then the shots a part at a time."""
+    if brief.get("skill") == "story":
+        progress("Reading the story", 0.01)
+        brief = {**brief, "bible": await writer.bible(brief)}
     progress("Choosing the places", 0.02)
     places = await writer.places(brief)
     n = max(min(len(places) + 1, len(slots)), round(len(slots) / SHOTS_PER_BEAT), 1)
@@ -279,6 +347,8 @@ async def write_plan(
     progress("Writing the story", 0.08)
     beats = await writer.beats(brief, route)
     cast = brief.get("cast", [])
+    story = brief.get("skill") == "story"
+    singer = None if story else singer_of(brief)
     shots: list[dict[str, Any]] = []
     seen: list[str] = []
     focus = 0
@@ -289,12 +359,20 @@ async def write_plan(
         for i in indexes:
             camera, looks_at = FRAMINGS[focus % len(FRAMINGS)]
             focus += 1
+            line = line_at(lines, slots[i].start, slots[i].end)
+            # the Sing rule: a song's close ups of the face while a line is sung; in a story, a person of the cast saying their words
+            sings = (
+                speaker_at(lines, slots[i].start, slots[i].end)
+                if story
+                else singer
+                if camera == SING_CAMERA and line
+                else None
+            )
+            if sings:
+                camera, looks_at = SING_CAMERA, face_of(sings, story)
             rows.append(
-                {
-                    "i": i, "camera": camera, "looks_at": looks_at,
-                    "line": line_at(lines, slots[i].start, slots[i].end),
-                }
-            )  # fmt: skip
+                {"i": i, "camera": camera, "looks_at": looks_at, "line": line, "sings": sings}
+            )
         written = await writer.part(brief, f"part-{b}", route[b], str(beats[b]["what"]), rows, seen)
         for r, w in zip(rows, written, strict=True):
             seen.append(w["shows"])
@@ -302,9 +380,9 @@ async def write_plan(
             shots.append(
                 {
                     "id": f"s{r['i'] + 1}", "start": slot.start, "end": slot.end, "beat": b,
-                    "shows": w["shows"], "who": who_in(w["shows"], cast), "place": route[b],
+                    "shows": w["shows"], "who": _with(who_in(w["shows"], cast), r["sings"]), "place": route[b],
                     "camera": r["camera"], "line": r["line"], "note": "",
-                    "motion": "Animate" if r["camera"] == ANIMATED_CAMERA else "Hold",
+                    "motion": "Sing" if r["sings"] else "Animate" if r["camera"] == ANIMATED_CAMERA else "Hold",
                     "fallback": w["fallback"],
                 }
             )  # fmt: skip
@@ -312,6 +390,7 @@ async def write_plan(
         "places": places,
         "beats": [{**x, "place": route[i]} for i, x in enumerate(beats)],
         "shots": shots,
+        **({"bible": brief["bible"]} if brief.get("bible") else {}),
     }
 
 
@@ -319,12 +398,23 @@ async def rewrite_part(
     writer: PlanWriter, brief: dict[str, Any], plan: dict[str, Any], beat: int, key: str
 ) -> dict[str, Any]:
     """Try another idea for one part of the plan: only its sentences change."""
+    if plan.get("bible"):
+        brief = {**brief, "bible": plan["bible"]}
     mine = [s for s in plan["shots"] if s["beat"] == beat]
     if not mine:
         raise WriterFailed("That part of the plan is gone.")
     others = [s["shows"] for s in plan["shots"] if s["beat"] != beat]
     looks = dict(FRAMINGS)
-    rows = [{"line": s["line"], "looks_at": looks.get(s["camera"], "the person")} for s in mine]
+    story = brief.get("skill") == "story"
+    rows = [
+        {
+            "line": s["line"],
+            "looks_at": face_of(s["who"][0], story)
+            if s["motion"] == "Sing" and s["who"]
+            else looks.get(s["camera"], "the person"),
+        }
+        for s in mine
+    ]
     what = plan["beats"][beat]["what"] if beat < len(plan.get("beats", [])) else brief["idea"]
     written = await writer.part(
         brief, key, mine[0]["place"], str(what), rows, others + [s["shows"] for s in mine]
@@ -335,7 +425,7 @@ async def rewrite_part(
         **plan,
         "shots": [
             {**s, "shows": new[s["id"]]["shows"], "fallback": new[s["id"]]["fallback"],
-             "who": who_in(new[s["id"]]["shows"], cast)}
+             "who": _with(who_in(new[s["id"]]["shows"], cast), s["who"][0] if s["motion"] == "Sing" and s["who"] else None)}
             if s["id"] in new else s
             for s in plan["shots"]
         ],

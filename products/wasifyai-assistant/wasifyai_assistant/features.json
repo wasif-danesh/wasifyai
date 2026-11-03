@@ -240,6 +240,7 @@
       "creative.remove_media",
       "creative.undo",
       "music.analyse",
+      "speech.join",
       "video.keep"
     ],
     "does": [
@@ -258,6 +259,7 @@
       "Take out of a project",
       "Undo a change to a plan",
       "Find the beats of a song",
+      "Join speech",
       "Keep a finished video"
     ],
     "about": "turn a song and an idea into a plan for a music video, shot by shot; change the plan, make a picture for each shot, and preview the cut"

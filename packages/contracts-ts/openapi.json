@@ -656,6 +656,19 @@
             "description": "The words of the song; left out, those it was made with.",
             "title": "Lyrics"
           },
+          "narrator": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A saved voice (voice.list) that reads a story.",
+            "title": "Narrator"
+          },
           "places": {
             "description": "Where it happens; left empty, the writer chooses.",
             "items": {
@@ -675,6 +688,29 @@
             "title": "Shape",
             "type": "string"
           },
+          "skill": {
+            "default": "song",
+            "description": "A music video of a song, or a story told by a voice.",
+            "enum": [
+              "song",
+              "story"
+            ],
+            "title": "Skill",
+            "type": "string"
+          },
+          "story": {
+            "anyOf": [
+              {
+                "maxLength": 12000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A story's text: what the narrator reads. Words in quotes are said by the person named in the same sentence.",
+            "title": "Story"
+          },
           "style": {
             "default": "",
             "description": "The look: warm film photo, for instance.",
@@ -683,15 +719,14 @@
             "type": "string"
           },
           "track_id": {
-            "description": "The song, from Your music.",
+            "default": "",
+            "description": "The song, from Your music. For a story, the narration once it is made.",
             "maxLength": 64,
-            "minLength": 1,
             "title": "Track Id",
             "type": "string"
           }
         },
         "required": [
-          "track_id",
           "idea"
         ],
         "title": "Brief",
@@ -3371,6 +3406,19 @@
             "maxItems": 3,
             "title": "Pictures",
             "type": "array"
+          },
+          "voice": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A saved voice (voice.list) for what they say in a story.",
+            "title": "Voice"
           }
         },
         "required": [

@@ -37,7 +37,13 @@ import { Textarea } from "../components/textarea";
 import { coverOf, indexKindOf } from "../creations/model";
 import { actions, hint } from "../styles";
 import { PageHeader } from "../window-bar";
-import { AnalysisCard, BriefForm, type LibraryPicture, useAnalysis } from "./BriefForm";
+import {
+  AnalysisCard,
+  BriefForm,
+  type CreativeVoice,
+  type LibraryPicture,
+  useAnalysis,
+} from "./BriefForm";
 import type { CreativeSong } from "./Creative";
 import { CutStage, Timeline } from "./CutStage";
 import {
@@ -86,6 +92,7 @@ const roomy = {
 export function ProjectView({
   api,
   songs,
+  voices,
   id,
   model,
   modelOfTab,
@@ -100,6 +107,7 @@ export function ProjectView({
 }: {
   api: CreativeApi;
   songs: () => Promise<CreativeSong[]>;
+  voices?: () => Promise<CreativeVoice[]>;
   id: string;
   model?: ReactNode;
   modelOfTab?: (tab: string) => ReactNode | undefined;
@@ -219,12 +227,23 @@ export function ProjectView({
     );
   }
 
-  const ready = analysis.state?.state === "ready";
+  const story = project.brief.skill === "story";
+  // a story is timed by its reading, so it needs no music analysis
+  const ready = story || analysis.state?.state === "ready";
   const shots = project.plan?.shots ?? [];
   const at = shots.findIndex((s) => s.id === selected);
   const covers = new Map(
     media.entries.map((e) => [`${indexKindOf(e.kind)}:${e.id}`, coverOf(e) ?? undefined]),
   );
+  // a sung close up has no picture of its own in the library: it shows the still it was made from
+  for (const takes of Object.values(project.shots.takes)) {
+    const still = takes.filter((t) => t.kind === "image").at(-1);
+    for (const t of takes) {
+      if (t.kind === "lipsync" && still) {
+        covers.set(`lipsync:${t.item_id}`, covers.get(`image:${still.item_id}`));
+      }
+    }
+  }
   const coverAt = (kind: string, item: string) => covers.get(`${kind}:${item}`);
   const stillOf = (shot: string) => {
     const take = project.shots.takes[shot]?.find((t) => t.chosen);
@@ -328,6 +347,7 @@ export function ProjectView({
             <BriefForm
               api={api}
               songs={songs}
+              voices={voices}
               initial={project.brief}
               initialTitle={project.title}
               submitLabel="Save and plan again"
@@ -403,7 +423,7 @@ export function ProjectView({
                   ) : null}
                   {!project.live && project.status !== "planned" ? (
                     <>
-                      <AnalysisCard analysis={analysis} />
+                      {story ? null : <AnalysisCard analysis={analysis} />}
                       <Stopped
                         project={project}
                         ready={ready}
@@ -465,6 +485,11 @@ function factsLine(project: CreativeProject): string {
   const { facts, plan, brief } = project;
   const seconds = facts.seconds ?? 0;
   const parts = [
+    plan?.bible
+      ? `${plan.bible.title}: ${plan.bible.tone}`
+      : brief.skill === "story"
+        ? "A story"
+        : "",
     brief.style,
     brief.shape,
     seconds
@@ -650,14 +675,15 @@ function SongStrip({ facts, shots }: { facts: SongFacts; shots: Shot[] }) {
   return (
     <figure className="m-0 grid gap-1.5">
       <div className="relative h-10 overflow-hidden rounded-md border bg-muted">
-        {(facts.sections ?? []).map((s) => (
+        {(facts.sections ?? []).map((s, i) => (
           <div
             key={s.start}
             className="absolute inset-y-0 bg-primary"
             style={{
               left: at(s.start),
               width: at(s.end - s.start),
-              opacity: strength[s.label] ?? 0.5,
+              // a story's paragraphs are told apart by shade, a song's sections by loudness
+              opacity: facts.story ? (i % 2 ? 0.6 : 0.35) : (strength[s.label] ?? 0.5),
             }}
           />
         ))}
@@ -670,9 +696,19 @@ function SongStrip({ facts, shots }: { facts: SongFacts; shots: Shot[] }) {
         ))}
       </div>
       <figcaption className={hint}>
-        {Math.round(seconds)} s{facts.bpm ? `, about ${Math.round(facts.bpm)} beats a minute` : ""},{" "}
-        {shots.length} shots. Darker is louder; the thin lines are the cuts.
-        {facts.lines_timed === false ? " The song's lines could not be timed." : ""}
+        {facts.story ? (
+          <>
+            {Math.round(seconds)} s read aloud, {shots.length} shots. Each block is a paragraph; the
+            thin lines are the cuts.
+          </>
+        ) : (
+          <>
+            {Math.round(seconds)} s
+            {facts.bpm ? `, about ${Math.round(facts.bpm)} beats a minute` : ""}, {shots.length}{" "}
+            shots. Darker is louder; the thin lines are the cuts.
+            {facts.lines_timed === false ? " The song's lines could not be timed." : ""}
+          </>
+        )}
       </figcaption>
     </figure>
   );

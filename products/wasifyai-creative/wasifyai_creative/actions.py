@@ -15,7 +15,6 @@ from wasifyai_platform_sdk.actions import (
     LibraryKind,
     Outcome,
     need_product,
-    need_runtime,
 )
 from wasifyai_platform_sdk.actions.helpers import need_deps
 
@@ -349,7 +348,7 @@ async def _add_media(p: MediaIn, ctx: ActionContext) -> Outcome:
     known = any(
         t["kind"] == p.kind and t["item_id"] == p.item_id for t in store.takes_of(p.project_id)
     )
-    if row and shot and p.kind in ("image", "video") and not known:
+    if row and shot and p.kind in ("image", "video", "lipsync") and not known:
         # for a shot it is a take; it becomes the chosen one only if the shot has none, by the person's click
         store.add_take(
             p.project_id, shot["id"], p.kind, p.item_id, stills.inputs_of(shot, row["brief"]),
@@ -626,16 +625,22 @@ def actions() -> list[Action]:
             description=(
                 "Plan a music video of a song in the library: the cuts follow the beats, and every "
                 "shot says what is seen, who is in it, where, how the camera moves and whether it "
-                "holds or moves. It takes about a minute with an 8B chat model, longer with a larger one. No pictures "
+                "holds, moves or sings. It takes about a minute with an 8B chat model, longer with a larger one. No pictures "
                 "or clips are made. Use it when the person wants a music video or a plan for one; "
-                "they can then change it in Creative Studio. Returns the project and its first shots."
+                "they can then change it in Creative Studio. Returns the project and its first shots. "
+                "For a video of a story, set brief.skill to story and brief.story to its text: a "
+                "narrator reads it (brief.narrator, a saved voice) and words in quotes are said by the "
+                "person named in the same sentence (their voice); reading it first takes a few minutes."
             ),
             input=PlanIn,
             output=PlanOut,
             examples=({"brief": {"track_id": SAMPLE_ID, "idea": "A woman drives home at dawn"}},),
             effect="make",
             flags=("private",),
-            requires=(HERE, CHAT, need_runtime("music_analysis")),
+            requires=(
+                HERE,
+                CHAT,
+            ),  # a song needs its analysis, which music.analyse asks for; a story does not
             long=True,
             product=PRODUCT_ID,
             bind=CallBinding(_plan),

@@ -8,6 +8,8 @@ export const ANALYSIS_COMPONENT = "music-analysis";
 
 export type CreativeShape = "landscape" | "portrait" | "square";
 export type ShotMotion = "Hold" | "Animate" | "Sing";
+/** a music video of a song, or a story read aloud (CS5) */
+export type CreativeSkill = "song" | "story";
 export type ProjectStatus = "draft" | "planning" | "planned" | "failed" | "stopped" | "interrupted";
 
 export type CastMember = {
@@ -16,12 +18,21 @@ export type CastMember = {
   photos_only: boolean;
   /** pictures of them from the library, so every shot starts from the same face */
   pictures?: string[];
+  /** a saved voice for what they say in a story */
+  voice?: string | null;
 };
 /** An object or place with words that are used again in every picture of it. */
 export type FixedWords = { name: string; words: string };
 
 export type Brief = {
+  /** "song" when left out */
+  skill?: CreativeSkill;
+  /** the song; for a story, its reading once it is made */
   track_id: string;
+  /** a story's text: the narrator reads it, words in quotes are said by the person named in the sentence */
+  story?: string | null;
+  /** the saved voice that reads a story */
+  narrator?: string | null;
   idea: string;
   style: string;
   cast: CastMember[];
@@ -52,7 +63,8 @@ export type Shot = {
 };
 
 export type PlanPart = { what: string; who: string; place: string };
-export type Plan = { places: string[]; beats: PlanPart[]; shots: Shot[] };
+export type StoryBible = { title: string; tone: string; ending: string };
+export type Plan = { places: string[]; beats: PlanPart[]; shots: Shot[]; bible?: StoryBible };
 
 export type SongSection = { start: number; end: number; energy: number; label: string };
 export type SongFacts = {
@@ -61,8 +73,11 @@ export type SongFacts = {
   beats?: number[];
   downbeats?: number[];
   sections?: SongSection[];
-  lines?: { text: string; start: number | null; end: number | null }[];
+  /** `who` is the person of the cast who says a line of a story; none for the narrator or a song */
+  lines?: { text: string; start: number | null; end: number | null; who?: string | null }[];
   lines_timed?: boolean;
+  /** the sound is a story read aloud, not a song */
+  story?: boolean;
 };
 
 export type CreativeProject = {
@@ -95,7 +110,8 @@ export type StillMode = "plain" | "reference";
 /** One still or clip of a shot. Taken from the library, so it can be deleted there. */
 export type Take = {
   id: string;
-  kind: "image" | "video";
+  /** a lipsync take is a sung (or spoken) close up, made from the still with the song's part */
+  kind: "image" | "video" | "lipsync";
   item_id: string;
   mode: string;
   seconds: number | null;
@@ -266,6 +282,8 @@ export type MotionEstimate = {
   fit: "fits" | "tight" | "too_big";
   /** the time comes from clips made on this computer */
   measured: boolean;
+  /** of the clips to make, the shots that sing (lip sync) */
+  sung?: number;
   ready: boolean;
   /** what to do first when the video model is not ready */
   step: string | null;
@@ -303,7 +321,9 @@ export type AnalysisState =
   | { state: "missing"; bytes: number }
   | { state: "installing"; share: number | null; label: string }
   | { state: "ready" }
-  | { state: "failed"; message: string; bytes: number };
+  | { state: "failed"; message: string; bytes: number }
+  /** a service: the tool is on its workers, set up by an admin, not from this page */
+  | { state: "elsewhere"; reason: string };
 
 export type CreativeApi = {
   analysis: () => Promise<AnalysisState>;
@@ -355,8 +375,12 @@ type ComponentStatus =
   | { state: "installed" }
   | { state: "failed"; message: string };
 
-export function createCreativeApi(transport: Transport): CreativeApi {
+export function createCreativeApi(
+  transport: Transport,
+  { hosted = false }: { hosted?: boolean } = {},
+): CreativeApi {
   const base = `/products/${CREATIVE_PRODUCT_ID}/creative/projects`;
+  const statusPath = `/products/${CREATIVE_PRODUCT_ID}/creative/status`;
   const component = `/components/${ANALYSIS_COMPONENT}`;
   let lastBytes = 0;
 
@@ -376,6 +400,14 @@ export function createCreativeApi(transport: Transport): CreativeApi {
 
   return {
     analysis: async () => {
+      if (hosted) {
+        const s = await json<{ analysis_ready: boolean; analysis_problem: string | null }>(
+          statusPath,
+        );
+        return s.analysis_ready
+          ? { state: "ready" }
+          : { state: "elsewhere", reason: s.analysis_problem ?? "Song analysis is not set up yet." };
+      }
       const { status } = await json<{ status: ComponentStatus }>(component);
       switch (status.state) {
         case "unsupported":
@@ -394,10 +426,11 @@ export function createCreativeApi(transport: Transport): CreativeApi {
       }
     },
     installAnalysis: async (bytes) => {
+      if (hosted) throw new Error("This is set up by whoever runs this service, not from this page.");
       await post(`${component}/install`, { confirm_bytes: bytes, repair: false });
     },
     cancelAnalysis: async () => {
-      await post(`${component}/cancel`);
+      if (!hosted) await post(`${component}/cancel`);
     },
     list: async (limit = 50) =>
       (await json<{ items: CreativeProject[] }>(`${base}?limit=${limit}`)).items,

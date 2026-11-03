@@ -224,6 +224,8 @@ class ApiToolHost:
                     "Finding the beats of a song is not available on this kind of computer yet."
                 )
             if not tool.ready():
+                if getattr(tool, "remote", False):  # the web: a worker's, set up by an admin
+                    return Readiness.needs_setup(tool.problem() or "", ui="creative")
                 return Readiness.needs_setup(
                     "Set up song analysis first (a download of about 970 MB, shown before it "
                     "starts).",

@@ -197,9 +197,12 @@ function Still({ cover, alt }: { cover: string | undefined; alt: string }) {
 }
 
 function clipWord(take: Take | undefined): string | null {
+  if (take?.kind === "lipsync") return "Sung clip";
   if (take?.kind !== "video") return null;
   return take.mode === "draft" ? "Draft clip" : take.mode === "final" ? "Clip" : "Clip, added";
 }
+
+const isClip = (take: Take | undefined) => take?.kind === "video" || take?.kind === "lipsync";
 
 /** The selected shot, large, with its takes, Redo and its clip. */
 function Selected({
@@ -240,7 +243,11 @@ function Selected({
           title={takes.some((t) => t.kind === "image") ? undefined : "Make the still first"}
           onClick={() => void act(() => api.makeMotion(project.id, { quality, shot_id: shot.id }))}
         >
-          {quality === "draft" ? "Make a draft clip" : "Make a clip"}
+          {shot.motion === "Sing" && shot.line && shot.who.length
+            ? "Make it sing"
+            : quality === "draft"
+              ? "Make a draft clip"
+              : "Make a clip"}
         </Button>
         <Button
           type="button"
@@ -266,7 +273,7 @@ function Selected({
                 <button
                   type="button"
                   aria-pressed={take.chosen}
-                  aria-label={`Version ${i + 1} of shot ${number}${take.kind === "video" ? `, ${clipWord(take)?.toLowerCase()}` : ""}${take.out_of_date ? ", out of date" : ""}`}
+                  aria-label={`Version ${i + 1} of shot ${number}${isClip(take) ? `, ${clipWord(take)?.toLowerCase()}` : ""}${take.out_of_date ? ", out of date" : ""}`}
                   disabled={busy}
                   onClick={() => void act(() => api.chooseTake(project.id, shot.id, take.id))}
                   className={`w-20 cursor-pointer rounded-md border-2 p-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 ${take.chosen ? "border-primary" : "border-transparent"}`}
@@ -363,7 +370,7 @@ export function ShotsStage({
               <button
                 type="button"
                 aria-pressed={on}
-                aria-label={`Shot ${i + 1}${chosen?.kind === "video" ? `, ${clipWord(chosen)?.toLowerCase()}` : ""}${chosen?.out_of_date ? ", out of date" : ""}${takes.length ? "" : ", no still yet"}`}
+                aria-label={`Shot ${i + 1}${isClip(chosen) ? `, ${clipWord(chosen)?.toLowerCase()}` : ""}${chosen?.out_of_date ? ", out of date" : ""}${takes.length ? "" : ", no still yet"}`}
                 onClick={() => onSelect(shot.id)}
                 className={`grid w-full cursor-pointer gap-1 rounded-md border p-1 text-start outline-none hover:border-primary/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 ${on ? "border-primary ring-1 ring-primary" : ""}`}
               >
@@ -373,7 +380,11 @@ export function ShotsStage({
                   {takes.length > 1 ? (
                     <span className="text-muted-foreground">{takes.length} versions</span>
                   ) : null}
-                  {chosen?.kind === "video" ? <Badge variant="secondary">Clip</Badge> : null}
+                  {isClip(chosen) ? (
+                    <Badge variant="secondary">
+                      {chosen?.kind === "lipsync" ? "Sings" : "Clip"}
+                    </Badge>
+                  ) : null}
                   {chosen?.out_of_date ? <Badge variant="destructive">Out of date</Badge> : null}
                 </span>
               </button>

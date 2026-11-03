@@ -175,8 +175,9 @@ def test_the_first_set_is_there(catalogue):
     # 72 with music.analyse, creative.plan and creative.edit_plan (ADR-0090 CS1)
     # 76 with creative.read_project, undo, add_media and remove_media (ADR-0090 screen)
     # 80 with creative.make_shots, redo_shot, choose_take and preview (ADR-0090 CS2)
-    # 84 with video.keep and creative.edit_cut, cut and export (ADR-0090 CS3); 85 with creative.animate (CS4)
-    assert 35 <= len(ids) <= 85
+    # 84 with video.keep and creative.edit_cut, cut and export (ADR-0090 CS3); 85 with creative.animate (CS4);
+    # 86 with speech.join (CS5)
+    assert 35 <= len(ids) <= 86
     for expected in (
         "library.search", "library.list", "library.get", "library.export", "library.rename",
         "library.delete", "image.generate", "image.edit", "video.generate", "video.animate",

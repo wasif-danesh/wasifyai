@@ -17,6 +17,7 @@ from wasifyai_platform_sdk import (
     VoiceEngineError,
     VoiceRequestError,
     admin_wire,
+    analysis_wire,
     builder_wire,
     model3d_wire,
     speech_wire,
@@ -544,6 +545,18 @@ async def _writing_answer(train: Any, w: Work) -> dict[str, Any]:
     return {"answers": answers}
 
 
+async def _analyse(tool: Any, w: Work) -> dict[str, Any]:
+    """A song's beats, downbeats, tempo and sections, with the desktop's own tool (ADR-0090)."""
+    if not tool.ready():
+        raise Failed(
+            "not_ready", "Song analysis is not set up on the worker. Ask an admin to set it up."
+        )
+    try:
+        return await tool.analyse(await w.read("song"))  # type: ignore[no-any-return]
+    except tool.Failed as e:
+        raise Failed("analysis_failed", str(e)) from None
+
+
 async def _fetch_model(admin: Any, w: Work) -> dict[str, Any]:
     async def report(fraction: float, label: str) -> None:
         w.report_soon(fraction, label)
@@ -561,6 +574,7 @@ async def _fetch_engine(admin: Any, w: Work) -> dict[str, Any]:
 HANDLERS: dict[str, Handler] = {
     admin_wire.FETCH_MODEL: _fetch_model,
     admin_wire.FETCH_ENGINE: _fetch_engine,
+    analysis_wire.ANALYSE: _analyse,
     builder_wire.INSPECT: _inspect,
     builder_wire.SNAPSHOT: _snapshot,
     builder_wire.RENDER: _render,

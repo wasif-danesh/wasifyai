@@ -357,6 +357,8 @@ export {
   type CreativeApi,
   type CreativeProject,
   type CreativeShape,
+  type CreativeSkill,
+  type StoryBible,
   type Plan,
   type PlanEdit,
   type PlanLogEntry,

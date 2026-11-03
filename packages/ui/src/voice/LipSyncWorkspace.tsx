@@ -42,6 +42,9 @@ export type LipSyncWorkspaceProps = {
   onModelChosen?: (id: string) => void;
   title?: string;
   lead?: string;
+  /** inside another screen's panel: one narrow column and no recent, and what is made is handed over */
+  panel?: boolean;
+  onMade?: (id: string) => void;
 };
 
 /** Setting up the lip sync engine: a program environment of about 2 GB, fetched only on a click
@@ -145,6 +148,8 @@ export function LipSyncWorkspace({
   onModelChosen,
   title = "Lip sync",
   lead,
+  panel = false,
+  onMade,
 }: LipSyncWorkspaceProps) {
   const { models, error, loading, reload } = useVoiceModels(api, "lipsync");
   const [engine, setEngine] = useState<LipSyncEngine | null>(null);
@@ -252,7 +257,9 @@ export function LipSyncWorkspace({
         const before = new Set((clips ?? []).map((c) => c.id));
         const list = await api.clips().catch(() => clips ?? []);
         setClips(list);
-        setShownId(list.find((c) => !before.has(c.id))?.id ?? list[0]?.id ?? null);
+        const made = list.find((c) => !before.has(c.id))?.id ?? list[0]?.id ?? null;
+        setShownId(made);
+        if (made) onMade?.(made);
         setPicture(null);
       } else {
         setProblem(r.message);
@@ -421,6 +428,7 @@ export function LipSyncWorkspace({
   return (
     <>
       <MakeScreen
+        panel={panel}
         title={title}
         lead={lead}
         ask={
@@ -429,6 +437,7 @@ export function LipSyncWorkspace({
             <ModelPicker
               models={models}
               task="lipsync"
+              inBody={panel}
               value={chosen?.id ?? null}
               onChange={(id) => {
                 setModelId(id);

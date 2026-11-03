@@ -34,7 +34,7 @@ afterEach(() => {
 describe("Trainers on the Workers page", () => {
   it("says when no worker lists a trainer", () => {
     render(<TrainersAdmin workers={[]} />);
-    expect(screen.getByText("No worker lists a trainer yet.")).toBeTruthy();
+    expect(screen.getByText("No worker lists a trainer or tool yet.")).toBeTruthy();
   });
 
   it("shows a ready trainer and offers to set one up, then reads the workers again", async () => {
@@ -48,5 +48,23 @@ describe("Trainers on the Workers page", () => {
     await user.click(screen.getByRole("button", { name: /Set up \(183 MB\)/ }));
     expect(fetchEngine).toHaveBeenCalledWith("video-trainer");
     await waitFor(() => expect(screen.getByText("Ready")).toBeTruthy());
+  });
+
+  it("offers to set song analysis up on a worker that lists it", async () => {
+    const user = userEvent.setup();
+    const analysis = {
+      ...worker(false),
+      components: {
+        music_analysis: {
+          ready: false,
+          problem: null,
+          setup: { supported: true, bytes: 970_000_000 },
+        },
+      },
+    };
+    render(<TrainersAdmin workers={[analysis]} />);
+    expect(screen.getByText("Song analysis")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /Set up \(970 MB\)/ }));
+    expect(fetchEngine).toHaveBeenCalledWith("music-analysis");
   });
 });

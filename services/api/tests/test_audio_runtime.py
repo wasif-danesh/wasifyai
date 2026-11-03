@@ -249,6 +249,18 @@ def test_resolve_names_what_to_do(tmp_path, monkeypatch):
     assert e.value.code == "runtime_missing"
 
 
+def test_resolve_prefers_an_installed_model_that_can_do_it(tmp_path, monkeypatch):
+    # the recommended designer is not here, VoxCPM2 is and can design: it is used
+    eng, _ = make_engine(tmp_path, monkeypatch, present={"voxcpm2-q8_0.gguf"})
+    assert eng.resolve("design", None).id == "voxcpm2"
+    assert eng.resolve("clone", None).id == "voxcpm2"
+    # nothing that can design is here: the recommended one is named
+    eng2, _ = make_engine(tmp_path, monkeypatch, present={"kokoro-82m-q8_0.gguf"})
+    with pytest.raises(VoiceEngineError) as e:
+        eng2.resolve("design", None)
+    assert e.value.code == "model_missing" and "VoiceDesign" in e.value.message
+
+
 async def test_speak_runs_the_model_and_reports_the_load(engine):
     model = engine.resolve("speak", "kokoro-82m")
     first = await engine.speak(model, "Hello there, this is a test of speech.", "af_heart", {})

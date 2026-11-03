@@ -6,11 +6,13 @@ import type { WorkerInfo } from "@wasifyai/client";
 import { Button } from "@wasifyai/ui";
 import { useCallback, useEffect, useState } from "react";
 
-/** What a trainer needs to be set up from here: the component a worker lists, and the name of its set-up job. */
-type Engine = "video-trainer" | "image-trainer";
+/** What a trainer or tool needs to be set up from here: the component a worker lists, and the name of its set-up job. */
+type Engine = "video-trainer" | "image-trainer" | "music-analysis";
 const TRAINERS: { component: string; engine: Engine; title: string }[] = [
   { component: "train.video", engine: "video-trainer", title: "Video model training" },
   { component: "train.image", engine: "image-trainer", title: "Image model training" },
+  // a song's beats for Creative Studio (ADR-0090)
+  { component: "music_analysis", engine: "music-analysis", title: "Song analysis" },
 ];
 
 const size = (bytes: number | undefined) =>
@@ -58,14 +60,15 @@ export function TrainersAdmin({ workers }: { workers: WorkerInfo[] }) {
       .map((w) => ({ t, w, c: w.components[t.component] })),
   );
   return (
-    <section aria-label="Trainers" className="grid gap-2">
-      <h2 className="m-0 font-semibold text-lg">Trainers</h2>
+    <section aria-label="Trainers and tools" className="grid gap-2">
+      <h2 className="m-0 font-semibold text-lg">Trainers and tools</h2>
       <p className={muted}>
         Teaching a model of someone's own runs on a worker. Set a trainer up once; people can then
-        teach that kind of model from Train models.
+        teach that kind of model from Train models. Song analysis finds the beats of a song for
+        Creative Studio.
       </p>
       {rows.length === 0 ? (
-        <output className={`${muted} block`}>No worker lists a trainer yet.</output>
+        <output className={`${muted} block`}>No worker lists a trainer or tool yet.</output>
       ) : (
         <ul className="m-0 grid list-none gap-2 p-0 text-sm">
           {rows.map(({ t, w, c }) => {

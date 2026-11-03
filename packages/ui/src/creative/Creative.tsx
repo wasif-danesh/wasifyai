@@ -12,7 +12,7 @@ import { EmptyState } from "../components/empty-state";
 import { Notice } from "../components/notice";
 import { panel } from "../styles";
 import { PageHeader, TopBarSlot } from "../window-bar";
-import { BriefForm } from "./BriefForm";
+import { BriefForm, type CreativeVoice } from "./BriefForm";
 import type { AddedFile, CreativeAssistant, CreativeScreen, MakePanelMakers } from "./MakePanel";
 import { ProjectView, picturesOf } from "./ProjectView";
 import type { ProjectCreations } from "./use-project-media";
@@ -30,6 +30,8 @@ export type CreativeSong = {
 export type CreativeProps = {
   api: CreativeApi;
   songs: () => Promise<CreativeSong[]>;
+  /** the person's saved voices, for a story's narrator and people */
+  voices?: () => Promise<CreativeVoice[]>;
   /** the chat model button: the plan is written by the model the person chose */
   model?: ReactNode;
   /** the model button of a tab of the Make panel, when it is not the chat's */
@@ -65,6 +67,7 @@ const STATUS: Record<CreativeProject["status"], string> = {
 export function Creative({
   api,
   songs,
+  voices,
   model,
   modelOfTab,
   makers,
@@ -111,6 +114,7 @@ export function Creative({
           <ProjectView
             api={api}
             songs={songs}
+            voices={voices}
             id={view.id}
             model={model}
             modelOfTab={modelOfTab}
@@ -200,6 +204,7 @@ export function Creative({
           <BriefForm
             api={api}
             songs={songs}
+            voices={voices}
             onMakeSong={onMakeSong}
             pictures={picturesOf(creations)}
             onCancel={() => setView({ at: "list" })}

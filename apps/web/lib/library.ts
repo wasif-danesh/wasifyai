@@ -3,6 +3,7 @@
 import {
   createAssistantApi,
   createCreationsApi,
+  createCreativeApi,
   createImagesApi,
   createModel3dApi,
   createModelsInUseApi,
@@ -44,3 +45,5 @@ export const webWorkers = createWorkersApi(transport);
 export const webModelsInUse = createModelsInUseApi(transport);
 /** My creations: every kind a person made, listed and searched (ADR-0040, ADR-0041). */
 export const webCreations = createCreationsApi(transport);
+/** Creative Studio (ADR-0090): projects from a song or a story to a finished video; song analysis on a worker. */
+export const webCreative = createCreativeApi(transport, { hosted: true });

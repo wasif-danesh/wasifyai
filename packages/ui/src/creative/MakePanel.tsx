@@ -23,6 +23,7 @@ import type { ChatToolResult } from "../chat/thread/use-thread-chat";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Notice } from "../components/notice";
+import { Segmented } from "../components/segmented";
 import { type Entry, coverOf, indexKindOf, toRow } from "../creations/model";
 import { hint } from "../styles";
 import type { EditorAssistant } from "../videobuilder/scenes/SceneEditor";
@@ -46,7 +47,10 @@ const WAITING: Record<CreativeScreen, Waiting> = {
 
 /** The tabs made here. The window has the engine and the models, so it draws them; what they make is handed over. */
 export type MakePanelMakers = Partial<
-  Record<"image" | "video" | "music", (onMade: (id: string) => void) => ReactNode>
+  Record<
+    "image" | "video" | "music" | "voice",
+    (onMade: (id: string, kind?: string) => void) => ReactNode
+  >
 >;
 
 /** The cut, for the Voice and Titles tabs. */
@@ -60,7 +64,7 @@ export type PanelCut = {
   at: () => number;
 };
 
-const MADE_LINE: Record<"image" | "video" | "music", (name: string | null) => string> = {
+const MADE_LINE: Record<"image" | "video" | "music" | "voice", (name: string | null) => string> = {
   image: (name) =>
     name
       ? `What you make here is a version of ${name}.`
@@ -71,7 +75,10 @@ const MADE_LINE: Record<"image" | "video" | "music", (name: string | null) => st
       : "Select a shot to make a version for it. Otherwise it joins this project's media.",
   music: () =>
     "What you make here joins this project's media. The video's song is the one in the brief.",
+  voice: () =>
+    "What you say here joins this project's media. A story's reading is made by its plan.",
 };
+const KIND_OF = { image: "image", video: "video", music: "track", voice: "speech" } as const;
 
 const TABS: { id: CreativeScreen | "add" | "ask"; label: string; icon: LucideIcon }[] = [
   { id: "image", label: "Image", icon: Image },
@@ -182,9 +189,11 @@ export function MakePanel({
           </Tabs.Trigger>
         ))}
       </Tabs.List>
-      {(["image", "video", "music"] as const).map((screen) => {
+      {(["image", "video", "music", "voice"] as const).map((screen) => {
         const maker = makers?.[screen];
         if (!maker) return null;
+        // the Voice tab shows the captions of the cut instead, once there is one
+        if (screen === "voice" && cut) return null;
         return (
           // kept while another tab shows: a picture being made must not be stopped by a click
           <Tabs.Content
@@ -195,7 +204,7 @@ export function MakePanel({
             className={cn("min-h-0 flex-1 flex-col", tab === screen ? "flex" : "hidden")}
           >
             <p className={`${hint} m-0 border-b px-3 py-1.5`}>{MADE_LINE[screen](selectedName)}</p>
-            {maker((id) => onAdd(screen === "music" ? "track" : screen, id))}
+            {maker((id, kind) => onAdd(kind ?? KIND_OF[screen], id))}
           </Tabs.Content>
         );
       })}
@@ -203,9 +212,11 @@ export function MakePanel({
         .filter((screen) =>
           screen === "image" || screen === "video" || screen === "music"
             ? !makers?.[screen]
-            : screen === "voice" || screen === "titles"
-              ? !cut
-              : true,
+            : screen === "voice"
+              ? !cut && !makers?.voice
+              : screen === "titles"
+                ? !cut
+                : true,
         )
         .map((screen) => (
           <Tabs.Content key={screen} value={screen} className="min-h-0 flex-1 overflow-auto p-3">
@@ -224,8 +235,8 @@ export function MakePanel({
         ))}
       {cut ? (
         <>
-          <Tabs.Content value="voice" className="min-h-0 flex-1 overflow-auto p-3">
-            <CaptionsTab cut={cut.state} timed={cut.timed} busy={cut.busy} edit={cut.edit} />
+          <Tabs.Content value="voice" className="min-h-0 flex-1 flex-col overflow-auto">
+            <VoiceTab cut={cut} speak={makers?.voice} onAdd={onAdd} />
           </Tabs.Content>
           <Tabs.Content value="titles" className="min-h-0 flex-1 overflow-auto p-3">
             <TitlesTab cut={cut.state} busy={cut.busy} edit={cut.edit} at={cut.at} />
@@ -275,6 +286,47 @@ export function MakePanel({
         </Tabs.Content>
       ) : null}
     </Tabs.Root>
+  );
+}
+
+/** The captions of the cut, and saying a line in a voice: a narration or a spoken line for the project. */
+function VoiceTab({
+  cut,
+  speak,
+  onAdd,
+}: {
+  cut: PanelCut;
+  speak?: (onMade: (id: string, kind?: string) => void) => ReactNode;
+  onAdd: (kind: string, id: string) => void;
+}) {
+  const [part, setPart] = useState<"captions" | "speak">("captions");
+  return (
+    <>
+      {speak ? (
+        <div className="border-b p-2">
+          <Segmented
+            label="Voice"
+            size="sm"
+            value={part}
+            onValueChange={(v) => setPart(v as "captions" | "speak")}
+            options={[
+              { value: "captions", label: "Captions" },
+              { value: "speak", label: "Speak" },
+            ]}
+          />
+        </div>
+      ) : null}
+      {part === "speak" && speak ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <p className={`${hint} m-0 border-b px-3 py-1.5`}>{MADE_LINE.voice(null)}</p>
+          {speak((id, kind) => onAdd(kind ?? "speech", id))}
+        </div>
+      ) : (
+        <div className="p-3">
+          <CaptionsTab cut={cut.state} timed={cut.timed} busy={cut.busy} edit={cut.edit} />
+        </div>
+      )}
+    </>
   );
 }
 

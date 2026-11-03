@@ -1,4 +1,11 @@
-from wasifyai_platform_sdk import admin_wire, builder_wire, model3d_wire, speech_wire, train_wire
+from wasifyai_platform_sdk import (
+    admin_wire,
+    analysis_wire,
+    builder_wire,
+    model3d_wire,
+    speech_wire,
+    train_wire,
+)
 from wasifyai_platform_sdk.capabilities import (
     Capabilities,
     CapabilityNotConfigured,
@@ -261,6 +268,7 @@ __all__ = [
     "admin_wire",
     "builder_wire",
     "model3d_wire",
+    "analysis_wire",
     "train_wire",
     "speech_wire",
     "JobError",

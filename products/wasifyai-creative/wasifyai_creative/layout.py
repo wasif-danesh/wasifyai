@@ -70,3 +70,16 @@ def lay_out(
             at = step
         out.append(Slot(_grid(at), _grid(b)))
     return out
+
+
+STORY_EVERY = {
+    -2: 3,
+    -1: 2,
+}  # a story cuts where a line starts: every line, or fewer for longer shots
+STORY_LONGEST = {1: 4.0, 2: 3.0}
+
+
+def lay_out_story(starts: list[float], seconds: float, cut_speed: int = 0) -> list[Slot]:
+    """Slots for a story read aloud: cuts where its lines start, a long line split so a shot can be made."""
+    picked = starts[:: STORY_EVERY.get(cut_speed, 1)]
+    return lay_out(starts, [], seconds, picked, -2, STORY_LONGEST.get(cut_speed, LONGEST_CLIP_S))

@@ -11,6 +11,7 @@ from wasifyai_platform_sdk import (
     EngineQueue,
     EngineWorkerInfo,
     admin_wire,
+    analysis_wire,
     builder_wire,
     model3d_wire,
     speech_wire,
@@ -58,6 +59,10 @@ class Worker:
     @property
     def _train(self) -> Any:
         return self._engines.get("train") if isinstance(self._engines, dict) else None
+
+    @property
+    def _analysis(self) -> Any:
+        return self._engines.get("analysis") if isinstance(self._engines, dict) else None
 
     @property
     def _builder(self) -> Any:
@@ -114,6 +119,20 @@ class Worker:
                 }
             except Exception:
                 log.exception("Motion graphics could not report its state")
+        if (tool := self._analysis) is not None:  # a song's beats (ADR-0090)
+            kinds += analysis_wire.KINDS
+            try:
+                components[analysis_wire.COMPONENT] = {
+                    "ready": tool.ready(),
+                    "problem": tool.problem(),
+                    "state": tool.state(),
+                    "setup": {
+                        "supported": bool(tool.supported),
+                        "bytes": int(tool.plan()["bytes"]),
+                    },
+                }
+            except Exception:
+                log.exception("song analysis could not report its state")
         return EngineWorkerInfo(
             id=self.name, kinds=kinds, models=models, components=components, busy=self._busy
         )

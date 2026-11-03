@@ -19,6 +19,7 @@ TRAINERS = {
     "writing-trainer": "trainer-writing",
     "decision-trainer": "trainer-deciding",
     "video-trainer": "trainer-video",
+    "music-analysis": "music-analysis",  # the song analysis tool (ADR-0090)
 }
 POLL_S = 1.0
 

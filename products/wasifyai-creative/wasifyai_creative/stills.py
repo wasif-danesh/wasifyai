@@ -24,6 +24,8 @@ SECONDS = {PLAIN: (14.0, 20.0), REFERENCE: (34.0, 42.0)}
 STILL_BYTES = 3 * 1024 * 1024
 PREVIEW_BYTES_A_SECOND = 500 * 1024
 PORTRAITS = 2
+# what lip sync needs to find (a Sing shot); a speaking face in a film photo was drawn with made-up subtitles (CS5)
+FACE = "Facing the camera, face and mouth clearly visible. No words or subtitles in the picture."
 
 
 @dataclass(frozen=True)
@@ -67,6 +69,7 @@ def inputs_of(shot: dict[str, Any], brief: dict[str, Any]) -> str:
         shot["shows"], shot["place"], shot["camera"], brief.get("style", ""), brief.get("shape", ""),
         [[p["name"], p.get("look", ""), p.get("pictures") or []] for p in present],
         [[f["name"], f["words"]] for f in _fixed(shot, brief)],
+        *(["sing"] if shot.get("motion") == "Sing" else []),
     ]  # fmt: skip
     return hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -90,6 +93,8 @@ def still_for(shot: dict[str, Any], brief: dict[str, Any], mode: str) -> Still:
             rf"\b{re.escape(name)}\b", "someone" if in_a_photo else "someone in a photograph", shows
         )
     people = [f"{p['name']}: {p['look'][:160]}." for p in present if p.get("look")]
+    if shot.get("motion") == "Sing":
+        people = [FACE, *people]
     place = f"Place: {shot['place']}." if shot.get("place") else ""
     frame = FRAMING.get(str(shot.get("camera", "")).split(" ")[0], "")
     fixed = [f"{f['name']}: {f['words'][:120]}." for f in _fixed(shot, brief)]

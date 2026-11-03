@@ -41,8 +41,8 @@ export function hrefOf(target: CreationEntry | MakeTarget): string {
       return "/image/3d";
     case "composition":
       return "/video/builder";
-    case "creative_project": // desktop first (ADR-0090); the web shows it in the Library only
-      return "/creations";
+    case "creative_project":
+      return `/creative?open=${encodeURIComponent(target.id)}`;
     case "notebook":
       return `/notebooks/${target.id}`;
     case "taught":

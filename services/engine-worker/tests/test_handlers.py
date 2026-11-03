@@ -260,3 +260,35 @@ async def test_what_is_here_is_not_fetched_again_and_what_is_not_a_model_is_refu
     engine = _job(admin_wire.FETCH_ENGINE, name="rm-rf")
     refused = await run_job(_engines(here), memory_storage(), engine, "w1")
     assert not refused.ok and refused.error and refused.error.code == "unknown_engine"
+
+
+class FakeAnalysis:
+    class Failed(Exception):
+        pass
+
+    def __init__(self, ready: bool = True, fail: bool = False) -> None:
+        self._ready, self._fail = ready, fail
+
+    def ready(self) -> bool:
+        return self._ready
+
+    async def analyse(self, audio: bytes) -> dict[str, Any]:
+        if self._fail:
+            raise self.Failed("The beats of this recording could not be found.")
+        return {"seconds": 3.0, "bpm": 120.0, "beats": [0.5], "downbeats": [0.5], "sections": [],
+                "heard": len(audio)}  # fmt: skip
+
+
+async def test_a_song_is_analysed_on_the_worker_and_a_tool_not_set_up_says_so():
+    from wasifyai_platform_sdk import analysis_wire
+
+    storage = memory_storage()
+    await storage.put(f"{PREFIX}/in/song", b"RIFFsong")
+    asked = job(analysis_wire.ANALYSE, {}, {"song": f"{PREFIX}/in/song"})
+    out = await run_job({"analysis": FakeAnalysis()}, storage, asked, "w")
+    assert out.ok and out.meta["bpm"] == 120.0 and out.meta["heard"] == 8
+    out = await run_job({"analysis": FakeAnalysis(ready=False)}, storage, asked, "w")
+    assert not out.ok and out.error and out.error.code == "not_ready"
+    assert "Ask an admin" in out.error.message
+    out = await run_job({"analysis": FakeAnalysis(fail=True)}, storage, asked, "w")
+    assert not out.ok and out.error and out.error.code == "analysis_failed"

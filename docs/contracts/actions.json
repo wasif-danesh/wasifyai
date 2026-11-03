@@ -1120,18 +1120,56 @@
       "id": "creative.plan",
       "title": "Plan a music video",
       "summary": "Turn a song and an idea into an editable plan of shots. Nothing is made yet.",
-      "description": "Plan a music video of a song in the library: the cuts follow the beats, and every shot says what is seen, who is in it, where, how the camera moves and whether it holds or moves. It takes about a minute with an 8B chat model, longer with a larger one. No pictures or clips are made. Use it when the person wants a music video or a plan for one; they can then change it in Creative Studio. Returns the project and its first shots.",
+      "description": "Plan a music video of a song in the library: the cuts follow the beats, and every shot says what is seen, who is in it, where, how the camera moves and whether it holds, moves or sings. It takes about a minute with an 8B chat model, longer with a larger one. No pictures or clips are made. Use it when the person wants a music video or a plan for one; they can then change it in Creative Studio. Returns the project and its first shots. For a video of a story, set brief.skill to story and brief.story to its text: a narrator reads it (brief.narrator, a saved voice) and words in quotes are said by the person named in the same sentence (their voice); reading it first takes a few minutes.",
       "input": {
         "$defs": {
           "Brief": {
             "additionalProperties": false,
             "properties": {
+              "skill": {
+                "default": "song",
+                "description": "A music video of a song, or a story told by a voice.",
+                "enum": [
+                  "song",
+                  "story"
+                ],
+                "title": "Skill",
+                "type": "string"
+              },
               "track_id": {
-                "description": "The song, from Your music.",
+                "default": "",
+                "description": "The song, from Your music. For a story, the narration once it is made.",
                 "maxLength": 64,
-                "minLength": 1,
                 "title": "Track Id",
                 "type": "string"
+              },
+              "story": {
+                "anyOf": [
+                  {
+                    "maxLength": 12000,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "A story's text: what the narrator reads. Words in quotes are said by the person named in the same sentence.",
+                "title": "Story"
+              },
+              "narrator": {
+                "anyOf": [
+                  {
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "A saved voice (voice.list) that reads a story.",
+                "title": "Narrator"
               },
               "idea": {
                 "description": "What the video is about, in a line.",
@@ -1207,7 +1245,6 @@
               }
             },
             "required": [
-              "track_id",
               "idea"
             ],
             "title": "Brief",
@@ -1269,6 +1306,20 @@
                 "maxItems": 3,
                 "title": "Pictures",
                 "type": "array"
+              },
+              "voice": {
+                "anyOf": [
+                  {
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "A saved voice (voice.list) for what they say in a story.",
+                "title": "Voice"
               }
             },
             "required": [
@@ -1367,10 +1418,6 @@
         {
           "kind": "chat",
           "name": ""
-        },
-        {
-          "kind": "runtime",
-          "name": "music_analysis"
         }
       ],
       "long": true,
@@ -4094,6 +4141,36 @@
             "default": null,
             "description": "A built-in voice for the words.",
             "title": "Voice"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "maximum": 36000,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Only part of the recording: from this second.",
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 36000,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "And to this second.",
+            "title": "End"
           },
           "title": {
             "anyOf": [
@@ -8649,6 +8726,143 @@
       ],
       "consent": "",
       "help": "docs/help/notebook.studio_output.md"
+    },
+    {
+      "id": "speech.join",
+      "title": "Join speech",
+      "summary": "Join speeches into one recording, with a pause after each.",
+      "description": "Put speeches of the library one after another, each followed by a pause, and keep them as one recording in Your music: a narration where each line can be a different voice. It says where each part starts and ends. It takes a few seconds.",
+      "input": {
+        "$defs": {
+          "JoinPart": {
+            "additionalProperties": false,
+            "properties": {
+              "speech_id": {
+                "description": "A speech of the library.",
+                "maxLength": 64,
+                "minLength": 1,
+                "title": "Speech Id",
+                "type": "string"
+              },
+              "pause": {
+                "default": 0.3,
+                "description": "Seconds of quiet after it.",
+                "maximum": 5,
+                "minimum": 0,
+                "title": "Pause",
+                "type": "number"
+              }
+            },
+            "required": [
+              "speech_id"
+            ],
+            "title": "JoinPart",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "parts": {
+            "items": {
+              "$ref": "#/$defs/JoinPart"
+            },
+            "maxItems": 400,
+            "minItems": 1,
+            "title": "Parts",
+            "type": "array"
+          },
+          "title": {
+            "description": "What the recording is called.",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "description": "What it says, so search finds it.",
+            "maxLength": 20000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parts",
+          "title"
+        ],
+        "title": "JoinIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "track_id": {
+            "title": "Track Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "times": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Times",
+            "type": "array"
+          }
+        },
+        "required": [
+          "track_id",
+          "title",
+          "seconds",
+          "uri",
+          "times"
+        ],
+        "title": "JoinOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "parts": [
+            {
+              "speech_id": "0b7c1f9e-0000-4000-8000-000000000000",
+              "pause": 0.4
+            }
+          ],
+          "title": "The lighthouse"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-voice"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-voice",
+      "ui": "creative",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/speech.join.md"
     },
     {
       "id": "speech.speak",

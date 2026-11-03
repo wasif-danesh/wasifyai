@@ -53,6 +53,9 @@ export type SpeakWorkspaceProps = {
   onTool?: (speech: Speech, tool: "convert" | "edit") => void;
   /** "See all" on the recent strip */
   onOpenLibrary?: () => void;
+  /** inside another screen's panel: one narrow column and no recent, and what is made is handed over */
+  panel?: boolean;
+  onMade?: (id: string) => void;
 };
 
 /**
@@ -72,6 +75,8 @@ export function SpeakWorkspace({
   lead,
   onTool,
   onOpenLibrary,
+  panel = false,
+  onMade,
 }: SpeakWorkspaceProps) {
   const textId = useId();
   const [saved, setSaved] = useState<SavedVoice[]>([]);
@@ -176,6 +181,7 @@ export function SpeakWorkspace({
       if (!r.ok) setProblem(r.message);
       else {
         setShownId(r.speech.id);
+        onMade?.(r.speech.id);
         await loadSpeeches();
       }
     } catch (e) {
@@ -344,6 +350,7 @@ export function SpeakWorkspace({
   return (
     <>
       <MakeScreen
+        panel={panel}
         title={title}
         lead={lead}
         ask={
@@ -352,6 +359,7 @@ export function SpeakWorkspace({
             <ModelPicker
               models={models}
               task={task}
+              inBody={panel}
               value={chosen?.id ?? null}
               onChange={(id) => {
                 setModelId(id);

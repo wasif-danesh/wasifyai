@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (owner, 2026-10-24: "I'll go with your pick" on all seven questions, recorded in "Owner's answers" below). **CS0 is
   done: the owner watched the excerpts on 2026-10-31 and said go (`docs/spikes/creative-cs0.md`). Its results are written into the decisions
-  below. CS1 is built (2026-10-31; "Built" below): a song becomes an editable plan on the desktop. CS2 is built (2026-11-02): the plan becomes stills and a preview over the song. CS3 is built the same day: the Cut step, its video at full size, and keeping it in Your videos. CS4 is built the same day too: motion, a draft of about 30 seconds and Make it better, with an estimate that held within 25% ("CS4" under "Built"); with it the plan to a usable v1 (CS1 to CS4) is built on the desktop. The screen amendment was accepted on 2026-10-31 and its first stage is built ("The screen" under "Built"); CS5 and the web come next.** "Creative Studio" is the owner's working name.
+  below. CS1 is built (2026-10-31; "Built" below): a song becomes an editable plan on the desktop. CS2 is built (2026-11-02): the plan becomes stills and a preview over the song. CS3 is built the same day: the Cut step, its video at full size, and keeping it in Your videos. CS4 is built the same day too: motion, a draft of about 30 seconds and Make it better, with an estimate that held within 25% ("CS4" under "Built"); with it the plan to a usable v1 (CS1 to CS4) is built on the desktop. The screen amendment was accepted on 2026-10-31 and its first stage is built ("The screen" under "Built"). CS5 (Sing and the Story skill) is built the same day ("CS5" under "Built"), and so is the web ("Amendment (2026-11-02): the web is built" under "Web").** "Creative Studio" is the owner's working name.
 - **Order and shared parts:** ADR-0096 (2026-10-31): the Motion graphics editor is built first; its screen frame, media rail, Make panel and docked assistant are shared with this product. The consent, safeguard and terms parts below were removed by ADR-0094.
 - **Date:** 2026-10-24
 - **Asked by:** the owner, 2026-10-24: study Maestro's Creative studio, Director and video editor, **do not use its code**, and plan how to
@@ -470,11 +470,79 @@ shot from the screen (72 to 106 s), its badge, the Video tab, axe clean on each,
 shapes, a 3-minute song (worked out from the measured clips: a draft of every shot about 50 minutes, the Animate shots about 25), whether the drafts are good to
 watch: the owner's watch is the check.
 
+### CS5 (2026-11-02; desktop)
+
+Sing and the Story skill. Measured on this Mac (M5 Pro, 64 GB) with real models: Qwen3-8B plans, VoxCPM2 designs and reads the voices, FLUX.2 klein 4B makes plain
+stills, MuseTalk lip syncs. `docs/spikes/creative-cs5-sheet.jpg` shows frames of the story's spoken shots (left) and the song's sung shots (right); the videos are
+`docs/listening/samples/creative-cs5-story.mp4` and `creative-cs5-song.mp4` (git-ignored).
+
+| Done when | Result |
+|---|---|
+| A story with two characters and a narrated voice | 6 paragraphs read by a narrator, with Mira and Tom each in their own designed voice: **read and planned in 70 s** (20 parts, 78 s of narration, 25 shots, "The Key and the Clock"). Sing shots s4, s8, s20 and s23 fall where Mira, Tom, Mira and Tom speak. Stills 367 s for 25. **Four speaking clips: 30, 15, 15 and 21 s**; the cut in 9 s with all four |
+| A song with four sung close-ups | CS0's 90 s English song with its typed words: planned in 36 s, 25 shots, **Sing on s4, s10, s16 and s22**, each on a sung line, plus 4 Animate shots. Stills 370 s. **Four sung clips: 27, 27, 15 and 15 s** against estimates of 34 to 41, 30 to 41, 13 to 17 and 12 to 17 s; the cut in 9 s with all four |
+
+**How it works.**
+- **The Sing rule** (`writer.py`). In a song, a shot whose framing comes round to the close up while a line is sung becomes a close up of the singer's face (the first
+  person of the cast who is there in person), marked Sing. In a story, a shot during which a person of the cast speaks for at least half a second is a close up of that
+  person, marked Sing. The plan check refuses a Sing shot with no person or no line. The camera is a close slow push in, because MuseTalk moves only the mouth.
+- **The still** of a Sing shot asks for the face toward the camera with the mouth clearly visible and no words in the picture (`stills.FACE`; the first stills drew
+  subtitles).
+- **The clip** of a Sing shot is the voice product's lip sync on the still with the shot's slice of the sound (`motion.py`, mode `sing`, take kind `lipsync`). It has one
+  setting, so a draft and Make it better both make it. Its estimate is 6 to 8 s of work a second sung plus 15 s to load the model, until one is made here, then the
+  measured rate plus and minus 15%. The cut lays the song or the narration over it, as for any clip.
+- **The Story skill** (`story.py`, pure). The brief takes the person's text (40 to 12,000 characters), a narrator voice and a saved voice for each person. Words in
+  quotes are said by the person named in the same sentence; everything else is narrated. Each part is spoken on its own with `speech.speak`, kept at once as a
+  checkpoint, and the parts are joined by the new action `speech.join` with a pause after each (0.2 s inside a sentence, 0.45 between sentences, 0.9 between
+  paragraphs). So every line's time is exact, and from then on a story is planned like a song: the narration is the sound, the parts are the captions, a paragraph is
+  a section and cuts fall where the lines start (`lay_out_story`). The chat model first writes a story bible (title, tone, ending). A story needs no song analysis, so
+  `creative.plan` no longer requires it.
+- **The narration is kept across plans.** Plan again keeps the spoken parts (they are saved recordings) and drops only the plan's own steps. If a joined part has
+  gone from the Library, the join answers "not found", the parts are dropped and the next try reads the story again.
+- **Voices.** A designed voice now uses an installed model that can design (VoxCPM2) when the recommended one (Qwen3-TTS VoiceDesign) is not downloaded
+  (`AudioEngine.resolve`).
+- **The Make panel.** The Voice tab says a line in a saved voice and adds it to the project (before there is a cut; with a cut it shows the captions). The Video tab
+  has Lip sync beside Create, Animate and Extend.
+
+**What the real run found:**
+- **Every Sing shot showed out of date**: the check compared a lip sync take with the mark of an animated clip. Fixed in `shots.view`.
+- **The image model drew subtitles** on two of the first faces; fixed by the still's words. Two remakes had no text.
+- **The whole shot's sound is lip synced.** When the narrator says "said Mira" inside her shot, her mouth moves to it too. Splitting a speaking shot at the quote is
+  not built.
+- **A face that fills the frame smears.** Tom's first close up had a blurred mouth (a MuseTalk limit); a redo of the still is the way round it for now.
+
+**Not built:** consent answers (removed by ADR-0094), splitting a speaking shot where the quote starts, more than one person singing in a shot, a story read by a
+cloned voice of a real person (any saved voice works; nothing checks whose it is). **Not checked:** the real window, a story in another language, 16 and 32 GB
+Macs, whether the result is good to watch: the owner's watch is the check.
+
 ## Web
 
 Desktop first, like Train. On the web the same screens would use engine workers (ADR-0087) for analysis, stills, clips and the cut, one
 job per person (ADR-0088), and need the GPU host (P7). `docs/web-parity-ledger.md` gets a row when CS1 starts: **soon, desktop first
 (owner)** until a web stage is planned.
+
+### Amendment (2026-11-02): the web is built
+
+Asked by the owner on 2026-11-02 ("Do CS5 and then the web version"). The web runs the same product and the same screen (`packages/ui/src/creative/`) at `/creative`;
+the parity ledger says live.
+
+- **Projects** are rows in Postgres, schema `creative` (`CreativeStore.on_postgres`, the same store class as the desktop's SQLite, stage J2). A plan or a run left
+  working by an API that stopped is marked interrupted when the API starts again, if nothing touched it for 30 minutes (`fail_stale`, `CREATIVE_STALE_MIN`), so Go on
+  works.
+- **Stills, clips, speech and lip sync** are the image, video and voice products' own actions, so they already run on the media worker and engine workers.
+- **Song analysis** is a new engine-worker job, `analysis.song` (`analysis_wire`): the worker runs the desktop's tool on the recording and answers with the same
+  shape, so `music.analyse` did not change (`services/api/.../remote_analysis.py`). An admin sets it up under Admin > Workers ("Song analysis", engine
+  `music-analysis`); a person cannot, and the brief's card says to ask an admin. A story needs no analysis.
+- **The preview and the cut** run with FFmpeg in the API, as Extend video does; the files go to object storage under the person's prefix.
+- **Search** reads `creative.projects` on Postgres; a project opens at `/creative?open=<id>`.
+- **Differences from the desktop:** the analysis card has no Install or Cancel (the admin's job), and Save a copy is a browser download of the kept video.
+
+Checked for real on the native web stack (API on Postgres, Redis, SeaweedFS, LiteLLM with gemma4:e4b, the media worker with ComfyUI and an engine worker), not in a
+browser: a story with two people in their own saved voices **read and planned in 30 s** (8 parts, Sing on s3 and s5), **8 stills in 127 s**, the two speaking
+clips on the worker in 45 and 15 s, **the cut in 6 s** with both (`docs/spikes/creative-cs5-web-sheet.jpg`); another person got 404 for the project and found nothing
+in search, the owner found it first; CS0's song **analysed on the worker and planned in 21 s** (103 bpm, 6 sections, 25 shots). The web media worker needs the model
+folders (`DESKTOP_MODELS_DIR`, `DESKTOP_EXTRA_MODEL_DIRS`) to find FLUX.2 klein.
+
+**Not checked:** the `/creative` page in a browser, the Kubernetes chart (no new values: the workers and the API are the ones already deployed), a GPU host.
 
 ## Consequences
 
@@ -507,7 +575,7 @@ job per person (ADR-0088), and need the GPU host (P7). `docs/web-parity-ledger.m
 
 A hosted provider for clips (a later, opt-in idea with its own ADR); an audio-driven video model such as LTX-2.5 on the Mac (a new
 runtime and an amendment to ADR-0066 and ADR-0037); more skills (podcast, a short viral clip); a queue of many projects (ADR-0088
-limits one job per person for now); notifications; a web stage; non-English interface text.
+limits one job per person for now); notifications; non-English interface text.
 
 ## Owner's answers (2026-10-24)
 

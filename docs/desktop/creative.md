@@ -1,6 +1,6 @@
 # Creative Studio on the desktop
 
-ADR-0090. At stage CS3 a project goes from a song to a finished video: a plan, stills, a cut with captions and titles, and the video kept in Your videos. Clips for every shot come in CS4.
+ADR-0090. A project goes from a song or a story to a finished video: a plan, stills, clips and sung or spoken close ups, a cut with captions and titles, and the video kept in Your videos.
 
 ## How a plan is made
 
@@ -58,3 +58,21 @@ the cut use the clips. Before Start the panel says the stretch, how many clips, 
 here, then from the last 12 at that setting, and while it runs the panel says the time left from the clips this run made. **Stop** keeps the clips; **Go on** makes only
 the shots with no up-to-date clip at that setting (a final clip counts for a draft). The Animate screen of Video has the same Final and Draft setting.
 
+
+## Sing and stories (CS5)
+
+**A story** is a project whose brief is your own text, a narrator voice and a saved voice for each person (Speech › Voices). Words in quotes are said by the person
+named in the same sentence; the rest is narrated. Planning reads it aloud first, a part at a time (each part is kept, so a stop loses one), joins the parts with short
+pauses, then plans it like a song: the narration is the sound and its parts are the captions. A story needs no song analysis. Plan again keeps the reading.
+Measured: about 150 words, 20 parts, read and planned in 70 s on Qwen3-8B with VoxCPM2.
+
+**Sing** shots are close ups of a face while a line is sung (a song: the first person of the cast) or while a person of the cast speaks (a story). Their clip is the
+voice product's lip sync on the still with that shot's slice of the sound, made by Draft 30 seconds, Make it better or the shot's own Make a clip; the badge says
+Sung clip. Measured: 15 to 30 s a clip for 2 to 5 s sung. The whole shot's sound is synced, so a narrator's words inside a speaking shot move the mouth too.
+
+The Make panel's **Voice** tab says a line in a saved voice and adds it to the project; the **Video** tab has Lip sync.
+
+## On the web
+
+The same screen at `/creative`, with projects in Postgres. A song needs **Song analysis** set up on a worker by an admin (Admin › Workers); a story does not. The
+preview and the cut are made in the API with FFmpeg. ADR-0090, "Amendment (2026-11-02): the web is built".

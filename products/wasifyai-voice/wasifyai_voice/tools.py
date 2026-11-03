@@ -361,6 +361,12 @@ def build_tools(
         pic = voice_wav = None
         try:
             voice_audio, seconds = await audio_input.at_rate(source.wav, "voice.wav", 16000, 1)
+            if state.get("start") is not None or state.get("end") is not None:
+                start = float(state.get("start") or 0)
+                end = min(float(state.get("end") or seconds), seconds)
+                if end - start < 0.5:
+                    return refuse_with("bad_part", "That part of the recording is too short.")
+                voice_audio, seconds = audio_input.slice_wav(voice_audio, start, end)
             req = check_lipsync(model, seconds)
             pic = await scratch_file(png, ".png")
             voice_wav = await scratch_file(voice_audio)

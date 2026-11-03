@@ -1,12 +1,14 @@
 "use client";
-// The brief of a project: the song, the idea, who is in it and where. The analysis tool is set up from
-// here, with its size shown first, because a plan cannot start without it.
+// The brief of a project: the song or the story, the idea, who is in it and where. The analysis tool is
+// set up from here, with its size shown first, because a song's plan cannot start without it. A story is
+// read aloud by saved voices instead, so it needs none.
 import {
   type AnalysisState,
   type CastMember,
   type CreativeApi,
   type CreativeBrief,
   type CreativeShape,
+  type CreativeSkill,
   type FixedWords,
   gigabytes,
 } from "@wasifyai/client";
@@ -33,6 +35,17 @@ const CUT_SPEEDS = [
   { value: "1", label: "Fast" },
   { value: "2", label: "Fastest" },
 ];
+const SKILLS = [
+  { value: "song", label: "A song" },
+  { value: "story", label: "A story" },
+];
+const STORY_MIN = 40;
+const STORY_MAX = 12000;
+const BUILT_IN = "built-in";
+
+/** A saved voice of the person's, to read a story or say a person's words. */
+export type CreativeVoice = { id: string; name: string };
+
 const SHAPES = [
   { value: "landscape", label: "Landscape" },
   { value: "portrait", label: "Portrait" },
@@ -91,6 +104,13 @@ export function AnalysisCard({ analysis }: { analysis: ReturnType<typeof useAnal
     return (
       <Notice tone="info" title="Not on this computer yet">
         {state.reason}
+      </Notice>
+    );
+  }
+  if (state.state === "elsewhere") {
+    return (
+      <Notice tone="info" title="Song analysis is not set up">
+        {state.reason} A story needs no analysis.
       </Notice>
     );
   }
@@ -201,7 +221,10 @@ function PicturesOf({
 }
 
 const EMPTY: CreativeBrief = {
+  skill: "song",
   track_id: "",
+  story: null,
+  narrator: null,
   idea: "",
   style: "",
   cast: [],
@@ -222,9 +245,12 @@ export function BriefForm({
   onCancel,
   onMakeSong,
   pictures,
+  voices,
 }: {
   api: CreativeApi;
   songs: () => Promise<CreativeSong[]>;
+  /** the person's saved voices, for a story's narrator and people */
+  voices?: () => Promise<CreativeVoice[]>;
   /** the pictures of the library a person can be drawn from */
   pictures?: () => Promise<LibraryPicture[]>;
   initial?: CreativeBrief;
@@ -256,6 +282,17 @@ export function BriefForm({
       .catch(() => setKnown([]));
   }, [api]);
   const usable = known.filter((k) => !brief.cast.some((p) => p.name === k.name));
+  const [saved, setSaved] = useState<CreativeVoice[]>([]);
+  useEffect(() => {
+    voices?.()
+      .then(setSaved)
+      .catch(() => setSaved([]));
+  }, [voices]);
+  const story = brief.skill === "story";
+  const voiceOptions = [
+    { value: BUILT_IN, label: "The model's own voice" },
+    ...saved.map((v) => ({ value: v.id, label: v.name })),
+  ];
 
   useEffect(() => {
     songs()
@@ -268,7 +305,10 @@ export function BriefForm({
   const song = list?.find((s) => s.id === brief.track_id);
   const ready = analysis.state?.state === "ready";
   const missingName = brief.cast.some((p) => !p.name.trim());
-  const canGo = ready && !!brief.track_id && brief.idea.trim().length >= 3 && !missingName && !busy;
+  const sourceReady = story
+    ? (brief.story ?? "").trim().length >= STORY_MIN
+    : ready && !!brief.track_id;
+  const canGo = sourceReady && brief.idea.trim().length >= 3 && !missingName && !busy;
 
   const submit = async () => {
     setBusy(true);
@@ -278,11 +318,14 @@ export function BriefForm({
         ...brief,
         idea: brief.idea.trim(),
         style: brief.style.trim(),
+        story: story ? (brief.story ?? "").trim() : null,
+        narrator: story ? (brief.narrator ?? null) : null,
+        track_id: story && !initial ? "" : brief.track_id,
         places: places
           .split("\n")
           .map((p) => p.trim())
           .filter(Boolean),
-        lyrics: lyrics.trim() || null,
+        lyrics: story ? null : lyrics.trim() || null,
       });
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "The plan did not start.");
@@ -303,12 +346,21 @@ export function BriefForm({
           {initial ? "Change the brief" : "New project"}
         </h1>
         <p className="m-0 text-muted-foreground">
-          With an 8B chat model a 3-minute song takes about a minute to plan; a larger model can
-          take many minutes. Only words are made at this stage.
+          {story
+            ? "Your story is read aloud first, a line at a time, then planned like a song. Only the reading and words are made at this stage."
+            : "With an 8B chat model a 3-minute song takes about a minute to plan; a larger model can take many minutes. Only words are made at this stage."}
         </p>
       </header>
-      <AnalysisCard analysis={analysis} />
-      {list && list.length === 0 ? (
+      {initial ? null : (
+        <Segmented
+          label="What the video is made from"
+          value={brief.skill ?? "song"}
+          onValueChange={(v) => change({ skill: v as CreativeSkill })}
+          options={SKILLS}
+        />
+      )}
+      {story ? null : <AnalysisCard analysis={analysis} />}
+      {!story && list && list.length === 0 ? (
         <Notice
           tone="info"
           title="There is no song yet"
@@ -324,22 +376,60 @@ export function BriefForm({
         </Notice>
       ) : null}
       <div className={panel}>
-        <Field label="Song">
-          {({ id, describedBy }) => (
-            <Select
-              id={id}
-              aria-describedby={describedBy}
-              value={brief.track_id || undefined}
-              onValueChange={(track_id) => change({ track_id })}
-              placeholder="Choose a song"
-              options={(list ?? []).map((s) => ({
-                value: s.id,
-                label: s.title || "Untitled song",
-                hint: clock(s.seconds),
-              }))}
-            />
-          )}
-        </Field>
+        {story ? (
+          <>
+            <Field
+              label="The story"
+              hint="What the narrator reads. Leave a blank line between paragraphs. Words in quotes are said by the person named in the same sentence, in their voice."
+            >
+              {({ id, describedBy }) => (
+                <Textarea
+                  id={id}
+                  aria-describedby={describedBy}
+                  rows={8}
+                  maxLength={STORY_MAX}
+                  value={brief.story ?? ""}
+                  onChange={(e) => change({ story: e.target.value })}
+                />
+              )}
+            </Field>
+            <Field
+              label="Who reads it"
+              hint={
+                saved.length
+                  ? "A saved voice, or the model's own."
+                  : "You have no saved voices yet: make one under Voices, or the model's own voice reads it."
+              }
+            >
+              {({ id, describedBy }) => (
+                <Select
+                  id={id}
+                  aria-describedby={describedBy}
+                  value={brief.narrator || BUILT_IN}
+                  onValueChange={(v) => change({ narrator: v === BUILT_IN ? null : v })}
+                  options={voiceOptions}
+                />
+              )}
+            </Field>
+          </>
+        ) : (
+          <Field label="Song">
+            {({ id, describedBy }) => (
+              <Select
+                id={id}
+                aria-describedby={describedBy}
+                value={brief.track_id || undefined}
+                onValueChange={(track_id) => change({ track_id })}
+                placeholder="Choose a song"
+                options={(list ?? []).map((s) => ({
+                  value: s.id,
+                  label: s.title || "Untitled song",
+                  hint: clock(s.seconds),
+                }))}
+              />
+            )}
+          </Field>
+        )}
         <Field label="What is the video about?" hint="A line is enough.">
           {({ id, describedBy }) => (
             <Textarea
@@ -382,6 +472,7 @@ export function BriefForm({
         <p className={`${hint} m-0`}>
           Only these people appear in the plan. Their words for how they look are used in every
           picture, so they stay the same person.
+          {story ? " Choose the voice that says the words in quotes after their name." : ""}
         </p>
         {brief.cast.map((p, i) => (
           <div key={`person-${i.toString()}`} className="grid gap-2 sm:grid-cols-[1fr_2fr_auto]">
@@ -399,6 +490,18 @@ export function BriefForm({
               value={p.look}
               onChange={(e) => person(i, { look: e.target.value })}
             />
+            {story ? (
+              <Select
+                aria-label={`Voice of ${p.name || `person ${i + 1}`}`}
+                className="sm:col-span-2"
+                value={p.voice || BUILT_IN}
+                onValueChange={(v) => person(i, { voice: v === BUILT_IN ? null : v })}
+                options={[
+                  { value: BUILT_IN, label: "The narrator says their words" },
+                  ...saved.map((v) => ({ value: v.id, label: v.name })),
+                ]}
+              />
+            ) : null}
             <div className="flex items-center gap-2">
               <Checkbox
                 label="Only in photos"
@@ -515,26 +618,28 @@ export function BriefForm({
             />
           )}
         </Field>
-        <Field
-          label="The song's words"
-          optional
-          hint={
-            song?.lyrics
-              ? "Left empty, the words the song was made with are used. They are used as typed, never changed."
-              : "They are used as typed. Listening only finds when each line is sung."
-          }
-        >
-          {({ id, describedBy }) => (
-            <Textarea
-              id={id}
-              aria-describedby={describedBy}
-              rows={4}
-              maxLength={20000}
-              value={lyrics}
-              onChange={(e) => setLyrics(e.target.value)}
-            />
-          )}
-        </Field>
+        {story ? null : (
+          <Field
+            label="The song's words"
+            optional
+            hint={
+              song?.lyrics
+                ? "Left empty, the words the song was made with are used. They are used as typed, never changed."
+                : "They are used as typed. Listening only finds when each line is sung."
+            }
+          >
+            {({ id, describedBy }) => (
+              <Textarea
+                id={id}
+                aria-describedby={describedBy}
+                rows={4}
+                maxLength={20000}
+                value={lyrics}
+                onChange={(e) => setLyrics(e.target.value)}
+              />
+            )}
+          </Field>
+        )}
         <Field label="Shape">
           <Segmented
             label="Shape"

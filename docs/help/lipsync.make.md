@@ -22,6 +22,9 @@ Make a picture talk: a video of the face saying words or a recording.
 
 - `image_id`: The picture.
 - `text`: Words for the face to say.
+- `source_kind`, `source_id`: Or a recording of the library (a track or a speech).
+- `start`, `end`: Only that part of the recording, in seconds: a line of a song, for Creative Studio's
+  sung shots. At least half a second.
 
 ## Limits
 

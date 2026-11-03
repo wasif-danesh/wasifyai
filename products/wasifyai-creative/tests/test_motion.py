@@ -44,9 +44,9 @@ def test_the_draft_excerpt_is_whole_shots_from_the_loudest_part_and_reaches_back
     assert motion.loudest_start([]) == 0.0 and motion.excerpt([], 0.0) == []
 
 
-def test_make_it_better_is_the_shots_the_plan_marks_animate():
+def test_make_it_better_is_the_shots_the_plan_marks_animate_or_sing():
     shots = [shot(1, 0, 1, motion="Animate"), shot(2, 1, 2), shot(3, 2, 3, motion="Sing")]
-    assert motion.better(shots) == ["s1"]
+    assert motion.better(shots) == ["s1", "s3"]
 
 
 def test_a_clip_is_asked_for_the_picture_in_words_then_its_move_under_the_limit():

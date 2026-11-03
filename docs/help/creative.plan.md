@@ -1,7 +1,7 @@
 ---
 action: creative.plan
 screen: creative
-synonyms: [music video, plan a music video, video for my song, shot list, storyboard, plan shots, cut to the beat, make a video from a song, creative studio]
+synonyms: [music video, plan a music video, video of a story, story video, narrated story, read my story aloud, video for my song, shot list, storyboard, plan shots, cut to the beat, make a video from a song, creative studio]
 ---
 # Plan a music video
 
@@ -10,8 +10,16 @@ Action: `creative.plan`
 ## What it is for
 
 Turn a song and an idea into a plan you can change: the cuts follow the beats, and each shot says what
-is seen, who is in it, where, how the camera moves and whether it holds or moves. Only words are made at
-this stage, no pictures or clips. Your typed lyrics stay exactly as you wrote them.
+is seen, who is in it, where, how the camera moves and whether it holds, moves or sings. Only words are
+made at this stage, no pictures or clips. Your typed lyrics stay exactly as you wrote them.
+
+It also makes a video of a **story**: you write the story, a narrator reads it in a saved voice, and words
+in quotes are said by the person named in the same sentence, in their own saved voice. The reading is
+kept in Your music, its lines become the captions, and the cuts fall where the lines start.
+
+**Sing.** In a song, the close ups of the first person of the cast who is there in person sing while a
+line is sung (about one shot in six). In a story, a shot where someone of the cast speaks is a close up of
+them speaking. These shots are made with lip sync on their part of the sound.
 
 ## Steps in the app
 
@@ -24,11 +32,15 @@ this stage, no pictures or clips. Your typed lyrics stay exactly as you wrote th
 
 ## Fields
 
-- `brief.track_id`: The song in Your music.
+- `brief.skill`: `song` (the default) or `story`.
+- `brief.track_id`: The song in Your music. For a story it is filled in when the reading is made.
+- `brief.story`: A story's text (a story only). Separate paragraphs with a blank line.
+- `brief.narrator`: The saved voice that reads a story (`voice.list`); left out, the model's own voice.
 - `brief.idea`: What the video is about.
 - `brief.style`: The look, in your own words.
-- `brief.cast`: The people, each with a `name`, fixed words for how they look (`look`) and
-  `photos_only` when they are only ever seen in photographs.
+- `brief.cast`: The people, each with a `name`, fixed words for how they look (`look`),
+  `photos_only` when they are only ever seen in photographs, and `voice`, a saved voice for what they
+  say in a story.
 - `brief.places`: The places, in the order the story visits them.
 - `brief.lyrics`: The words of the song, typed.
 - `brief.shape`: landscape, portrait or square.
@@ -43,19 +55,26 @@ this stage, no pictures or clips. Your typed lyrics stay exactly as you wrote th
   expect to change some of them. A shot the model could not write gets plain words and a mark, so you
   can see which ones to rewrite.
 - Changing how fast it cuts means planning again.
-- At this stage nothing is drawn. Shots and the cut come in later stages.
-- Desktop only for now.
+- Planning draws nothing. Make the stills, the clips and the cut on the Shots and Cut steps.
+- On the web, a song needs song analysis set up on a worker by an admin. A story does not.
+
+- A story is read one part at a time before it is planned: a story of about 150 words (20 parts, 78 s read aloud)
+  was read and planned in about 70 s on an M5 Pro with Qwen3-8B. On the web, a shorter one (8 parts) took 30 s.
+- A quote is said by the person named in the same sentence, outside the quote. With nobody named, the
+  narrator reads it.
 
 ## Needs
 
 - Music analysis set up (about 970 MB, shown before it starts).
 - A language model, chosen with the model button.
-- A song in Your music.
+- A song in Your music, or for a story a speech model, and saved voices for its narrator and people
+  (Voices).
 
 ## Examples
 
 - Plan a music video for my song "Drive home": a woman drives home along the coast at dawn.
 - Make a shot list for this track, vertical, with fast cuts.
+- Make a video of my story about Mira and Tom opening the old house, read by my Narrator voice.
 
 ## Problems
 

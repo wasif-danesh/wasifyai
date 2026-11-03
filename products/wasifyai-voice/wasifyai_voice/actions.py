@@ -849,6 +849,73 @@ def _book_result(outputs: dict[str, Any], p: BookMakeIn) -> Outcome | None:
     return _tracks_result("tracks of the audiobook")(outputs, p)
 
 
+# ---- speech.join -------------------------------------------------------------------------------
+
+JOIN_RATE = 24000
+MAX_JOIN_PARTS = 400
+
+
+class JoinPart(Strict):
+    speech_id: str = Field(min_length=1, max_length=64, description="A speech of the library.")
+    pause: float = Field(0.3, ge=0, le=5, description="Seconds of quiet after it.")
+
+
+class JoinIn(Strict):
+    parts: list[JoinPart] = Field(min_length=1, max_length=MAX_JOIN_PARTS)
+    title: str = Field(min_length=1, max_length=120, description="What the recording is called.")
+    text: str = Field("", max_length=20000, description="What it says, so search finds it.")
+
+
+class JoinOut(BaseModel):
+    track_id: str
+    title: str
+    seconds: float
+    uri: str
+    times: list[list[float]]  # where each part starts and ends, in seconds
+
+
+async def _join(p: JoinIn, ctx: ActionContext) -> Outcome:
+    """Speeches one after another, with a pause after each, kept as one recording in Your music:
+    the narration of a story, where each line can be a different voice. Says where each part
+    starts, so pictures and captions can follow."""
+    deps = need_deps(ctx)
+    store = _store(ctx)
+    parts: list[tuple[bytes, float]] = []
+    for part in p.parts:
+        try:
+            row = await asyncio.to_thread(
+                store.get_speech, ctx.actor.tenant_id, ctx.actor.user_id, part.speech_id
+            )
+            with deps.acting_as(ctx.actor, PRODUCT_ID):
+                data = await deps.storage.get(row["audio_key"])
+        except (NotFound, FileNotFoundError):
+            return Outcome.refused("A speech to join is no longer there.", "not_found")
+        try:
+            wav, _ = await audio_input.at_rate(data, "part.wav", JOIN_RATE, 1)
+        except audio_input.AudioInputError as e:
+            return Outcome.refused(str(e), e.code)
+        parts.append((wav, part.pause))
+    joined, times = await asyncio.to_thread(audio_input.join_wavs, parts)
+    seconds = round(times[-1][1] + p.parts[-1].pause, 3)
+    track_id = new_id()
+    key = f"music/{track_id}.wav"
+    with deps.acting_as(ctx.actor, PRODUCT_ID):
+        await deps.storage.put(key, joined, "audio/wav")
+    title = p.title.strip()
+    await asyncio.to_thread(
+        store.add_track, ctx.actor.tenant_id, ctx.actor.user_id, title=title, mode="joined",
+        description="Speech joined into one recording", lyrics=p.text, instrumental=False,
+        model_id="joined", options={}, seed=None, seconds=seconds, sample_rate=JOIN_RATE,
+        audio_key=key, load_s=0, elapsed_s=0, track_id=track_id,
+    )  # fmt: skip
+    await _reindex(ctx, "track", track_id, search_text(title, p.text[:TRANSCRIPT_INDEX_CHARS]))
+    return Outcome.ok(
+        {"track_id": track_id, "title": title, "seconds": seconds, "uri": _uri("track", track_id),
+         "times": [[a, b] for a, b in times]},
+        f'"{title}" was joined ({seconds:.0f} seconds) and saved to Your music.',
+    )  # fmt: skip
+
+
 # ---- lip sync ---------------------------------------------------------------------------------
 
 
@@ -858,6 +925,10 @@ class LipSyncIn(Strict):
     source_kind: SourceKind | None = Field(None, description="Or a recording of the library.")
     source_id: str | None = Field(None, max_length=64)
     voice: str | None = Field(None, max_length=100, description="A built-in voice for the words.")
+    start: float | None = Field(
+        None, ge=0, le=36000, description="Only part of the recording: from this second."
+    )
+    end: float | None = Field(None, gt=0, le=36000, description="And to this second.")
     title: str | None = Field(None, max_length=120)
     model: str | None = Field(None, max_length=100)
 
@@ -867,6 +938,10 @@ class LipSyncIn(Strict):
             raise ValueError("Give either text for the face to say, or a recording (source_id).")
         if self.source_id and not self.source_kind:
             raise ValueError("Say whether the recording is a track or a speech (source_kind).")
+        if (self.start is not None or self.end is not None) and not self.source_id:
+            raise ValueError("A part (start and end) is only for a recording.")
+        if self.start is not None and self.end is not None and self.end - self.start < 0.5:
+            raise ValueError("The part must be at least half a second long.")
         return self
 
 
@@ -903,7 +978,7 @@ async def _lipsync_input(p: LipSyncIn, ctx: ActionContext) -> dict[str, Any]:
     else:
         assert p.source_kind and p.source_id
         graph |= _source(p.source_kind, p.source_id)
-    return graph | _clean({"title": p.title, "model": p.model})
+    return graph | _clean({"title": p.title, "model": p.model, "start": p.start, "end": p.end})
 
 
 async def _lipsync_check(p: LipSyncIn, ctx: ActionContext) -> None:
@@ -1073,6 +1148,21 @@ def actions() -> list[Action]:
             effect="make", flags=("private",), requires=(HERE, need_model("separate")), long=True,
             product=PRODUCT_ID, ui="music.separate",
             bind=_run("parts", _separate_input, _tracks_result("parts"), _check_source),
+        ),
+        Action(
+            id="speech.join", title="Join speech",
+            summary="Join speeches into one recording, with a pause after each.",
+            description=(
+                "Put speeches of the library one after another, each followed by a pause, and "
+                "keep them as one recording in Your music: a narration where each line can be a "
+                "different voice. It says where each part starts and ends. It takes a few seconds."
+            ),
+            input=JoinIn, output=JoinOut,
+            examples=(
+                {"parts": [{"speech_id": SAMPLE_ID, "pause": 0.4}], "title": "The lighthouse"},
+            ),
+            effect="make", flags=("private",), requires=(HERE,), product=PRODUCT_ID,
+            bind=CallBinding(_join), ui="creative",
         ),
         Action(
             id="music.analyse", title="Find the beats of a song",
@@ -1386,7 +1476,7 @@ def library_kinds() -> list[LibraryKind]:
             "lipsync", PRODUCT_ID, "talking video", _lister("list_clips", _clip_item),
             _getter("get_clip", _clip_item),
             _deleter("delete_clip", ("video_key", "picture_key")), _rename_clip,
-            _exporter("get_clip", "video_key", "mp4", "title"),
+            _exporter("get_clip", "video_key", "mp4", "title"), _reader("get_clip", "video_key"),
         ),
     ]  # fmt: skip
 

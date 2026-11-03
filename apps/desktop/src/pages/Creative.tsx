@@ -7,12 +7,14 @@ import {
   Creative,
   type CreativeScreen,
   ImageWorkspace,
+  LipSyncWorkspace,
   type MakePanelMakers,
   ModelSelect,
   type ModelSelectHandle,
   MusicWorkspace,
   Notice,
   Segmented,
+  SpeakWorkspace,
   VideoWorkspace,
   useChoicesFor,
 } from "@wasifyai/ui";
@@ -39,6 +41,8 @@ const songs = async () => {
   }));
 };
 
+const voices = async () => (await voiceApi.voices()).map((v) => ({ id: v.id, name: v.name }));
+
 const SCREENS: Record<CreativeScreen, Route> = {
   image: "create",
   video: "video",
@@ -58,7 +62,9 @@ const VIDEO_MODES = [
   { value: "text", label: "Create" },
   { value: "image", label: "Animate" },
   { value: "extend", label: "Extend" },
+  { value: "lipsync", label: "Lip sync" },
 ];
+type VideoMakeMode = Exclude<VideoMode, "import"> | "lipsync";
 
 function fitOf(model: ReturnType<typeof useModelOf>, real: boolean) {
   const tooBig = real && model?.fit?.verdict === "too_big";
@@ -127,12 +133,12 @@ function VideoMaker({
   keyed,
   go,
 }: {
-  onMade: (id: string) => void;
+  onMade: (id: string, kind?: string) => void;
   ensure: () => boolean;
   keyed: boolean;
   go: (r: Route) => void;
 }) {
-  const [mode, setMode] = useState<Exclude<VideoMode, "import">>("text");
+  const [mode, setMode] = useState<VideoMakeMode>("text");
   const model = useModelOf("wasifyai-video");
   const engine = useImageEngine();
   const looks = useVideoLooks();
@@ -144,26 +150,36 @@ function VideoMaker({
           label="What to make"
           size="sm"
           value={mode}
-          onValueChange={(v) => setMode(v as Exclude<VideoMode, "import">)}
+          onValueChange={(v) => setMode(v as VideoMakeMode)}
           options={VIDEO_MODES}
         />
       </div>
       <div className="min-h-0 flex-1">
-        <VideoWorkspace
-          key={mode}
-          panel
-          mode={mode}
-          runs={client}
-          videos={videos}
-          canSave
-          hint="A 5 second clip takes a few minutes on a fast Mac. It is made on this computer."
-          onOpenLibrary={() => go("videos")}
-          blockedReason={blockedReason}
-          beforeMake={ensure}
-          onMade={onMade}
-          looks={looks}
-          notices={notices}
-        />
+        {mode === "lipsync" ? (
+          <LipSyncWorkspace
+            panel
+            api={voiceApi}
+            runs={client}
+            onGetModel={() => go("models")}
+            onMade={(id) => onMade(id, "lipsync")}
+          />
+        ) : (
+          <VideoWorkspace
+            key={mode}
+            panel
+            mode={mode}
+            runs={client}
+            videos={videos}
+            canSave
+            hint="A 5 second clip takes a few minutes on a fast Mac. It is made on this computer."
+            onOpenLibrary={() => go("videos")}
+            blockedReason={blockedReason}
+            beforeMake={ensure}
+            onMade={onMade}
+            looks={looks}
+            notices={notices}
+          />
+        )}
       </div>
     </>
   );
@@ -199,6 +215,15 @@ export function CreativePage({ go }: { go: (r: Route) => void }) {
       video: (onMade) => (
         <VideoMaker onMade={onMade} ensure={video.ensure} keyed={video.keyed} go={go} />
       ),
+      voice: (onMade) => (
+        <SpeakWorkspace
+          panel
+          api={voiceApi}
+          runs={client}
+          onGetModel={() => go("models")}
+          onMade={(id) => onMade(id, "speech")}
+        />
+      ),
       music: (onMade) => (
         <MusicWorkspace
           panel
@@ -217,6 +242,7 @@ export function CreativePage({ go }: { go: (r: Route) => void }) {
     <Creative
       api={creative}
       songs={songs}
+      voices={voices}
       model={<ModelSelect group="chat" api={choices} handleRef={picker} />}
       modelOfTab={(tab) =>
         tab === "image" ? (

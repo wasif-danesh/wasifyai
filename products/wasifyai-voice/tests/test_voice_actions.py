@@ -339,6 +339,55 @@ async def test_a_picture_talks_without_being_asked_whose_it_is(tmp_path, ctx):  
     assert (ghost.status, ghost.code) == ("refused", "not_found")
 
 
+async def test_a_picture_sings_only_the_part_of_a_song_it_is_given(tmp_path, ctx):  # noqa: F811
+    from wasifyai_voice.actions import library_kinds as kinds
+
+    h = Harness(tmp_path)
+    await library_track(h.rig, seconds=4.0)
+    part = {
+        "image_id": "img1", "source_kind": "track", "source_id": "song", "start": 1.0, "end": 2.5,
+    }  # fmt: skip
+    r = await h.go("lipsync.make", part, person_approved=True)
+    assert r.ok, r.text
+    assert h.engine.lipsynced[-1][1].voice_seconds == pytest.approx(1.5, abs=0.01)
+    whole = await h.go("lipsync.make", {**part, "start": None, "end": None}, person_approved=True)
+    assert whole.ok and h.engine.lipsynced[-1][1].voice_seconds == pytest.approx(4.0, abs=0.01)
+    for bad in (
+        {**part, "end": 1.2},  # under half a second
+        {"image_id": "img1", "text": "Hello there.", "start": 1.0},  # a part of words
+    ):  # fmt: skip
+        again = await h.go("lipsync.make", bad, person_approved=True)
+        assert (again.status, again.code) == ("refused", "invalid_input"), bad
+    # Creative Studio's cut reads it
+    assert next(k for k in kinds() if k.kind == "lipsync").read is not None
+
+
+async def test_speeches_are_joined_into_one_recording_with_the_times_of_each(tmp_path, ctx):  # noqa: F811
+    from wasifyai_voice.audio_input import wav_facts
+
+    h = Harness(tmp_path)
+    a = await a_speech(h, "Mira found the key.")
+    b = await a_speech(h, "It still fits.")
+    r = await h.go(
+        "speech.join",
+        {"parts": [{"speech_id": a, "pause": 0.5}, {"speech_id": b, "pause": 1.0}],
+         "title": "The key", "text": "Mira found the key. It still fits."},
+    )  # fmt: skip
+    assert r.ok, r.text
+    (s1, e1), (s2, e2) = r.output["times"]
+    assert s1 == 0.0 and s2 == pytest.approx(e1 + 0.5, abs=0.01) and e2 > s2
+    assert r.output["seconds"] == pytest.approx(e2 + 1.0, abs=0.01)
+    track = h.store.get_track("t1", "u1", r.output["track_id"])
+    assert (track["title"], track["mode"]) == ("The key", "joined")
+    assert "It still fits" in track["lyrics"]
+    data = await h.rig.caps.storage.get(track["audio_key"])
+    rate, channels, seconds = wav_facts(data)
+    assert (rate, channels) == (24000, 1)
+    assert seconds == pytest.approx(r.output["seconds"], abs=0.01)
+    ghost = await h.go("speech.join", {"parts": [{"speech_id": "ghost"}], "title": "x"})
+    assert (ghost.status, ghost.code) == ("refused", "not_found")
+
+
 # ---- the library ------------------------------------------------------------------------------
 
 

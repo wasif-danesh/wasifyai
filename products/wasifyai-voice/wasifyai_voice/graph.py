@@ -64,6 +64,8 @@ class SpeakState(TypedDict, total=False):
     old_text: str  # speech_edit: what the recording says now; `text` is what it should say
     tracks: list[dict[str, Any]]  # the audio tools: every track made
     picture: str  # lipsync: the id of an added picture
+    start: float  # lipsync: only part of the recording, from this second
+    end: float  # lipsync: to this second
     clip_id: str
     video_url: str
     language: str  # dubbing: the language to dub into

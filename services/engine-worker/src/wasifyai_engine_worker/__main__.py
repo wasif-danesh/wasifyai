@@ -19,11 +19,20 @@ from wasifyai_api.desktop_video_training import make_video_trainer
 from wasifyai_api.language_setup import LOCK_NAME as LANGUAGE_LOCK_NAME
 from wasifyai_api.language_setup import LanguageSetup
 from wasifyai_api.local_speech import build_local_engine
+from wasifyai_api.music_analysis_setup import LOCK_NAME as ANALYSIS_LOCK_NAME
+from wasifyai_api.music_analysis_setup import MusicAnalysis
 from wasifyai_api.training_setup import HUB, TrainingSetup
 from wasifyai_api.training_setup import LOCK_NAME as IMAGE_LOCK_NAME
 from wasifyai_api.video_setup import LOCK_NAME as VIDEO_LOCK_NAME
 from wasifyai_api.video_setup import VideoSetup
-from wasifyai_platform_sdk import EngineQueue, admin_wire, memory_storage, s3_storage, tracing
+from wasifyai_platform_sdk import (
+    EngineQueue,
+    admin_wire,
+    analysis_wire,
+    memory_storage,
+    s3_storage,
+    tracing,
+)
 
 from wasifyai_engine_worker.admin import AdminComponent
 from wasifyai_engine_worker.settings import WorkerSettings
@@ -100,7 +109,14 @@ async def main() -> None:
         base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
     )
     writing_trainer = make_language_trainer(api.desktop_dir)
+    # a song's beats for Creative Studio (ADR-0090): the desktop's tool, set up by an admin
+    analysis = MusicAnalysis(
+        api.desktop_dir,
+        lock=products / "wasifyai-voice" / "analysis" / ANALYSIS_LOCK_NAME,
+        uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
+    )
     setups = {
+        analysis_wire.SETUP: analysis,
         admin_wire.VIDEO_TRAINER: video_setup,
         admin_wire.IMAGE_TRAINER: image_setup,
         admin_wire.DECISION_TRAINER: decision_setup,
@@ -112,6 +128,7 @@ async def main() -> None:
             "speech": engine,
             "model3d": model3d,
             "builder": builder,
+            "analysis": analysis,
             "train": TrainComponents(
                 video=video_trainer,
                 image=image_trainer,

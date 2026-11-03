@@ -594,7 +594,9 @@ class AudioEngine:
         else:
             wanted = [x for x in entries.values() if task in x.voice.recommended]
             ready = [x for x in wanted if self._present(x)]
-            e = (ready or wanted or [None])[0]
+            # an installed model that can do the task beats a recommended one still to get
+            able = [x for x in entries.values() if task in x.voice.tasks and self._present(x)]
+            e = (ready or able or wanted or [None])[0]
             if e is None:
                 raise VoiceEngineError("no_model", "There is no model for this yet.")
         if not self._runtime_ready(e.voice):

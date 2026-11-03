@@ -43,7 +43,9 @@ export type WorkersApi = {
   list(): Promise<WorkerInfo[]>;
   /** Start getting a model onto a worker; the id of the job to follow. */
   fetchModel(modelId: string): Promise<string>;
-  fetchEngine(name: "lipsync-engine" | "video-trainer" | "image-trainer"): Promise<string>;
+  fetchEngine(
+    name: "lipsync-engine" | "video-trainer" | "image-trainer" | "music-analysis",
+  ): Promise<string>;
   job(id: string): Promise<FetchJob>;
 };
 

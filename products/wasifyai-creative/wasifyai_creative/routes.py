@@ -180,6 +180,10 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         tool = deps.state.music_analysis
         return {
             "analysis": tool.state() if tool is not None else None,
+            # whether a song can be analysed now and, if not, why (the web reads this: a worker's tool)
+            "analysis_ready": bool(tool is not None and tool.ready()),
+            "analysis_problem": (tool.problem() if tool is not None else None)
+            or (None if tool is not None else "Finding the beats of a song is not available here."),
             "writing": manager_for(deps).active(identity),
         }
 

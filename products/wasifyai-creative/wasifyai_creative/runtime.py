@@ -7,6 +7,7 @@ The product reaches the song through the `music.analyse` action (the voice produ
 its text capability, so it imports neither from the API nor from another product."""
 
 import asyncio
+import hashlib
 import logging
 import time
 from pathlib import Path
@@ -16,9 +17,10 @@ from typing import Any
 from wasifyai_platform_sdk import Identity, RouteDeps, RunContext, search_text, set_context
 from wasifyai_platform_sdk.context import reset_context
 
+from wasifyai_creative import story as stories
 from wasifyai_creative.cut import captions_of
 from wasifyai_creative.document import index_words
-from wasifyai_creative.layout import lay_out
+from wasifyai_creative.layout import lay_out, lay_out_story
 from wasifyai_creative.shots import Refused, ShotJobs
 from wasifyai_creative.store import CreativeStore
 from wasifyai_creative.writer import PlanWriter, WriterFailed, rewrite_part, write_plan
@@ -27,6 +29,10 @@ log = logging.getLogger(__name__)
 
 PRODUCT_ID = "wasifyai-creative"
 KIND = "creative_project"
+NARRATION = (
+    "say-",
+    "joined-",
+)  # spoken parts of a story, kept across plans: they are saved recordings
 MODEL_FAILED = "The model did not answer. Check the chat model and try again."
 
 
@@ -147,13 +153,74 @@ class PlanJobs:
             raise WriterFailed(result.text or "The beats of the song could not be found.")
         return result.output
 
+    async def _narrate(self, identity: Identity, row: dict[str, Any]) -> dict[str, Any]:
+        """A story read aloud: each part spoken in its voice (kept as soon as it is made, so a stop loses one part at
+        most), then joined into one recording in Your music. Returns what a song's analysis would, with exact times."""
+        executor = self._deps.state.actions
+        if executor is None:
+            raise WriterFailed("The story cannot be read aloud here.")
+        store = store_for(self._deps.state)
+        item, brief = row["id"], row["brief"]
+        voices = {p["name"]: p.get("voice") for p in brief.get("cast", [])}
+        parts = stories.parts_of(str(brief.get("story") or ""), brief.get("cast", []))
+        if not parts:
+            raise WriterFailed("The story has nothing to read.")
+        saved = store.checkpoints(item)
+        spoken: list[dict[str, Any]] = []
+        for n, part in enumerate(parts):
+            voice = (voices.get(part["who"]) if part["who"] else None) or brief.get("narrator")
+            key = "say-" + hashlib.sha256(f"{part['text']}|{voice or ''}".encode()).hexdigest()[:16]
+            if key not in saved:
+                store.set_progress(
+                    item,
+                    f"Reading the story aloud, part {n + 1} of {len(parts)}",
+                    0.02 + 0.5 * n / len(parts),
+                )
+                params = {"text": part["text"], **({"saved_voice": voice} if voice else {})}
+                done = await executor.run_action(
+                    "speech.speak", params, "window", actor=identity, person_approved=True
+                )
+                if done.status != "ok":
+                    raise WriterFailed(done.text or "The story could not be read aloud.")
+                saved[key] = {
+                    "speech_id": done.output["speech_id"],
+                    "seconds": done.output["seconds"],
+                }
+                store.keep_checkpoint(item, key, saved[key])
+                store.add_media(item, "speech", saved[key]["speech_id"], None, made=True)
+            spoken.append({"speech_id": saved[key]["speech_id"], "pause": part["pause"]})
+        joined = "joined-" + hashlib.sha256(repr(spoken).encode()).hexdigest()[:16]
+        if joined not in saved:
+            store.set_progress(item, "Joining the narration", 0.53)
+            done = await executor.run_action(
+                "speech.join",
+                {"parts": spoken, "title": row["title"][:120], "text": str(brief.get("story") or "")},
+                "window", actor=identity, person_approved=True,
+            )  # fmt: skip
+            if done.status != "ok":
+                if done.code == "not_found":  # a part was deleted: the next try speaks again
+                    store.drop_checkpoints(item, *NARRATION)
+                raise WriterFailed(done.text or "The narration could not be joined.")
+            saved[joined] = done.output
+            store.keep_checkpoint(item, joined, done.output)
+            store.add_media(item, "track", done.output["track_id"], None, made=True)
+        made = saved[joined]
+        fresh = store.get(identity.tenant_id, identity.user_id, item)
+        store.set_brief(item, fresh["title"], {**fresh["brief"], "track_id": made["track_id"]})
+        return {
+            "track_id": made["track_id"],
+            "title": made["title"],
+            **stories.facts_of(parts, made["times"], made["seconds"]),
+        }
+
     def start(self, identity: Identity, project_id: str, *, again: bool = False) -> None:
         """Write the plan. `again` starts afresh; otherwise it goes on from the finished steps."""
         store = store_for(self._deps.state)
         row = store.get(identity.tenant_id, identity.user_id, project_id)
         if again:
-            store.clear_checkpoints(project_id)
-        self._begin(identity, project_id, "Finding the beats", lambda: self._plan(identity, row))
+            store.clear_checkpoints(project_id, NARRATION)
+        stage = "Reading the story" if row["brief"].get("skill") == "story" else "Finding the beats"
+        self._begin(identity, project_id, stage, lambda: self._plan(identity, row))
 
     def rewrite(self, identity: Identity, project_id: str, beat: int) -> None:
         """Try another idea for one part of the plan; only its shots change."""
@@ -187,22 +254,28 @@ class PlanJobs:
 
         async def work() -> None:
             started = time.monotonic()
-            facts = await self._facts(identity, row)
+            story = row["brief"].get("skill") == "story"
+            facts = await (self._narrate(identity, row) if story else self._facts(identity, row))
             store.set_facts(item, facts)
-            brief = row["brief"]
-            slots = lay_out(
-                facts["beats"], facts["downbeats"], facts["seconds"],
-                [s["start"] for s in facts["sections"]], brief.get("cut_speed", 0),
+            brief = store.get(identity.tenant_id, identity.user_id, item)["brief"]
+            slots = (
+                lay_out_story(facts["beats"], facts["seconds"], brief.get("cut_speed", 0))
+                if story
+                else lay_out(
+                    facts["beats"], facts["downbeats"], facts["seconds"],
+                    [s["start"] for s in facts["sections"]], brief.get("cut_speed", 0),
+                )
             )  # fmt: skip
+            share = (0.55, 0.45) if story else (0.0, 1.0)
             plan = await write_plan(
                 self._writer(item),
                 brief,
                 slots,
                 facts["lines"] if facts["lines_timed"] else [],
-                lambda stage, share: store.set_progress(item, stage, share),
+                lambda stage, part: store.set_progress(item, stage, share[0] + share[1] * part),
             )
             store.save_plan(item, plan, "The plan was written")
-            store.clear_checkpoints(item)
+            store.clear_checkpoints(item, NARRATION)
             store.finish(item, "planned", None, round(time.monotonic() - started, 1))
             fresh = store.get(identity.tenant_id, identity.user_id, item)
             await add_to_search(self._deps.state, identity, fresh)
@@ -218,7 +291,7 @@ class PlanJobs:
             writer = self._writer(item)
             plan = await rewrite_part(writer, row["brief"], row["plan"], beat, key)
             store.save_plan(item, plan, f"Part {beat + 1} was written again")
-            store.clear_checkpoints(item)
+            store.clear_checkpoints(item, NARRATION)
             store.finish(item, "planned", None)
             fresh = store.get(identity.tenant_id, identity.user_id, item)
             await add_to_search(self._deps.state, identity, fresh)

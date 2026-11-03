@@ -701,6 +701,77 @@ describe("Creative Studio", () => {
     await waitFor(() => expect(a.addMedia).toHaveBeenCalledWith("p1", "image", "new-file", "s0"));
   });
 
+  it("plans a story read by saved voices with no song and no music analysis", async () => {
+    const a = api({
+      list: vi.fn(async () => []),
+      analysis: vi.fn(async () => ({ state: "missing" as const, bytes: 900_000_000 })),
+    });
+    const voices = async () => [
+      { id: "v-n", name: "Narrator" },
+      { id: "v-m", name: "Mira's voice" },
+    ];
+    const user = userEvent.setup();
+    render(<Creative api={a} songs={songs} voices={voices} />);
+    await user.click(await screen.findByRole("button", { name: "New project" }));
+    await user.click(await screen.findByRole("radio", { name: "A story" }));
+    expect(screen.queryByRole("button", { name: /Download and set up/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("The song's words")).not.toBeInTheDocument();
+    const plan = screen.getByRole("button", { name: "Plan it" });
+    await user.type(screen.getByLabelText("What is the video about?"), "Opening the old house");
+    await user.type(screen.getByLabelText("The story"), "Too short.");
+    expect(plan).toBeDisabled();
+    await user.type(
+      screen.getByLabelText("The story"),
+      ' Mira found the key. "It fits," said Mira.',
+    );
+    await user.click(screen.getByLabelText("Who reads it"));
+    await user.click(await screen.findByRole("option", { name: "Narrator" }));
+    await user.click(screen.getByRole("button", { name: "Add a person" }));
+    await user.type(screen.getByLabelText("Name of person 1"), "Mira");
+    await user.click(screen.getByLabelText("Voice of Mira"));
+    await user.click(await screen.findByRole("option", { name: "Mira's voice" }));
+    expect(plan).toBeEnabled();
+    await user.click(plan);
+    const [, brief] = (a.add as ReturnType<typeof vi.fn>).mock.calls[0] as [string, never];
+    expect(brief).toMatchObject({
+      skill: "story",
+      track_id: "",
+      narrator: "v-n",
+      lyrics: null,
+      story: 'Too short. Mira found the key. "It fits," said Mira.',
+      cast: [{ name: "Mira", voice: "v-m" }],
+    });
+  });
+
+  it("makes a Sing shot sing, and shows its sung clip with the still it came from", async () => {
+    const sung = { ...take("c", "clip-1", { kind: "lipsync", mode: "sing" }) };
+    const shots = {
+      takes: { s0: [take("a", "pic-1", { chosen: false }), sung], s1: [], s2: [] },
+      missing: ["s1", "s2"],
+      out_of_date: [],
+      run: null,
+      preview: null,
+    };
+    const plan = {
+      places: ["a coast road"],
+      beats: [{ what: "She sings", who: "Mira", place: "a coast road" }],
+      shots: [shot(0, { motion: "Sing", line: "Take me home" }), shot(1), shot(2)],
+    };
+    const a = api({
+      get: vi.fn(async () => project({ shots, plan })),
+      estimateMotion: vi.fn(async () => ({ ...MOTION, quality: "final" as const, sung: 1 })),
+    });
+    const user = userEvent.setup();
+    render(<Creative api={a} songs={songs} open="p1" />);
+    await user.click(await screen.findByRole("radio", { name: "Shots" }));
+    expect(await screen.findByRole("button", { name: "Shot 1, sung clip" })).toBeInTheDocument();
+    const motion = screen.getByRole("region", { name: "Motion" });
+    expect(await within(motion).findByText(/2 clips to make \(1 sings\)/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Shot 1, sung clip" }));
+    await user.click(screen.getByRole("button", { name: "Make it sing" }));
+    expect(a.makeMotion).toHaveBeenCalledWith("p1", { quality: "draft", shot_id: "s0" });
+  });
+
   it("offers people used before and keeps fixed words for objects", async () => {
     const a = api({
       list: vi.fn(async () => []),
@@ -838,6 +909,38 @@ describe("Creative Studio", () => {
     expect(a.editCut).toHaveBeenLastCalledWith("p1", [
       { op: "add_caption", kind: "lower", text: "Mira, on the road home", start: 0, end: 3 },
     ]);
+  });
+
+  it("says a line in the Voice tab beside the captions, and a lip sync made in the Video tab is a take", async () => {
+    const now = project({ facts: { seconds: 6, lines_timed: true }, cut: cutOf() });
+    const a = api({ get: vi.fn(async () => now), addMedia: vi.fn(async () => []) });
+    const makers = {
+      voice: (onMade: (id: string, kind?: string) => void) => (
+        <button type="button" onClick={() => onMade("speech-1", "speech")}>
+          Pretend it was said
+        </button>
+      ),
+      video: (onMade: (id: string, kind?: string) => void) => (
+        <button type="button" onClick={() => onMade("clip-1", "lipsync")}>
+          Pretend it sang
+        </button>
+      ),
+    };
+    const user = userEvent.setup();
+    render(<Creative api={a} songs={songs} open="p1" makers={makers} />);
+    await user.click(await screen.findByRole("radio", { name: "Cut" }));
+    await user.click(screen.getByRole("tab", { name: "Voice" }));
+    expect(screen.getByRole("checkbox", { name: "Show the song's words" })).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: "Speak" }));
+    await user.click(screen.getByRole("button", { name: "Pretend it was said" }));
+    await waitFor(() =>
+      expect(a.addMedia).toHaveBeenCalledWith("p1", "speech", "speech-1", undefined),
+    );
+    await user.click(screen.getByRole("tab", { name: "Video" }));
+    await user.click(screen.getByRole("button", { name: "Pretend it sang" }));
+    await waitFor(() =>
+      expect(a.addMedia).toHaveBeenLastCalledWith("p1", "lipsync", "clip-1", undefined),
+    );
   });
 
   it("puts words that would touch on another line of their row", () => {

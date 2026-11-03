@@ -127,6 +127,7 @@ log = logging.getLogger("wasifyai_api")
 REDIS_SOCKET_TIMEOUT_S = 60
 ENHANCES_PER_HOUR = 40  # prompt enhancements per user per hour (ADR-0038)
 SEARCHES_PER_HOUR = 50  # searches of My creations per user per hour (ADR-0041)
+CREATIVE_STALE_MIN = 30  # a Creative Studio plan or run untouched this long: its replica is gone
 SEARCH_ALIAS = "creation-embedder"  # the multilingual embedder behind search (ADR-0041)
 
 
@@ -674,6 +675,8 @@ async def _web_services(s: ApiServices, settings: Settings, r: _Running, given: 
         await _web_builder(s, settings, queue)
     if (pdir / "wasifyai-training").is_dir():
         await _web_training(s, settings, queue)
+    if (pdir / "wasifyai-creative").is_dir():
+        await _web_creative(s, settings, queue)
 
 
 async def _web_voice(s: ApiServices, settings: Settings, queue: Callable[[], EngineQueue] | None):
@@ -826,6 +829,28 @@ async def _web_training(s: ApiServices, settings: Settings, queue: Callable[[], 
         await tq.cancel(run["id"])
 
 
+async def _web_creative(s: ApiServices, settings: Settings, queue: Callable[[], EngineQueue]):
+    try:
+        from wasifyai_creative.store import CreativeStore
+
+        from wasifyai_api.remote_analysis import RemoteMusicAnalysis
+    except ImportError:  # Creative Studio is not part of this build
+        log.warning("the creative product is not installed: no Creative Studio on the web")
+        return
+    assert s.storage is not None
+    # Creative Studio (ADR-0090): Postgres for the projects; pictures, clips, speech and lip sync
+    # through their own actions on workers; a song's beats on a worker with the analysis tool;
+    # the preview and the cut with FFmpeg here, like Extend video
+    store = await asyncio.to_thread(CreativeStore.on_postgres, settings.database_url)
+    s.creative_store = store
+    s.music_analysis = RemoteMusicAnalysis(
+        queue(), s.storage.backing, s.engine_workers, usage=s.usage
+    )
+    # work a gone replica left going: interrupted, to go on from its last finished step
+    stale = (datetime.now(UTC) - timedelta(minutes=CREATIVE_STALE_MIN)).isoformat()
+    await asyncio.to_thread(store.fail_stale, stale)
+
+
 async def _resume_web_jobs(s: ApiServices) -> None:
     """3D models and Motion graphics a worker was still making when this service stopped are
     followed again (one replica each, stage J3)."""
@@ -968,7 +993,7 @@ async def _close(
     if s.engine_workers is not None:
         await s.engine_workers.close()
     if not desktop:
-        for kept in (s.model3d_store, s.training_store, s.builder_store):
+        for kept in (s.model3d_store, s.training_store, s.builder_store, s.creative_store):
             close_kept = getattr(kept, "close", None)
             if close_kept is not None:
                 await asyncio.to_thread(close_kept)

@@ -53,12 +53,15 @@ def view(store: CreativeStore, row: dict[str, Any]) -> dict[str, Any]:
     by_shot: dict[str, list[dict[str, Any]]] = {}
     missing, stale = [], []
     for shot in shots:
-        mark = stills.inputs_of(shot, brief)
+        # a still depends on its inputs; a clip on its still's, and a sung clip on its part of the song too
+        marks = {"image": stills.inputs_of(shot, brief)}
+        clip_mark = _mark(shot, brief)
         found = [
             {
                 "id": t["id"], "kind": t["kind"], "item_id": t["item_id"], "mode": t["mode"],
                 "seconds": t["seconds"], "prompt": t["prompt"], "created_at": t["created_at"],
-                "out_of_date": t["inputs"] != mark, "chosen": chosen.get(shot["id"]) == t["id"],
+                "out_of_date": t["inputs"] != marks.get(t["kind"], clip_mark),
+                "chosen": chosen.get(shot["id"]) == t["id"],
             }
             for t in takes
             if t["shot_id"] == shot["id"]
@@ -113,6 +116,12 @@ def preview_command(
     return render_command(
         ffmpeg, pieces, song, shots[-1]["end"], None, PREVIEW_SIZES[shape], out, draft=True
     )
+
+
+def _mark(shot: dict[str, Any], brief: dict[str, Any]) -> str:
+    """What a shot's clip depends on: its still's inputs, and for a sung shot the part of the song."""
+    inputs = stills.inputs_of(shot, brief)
+    return motion.sing_mark(shot, inputs) if motion.sings(shot) else inputs
 
 
 class ShotJobs:
@@ -207,7 +216,7 @@ class ShotJobs:
             if mode == stills.REFERENCE and row["plan"]
             else 0
         )
-        folder = self._deps.state.desktop_dir or "."
+        folder = self._deps.state.desktop_dir or tempfile.gettempdir()
         made = stills.estimate(
             count, portraits, mode, _measured(store.takes_of(row["id"]), mode),
             float(row["facts"].get("seconds", 0)), free_bytes(folder),
@@ -339,27 +348,37 @@ class ShotJobs:
         chosen = store.chosen_of(row["id"])
         by_id = {s["id"]: s for s in (row["plan"] or {}).get("shots", [])}
         wanted, at = self._motion_shots(row, quality, start, shot)
-        todo = no_still = 0
+        todo = no_still = sung = 0
+        sung_s = 0.0
         for sid in wanted:
             found = by_id.get(sid)
             if found is None:
                 continue
             if motion.source_of(takes, chosen, sid) is None:
                 no_still += 1
-            elif not motion.has_clip(takes, sid, quality, stills.inputs_of(found, row["brief"])):
-                todo += 1
+            elif not motion.has_clip(takes, sid, quality, _mark(found, row["brief"])):
+                if motion.sings(found):
+                    sung += 1
+                    sung_s += found["end"] - found["start"]
+                else:
+                    todo += 1
         made = motion.estimate(
-            todo,
-            quality,
-            motion.measured(takes, quality),
-            free_bytes(self._deps.state.desktop_dir or "."),
-        )
+            todo, quality, motion.measured(takes, quality),
+            free_bytes(self._deps.state.desktop_dir or tempfile.gettempdir()),
+            sung, sung_s, motion.measured_sing(takes, by_id),
+        )  # fmt: skip
         picked = [by_id[s] for s in wanted if s in by_id]
         executor = self._executor()
-        action = executor.registry.get("video.animate")
-        ready = await executor.readiness(action) if action else None
+        ready = None
+        for name, needed in (("video.animate", todo or not sung), ("lipsync.make", sung)):
+            action = executor.registry.get(name) if needed else None
+            found_ready = await executor.readiness(action) if action else None
+            if needed and (found_ready is None or found_ready.state != "ready"):
+                ready = found_ready
+                break
+            ready = ready or found_ready
         return {
-            **made, "quality": quality, "count": todo, "shots": len(picked), "no_still": no_still,
+            **made, "quality": quality, "count": todo + sung, "shots": len(picked), "no_still": no_still,
             "start": picked[0]["start"] if picked else 0.0, "end": picked[-1]["end"] if picked else 0.0,
             "loudest": at is not None and start is None,
             "sections": [{"start": s["start"], "end": s["end"], "label": s.get("label", "")} for s in row["facts"].get("sections", [])],
@@ -410,7 +429,7 @@ class ShotJobs:
             shot = next((s for s in row["plan"]["shots"] if s["id"] == shot_id), None)
             takes = store.takes_of(item)
             source = motion.source_of(takes, store.chosen_of(item), shot_id) if shot else None
-            mark = stills.inputs_of(shot, row["brief"]) if shot else ""
+            mark = _mark(shot, row["brief"]) if shot else ""
             if (
                 shot is None
                 or source is None
@@ -418,20 +437,34 @@ class ShotJobs:
             ):
                 continue  # gone from the plan, no still to start from, or made already
             number = row["plan"]["shots"].index(shot) + 1
-            store.run_progress(item, f"Animating shot {number}", finished, failed)
-            prompt = motion.clip_prompt(shot, row["brief"])
-            started = time.monotonic()
-            done = await self._executor().run_action(
-                "video.animate",
-                {"image_id": source["item_id"], "prompt": prompt, "seconds": motion.CLIP_S, "quality": quality},
-                "window", actor=identity, person_approved=True,
+            sung = motion.sings(shot)
+            store.run_progress(
+                item, f"Making the face sing in shot {number}" if sung else f"Animating shot {number}", finished, failed
             )  # fmt: skip
-            if done.status == "ok" and done.output.get("video_id"):
+            started = time.monotonic()
+            if sung:  # the face sings the part of the song this shot covers
+                prompt = str(shot["line"])
+                kind, mode, made_key = "lipsync", motion.SING, "clip_id"
+                done = await self._executor().run_action(
+                    "lipsync.make",
+                    {"image_id": source["item_id"], "source_kind": "track", "source_id": row["brief"]["track_id"],
+                     "start": shot["start"], "end": shot["end"], "title": f"{row['title'][:90]}, shot {number}"},
+                    "window", actor=identity, person_approved=True,
+                )  # fmt: skip
+            else:
+                prompt = motion.clip_prompt(shot, row["brief"])
+                kind, mode, made_key = "video", quality, "video_id"
+                done = await self._executor().run_action(
+                    "video.animate",
+                    {"image_id": source["item_id"], "prompt": prompt, "seconds": motion.CLIP_S, "quality": quality},
+                    "window", actor=identity, person_approved=True,
+                )  # fmt: skip
+            if done.status == "ok" and done.output.get(made_key):
                 in_a_row = 0
-                clip = done.output["video_id"]
-                store.add_media(item, "video", clip, shot_id, made=True)
+                clip = done.output[made_key]
+                store.add_media(item, kind, clip, shot_id, made=True)
                 store.add_take(
-                    item, shot_id, "video", clip, mark, prompt, quality,
+                    item, shot_id, kind, clip, mark, prompt, mode,
                     round(time.monotonic() - started, 1), row["revision"], choose=True,
                 )  # fmt: skip
             elif done.code == "busy":

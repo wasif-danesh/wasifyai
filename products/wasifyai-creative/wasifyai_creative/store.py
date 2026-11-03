@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from wasifyai_platform_sdk.sqlstore import SqliteStoreDb, StoreDb
+from wasifyai_platform_sdk.sqlstore import PostgresStoreDb, SqliteStoreDb, StoreDb, ddl_for
 
 SCHEMA = 3
 KEEP_REVISIONS = 30
@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS exports(
 CREATE INDEX IF NOT EXISTS exports_project ON exports(project_id, created_at);
 """
 LEFT_RUNNING = "It stopped when the app closed. Go on, and it picks up where it stopped."
+LEFT_RUNNING_WEB = "It stopped when the service restarted. Go on, and it picks up where it stopped."
 
 
 class NotFound(Exception):
@@ -93,7 +94,7 @@ def now() -> str:
 class CreativeStore:
     def __init__(self, db: StoreDb):
         self.db = db
-        db.open_tables(DDL)
+        db.open_tables(ddl_for(DDL, db.dialect))
         found = db.one("SELECT value FROM meta WHERE key = 'schema'")
         if found is None:
             db.exec("INSERT INTO meta VALUES ('schema', ?)", (str(SCHEMA),))
@@ -117,6 +118,36 @@ class CreativeStore:
             (LEFT_RUNNING,),
         )
         return store
+
+    @classmethod
+    def on_postgres(
+        cls, dsn: str, *, schema: str = "creative", max_connections: int = 8
+    ) -> "CreativeStore":
+        """The web's store, in its own schema of the deployment's Postgres. Work left going by a
+        stopped service is swept by `fail_stale`, not here: other replicas may be working."""
+        return cls(PostgresStoreDb(dsn, schema, max_connections=max_connections))
+
+    def fail_stale(self, before: str) -> int:
+        """Plans and runs not touched since `before` belong to a service that is gone: they become
+        `interrupted` and can go on from their checkpoints. Returns how many."""
+        n = self.db.exec(
+            "UPDATE projects SET status = 'interrupted', error = ?, stage = '' WHERE status = 'planning' AND updated_at < ?",
+            (LEFT_RUNNING_WEB, before),
+        )
+        return n + self.db.exec(
+            "UPDATE runs SET status = 'interrupted', error = ?, stage = '' WHERE status = 'running' AND updated_at < ?",
+            (LEFT_RUNNING_WEB, before),
+        )
+
+    @property
+    def schema(self) -> str:
+        return str(getattr(self.db, "schema", ""))
+
+    def drop_schema(self) -> None:
+        """Remove the web store's schema (tests)."""
+        drop = getattr(self.db, "drop", None)
+        if drop is not None:
+            drop()
 
     def close(self) -> None:
         self.db.close()
@@ -206,8 +237,8 @@ class CreativeStore:
 
     def set_progress(self, item: str, stage: str, progress: float) -> None:
         self.db.exec(
-            "UPDATE projects SET stage = ?, progress = ? WHERE id = ? AND status = 'planning'",
-            (stage, progress, item),
+            "UPDATE projects SET stage = ?, progress = ?, updated_at = ? WHERE id = ? AND status = 'planning'",
+            (stage, progress, now(), item),
         )
 
     def set_facts(self, item: str, facts: dict[str, Any]) -> None:
@@ -233,8 +264,21 @@ class CreativeStore:
             (item, step, json.dumps(data)),
         )
 
-    def clear_checkpoints(self, item: str) -> None:
-        self.db.exec("DELETE FROM checkpoints WHERE project_id = ?", (item,))
+    def clear_checkpoints(self, item: str, keep: tuple[str, ...] = ()) -> None:
+        """Forget the finished steps, except those whose name starts with one of `keep`."""
+        for step in self.checkpoints(item):
+            if not (keep and step.startswith(keep)):
+                self.db.exec(
+                    "DELETE FROM checkpoints WHERE project_id = ? AND step = ?", (item, step)
+                )
+
+    def drop_checkpoints(self, item: str, *prefixes: str) -> None:
+        """Forget the finished steps whose name starts with one of `prefixes`."""
+        for step in self.checkpoints(item):
+            if step.startswith(prefixes):
+                self.db.exec(
+                    "DELETE FROM checkpoints WHERE project_id = ? AND step = ?", (item, step)
+                )
 
     def add_log(self, item: str, step: str, asked: str, said: str) -> None:
         self.db.exec(

@@ -5,9 +5,11 @@ result is checked by `problems`."""
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Motion = Literal["Hold", "Animate", "Sing"]
+Skill = Literal["song", "story"]
+MAX_STORY = 12000
 SHOT_FIELDS = ("shows", "motion", "place", "camera", "note", "line")
 # the framings the code hands out, each with what the writer is asked to look at (docs/spikes/creative-cs0.md)
 FRAMINGS: tuple[tuple[str, str], ...] = (
@@ -43,6 +45,9 @@ class Person(BaseModel):
         max_length=3,
         description="Pictures of them from the library, so every shot starts from the same face.",
     )
+    voice: str | None = Field(
+        None, max_length=64, description="A saved voice (voice.list) for what they say in a story."
+    )
 
 
 class Fixed(BaseModel):
@@ -57,7 +62,18 @@ class Fixed(BaseModel):
 class Brief(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    track_id: str = Field(min_length=1, max_length=64, description="The song, from Your music.")
+    skill: Skill = Field("song", description="A music video of a song, or a story told by a voice.")
+    track_id: str = Field(
+        "", max_length=64,
+        description="The song, from Your music. For a story, the narration once it is made.",
+    )  # fmt: skip
+    story: str | None = Field(
+        None, max_length=MAX_STORY,
+        description="A story's text: what the narrator reads. Words in quotes are said by the person named in the same sentence.",
+    )  # fmt: skip
+    narrator: str | None = Field(
+        None, max_length=64, description="A saved voice (voice.list) that reads a story."
+    )
     idea: str = Field(
         min_length=3, max_length=600, description="What the video is about, in a line."
     )
@@ -80,6 +96,14 @@ class Brief(BaseModel):
     )
     shape: Literal["landscape", "portrait", "square"] = "landscape"
     cut_speed: int = Field(0, ge=-2, le=2, description="-2 few long shots, +2 many short ones.")
+
+    @model_validator(mode="after")
+    def _source(self) -> "Brief":
+        if self.skill == "song" and not self.track_id:
+            raise ValueError("Choose a song from Your music.")
+        if self.skill == "story" and len((self.story or "").strip()) < 40:
+            raise ValueError("Write the story, at least a few sentences.")
+        return self
 
 
 def problems(plan: dict[str, Any], cast: list[str], seconds: float) -> list[str]:

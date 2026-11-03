@@ -114,6 +114,56 @@ async def at_rate(data: bytes, filename: str, rate: int, channels: int) -> tuple
     return wav, facts[2]
 
 
+def _frames(wav: bytes) -> tuple[int, int, bytes]:
+    import io
+    import wave
+
+    with wave.open(io.BytesIO(wav)) as w:
+        return w.getframerate(), w.getnchannels(), w.readframes(w.getnframes())
+
+
+def _wav(rate: int, channels: int, frames: bytes) -> bytes:
+    import io
+    import wave
+
+    out = io.BytesIO()
+    with wave.open(out, "wb") as w:
+        w.setnchannels(channels)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(frames)
+    return out.getvalue()
+
+
+def slice_wav(wav: bytes, start: float, end: float) -> tuple[bytes, float]:
+    """The part of a 16-bit WAV from `start` to `end` seconds (a sung line of a song), with its
+    length."""
+    rate, channels, frames = _frames(wav)
+    width = 2 * channels
+    total = len(frames) // width
+    a = max(0, min(total, round(start * rate)))
+    b = max(a, min(total, round(end * rate)))
+    return _wav(rate, channels, frames[a * width : b * width]), (b - a) / rate
+
+
+def join_wavs(parts: list[tuple[bytes, float]]) -> tuple[bytes, list[tuple[float, float]]]:
+    """16-bit WAVs of one rate and channel count, one after another, each followed by its pause in
+    seconds. Returns the joined WAV and where each part starts and ends in it."""
+    rate = channels = 0
+    out = bytearray()
+    times: list[tuple[float, float]] = []
+    for wav, pause in parts:
+        r, c, frames = _frames(wav)
+        if rate and (r, c) != (rate, channels):
+            raise AudioInputError("unsupported_audio", "The parts do not have the same rate.")
+        rate, channels = r, c
+        start = len(out) / (2 * c * r)
+        out += frames
+        times.append((round(start, 3), round(len(out) / (2 * c * r), 3)))
+        out += b"\0" * (round(max(0.0, pause) * r) * 2 * c)
+    return _wav(rate or 24000, channels or 1, bytes(out)), times
+
+
 # ---- encoding for saving -----------------------------------------------------------------------
 
 ENCODINGS = {

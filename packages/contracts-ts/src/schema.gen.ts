@@ -4458,6 +4458,11 @@ export interface components {
              */
             lyrics?: string | null;
             /**
+             * Narrator
+             * @description A saved voice (voice.list) that reads a story.
+             */
+            narrator?: string | null;
+            /**
              * Places
              * @description Where it happens; left empty, the writer chooses.
              */
@@ -4469,6 +4474,18 @@ export interface components {
              */
             shape: "landscape" | "portrait" | "square";
             /**
+             * Skill
+             * @description A music video of a song, or a story told by a voice.
+             * @default song
+             * @enum {string}
+             */
+            skill: "song" | "story";
+            /**
+             * Story
+             * @description A story's text: what the narrator reads. Words in quotes are said by the person named in the same sentence.
+             */
+            story?: string | null;
+            /**
              * Style
              * @description The look: warm film photo, for instance.
              * @default
@@ -4476,7 +4493,8 @@ export interface components {
             style: string;
             /**
              * Track Id
-             * @description The song, from Your music.
+             * @description The song, from Your music. For a story, the narration once it is made.
+             * @default
              */
             track_id: string;
         };
@@ -5496,6 +5514,11 @@ export interface components {
              * @description Pictures of them from the library, so every shot starts from the same face.
              */
             pictures?: string[];
+            /**
+             * Voice
+             * @description A saved voice (voice.list) for what they say in a story.
+             */
+            voice?: string | null;
         };
         /** PlanBook */
         PlanBook: {

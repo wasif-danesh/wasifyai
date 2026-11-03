@@ -206,6 +206,7 @@ export { type MenuLink, SideMenu, type SideMenuProps } from "./shell/SideMenu";
 export type { RecentChat, Recents } from "./shell/RecentChats";
 export { VideoBuilder, type VideoBuilderProps } from "./videobuilder/VideoBuilder";
 export { Creative, type CreativeProps, type CreativeSong } from "./creative/Creative";
+export type { CreativeVoice } from "./creative/BriefForm";
 export type {
   AddedFile,
   CreativeAssistant,

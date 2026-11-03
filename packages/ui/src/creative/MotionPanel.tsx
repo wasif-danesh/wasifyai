@@ -67,7 +67,7 @@ export function MotionPanel({
   const start = quality === "draft" && from !== LOUDEST ? Number(from) : undefined;
   const clips = Object.values(project.shots.takes)
     .flat()
-    .filter((t) => t.kind === "video").length;
+    .filter((t) => t.kind === "video" || t.kind === "lipsync").length;
   const stills = project.shots.missing.length;
   // biome-ignore lint/correctness/useExhaustiveDependencies: clips and stills say when the numbers changed
   useEffect(() => {
@@ -120,17 +120,18 @@ export function MotionPanel({
           <p className="m-0 text-sm">
             {quality === "draft"
               ? `${clock(ask.start)} to ${clock(ask.end)}: ${ask.shots} shots.`
-              : `${ask.shots} ${ask.shots === 1 ? "shot is" : "shots are"} marked Animate in the plan.`}{" "}
+              : `${ask.shots} ${ask.shots === 1 ? "shot is" : "shots are"} marked Animate or Sing in the plan.`}{" "}
             {none
               ? "They have their clips."
-              : `${ask.count} ${ask.count === 1 ? "clip" : "clips"} to make, about ${minutes(ask.seconds_low)} to ${minutes(ask.seconds_high)}${ask.measured ? ", going by the clips made on this computer" : ""}, about ${gigabytes(ask.bytes)} on the disk.`}
+              : `${ask.count} ${ask.count === 1 ? "clip" : "clips"} to make${ask.sung ? ` (${ask.sung} ${ask.sung === 1 ? "sings" : "sing"})` : ""}, about ${minutes(ask.seconds_low)} to ${minutes(ask.seconds_high)}${ask.measured ? ", going by the clips made on this computer" : ""}, about ${gigabytes(ask.bytes)} on the disk.`}
           </p>
           <p className={`${hint} m-0`}>
             {quality === "draft"
               ? "A draft is quick and soft, to see the motion first. "
               : "Make it better is sharp and takes about four times as long as a draft. "}
             Each clip is 5 seconds, is used for its shot, and goes into Your videos; the still stays
-            as another version. Stop keeps the clips made.
+            as another version. A shot marked Sing is lip sync instead: its face sings its part of
+            the song (only the mouth moves). Stop keeps the clips made.
           </p>
           {ask.no_still ? (
             <Notice tone="info" title="Some shots have no still">
@@ -149,7 +150,7 @@ export function MotionPanel({
             </Notice>
           ) : null}
           {ask.ready ? null : (
-            <Notice tone="warn" title="The video model is not ready">
+            <Notice tone="warn" title="A model is not ready">
               {ask.step ?? "Choose a video model with the model button on the Video tab."}
             </Notice>
           )}

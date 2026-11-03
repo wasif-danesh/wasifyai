@@ -556,7 +556,7 @@ function PieceActions({
             }
             options={versions.map((t, i) => ({
               value: t.id,
-              label: `Version ${i + 1}${t.kind === "video" ? ", a clip" : ""}`,
+              label: `Version ${i + 1}${t.kind === "video" ? ", a clip" : t.kind === "lipsync" ? ", a sung clip" : ""}`,
             }))}
           />
           <span className={hint}>The same version is used on the Shots step.</span>

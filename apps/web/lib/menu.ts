@@ -73,6 +73,8 @@ export function resolveWebItem(
         return live("image") ? page("/image/3d") : undefined; // still the image product's page (D25)
       case "train":
         return page("/train");
+      case "creative":
+        return page("/creative");
       case "library":
         // the one Library, whichever kind it shows, and the page of one picture or clip in it (ADR-0093, U8)
         return {

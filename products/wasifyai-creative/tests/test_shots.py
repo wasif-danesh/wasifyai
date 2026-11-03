@@ -273,7 +273,9 @@ def test_a_prompt_stays_under_the_image_products_limit_and_keeps_what_the_shot_s
 
 def test_a_still_goes_out_of_date_when_what_it_depends_on_changes_and_not_otherwise():
     base = stills.inputs_of(shot(1, 0, 1), BRIEF)
-    assert stills.inputs_of(shot(1, 5, 9, note="x", motion="Sing"), BRIEF) == base
+    assert stills.inputs_of(shot(1, 5, 9, note="x", motion="Animate"), BRIEF) == base
+    # a sung shot asks for the face, so its still is made again
+    assert stills.inputs_of(shot(1, 0, 1, motion="Sing"), BRIEF) != base
     assert stills.inputs_of(shot(1, 0, 1, camera="close"), BRIEF) != base
     assert stills.inputs_of(shot(1, 0, 1), {**BRIEF, "style": "ink"}) != base
     changed = {**BRIEF, "cast": [{**BRIEF["cast"][0], "look": "long red hair"}]}

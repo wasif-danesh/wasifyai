@@ -19,6 +19,31 @@
       "path": "packages/ui/src/chat/markdown.tsx",
       "match": "text-[0.9em]",
       "reason": "Inline code is sized relative to the surrounding text (em), which a rem token cannot express."
+    },
+    {
+      "path": "packages/ui/src/videobuilder/scenes/BrandTools.tsx",
+      "match": "\"#0b1220\"",
+      "reason": "A brand kit's first colours are the person's own brand data, written into the video they make; they are not the app's theme and must not follow it."
+    },
+    {
+      "path": "packages/ui/src/videobuilder/scenes/BrandTools.tsx",
+      "match": "\"#1c2b4a\"",
+      "reason": "A brand kit's first colours are the person's own brand data, written into the video they make; they are not the app's theme and must not follow it."
+    },
+    {
+      "path": "packages/ui/src/videobuilder/scenes/BrandTools.tsx",
+      "match": "\"#f5f7fb\"",
+      "reason": "A brand kit's first colours are the person's own brand data, written into the video they make; they are not the app's theme and must not follow it."
+    },
+    {
+      "path": "packages/ui/src/videobuilder/scenes/BrandTools.tsx",
+      "match": "\"#4f8cff\"",
+      "reason": "A brand kit's first colours are the person's own brand data, written into the video they make; they are not the app's theme and must not follow it."
+    },
+    {
+      "path": "packages/ui/src/videobuilder/scenes/SceneEditor.tsx",
+      "match": "linear-gradient(135deg, ${t.from}, ${t.to})",
+      "reason": "A swatch that shows a look's own two colours (data from the look), so the person sees the look before choosing it."
     }
   ]
 }

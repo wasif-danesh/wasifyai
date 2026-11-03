@@ -16,12 +16,12 @@ import { webClient } from "@/lib/run-client";
 import type { ImageMode, VideoMode } from "@wasifyai/client";
 import {
   Creative,
-  type CreativeScreen as Screen,
   ImageWorkspace,
   LipSyncWorkspace,
   type MakePanelMakers,
   ModelSelect,
   MusicWorkspace,
+  type CreativeScreen as Screen,
   Segmented,
   SpeakWorkspace,
   VideoWorkspace,

@@ -406,7 +406,10 @@ export function createCreativeApi(
         );
         return s.analysis_ready
           ? { state: "ready" }
-          : { state: "elsewhere", reason: s.analysis_problem ?? "Song analysis is not set up yet." };
+          : {
+              state: "elsewhere",
+              reason: s.analysis_problem ?? "Song analysis is not set up yet.",
+            };
       }
       const { status } = await json<{ status: ComponentStatus }>(component);
       switch (status.state) {
@@ -426,7 +429,8 @@ export function createCreativeApi(
       }
     },
     installAnalysis: async (bytes) => {
-      if (hosted) throw new Error("This is set up by whoever runs this service, not from this page.");
+      if (hosted)
+        throw new Error("This is set up by whoever runs this service, not from this page.");
       await post(`${component}/install`, { confirm_bytes: bytes, repair: false });
     },
     cancelAnalysis: async () => {

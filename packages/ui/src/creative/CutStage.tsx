@@ -413,7 +413,7 @@ function PieceButton({
       )}
       style={cover ? { backgroundImage: `url(${cover})` } : undefined}
     >
-      <span className="absolute start-0.5 top-0.5 rounded-sm bg-background/80 px-1 text-[0.625rem]">
+      <span className="absolute start-0.5 top-0.5 rounded-sm bg-background/80 px-1 text-2xs">
         {piece.number ?? "+"}
       </span>
       {piece.fade ? (

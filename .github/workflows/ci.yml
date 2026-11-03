@@ -180,6 +180,11 @@ jobs:
       OLLAMA_EXTERNAL_URL: http://127.0.0.1:11434
       KIND_MODE: light   # a hosted runner is too small for the models; `full` is for a workstation
     steps:
+      # The images are built in Docker and then copied into the kind node, so each is on the disk twice; the runner's
+      # preinstalled toolchains this job never uses take about 20 GB (2026-11-03: "no space left on device" loading web)
+      - run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
       - run: make helm-lint

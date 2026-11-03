@@ -181,7 +181,7 @@ export function ArrangeOverlay({
             <span
               aria-hidden="true"
               onPointerDown={(e) => start(e, part, measured, "size")}
-              className="absolute -right-1.5 -bottom-1.5 size-3 cursor-nwse-resize touch-none rounded-[2px] border-2 border-primary bg-white"
+              className="absolute -right-1.5 -bottom-1.5 size-3 cursor-nwse-resize touch-none rounded-xs border-2 border-primary bg-white"
             />
           </button>
         );

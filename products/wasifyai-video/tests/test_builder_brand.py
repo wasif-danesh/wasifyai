@@ -288,6 +288,7 @@ def test_the_assistant_in_the_editor_can_use_the_brand_and_is_told_of_it():
 def wait_all(client, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out = []
     for row in rows:
+        got: dict[str, Any] = {}
         for _ in range(500):
             got = client.get(f"{BASE}/renders/{row['id']}").json()
             if got["status"] != "working":

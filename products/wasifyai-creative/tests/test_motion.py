@@ -77,8 +77,12 @@ def test_a_clip_starts_from_the_chosen_still_or_the_newest_one_when_a_clip_is_ch
         {"id": "b", "shot_id": "s1", "kind": "image", "mode": "plain", "inputs": "m"},
         {"id": "c", "shot_id": "s1", "kind": "video", "mode": "draft", "inputs": "m"},
     ]
-    assert motion.source_of(takes, {"s1": "a"}, "s1")["id"] == "a"
-    assert motion.source_of(takes, {"s1": "c"}, "s1")["id"] == "b"
+    chosen, newest = (
+        motion.source_of(takes, {"s1": "a"}, "s1"),
+        motion.source_of(takes, {"s1": "c"}, "s1"),
+    )
+    assert chosen is not None and chosen["id"] == "a"
+    assert newest is not None and newest["id"] == "b"
     assert motion.source_of(takes, {}, "s2") is None
     # a draft clip is enough for a draft; a final one is needed for final, and a final one serves a draft too
     assert motion.has_clip(takes, "s1", motion.DRAFT, "m") and not motion.has_clip(

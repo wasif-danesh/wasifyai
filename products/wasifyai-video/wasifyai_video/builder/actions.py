@@ -819,7 +819,7 @@ async def _make_file(p: MakeFileIn, ctx: ActionContext) -> Outcome:
     item = make.made_item(p.what, done.output)
     kind = ctx.executor.library.get(item[0]) if item else None
     data = await kind.read(ctx, item[1]) if item and kind and kind.read else None
-    if data is None:
+    if data is None or item is None:
         return Outcome.error("It was made, but could not be brought here. It is in your Library.")
     try:
         checked = await asyncio.to_thread(media.check_upload, data, make.file_name(p.what, p.text))

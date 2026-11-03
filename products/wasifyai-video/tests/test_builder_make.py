@@ -139,6 +139,7 @@ class MakeRig:
 
     async def kept(self, cid: str, asset: dict[str, Any]) -> int:
         who = ("t1", "wasifyai-video", "u1")
+        assert self.state.storage is not None
         return await self.state.storage.size_for(who, media.rel_path(cid, asset["file"]))
 
 
@@ -415,6 +416,7 @@ def test_a_long_make_is_followed_and_can_be_stopped(client):
     assert job["state"] == "working"
     assert client.get(f"{BASE}/make-jobs/{job['job_id']}").json()["state"] == "working"
     client.rig.models.gate.set()
+    done: dict[str, Any] = {}
     for _ in range(300):
         done = client.get(f"{BASE}/make-jobs/{job['job_id']}").json()
         if done["state"] != "working":
@@ -427,6 +429,7 @@ def test_a_long_make_is_followed_and_can_be_stopped(client):
         f"{BASE}/projects/{cid}/make", json={"what": "picture", "text": "B"}
     ).json()
     assert client.post(f"{BASE}/make-jobs/{second['job_id']}/cancel").json() == {"state": "stopped"}
+    stopped = client.get(f"{BASE}/make-jobs/{second['job_id']}")
     for _ in range(300):
         stopped = client.get(f"{BASE}/make-jobs/{second['job_id']}")
         if stopped.status_code != 200 or stopped.json()["state"] != "working":

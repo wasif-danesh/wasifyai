@@ -378,10 +378,14 @@ async def test_speeches_are_joined_into_one_recording_with_the_times_of_each(tmp
     assert s1 == 0.0 and s2 == pytest.approx(e1 + 0.5, abs=0.01) and e2 > s2
     assert r.output["seconds"] == pytest.approx(e2 + 1.0, abs=0.01)
     track = h.store.get_track("t1", "u1", r.output["track_id"])
+    assert track is not None
     assert (track["title"], track["mode"]) == ("The key", "joined")
     assert "It still fits" in track["lyrics"]
-    data = await h.rig.caps.storage.get(track["audio_key"])
-    rate, channels, seconds = wav_facts(data)
+    storage = h.rig.caps.storage
+    assert storage is not None
+    facts = wav_facts(await storage.get(track["audio_key"]))
+    assert facts is not None
+    rate, channels, seconds = facts
     assert (rate, channels) == (24000, 1)
     assert seconds == pytest.approx(r.output["seconds"], abs=0.01)
     ghost = await h.go("speech.join", {"parts": [{"speech_id": "ghost"}], "title": "x"})

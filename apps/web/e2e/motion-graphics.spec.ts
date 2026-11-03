@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { mockApi } from "./mock-api";
 
-// The first screen of Motion graphics: a long title in "Your videos" must not push into the column next to it, the
-// heading must stay inside its column, and nothing may make the page scroll sideways (the bug of 2026-10-24).
+// The first screen of Motion graphics (the scenes start, ADR-0096): a long title in "Your videos" must stay inside its
+// list, the heading must stay inside its column, and nothing may make the page scroll sideways (the bug of 2026-10-24).
 
 const LONG =
   "The best way to predict the future is to invent it, said Alan Kay in 1971 at Xerox PARC";
@@ -66,7 +66,7 @@ for (const scheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme: scheme });
       await page.setViewportSize({ width, height: 800 });
       await page.goto("/video/builder");
-      const heading = page.getByRole("heading", { name: "What should we make?" });
+      const heading = page.getByRole("heading", { name: "What do you want to promote?" });
       await expect(heading).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
 
@@ -75,23 +75,25 @@ for (const scheme of ["light", "dark"] as const) {
       );
       expect(wide, "the page scrolls sideways").toBeLessThanOrEqual(1);
 
-      const section = page.getByRole("region", { name: "What to make" });
+      const section = page.getByRole("region", { name: "New project" });
       const list = page.getByRole("navigation", { name: "Your video projects" });
-      const [s, l, h] = await Promise.all([
+      const title = list.getByText(LONG);
+      await expect(title).toBeVisible();
+      const [s, l, h, t] = await Promise.all([
         section.boundingBox(),
         list.boundingBox(),
         heading.boundingBox(),
+        title.boundingBox(),
       ]);
-      if (!s || !l || !h) throw new Error("a part of the screen is missing");
+      if (!s || !l || !h || !t) throw new Error("a part of the screen is missing");
       expect(h.x + h.width, "the heading leaves its column").toBeLessThanOrEqual(s.x + s.width + 1);
-      // the make frame (ADR-0093 U10): the projects are under the stage, beside the ask column or below it
-      if (width >= 768) {
-        expect(l.x, "the list runs into the ask column").toBeGreaterThanOrEqual(s.x + s.width - 1);
-      } else {
-        expect(l.y, "the list sits on the ask column").toBeGreaterThanOrEqual(s.y + s.height - 1);
-      }
+      // the scenes start (ADR-0096): the projects are under the new project, at every width
+      expect(l.y, "the list sits on the new project").toBeGreaterThanOrEqual(s.y + s.height - 1);
+      expect(t.x + t.width, "the long title leaves its list").toBeLessThanOrEqual(
+        l.x + l.width + 1,
+      );
       await expect(
-        page.getByRole("button", { name: "Fill in the form", exact: true }),
+        page.getByRole("button", { name: "Make a first version", exact: true }),
       ).toBeVisible();
       if (process.env.SHOTS)
         await page.screenshot({ path: `${process.env.SHOTS}/mg-${width}-${scheme}.png` });

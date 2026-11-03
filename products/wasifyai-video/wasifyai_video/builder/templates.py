@@ -1333,7 +1333,7 @@ def _render_scenes(document: dict[str, Any]) -> str:
                 f'<img id="s{scene["id"]}-logo" class="end-logo" src="assets/{logo["file"]}" '
                 'alt="">',
             )
-        elif logo and brand["logo_on_scenes"]:
+        elif logo and brand and brand["logo_on_scenes"]:
             body = (
                 f'<img id="s{scene["id"]}-corner" class="brand-corner" '
                 f'src="assets/{logo["file"]}" alt="">\n{body}'

@@ -123,6 +123,9 @@ export type ModelChoice = {
   readsPictures?: boolean;
   /** why `unavailable`, in words */
   unavailableReason?: string | null;
+  /** `needs_download` whose files another tool already has on the computer ("ComfyUI"): getting it uses them where
+   * they are, nothing of the model is downloaded (`downloadBytes` is then 0) */
+  foundIn?: string | null;
 };
 
 export type ChoiceList = {

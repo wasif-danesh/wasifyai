@@ -140,6 +140,41 @@ describe("the model picker button and panel", () => {
 });
 
 describe("choosing a model that is not on the computer", () => {
+  it("uses files another tool already has without asking, since nothing is downloaded", async () => {
+    const api = fake([
+      choice({ id: "f", title: "FLUX.2 klein 4B", foundIn: "ComfyUI", downloadBytes: 0 }),
+    ]);
+    const user = userEvent.setup();
+    render(<ModelSelect group="images" api={api} />);
+    await user.click(await screen.findByRole("button", { name: /Select image model/ }));
+    expect(await screen.findByText(/Found in ComfyUI/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /FLUX.2 klein 4B/ }));
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith("f", expect.any(Function), expect.any(AbortSignal)),
+    );
+    expect(screen.queryByRole("dialog", { name: /Download/ })).toBeNull();
+  });
+
+  it("still asks when the engine is missing, and says the model is used where it is", async () => {
+    const api = fake([
+      choice({
+        id: "f",
+        title: "FLUX.2 klein 4B",
+        foundIn: "ComfyUI",
+        downloadBytes: 0,
+        engineBytes: 1.5e9,
+        engineName: "The image engine",
+      }),
+    ]);
+    const user = userEvent.setup();
+    render(<ModelSelect group="images" api={api} />);
+    await user.click(await screen.findByRole("button", { name: /Select image model/ }));
+    await user.click(await screen.findByRole("button", { name: /FLUX.2 klein 4B/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Download FLUX.2 klein 4B?" });
+    expect(within(dialog).getByText(/found in ComfyUI, used where it is/)).toBeInTheDocument();
+    expect(api.get).not.toHaveBeenCalled();
+  });
+
   it("asks first, in words, with the engine and the model and the total, and downloads only on a yes", async () => {
     const api = fake([
       choice({

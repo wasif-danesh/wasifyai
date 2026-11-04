@@ -563,8 +563,9 @@ on the Music screen (ACE-Step); the chat model chosen from the model button (Qwe
 the lyrics as captions at their sung times; Save a copy wrote it (to Downloads, as it does without the Save As box); Ask's "Make the first part calmer"
 made shot 2 hold (Plan 2, with Undo). Found and fixed: an error from a product that was already a sentence got a second full stop ("Get the model first.."),
 the Model hub's table kept "Not downloaded" after a found file was used until the page was read again, and the projects page still said a project ends
-as "pictures over the song". Seen, not changed: in a fresh install the Model hub's table offers **Get (16 GB)** for klein and LTX although the same files
-are found in ComfyUI's folder further down (only Advanced offers "Use it"); the plan writer wrote "eyes glowing with light" for the sung shot, and the
+as "pictures over the song". In a fresh install the Model hub's table offered **Get (16 GB)** for klein and LTX although the same files
+were found in ComfyUI's folder further down (only Advanced offered "Use it"); fixed the same day: such a row says "Found in ComfyUI" and offers Use,
+which adds the folder and downloads nothing (checked on an empty data folder: both models ready, 0 bytes fetched; ADR-0086). Seen, not changed: the plan writer wrote "eyes glowing with light" for the sung shot, and the
 still and its sung clip show glowing eyes (the picture checker of CS6 is for this); the engine needs a second, forced stop after a stop request (the window
 already ends it that way). Not run: Make it better at the final setting, the Voice and Titles tabs, a story project.
 

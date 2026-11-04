@@ -1,6 +1,6 @@
 import type { OwnKeysApi, VoiceApi, VoiceModelInfo } from "@wasifyai/client";
 import { describe, expect, it, vi } from "vitest";
-import type { DiscoveryApi, FoundModel } from "../discovery";
+import type { DiscoveryApi, DiscoveryState, FoundModel } from "../discovery";
 import type { HubApi } from "../hub";
 import type { LanguageApi, LanguageState } from "../language";
 import type { ModelEntry, ModelsApi } from "../models";
@@ -230,6 +230,103 @@ describe("images and video", () => {
       CATALOGUE_GROUPS.images,
     ).list();
     expect(list.choices[0]).toMatchObject({ state: "too_big", fitReason: "Needs 40 GB." });
+  });
+
+  // a fresh install offered 16 GB of downloads for klein and LTX while ComfyUI's folder had the files (2026-11-04)
+  const kleinFiles = (present: boolean) =>
+    ["flux-2-klein-4b.safetensors", "flux2-vae.safetensors"].map((name) => ({
+      folder: name.includes("vae") ? "vae" : "diffusion_models",
+      name,
+      size: 5e9,
+      present,
+      location: null,
+      removable: false,
+      partial_bytes: 0,
+    }));
+  const inComfy = (name: string, over: Partial<FoundModel> = {}) =>
+    found({
+      id: `c-${name}`,
+      name: name.replace(".safetensors", ""),
+      kind: "diffusion",
+      path: `/Users/x/ComfyUI-Shared/models/some/${name}`,
+      tool: "comfyui",
+      tool_title: "ComfyUI",
+      use_root: "/Users/x/ComfyUI-Shared/models",
+      use: "folder",
+      ...over,
+    });
+  const discovery = (items: FoundModel[]) => {
+    const use = vi.fn(async () => ({ folder: "/Users/x/ComfyUI-Shared/models" }));
+    return {
+      api: { state: async () => ({ items }) as unknown as DiscoveryState, use },
+      use,
+    };
+  };
+
+  it("a model whose missing files another tool has is found there, with nothing to download", async () => {
+    const models = {
+      overview: async () => overview([entry({ files: kleinFiles(false) })]),
+    } as unknown as ModelsApi;
+    const d = discovery([inComfy("flux-2-klein-4b.safetensors"), inComfy("flux2-vae.safetensors")]);
+    const list = await catalogueChoices(
+      { models, engines: engines(), memory: memory(), discovery: d.api },
+      CATALOGUE_GROUPS.images,
+    ).list();
+    expect(list.choices[0]).toMatchObject({
+      state: "needs_download",
+      foundIn: "ComfyUI",
+      downloadBytes: 0,
+      sizeBytes: 10e9,
+    });
+  });
+
+  it("is not offered as found when one file is still nowhere, or the found file cannot be used", async () => {
+    const models = {
+      overview: async () => overview([entry({ files: kleinFiles(false) })]),
+    } as unknown as ModelsApi;
+    for (const items of [
+      [inComfy("flux-2-klein-4b.safetensors")],
+      [
+        inComfy("flux-2-klein-4b.safetensors"),
+        inComfy("flux2-vae.safetensors", { state: "unsupported" }),
+      ],
+    ]) {
+      const list = await catalogueChoices(
+        { models, engines: engines(), memory: memory(), discovery: discovery(items).api },
+        CATALOGUE_GROUPS.images,
+      ).list();
+      expect(list.choices[0]?.foundIn ?? null).toBeNull();
+      expect(list.choices[0]?.downloadBytes).toBe(10e9);
+    }
+  });
+
+  it("getting a found model adds its folder once and downloads nothing", async () => {
+    let used = false;
+    const download = vi.fn();
+    const models = {
+      overview: async () =>
+        overview([
+          used
+            ? entry({ status: "ready", files: kleinFiles(true), bytes_missing: 0 })
+            : entry({ files: kleinFiles(false) }),
+        ]),
+      download,
+    } as unknown as ModelsApi;
+    const d = discovery([inComfy("flux-2-klein-4b.safetensors"), inComfy("flux2-vae.safetensors")]);
+    d.use.mockImplementation(async () => {
+      used = true;
+      return { folder: "/Users/x/ComfyUI-Shared/models" };
+    });
+    const mem = memory();
+    const labels: string[] = [];
+    await catalogueChoices(
+      { models, engines: engines(), memory: mem, discovery: d.api },
+      CATALOGUE_GROUPS.images,
+    ).get("flux2-klein-4b", (p) => labels.push(p.label), never);
+    expect(d.use).toHaveBeenCalledTimes(1);
+    expect(download).not.toHaveBeenCalled();
+    expect(labels[0]).toBe("Using the files found in ComfyUI");
+    expect(mem.data["wasifyai:model:images"]).toBe("flux2-klein-4b");
   });
 });
 

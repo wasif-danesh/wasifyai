@@ -29,7 +29,13 @@ export function createChoicesSource(engines = createEngines()): ChoicesSource {
       case "video":
       case "documents":
         return catalogueChoices(
-          { models: modelsApi, engines, memory: remembered, keys: ownKeysApi },
+          {
+            models: modelsApi,
+            engines,
+            memory: remembered,
+            keys: ownKeysApi,
+            discovery: discoveryApi,
+          },
           CATALOGUE_GROUPS[group],
         );
       case "three_d":

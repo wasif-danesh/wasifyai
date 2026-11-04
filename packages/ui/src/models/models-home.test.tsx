@@ -130,6 +130,34 @@ describe("the Models page", () => {
     await waitFor(() => expect(get).toHaveBeenCalled());
   });
 
+  it("uses files another tool already has, without offering a download", async () => {
+    const get = vi.fn(async () => {});
+    const rows = [
+      row({
+        id: "klein",
+        title: "Klein",
+        state: "needs_download",
+        chosen: false,
+        foundIn: "ComfyUI",
+        downloadBytes: 0,
+        engineBytes: 0,
+        sizeBytes: 16e9,
+      }),
+    ];
+    const src = (() => ({
+      list: async () => ({ choices: rows, diskFreeBytes: 200e9, memoryBytes: 32e9 }),
+      choose: async () => {},
+      get,
+    })) as never;
+    const user = userEvent.setup();
+    page(src, { initialGroup: "voice" });
+    expect(await screen.findByText("Found in ComfyUI")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Get Klein/ })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Use Klein, found in ComfyUI" }));
+    await waitFor(() => expect(get).toHaveBeenCalled());
+    expect(screen.queryByRole("dialog", { name: /Download/ })).toBeNull();
+  });
+
   it("takes one off after asking", async () => {
     const { src, remove } = source({ voice: [row({ chosen: true })] });
     const user = userEvent.setup();

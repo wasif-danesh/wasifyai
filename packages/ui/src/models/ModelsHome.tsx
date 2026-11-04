@@ -73,6 +73,7 @@ function statusOf(
   if (c.state === "too_big") return { text: "Won't fit here", tone: "warn" };
   if (c.state === "unavailable")
     return { text: c.unavailableReason ?? "Not available here", tone: "warn" };
+  if (c.foundIn) return { text: `Found in ${c.foundIn}`, tone: "ok" };
   return { text: place === "service" ? "Not on the worker" : "Not downloaded", tone: "plain" };
 }
 
@@ -85,6 +86,8 @@ const TONE: Record<string, string> = {
 
 function sizeText(c: ModelChoice): string {
   if (c.state === "ready") return c.sizeBytes ? formatBytes(c.sizeBytes) : "—";
+  // found files are not fetched: the size is what they take, or the engine still to fetch
+  if (c.foundIn && c.engineBytes === 0) return c.sizeBytes ? formatBytes(c.sizeBytes) : "—";
   const total = c.downloadBytes + c.engineBytes;
   return total > 0 ? formatBytes(total) : "—";
 }
@@ -215,7 +218,22 @@ function GroupTable({ group, place }: { group: GroupId; place: Place }) {
                           Use
                         </Button>
                       ) : null}
-                      {c.state === "needs_download" ? (
+                      {c.state === "needs_download" && c.foundIn && c.engineBytes === 0 ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          aria-label={`Use ${c.title}, found in ${c.foundIn}`}
+                          disabled={m.working !== null}
+                          onClick={() => {
+                            m.setProblem(null);
+                            get(c);
+                          }}
+                        >
+                          Use
+                        </Button>
+                      ) : null}
+                      {c.state === "needs_download" && !(c.foundIn && c.engineBytes === 0) ? (
                         <Button
                           type="button"
                           size="sm"

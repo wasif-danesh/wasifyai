@@ -77,6 +77,10 @@ A shared component `ModelPicker` in `packages/ui` (desktop only; the web serves 
   *"To use Parakeet TDT 0.6B v3 we need to download it. 916 MB, about 2 minutes on a typical connection. It runs on this computer; nothing is sent away. Commercial use
   is allowed (licence). [Download and use] [Not now]"*. Behind it the same confirm-first download runs (exact files and total echoed back, resumable, checksums).
   The dialog also shows **fit** ("fits this computer", or "too big for this computer: choose a smaller one") and free disk.
+- **When another tool already has every file of a catalogue model** (FLUX.2 klein or LTX-Video in ComfyUI's models folder, found by
+  ADR-0063's scan), the row says *Found in ComfyUI* and offers **Use**, not Get: choosing it adds that folder and downloads nothing, with no
+  question. If the engine is also missing, the dialog still asks, for the engine only, and says the model is "found in ComfyUI, used where it is"
+  (2026-11-04).
 - **When the model needs an engine we do not have** (the image engine, the language engine, the speech runtime), the **same dialog adds it** to the total:
   *"Image engine 1.5 GB (once) + FLUX.2 klein 4B 16.1 GB = 17.6 GB."* One yes, one progress bar, no visit to Settings.
 - **After the download** the model is selected and loaded without another click. Progress shows in the button (a thin bar), survives leaving the screen, and ends

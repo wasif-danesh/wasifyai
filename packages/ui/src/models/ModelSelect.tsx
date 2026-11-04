@@ -53,6 +53,8 @@ function stateLine(c: ModelChoice): string {
   if (c.state === "ready") return c.chosen ? "In use" : "On this computer";
   if (c.state === "too_big") return "Too big for this computer";
   if (c.state === "unavailable") return c.unavailableReason ?? "Not available here";
+  if (c.foundIn && c.engineBytes === 0) return `Found in ${c.foundIn}`;
+  if (c.foundIn) return `Found in ${c.foundIn}, ${formatBytes(c.engineBytes)} to download`;
   return `${formatBytes(c.downloadBytes + c.engineBytes)} to download`;
 }
 
@@ -135,6 +137,9 @@ export function ModelSelect({
       onChanged?.(c.id);
       changed();
       setOpen(false);
+    } else if (c.state === "needs_download" && c.foundIn && c.engineBytes === 0) {
+      // its files are already on the computer: nothing to download, so nothing to ask
+      download(c);
     } else if (c.state === "needs_download") {
       setAsking(c);
     }
@@ -337,7 +342,11 @@ export function GetModelDialog({
           ) : null}
           <li className="flex justify-between gap-4">
             <span>{displayName(choice.title)}</span>
-            <span>{formatBytes(choice.downloadBytes)}</span>
+            <span>
+              {choice.foundIn
+                ? `found in ${choice.foundIn}, used where it is`
+                : formatBytes(choice.downloadBytes)}
+            </span>
           </li>
           <li className="flex justify-between gap-4 border-t pt-1 font-medium">
             <span>Total</span>

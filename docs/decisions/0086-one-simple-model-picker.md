@@ -99,3 +99,13 @@ another screen does not stop them, and every screen that lists models reads its 
 holds the queue; `packages/ui/src/models/downloads.tsx`). The Models page, the model button and the web's "Get on the worker" use it alike.
 Not changed: the dialogs that ask a question (download, remove) are still dialogs; setup cards that sit inside a screen (3D, the speech
 runtime) were never blocking.
+
+## Amendment: files another tool already has are used, not downloaded (2026-11-04)
+
+A walk on an empty desktop data folder found the Model hub offering **Get (16 GB)** for FLUX.2 klein and LTX-Video while ComfyUI's
+models folder already held every file; only Advanced › Found on this computer offered "Use it". Now, when the discovery scan (ADR-0063)
+finds every missing file of a catalogue model in a folder the app can add, its row carries `foundIn` ("ComfyUI"), says **Found in ComfyUI**
+and offers **Use** with no question, since nothing is downloaded. Getting it adds that folder (one `discovery/use` per folder) and then runs
+only the steps still needed; if the image engine is missing, the usual dialog still asks for the engine and says the model is "found in
+ComfyUI, used where it is". The matching is by file name in `apps/desktop/src/choices/catalogue-choices.ts` (`foundFor`); a model with
+any file not found is offered as a download as before. Checked on a fresh engine: one Use made klein and LTX ready with nothing fetched.

@@ -369,6 +369,17 @@ async def test_a_failed_child_run_is_an_error_with_the_products_sentence():
     assert r.text == "The thing could not be made: It stopped."
 
 
+async def test_a_products_whole_sentence_gets_one_full_stop():
+    host = FakeActionHost()
+    host.script(
+        "wasifyai-demo",
+        [{"event": "error", "code": "models_missing", "message": "Get the model first."}],
+    )
+    ex, *_ = setup(act("demo.make", effect="make", bind=child()), host=host)
+    r = await run(ex, "demo.make", policy=ApprovalPolicy(make="auto"))
+    assert r.text == "The thing could not be made: Get the model first."
+
+
 async def test_an_output_the_action_does_not_document_is_an_error():
     host = FakeActionHost()
     host.script("wasifyai-demo", [{"event": "done", "outputs": {"status": "done", "thing_id": 7}}])

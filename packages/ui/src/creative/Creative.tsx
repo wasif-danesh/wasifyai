@@ -1,6 +1,6 @@
 "use client";
-// Creative Studio (ADR-0090): the projects, the brief of a new one, and one project's screen. At this stage a
-// project goes as far as a preview of its shots over the song; the Cut step comes in a later stage.
+// Creative Studio (ADR-0090): the projects, the brief of a new one, and one project's screen, which goes
+// from the plan through the shots to the cut and the exported video.
 import type { CreativeApi, CreativeBrief, CreativeProject } from "@wasifyai/client";
 import { Clapperboard, Plus, Trash2 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
@@ -146,8 +146,8 @@ export function Creative({
               <div className="grid gap-1.5">
                 <h1 className="m-0 font-semibold text-xl">Creative Studio</h1>
                 <p className="m-0 text-muted-foreground">
-                  Turn a song and an idea into a plan of shots, cut on the beat, that you can
-                  change, then see it as pictures over the song.
+                  Turn a song or a story into a plan of shots, cut on the beat, that you can change,
+                  then make the pictures and clips and export the finished video.
                 </p>
               </div>
               <Button type="button" onClick={() => setView({ at: "new" })}>

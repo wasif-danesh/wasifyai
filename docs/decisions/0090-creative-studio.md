@@ -553,6 +553,21 @@ again whenever its screen re-rendered), and a join under a second read "Joined i
 being made, so a song, a plan or stills show "Idle"; when the model gateway drops one request the chat model button reads "Select chat model" until it is opened
 again. Not run in the browser: motion clips and Sing.
 
+**The desktop screens checked in a browser (2026-11-04)**, from a fresh install: a throwaway desktop engine on its own data folder (the models, engine
+and components linked from the app's folder, its own ComfyUI folder), the desktop screens from Vite with a stand-in for the window's native layer,
+real models throughout. Not the Tauri window: the Save As box, files dropped from Finder and the window's own web view are not covered. A 30 s song made
+on the Music screen (ACE-Step); the chat model chosen from the model button (Qwen3 8B); FLUX.2 klein and LTX-Video taken from files ComfyUI already had
+(Model hub › Advanced › Found on this computer › Use it); planned in **19 s** (8 shots: 5 hold, 2 animate, 1 sing, the lyrics placed on their shots);
+**8 reference stills in 4 min 56 s** (estimate 5 to 6 minutes; the same face, hair, coat and earrings in all 8); **the 30 s motion draft in 6 min 17 s**
+(estimate 6 to 8 minutes; 7 clips of about 45 s and the sung shot in about 30 s); **the video at 1920x1080 in 4 s**, H.264 with the song in stereo AAC and
+the lyrics as captions at their sung times; Save a copy wrote it (to Downloads, as it does without the Save As box); Ask's "Make the first part calmer"
+made shot 2 hold (Plan 2, with Undo). Found and fixed: an error from a product that was already a sentence got a second full stop ("Get the model first.."),
+the Model hub's table kept "Not downloaded" after a found file was used until the page was read again, and the projects page still said a project ends
+as "pictures over the song". Seen, not changed: in a fresh install the Model hub's table offers **Get (16 GB)** for klein and LTX although the same files
+are found in ComfyUI's folder further down (only Advanced offers "Use it"); the plan writer wrote "eyes glowing with light" for the sung shot, and the
+still and its sung clip show glowing eyes (the picture checker of CS6 is for this); the engine needs a second, forced stop after a stop request (the window
+already ends it that way). Not run: Make it better at the final setting, the Voice and Titles tabs, a story project.
+
 ## Consequences
 
 * The video product's work changes from "one clip at a time" to "a project made of many shots", and the first time we keep a plan

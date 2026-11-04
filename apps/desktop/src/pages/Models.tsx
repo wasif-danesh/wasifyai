@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { ModelsHome } from "@wasifyai/ui";
+import { ModelsHome, useChoicesChanged } from "@wasifyai/ui";
 import { useState } from "react";
 import { ChatModel } from "../ChatModel";
 import { FoundModels } from "../FoundModels";
@@ -13,9 +13,14 @@ import { ModelsPanel } from "../ModelsPanel";
 export function ModelsPage() {
   // `#/models?tab=discover` opens Advanced (a link from an older screen)
   const open = window.location.hash.includes("tab=discover");
-  // using a found file or finishing a download changes the lists: they read again
+  // using a found file or finishing a download changes the lists: they read again, and so do the
+  // table above and every model button (a found klein stayed "Not downloaded" until a reload)
   const [version, setVersion] = useState(0);
-  const changed = () => setVersion((v) => v + 1);
+  const choicesChanged = useChoicesChanged();
+  const changed = () => {
+    setVersion((v) => v + 1);
+    choicesChanged();
+  };
   return (
     <div className="mx-auto w-full max-w-5xl px-8 pt-16 pb-12">
       <ModelsHome

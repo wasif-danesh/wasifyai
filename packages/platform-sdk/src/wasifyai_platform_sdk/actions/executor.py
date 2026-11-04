@@ -431,8 +431,10 @@ class ActionExecutor:
         """The outcome of a product run from its last event (`error` or `done`)."""
         noun = bind.noun
         if ev.get("event") == "error":
+            # a product's message is often a whole sentence already: one full stop, not two
+            reason = str(ev.get("message") or "it failed").rstrip().rstrip(".")
             return Outcome.error(
-                f"The {noun} could not be made: {ev.get('message', 'it failed')}.",
+                f"The {noun} could not be made: {reason}.",
                 str(ev.get("code") or "failed"),
             )
         outputs = ev.get("outputs") or {}

@@ -569,6 +569,13 @@ which adds the folder and downloads nothing (checked on an empty data folder: bo
 still and its sung clip show glowing eyes (the picture checker of CS6 is for this); the engine needs a second, forced stop after a stop request (the window
 already ends it that way). Not run: Make it better at the final setting, the Voice and Titles tabs, a story project.
 
+**Sharp clips by default (2026-11-05, owner).** The 2026-11-04 test video looked poor because its moving shots were draft
+clips (480x288, 15 steps) stretched to 1080p. LTX's final setting is much better at 2.5 to 3.4 minutes a clip, and Wan 2.2
+5B better still at about 25 minutes (`docs/spikes/video-wan22-w0.md`). The owner chose LTX's final setting as the default:
+the Motion panel opens on Make it better, a selected shot's Make a clip is final unless the draft is picked, and the Cut
+step says how many pieces still show a draft clip. The draft stays as a quick preview; the action's own default is
+unchanged.
+
 ## Consequences
 
 * The video product's work changes from "one clip at a time" to "a project made of many shots", and the first time we keep a plan

@@ -57,6 +57,8 @@ Each clip is 5 seconds (a shorter shot uses its start), becomes the shot's chose
 the cut use the clips. Before Start the panel says the stretch, how many clips, the time as a range and the disk; the time comes from CS0's figures until clips are made
 here, then from the last 12 at that setting, and while it runs the panel says the time left from the clips this run made. **Stop** keeps the clips; **Go on** makes only
 the shots with no up-to-date clip at that setting (a final clip counts for a draft). The Animate screen of Video has the same Final and Draft setting.
+**Make it better is what the panel opens on (2026-11-05):** a draft stretched to 1080p is soft (`docs/spikes/video-wan22-w0.md`), so the draft is a preview the
+person picks, and a selected shot's button makes a final clip unless the draft is picked. The Cut step says how many pieces still show a draft clip.
 
 
 ## Sing and stories (CS5)

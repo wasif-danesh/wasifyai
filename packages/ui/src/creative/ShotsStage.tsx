@@ -312,7 +312,8 @@ export function ShotsStage({
   const run = project.shots.run;
   const at = shots.findIndex((s) => s.id === selected);
   const current = at < 0 ? undefined : shots[at];
-  const [quality, setQuality] = useState<MotionQuality>("draft");
+  // sharp clips by default: a draft is soft at full size and only a preview of the motion (owner, 2026-11-05)
+  const [quality, setQuality] = useState<MotionQuality>("final");
   const someStills = project.shots.missing.length < shots.length;
   const left = timeLeft(project);
   return (

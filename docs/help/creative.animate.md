@@ -16,14 +16,15 @@ Animate at the final setting, sharp. Each clip is used for its shot, and the sti
 ## Steps in the app
 
 1. Open **Creative Studio**, open a project and go to **Shots**.
-2. Under **Motion**, choose where the 30 seconds start (the loudest part is chosen for you), then **Draft 30 seconds**.
-3. Watch them in the preview or the cut. Then choose **Make it better** for the shots marked Animate.
+2. Under **Motion**, choose **Make it better** (chosen for you) to make sharp clips of the shots marked Animate.
+3. For a quick, soft look at the motion first, choose **Draft 30 seconds** and where the 30 seconds start (the loudest
+   part is chosen for you). Draft clips are only a preview: the Cut step says when the video still uses any.
 4. To make one shot's clip, select the shot and choose **Make a clip**.
 
 ## Fields
 
 - `project_id`: The project.
-- `quality`: `draft` (the default) or `final`.
+- `quality`: `draft` (the default when an agent leaves it out) or `final` (what the screen offers first).
 - `start`: Draft only: where the 30 seconds start, in seconds. The loudest part when left out.
 - `shot_id`: Only this shot, made again even when it has a clip.
 

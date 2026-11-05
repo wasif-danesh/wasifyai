@@ -39,6 +39,18 @@ const SIZE = {
 
 type Chosen = { kind: "piece" | "caption"; id: string } | null;
 
+/** How many pieces of the cut show a draft clip: soft at full size, so the finished video should not use them. */
+export function draftPieces(project: CreativeProject, cut: CutState): number {
+  return cut.items.filter(
+    (p) =>
+      p.kind === "video" &&
+      p.shot_id !== null &&
+      (project.shots.takes[p.shot_id] ?? []).some(
+        (t) => t.item_id === p.item_id && t.kind === "video" && t.mode === "draft",
+      ),
+  ).length;
+}
+
 export function CutStage({
   api,
   project,
@@ -62,6 +74,7 @@ export function CutStage({
   const busy = project.shots_live || project.live;
   const made = cut.render;
   const { summary } = cut;
+  const drafts = draftPieces(project, cut);
   return (
     <div className="grid content-start gap-4">
       {making ? (
@@ -89,6 +102,15 @@ export function CutStage({
           }
         >
           The cut keeps its own pieces. Start again to take the plan's shots and times.
+        </Notice>
+      ) : null}
+      {drafts ? (
+        <Notice
+          tone="info"
+          title={`${drafts === 1 ? "1 piece uses a draft clip" : `${drafts} pieces use draft clips`}`}
+        >
+          Draft clips are soft at full size. On the Shots step, Make it better makes sharp clips of
+          the shots marked Animate, and Make a clip makes one for a single shot.
         </Notice>
       ) : null}
       {saved ? (

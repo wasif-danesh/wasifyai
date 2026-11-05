@@ -5,7 +5,7 @@ import type { CreativeApi, CreativeProject, CutState } from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChatScreenProps } from "../chat/ChatScreen";
 import { Creative } from "./Creative";
-import { lanesOf } from "./CutStage";
+import { draftPieces, lanesOf } from "./CutStage";
 
 // the chat has its own tests: here, what the screen gives it and does with what it reports
 let chat: ChatScreenProps;
@@ -583,22 +583,26 @@ describe("Creative Studio", () => {
     await user.click(await screen.findByRole("radio", { name: "Shots" }));
     const motion = await screen.findByRole("region", { name: "Motion" });
     expect(
-      await within(motion).findByText(
-        /0:00 to 0:06: 3 shots\. 2 clips to make, about 60 seconds to 2 minutes/,
-      ),
+      await within(motion).findByText(/marked Animate or Sing in the plan\. 2 clips to make/),
     ).toBeInTheDocument();
     expect(within(motion).getByText("Some shots have no still")).toBeInTheDocument();
-    await user.click(within(motion).getByRole("button", { name: "Draft 30 seconds" }));
-    expect(a.makeMotion).toHaveBeenCalledWith("p1", { quality: "draft", start: undefined });
-    await user.click(within(motion).getByRole("radio", { name: "Make it better" }));
-    await waitFor(() =>
-      expect(a.estimateMotion).toHaveBeenCalledWith("p1", { quality: "final", start: undefined }),
-    );
+    // sharp clips by default; the draft is a soft preview the person picks
+    expect(a.estimateMotion).toHaveBeenCalledWith("p1", { quality: "final", start: undefined });
     await user.click(within(motion).getByRole("button", { name: "Make it better" }));
     expect(a.makeMotion).toHaveBeenCalledWith("p1", { quality: "final", start: undefined });
     await user.click(screen.getByRole("button", { name: "Shot 1" }));
     await user.click(screen.getByRole("button", { name: "Make a clip" }));
     expect(a.makeMotion).toHaveBeenCalledWith("p1", { quality: "final", shot_id: "s0" });
+    await user.click(within(motion).getByRole("radio", { name: "Draft 30 seconds" }));
+    expect(
+      await within(motion).findByText(
+        /0:00 to 0:06: 3 shots\. 2 clips to make, about 60 seconds to 2 minutes/,
+      ),
+    ).toBeInTheDocument();
+    expect(a.estimateMotion).toHaveBeenCalledWith("p1", { quality: "draft", start: undefined });
+    await user.click(within(motion).getByRole("button", { name: "Draft 30 seconds" }));
+    expect(a.makeMotion).toHaveBeenCalledWith("p1", { quality: "draft", start: undefined });
+    expect(screen.getByRole("button", { name: "Make a draft clip" })).toBeInTheDocument();
   });
 
   it("will not animate without the video model, and shows clips and the time left while they are made", async () => {
@@ -624,7 +628,7 @@ describe("Creative Studio", () => {
     const { unmount } = render(<Creative api={blocked} songs={songs} open="p1" />);
     await user.click(await screen.findByRole("radio", { name: "Shots" }));
     expect(await screen.findByText("Get the video model first.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Draft 30 seconds" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Make it better" })).toBeDisabled();
     unmount();
 
     const clip = take("c", "vid-1", {
@@ -769,7 +773,28 @@ describe("Creative Studio", () => {
     expect(await within(motion).findByText(/2 clips to make \(1 sings\)/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Shot 1, sung clip" }));
     await user.click(screen.getByRole("button", { name: "Make it sing" }));
-    expect(a.makeMotion).toHaveBeenCalledWith("p1", { quality: "draft", shot_id: "s0" });
+    expect(a.makeMotion).toHaveBeenCalledWith("p1", { quality: "final", shot_id: "s0" });
+  });
+
+  it("counts the pieces of the cut that show a draft clip", () => {
+    const draft = take("d", "vid-0", { kind: "video" as const, mode: "draft" });
+    const sharp = take("f", "vid-1", { kind: "video" as const, mode: "final" });
+    const p = project({
+      shots: {
+        takes: { s0: [draft], s1: [sharp] },
+        missing: [],
+        out_of_date: [],
+        run: null,
+        preview: null,
+      },
+    });
+    const items = [
+      piece(0, { kind: "video", item_id: "vid-0" }),
+      piece(1, { kind: "video", item_id: "vid-1" }),
+      piece(2),
+    ];
+    expect(draftPieces(p, cutOf({ items }))).toBe(1);
+    expect(draftPieces(p, cutOf())).toBe(0);
   });
 
   it("offers people used before and keeps fixed words for objects", async () => {

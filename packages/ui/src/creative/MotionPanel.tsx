@@ -1,6 +1,6 @@
 "use client";
-// Motion on the Shots step (ADR-0090 decision 6, stage CS4): a quick draft of about 30 seconds first, then Make it better
-// for the shots the plan marks Animate. The panel says before Start which shots, how long and how much disk, and the time
+// Motion on the Shots step (ADR-0090 decision 6, stage CS4): Make it better, sharp clips for the shots the plan marks
+// Animate, is the default (owner, 2026-11-05); a quick draft of about 30 seconds is a soft preview of the motion. The panel says before Start which shots, how long and how much disk, and the time
 // is corrected by the clips made on this computer.
 import {
   type CreativeApi,
@@ -18,8 +18,8 @@ import { Spinner } from "../components/spinner";
 import { actions, hint, panel } from "../styles";
 
 const QUALITIES = [
-  { value: "draft", label: "Draft 30 seconds" },
   { value: "final", label: "Make it better" },
+  { value: "draft", label: "Draft 30 seconds" },
 ];
 const LOUDEST = "loudest";
 
@@ -130,7 +130,7 @@ export function MotionPanel({
           </p>
           <p className={`${hint} m-0`}>
             {quality === "draft"
-              ? "A draft is quick and soft, to see the motion first. "
+              ? "A draft is quick and soft: a preview of the motion, not for the finished video. "
               : "Make it better is sharp and takes about four times as long as a draft. "}
             Each clip is 5 seconds, is used for its shot, and goes into Your videos; the still stays
             as another version. A shot marked Sing is lip sync instead: its face sings its part of

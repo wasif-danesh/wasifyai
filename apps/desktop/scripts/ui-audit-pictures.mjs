@@ -485,6 +485,9 @@ for (const scheme of ["light", "dark"]) {
       await page.getByRole("radio", { name: "Shots" }).click();
       const motion = page.getByRole("region", { name: "Motion" });
       await motion.getByText(/clips? to make|They have their clips/).waitFor({ timeout: 30000 });
+      // Make it better is the default since 2026-11-05; the draft is picked
+      await motion.getByRole("radio", { name: "Draft 30 seconds" }).click();
+      await page.waitForTimeout(1500);
       seen.draftSays = await motion.locator("p").first().innerText();
       await shot(page, "creative-motion", 900);
       seen.axeMotion = await axe();

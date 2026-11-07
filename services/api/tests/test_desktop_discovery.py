@@ -195,6 +195,30 @@ def test_ollama_is_read_through_its_manifests(tmp_path):
     assert item.path == str(blob)
 
 
+def test_an_ollama_model_kept_under_a_hash_takes_the_name_it_came_from(tmp_path):
+    # an import leaves "llamacpp:<hash>", which the screen showed as "Unnamed model"
+    # (seen on the owner's Mac, 2026-11-07)
+    root = tmp_path / ".ollama" / "models"
+    gguf(root / "blobs" / "sha256-big", arch="gpt-oss", name="", ftype=15)
+    gguf(root / "blobs" / "sha256-own", arch="llama", name="My Llama", ftype=15)
+    library = root / "manifests" / "registry.ollama.ai" / "library" / "llamacpp"
+    library.mkdir(parents=True)
+    for digest, tag in (("big", "9ba9cc2b4e02463b933096090530aef679d534dd91ecc9af"),
+                        ("own", "0123456789abcdef0123456789abcdef01234567")):  # fmt: skip
+        (library / tag).write_text(json.dumps({"layers": [
+            {"mediaType": "application/vnd.ollama.image.model", "digest": f"sha256:{digest}"},
+            {"mediaType": "application/vnd.ollama.image.template", "digest": "sha256:t",
+             "from": "gpt-oss:20b"},
+        ]}))  # fmt: skip
+
+    names = {
+        Path(i.path).name: i.name
+        for i in scan_folders(tools_for(tmp_path), []).items
+        if i.tool == "ollama"
+    }
+    assert names == {"sha256-big": "gpt-oss:20b", "sha256-own": "My Llama"}
+
+
 def test_a_huggingface_repo_is_one_item_and_a_vocabulary_file_is_none(tmp_path):
     hub = tmp_path / ".cache" / "huggingface" / "hub"
     snap = hub / "models--org--flux-ish" / "snapshots" / "rev1"

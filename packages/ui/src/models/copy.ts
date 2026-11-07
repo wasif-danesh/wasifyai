@@ -87,6 +87,9 @@ export function hostOf(source: string | null | undefined): string | null {
   }
 }
 
+/** Pieces of a tag that are written in capitals ("gpt-oss" reads "GPT OSS"). */
+const ACRONYMS = new Set(["gpt", "oss", "llm", "vl"]);
+
 /**
  * A model's name as a person reads it (the UI plan's principle 5: never a raw tag). A tag from a local server
  * ("qwen3.8:27b-mlx") or a file name ("Qwen3-8B-Q4_K_M.gguf") becomes "Qwen3.8 27B (MLX)" or "Qwen3 8B (Q4_K_M)"; a
@@ -115,6 +118,7 @@ export function displayName(name: string): string {
       words.push(p.toUpperCase()); // 8B, E4B (Gemma), A3B
     else if (/^(q\d.*|fp\d+|bf16|int\d|mlx|gguf|it|instruct|qat|latest|awq|gptq)$/i.test(p))
       extra.push(p.toUpperCase());
+    else if (ACRONYMS.has(p.toLowerCase())) words.push(p.toUpperCase());
     else words.push(p.charAt(0).toUpperCase() + p.slice(1));
   }
   const tail = extra.filter((e) => e !== "LATEST" && e !== "GGUF").join(" ");

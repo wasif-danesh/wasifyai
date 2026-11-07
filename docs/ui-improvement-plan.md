@@ -22,8 +22,8 @@ built (U0 to U12, 2026-10-27 and 2026-10-28).
 4. **Experts' fields behind "For experts".** Speed, Seed, Tempo, Key, Takes and the like leave the first screen
    (ADR-0073's rule, applied to every tool).
 5. **One model control.** The top-bar button always names a real model (never a raw tag, never a hash) with a
-   readiness dot, or says what to do ("Choose a speech model"); the picker is a dialog that does not cover the
-   form; the first visit to a tool without a model shows one card with the recommended model, its size and one
+   readiness dot, or says what to do ("Choose a speech model"); the picker is a drop-down panel under the
+   button (a dialog from U3 until the owner asked for the drop-down back on 2026-11-07, ADR-0093 amendment); the first visit to a tool without a model shows one card with the recommended model, its size and one
    button (the ADR-0086 pattern, on every product).
 6. **One library.** My creations is the only place things live; every "Your …" page goes, every in-screen
    "Made before" list becomes the recent strip, and both read the same library filtered by kind. Every creation
@@ -145,7 +145,7 @@ its flow (say it, check the form, make it) and drops its own typeface and left c
 
 **Models and the picker.** Before: a table that clips its Use button and wraps the licence into four lines, a
 hash as a name, a popover over the form. After: the picker is a dialog (the ADR-0086 one) with the same rows as
-the Models page; the Models table gets a Name column with display names (a hash is a tooltip) and a
+the Models page (back to a drop-down panel on 2026-11-07, owner; ADR-0093 amendment); the Models table gets a Name column with display names (a hash is a tooltip) and a
 readiness dot that the bar button shares; Advanced stays as it is.
 
 **Settings.** Before: nine sections on one page, one Save button, native controls. After: grouped as General

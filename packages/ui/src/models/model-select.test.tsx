@@ -130,6 +130,20 @@ describe("the model picker button and panel", () => {
     expect(within(row).getByText(/Too big for this computer/)).toBeInTheDocument();
   });
 
+  it("drops down under its button, not as a dialog over the window, and Escape closes it", async () => {
+    const user = userEvent.setup();
+    render(<ModelSelect group="images" api={fake([choice({ state: "ready" })])} />);
+    const button = await screen.findByRole("button", { name: /Select image model/ });
+    await user.click(button);
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    const panel = await screen.findByRole("dialog", { name: /Select image model/ });
+    expect(panel.tagName).not.toBe("DIALOG"); // not the browser's modal box
+    expect(panel.querySelector("h2")).toBeNull(); // no title: the button already says what it is
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(button).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("can be opened by the screen, for the main button pressed with no model", async () => {
     const handle = createRef<ModelSelectHandle>();
     render(<ModelSelect group="music" api={fake([choice()])} handleRef={handle} />);
@@ -200,11 +214,12 @@ describe("choosing a model that is not on the computer", () => {
     expect(within(dialog).queryByText(/commercial|licence/i)).toBeNull();
     expect(api.get).not.toHaveBeenCalled(); // nothing yet
     await user.click(within(dialog).getByRole("button", { name: "Not now" }));
-    // the question closes; the picker, a dialog of its own since stage U3, stays open
+    // the question closes, and so did the drop-down panel under it: open it again to say yes
     expect(api.get).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog", { name: "Download FLUX.2 klein 4B?" })).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: /FLUX.2 klein 4B/ }));
+    await user.click(screen.getByRole("button", { name: /Select image model/ }));
+    await user.click(await screen.findByRole("button", { name: /FLUX.2 klein 4B/ }));
     await user.click(screen.getByRole("button", { name: "Download and use" }));
     await waitFor(() =>
       expect(api.get).toHaveBeenCalledWith("f", expect.any(Function), expect.any(AbortSignal)),

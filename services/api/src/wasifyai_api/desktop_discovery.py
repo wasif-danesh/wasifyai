@@ -497,6 +497,22 @@ def _scan_files_layout(root: Path, tool: Tool, budget: Budget) -> list[Found]:
     return out
 
 
+_HASH_TAG = re.compile(r"[0-9a-f]{24,}", re.IGNORECASE)
+
+
+def _ollama_hash_name(doc: dict[str, Any], h: Header) -> str:
+    """A name for a model Ollama keeps under a hash ("llamacpp:9ba9cc2b…", made by an import):
+    the file's own name, else the model its other layers came from ("gpt-oss:20b"), else nothing
+    (the screen then says Unnamed model)."""
+    if h.name.strip():
+        return h.name.strip()
+    for layer in doc.get("layers", []):
+        base = str(layer.get("from") or "").strip() if isinstance(layer, dict) else ""
+        if base and not _HASH_TAG.search(base):
+            return base
+    return ""
+
+
 def _scan_ollama(root: Path, tool: Tool, budget: Budget) -> list[Found]:
     manifests = root / "manifests"
     out: list[Found] = []
@@ -520,6 +536,8 @@ def _scan_ollama(root: Path, tool: Tool, budget: Budget) -> list[Found]:
             continue
         name = "/".join(parts[1:-1]).removeprefix("library/") + f":{parts[-1]}"
         h = read_gguf(blob) or Header()
+        if _HASH_TAG.search(name):
+            name = _ollama_hash_name(doc, h) or name
         size = _size(blob)
         if h.tensors == 0 or size < MIN_BYTES:
             continue

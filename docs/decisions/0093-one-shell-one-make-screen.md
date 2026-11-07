@@ -32,7 +32,7 @@ The owner is not happy with the look and feel or the flows, and wants the app ad
 3. **One word for the main action, "make"**, and one set of nouns (picture, video, speech, song, voice,
    recording, notebook, model), kept in one file that every screen imports and a test checks.
 4. **One model control:** the top-bar button names a real model by its display name (never a raw tag or a
-   hash) with a readiness dot, or says "Choose a … model"; the picker is a dialog that does not cover the form; a
+   hash) with a readiness dot, or says "Choose a … model"; the picker is a drop-down panel under the button (amended 2026-11-07, see below); a
    tool's first visit without a model shows the ADR-0086 card. The "Model for …" placeholder goes.
 5. **One library:** My creations is the only library; the per-product "Your …" pages go; every creation opens to
    a detail view with its recipe, actions and what was made from it; make screens show a recent strip read from
@@ -72,3 +72,13 @@ owner approves (owner, 2026-10-29). The accessibility checker was accepted (owne
 without groups was tried and decided against (2026-10-28). The per-product libraries go (owner, 2026-10-28):
 decision 5 above stands as written. The web's Explore page stays as a marketing page outside the app, and the chat
 box has three pills and a "+" menu (owner, 2026-10-28).
+
+## Amendment (2026-11-07, owner): the picker drops down again
+
+The owner found the picker as a dialog in the middle of the window (stage U3) harder to use than the drop-down
+panel it replaced, and asked for the drop-down back across the app. `ModelSelect` now opens a panel under its
+button (Radix Popover from the `radix-ui` package the UI already uses: no new dependency). It turns upward or
+sideways when there is no room, scrolls inside itself, and closes on Escape, a click outside or a choice. The rows,
+tabs and words are unchanged. The download question (`GetModelDialog`) stays a dialog, and the panel closes when
+it opens. The old panel's fault, which was why U3 made it a dialog (it was clipped by its box and covered the
+form), is handled by the portal and the collision padding: the panel is drawn above the page, not inside the box.

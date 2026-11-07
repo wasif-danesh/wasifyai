@@ -8,6 +8,7 @@ describe("displayName", () => {
     ["Qwen3-8B-Q4_K_M.gguf", "Qwen3 8B (Q4_K_M)"],
     ["qwen3:latest", "Qwen3"],
     ["gemma4:e4b", "Gemma4 E4B"],
+    ["gpt-oss:20b", "GPT OSS 20B"],
     ["mlx-community/Qwen3-30B-A3B-4bit", "Qwen3 30B A3B 4bit"],
     ["FLUX.2 klein 4B", "FLUX.2 klein 4B"],
     ["llamacpp:9ba9cc2b4e02463b933096090530aef679d534dd91ecc9afadfb2dbfdc59f3c5", "Unnamed model"],

@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown, Download, Eye } from "lucide-react";
+import { Popover as PopoverPrimitive } from "radix-ui";
 import { type Ref, useEffect, useId, useImperativeHandle, useRef, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
@@ -61,7 +62,7 @@ function stateLine(c: ModelChoice): string {
 type Tab = "recommended" | "device" | "more";
 
 /**
- * "Select image model": the same button and panel for every group (ADR-0086). Choosing a model that is on the
+ * "Select image model": the same button and drop-down panel for every group (ADR-0086). Choosing a model that is on the
  * computer uses it; choosing one that is not opens a dialog that says what will be downloaded and, on a yes,
  * downloads it and uses it. The window supplies the rows and the work through `api`.
  */
@@ -91,7 +92,6 @@ export function ModelSelect({
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("recommended");
   const [asking, setAsking] = useState<ModelChoice | null>(null);
-  const root = useRef<HTMLDivElement>(null);
   const rows = useRef<ModelChoice[]>([]);
   rows.current = m.list?.choices ?? [];
   useImperativeHandle(
@@ -141,6 +141,8 @@ export function ModelSelect({
       // its files are already on the computer: nothing to download, so nothing to ask
       download(c);
     } else if (c.state === "needs_download") {
+      // the question is a dialog of its own; the panel closes under it
+      setOpen(false);
       setAsking(c);
     }
   }
@@ -157,37 +159,39 @@ export function ModelSelect({
   }
 
   return (
-    <div ref={root} className={cn("relative inline-block max-w-full min-w-0", className)}>
-      <Button
-        type="button"
-        variant="outline"
-        className="max-w-full"
-        disabled={disabled || !api}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-controls={`${id}-panel`}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <ReadyDot state={getting ? "getting" : chosen ? "ready" : "none"} />
-        <span className="min-w-0 max-w-[16rem] truncate">{label}</span>
-        {getting ? (
-          <span className="text-muted-foreground text-xs">
-            {getting.progress.fraction === null
-              ? "Downloading…"
-              : `Downloading ${Math.round(getting.progress.fraction * 100)}%`}
-          </span>
-        ) : chosen ? null : (
-          <span className="sr-only"> (no model chosen)</span>
-        )}
-        <ChevronDown className="size-4" aria-hidden="true" />
-      </Button>
-
-      {open ? (
-        // a dialog in the middle of the window (stage U3 of the UI plan), never a panel over the form
-        <Modal label={g.select} onClose={() => setOpen(false)}>
-          <div
+    <div className={cn("relative inline-block max-w-full min-w-0", className)}>
+      <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+        <PopoverPrimitive.Trigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className="max-w-full"
+            disabled={disabled || !api}
+          >
+            <ReadyDot state={getting ? "getting" : chosen ? "ready" : "none"} />
+            <span className="min-w-0 max-w-[16rem] truncate">{label}</span>
+            {getting ? (
+              <span className="text-muted-foreground text-xs">
+                {getting.progress.fraction === null
+                  ? "Downloading…"
+                  : `Downloading ${Math.round(getting.progress.fraction * 100)}%`}
+              </span>
+            ) : chosen ? null : (
+              <span className="sr-only"> (no model chosen)</span>
+            )}
+            <ChevronDown className="size-4" aria-hidden="true" />
+          </Button>
+        </PopoverPrimitive.Trigger>
+        <PopoverPrimitive.Portal>
+          {/* a drop-down panel under the button (owner, 2026-11-07: the dialog of stage U3 is gone); it turns
+              upward or sideways when there is no room, and Escape or a click outside closes it */}
+          <PopoverPrimitive.Content
             id={`${id}-panel`}
-            className="grid max-h-[70vh] grid-cols-[minmax(0,1fr)] content-start gap-3 overflow-y-auto"
+            aria-label={g.select}
+            align="start"
+            sideOffset={6}
+            collisionPadding={16}
+            className="z-50 grid max-h-[min(34rem,var(--radix-popover-content-available-height))] w-[min(26rem,calc(100vw-2rem))] grid-cols-[minmax(0,1fr)] content-start gap-3 overflow-y-auto rounded-xl border bg-popover p-3 text-popover-foreground shadow-card"
           >
             <div
               role="tablist"
@@ -287,9 +291,9 @@ export function ModelSelect({
             </ul>
 
             {tab === "more" && api?.more ? <div className="grid gap-2">{api.more}</div> : null}
-          </div>
-        </Modal>
-      ) : null}
+          </PopoverPrimitive.Content>
+        </PopoverPrimitive.Portal>
+      </PopoverPrimitive.Root>
 
       {asking ? (
         <GetModelDialog

@@ -52,13 +52,13 @@ def test_a_base_that_does_not_fit_or_is_not_set_up_says_so():
 def test_a_run_with_no_choice_uses_the_recommendation_and_records_it(rig):
     ds = ready_dataset(rig, pictures=8)
     run = rig.post(f"{BASE}/runs", json={"dataset_id": ds["id"]}).json()
-    assert run["settings"]["method"] == "lora" and run["settings"]["engine"] == "mflux"
+    assert run["settings"]["method"] == "lora" and run["settings"]["engine"] == "ai-toolkit"
     assert run["base"] == trainer.BASE
     row = done(rig, run["id"])
     assert row["status"] == "done"
     model = rig.get(f"{BASE}/models/{row['model_id']}").json()
     assert model["card"]["settings"]["method"] == "lora"
-    assert model["card"]["settings"]["engine"] == "mflux"
+    assert model["card"]["settings"]["engine"] == "ai-toolkit"
 
 
 def test_a_choice_that_cannot_be_used_is_refused_with_the_reason(rig):
@@ -74,6 +74,37 @@ def test_a_choice_that_cannot_be_used_is_refused_with_the_reason(rig):
         assert words in str(refused.json()), body
     # the refusals left nothing running
     assert rig.get(f"{BASE}/status").json()["busy"] is False
+
+
+def test_a_second_picture_model_is_taught_with_its_own_recipe_and_named_on_the_card(
+    rig, monkeypatch
+):
+    # ADR-0073, amendment 2026-11-07: the chosen model is the one taught, never the trainer's own
+    from dataclasses import replace
+
+    from wasifyai_training import picture_bases
+
+    other = replace(
+        picture_bases.KLEIN_4B,
+        id="flux2-klein-9b",
+        title="FLUX.2 klein 9B",
+        presets={"character": 300, "style": 300, "object": 300},
+        sides={"character": 640, "style": 640, "object": 640},
+    )
+    monkeypatch.setitem(picture_bases.PICTURE_BASES, other.id, other)
+    monkeypatch.setattr(
+        bases,
+        "DESCRIPTORS",
+        (*bases.DESCRIPTORS, replace(bases.DESCRIPTORS[0], id=other.id, title=other.title)),
+    )
+    ds = ready_dataset(rig, pictures=8)
+    run = rig.post(f"{BASE}/runs", json={"dataset_id": ds["id"], "base": other.id}).json()
+    assert run["base"] == other.id
+    assert run["steps"] == 300 and run["settings"]["side"] == 640
+    row = done(rig, run["id"])
+    model = rig.get(f"{BASE}/models/{row['model_id']}").json()
+    assert model["base"] == other.id
+    assert model["card"]["base_title"] == "FLUX.2 klein 9B"
 
 
 def test_the_recommended_choice_can_be_named_outright(rig):

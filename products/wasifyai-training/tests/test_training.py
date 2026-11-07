@@ -34,8 +34,8 @@ def test_the_status_says_it_is_a_preview_and_what_a_run_asks_for(rig):
     s = rig.get(f"{BASE}/status").json()
     assert s["ready"] is True and s["preview"] is True and s["place"] == "device"
     assert s["min_pictures"] == 8 and set(s["kinds"]) == {"character", "style", "object"}
-    assert s["estimates"]["character"] == "About 20 minutes"  # 200 steps at 6 s (512 pixels)
-    assert s["estimates"]["style"] == "About 42 minutes"  # 250 steps at 10 s (768 pixels)
+    assert s["estimates"]["character"] == "About 16 minutes"  # 200 steps at 4.9 s (512 pixels)
+    assert s["estimates"]["style"] == "About 20 minutes"  # 250 steps at 4.9 s
     assert s["steps"] == {"character": 200, "style": 250, "object": 150}
 
 
@@ -186,7 +186,7 @@ def test_a_run_goes_through_its_steps_and_leaves_a_model_with_its_card(rig):
     assert started.status_code == 202, started.text
     run = started.json()
     assert run["status"] == "working" and run["steps"] == 200 and run["preview"] is True
-    assert run["estimate"] == "About 20 minutes"
+    assert run["estimate"] == "About 16 minutes"
     assert rig.post(f"{BASE}/runs", json={"dataset_id": ds["id"]}).json()["detail"]["code"] in (
         "busy",
         "not_ready_to_train",
@@ -306,16 +306,16 @@ def test_the_steps_follow_the_number_of_pictures_between_the_preset_and_a_ceilin
     assert trainer.steps_for("character", 37) == 500  # 518 would be 14 passes: the ceiling
     assert trainer.steps_for("character", 80) == 500
     assert trainer.steps_for("style", 15) == 250 and trainer.steps_for("object", 8) == 150
-    # a character is taught at 512 pixels (6 s a step), the others at 768 (10 s a step)
-    assert trainer.side_for("character") == 512 and trainer.side_for("style") == 768
-    assert trainer.estimate_words(500, "character") == "About 50 minutes"
-    assert trainer.estimate_words(500, "object") == "About 83 minutes"
+    # every kind is taught at 512 pixels, 4.9 s a step as AI Toolkit measured on this Mac
+    assert trainer.side_for("character") == 512 and trainer.side_for("style") == 512
+    assert trainer.estimate_words(500, "character") == "About 41 minutes"
+    assert trainer.estimate_words(500, "object") == "About 41 minutes"
 
 
 def test_a_set_says_what_teaching_it_would_take_and_the_run_keeps_the_side(rig):
     ds = ready_dataset(rig, pictures=8)
     got = rig.get(f"{BASE}/datasets/{ds['id']}").json()
-    assert got["steps"] == 200 and got["estimate"] == "About 20 minutes"
+    assert got["steps"] == 200 and got["estimate"] == "About 16 minutes"
     run = rig.post(f"{BASE}/runs", json={"dataset_id": ds["id"]}).json()
     assert run["steps"] == 200 and run["settings"]["side"] == 512
 
@@ -327,7 +327,7 @@ def test_a_runs_kind_is_found_from_the_start_of_its_id(tmp_path):
     store = TrainingStore.in_folder(tmp_path)
     store.add_model(
         "t1", "u1", run_id="b37ba287f9604199b22047e56ad709ce", dataset_id=None, name="Ena",
-        trigger_word="gabrin", kind="character", base="flux2-klein-base-4b", card={},
+        trigger_word="gabrin", kind="character", base="flux2-klein-4b", card={},
         preview=False, adapter_bytes=1,
     )  # fmt: skip
     assert store.taught_in_run("b37ba287") == {"kind": "character", "word": "gabrin"}

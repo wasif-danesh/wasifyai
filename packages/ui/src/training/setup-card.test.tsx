@@ -19,7 +19,7 @@ const STATUS = {
   min_pictures: 8,
   max_pictures: 100,
   kinds: ["character", "style", "object"],
-  base: "flux2-klein-base-4b",
+  base: "flux2-klein-4b",
   steps: { character: 200, style: 250, object: 150 },
   estimates: { character: "", style: "", object: "" },
 } as unknown as TrainStatus;
@@ -35,14 +35,14 @@ const OFFER: TrainingSetupState = {
     needs_free_bytes: 20_300_000_000,
     parts: [
       {
-        name: "Trainer (mflux)",
+        name: "Trainer (AI Toolkit)",
         version: "0.22.0",
         bytes: 1_100_000_000,
         have: false,
         source: "pypi.org",
       },
       {
-        name: "FLUX.2 klein base 4B",
+        name: "FLUX.2 klein 4B text encoder settings",
         version: "the picture model it learns on",
         bytes: 15_980_000_000,
         have: false,
@@ -75,7 +75,7 @@ describe("Set up training", () => {
       await screen.findByRole("button", { name: "Set up: Make my own character or style" }),
     );
     expect(await screen.findByText("Set up training")).toBeTruthy();
-    expect(screen.getByText("Trainer (mflux)")).toBeTruthy();
+    expect(screen.getByText("Trainer (AI Toolkit)")).toBeTruthy();
     expect(screen.getAllByText(/· from pypi\.org/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/· from huggingface\.co/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/MIT|Apache/)).toBeNull();

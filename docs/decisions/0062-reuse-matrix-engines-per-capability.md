@@ -1,6 +1,8 @@
 # ADR-0062: Reuse matrix: which engine and which Unsloth parts, per capability
 
 - **Status:** Accepted (2026-10-15)
+- **Superseded in part:** by the ADR-0073 amendment of 2026-11-07 (owner): the picture trainer is AI Toolkit on
+  every platform, not mflux.
 - **Date:** 2026-10-15
 - **Depends on:** ADR-0056 (one engine, two shells), ADR-0059 (image engine), ADR-0060 (documents), ADR-0061
   (how Unsloth code enters). Evidence: `docs/spikes/unsloth-phase0.md`.

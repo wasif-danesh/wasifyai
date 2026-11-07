@@ -75,7 +75,7 @@ bring **a folder of photos, a spreadsheet, or some chats**, and want a result.
    |---|---|---|
    | Language model | Unsloth component, MLX backend (QLoRA default) | Unsloth component, CUDA |
    | Decision model (sorter) | Unsloth component; Laya on the Mac to be measured | Unsloth component (Laya, Clef, LLM head) |
-   | Image LoRA | **mflux** (our measured path) | Unsloth diffusion trainer; **AI Toolkit** as an alternative engine if the spike finds a family it does better |
+   | Image LoRA | **AI Toolkit** (amendment 2026-11-07; was mflux) | **AI Toolkit**, the same trainer (amendment 2026-11-07) |
 
 4. **Three tiers for where it runs, chosen by the person, never silently:** **this computer** (nothing leaves),
    **my other machine** (the runner of ADR-0058: an NVIDIA box under the desk), **a rented GPU** (the person's own
@@ -566,7 +566,65 @@ computer is chosen like the others and **Get it** with its size appears under th
 the method and is called **How to teach it**. Nothing on the engine changed: the choice is the same `base` it was.
 
 Still one model for pictures (FLUX.2 klein base 4B) and one for video (LTX-Video 2B 0.9.5), so those lists hold one
-row each. A second picture model needs the hard-coded klein names in the trainers (`trainer.py`, `bases.py`,
-`desktop_training.py`, `remote_train.py`, `comfy_lora.py`) to come from the descriptor first, and the owner's yes to
-the model and its download.
+row each.
 
+**The picture trainer takes the chosen model (same day, owner: "Yes, start it").** Everything that differs from one
+picture model to the next is in one recipe per model, `wasifyai_training/picture_bases.py`: the name `mflux-train`
+knows it by, the layers taught, the picture size, the steps, the measured seconds a step and memory, the learning
+rate, the converter to ComfyUI's names (`comfy_lora.CONVERTERS`) and the Create model it is used with. The picture
+rows of the descriptors are made from the recipes. A run records the chosen base (before, the trainer's own fixed
+base was recorded over it, so a choice would have been ignored), its steps and side come from that recipe, the job
+carries it to the trainer on the desktop and on a web worker, and publishing converts by it; a base with no recipe or
+no converter is refused in words. The trainer's set-up still pins one model's files (`trainer-pictures` in the
+component manifests), so `find_base` finds only that one. Only klein base 4B has a recipe: a second model (klein base
+9B is the natural next one, same layout) needs its recipe measured on this computer, its pins and download, and the
+Images screens to run its distilled twin, and the owner's yes to the model and the download.
+
+
+## Amendment (2026-11-07, owner): the picture trainer is AI Toolkit, on every platform
+
+The owner: "Faster solution was never my target. My aim was cross platform support", and AI Toolkit was already
+proven on this Mac by the owner's character-lora project. mflux runs on MLX, so only on a Mac with Apple silicon;
+choosing it (ADR-0054, ADR-0062, decision 3 above) put "measured here" and speed before that aim. **The picture
+trainer is now AI Toolkit (Ostris) everywhere, and mflux is removed** (its lock, `scripts/lock-trainer.sh`, its
+converter and its set-up). Decision 3's table changes for image LoRA: AI Toolkit on Apple silicon (PyTorch on the
+graphics chip) and on NVIDIA (CUDA), on Windows and Linux too.
+
+- **Set-up** (`training_setup.PictureSetup`, part `trainer-pictures`, the same pins on every platform): AI Toolkit's
+  source as one pinned archive (commit `f7a1fb9a`, version 0.13.25, the one character-lora used; size and SHA-256),
+  then **AI Toolkit's own manager** makes its environment (`training_aitk_install.py`: the manager picks PyTorch with
+  MPS on a Mac, the CUDA build that matches the card elsewhere, and FFmpeg; its web UI is not set up). This replaces
+  our hashed lock for this trainer: per-platform CUDA locks would duplicate what the manager already does. Only the
+  text encoder's small files (settings and tokenizer, 16 MB) are fetched by the app; a Hugging Face cache that holds
+  them is used where it is.
+- **The model is the image model's own files**, the ones Create uses (FLUX.2 klein 4B: `flux-2-klein-4b`,
+  `qwen_3_4b`, `flux2-vae`), found where the Models screen keeps them, ComfyUI-Shared included. Nothing big is
+  downloaded for training; if the model is missing the card says to get it from Select image model. The base recipe
+  id is now `flux2-klein-4b`; the old id `flux2-klein-base-4b` still finds its recipe for older runs.
+- **Correction.** The 2026-10-25 note above says the character-lora run trained `flux-2-klein-base-4b`. It did not:
+  that name was a link to ComfyUI's `flux-2-klein-4b.safetensors`, whose SHA-256 (`ec3d4e73…`) is the **distilled**
+  FLUX.2 klein 4B (black-forest-labs/FLUX.2-klein-4B), not the base. So the proven run, which drew Ena well in
+  Create, taught the distilled model directly, and that is what the app now does (it also avoids the "a look taught
+  on base does not show on the distilled model" finding of `docs/spikes/train-distilled.md`).
+- **The run** (`desktop_training.AiToolkitTrainer`): a JSON config (`run.py train.json`, rank 16, 8-bit `convrot8`
+  quantisation, a checkpoint every 25 steps with the newest two kept, sample pictures a quarter of the way through);
+  progress from AI Toolkit's bar; its samples become the run's `step-NNNN-K.png`; pause stops the process tree
+  (`taskkill /T` on Windows) and a picked-up run gives AI Toolkit the same config, which goes on from its newest
+  checkpoint. AI Toolkit writes ComfyUI's key names already, so `comfy_lora` now only checks and copies.
+- **Measured through the app on this Mac (2026-11-07):** 30 steps on 8 Ena pictures at 512 px, 4.3 s a step of
+  learning, 413 s in all with the load and ten samples; peak memory 39.7 GB (the recipe's need is now 40 GB). The
+  adapter (46 MB) was published to a `loras` folder. Thirty steps is too few to change the samples; likeness rests
+  on the 500-step character-lora run. All kinds are taught at 512 px, 4.9 s a step (that run's average).
+- **The text encoder.** AI Toolkit's klein models ignore the config's `te_name_or_path` and always ask the Hub for
+  `Qwen/Qwen3-4B` (at the pinned commit and on main of 2026-11-04). character-lora's checkout carried a five-line edit
+  that made klein read the folder it was given, which is why the run above worked. The app does not change AI
+  Toolkit's files: it starts `run.py` through `training_aitk_run.py` (run as `python -P`), which points klein at the
+  run's text encoder folder (ComfyUI's `qwen_3_4b` with the small settings and tokenizer files) and then runs
+  `run.py`. No second 8 GB copy of the text encoder is downloaded.
+- **A fresh install through the app's set-up (2026-11-07):** `PictureSetup` into an empty data folder was ready in
+  28 s with a warm uv cache (the environment 1.4 GB, FFmpeg 126 MB, PyTorch 2.13.0 with MPS); a 6-step run on it
+  through the app, with AI Toolkit's files as downloaded, took 311 s, peaked at 39.7 GB and published a 46 MB adapter.
+- **Not verified:** a run on Windows or Linux with an NVIDIA card (no such machine here), a fresh install with an
+  empty uv cache (how long the PyTorch download takes), style and object runs with AI Toolkit, and the web worker on
+  a CUDA host. The old mflux component folder (`components/mflux`, about 8 GB) is no
+  longer used and can be removed from the computer.

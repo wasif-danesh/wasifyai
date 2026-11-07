@@ -1,24 +1,27 @@
-"""Setting up the picture trainer (ADR-0073): mflux in an environment of its own, and the model it
-teaches, under `<app data>/components/mflux/`. Nothing is fetched before the person has seen what it
-is and how large, and has agreed.
+"""Setting up the trainers (ADR-0073): the shared machinery, and the picture trainer itself.
 
-Steps, the same shape as the other components, checked at the end:
+`TrainingSetup` is what every trainer's setup shares (the writing, decision and video trainers and
+the song analysis are its kin): nothing is fetched before the person has seen what it is and how
+large, and has agreed; a hashed lock makes the environment; each model file has a pinned size and
+SHA-256 (its part of `components/manifests/<platform>.yaml`), fetched by the resumable downloader
+the Models screen uses; a check runs at the end, and only then `installed.json` is written.
+
+`PictureSetup` sets up the picture trainer, AI Toolkit (Ostris), under
+`<app data>/components/ai-toolkit/` (ADR-0073, amendment 2026-11-07: the owner's aim is that
+teaching works on every platform). Steps:
 
     1 disk         enough free space, said before anything is downloaded
-    2 environment  `uv venv` from the engine's own interpreter (no download)
-    3 packages     `uv pip install --require-hashes -r <the lock>` (the lock is committed:
-                   `scripts/lock-trainer.sh`); the exact versions the real runs were made with
-    4 model        the base model's files, each with a pinned size and SHA-256, through the same
-                   resumable downloader the Models screen uses (its part of the component
-                   manifests, `components/manifests/<platform>.yaml`)
-    5 check        the tool starts and every model file is there; only then `installed.json`
+    2 environment  AI Toolkit's source, a pinned archive of one commit (size and SHA-256)
+    3 packages     AI Toolkit's own manager makes its environment (`training_aitk_install`):
+                   PyTorch for the graphics chip of a Mac with Apple silicon, or the CUDA
+                   build for an NVIDIA card on Windows and Linux, and FFmpeg
+    4 model        the small files of the text encoder (its settings and tokenizer)
+    5 check        PyTorch starts in that environment; only then `installed.json`
 
-A failed install removes the environment it made, but keeps the model files that arrived: a new
-start continues where it stopped. Where mflux and the model are already on the computer (a copy
-named by `WASIFYAI_MFLUX_DIR`, a Hugging Face cache that holds the base
-model) they are used where they are and nothing is offered.
-
-mflux runs on MLX: Apple silicon only. Elsewhere the setup says so and offers nothing.
+The big files are **not** fetched here: they are the image model's own (FLUX.2 klein 4B), the ones
+Create uses, found where the Models screen keeps them. If they are not on this computer the setup
+says so and where to get them. A copy of AI Toolkit already set up (named by
+`WASIFYAI_AI_TOOLKIT_DIR`) is used where it is and nothing is offered for it.
 """
 
 import asyncio
@@ -29,6 +32,7 @@ import os
 import platform
 import shutil
 import sys
+import tarfile
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -52,18 +56,26 @@ from wasifyai_api.services import services_of
 log = logging.getLogger(__name__)
 
 PART = "trainer-pictures"  # its pins in the component manifests
-LOCK_NAME = "requirements-aarch64-apple-darwin.lock"
 STATE_FILE = "installed.json"
-EXECUTABLE = "mflux-train"
 MIN_FREE_BYTES = 3 * 1024**3  # room to work in, besides what is downloaded
 HUB = "https://huggingface.co"
+COMPONENT = "ai-toolkit"
+CHECKOUT = "ai-toolkit"  # AI Toolkit's own folder inside the component's
+INSTALL_SCRIPT = Path(__file__).with_name("training_aitk_install.py")
 
 STEPS = ("disk", "environment", "packages", "model", "check")
 STEP_TEXT = {
     "disk": "Checking free space",
     "environment": "Preparing the trainer's environment",
-    "packages": "Installing the trainer's packages (about 1 GB)",
-    "model": "Getting the picture model",
+    "packages": "Installing the trainer's packages",
+    "model": "Getting the model's small files",
+    "check": "Checking that it starts",
+}
+PICTURE_STEP_TEXT = {
+    "disk": "Checking free space",
+    "environment": "Getting AI Toolkit",
+    "packages": "Installing the trainer's packages (PyTorch and the rest, a few GB)",
+    "model": "Getting the text encoder's settings",
     "check": "Checking that it starts",
 }
 
@@ -74,6 +86,17 @@ InstallError = installer.InstallError
 
 def apple_silicon() -> bool:
     return sys.platform == "darwin" and platform.machine() == "arm64"
+
+
+def nvidia_gpu() -> bool:
+    """An NVIDIA graphics card with its driver: the driver brings `nvidia-smi`."""
+    return shutil.which("nvidia-smi") is not None
+
+
+def picture_supported() -> bool:
+    """Where AI Toolkit can teach a picture model: a Mac with Apple silicon, or Windows or Linux
+    with an NVIDIA graphics card."""
+    return apple_silicon() or (sys.platform in ("win32", "linux") and nvidia_gpu())
 
 
 # ---- the pins ------------------------------------------------------------------------------------
@@ -99,6 +122,14 @@ class Pins:
     digest: str  # of the pins: what an install records, so a changed pin asks for a new one
 
     legacy: str | None = None  # what installs made before the pins moved to the manifests recorded
+    tool_url: str = (
+        ""  # a tool fetched as one archive (AI Toolkit's source), with its size and hash
+    )
+    tool_size: int = 0
+    tool_sha256: str = ""
+    model: str = (
+        ""  # the image model whose files are taught (its catalogue id), when not fetched here
+    )
 
     def made_from(self, recorded: object) -> bool:
         """Whether an install's record was made from these pins."""
@@ -130,6 +161,10 @@ def load_pins(path: Path | None = None, part: str = PART) -> Pins:
         base_files=tuple(files),
         digest=pins_digest(raw),
         legacy=legacy_digest(raw),
+        tool_url=str(tool.get("url") or ""),
+        tool_size=int(tool.get("size") or 0),
+        tool_sha256=str(tool.get("sha256") or "").lower(),
+        model=str(base.get("model") or ""),
     )
 
 
@@ -137,31 +172,40 @@ def load_pins(path: Path | None = None, part: str = PART) -> Pins:
 
 
 def component_root(data_dir: Path) -> Path:
-    return data_dir / "components" / "mflux"
+    return data_dir / "components" / COMPONENT
+
+
+def venv_python(checkout: Path) -> Path:
+    """The Python of AI Toolkit's environment, as its manager makes it (`.venv`, or `venv`)."""
+    tail = Path("Scripts/python.exe") if sys.platform == "win32" else Path("bin/python")
+    for name in (".venv", "venv"):
+        if (checkout / name / tail).is_file():
+            return checkout / name / tail
+    return checkout / ".venv" / tail
 
 
 def _tool_in(home: Path) -> bool:
-    return (home / "bin" / EXECUTABLE).is_file()
+    return (home / "run.py").is_file() and venv_python(home).is_file()
 
 
 def managed_tool(data_dir: Path, pins: Pins) -> Path | None:
-    """The environment this app installed, when it still matches the pins."""
+    """The AI Toolkit this app set up, when it still matches the pins."""
     root = component_root(data_dir)
     try:
         state = json.loads((root / STATE_FILE).read_text())
     except (OSError, ValueError):
         return None
-    home = root / "venv"
+    home = root / CHECKOUT
     if state.get("schema") == 1 and pins.made_from(state.get("pins")) and _tool_in(home):
         return home
     return None
 
 
 def find_tool(data_dir: Path | None, pins: Pins | None = None) -> tuple[Path, str] | None:
-    """(the environment with `bin/mflux-train`, where it came from): a copy named by
-    `WASIFYAI_MFLUX_DIR` (development and CI), or the one this app installed."""
+    """(AI Toolkit's folder, with `run.py` and its environment, where it came from): a copy named
+    by `WASIFYAI_AI_TOOLKIT_DIR` (development and CI), or the one this app set up."""
     pins = pins or load_pins()
-    env = os.environ.get("WASIFYAI_MFLUX_DIR")
+    env = os.environ.get("WASIFYAI_AI_TOOLKIT_DIR")
     if env and _tool_in(Path(env).expanduser()):
         return Path(env).expanduser(), "env"
     if data_dir is not None and (managed := managed_tool(data_dir, pins)) is not None:
@@ -176,10 +220,15 @@ def _complete(folder: Path, pins: Pins) -> bool:
         return False
 
 
-def find_base(data_dir: Path | None, pins: Pins | None = None) -> tuple[Path, str] | None:
-    """(the folder of the base model, where it came from): this app's own copy, or a complete
-    snapshot in the Hugging Face cache (a model fetched earlier is not fetched again)."""
+def find_base(
+    data_dir: Path | None, pins: Pins | None = None, base: str | None = None
+) -> tuple[Path, str] | None:
+    """(the folder of the text encoder's small files, where it came from): this app's own copy, or
+    a complete snapshot in the Hugging Face cache (files fetched earlier are not fetched again).
+    `base` names the picture model wanted: the set-up pins one model, so another is not found."""
     pins = pins or load_pins()
+    if base is not None and base != pins.base_id:
+        return None
     if data_dir is not None:
         own = component_root(data_dir) / "models" / pins.base_folder
         if _complete(own, pins):
@@ -229,8 +278,8 @@ async def run_command(args: list[str], env: dict[str, str]) -> tuple[int, str]:
 
 @dataclass
 class TrainingSetup:
-    """What the engine holds for the trainer's component: what is there, what it would take, and
-    the install."""
+    """What the engine holds for a trainer's component: what is there, what it would take, and the
+    install. Each trainer's setup says where it lives, what it finds and how it checks itself."""
 
     step_text = STEP_TEXT  # what each step says on the screen; not a field
 
@@ -254,13 +303,13 @@ class TrainingSetup:
 
     @property
     def root(self) -> Path:
-        return component_root(self.data_dir)
+        raise NotImplementedError
 
     def tool(self) -> tuple[Path, str] | None:
-        return find_tool(self.data_dir, self.pins)
+        raise NotImplementedError
 
     def base(self) -> tuple[Path, str] | None:
-        return find_base(self.data_dir, self.pins)
+        raise NotImplementedError
 
     @property
     def running(self) -> bool:
@@ -274,35 +323,12 @@ class TrainingSetup:
 
     def problem(self) -> str | None:
         """Why this cannot be set up here, in words, or None."""
-        if not self.supported:
-            return (
-                "Teaching a picture model works on a Mac with Apple silicon for now. Windows and "
-                "Linux (with an NVIDIA graphics card) come later."
-            )
         if self.tool() is None and (self.lock is None or not self.lock.is_file() or not self.uv):
             return "The tool that sets up the trainer is not part of this build."
         return None
 
     def plan(self) -> dict[str, Any]:
-        p = self.pins
-        tool, base = self.tool(), self.base()
-        return {
-            "supported": self.supported,
-            "bytes": self.missing_bytes() if self.supported else 0,
-            "needs_free_bytes": self.missing_bytes() + MIN_FREE_BYTES,
-            "parts": [
-                {
-                    "name": "Trainer (mflux)", "version": p.tool_version,
-                    "bytes": 0 if tool else p.packages_bytes, "have": tool is not None,
-                    "source": "pypi.org",
-                },
-                {
-                    "name": p.base_title, "version": "the picture model it learns on",
-                    "bytes": 0 if base else p.base_bytes, "have": base is not None,
-                    "source": "huggingface.co",
-                },
-            ],
-        }  # fmt: skip
+        raise NotImplementedError
 
     def state(self) -> dict[str, Any]:
         tool, base = self.tool(), self.base()
@@ -455,17 +481,157 @@ class TrainingSetup:
         self._say("model", before + d.bytes_total)
 
     async def _check(self) -> None:
+        raise NotImplementedError
+
+
+@dataclass
+class PictureSetup(TrainingSetup):
+    """The picture trainer's component: AI Toolkit, its environment as its own manager makes it on
+    this computer, and the text encoder's small files; and a way to find the image model's files."""
+
+    step_text = PICTURE_STEP_TEXT  # not a field
+
+    # the image model's files (transformer, text_encoder, vae) as the Models screen keeps them, or
+    # None: set by the engine
+    picture_model: Callable[[], dict[str, Path] | None] = lambda: None  # noqa: E731
+    picture_model_bytes: int = 0
+    picture_model_title: str = "FLUX.2 klein 4B"
+
+    @property
+    def supported(self) -> bool:
+        return picture_supported()
+
+    @property
+    def root(self) -> Path:
+        return component_root(self.data_dir)
+
+    def tool(self) -> tuple[Path, str] | None:
+        return find_tool(self.data_dir, self.pins)
+
+    def base(self) -> tuple[Path, str] | None:
+        return find_base(self.data_dir, self.pins)
+
+    def tool_bytes(self) -> int:
+        return self.pins.tool_size + self.pins.packages_bytes
+
+    def missing_bytes(self) -> int:
+        return (0 if self.tool() else self.tool_bytes()) + (
+            0 if self.base() else self.pins.base_bytes
+        )
+
+    def problem(self) -> str | None:
+        if not self.supported:
+            return (
+                "Teaching a picture model needs a Mac with Apple silicon, or a computer with an "
+                "NVIDIA graphics card."
+            )
+        if self.tool() is None and (not INSTALL_SCRIPT.is_file() or not self.pins.tool_url):
+            return "The tool that sets up the trainer is not part of this build."
+        return None
+
+    def plan(self) -> dict[str, Any]:
+        p = self.pins
+        tool, base = self.tool(), self.base()
+        return {
+            "supported": self.supported,
+            "bytes": self.missing_bytes() if self.supported else 0,
+            "needs_free_bytes": self.missing_bytes() + MIN_FREE_BYTES,
+            "parts": [
+                {
+                    "name": "Trainer (AI Toolkit)", "version": p.tool_version,
+                    "bytes": 0 if tool else self.tool_bytes(), "have": tool is not None,
+                    "source": "github.com and pypi.org",
+                },
+                {
+                    "name": p.base_title, "version": "a few small files",
+                    "bytes": 0 if base else p.base_bytes, "have": base is not None,
+                    "source": "huggingface.co",
+                },
+            ],
+            # what teaching also needs and this setup does not fetch: the model Create uses
+            "needs": [
+                {
+                    "name": f"The image model ({self.picture_model_title})",
+                    "have": self.picture_model() is not None,
+                    "bytes": self.picture_model_bytes,
+                    "how": "Choose Select image model on an Images screen to get it.",
+                }
+            ],
+        }  # fmt: skip
+
+    async def _install_tool(self) -> None:
+        """AI Toolkit's source from its pinned archive, then its environment from its manager."""
+        p = self.pins
+        (self.root / STATE_FILE).unlink(missing_ok=True)  # an old install never looks whole
+        name = f"ai-toolkit-{p.tool_version}.tar.gz"
+        entry = ModelEntry("ai-toolkit", "wasifyai-training", "AI Toolkit", "", "", 0, ())
+        d = self.downloads.start(
+            entry, [ModelFile("download", name, p.tool_url, p.tool_size, p.tool_sha256)], self.root
+        )
+        try:
+            while d.status == "running":
+                self._say("environment", d.bytes_done)
+                await asyncio.sleep(0.4)
+        except asyncio.CancelledError:
+            self.downloads.cancel(d.id)
+            raise
+        if d.status != "done":
+            raise InstallError(d.error or "AI Toolkit could not be downloaded.", "environment")
+        archive = self.root / "download" / name
+        checkout = self.root / CHECKOUT
+        await asyncio.to_thread(_unpack, archive, checkout)
+        archive.unlink(missing_ok=True)
+        self._say("packages", p.tool_size)
+        env = self._env()
+        env["UV_PYTHON_INSTALL_DIR"] = str(checkout / ".uv" / "python")
+        if self.uv:
+            env["PATH"] = os.pathsep.join([str(Path(self.uv).parent), env.get("PATH", "")])
+        code, out = await self.run([self.python, "-I", str(INSTALL_SCRIPT), str(checkout)], env)
+        for line in out.splitlines()[-40:]:
+            log.info("ai-toolkit setup: %s", line[-300:])
+        if "AITK-SETUP-UNSUPPORTED" in out:
+            why = out.split("AITK-SETUP-UNSUPPORTED", 1)[1].strip().splitlines()[0]
+            raise InstallError(f"AI Toolkit cannot be set up here: {why}", "packages")
+        if code != 0 or "AITK-SETUP-OK" not in out:
+            raise InstallError(
+                "Installing the trainer's packages did not work. Try again.", "packages"
+            )
+
+    async def _check(self) -> None:
         # the record that makes it installed is written after this check: look at the folder itself
         found = self.tool()
-        home = found[0] if found else self.root / "venv"
+        home = found[0] if found else self.root / CHECKOUT
         if self.base() is None:
-            raise InstallError("Some files of the picture model are missing. Try again.", "check")
+            raise InstallError("Some of the text encoder's files are missing. Try again.", "check")
         if not _tool_in(home):
             raise InstallError("The trainer was installed but could not be found.", "check")
-        code, out = await self.run([str(home / "bin" / EXECUTABLE), "--help"], self._env())
-        if code != 0 or "mflux-train" not in out:
+        code, out = await self.run(
+            [
+                str(venv_python(home)),
+                "-c",
+                "import torch, diffusers; print('ok', torch.__version__)",
+            ],
+            self._env(),
+        )
+        if code != 0 or "ok" not in out:
             log.error("the trainer check failed: %s", out[-600:])
             raise InstallError("The trainer was installed but did not start.", "check")
+
+
+def _unpack(archive: Path, checkout: Path) -> None:
+    """The archive's one top folder becomes `checkout`; a half-unpacked one is never left."""
+    tmp = checkout.with_name(checkout.name + ".part")
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    with tarfile.open(archive) as tar:
+        tar.extractall(tmp, filter="data")
+    tops = [p for p in tmp.iterdir() if p.is_dir()]
+    if len(tops) != 1:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise InstallError("The AI Toolkit download is not what was expected.", "environment")
+    shutil.rmtree(checkout, ignore_errors=True)
+    tops[0].replace(checkout)
+    shutil.rmtree(tmp, ignore_errors=True)
 
 
 # ---- the routes ----------------------------------------------------------------------------------

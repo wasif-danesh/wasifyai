@@ -2,9 +2,9 @@
 
 The product asks `state.training` to train a dataset and hands it a `TrainJob`: the pictures and
 their captions as files, a folder for the samples, and the settings. The engine reports how far it
-is and writes a sample picture now and then; it returns the adapter file. The real trainers (mflux
-on the Mac, then Unsloth's component) are engines of their own that do the same; this package does
-not change when they arrive.
+is and writes a sample picture now and then; it returns the adapter file. The real trainer
+(AI Toolkit, on a Mac with Apple silicon or a computer with an NVIDIA graphics card) is an engine
+of its own that does the same; this package does not change with it.
 
 `PreviewTrainer` does everything but learn: it runs the same steps, writes sample pictures that say
 "Preview" and a small adapter file that is not a model. The screens say so while the engine is a
@@ -21,18 +21,15 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageEnhance
 
-BASE = "flux2-klein-base-4b"  # what the first LoRA is taught on: the model Create image uses
-BASE_TITLE = "FLUX.2 klein base 4B"
-# measured on the owner's M5 Pro (ADR-0073, 2026-10-25): 9.2 to 11.6 s a step at 768 pixels, the
-# model load and the sample pictures included, and 6.0 s a step at 512 pixels (518 steps in 51 min)
-SECONDS_PER_STEP = {512: 6.0, 768: 10.0}
-# the longest side of a training picture. A character is taught at 512, as the AI Toolkit run of
-# the same 37 pictures was, and drew as well (Create, 2026-10-25); the others stay at 768 until
-# they are measured at 512
-SIDES = {"character": 512, "style": 768, "object": 768}
-# steps. The least a kind needs: a character and an object bound their magic word in 150 to 200
-# steps on 10 to 15 pictures; a style learnt the scenes it was shown by 250 steps
-PRESETS = {"character": 200, "style": 250, "object": 150}
+from wasifyai_training.picture_bases import KLEIN_4B, picture_base
+
+# the recommended picture model and its measured numbers; another model's are in its
+# recipe (`picture_bases`)
+BASE = KLEIN_4B.id
+BASE_TITLE = KLEIN_4B.title
+SECONDS_PER_STEP = KLEIN_4B.seconds_per_step
+SIDES = KLEIN_4B.sides
+PRESETS = KLEIN_4B.presets
 # a steps count is not a count of passes over the pictures: 200 steps is 18 passes over 11
 # pictures and 5 over 37. The run takes about this many passes, never fewer steps than the preset
 # and never more than the ceiling (a set of 37 took 518 steps, 14 passes: 51 minutes at 512)
@@ -49,6 +46,7 @@ class TrainJob:
     captions: list[str]  # the same order, the magic word already first
     samples: Path  # a folder for the sample pictures
     settings: dict[str, Any] = field(default_factory=dict)
+    base: str = BASE  # the picture model taught (`picture_bases`)
 
 
 @dataclass
@@ -76,21 +74,22 @@ Report = Callable[[int, str], None]
 SampleFn = Callable[[str], None]
 
 
-def steps_for(kind: str, pictures: int) -> int:
-    """How many steps to teach `pictures` pictures of this kind."""
-    return min(MAX_STEPS, max(PRESETS[kind], PASSES * max(0, pictures)))
+def steps_for(kind: str, pictures: int, base: str | None = None) -> int:
+    """How many steps to teach `pictures` pictures of this kind on `base` (the recommended
+    model by default)."""
+    return min(MAX_STEPS, max(picture_base(base).presets[kind], PASSES * max(0, pictures)))
 
 
-def side_for(kind: str) -> int:
-    return SIDES.get(kind, 768)
+def side_for(kind: str, base: str | None = None) -> int:
+    return picture_base(base).side_for(kind)
 
 
-def estimate_seconds(steps: int, kind: str = "character") -> int:
-    return round(steps * SECONDS_PER_STEP[side_for(kind)])
+def estimate_seconds(steps: int, kind: str = "character", base: str | None = None) -> int:
+    return picture_base(base).seconds_for(steps, kind)
 
 
-def estimate_words(steps: int, kind: str = "character") -> str:
-    minutes = max(1, round(estimate_seconds(steps, kind) / 60))
+def estimate_words(steps: int, kind: str = "character", base: str | None = None) -> str:
+    minutes = max(1, round(estimate_seconds(steps, kind, base) / 60))
     return f"About {minutes} minutes"
 
 

@@ -21,8 +21,7 @@ from wasifyai_api.language_setup import LanguageSetup
 from wasifyai_api.local_speech import build_local_engine
 from wasifyai_api.music_analysis_setup import LOCK_NAME as ANALYSIS_LOCK_NAME
 from wasifyai_api.music_analysis_setup import MusicAnalysis
-from wasifyai_api.training_setup import HUB, TrainingSetup
-from wasifyai_api.training_setup import LOCK_NAME as IMAGE_LOCK_NAME
+from wasifyai_api.training_setup import HUB, PictureSetup
 from wasifyai_api.video_setup import LOCK_NAME as VIDEO_LOCK_NAME
 from wasifyai_api.video_setup import VideoSetup
 from wasifyai_platform_sdk import (
@@ -88,13 +87,12 @@ async def main() -> None:
     )
     if video_trainer is not None:
         video_setup.video_model = video_trainer.model_files
-    image_setup = TrainingSetup(
+    image_setup = PictureSetup(
         api.desktop_dir,
-        lock=products / "wasifyai-training" / "trainer" / IMAGE_LOCK_NAME,
         uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
         base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
     )
-    image_trainer = make_trainer(api.desktop_dir, api.models_dir, image_setup)
+    image_trainer = make_trainer(api.desktop_dir, api.models_dir, image_setup, models)
     decision_setup = DecisionSetup(
         api.desktop_dir,
         lock=products / "wasifyai-training" / "trainer" / DECISION_LOCK_NAME,

@@ -4,6 +4,8 @@
   clarifications (see ADR-0073): the person only uploads images, and the app writes the descriptions and suggests the
   trigger word. The first draft of the "diffusion model beyond LoRA" ADR is folded in here as the last section.
 - **Superseded in part:** by ADR-0094 (2026-10-29): the picture checks are removed.
+- **Superseded in part:** by the ADR-0073 amendment of 2026-11-07 (owner): the picture trainer is AI Toolkit on
+  every platform, not mflux.
 - **Date:** 2026-10-18
 - **Depends on:** ADR-0073 (training platform and the simplicity rules), ADR-0059 (ComfyUI sidecar, LoRA chain),
   ADR-0062 (reuse matrix), ADR-0056 (inventory from `wasifyai-art`), ADR-0038 (prompt and caption aids), ADR-0035

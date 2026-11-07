@@ -370,6 +370,7 @@ async def _train_image(train: Any, w: Work) -> dict[str, Any]:
         kind=str(p["kind"]), word=str(p["word"]), steps=int(p["steps"]), pictures=pictures,
         captions=list(p["captions"]), samples=run / "samples",
         settings=dict(p.get("settings") or {}),
+        **({"base": str(p["base"])} if p.get("base") else {}),
     )  # fmt: skip
     steps = max(1, job.steps)
     loop = asyncio.get_running_loop()

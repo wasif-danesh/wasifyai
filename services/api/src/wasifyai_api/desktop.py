@@ -76,7 +76,7 @@ from wasifyai_api.runs import RunManager
 from wasifyai_api.services import services_of
 from wasifyai_api.settings_store import SettingsStore
 from wasifyai_api.sqlite_stores import SqliteIndexStore, SqliteSettingsStore, SqliteUserStore
-from wasifyai_api.training_setup import HUB, LOCK_NAME, TrainingSetup
+from wasifyai_api.training_setup import HUB, PictureSetup
 from wasifyai_api.video_setup import LOCK_NAME as VIDEO_LOCK_NAME
 from wasifyai_api.video_setup import VideoSetup
 from wasifyai_api.web_search import WebService, load_or_create_key
@@ -120,7 +120,7 @@ class DesktopBackends:
         None  # the render engine, installed on request (ADR-0077)
     )
     model3d: Model3dService | None = None  # the 3D engine, installed on request (ADR-0080)
-    training_setup: TrainingSetup | None = None  # the trainer's component, set up on request
+    training_setup: PictureSetup | None = None  # the trainer's component, set up on request
     language_setup: LanguageSetup | None = None  # the writing trainer's component
     writing: MlxLmTrainer | None = None  # the language trainer: mlx-lm on a Mac (ADR-0074)
     decision_setup: DecisionSetup | None = None  # the decision trainer's component
@@ -234,9 +234,8 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     web = WebService(SqliteSettingsStore(engine), secrets, legacy_box=box)
     own_keys = OwnKeysService(SqliteSettingsStore(engine), secrets)
     cache = root / "engine" / "cache"
-    setup = TrainingSetup(
+    setup = PictureSetup(
         root,
-        lock=products / "wasifyai-training" / "trainer" / LOCK_NAME,
         uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
         cache_dir=cache if cache.is_dir() else None,
         base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
@@ -285,7 +284,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         video_builder=VideoBuilderService(settings.desktop_dir),
         model3d=Model3dService(settings.desktop_dir),
         training_setup=setup,
-        training=make_trainer(settings.desktop_dir, settings.models_dir, setup),
+        training=make_trainer(settings.desktop_dir, settings.models_dir, setup, models),
         language_setup=language_setup,
         writing=make_language_trainer(settings.desktop_dir),
         decision_setup=decision_setup,

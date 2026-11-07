@@ -38,6 +38,12 @@ EV_PICTURE = "train.picture"  # usage events
 EV_RUN = "train.run"
 
 
+def base_title(base: str | None) -> str:
+    """The name of the model a run taught, for its card."""
+    d = bases.descriptor(base or trainer.BASE)
+    return d.title if d else trainer.BASE_TITLE
+
+
 class NotAvailable(Exception):
     """This deployment has no training engine."""
 
@@ -402,12 +408,15 @@ class RunManager:
             chosen, how = bases.resolve(dataset["kind"], base, method)
         except bases.Unavailable as e:
             raise Refused("cannot_teach", str(e)) from None
-        steps = trainer.steps_for(dataset["kind"], len(items))
+        # the chosen model, never the trainer's own default: each one's recipe is in
+        # `picture_bases`
+        steps = trainer.steps_for(dataset["kind"], len(items), chosen.id)
+        side = trainer.side_for(dataset["kind"], chosen.id)
         row = store.add_run(
             identity.tenant_id, identity.user_id, dataset_id,
-            base=getattr(engine, "base", chosen.id), steps=steps,
+            base=chosen.id, steps=steps,
             settings={"steps": steps, "kind": dataset["kind"], "method": how,
-                      "engine": chosen.engine, "side": trainer.side_for(dataset["kind"])},
+                      "engine": chosen.engine, "side": side},
             preview=bool(getattr(engine, "preview", False)),
         )  # fmt: skip
         self._run_id = row["id"]
@@ -476,6 +485,7 @@ class RunManager:
                 pictures=[item_folder(store, identity, i["id"]) / "picture.png" for i in items],
                 captions=[captions.with_word(i["caption"], dataset["trigger_word"]) for i in items],
                 samples=folder / "samples", settings=row["settings"],
+                base=row["base"] or trainer.BASE,
             )  # fmt: skip
             result = await engine.train(
                 job,
@@ -512,7 +522,7 @@ class RunManager:
         """The adapter becomes a model with its card (ADR-0073 decision 9)."""
         store = store_for(self._deps.state)
         card = {
-            "base": row["base"], "base_title": trainer.BASE_TITLE,
+            "base": row["base"], "base_title": base_title(row["base"]),
             "engine": result.engine, "preview": bool(row["preview"]), "note": result.note,
             "dataset": {"name": dataset["name"], "kind": dataset["kind"], "pictures": len(items),
                         "hash": dataset_hash(items)},
@@ -550,8 +560,9 @@ class RunManager:
             return None
         try:
             name = await publish(
-                result.adapter, dataset["name"] or dataset["trigger_word"], row["id"]
-            )
+                result.adapter, dataset["name"] or dataset["trigger_word"], row["id"],
+                base=row["base"] or trainer.BASE,
+            )  # fmt: skip
         except Exception:
             log.exception("a trained model could not be published to the image engine")
             return None

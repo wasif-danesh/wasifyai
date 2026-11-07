@@ -1,9 +1,11 @@
-"""Setting up the picture trainer: what is offered and what it costs, what counts as already there,
-and the install through stand-ins for `uv` and the model's server (the real run is by hand)."""
+"""Setting up the picture trainer (AI Toolkit): what is offered and what it costs, what counts as
+already there, and the install through stand-ins for AI Toolkit's manager and the servers it is
+fetched from (the real run is by hand)."""
 
 import hashlib
+import io
 import json
-import os
+import tarfile
 from dataclasses import replace
 from pathlib import Path
 
@@ -13,11 +15,24 @@ from wasifyai_api import training_setup as ts
 from wasifyai_api.desktop_models import DownloadManager
 
 FILES = {
-    "model_index.json": b'{"a": 1}',
-    "transformer/diffusion_pytorch_model.safetensors": b"W" * 300,
-    "text_encoder/model-00002-of-00002.safetensors": b"T" * 200,
-    "vae/diffusion_pytorch_model.safetensors": b"V" * 100,
+    "text_encoder/config.json": b'{"a": 1}',
+    "tokenizer/tokenizer.json": b"T" * 300,
+    "tokenizer/vocab.json": b"V" * 100,
 }
+
+
+def source_archive() -> bytes:
+    """A stand-in for AI Toolkit's source archive: one top folder with `run.py` and its manager."""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for name, body in (("run.py", b"print('run')"), ("manager/__init__.py", b"")):
+            info = tarfile.TarInfo(f"ai-toolkit-abc/{name}")
+            info.size = len(body)
+            tar.addfile(info, io.BytesIO(body))
+    return buf.getvalue()
+
+
+ARCHIVE = source_archive()
 
 
 def small_pins() -> ts.Pins:
@@ -25,6 +40,9 @@ def small_pins() -> ts.Pins:
     return replace(
         base,
         packages_bytes=1000,
+        tool_url="https://github.test/ai-toolkit.tar.gz",
+        tool_size=len(ARCHIVE),
+        tool_sha256=hashlib.sha256(ARCHIVE).hexdigest(),
         base_files=tuple(
             ts.BaseFile(p, len(d), hashlib.sha256(d).hexdigest()) for p, d in FILES.items()
         ),
@@ -43,34 +61,56 @@ def write_base(folder: Path, skip: str | None = None, short: str | None = None) 
 @pytest.fixture(autouse=True)
 def alone(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Nothing of the developer's own is found unless a test puts it there."""
-    monkeypatch.delenv("WASIFYAI_MFLUX_DIR", raising=False)
+    monkeypatch.delenv("WASIFYAI_AI_TOOLKIT_DIR", raising=False)
     monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
-    monkeypatch.setattr(ts, "apple_silicon", lambda: True)
+    monkeypatch.setattr(ts, "picture_supported", lambda: True)
 
 
-def test_the_pins_name_every_file_with_a_size_and_a_checksum():
+def test_the_pins_name_ai_toolkit_and_the_text_encoders_small_files():
     p = ts.load_pins()
+    assert p.tool_version == "0.13.25" and "f7a1fb9a" in p.tool_url
+    assert p.tool_size > 1_000_000 and len(p.tool_sha256) == 64
+    assert p.model == "flux2-klein-4b"  # the image model's own files are taught
     assert p.base_repo == "black-forest-labs/FLUX.2-klein-base-4B"
-    assert len(p.base_files) == 19
-    assert 15e9 < p.base_bytes < 17e9
+    paths = {f.path for f in p.base_files}
+    assert paths >= {"text_encoder/config.json", "tokenizer/tokenizer.json"}
+    assert p.base_bytes < 20e6  # small files only: nothing big is fetched for the trainer
     assert all(len(f.sha256) == 64 for f in p.base_files)
-    assert p.tool_version == "0.22.0"
 
 
-def test_the_lock_is_committed_and_hashed():
-    lock = Path(__file__).parents[3] / "products/wasifyai-training/trainer" / ts.LOCK_NAME
-    text = lock.read_text()
-    assert "mflux==0.22.0" in text and "--hash=sha256:" in text
+def test_every_platform_pins_the_same_trainer():
+    from wasifyai_api.components.manifest import part_pins
+
+    tools = {
+        plat: part_pins("trainer-pictures", platform=plat)["tool"]["sha256"]
+        for plat in ("darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64", "windows-x64")
+    }
+    assert len(set(tools.values())) == 1
+
+
+def test_it_can_teach_on_apple_silicon_or_with_an_nvidia_card(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.undo()
+    for plat, arm, nvidia, can in (
+        ("darwin", True, False, True),
+        ("darwin", False, False, False),
+        ("linux", False, True, True),
+        ("win32", False, True, True),
+        ("win32", False, False, False),
+    ):
+        monkeypatch.setattr(ts.sys, "platform", plat)
+        monkeypatch.setattr(ts, "apple_silicon", lambda a=arm, p=plat: a and p == "darwin")
+        monkeypatch.setattr(ts, "nvidia_gpu", lambda nvidia=nvidia: nvidia)
+        assert ts.picture_supported() is can, (plat, arm, nvidia)
 
 
 def test_the_model_counts_only_when_every_file_is_whole(tmp_path: Path):
     pins = small_pins()
     own = ts.component_root(tmp_path) / "models" / pins.base_folder
-    write_base(own, skip="vae/diffusion_pytorch_model.safetensors")
+    write_base(own, skip="tokenizer/vocab.json")
     assert ts.find_base(tmp_path, pins) is None  # a download still going
     write_base(own)
     assert ts.find_base(tmp_path, pins) == (own, "managed")
-    write_base(own, short="transformer/diffusion_pytorch_model.safetensors")
+    write_base(own, short="tokenizer/tokenizer.json")
     assert ts.find_base(tmp_path, pins) is None  # a file that is the wrong size is not whole
 
 
@@ -88,14 +128,19 @@ def test_a_snapshot_in_the_hugging_face_cache_is_used_where_it_is(tmp_path: Path
     assert ts.find_base(tmp_path, pins) == (snap, "cache")
 
 
+def make_checkout(home: Path) -> None:
+    (home / ".venv" / "bin").mkdir(parents=True)
+    (home / "run.py").write_text("")
+    (home / ".venv" / "bin" / "python").write_text("")
+
+
 def test_the_tool_is_found_in_a_setting_or_the_app_folder(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     pins = small_pins()
     assert ts.find_tool(tmp_path, pins) is None
-    home = ts.component_root(tmp_path) / "venv"
-    (home / "bin").mkdir(parents=True)
-    (home / "bin" / ts.EXECUTABLE).write_text("")
+    home = ts.component_root(tmp_path) / ts.CHECKOUT
+    make_checkout(home)
     assert ts.find_tool(tmp_path, pins) is None  # no installed.json: not whole yet
     (ts.component_root(tmp_path) / ts.STATE_FILE).write_text(
         json.dumps({"schema": 1, "pins": pins.digest})
@@ -106,19 +151,17 @@ def test_the_tool_is_found_in_a_setting_or_the_app_folder(
     )
     assert ts.find_tool(tmp_path, pins) is None  # a changed pin asks for a new install
     other = tmp_path / "mine"
-    (other / "bin").mkdir(parents=True)
-    (other / "bin" / ts.EXECUTABLE).write_text("")
-    monkeypatch.setenv("WASIFYAI_MFLUX_DIR", str(other))
+    make_checkout(other)
+    monkeypatch.setenv("WASIFYAI_AI_TOOLKIT_DIR", str(other))
     assert ts.find_tool(tmp_path, pins) == (other, "env")
 
 
-def setup_for(tmp_path: Path, **over) -> tuple[ts.TrainingSetup, list[list[str]], list[str]]:
-    lock = tmp_path / "lock.txt"
-    lock.write_text("mflux==0.22.0\n")
+def setup_for(tmp_path: Path, **over) -> tuple[ts.PictureSetup, list[list[str]], list[str]]:
     served = {
         f"https://hub.test/{small_pins().base_repo}/resolve/{small_pins().base_revision}/{p}": d
         for p, d in FILES.items()
     }
+    served[small_pins().tool_url] = ARCHIVE
     asked: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -129,24 +172,25 @@ def setup_for(tmp_path: Path, **over) -> tuple[ts.TrainingSetup, list[list[str]]
         return httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=True)
 
     commands: list[list[str]] = []
-    root = ts.component_root(tmp_path)
 
     async def run(args: list[str], env: dict[str, str]) -> tuple[int, str]:
         commands.append(args)
-        if args[1:2] == ["venv"]:
-            os.makedirs(Path(args[-1], "bin"))  # noqa: ASYNC240
-            return 0, ""
-        if args[1:3] == ["pip", "install"]:
-            if over.get("pip_fails"):
-                return 1, "no network"
-            (root / "venv" / "bin" / ts.EXECUTABLE).write_text("#!/bin/sh\n")  # noqa: ASYNC240
-            return 0, ""
-        if args[0].endswith(ts.EXECUTABLE):
-            return 0, "usage: mflux-train [-h]"
+        if str(ts.INSTALL_SCRIPT) in args:
+            checkout = Path(args[-1])
+            assert (checkout / "run.py").is_file()  # noqa: ASYNC240  the source was unpacked
+            if over.get("manager_fails"):
+                return 1, "error: could not reach download.pytorch.org"
+            if over.get("unsupported"):
+                return 3, "AITK-SETUP-UNSUPPORTED No supported GPU was found."
+            (checkout / ".venv" / "bin").mkdir(parents=True)  # noqa: ASYNC240
+            (checkout / ".venv" / "bin" / "python").write_text("")  # noqa: ASYNC240
+            return 0, "Environment is up to date.\nAITK-SETUP-OK mps"
+        if args[1:2] == ["-c"]:
+            return 0, "ok 2.13.0"
         return 0, ""
 
-    setup = ts.TrainingSetup(
-        tmp_path, lock=lock, uv="uv", pins=small_pins(), base_url="https://hub.test",
+    setup = ts.PictureSetup(
+        tmp_path, pins=small_pins(), base_url="https://hub.test",
         run=run, downloads=DownloadManager(factory, chunk=64),
     )  # fmt: skip
     return setup, commands, asked
@@ -155,23 +199,36 @@ def setup_for(tmp_path: Path, **over) -> tuple[ts.TrainingSetup, list[list[str]]
 def test_the_plan_says_what_it_would_fetch_and_nothing_that_is_already_there(tmp_path: Path):
     setup, _, _ = setup_for(tmp_path)
     plan = setup.plan()
-    assert plan["bytes"] == 1000 + 8 + 300 + 200 + 100 == setup.missing_bytes()
-    assert {p["name"] for p in plan["parts"]} == {"Trainer (mflux)", "FLUX.2 klein base 4B"}
+    assert plan["bytes"] == len(ARCHIVE) + 1000 + 8 + 300 + 100 == setup.missing_bytes()
+    assert [p["name"] for p in plan["parts"]] == [
+        "Trainer (AI Toolkit)", "FLUX.2 klein 4B text encoder settings",
+    ]  # fmt: skip
     assert all(p["source"] for p in plan["parts"])
     write_base(ts.component_root(tmp_path) / "models" / setup.pins.base_folder)
-    assert setup.missing_bytes() == 1000  # the model is there: only the trainer
+    assert setup.missing_bytes() == len(ARCHIVE) + 1000  # the small files are there
     assert [p["have"] for p in setup.plan()["parts"]] == [False, True]
+
+
+def test_the_plan_says_the_image_model_is_needed_and_where_to_get_it(tmp_path: Path):
+    setup, _, _ = setup_for(tmp_path)
+    setup.picture_model_bytes = 16_000_000_000
+    need = setup.plan()["needs"][0]
+    assert need["name"] == "The image model (FLUX.2 klein 4B)" and not need["have"]
+    assert need["bytes"] == 16_000_000_000 and "Select image model" in need["how"]
+    setup.picture_model = lambda: {"transformer": tmp_path / "t"}
+    assert setup.plan()["needs"][0]["have"]
+    assert setup.missing_bytes() == setup.plan()["bytes"]  # it is never fetched by this setup
 
 
 def test_it_says_in_words_why_it_cannot_be_set_up(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     setup, _, _ = setup_for(tmp_path)
     assert setup.problem() is None
-    monkeypatch.setattr(ts, "apple_silicon", lambda: False)
+    monkeypatch.setattr(ts, "picture_supported", lambda: False)
     assert "Apple silicon" in (setup.problem() or "") and "NVIDIA" in (setup.problem() or "")
     with pytest.raises(ts.InstallError, match="Apple silicon"):
         setup.start(setup.missing_bytes())
-    monkeypatch.setattr(ts, "apple_silicon", lambda: True)
-    setup.lock = None
+    monkeypatch.setattr(ts, "picture_supported", lambda: True)
+    setup.pins = replace(setup.pins, tool_url="")
     assert "not part of this build" in (setup.problem() or "")
 
 
@@ -184,15 +241,16 @@ async def test_nothing_starts_unless_the_size_shown_is_repeated(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_the_install_makes_the_environment_gets_the_model_and_checks_it(tmp_path: Path):
+async def test_the_install_unpacks_ai_toolkit_runs_its_manager_and_checks_it(tmp_path: Path):
     setup, commands, asked = setup_for(tmp_path)
     setup.start(setup.missing_bytes())
     await setup.wait()
     assert setup.progress.state == "ready", setup.progress.message
-    assert [c[1] for c in commands[:2]] == ["venv", "pip"]
-    assert "--require-hashes" in commands[1] and str(setup.lock) in commands[1]
-    assert commands[-1][0].endswith(ts.EXECUTABLE) and commands[-1][1] == "--help"
-    assert len(asked) == 4 and all(u.startswith("https://hub.test/") for u in asked)
+    checkout = ts.component_root(tmp_path) / ts.CHECKOUT
+    assert commands[0] == [setup.python, "-I", str(ts.INSTALL_SCRIPT), str(checkout)]
+    assert commands[-1][0] == str(ts.venv_python(checkout)) and commands[-1][1] == "-c"
+    assert asked[0] == setup.pins.tool_url and len(asked) == 1 + len(FILES)
+    assert not list((ts.component_root(tmp_path) / "download").glob("*.tar.gz"))
     state = setup.state()
     assert state["installed"] and state["tool"] == "managed" and state["base"] == "managed"
     assert setup.missing_bytes() == 0
@@ -201,13 +259,23 @@ async def test_the_install_makes_the_environment_gets_the_model_and_checks_it(tm
 
 
 @pytest.mark.asyncio
-async def test_a_failed_package_install_leaves_no_environment_and_says_what_to_do(tmp_path: Path):
-    setup, _, _ = setup_for(tmp_path, pip_fails=True)
+async def test_a_failed_manager_says_so_and_nothing_counts_as_installed(tmp_path: Path):
+    setup, _, _ = setup_for(tmp_path, manager_fails=True)
     setup.start(setup.missing_bytes())
     await setup.wait()
-    assert setup.progress.state == "failed" and "online" in setup.progress.message
-    assert not (ts.component_root(tmp_path) / "venv").exists()
+    assert setup.progress.state == "failed" and "did not work" in setup.progress.message
+    assert setup.progress.step == "packages"
     assert not (ts.component_root(tmp_path) / ts.STATE_FILE).exists()
+    assert not setup.state()["installed"]
+
+
+@pytest.mark.asyncio
+async def test_a_computer_the_manager_cannot_set_up_is_named_in_its_words(tmp_path: Path):
+    setup, _, _ = setup_for(tmp_path, unsupported=True)
+    setup.start(setup.missing_bytes())
+    await setup.wait()
+    assert setup.progress.state == "failed"
+    assert "No supported GPU was found" in setup.progress.message
 
 
 @pytest.mark.asyncio
@@ -216,7 +284,7 @@ async def test_a_file_that_does_not_match_its_checksum_is_refused(tmp_path: Path
     bad = replace(
         setup.pins,
         base_files=tuple(
-            replace(f, sha256="0" * 64) if f.path.startswith("vae") else f
+            replace(f, sha256="0" * 64) if f.path.startswith("tokenizer") else f
             for f in setup.pins.base_files
         ),
     )
@@ -233,5 +301,5 @@ async def test_removing_it_gives_the_bytes_back(tmp_path: Path):
     setup.start(setup.missing_bytes())
     await setup.wait()
     freed = setup.remove()
-    assert freed >= 600 and not ts.component_root(tmp_path).exists()
+    assert freed >= 400 and not ts.component_root(tmp_path).exists()
     assert not setup.state()["installed"]

@@ -1,53 +1,61 @@
-"""The training engine of the desktop profile (ADR-0073, ADR-0076).
+"""The picture trainer of the desktop profile (ADR-0073, ADR-0076; amendment 2026-11-07).
 
-On a Mac with Apple silicon it is mflux (MIT), run as a separate process of its own:
-`mflux-train` is given a config and a folder of pictures with their descriptions, writes sample
-pictures as it goes and a checkpoint that holds the adapter. This module builds the config, reads
-the progress, keeps the samples and takes the adapter out. It holds the one big-model slot while
-it runs (ADR-0056) and kills the process group when the run is stopped or the slot is wanted.
-The first LoRA is taught on FLUX.2 klein base 4B, the model Create image uses, so what it learns
-can be used there.
+It is AI Toolkit (Ostris), run as a separate process of its own: `run.py` is given a config and a
+folder of pictures with their descriptions, writes sample pictures and checkpoints as it goes, and
+an adapter in the key names ComfyUI reads. This module builds the config, reads the progress,
+keeps the samples and takes the adapter out. It holds the one big-model slot while it runs
+(ADR-0056) and stops the process tree when the run is stopped or the slot is wanted.
 
-Anywhere else (Windows, Linux, an Intel Mac) it says so in words and trains nothing: the NVIDIA
-trainers are a later stage (ADR-0073 decision 3). Nothing is downloaded silently: the base model
-must already be on the computer."""
+The same code runs on a Mac with Apple silicon (PyTorch on the graphics chip) and on Windows or
+Linux with an NVIDIA graphics card (CUDA): the owner's aim is that teaching works everywhere.
+A model is taught from the image model's own files, the ones Create uses, found where the Models
+screen keeps them; nothing is downloaded during a run."""
 
 import asyncio
 import contextlib
 import json
-import math
 import os
 import re
 import shutil
 import signal
 import subprocess
+import sys
 import time
-import zipfile
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
+from wasifyai_training.picture_bases import KLEIN_4B, PICTURE_BASES, PictureBase, picture_base
 
 from wasifyai_api.desktop_fit import assess_fit, need_declared, read_machine
 from wasifyai_api.desktop_models import free_disk_bytes
-from wasifyai_api.training_setup import TrainingSetup, apple_silicon, find_base, find_tool
+from wasifyai_api.training_setup import (
+    TrainingSetup,
+    find_base,
+    find_tool,
+    picture_supported,
+    venv_python,
+)
 
-BASE = "flux2-klein-base-4b"
-# What a run holds at 768 px, 8-bit, with gradient checkpointing, as the system counts it.
-# Measured on the owner's M5 Pro, 2026-10-25: 21.0 GB for a style and an object run, 35.0 GB for a
-# character run; the worst case is used, so a computer that could not hold it is told so.
-NEED_GB = 35.0
-SIDE = 768  # the longest side of a training picture
+# starts `run.py` with klein reading the text encoder folder the config names (AI Toolkit ignores
+# it); run with -P so this folder's modules (`logging.py`) do not shadow the standard library's
+LAUNCHER = Path(__file__).with_name("training_aitk_run.py")
+
+# the model taught when a run names none; every number that depends on the model (its files,
+# its architecture, the memory, the learning rate) is in its recipe in
+# `wasifyai_training.picture_bases`
+BASE = KLEIN_4B.id
+NEED_GB = KLEIN_4B.need_gb
+SIDE = 512  # the longest side of a training picture, when a run does not say
 RANK = 16
-# per kind of thing taught. A style at 3e-4 did no better than at 1e-4 (measured, 2026-10-25), so
-# all are 1e-4
-LEARNING_RATE = {"character": 1e-4, "object": 1e-4, "style": 1e-4}
 RUN_DISK_BYTES = 3 * 1024**3  # a run's pictures, checkpoints and samples; the model is already kept
 MIN_BATTERY_PERCENT = 25  # below this on battery, a run is not started
 CHECKPOINT_EVERY = 25  # steps: a pause loses at most this many
-EXECUTABLE = "mflux-train"
+NAME = "wasify"  # the run's name inside AI Toolkit: its files are `wasify_000000025.safetensors`
 TOKENIZE_SCRIPT = Path(__file__).with_name("training_tokenize.py")
+# development: a folder with the image models in ComfyUI's layout (`diffusion_models/`, ...)
+MODEL_DIR_ENV = "WASIFYAI_PICTURE_MODEL_DIR"
 
 # a sample shows what the model makes with the magic word: a scene it saw and one it did not
 SAMPLE_PROMPTS = {
@@ -56,62 +64,109 @@ SAMPLE_PROMPTS = {
     "object": "{word} on a wooden table by a window",
 }
 
-# tqdm's bar: " 12%|███  | 12/100 [01:30<10:40,  7.3s/it]"
+# tqdm's bar: "wasify:  12%|███  | 12/100 [01:30<10:40,  7.3s/it, lr: 1.0e-04 loss: 3.2e-01]"
 _BAR = re.compile(r"\|\s*(\d+)/(\d+)\s*\[")
-_PREVIEW_FILE = re.compile(r"^(\d{7})_preview_image_(.+)\.png$")
+_SAMPLE_FILE = re.compile(r"__(\d{9})_(\d+)\.(?:jpg|jpeg|png|webp)$")
+_SAVE_FILE = re.compile(rf"^{NAME}_(\d{{9}})\.safetensors$")
+
+
+def device() -> str:
+    """Where AI Toolkit runs: the graphics chip of a Mac, else the first NVIDIA card."""
+    return "mps" if sys.platform == "darwin" else "cuda:0"
 
 
 def training_config(
     steps: int,
-    pictures: int,
     work: Path,
     out: Path,
+    files: dict[str, Path],
     *,
     sample_every: int,
-    base: Path | None = None,
+    prompts: list[str],
     kind: str = "character",
     side: int = SIDE,
+    recipe: PictureBase = KLEIN_4B,
 ) -> dict[str, Any]:
-    """The `mflux-train` config: epochs make up the steps (one picture is one step), the full
-    timestep range (the klein finding), the layers of both kinds of block at rank 16."""
-    epochs = max(1, math.ceil(steps / max(1, pictures)))
-    blocks_double, blocks_single = {"start": 0, "end": 5}, {"start": 0, "end": 20}
-    targets = [
-        {"module_path": f"transformer_blocks.{{block}}.{m}", "blocks": blocks_double, "rank": RANK}
-        for m in (
-            "attn.to_q",
-            "attn.to_k",
-            "attn.to_v",
-            "attn.to_out",
-            "ff.linear_in",
-            "ff.linear_out",
-        )
-    ] + [
-        {
-            "module_path": f"single_transformer_blocks.{{block}}.{m}",
-            "blocks": blocks_single,
-            "rank": RANK,
-        }
-        for m in ("attn.to_qkv_mlp_proj", "attn.to_out")
-    ]
-    config = {
-        "model": BASE, "data": str(work), "seed": 42, "steps": 28, "guidance": 4.0,
-        "quantize": 8, "max_resolution": side, "low_ram": False, "gradient_checkpointing": True,
-        "training_loop": {
-            "num_epochs": epochs, "batch_size": 1,
-            "timestep_low": 0, "timestep_high": 28, "timestep_type": "sigmoid",
+    """AI Toolkit's config for the model `recipe` describes, taught from the image model's own
+    `files` (transformer, text encoder folder, vae): a LoRA at rank 16, a checkpoint every 25 steps
+    (the newest two kept, so a paused run picks up where it stopped) and sample pictures."""
+    model: dict[str, Any] = {
+        "name_or_path": str(files["transformer"]),
+        "arch": recipe.arch,
+        "te_name_or_path": str(files["text_encoder"]),
+        "vae_path": str(files["vae"]),
+        "low_vram": False,
+    }
+    if recipe.quantize:
+        model |= {
+            "quantize": True, "qtype": recipe.quantize,
+            "quantize_te": True, "qtype_te": recipe.quantize,
+        }  # fmt: skip
+    process = {
+        "type": "sd_trainer",
+        "training_folder": str(out),
+        "device": device(),
+        "network": {"type": "lora", "linear": RANK, "linear_alpha": RANK},
+        "save": {
+            "dtype": "float16", "save_every": CHECKPOINT_EVERY, "max_step_saves_to_keep": 2,
         },
-        "optimizer": {"name": "AdamW", "learning_rate": LEARNING_RATE.get(kind, 1e-4)},
-        "checkpoint": {"save_frequency": CHECKPOINT_EVERY, "output_path": str(out)},
-        "monitoring": {
-            "preview_width": 512, "preview_height": 512, "plot_frequency": 1_000_000,
-            "generate_image_frequency": max(1, sample_every),
+        "datasets": [
+            {
+                "folder_path": str(work), "caption_ext": "txt", "caption_dropout_rate": 0.0,
+                "shuffle_tokens": False, "cache_latents_to_disk": True, "resolution": [side],
+            }
+        ],
+        "train": {
+            "batch_size": 1, "steps": steps, "train_unet": True, "train_text_encoder": False,
+            "gradient_checkpointing": recipe.gradient_checkpointing,
+            "noise_scheduler": "flowmatch", "optimizer": "adamw",
+            "lr": recipe.learning_rate.get(kind, 1e-4), "dtype": "bf16",
+            "disable_sampling": False,
         },
-        "lora_layers": {"targets": targets},
+        "model": model,
+        "sample": {
+            "sampler": "flowmatch", "sample_every": max(1, sample_every),
+            "width": 512, "height": 512, "prompts": prompts, "seed": 42,
+            "guidance_scale": recipe.guidance, "sample_steps": recipe.sample_steps,
+        },
     }  # fmt: skip
-    if base is not None:
-        config["model_path"] = str(base)  # the model's own folder: the trainer fetches nothing
-    return config
+    return {
+        "job": "extension",
+        "config": {"name": NAME, "process": [process]},
+        "meta": {"name": NAME},
+    }
+
+
+def text_encoder_dir(small: Path, weights: Path, target: Path) -> Path:
+    """The text encoder as one folder, the way AI Toolkit loads it: its settings and tokenizer
+    files (the setup's small files) beside the weights the image model uses. Links, not copies;
+    a copy only where a link cannot be made (a small file, never the weights)."""
+    target.mkdir(parents=True, exist_ok=True)
+    wanted = [(weights, "model.safetensors")]
+    for sub in ("text_encoder", "tokenizer"):
+        # settings and tokenizer only: another copy's weights or shard index (a Hugging Face cache
+        # holds both) would be loaded instead of `weights`
+        wanted += [
+            (f, f.name)
+            for f in sorted((small / sub).glob("*"))
+            if f.is_file() and f.suffix != ".safetensors" and not f.name.endswith(".index.json")
+        ]
+    for src, name in wanted:
+        dst = target / name
+        if dst.exists() or dst.is_symlink():
+            dst.unlink()
+        try:
+            dst.symlink_to(src)
+        except OSError:
+            try:
+                os.link(src, dst)
+            except OSError:
+                if src == weights:
+                    raise RuntimeError(
+                        "The text encoder could not be linked into the run's folder."
+                    ) from None
+                shutil.copyfile(src, dst)
+    return target
 
 
 def parse_progress(text: str) -> tuple[int, int] | None:
@@ -149,33 +204,27 @@ def process_footprint(pid: int) -> int:
 
 
 def latest_checkpoint(folder: Path) -> Path | None:
-    zips = sorted(folder.glob("*_checkpoint.zip")) if folder.is_dir() else []
-    return zips[-1] if zips else None
+    """The newest checkpoint AI Toolkit kept of the run (`wasify_000000025.safetensors`)."""
+    saves = sorted(p for p in folder.glob(f"{NAME}_*.safetensors") if _SAVE_FILE.match(p.name))
+    return saves[-1] if saves else None
 
 
 def checkpoint_step(path: Path | None) -> int | None:
-    found = re.match(r"(\d+)_checkpoint", path.name) if path is not None else None
+    found = _SAVE_FILE.match(path.name) if path is not None else None
     return int(found.group(1)) if found else None
 
 
-def prune_checkpoints(folder: Path, keep: int = 2, protect: Path | None = None) -> None:
-    """Older checkpoints are large and no use: the newest two are kept (one may be half written).
-    The one a resumed run started from stays: the trainer still reads it while it goes on."""
-    zips = sorted(folder.glob("*_checkpoint.zip")) if folder.is_dir() else []
-    for old in zips[:-keep]:
-        if protect is not None and old == protect:
-            continue
-        with contextlib.suppress(OSError):
-            old.unlink()
-
-
 def _kill_group(pid: int) -> None:
+    """The trainer and every process it started."""
+    if sys.platform == "win32":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True, check=False)
+        return
     with contextlib.suppress(ProcessLookupError, PermissionError):
         os.killpg(pid, signal.SIGTERM)
 
 
-def prepare_data(job: Any, work: Path) -> None:
-    """The folder `mflux-train` reads: `pic-NN.png` with `pic-NN.txt`, and the sample prompts."""
+def prepare_data(job: Any, work: Path) -> list[str]:
+    """The folder AI Toolkit reads: `pic-NNN.png` with `pic-NNN.txt`; the two sample prompts."""
     work.mkdir(parents=True, exist_ok=True)
     for n, (path, caption) in enumerate(zip(job.pictures, job.captions, strict=True), start=1):
         with Image.open(path) as im:
@@ -183,29 +232,14 @@ def prepare_data(job: Any, work: Path) -> None:
         (work / f"pic-{n:03d}.txt").write_text(caption, encoding="utf-8")
     first = job.captions[0] if job.captions else job.word
     new = SAMPLE_PROMPTS.get(job.kind, SAMPLE_PROMPTS["character"]).format(word=job.word)
-    (work / "preview-1.txt").write_text(first, encoding="utf-8")
-    (work / "preview-2.txt").write_text(new, encoding="utf-8")
+    return [first, new]
 
 
-def take_adapter(checkpoints: Path, target: Path) -> bool:
-    """The adapter of the newest checkpoint, written to `target`."""
-    zips = sorted(checkpoints.glob("*_checkpoint.zip"))
-    if not zips:
-        return False
-    with zipfile.ZipFile(zips[-1]) as z:
-        name = next((n for n in z.namelist() if n.endswith("_adapter.safetensors")), None)
-        if name is None:
-            return False
-        with z.open(name) as src, target.open("wb") as dst:
-            shutil.copyfileobj(src, dst)
-    return True
-
-
-class MfluxTrainer:
+class AiToolkitTrainer:
     """The `TrainJob` in, the `TrainResult` out, behind the product's interface (`trainer.py`)."""
 
     preview = False
-    engine = "mflux"
+    engine = "ai-toolkit"
     base = BASE
 
     def __init__(
@@ -213,38 +247,66 @@ class MfluxTrainer:
         data_dir: Path | None = None,
         models_dir: Path | None = None,
         setup: TrainingSetup | None = None,
+        models: Any = None,
     ) -> None:
         self.data_dir = data_dir
         self.setup = setup  # what the person can be offered when the trainer is not there yet
         self.models_dir = models_dir  # the image engine reads styles from its `loras` folder
+        self.models = models  # the Models screen's catalogue and folders: the image model's files
         self.on_published: Callable[[], Awaitable[None]] | None = None  # the engine looks again
         self.slot: Any = None  # the SlotManager: a run holds the one big-model slot
         self._proc: asyncio.subprocess.Process | None = None
         self._pausing = False
-        self._resumed_from: Path | None = None  # the checkpoint a picked-up run started from
         self.peak_bytes = 0  # the most memory the last run held
         self._words: dict[tuple[str, str], dict[str, Any]] = {}  # how words were split
 
     # ---- what the product asks ---------------------------------------------------------------
 
     def problem(self) -> str | None:
-        if not apple_silicon():
+        if not picture_supported():
             return (
-                "Teaching a picture model works on a Mac with Apple silicon for now. Windows and "
-                "Linux (with an NVIDIA graphics card) come later."
+                "Teaching a picture model needs a Mac with Apple silicon, or a computer with an "
+                "NVIDIA graphics card."
             )
         if find_tool(self.data_dir) is None or find_base(self.data_dir) is None:
             return "Training is not set up on this computer yet. Set it up first."
+        if self.model_files() is None:
+            return (
+                f"{KLEIN_4B.use_with} is not on this computer yet. Choose Select image model on "
+                "an Images screen to get it."
+            )
         return None
+
+    def model_files(self, base: str | None = None) -> dict[str, Path] | None:
+        """The image model's files the recipe of `base` is taught from, by part (transformer,
+        text_encoder, vae), where the Models screen keeps them; None when one is missing."""
+        recipe = picture_base(base or self.base)
+        entry = self.models.catalogue.get(recipe.model) if self.models is not None else None
+        env = os.environ.get(MODEL_DIR_ENV)
+        found: dict[str, Path] = {}
+        for part, name in recipe.files.items():
+            path = None
+            for f in entry.files if entry is not None else ():
+                if f.name == name:
+                    path = self.models.locate(f)
+            if path is None and env:
+                hits = sorted(Path(env).expanduser().glob(f"*/{name}"))
+                path = hits[0] if hits else None
+            if path is None:
+                return None
+            found[part] = path
+        return found
 
     def ready(self) -> bool:
         return self.problem() is None
 
-    def fit(self) -> dict[str, Any]:
-        return assess_fit(need_declared(NEED_GB), read_machine()).public()
+    def fit(self, base: str | None = None) -> dict[str, Any]:
+        recipe = PICTURE_BASES.get(base or self.base)
+        need = recipe.need_gb if recipe else NEED_GB
+        return assess_fit(need_declared(need), read_machine()).public()
 
     def state(self) -> dict[str, Any]:
-        return {"engine": self.engine, "preview": False, "base": BASE, "setup": self.problem()}
+        return {"engine": self.engine, "preview": False, "base": self.base, "setup": self.problem()}
 
     @property
     def busy(self) -> bool:
@@ -262,7 +324,7 @@ class MfluxTrainer:
         if tool is None or base is None:
             return None
         file = base[0] / "tokenizer" / "tokenizer.json"
-        python = tool[0] / "bin" / "python"
+        python = venv_python(tool[0])
         if not file.is_file() or not python.is_file():
             return None
         todo = [w for w in dict.fromkeys(words) if (str(file), w) not in self._words]
@@ -285,9 +347,9 @@ class MfluxTrainer:
 
     # ---- the image engine (ComfyUI) reads what was taught --------------------------------------
 
-    async def publish(self, adapter: Path, title: str, run_id: str) -> str | None:
-        """The adapter in ComfyUI's key names, in the `loras` folder of the models: the name an
-        image workflow gives it, or None when there is no folder to put it in."""
+    async def publish(self, adapter: Path, title: str, run_id: str, base: str = BASE) -> str | None:
+        """The adapter taught on `base` in ComfyUI's key names, in the `loras` folder of the models:
+        the name an image workflow gives it, or None when there is no folder to put it in."""
         if self.models_dir is None:
             return None
         from wasifyai_training import comfy_lora
@@ -296,7 +358,7 @@ class MfluxTrainer:
         name = f"wasify-{slug}-{run_id[:8]}.safetensors"
         target = self.models_dir / "loras" / name
         await asyncio.to_thread(target.parent.mkdir, parents=True, exist_ok=True)
-        await asyncio.to_thread(comfy_lora.convert, adapter, target, BASE)
+        await asyncio.to_thread(comfy_lora.convert, adapter, target, base)
         if self.on_published is not None:
             with contextlib.suppress(Exception):
                 await self.on_published()
@@ -367,44 +429,50 @@ class MfluxTrainer:
     ) -> Any:
         from wasifyai_training.trainer import Paused, Stopped, TrainResult
 
-        tool, base = find_tool(self.data_dir), find_base(self.data_dir)
+        try:
+            recipe = picture_base(getattr(job, "base", None))
+        except KeyError:
+            raise RuntimeError("This picture model cannot be taught yet.") from None
+        tool, small = find_tool(self.data_dir), find_base(self.data_dir, base=recipe.id)
+        files = self.model_files(recipe.id)
         why = self.problem()
-        if tool is None or base is None or why:
-            raise RuntimeError(why or "Training is not set up.")
+        if tool is None or small is None or files is None or why:
+            raise RuntimeError(
+                why or f"{recipe.title} is not on this computer yet. Set it up first."
+            )
         home = tool[0]
         folder = job.samples.parent
         work, out = folder / "work", folder / "out"
+        saves = out / NAME
+        cfg = folder / "train.json"
         started = time.monotonic()
         self._pausing = False
-        self._resumed_from = None
         keep = False  # a paused run keeps its pictures and checkpoints
         try:
-            total = max(1, math.ceil(job.steps / max(1, len(job.pictures)))) * len(job.pictures)
             await asyncio.to_thread(job.samples.mkdir, parents=True, exist_ok=True)
             if resume:
-                zip_ = latest_checkpoint(out / "checkpoints")
-                if zip_ is None or not work.is_dir():
+                # AI Toolkit picks a run up from its newest checkpoint when given the same config
+                if latest_checkpoint(saves) is None or not work.is_dir() or not cfg.is_file():
                     raise RuntimeError("What was kept of this run is gone. Start it again.")
-                args = ["--resume", str(zip_)]
-                self._resumed_from = zip_
             else:
                 await asyncio.to_thread(shutil.rmtree, work, True)
                 await asyncio.to_thread(shutil.rmtree, out, True)
-                await asyncio.to_thread(prepare_data, job, work)
+                prompts = await asyncio.to_thread(prepare_data, job, work)
+                te = await asyncio.to_thread(
+                    text_encoder_dir, small[0], files["text_encoder"], folder / "text-encoder"
+                )
                 config = training_config(
-                    job.steps, len(job.pictures), work, out,
-                    sample_every=max(1, total // 4), base=base[0], kind=job.kind,
-                    side=int(job.settings.get("side", SIDE)),
+                    job.steps, work, out, {**files, "text_encoder": te},
+                    sample_every=max(1, job.steps // 4), prompts=prompts, kind=job.kind,
+                    side=int(job.settings.get("side", recipe.side_for(job.kind))), recipe=recipe,
                 )  # fmt: skip
-                cfg = folder / "train.json"
                 await asyncio.to_thread(cfg.write_text, json.dumps(config, indent=2))
-                args = ["--config", str(cfg)]
             try:
-                await self._run(home, args, out, job, report, sample, total)
+                await self._run(home, [str(cfg)], saves, job, report, sample)
             except RuntimeError:
                 if not self._pausing:
                     raise
-                step = checkpoint_step(latest_checkpoint(out / "checkpoints"))
+                step = checkpoint_step(latest_checkpoint(saves))
                 if step is None:
                     raise Stopped(
                         "It was stopped before its first checkpoint, so nothing was kept."
@@ -412,44 +480,51 @@ class MfluxTrainer:
                 keep = True
                 raise Paused(step) from None
             adapter = folder / "adapter.safetensors"
-            if not await asyncio.to_thread(take_adapter, out / "checkpoints", adapter):
+            final = saves / f"{NAME}.safetensors"
+            if not final.is_file():
                 raise RuntimeError("The training tool finished without an adapter.")
+            await asyncio.to_thread(shutil.copyfile, final, adapter)
             return TrainResult(
                 adapter, time.monotonic() - started, self.engine,
                 peak_bytes=self.peak_bytes,
             )  # fmt: skip
         finally:
             if not keep:
-                await asyncio.to_thread(shutil.rmtree, work, True)
-                await asyncio.to_thread(
-                    shutil.rmtree, out, True
-                )  # the checkpoints are large; the adapter is kept
+                for gone in (work, out, folder / "text-encoder"):
+                    # links only in the text encoder's folder: the model's own files stay
+                    await asyncio.to_thread(shutil.rmtree, gone, True)
 
     async def _run(
-        self, home: Path, args: list[str], out: Path, job: Any,
-        report: Callable[[int, str], None], sample: Callable[[str], None], total: int,
+        self, home: Path, args: list[str], saves: Path, job: Any,
+        report: Callable[[int, str], None], sample: Callable[[str], None],
     ) -> None:  # fmt: skip
         env = {
-            **os.environ,
+            k: v for k, v in os.environ.items() if not k.startswith(("VIRTUAL_ENV", "PYTHONHOME"))
+        }
+        env |= {
             "PYTHONUNBUFFERED": "1",
-            "HF_HUB_OFFLINE": "1",  # the base model is on the computer or the run does not start
-            "PATH": f"{home / 'bin'}:{os.environ.get('PATH', '')}",
+            "HF_HUB_OFFLINE": "1",  # every file is on the computer or the run does not start
         }
         report(0, "Loading the model")
         tail: list[str] = []
         seen: set[str] = set()
         self.peak_bytes = 0
         holder = self.slot.hold("training") if self.slot is not None else _no_slot()
+        apart: dict[str, Any] = (
+            {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}  # type: ignore[attr-defined]
+            if sys.platform == "win32"
+            else {"start_new_session": True}
+        )
         async with holder:
             proc = await asyncio.create_subprocess_exec(
-                str(home / "bin" / EXECUTABLE), *args,
+                str(venv_python(home)), "-P", str(LAUNCHER), str(home), *args, cwd=str(home),
                 env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-                stdin=asyncio.subprocess.DEVNULL, start_new_session=True,
+                stdin=asyncio.subprocess.DEVNULL, **apart,
             )  # fmt: skip
             self._proc = proc
             sampler = asyncio.create_task(self._sample_memory(proc))
             try:
-                await self._watch(proc, out, job, report, sample, tail, seen, total)
+                await self._watch(proc, saves, job, report, sample, tail, seen)
                 await proc.wait()
             except asyncio.CancelledError:
                 _kill_group(proc.pid)
@@ -469,9 +544,9 @@ class MfluxTrainer:
             await asyncio.sleep(10)
 
     async def _watch(
-        self, proc: asyncio.subprocess.Process, out: Path, job: Any,
+        self, proc: asyncio.subprocess.Process, saves: Path, job: Any,
         report: Callable[[int, str], None], sample: Callable[[str], None],
-        tail: list[str], seen: set[str], total: int,
+        tail: list[str], seen: set[str],
     ) -> None:  # fmt: skip
         assert proc.stdout is not None
         buffer = ""
@@ -482,8 +557,8 @@ class MfluxTrainer:
             next one starts."""
             nonlocal reported
             bar = parse_progress(text)
-            # the tool draws other bars (loading, quantising): only the training one counts
-            if bar is not None and bar[1] == total and bar[0] != reported:
+            # the tool draws other bars (caching latents, loading): only the training one counts
+            if bar is not None and bar[1] == job.steps and bar[0] != reported:
                 reported = step = min(bar[0], job.steps)
                 report(step, f"Learning, step {step} of {job.steps}")
 
@@ -497,25 +572,29 @@ class MfluxTrainer:
                 del tail[:-20]
                 progress(line)
             progress(buffer)
-            await asyncio.to_thread(self._copy_samples, out, job, sample, seen)
-            await asyncio.to_thread(prune_checkpoints, out / "checkpoints", 2, self._resumed_from)
-        await asyncio.to_thread(self._copy_samples, out, job, sample, seen)
+            await asyncio.to_thread(self._copy_samples, saves, job, sample, seen)
+        await asyncio.to_thread(self._copy_samples, saves, job, sample, seen)
 
     @staticmethod
-    def _copy_samples(out: Path, job: Any, sample: Callable[[str], None], seen: set[str]) -> None:
-        """Each new preview picture of mflux becomes a sample of the run: `step-0000-1.png` is what
-        the model drew before it learned anything, the later ones what it draws now. A run picked
-        up again does not add the ones it already has."""
-        for path in sorted((out / "preview").glob("*.png")) if (out / "preview").is_dir() else []:
-            found = _PREVIEW_FILE.match(path.name)
+    def _copy_samples(saves: Path, job: Any, sample: Callable[[str], None], seen: set[str]) -> None:
+        """Each new sample picture of AI Toolkit becomes a sample of the run, as a PNG:
+        `step-0000-1.png` is what the model drew before it learned anything, the later ones what
+        it draws now. A run picked up again does not add the ones it already has."""
+        folder = saves / "samples"
+        for path in sorted(folder.iterdir()) if folder.is_dir() else []:
+            found = _SAMPLE_FILE.search(path.name)
             if found is None or path.name in seen:
                 continue
             seen.add(path.name)
-            kind = re.search(r"(\d+)$", found.group(2))
-            name = f"step-{int(found.group(1)):04d}-{kind.group(1) if kind else '1'}.png"
+            name = f"step-{int(found.group(1)):04d}-{int(found.group(2)) + 1}.png"
             if (job.samples / name).is_file():
                 continue
-            shutil.copyfile(path, job.samples / name)
+            try:
+                with Image.open(path) as im:
+                    im.convert("RGB").save(job.samples / name, "PNG")
+            except OSError:
+                seen.discard(path.name)  # still being written: the next look takes it
+                continue
             sample(name)
 
 
@@ -525,11 +604,21 @@ async def _no_slot():  # type: ignore[no-untyped-def]
 
 
 def make_trainer(
-    data_dir: Path | None, models_dir: Path | None = None, setup: TrainingSetup | None = None
+    data_dir: Path | None,
+    models_dir: Path | None = None,
+    setup: TrainingSetup | None = None,
+    models: Any = None,
 ) -> Any:
-    """The trainer of this engine, or None when the training product is not part of this build."""
+    """The trainer of this engine, or None when the training product is not part of this build.
+    `models` (the Models screen's catalogue and folders) is where the image model's files are."""
     try:
         import wasifyai_training  # noqa: F401
     except ImportError:
         return None
-    return MfluxTrainer(data_dir, models_dir, setup)
+    trainer = AiToolkitTrainer(data_dir, models_dir, setup, models)
+    if setup is not None and hasattr(setup, "picture_model"):
+        setup.picture_model = trainer.model_files
+        entry = models.catalogue.get(KLEIN_4B.model) if models is not None else None
+        setup.picture_model_bytes = entry.total_bytes if entry is not None else 0
+        setup.picture_model_title = KLEIN_4B.use_with
+    return trainer

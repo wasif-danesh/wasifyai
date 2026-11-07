@@ -44,7 +44,7 @@ const CHOICES: TrainChoices = {
     {
       id: "base-a",
       title: "Base A",
-      engine: "mflux",
+      engine: "ai-toolkit",
       recommended: true,
       can_teach: true,
       reason: "",
@@ -54,7 +54,7 @@ const CHOICES: TrainChoices = {
     {
       id: "base-b",
       title: "Base B",
-      engine: "mflux",
+      engine: "ai-toolkit",
       recommended: false,
       can_teach: true,
       reason: "",
@@ -86,7 +86,7 @@ const STATUS: TrainStatus = {
   min_pictures: 3,
   max_pictures: 100,
   kinds: ["character", "style", "object"],
-  base: "flux2-klein-base-4b",
+  base: "flux2-klein-4b",
   steps: { character: 200, style: 250, object: 150 },
   estimates: {
     character: "About 25 minutes",
@@ -418,7 +418,7 @@ function fake(over: Partial<TrainStatus> = {}, videoOver: Partial<VideoTrainStat
           adapter_bytes: 4,
           created_at: "",
           card: {
-            base_title: "FLUX.2 klein base 4B",
+            base_title: "FLUX.2 klein 4B",
             engine: "preview",
             preview: true,
             note: "A preview: this file is not a trained model.",
@@ -689,7 +689,7 @@ describe("Train", () => {
         adapter_bytes: 4,
         created_at: "",
         card: {
-          base_title: "FLUX.2 klein base 4B",
+          base_title: "FLUX.2 klein 4B",
           engine: "preview",
           preview: true,
           note: "",

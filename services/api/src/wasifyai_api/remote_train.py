@@ -267,10 +267,10 @@ class UnservedTrainer(RemoteTrainer):
 
 
 class RemoteImageTrainer(RemoteTrainer):
-    """`TrainJob` in, `TrainResult` out, like `MfluxTrainer`; the style is kept in storage, not in a shared folder."""
+    """`TrainJob` in, `TrainResult` out, like `AiToolkitTrainer`; the style is kept in storage, not in a shared folder."""
 
     component = train_wire.COMPONENT_IMAGE
-    engine = "mflux"
+    engine = "ai-toolkit"
 
     def __init__(self, *args: Any, **kw: Any):
         super().__init__(*args, **kw)
@@ -294,6 +294,7 @@ class RemoteImageTrainer(RemoteTrainer):
         params = {
             "kind": job.kind, "word": job.word, "steps": job.steps, "pictures": names,
             "captions": job.captions, "settings": job.settings,
+            "base": getattr(job, "base", self.base),
         }  # fmt: skip
         folder = job.samples.parent
         await asyncio.to_thread(job.samples.mkdir, parents=True, exist_ok=True)
@@ -361,17 +362,19 @@ class RemoteImageTrainer(RemoteTrainer):
         found = {w: self._words[w] for w in words if w in self._words}
         return found or None
 
-    async def publish(self, adapter: Path, title: str, run_id: str) -> str | None:
-        """The adapter in ComfyUI's key names, kept under the person's own prefix: the name an image
-        workflow is given; the media job fetches the file by it (never shared with anyone else)."""
+    async def publish(
+        self, adapter: Path, title: str, run_id: str, base: str | None = None
+    ) -> str | None:
+        """The adapter taught on `base` in ComfyUI's key names, kept under the person's own prefix:
+        the name an image workflow is given; the media job fetches the file by it (never shared with
+        anyone else)."""
         from wasifyai_training import comfy_lora
-        from wasifyai_training.trainer import BASE
 
         ctx = require_context()
         slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:40] or "model"
         name = f"wasify-{slug}-{run_id[:8]}.safetensors"
         converted = adapter.with_name(name)
-        await asyncio.to_thread(comfy_lora.convert, adapter, converted, BASE)
+        await asyncio.to_thread(comfy_lora.convert, adapter, converted, base or self.base)
         key = look_key(ctx.tenant_id, ctx.user_id, run_id, name)
         await self._storage.put(
             key, await asyncio.to_thread(converted.read_bytes), "application/octet-stream"

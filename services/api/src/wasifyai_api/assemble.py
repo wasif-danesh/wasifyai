@@ -898,7 +898,7 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     s.video_builder = desktop.video_builder  # the render engine (ADR-0077)
     s.model3d = desktop.model3d  # the 3D engine (ADR-0080)
     s.training_setup = desktop.training_setup  # the trainer, set up on request
-    s.training = desktop.training  # the trainer: mflux on a Mac (ADR-0073)
+    s.training = desktop.training  # the picture trainer: AI Toolkit (ADR-0073)
     s.language_training = desktop.writing  # mlx-lm on a Mac (ADR-0074)
     s.language_setup = desktop.language_setup  # its component, set up on request
     s.decision_training = desktop.deciding  # Laya on a Mac (ADR-0075)

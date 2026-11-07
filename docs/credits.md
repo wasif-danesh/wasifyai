@@ -114,7 +114,6 @@ These are the places where a licence asks for more than "keep the notice". Items
 | llama.cpp | `ggml-org/llama.cpp` | MIT | The local language engine (a pinned prebuilt release, run as a managed process) |
 | audio.cpp | `0xShug0/audio.cpp` | Apache-2.0 per ADR-0066 (GitHub shows "Other") | Speech, music and audio tools runtime |
 | MuseTalk | `TMElyralab/MuseTalk` | MIT (GitHub shows "Other") | Lip sync, an optional component |
-| mflux | `mflux-community/mflux` | MIT | Image LoRA training on the Mac (a spike; planned in ADR-0076) |
 
 ## 7. Models in the catalogue (Built) and their projects
 
@@ -181,7 +180,7 @@ Weights have their own licences, recorded per model in `products/*/models.yaml` 
 |---|---|---|---|
 | Open WebUI | `open-webui/open-webui` | Custom (BSD-3 with a branding clause) | A whole product with its own server |
 | LibreChat | `LibreChat-AI/LibreChat` | MIT | Same |
-| Ostris AI Toolkit | `ostris/ai-toolkit` | MIT | Kept as an optional NVIDIA training engine; not on the Mac |
+| Ostris AI Toolkit | `ostris/ai-toolkit` | MIT | The picture trainer on every platform: Apple silicon and NVIDIA (ADR-0073, 2026-11-07) |
 | Kohya, SimpleTuner, OneTrainer | `bmaltais/kohya_ss`, `bghira/SimpleTuner`, `Nerogar/OneTrainer` | Apache-2.0, AGPL-3.0, AGPL-3.0 | NVIDIA trainers with no Mac path; the last two are AGPL |
 | stable-diffusion.cpp, whisper.cpp | `leejet/stable-diffusion.cpp`, `ggml-org/whisper.cpp` | MIT | Measured against ComfyUI and audio.cpp; kept as fallbacks |
 | Remotion | `remotion-dev/remotion` | Custom (free for individuals and up to 3 employees; paid beyond) | A paid licence for larger companies |

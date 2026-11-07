@@ -43,13 +43,13 @@ async def test_the_engine_reads_it_once_and_remembers(tmp_path: Path, monkeypatc
     (base / "tokenizer").mkdir(parents=True)
     tiny_tokenizer(base / "tokenizer" / "tokenizer.json")
     tool = tmp_path / "tool"
-    (tool / "bin").mkdir(parents=True)
-    runner = tool / "bin" / "python"
+    (tool / ".venv" / "bin").mkdir(parents=True)
+    runner = tool / ".venv" / "bin" / "python"
     runner.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
     runner.chmod(runner.stat().st_mode | stat.S_IXUSR)
     monkeypatch.setattr(dt, "find_tool", lambda *_: (tool, "env"))
     monkeypatch.setattr(dt, "find_base", lambda *_: (base, "cache"))
-    trainer = dt.MfluxTrainer(None)
+    trainer = dt.AiToolkitTrainer(None)
     first = await trainer.tokenize(["sunrise", "zqxvk"])
     assert first is not None and first["sunrise"]["known"] == ["sunrise"]
     assert len(first["zqxvk"]["pieces"]) > 1
@@ -59,4 +59,4 @@ async def test_the_engine_reads_it_once_and_remembers(tmp_path: Path, monkeypatc
     again = await trainer.tokenize(["zqxvk"])
     assert again == {"zqxvk": first["zqxvk"]}
     monkeypatch.setattr(dt, "find_base", lambda *_: None)
-    assert await dt.MfluxTrainer(None).tokenize(["x"]) is None
+    assert await dt.AiToolkitTrainer(None).tokenize(["x"]) is None

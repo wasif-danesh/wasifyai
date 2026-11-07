@@ -23,10 +23,10 @@ While the trainer is a preview, the run does everything except learn, and says s
 3. Say what it is (a character, a style or an object), give it a name, choose one of the three magic words (or
    type your own).
 4. Read the descriptions the app wrote; change any, or choose Describe again.
-5. **Model to teach** shows the model it will teach (FLUX.2 klein base 4B, recommended). Press it to choose
+5. **Model to teach** shows the model it will teach (FLUX.2 klein 4B, the model Create uses, recommended). Press it to choose
    another: every model that can be taught is listed, and a model on this computer that cannot be is listed with
    the reason. Leave **How to teach it** closed to teach it the recommended way (a small adapter).
-6. Choose Teach it. It takes about 25 minutes on a Mac and chat and image making pause. A new sample picture
+6. Choose Teach it. It takes about 15 to 25 minutes on a Mac with Apple silicon, and chat and image making pause. A new sample picture
    appears now and then. You can stop it; nothing is kept.
 7. The result is in My models and in the library, found by its name and magic word.
 
@@ -34,7 +34,7 @@ While the trainer is a preview, the run does everything except learn, and says s
 
 - `dataset_id`: The set of pictures to teach from. It must have at least 8 pictures, a description for each and a
   magic word.
-- `base`: Optional. The model to teach. Leave it out for the recommended one (FLUX.2 klein base 4B).
+- `base`: Optional. The model to teach. Leave it out for the recommended one (FLUX.2 klein 4B).
 - `method`: Optional. `lora` (a small adapter, the recommended and only method for pictures), `qlora` (less
   memory, for writing models) or `full` (teach all of it, Advanced). A method the model cannot use is refused
   with the reason.
@@ -46,8 +46,11 @@ While the trainer is a preview, the run does everything except learn, and says s
 
 ## Needs
 
-- A model that can read pictures (to write the descriptions), the training engine, enough free disk space for
-  the pictures and the samples, and free memory for the run.
+- A Mac with Apple silicon, or a computer with an NVIDIA graphics card (Windows or Linux).
+- The picture trainer, AI Toolkit, set up in the app once (a few GB), and the image model Create uses (FLUX.2
+  klein 4B, from Select image model on an Images screen): it is taught from those same files.
+- A model that can read pictures (to write the descriptions), enough free disk space for the pictures and the
+  samples, and free memory for the run.
 
 ## On the web
 

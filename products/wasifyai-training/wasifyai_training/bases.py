@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from wasifyai_training import trainer
+from wasifyai_training.picture_bases import PICTURE_BASES
 
 FAMILY_FOR_KIND = {
     "character": "image",
@@ -50,19 +50,24 @@ class Descriptor:
     measured: str = ""  # what a real run measured, for the card; empty = not measured
 
 
-DESCRIPTORS = (
+_PICTURE_METHODS_NOT = {
+    "qlora": "Pictures are taught as a small adapter. The less-memory version is for writing models.",
+    "full": "Teaching all of a picture model needs far more memory than a Mac has, and the picture trainer here does "
+    "not do it.",
+}
+
+DESCRIPTORS = tuple(
     Descriptor(
-        id=trainer.BASE,
-        title=trainer.BASE_TITLE,
+        id=p.id,
+        title=p.title,
         family="image",
-        engine="mflux",
-        methods_not={
-            "qlora": "Pictures are taught as a small adapter. The less-memory version is for "
-            "writing models.",
-            "full": "Teaching all of a picture model needs far more memory than a Mac has, and the "
-            "picture trainer does not do it.",
-        },
-    ),
+        engine="ai-toolkit",
+        need_gb=p.need_gb,
+        note=f"{p.note} Use it in Create with {p.use_with}.",
+        methods_not=_PICTURE_METHODS_NOT,
+    )
+    for p in PICTURE_BASES.values()
+) + (
     Descriptor(
         id="qwen3-0.6b-4bit",
         title="Qwen3 0.6B",

@@ -40,7 +40,7 @@ def _cancel(obj: Any) -> Callable[[], bool] | None:
 
 
 TRAINER_TITLES = {
-    "trainer-pictures": "Picture trainer (mflux)",
+    "trainer-pictures": "Picture trainer (AI Toolkit)",
     "trainer-writing": "Writing trainer (mlx-lm)",
     "trainer-deciding": "Decision trainer (Laya)",
     "trainer-video": "Video trainer (diffusers)",

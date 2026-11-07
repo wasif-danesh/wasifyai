@@ -46,10 +46,10 @@ from wasifyai_training.trainer import PreviewTrainer  # noqa: E402
 
 
 class StandInPictureTrainer(PreviewTrainer):
-    """The picture trainer without a model: it writes sample pictures as the preview does, and an adapter in mflux's names."""
+    """The picture trainer without a model: it writes sample pictures as the preview does, and an adapter in ComfyUI's names, as AI Toolkit writes one."""
 
     preview = False
-    engine = "mflux"
+    engine = "ai-toolkit"
     step_s = 0.01
 
     def preflight(self):

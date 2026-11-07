@@ -1,12 +1,13 @@
-"""The desktop's real trainer (mflux), driven through a stand-in for the `mflux-train` program: the
-config it builds, the progress and sample pictures it reads, the adapter it takes out, a failure in
-words and a stopped run. The real program is run by hand (ADR-0073, "Built: the real trainer")."""
+# ruff: noqa: E501  (the stand-in program and a model entry read better on one line)
+"""The desktop's real picture trainer (AI Toolkit), driven through a stand-in for AI Toolkit's
+`run.py`: the config it builds, the progress and sample pictures it reads, the adapter it takes
+out, a failure in words, a stopped run and a paused one picked up again. The real program is run
+by hand (ADR-0073, amendment 2026-11-07)."""
 
 import asyncio
+import json
 import os
-import stat
 import sys
-import zipfile
 from pathlib import Path
 
 import pytest
@@ -14,66 +15,96 @@ from PIL import Image
 from wasifyai_api import desktop_training as dt
 from wasifyai_training.trainer import TrainJob
 
-FAKE = """#!{python}
-import json, os, sys, time, zipfile
+FAKE = """
+import json, os, sys, time
 from pathlib import Path
-argv = sys.argv
-resume = "--resume" in argv
-if resume:
-    out = Path(argv[argv.index("--resume") + 1]).parent.parent
-    total = int((out / "total.txt").read_text())
-    first = int(Path(argv[argv.index("--resume") + 1]).name[:7]) + 1
-else:
-    cfg = json.loads(Path(argv[argv.index("--config") + 1]).read_text())
-    out = Path(cfg["checkpoint"]["output_path"])
-    (out / "preview").mkdir(parents=True)
-    (out / "checkpoints").mkdir()
-    total = cfg["training_loop"]["num_epochs"] * len(list(Path(cfg["data"]).glob("*.png")))
-    (out / "total.txt").write_text(str(total))
-    first = 1
+from PIL import Image
+cfg = json.loads(Path(sys.argv[1]).read_text())
+p = cfg["config"]["process"][0]
+name = cfg["config"]["name"]
+out = Path(p["training_folder"]) / name
+(out / "samples").mkdir(parents=True, exist_ok=True)
+total = p["train"]["steps"]
+every = p["sample"]["sample_every"]
+saves = sorted(out.glob(name + "_*.safetensors"))
+first = int(saves[-1].stem.rsplit("_", 1)[1]) + 1 if saves else 1
 Path(os.environ["FAKE_PID_FILE"]).write_text(str(os.getpid()))
+from extensions_built_in.diffusion_models.flux2.flux2_klein_model import Flux2Klein4BModel
+cfg["klein_te"] = Flux2Klein4BModel.flux2_klein_te_path
+Path(os.environ["FAKE_CFG_FILE"]).write_text(json.dumps(cfg))
 mode = os.environ.get("FAKE_MODE", "ok")
-def preview(n):
-    for k in (1, 2):
-        Path(out / "preview" / f"{{n:07d}}_preview_image_preview-{{k}}.png").write_bytes(b"png")
-def checkpoint(n):
-    with zipfile.ZipFile(out / "checkpoints" / f"{{n:07d}}_checkpoint.zip", "w") as z:
-        z.writestr(f"{{n:07d}}_adapter.safetensors", b"adapter-bytes")
-        z.writestr(f"{{n:07d}}_optimizer.safetensors", b"x" * 1000)
-if not resume:
-    preview(0)
-    sys.stderr.write("\\r100%|##########| 28/28 [00:30<00:00,  1.0s/it]\\n")  # a sample
+pictures = len(list(Path(p["datasets"][0]["folder_path"]).glob("*.png")))
+def samples(n):
+    for k in range(len(p["sample"]["prompts"])):
+        Image.new("RGB", (8, 8), (n, k * 40, 90)).save(out / "samples" / f"17000{n}__{n:09d}_{k}.jpg")
+def save(n):
+    (out / f"{name}_{n:09d}.safetensors").write_bytes(b"checkpoint")
+sys.stderr.write(f"\\rCaching latents: 100%|##| {pictures}/{pictures} [00:01<00:00]\\n")
+if not saves:
+    samples(0)
 for step in range(first, total + 1):
-    sys.stderr.write(f"\\r 50%|#####     | {{step}}/{{total}} [00:01<00:01,  1.0s/it]")
+    sys.stderr.write(f"\\r{name}:  50%|#####     | {step}/{total} [00:01<00:01,  1.0s/it, loss: 0.3]")
     sys.stderr.flush()
     if mode == "fail" and step == 2:
-        sys.stderr.write("\\nValueError: out of memory\\n")
+        sys.stderr.write("\\nRuntimeError: MPS backend out of memory\\n")
         sys.exit(3)
     if mode == "hang" and step == 2:
         time.sleep(600)
-    if mode == "pause" and step == 5 and not resume:
-        checkpoint(3)
+    if mode == "pause" and step == 5 and first == 1:
+        save(3)
         time.sleep(600)
     if mode == "pause_early" and step == 2:
         time.sleep(600)
-    if step % 3 == 0:
-        preview(step)
+    if step % every == 0:
+        samples(step)
     time.sleep(0.01)
-checkpoint(total)
+(out / f"{name}.safetensors").write_bytes(b"adapter-bytes")
+"""
+
+
+# AI Toolkit's klein classes as the launcher finds them; the fake `run.py` writes down where klein reads its
+# text encoder from
+KLEIN = """
+class Flux2KleinModel:
+    flux2_klein_te_path = None
+class Flux2Klein4BModel(Flux2KleinModel):
+    arch = "flux2_klein_4b"
+    flux2_klein_te_path = "Qwen/Qwen3-4B"
 """
 
 
 @pytest.fixture
 def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    bin_dir = tmp_path / "mflux" / "bin"
-    bin_dir.mkdir(parents=True)
-    tool = bin_dir / dt.EXECUTABLE
-    tool.write_text(FAKE.format(python=sys.executable))
-    tool.chmod(tool.stat().st_mode | stat.S_IXUSR)
-    monkeypatch.setenv("WASIFYAI_MFLUX_DIR", str(tmp_path / "mflux"))
+    """A stand-in AI Toolkit folder, its small files and the image model's files."""
+    tool = tmp_path / "ai-toolkit"
+    (tool / ".venv" / "bin").mkdir(parents=True)
+    (tool / "run.py").write_text(FAKE)
+    klein = tool / "extensions_built_in" / "diffusion_models" / "flux2"
+    klein.mkdir(parents=True)
+    for d in (klein.parent.parent, klein.parent, klein):
+        (d / "__init__.py").write_text("")
+    (klein / "flux2_klein_model.py").write_text(KLEIN)
+    python = tool / ".venv" / "bin" / "python"
+    python.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+    python.chmod(0o755)
+    small = tmp_path / "small"
+    for f in ("text_encoder/config.json", "tokenizer/tokenizer.json", "tokenizer/vocab.json"):
+        (small / f).parent.mkdir(parents=True, exist_ok=True)
+        (small / f).write_text("{}")
+    models = tmp_path / "comfy"
+    for folder, name in (
+        ("diffusion_models", "flux-2-klein-4b.safetensors"),
+        ("text_encoders", "qwen_3_4b.safetensors"),
+        ("vae", "flux2-vae.safetensors"),
+    ):
+        (models / folder).mkdir(parents=True, exist_ok=True)
+        (models / folder / name).write_bytes(b"weights")
+    monkeypatch.setenv("WASIFYAI_AI_TOOLKIT_DIR", str(tool))
+    monkeypatch.setenv(dt.MODEL_DIR_ENV, str(models))
     monkeypatch.setenv("FAKE_PID_FILE", str(tmp_path / "pid"))
-    monkeypatch.setattr(dt, "apple_silicon", lambda: True)
-    monkeypatch.setattr(dt, "find_base", lambda *_: (tmp_path / "base", "cache"))
+    monkeypatch.setenv("FAKE_CFG_FILE", str(tmp_path / "cfg.json"))
+    monkeypatch.setattr(dt, "picture_supported", lambda: True)
+    monkeypatch.setattr(dt, "find_base", lambda *_, **__: (small, "cache"))
     return tmp_path
 
 
@@ -90,33 +121,120 @@ def job_in(tmp_path: Path, pictures: int = 4, steps: int = 8) -> TrainJob:
     )  # fmt: skip
 
 
-def test_the_config_makes_epochs_of_the_pictures_and_trains_both_kinds_of_block():
-    cfg = dt.training_config(200, 12, Path("/w"), Path("/o"), sample_every=51)
-    assert cfg["model"] == "flux2-klein-base-4b"
-    assert cfg["training_loop"]["num_epochs"] == 17  # 17 x 12 = 204 steps, at least the 200 asked
-    assert (cfg["training_loop"]["timestep_low"], cfg["training_loop"]["timestep_high"]) == (0, 28)
-    paths = [t["module_path"] for t in cfg["lora_layers"]["targets"]]
-    assert "transformer_blocks.{block}.attn.to_q" in paths
-    assert "single_transformer_blocks.{block}.attn.to_qkv_mlp_proj" in paths
-    assert all(t["rank"] == 16 for t in cfg["lora_layers"]["targets"])
-    assert cfg["monitoring"]["generate_image_frequency"] == 51
+FILES = {
+    "transformer": Path("/m/diffusion_models/flux-2-klein-4b.safetensors"),
+    "text_encoder": Path("/run/text-encoder"),
+    "vae": Path("/m/vae/flux2-vae.safetensors"),
+}
+
+
+def config(**kw: object) -> dict:
+    args = {"sample_every": 50, "prompts": ["a", "b"], **kw}
+    return dt.training_config(200, Path("/w"), Path("/o"), FILES, **args)["config"]["process"][0]  # type: ignore[arg-type]
+
+
+def test_the_config_teaches_the_image_models_own_files_at_rank_16():
+    p = config()
+    assert p["model"]["arch"] == "flux2_klein_4b"
+    assert p["model"]["name_or_path"] == str(FILES["transformer"])
+    assert p["model"]["te_name_or_path"] == "/run/text-encoder"
+    assert p["model"]["vae_path"] == str(FILES["vae"])
+    assert p["model"]["qtype"] == p["model"]["qtype_te"] == "convrot8"
+    assert p["network"] == {"type": "lora", "linear": 16, "linear_alpha": 16}
+    assert p["train"]["steps"] == 200 and p["train"]["lr"] == 1e-4
+    assert p["save"]["save_every"] == dt.CHECKPOINT_EVERY == 25
+    assert p["sample"]["sample_every"] == 50 and p["sample"]["prompts"] == ["a", "b"]
+    assert p["datasets"][0]["folder_path"] == "/w" and p["datasets"][0]["resolution"] == [512]
+    assert p["training_folder"] == "/o"
+
+
+def test_the_config_runs_on_the_macs_graphics_chip_or_the_first_nvidia_card(monkeypatch):
+    monkeypatch.setattr(dt.sys, "platform", "darwin")
+    assert config()["device"] == "mps"
+    for name in ("linux", "win32"):
+        monkeypatch.setattr(dt.sys, "platform", name)
+        assert config()["device"] == "cuda:0"
+
+
+def test_the_config_takes_the_architecture_size_and_rate_from_the_recipe():
+    from dataclasses import replace
+
+    from wasifyai_training.picture_bases import KLEIN_4B
+
+    recipe = replace(
+        KLEIN_4B, arch="flux2_klein_9b", learning_rate={"style": 5e-5}, quantize="", guidance=4.0
+    )
+    p = config(kind="style", recipe=recipe, side=768)
+    assert p["model"]["arch"] == "flux2_klein_9b" and "qtype" not in p["model"]
+    assert p["train"]["lr"] == 5e-5 and p["sample"]["guidance_scale"] == 4.0
+    assert p["datasets"][0]["resolution"] == [768]
 
 
 def test_progress_is_read_from_the_bar():
-    assert dt.parse_progress(" 12%|#   | 12/100 [01:30<10:40,  7.3s/it]") == (12, 100)
+    assert dt.parse_progress("wasify:  12%|#   | 12/100 [01:30<10:40,  7.3s/it]") == (12, 100)
     assert dt.parse_progress("Loading weights") is None
 
 
 def test_it_says_in_words_why_it_cannot_train(home: Path, monkeypatch: pytest.MonkeyPatch):
-    trainer = dt.MfluxTrainer(None)
+    trainer = dt.AiToolkitTrainer(None)
     assert trainer.ready() and trainer.problem() is None
-    monkeypatch.setattr(dt, "find_base", lambda *_: None)
+    monkeypatch.setattr(dt, "find_base", lambda *_, **__: None)
     assert "set it up" in (trainer.problem() or "").lower() and not trainer.ready()
-    monkeypatch.setattr(dt, "apple_silicon", lambda: False)
+    monkeypatch.setattr(dt, "picture_supported", lambda: False)
     assert "Apple silicon" in (trainer.problem() or "") and "NVIDIA" in (trainer.problem() or "")
-    monkeypatch.delenv("WASIFYAI_MFLUX_DIR")
-    monkeypatch.setattr(dt, "apple_silicon", lambda: True)
-    assert "not set up" in (dt.MfluxTrainer(home / "data").problem() or "")
+    monkeypatch.setattr(dt, "picture_supported", lambda: True)
+    monkeypatch.setattr(dt, "find_base", lambda *_, **__: (home / "small", "cache"))
+    monkeypatch.delenv(dt.MODEL_DIR_ENV)
+    assert "Select image model" in (trainer.problem() or "")
+    monkeypatch.delenv("WASIFYAI_AI_TOOLKIT_DIR")
+    assert "not set up" in (dt.AiToolkitTrainer(home / "data").problem() or "")
+
+
+def test_the_image_models_files_are_found_where_the_models_screen_keeps_them(tmp_path: Path):
+    from wasifyai_api.desktop_models import FolderModels, ModelEntry, ModelFile
+
+    files = [
+        ModelFile("diffusion_models", "flux-2-klein-4b.safetensors", "u", 5, "0" * 64),
+        ModelFile("text_encoders", "qwen_3_4b.safetensors", "u", 5, "0" * 64),
+        ModelFile("vae", "flux2-vae.safetensors", "u", 5, "0" * 64),
+    ]
+    entry = ModelEntry(
+        "flux2-klein-4b", "wasifyai-image", "FLUX.2 klein 4B", "", "", 0, tuple(files)
+    )
+    shared = tmp_path / "ComfyUI-Shared" / "models"
+    models = FolderModels([entry], tmp_path / "own", (shared,))
+    trainer = dt.AiToolkitTrainer(None, None, None, models)
+    assert trainer.model_files() is None
+    for f in files:
+        (shared / f.folder).mkdir(parents=True, exist_ok=True)
+        (shared / f.folder / f.name).write_bytes(b"12345")
+    found = trainer.model_files()
+    assert found is not None and found["vae"] == shared / "vae" / "flux2-vae.safetensors"
+    assert found["text_encoder"].name == "qwen_3_4b.safetensors"
+
+
+def test_the_text_encoder_is_one_folder_of_links_beside_the_weights(tmp_path: Path):
+    small = tmp_path / "small"
+    for f in (
+        "text_encoder/config.json", "tokenizer/tokenizer.json",
+        # a Hugging Face cache also holds the model's own weights in shards: never taken
+        "text_encoder/model-00001-of-00002.safetensors", "text_encoder/model.safetensors.index.json",
+    ):  # fmt: skip
+        (small / f).parent.mkdir(parents=True, exist_ok=True)
+        (small / f).write_text("{}")
+    weights = tmp_path / "qwen_3_4b.safetensors"
+    weights.write_bytes(b"w" * 10)
+    te = dt.text_encoder_dir(small, weights, tmp_path / "te")
+    assert sorted(p.name for p in te.iterdir()) == [
+        "config.json", "model.safetensors", "tokenizer.json",
+    ]  # fmt: skip
+    assert (te / "model.safetensors").read_bytes() == weights.read_bytes()
+    assert (te / "model.safetensors").is_symlink()  # never an 8 GB copy
+    dt.text_encoder_dir(small, weights, tmp_path / "te")  # made again over itself
+    import shutil
+
+    shutil.rmtree(te)
+    assert weights.is_file()  # removing the run's folder leaves the model's own file
 
 
 @pytest.mark.asyncio
@@ -124,30 +242,42 @@ async def test_a_run_reports_steps_keeps_the_samples_and_returns_the_adapter(hom
     job = job_in(home)
     steps: list[tuple[int, str]] = []
     samples: list[str] = []
-    result = await dt.MfluxTrainer(None).train(
+    result = await dt.AiToolkitTrainer(None).train(
         job, lambda s, w: steps.append((s, w)), samples.append
     )
     assert steps[0] == (0, "Loading the model")
-    assert steps[1][0] == 1  # the sample's own bar (28 of 28) is not a training step
+    assert steps[1][0] == 1  # the caching bar (4 of 4) is not a training step
     assert [s for s, _ in steps] == sorted(s for s, _ in steps) and steps[-1][0] == job.steps
     assert samples[0] == "step-0000-1.png" and "step-0000-2.png" in samples
+    assert "step-0008-2.png" in samples
     assert all((job.samples / n).is_file() for n in samples)
-    assert result.engine == "mflux" and result.adapter.read_bytes() == b"adapter-bytes"
-    assert not (job.samples.parent / "work").exists()  # the pictures copy and checkpoints are gone
-    assert not (job.samples.parent / "out").exists()
+    with Image.open(job.samples / samples[0]) as im:
+        assert im.format == "PNG"
+    assert result.engine == "ai-toolkit" and result.adapter.read_bytes() == b"adapter-bytes"
+    folder = job.samples.parent
+    assert not (folder / "work").exists() and not (folder / "out").exists()
+    assert not (folder / "text-encoder").exists()
+    seen = json.loads((home / "cfg.json").read_text())
+    cfg = seen["config"]["process"][0]
+    # klein read the text encoder folder the config names, not the Hub's "Qwen/Qwen3-4B"
+    assert seen["klein_te"] == cfg["model"]["te_name_or_path"]
+    assert cfg["sample"]["prompts"][0] == "enaq7x, picture 0"
+    assert "enaq7x" in cfg["sample"]["prompts"][1] and cfg["sample"]["sample_every"] == 2
+    assert Path(cfg["model"]["te_name_or_path"]).name == "text-encoder"
+    assert (home / "comfy" / "text_encoders" / "qwen_3_4b.safetensors").is_file()
 
 
 @pytest.mark.asyncio
 async def test_a_failure_says_what_the_tool_said(home: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("FAKE_MODE", "fail")
     with pytest.raises(RuntimeError, match="out of memory"):
-        await dt.MfluxTrainer(None).train(job_in(home), lambda *_: None, lambda _n: None)
+        await dt.AiToolkitTrainer(None).train(job_in(home), lambda *_: None, lambda _n: None)
 
 
 @pytest.mark.asyncio
 async def test_stopping_a_run_kills_the_process(home: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("FAKE_MODE", "hang")
-    trainer = dt.MfluxTrainer(None)
+    trainer = dt.AiToolkitTrainer(None)
     reached = asyncio.Event()
 
     def report(step: int, _words: str) -> None:
@@ -165,29 +295,15 @@ async def test_stopping_a_run_kills_the_process(home: Path, monkeypatch: pytest.
     assert not trainer.busy
 
 
-def test_the_adapter_is_taken_from_the_newest_checkpoint(tmp_path: Path):
-    for n, body in ((10, b"old"), (20, b"new")):
-        with zipfile.ZipFile(tmp_path / f"{n:07d}_checkpoint.zip", "w") as z:
-            z.writestr(f"{n:07d}_adapter.safetensors", body)
-    target = tmp_path / "adapter.safetensors"
-    assert dt.take_adapter(tmp_path, target) and target.read_bytes() == b"new"
-    assert not dt.take_adapter(tmp_path / "none", tmp_path / "x")
-
-
-def test_the_data_folder_holds_pictures_captions_and_two_sample_prompts(tmp_path: Path):
+def test_the_data_folder_holds_pictures_and_captions_and_gives_two_sample_prompts(tmp_path: Path):
     job = job_in(tmp_path, pictures=2)
     work = tmp_path / "work"
-    dt.prepare_data(job, work)
+    prompts = dt.prepare_data(job, work)
     assert sorted(p.name for p in work.iterdir()) == [
-        "pic-001.png",
-        "pic-001.txt",
-        "pic-002.png",
-        "pic-002.txt",
-        "preview-1.txt",
-        "preview-2.txt",
-    ]
+        "pic-001.png", "pic-001.txt", "pic-002.png", "pic-002.txt",
+    ]  # fmt: skip
     assert (work / "pic-001.txt").read_text() == "enaq7x, picture 0"
-    assert "enaq7x" in (work / "preview-2.txt").read_text()
+    assert prompts[0] == "enaq7x, picture 0" and "enaq7x" in prompts[1]
 
 
 @pytest.mark.asyncio
@@ -199,18 +315,15 @@ async def test_a_taught_model_is_published_to_the_image_engines_styles_and_remov
     adapter = tmp_path / "adapter.safetensors"
     tensors = {}
     for module, (out, inp) in {
-        "transformer_blocks.0.attn.to_q": (4, 4),
-        "transformer_blocks.0.attn.to_k": (4, 4),
-        "transformer_blocks.0.attn.to_v": (4, 4),
-        "single_transformer_blocks.0.attn.to_out": (4, 10),
+        "double_blocks.0.img_attn.qkv": (12, 4),
+        "single_blocks.0.linear2": (4, 10),
     }.items():
         for ab, shape in (("A", [2, inp]), ("B", [out, 2])):
-            n = shape[0] * shape[1]
-            tensors[f"transformer.{module}.lora_{ab}.weight"] = {
-                "dtype": "F32", "shape": shape, "data": bytes(4 * n),
+            tensors[f"diffusion_model.{module}.lora_{ab}.weight"] = {
+                "dtype": "F32", "shape": shape, "data": bytes(4 * shape[0] * shape[1]),
             }  # fmt: skip
-    comfy_lora.write_tensors(adapter, tensors, {})
-    trainer = dt.MfluxTrainer(None, tmp_path / "models")
+    comfy_lora.write_tensors(adapter, tensors, {"software": "ai-toolkit"})
+    trainer = dt.AiToolkitTrainer(None, tmp_path / "models")
     scans: list[int] = []
 
     async def scan() -> None:
@@ -220,28 +333,13 @@ async def test_a_taught_model_is_published_to_the_image_engines_styles_and_remov
     name = await trainer.publish(adapter, "My Cat!", "abcdef0123456789")
     assert name == "wasify-my-cat-abcdef01.safetensors"
     published = tmp_path / "models" / "loras" / name
-    assert (
-        "diffusion_model.double_blocks.0.img_attn.qkv.lora_A.weight"
-        in comfy_lora.read_tensors(published)[0]
-    )
+    tensors, meta = comfy_lora.read_tensors(published)
+    assert "diffusion_model.double_blocks.0.img_attn.qkv.lora_A.weight" in tensors
+    assert meta["taught_on"] == "flux2-klein-4b"
     await trainer.unpublish(name)
     assert not published.exists() and scans == [1, 1]
     await trainer.unpublish("../escape.safetensors")  # a name that leaves the folder is ignored
-    assert await dt.MfluxTrainer(None, None).publish(adapter, "x", "y") is None
-
-
-def test_each_kind_of_thing_has_its_own_learning_rate():
-    rate = lambda kind: dt.training_config(  # noqa: E731
-        8, 4, Path("/w"), Path("/o"), sample_every=2, kind=kind
-    )["optimizer"]["learning_rate"]
-    assert rate("character") == rate("object") == rate("style") == 1e-4
-    assert rate("something else") == 1e-4
-
-
-def test_the_config_names_the_models_own_folder_so_the_trainer_fetches_nothing():
-    cfg = dt.training_config(8, 4, Path("/w"), Path("/o"), sample_every=2, base=Path("/m/base"))
-    assert cfg["model_path"] == "/m/base"
-    assert "model_path" not in dt.training_config(8, 4, Path("/w"), Path("/o"), sample_every=2)
+    assert await dt.AiToolkitTrainer(None, None).publish(adapter, "x", "y") is None
 
 
 @pytest.mark.asyncio
@@ -251,7 +349,7 @@ async def test_a_paused_run_keeps_its_checkpoint_and_goes_on_from_it(
     from wasifyai_training.trainer import Paused
 
     monkeypatch.setenv("FAKE_MODE", "pause")
-    trainer = dt.MfluxTrainer(None)
+    trainer = dt.AiToolkitTrainer(None)
     job = job_in(home, pictures=4, steps=8)
     reached = asyncio.Event()
 
@@ -267,7 +365,7 @@ async def test_a_paused_run_keeps_its_checkpoint_and_goes_on_from_it(
         await task
     assert stopped.value.step == 3  # the checkpoint it had written
     folder = job.samples.parent
-    assert (folder / "work").is_dir() and (folder / "out" / "checkpoints").is_dir()
+    assert (folder / "work").is_dir() and dt.latest_checkpoint(folder / "out" / dt.NAME)
     seen: list[int] = []
     result = await trainer.train(job, lambda s, _w: seen.append(s), lambda _n: None, resume=True)
     assert seen and seen[-1] == job.steps and min(s for s in seen if s) >= 4
@@ -282,7 +380,7 @@ async def test_a_run_stopped_before_its_first_checkpoint_keeps_nothing(
     from wasifyai_training.trainer import Stopped
 
     monkeypatch.setenv("FAKE_MODE", "pause_early")
-    trainer = dt.MfluxTrainer(None)
+    trainer = dt.AiToolkitTrainer(None)
     job = job_in(home)
     reached = asyncio.Event()
     task = asyncio.create_task(
@@ -298,7 +396,7 @@ async def test_a_run_stopped_before_its_first_checkpoint_keeps_nothing(
 
 @pytest.mark.asyncio
 async def test_a_run_that_cannot_be_picked_up_says_so(home: Path):
-    trainer = dt.MfluxTrainer(None)
+    trainer = dt.AiToolkitTrainer(None)
     with pytest.raises(RuntimeError, match="is gone"):
         await trainer.train(job_in(home), lambda *_: None, lambda _n: None, resume=True)
 
@@ -306,25 +404,16 @@ async def test_a_run_that_cannot_be_picked_up_says_so(home: Path):
 @pytest.mark.asyncio
 async def test_the_most_memory_a_run_held_is_measured(home: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(dt, "process_footprint", lambda pid: 31 * 1024**3)
-    result = await dt.MfluxTrainer(None).train(job_in(home), lambda *_: None, lambda _n: None)
+    result = await dt.AiToolkitTrainer(None).train(job_in(home), lambda *_: None, lambda _n: None)
     assert result.peak_bytes == 31 * 1024**3
 
 
-def test_only_the_newest_two_checkpoints_are_kept(tmp_path: Path):
-    for n in (25, 50, 75, 100):
-        (tmp_path / f"{n:07d}_checkpoint.zip").write_bytes(b"z")
-    dt.prune_checkpoints(tmp_path)
-    assert [p.name for p in sorted(tmp_path.iterdir())] == [
-        "0000075_checkpoint.zip",
-        "0000100_checkpoint.zip",
-    ]
-    assert dt.checkpoint_step(dt.latest_checkpoint(tmp_path)) == 100
-    # the checkpoint a picked-up run started from is still read by the trainer: it is never removed
-    for n in (50, 125):
-        (tmp_path / f"{n:07d}_checkpoint.zip").write_bytes(b"z")
-    dt.prune_checkpoints(tmp_path, protect=tmp_path / "0000050_checkpoint.zip")
-    names = [p.name for p in sorted(tmp_path.iterdir())]
-    assert "0000050_checkpoint.zip" in names and "0000075_checkpoint.zip" not in names
+def test_the_newest_checkpoint_is_read_by_its_step(tmp_path: Path):
+    for n in (25, 50):
+        (tmp_path / f"wasify_{n:09d}.safetensors").write_bytes(b"z")
+    (tmp_path / "wasify.safetensors").write_bytes(b"final")  # the adapter is not a checkpoint
+    (tmp_path / "optimizer.pt").write_bytes(b"o")
+    assert dt.checkpoint_step(dt.latest_checkpoint(tmp_path)) == 50
     assert dt.latest_checkpoint(tmp_path / "none") is None
 
 
@@ -354,7 +443,7 @@ def test_the_battery_and_the_memory_a_process_holds_are_read_in_words_and_number
 def test_before_a_run_it_says_what_stops_it_and_what_to_look_out_for(
     home: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    trainer = dt.MfluxTrainer(home)
+    trainer = dt.AiToolkitTrainer(home)
     fit = {
         "verdict": "fits",
         "reason": "",
@@ -384,9 +473,8 @@ def test_before_a_run_it_says_what_stops_it_and_what_to_look_out_for(
     assert "Close other apps" in trainer.preflight()["warnings"][0]
 
 
-def test_the_config_trains_at_the_side_the_run_asks_for(tmp_path):
-    from wasifyai_api.desktop_training import SIDE, training_config
+def test_set_up_finds_only_the_picture_model_it_pinned(tmp_path):
+    from wasifyai_api import training_setup as ts
 
-    at_default = training_config(200, 20, tmp_path / "w", tmp_path / "o", sample_every=50)
-    at_512 = training_config(200, 20, tmp_path / "w", tmp_path / "o", sample_every=50, side=512)
-    assert at_default["max_resolution"] == SIDE == 768 and at_512["max_resolution"] == 512
+    pins = ts.load_pins()
+    assert ts.find_base(tmp_path, pins, base="flux2-klein-9b") is None

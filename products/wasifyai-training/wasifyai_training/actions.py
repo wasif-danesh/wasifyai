@@ -71,7 +71,7 @@ class StartIn(BaseModel):
     base: str | None = Field(
         default=None,
         max_length=80,
-        description="The model to teach, from the Train screen's 'Choose the model and method'. "
+        description="The model to teach, from the Train screen's 'Model to teach'. "
         "Leave it out to use the recommended one.",
     )
     method: str | None = Field(

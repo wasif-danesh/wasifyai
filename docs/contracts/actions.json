@@ -9479,7 +9479,7 @@
               }
             ],
             "default": null,
-            "description": "The model to teach, from the Train screen's 'Choose the model and method'. Leave it out to use the recommended one.",
+            "description": "The model to teach, from the Train screen's 'Model to teach'. Leave it out to use the recommended one.",
             "title": "Base"
           },
           "method": {

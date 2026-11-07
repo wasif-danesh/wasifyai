@@ -25,6 +25,7 @@ import { CheckIt, EvaluationLine } from "./CheckIt";
 import { Choose } from "./Choose";
 import { Decide, DecideResult } from "./Decide";
 import { SetupCard } from "./SetupCard";
+import { TeachModelSelect } from "./TeachModelSelect";
 import { TryIt } from "./TryIt";
 import { Writing, WritingResult } from "./Writing";
 import { useChoices } from "./use-choices";
@@ -1061,6 +1062,11 @@ function CheckStep({
           {noVideo}
         </Notice>
       ) : null}
+      <TeachModelSelect
+        bases={choosing.choices?.bases ?? []}
+        chosen={choosing.base}
+        onPick={choosing.pickBase}
+      />
       <Choose c={choosing} />
       <div className={actions}>
         <Button type="button" variant="outline" onClick={onBack}>

@@ -569,7 +569,8 @@ describe("Train", () => {
     const engine = fake();
     const start = vi.spyOn(engine.api, "startRun");
     await readyToTeach(user, engine.api);
-    expect(await screen.findByText("Choose the model and method")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /Model to teach/ })).toBeTruthy();
+    expect(await screen.findByText("How to teach it")).toBeTruthy();
     expect(screen.getAllByText("Recommended").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Teach it" }));
     await waitFor(() => expect(start).toHaveBeenCalledWith("d".repeat(32), {}));
@@ -580,13 +581,17 @@ describe("Train", () => {
     const engine = fake();
     const start = vi.spyOn(engine.api, "startRun");
     await readyToTeach(user, engine.api);
-    await user.click(await screen.findByText("Choose the model and method"));
+    // the model is chosen from the drop-down on the card
+    await user.click(await screen.findByRole("button", { name: /Model to teach/ }));
+    const list = await screen.findByRole("list", { name: "Models that can be taught" });
     // a model nobody can teach is listed with the reason, and cannot be picked
-    const other = screen.getByLabelText(/Some other picture model/) as HTMLInputElement;
-    expect(other.disabled).toBe(true);
+    const other = within(list).getByRole("button", { name: /Some other picture model/ });
+    expect((other as HTMLButtonElement).disabled).toBe(true);
     expect(
-      screen.getByText(/The app has no way to teach it|the app has no way to teach it/i),
+      within(list).getByText(/The app has no way to teach it|the app has no way to teach it/i),
     ).toBeTruthy();
+    await user.keyboard("{Escape}");
+    await user.click(await screen.findByText("How to teach it"));
     // a method the model cannot use is shown with why, not hidden
     const less = screen.getByLabelText(/Small adapter, less memory/) as HTMLInputElement;
     expect(less.disabled).toBe(true);
@@ -604,10 +609,13 @@ describe("Train", () => {
     const engine = fake();
     const start = vi.spyOn(engine.api, "startRun");
     await readyToTeach(user, engine.api);
-    await user.click(await screen.findByText("Choose the model and method"));
+    await user.click(await screen.findByText("How to teach it"));
     await user.click(screen.getByText("For experts"));
     await user.click(screen.getByLabelText(/Teach all of it/));
-    await user.click(screen.getByLabelText(/Base B/));
+    await user.click(screen.getByRole("button", { name: /Model to teach/ }));
+    const list = await screen.findByRole("list", { name: "Models that can be taught" });
+    await user.click(within(list).getByRole("button", { name: /Base B/ }));
+    expect(await screen.findByRole("button", { name: /Model to teach Base B/ })).toBeTruthy();
     // Base B cannot teach all of it: the choice falls back to the small adapter
     expect((screen.getByLabelText(/Teach all of it/) as HTMLInputElement).disabled).toBe(true);
     await user.click(screen.getByRole("button", { name: "Teach it" }));

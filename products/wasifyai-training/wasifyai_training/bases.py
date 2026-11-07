@@ -197,7 +197,7 @@ def choices(
     have: Callable[[Descriptor], bool] | None = None,
     family: str | None = None,
 ) -> dict[str, Any]:
-    """The rows of the "Choose the model and method" panel for a kind of teaching.
+    """The rows of the "Model to teach" drop-down for a kind of teaching.
 
     `fit` is the engine's verdict for this computer (or a function that gives it for a base),
     `ready` whether the engine is set up, `have` whether a base is on this computer (a row that is

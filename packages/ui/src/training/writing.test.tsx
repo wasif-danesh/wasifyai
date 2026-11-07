@@ -307,12 +307,12 @@ describe("Writing", () => {
     },
   );
 
-  it("keeps the model and method behind one closed line that says what is recommended", async () => {
+  it("shows the model to teach on the card and keeps the method behind one closed line", async () => {
     const user = userEvent.setup();
     const engine = fake();
     render(<Writing api={engine.api} pollMs={10} />);
     await user.click(await screen.findByRole("button", { name: "New set of examples" }));
-    const summary = await screen.findByText("Choose the model and method");
+    const summary = await screen.findByText("How to teach it");
     const box = summary.closest("details") as HTMLDetailsElement;
     expect(box.open).toBe(false);
     expect(within(summary).getByText("Recommended")).toBeTruthy();
@@ -322,7 +322,7 @@ describe("Writing", () => {
     expect(screen.getByLabelText("What it is asked, example 1")).toBeTruthy();
     expect(screen.getByLabelText("What it should answer, example 1")).toBeTruthy();
     await user.click(within(box).getByRole("button", { name: "Better" }));
-    expect(within(summary).getByText("Qwen3 0.6B, Better")).toBeTruthy();
+    expect(within(summary).getByText("Better")).toBeTruthy();
   });
 
   it("pastes rows in and stops a run that is going", { timeout: 30_000 }, async () => {
@@ -514,7 +514,7 @@ const ROW = (id: string, title: string, installed: boolean, recommended = false)
   ],
 });
 
-describe("Which model?", () => {
+describe("Model to teach", () => {
   it(
     "lists the models, fetches one that is not there after its size is shown, and teaching waits for it",
     { timeout: 30_000 },
@@ -568,20 +568,26 @@ describe("Which model?", () => {
       await user.click(screen.getByLabelText(/Two columns/));
       await user.paste(Array.from({ length: 12 }, (_, i) => `Q${i}?\tA${i}`).join("\n"));
       await user.click(screen.getByRole("button", { name: /Add 12 pasted rows/ }));
-      expect(await screen.findByText("Which model?")).toBeTruthy();
-      expect((screen.getByLabelText("Qwen3 0.6B") as HTMLInputElement).checked).toBe(true);
-      expect(screen.getByText(/Measured here: 70 steps in 13 s/)).toBeTruthy();
-      // nothing to get for the model that is there; the other one says its size
+      // the model is chosen from the drop-down on the card
+      await user.click(await screen.findByRole("button", { name: /Model to teach Qwen3 0.6B/ }));
+      const list = await screen.findByRole("list", { name: "Models that can be taught" });
+      const small = within(list).getByRole("button", { name: /Qwen3 0.6B/ });
+      expect(small.getAttribute("aria-current")).toBe("true");
+      expect(within(list).getAllByText(/Measured here: 70 steps in 13 s/).length).toBeGreaterThan(
+        0,
+      );
+      expect(within(list).getByText("To download before teaching")).toBeTruthy();
+      // nothing to get for the model that is there
       expect(screen.queryByRole("button", { name: "Get Qwen3 0.6B" })).toBeNull();
-      const get = await screen.findByRole("button", { name: "Get Qwen3 1.7B" });
-      expect(get.textContent).toBe("Get it (984 MB)");
-      // choosing it: teaching waits and says why
-      await user.click(screen.getByLabelText("Qwen3 1.7B"));
+      // choosing the other one: teaching waits and says why, and it offers to get it with its size
+      await user.click(within(list).getByRole("button", { name: /Qwen3 1.7B/ }));
       expect(update).toHaveBeenCalledWith(expect.any(String), { base: "qwen3-1.7b-4bit" });
       expect(await screen.findByText(/Qwen3 1.7B is not on this computer yet/)).toBeTruthy();
       expect((screen.getByRole("button", { name: "Teach it" }) as HTMLButtonElement).disabled).toBe(
         true,
       );
+      const get = await screen.findByRole("button", { name: "Get Qwen3 1.7B" });
+      expect(get.textContent).toBe("Get it (984 MB)");
       // fetching it: the size was shown on the button and is sent back
       await user.click(get);
       expect(engine.api.installLanguagePart).toHaveBeenCalledWith(

@@ -458,17 +458,17 @@ describe("Decide", () => {
     expect(engine.log).toContain("cancel");
   });
 
-  it("keeps the model and method behind one closed line that says what is recommended", async () => {
+  it("shows the model to teach on the card and keeps the method behind one closed line", async () => {
     const user = userEvent.setup();
     const engine = fake();
     render(<Decide api={engine.api} pollMs={10} />);
     await user.click(await screen.findByRole("button", { name: "New set of examples" }));
-    const summary = await screen.findByText("Choose the model and method");
+    const summary = await screen.findByText("How to teach it");
     const box = summary.closest("details") as HTMLDetailsElement;
     expect(box.open).toBe(false);
     expect(within(summary).getByText("Recommended")).toBeTruthy();
     await user.click(within(box).getByRole("button", { name: "Better" }));
-    expect(within(summary).getByText("Laya, Better")).toBeTruthy();
+    expect(within(summary).getByText("Better")).toBeTruthy();
     // nothing about encoders, loss or calibration
     expect(screen.queryByText(/encoder|calibration|loss/i)).toBeNull();
   });

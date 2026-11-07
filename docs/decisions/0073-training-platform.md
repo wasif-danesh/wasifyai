@@ -552,3 +552,21 @@ ask jobs). An admin sets each trainer up on a worker (`POST /admin/workers/engin
 the storage key of **that person's** model (or refuses, "not yours"), and the media worker fetches the file for that one job into its `loras` folder and removes it.
 **Checked for real** through the web stack on this Mac: Ena's video look (2,761 s, the desktop's loss to four decimals, used from the web API for a real 768x512 clip), a decision model (43 s), a writing model (12 s) and a picture
 style. **Not built:** *Use in chat* for a writing model (a worker would have to serve the adapter behind a per-person chat alias), pausing a run, a queue of runs, the Linux GPU trainers (P7).
+
+## Amendment (2026-11-07, owner): "Model to teach" on every card
+
+The owner asked that the person choose the model to teach on the training screen itself, on every card (pictures,
+video, writing, decisions), and not from the Images picker. The model choice was inside the closed "Choose the model
+and method" on the picture and video cards and "Which model?" inside it on the writing and decision cards. It is now
+one visible **Model to teach** button on each card (`packages/ui/src/training/TeachModelSelect.tsx`): a drop-down
+under the button, like the model picker (ADR-0093 amendment of the same day), that lists every descriptor of the
+family with what it is good for and what a real run measured, and lists a model on this computer with no
+descriptor with the reason (decision 3 and the 2026-10-24 amendment, unchanged). A model that is not on this
+computer is chosen like the others and **Get it** with its size appears under the button. The closed line keeps only
+the method and is called **How to teach it**. Nothing on the engine changed: the choice is the same `base` it was.
+
+Still one model for pictures (FLUX.2 klein base 4B) and one for video (LTX-Video 2B 0.9.5), so those lists hold one
+row each. A second picture model needs the hard-coded klein names in the trainers (`trainer.py`, `bases.py`,
+`desktop_training.py`, `remote_train.py`, `comfy_lora.py`) to come from the descriptor first, and the owner's yes to
+the model and its download.
+

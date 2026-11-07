@@ -22,6 +22,7 @@ import { Textarea } from "../components/textarea";
 import { actions, chips, field, fieldLabel, hint, panel } from "../styles";
 import { EvaluationLine } from "./CheckIt";
 import { SetupCard } from "./SetupCard";
+import { TeachModelSelect } from "./TeachModelSelect";
 import { type DecideHook, useDecide } from "./use-decide";
 import { useDecisionBases } from "./use-decision-bases";
 import { useTrainingSetup } from "./use-setup";
@@ -569,112 +570,79 @@ function ExamplesStep({ w }: { w: DecideHook }) {
 // ---- the model and the editor -------------------------------------------------------------------
 
 /**
- * "Which model?": the models a decision model can be taught on. One that is not on this computer is chosen like the others
- * and fetched next to its name, after its size is shown; teaching waits for it.
+ * "Model to teach": the models a decision model can be taught on, in the drop-down every training card has. One that
+ * is not on this computer is chosen like the others and fetched under the button, after its size is shown.
  */
 function ModelChoice({ w, api, pollMs }: { w: DecideHook; api: TrainingApi; pollMs?: number }) {
   const lang = useDecisionBases(api, pollMs, () => void w.replan());
-  const group = useId();
   const rows = w.state.status?.choices.bases ?? [];
   const chosen = w.state.current?.base || w.state.status?.choices.default_base || "";
-  if (rows.length < 2) return null;
+  const b = rows.find((x) => x.id === chosen);
+  const part = b ? lang.bases.find((x) => x.id === b.id)?.model : undefined;
+  const getting = part?.progress.state === "installing";
+  const value =
+    part && part.progress.total_bytes > 0
+      ? part.progress.done_bytes / part.progress.total_bytes
+      : undefined;
   return (
-    <fieldset className={cn(field, "m-0 border-0 p-0")}>
-      <legend className={cn(fieldLabel, "mb-1.5")}>Which model?</legend>
-      <div className="grid gap-2">
-        {rows.map((b) => {
-          const part = lang.bases.find((x) => x.id === b.id)?.model;
-          const getting = part?.progress.state === "installing";
-          const value =
-            part && part.progress.total_bytes > 0
-              ? part.progress.done_bytes / part.progress.total_bytes
-              : undefined;
-          return (
-            <div
-              key={b.id}
-              className="flex items-start gap-3 rounded-lg border px-3 py-2 has-[:checked]:border-primary"
-            >
-              <input
-                type="radio"
-                name={group}
-                className="mt-1"
-                aria-label={b.title}
-                checked={chosen === b.id}
-                disabled={!b.can_teach}
-                onChange={() => void w.patch({ base: b.id })}
-              />
-              <span className="grid min-w-0 flex-1 gap-0.5">
-                <span>
-                  {b.title}
-                  {b.recommended ? (
-                    <span className="ml-2 rounded-full border px-2 py-0.5 text-xs">
-                      Recommended
-                    </span>
-                  ) : null}
-                </span>
-                <span className={hint}>
-                  {b.can_teach ? b.note : b.reason}
-                  {b.measured ? ` Measured here: ${b.measured}.` : ""}
-                </span>
-                {getting ? (
-                  <JobMeter
-                    title="Getting the model"
-                    text={value === undefined ? "Starting" : `${Math.round(value * 100)}%`}
-                    value={value}
-                    label={`Download progress of ${b.title}`}
-                  />
-                ) : null}
-                {part?.progress.state === "failed" ? (
-                  <span className="text-destructive text-sm">{part.progress.message}</span>
-                ) : null}
+    <TeachModelSelect
+      bases={rows}
+      chosen={chosen}
+      onPick={(id) => void w.patch({ base: id })}
+      below={
+        <>
+          <p className={cn(hint, "m-0")}>
+            Choose the one for many languages if your texts are not in English.
+          </p>
+          {b && getting ? (
+            <JobMeter
+              title="Getting the model"
+              text={value === undefined ? "Starting" : `${Math.round(value * 100)}%`}
+              value={value}
+              label={`Download progress of ${b.title}`}
+            />
+          ) : null}
+          {part?.progress.state === "failed" ? (
+            <span className="text-destructive text-sm">{part.progress.message}</span>
+          ) : null}
+          {b?.can_teach && !b.installed && part ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {getting ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  aria-label={`Stop getting ${b.title}`}
+                  onClick={() => void lang.cancel(b.id)}
+                >
+                  Stop
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  aria-label={`Get ${b.title}`}
+                  onClick={() => void lang.install(b.id, part.bytes)}
+                >
+                  Get it ({gigabytes(part.bytes)})
+                </Button>
+              )}
+              <span className={hint}>
+                Downloaded once, every file checked, and kept in the app's own folder.
               </span>
-              {b.can_teach && !b.installed && part ? (
-                getting ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    aria-label={`Stop getting ${b.title}`}
-                    onClick={() => void lang.cancel(b.id)}
-                  >
-                    Stop
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    aria-label={`Get ${b.title}`}
-                    onClick={() => void lang.install(b.id, part.bytes)}
-                  >
-                    Get it ({gigabytes(part.bytes)})
-                  </Button>
-                )
-              ) : null}
             </div>
-          );
-        })}
-      </div>
-      {lang.error ? <span className="text-destructive text-sm">{lang.error}</span> : null}
-      <p className={hint}>
-        Choose the one for many languages if your texts are not in English. Each is downloaded once,
-        every file checked, and kept in the app's own folder.
-      </p>
-    </fieldset>
+          ) : null}
+          {lang.error ? <span className="text-destructive text-sm">{lang.error}</span> : null}
+        </>
+      }
+    />
   );
 }
 
-/** What the collapsed "Choose the model and method" line says: the recommendation, or what was chosen. */
+/** What the collapsed "How to teach it" line says: the recommendation, or what was chosen. */
 function chosenSummary(w: DecideHook): string {
-  const set = w.state.current;
-  const rows = w.state.status?.choices.bases ?? [];
-  const base = set?.base || w.state.status?.choices.default_base || "";
-  const picked = rows.find((b) => b.id === base);
-  const changed =
-    (set?.base && set.base !== w.state.status?.choices.default_base) || set?.quality === "better";
-  return changed
-    ? `${picked?.title ?? w.state.plan?.base_title ?? ""}, ${set?.quality === "better" ? "Better" : "Quick"}`
-    : "Recommended";
+  return w.state.current?.quality === "better" ? "Better" : "Recommended";
 }
 
 function Editor({ w, api, pollMs }: { w: DecideHook; api: TrainingApi; pollMs?: number }) {
@@ -740,9 +708,10 @@ function Editor({ w, api, pollMs }: { w: DecideHook; api: TrainingApi; pollMs?: 
             ) : null}
           </>
         ) : null}
+        <ModelChoice w={w} api={api} pollMs={pollMs} />
         <details className="rounded-lg border px-3 py-2">
           <summary className="cursor-pointer font-semibold">
-            Choose the model and method
+            How to teach it
             <span className="ml-2 font-normal text-muted-foreground">{chosenSummary(w)}</span>
           </summary>
           <div className="mt-3 grid gap-4">
@@ -766,7 +735,6 @@ function Editor({ w, api, pollMs }: { w: DecideHook; api: TrainingApi; pollMs?: 
                 Better goes over your examples twice as often and takes about twice as long.
               </p>
             </fieldset>
-            <ModelChoice w={w} api={api} pollMs={pollMs} />
             {plan ? (
               <p className={hint}>
                 It is taught on {plan.base_title}: {plan.base_note} All of the model is taught, not

@@ -23,9 +23,9 @@ While the trainer is a preview, the run does everything except learn, and says s
 3. Say what it is (a character, a style or an object), give it a name, choose one of the three magic words (or
    type your own).
 4. Read the descriptions the app wrote; change any, or choose Describe again.
-5. Leave **Choose the model and method** closed to use the recommendation (FLUX.2 klein base 4B, as a small
-   adapter). Open it to see every model on this computer and how each can be taught, with the reason beside
-   anything that cannot be used.
+5. **Model to teach** shows the model it will teach (FLUX.2 klein base 4B, recommended). Press it to choose
+   another: every model that can be taught is listed, and a model on this computer that cannot be is listed with
+   the reason. Leave **How to teach it** closed to teach it the recommended way (a small adapter).
 6. Choose Teach it. It takes about 25 minutes on a Mac and chat and image making pause. A new sample picture
    appears now and then. You can stop it; nothing is kept.
 7. The result is in My models and in the library, found by its name and magic word.
@@ -66,7 +66,7 @@ the desktop only for now.
 - **Add at least 8 pictures** Add more, 15 to 25 good ones is plenty.
 - **Write the descriptions first** Choose Write the descriptions on the screen.
 - **A model is being taught** Wait for it to finish or stop it.
-- **This model cannot be taught yet** Choose the recommended model, or leave the choice closed.
+- **This model cannot be taught yet** Choose the recommended model under Model to teach.
 - **You've reached today's limit** Try again tomorrow.
 
 ---
@@ -97,10 +97,9 @@ answers got closer to yours.
    download the same model in the form the chat engine runs (shown first). Choose **Back to my chat model** to
    return to the model chat used before.
 
-To use a different model or to take more care, open **Choose the model and method** (closed by default, with the
-recommendation). It lists Qwen3 0.6B (small and quick), 1.7B and 4B (they follow the examples more closely and take
-longer), and Quick or Better. One that is not on this computer has **Get it** next to its name, with its size;
-nothing is fetched until you press it.
+To use a different model, press **Model to teach**: it lists Qwen3 0.6B (small and quick), 1.7B and 4B (they follow
+the examples more closely and take longer). One that is not on this computer shows **Get it** under the button, with
+its size; nothing is fetched until you press it. To take more care, open **How to teach it** and choose Better.
 
 ### Fields
 
@@ -151,7 +150,8 @@ it had not seen, beside a plain word counter, where it went wrong, and whether i
 5. Choose Teach it. It takes a minute or two on a Mac; chat and image making pause.
 6. Read the report, then choose **Try it** or **Sort a list**. The model is kept in My models, about 840 MB.
 
-To use the model for many languages or to take more care, open **Choose the model and method** (closed by default).
+To use the model for many languages, choose it under **Model to teach**. To take more care, open **How to teach
+it** (closed by default) and choose Better.
 All of the model is taught; it is not taught as a small adapter.
 
 ### Fields

@@ -164,19 +164,19 @@ parts:
       - darwin-arm64
   trainer-pictures:
     pins:
-      comment: AI Toolkit (Ostris) at the commit the owner's character-lora runs used on this Mac (2026-10-14);
-        its own manager sets up its environment for this computer (PyTorch with MPS on Apple silicon, CUDA
+      comment: AI Toolkit (Ostris), main of 2026-11-04 (it has FLUX.3 Image Klein; ADR-0097); the
+        owner's character-lora runs used f7a1fb9a on this Mac (2026-10-14). Its own manager sets up its environment for this computer (PyTorch with MPS on Apple silicon, CUDA
         with an NVIDIA card). The image model's files are the ones Create uses (`model`); only the text
         encoder's small files are fetched here (ADR-0073, amendment 2026-11-07).
       schema: 1
       tool:
         id: ai-toolkit
-        version: 0.13.25
-        commit: f7a1fb9a77e5418269b1e9eda4ace6d7c1b7bb47
+        version: 0.13.41
+        commit: beb94824c51480a04d3c86c718603676fdef6938
         source: github.com/ostris/ai-toolkit
-        url: https://codeload.github.com/ostris/ai-toolkit/tar.gz/f7a1fb9a77e5418269b1e9eda4ace6d7c1b7bb47
-        size: 35326066
-        sha256: 688f0ef17c70a257187fa032ce757191fb9ea8e3ede254f0cc507439da3fad3f
+        url: https://codeload.github.com/ostris/ai-toolkit/tar.gz/beb94824c51480a04d3c86c718603676fdef6938
+        size: 35446242
+        sha256: 025d01a3d8ad3b46afc3be1bd5b3857627e9ebac06648bd31cbdbbc346cf2cbf
         packages_bytes: 6000000000  # not measured: the CUDA build of PyTorch is several GB
         python: '3.12'
       base:

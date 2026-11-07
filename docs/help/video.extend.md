@@ -34,6 +34,8 @@ If you taught the video model a look or a motion (under **Train models**, in the
 - `video_id`: The video to carry on.
 - `prompt`: What should keep happening.
 - `seconds`: How much is added: 5 or 8 (5 unless you say otherwise).
+- `model`: which video model makes it, by its id (for example `ltx-video-2b`); left out, the default. A model
+  that cannot do this is refused ("This model cannot ...").
 
 ## Limits
 

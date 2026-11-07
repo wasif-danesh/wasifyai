@@ -2510,6 +2510,20 @@
             "maxItems": 8,
             "title": "Styles",
             "type": "array"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Which image model makes it, by its id (as the Models page names it, for example qwen-image-2.1); leave it out for the default model.",
+            "title": "Model"
           }
         },
         "required": [
@@ -2645,6 +2659,20 @@
             "maxItems": 8,
             "title": "Styles",
             "type": "array"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Which image model makes it, by its id (as the Models page names it, for example qwen-image-2.1); leave it out for the default model.",
+            "title": "Model"
           }
         },
         "required": [
@@ -2831,6 +2859,20 @@
             "maxItems": 8,
             "title": "Styles",
             "type": "array"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Which image model makes it, by its id (as the Models page names it, for example qwen-image-2.1); leave it out for the default model.",
+            "title": "Model"
           }
         },
         "required": [
@@ -2983,6 +3025,20 @@
             "maxItems": 8,
             "title": "Styles",
             "type": "array"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Which image model makes it, by its id (as the Models page names it, for example qwen-image-2.1); leave it out for the default model.",
+            "title": "Model"
           }
         },
         "required": [
@@ -9649,6 +9705,20 @@
             ],
             "title": "Quality",
             "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Which video model makes it, by its id (as the Models page names it, for example wan2.2-14b); leave it out for the default model.",
+            "title": "Model"
           }
         },
         "required": [
@@ -9759,6 +9829,20 @@
             ],
             "title": "Seconds",
             "type": "integer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Which video model makes it, by its id (as the Models page names it, for example wan2.2-14b); leave it out for the default model.",
+            "title": "Model"
           }
         },
         "required": [
@@ -9873,6 +9957,20 @@
             ],
             "title": "Seconds",
             "type": "integer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Which video model makes it, by its id (as the Models page names it, for example wan2.2-14b); leave it out for the default model.",
+            "title": "Model"
           }
         },
         "required": [

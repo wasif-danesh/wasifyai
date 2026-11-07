@@ -66,18 +66,36 @@ def build_capabilities(config: ProductConfig, deps: ProviderDeps) -> Capabilitie
         "image": {},
         "video": {},
     }
-    for name, binding in config.capabilities.items():
-        family, _, action = name.partition(".")
+
+    def provider(name: str, binding: CapabilityBinding) -> Any:
+        family = name.partition(".")[0]
         key = (binding.provider, family)
         if key not in _FACTORIES:
             raise ValueError(f"{name}: provider {binding.provider!r} does not support {family!r}")
         if key not in cache:
             cache[key] = _FACTORIES[key](deps, config)
-        grouped[family][action] = (binding, cache[key])
+        return cache[key]
+
+    for name, binding in config.capabilities.items():
+        family, _, action = name.partition(".")
+        grouped[family][action] = (binding, provider(name, binding))
+    # each model's own bindings (ADR-0097); the first model answers a request that names none
+    per_model: dict[str, dict[str, dict[str, tuple[CapabilityBinding, Any]]]] = {
+        "image": {}, "video": {},
+    }  # fmt: skip
+    for m in config.models:
+        for name, binding in m.capabilities.items():
+            family, _, action = name.partition(".")
+            per_model[family].setdefault(m.id, {})[action] = (binding, provider(name, binding))
+    settings = {m.id: dict(m.settings) for m in config.models}
+    for family in ("image", "video"):
+        first = next(iter(per_model[family].values()), None)
+        if first is not None and not grouped[family]:
+            grouped[family] = first
     return Capabilities(
         text=TextCapabilities(grouped["text"], config.id),
-        image=MediaCapabilities("image", grouped["image"], config.id),
-        video=MediaCapabilities("video", grouped["video"], config.id),
+        image=MediaCapabilities("image", grouped["image"], config.id, per_model["image"], settings),
+        video=MediaCapabilities("video", grouped["video"], config.id, per_model["video"], settings),
         storage=deps.storage,
         config=config,
         db=deps.db,

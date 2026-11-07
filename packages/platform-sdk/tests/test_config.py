@@ -80,3 +80,22 @@ def test_committed_product_configs_are_valid(product):
     """Every shipped product loads, its workflows and map files exist, and every mapped node ID
     is present in the workflow JSON."""
     load_product_config(REPO_PRODUCTS, product, environ={}, check_files=True)
+
+
+def test_models_bind_media_only_and_once(tmp_path):
+    import pytest as _pytest
+    from wasifyai_platform_sdk.config import ProductConfig
+
+    gen = {"image.generate": {"provider": "fake"}}
+    ok = ProductConfig.model_validate({"id": "p", "models": [{"id": "a", "capabilities": gen}]})
+    assert ok.model(None).id == "a" and ok.model("a").id == "a" and ok.model("b") is None
+    for bad in (
+        {"id": "p", "models": [{"id": "a", "capabilities": {"text.chat": {"provider": "fake"}}}]},
+        {"id": "p", "models": [{"id": "a", "capabilities": {}}]},
+        {"id": "p", "models": [{"id": "a", "capabilities": gen}] * 2},
+        {"id": "p", "capabilities": {"image.edit": {"provider": "fake"}},
+         "models": [{"id": "a", "capabilities": gen}]},
+        {"id": "p", "models": [{"id": "Bad Id", "capabilities": gen}]},
+    ):  # fmt: skip
+        with _pytest.raises(ValueError):
+            ProductConfig.model_validate(bad)

@@ -74,6 +74,8 @@ class ImageState(TypedDict, total=False):
     lora_files: dict[
         str, str
     ]  # on the web: the storage key of each style, which is the person's own
+    # which of the product's models makes the picture (ADR-0097); absent: the first in product.yaml
+    model: str
     # the picture of the library the change starts from, when the person chose one there
     # (not a file they added)
     source_id: str
@@ -164,6 +166,16 @@ def check_styles(raw: object) -> tuple[list[dict[str, Any]], str]:
     return out, ""
 
 
+# the capability verb of each mode, and what a model that lacks it cannot do (ADR-0097)
+VERBS = {"text": "generate", "image": "edit", "reference": "reference", "inpaint": "inpaint"}
+CANNOT = {
+    "text": "make a picture from words",
+    "image": "change a picture",
+    "reference": "combine two pictures",
+    "inpaint": "change a painted area",
+}
+
+
 def check_advanced(state: dict[str, Any], sized: bool) -> tuple[dict[str, int], str]:
     """Steps and a size of one's own, or why they are refused."""
     out: dict[str, int] = {}
@@ -200,8 +212,8 @@ def size_of(state: ImageState) -> tuple[int, int]:
 
 
 def recipe_of(state: ImageState, width: int, height: int) -> dict[str, Any]:
-    """What made the image, in the shape the window shows and "run again" reads. The model is not
-    named: the graph asks for a capability, not a model (see docs/phase2-stage-b-plan.md)."""
+    """What made the image, in the shape the window shows and "run again" reads. The model is named
+    by its catalogue id when the person chose one (ADR-0097), so "Make it again" uses it too."""
     sized = state["mode"] in ("text", "reference")  # the others take their shape from the picture
     styles = {"styles": state["styles"]} if state.get("styles") else {}
     advanced: dict[str, Any] = {"steps": state["steps"]} if state.get("steps") else {}
@@ -218,6 +230,7 @@ def recipe_of(state: ImageState, width: int, height: int) -> dict[str, Any]:
         "loras": state.get("loras") or [],
         **styles,  # by id, strength, checksum and title: "Make it again" finds them (ADR-0091)
         **advanced,
+        **({"model": state["model"]} if state.get("model") else {}),
     }
 
 
@@ -334,6 +347,13 @@ def build_image_graph(
             await discard_all(picked)
             return refuse_with(code, message)
 
+        model = state.get("model")
+        if model is not None:  # one of this product's models, and one that can do this (ADR-0097)
+            offered = caps.image.models()
+            if not isinstance(model, str) or model not in offered:
+                return await refused("invalid_request", "Please choose one of the image models.")
+            if VERBS[mode] not in offered[model]:
+                return await refused("invalid_request", f"This model cannot {CANNOT[mode]}.")
         sized = mode in ("text", "reference")
         if sized and (state.get("size") or DEFAULT_SIZE) not in SIZES:
             return await refused("invalid_request", "Please choose one of the image sizes.")
@@ -406,6 +426,8 @@ def build_image_graph(
         }
         if "steps" in advanced:
             out["steps"] = advanced["steps"]
+        if model is not None:
+            out["model"] = model
         if "width" in advanced:
             out["width"], out["height"] = advanced["width"], advanced["height"]
         return out
@@ -439,6 +461,8 @@ def build_image_graph(
             extra["steps"] = state["steps"]
         if state.get("lora_files"):
             extra["lora_files"] = state["lora_files"]
+        if state.get("model"):
+            extra["model"] = state["model"]
         prompt = state["prompt"]
         if mode == "image":
             handle = await caps.image.edit(

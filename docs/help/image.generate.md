@@ -22,6 +22,8 @@ Make a new picture from a description and keep it in your library.
 
 - `prompt`: A clear, concrete description, in English works best.
 - `size`: square, landscape, portrait, wide or tall.
+- `model`: which image model makes it, by its id (for example `qwen-image-2.1`); left out, the default. A model
+  that cannot do this is refused ("This model cannot ...").
 
 ## Limits
 

@@ -52,8 +52,9 @@ class Rig:
         return [p for p in self.asked() if not isinstance(p, str)]
 
 
-def make_rig(tmp_path: Path, enhance=None, describe=None):
-    """Capabilities for a throwaway `wasifyai-image` product with scripted replies."""
+def make_rig(tmp_path: Path, enhance=None, describe=None, models=None):
+    """Capabilities for a throwaway `wasifyai-image` product with scripted replies. `models`: the
+    product's models (ADR-0097) in place of its own image bindings."""
     d = tmp_path / "wasifyai-image"
     d.mkdir(parents=True, exist_ok=True)
     (d / "product.yaml").write_text(
@@ -70,11 +71,18 @@ def make_rig(tmp_path: Path, enhance=None, describe=None):
                         "defaults": {"replies": describe or ["A blue square."]},
                         "inputs": ["text", "image"],
                     },
-                    "image.generate": {"provider": "fake"},
-                    "image.edit": {"provider": "fake"},
-                    "image.reference": {"provider": "fake"},
-                    "image.inpaint": {"provider": "fake"},
+                    **(
+                        {}
+                        if models
+                        else {
+                            "image.generate": {"provider": "fake"},
+                            "image.edit": {"provider": "fake"},
+                            "image.reference": {"provider": "fake"},
+                            "image.inpaint": {"provider": "fake"},
+                        }
+                    ),
                 },
+                **({"models": models} if models else {}),
                 "uploads": {"image": {}},
                 "enhance": {
                     "text_to_image": {"prompt": "enhance_text_to_image", "max_chars": 500},

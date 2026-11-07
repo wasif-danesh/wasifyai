@@ -178,6 +178,8 @@ export type VideoWorkspaceProps = {
   notices?: ReactNode;
   /** When set, the fields are shown but making is refused with this reason. */
   blockedReason?: string | null;
+  /** which of the product's models makes the clip (ADR-0097): the one the person chose */
+  model?: string | null;
   /** Asked before a clip is made; false stops it (the window opens its model picker when none is ready). */
   beforeMake?: () => boolean;
   /** Whether "Save a copy" is on offer. */
@@ -214,6 +216,7 @@ export function VideoWorkspace({
   onMade,
   notices,
   blockedReason = null,
+  model = null,
   beforeMake,
   canSave = false,
   downloadHref,
@@ -373,9 +376,10 @@ export function VideoWorkspace({
         sourceId: value.source?.id,
         sourceImageId: value.mode === "image" ? (fromLibrary.current ?? undefined) : undefined,
         draft: value.mode === "image" && value.draft,
+        model: model ?? undefined,
       });
     },
-    [flow, looks, usable],
+    [flow, looks, usable, model],
   );
 
   const make = useCallback(() => {

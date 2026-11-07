@@ -28,6 +28,8 @@ If you taught the video model a look or a motion (under **Train models**, in the
 - `prompt`: What should move.
 - `seconds`: 5 or 8 (5 unless you say otherwise).
 - `quality`: `final` (the default) or `draft`: about four times as quick and softer, to see the motion first.
+- `model`: which video model makes it, by its id (for example `ltx-video-2b`); left out, the default. A model
+  that cannot do this is refused ("This model cannot ...").
 
 ## Limits
 

@@ -28,6 +28,8 @@ If you taught the video model a look or a motion (under **Train models**, in the
 - `prompt`: What happens in the clip.
 - `shape`: landscape, portrait or square.
 - `seconds`: 5 or 8 (5 unless you say otherwise).
+- `model`: which video model makes it, by its id (for example `wan2.2-14b`); left out, the default. A model
+  that cannot do this is refused ("This model cannot ...").
 
 ## Limits
 

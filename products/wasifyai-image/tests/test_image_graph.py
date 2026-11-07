@@ -416,3 +416,39 @@ async def test_on_the_web_a_service_style_goes_to_the_worker_by_its_key(tmp_path
     job = rig.sink.submitted[0]
     assert job.prompt["lora_files"] == {"service-ab12cd34ef56.safetensors": key}
     assert asked == []  # the service's style is not one of the person's looks
+
+
+# ---- choosing a model (ADR-0097) -----------------------------------------------------------
+
+MODELS = [
+    {"id": "big", "capabilities": {
+        verb: {"provider": "fake", "defaults": {"made_by": "big"}}
+        for verb in ("image.generate", "image.edit", "image.reference", "image.inpaint")}},
+    {"id": "small", "capabilities": {
+        "image.generate": {"provider": "fake", "defaults": {"made_by": "small"}}}},
+]  # fmt: skip
+
+
+async def test_the_chosen_model_makes_the_picture_and_the_recipe_names_it(tmp_path, ctx):
+    rig = make_rig(tmp_path, models=MODELS)
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "model": "small"})
+    assert rig.sink.submitted[0].prompt["made_by"] == "small"
+    await s.finish_job()
+    assert s.images.images[0].recipe["model"] == "small"
+    await Story(rig).start({"mode": "text", "prompt": "a fox"})  # none chosen: the first
+    assert rig.sink.submitted[1].prompt["made_by"] == "big"
+
+
+async def test_a_model_that_is_not_offered_or_cannot_do_it_is_refused_before_any_work(
+    tmp_path, ctx
+):
+    rig = make_rig(tmp_path, models=MODELS)
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "model": "nope"})
+    assert "choose one of the image models" in s.state["refusal"]["message"]
+    up = await put_upload(rig)
+    s = await Story(rig).start(
+        {"mode": "image", "prompt": "make it dusk", "image_key": up.key, "model": "small"}
+    )
+    assert s.state["refusal"]["message"] == "This model cannot change a picture."
+    assert not await exists(rig, up.key)  # the upload is let go on the way out, as on every refusal
+    assert rig.sink.submitted == []

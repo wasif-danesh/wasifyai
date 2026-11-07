@@ -122,7 +122,20 @@ async def finished(d, wait_s=10):
 
 def test_the_shipped_catalogue_is_pinned_and_safe():
     entries = load_catalogue(PRODUCTS, ["wasifyai-image", "hello"])
-    assert [e.id for e in entries] == ["flux2-klein-4b"]
+    assert [e.id for e in entries] == [
+        "flux2-klein-4b", "qwen-image-2.1", "z-image-turbo", "hidream-o1"
+    ]  # fmt: skip
+    for entry in entries:  # every file of every model is pinned to a commit
+        for f in entry.files:
+            assert f.url.startswith("https://huggingface.co/") and "/main/" not in f.url
+            assert len(f.sha256) == 64 and f.size > 1_000_000
+    # what each model can do comes from the product's `models:` list (ADR-0097)
+    assert [e.can for e in entries] == [
+        ("image.edit", "image.generate", "image.inpaint", "image.reference"),
+        ("image.edit", "image.generate", "image.reference"),
+        ("image.generate",),
+        ("image.generate",),
+    ]
     e = entries[0]
     assert e.approx_ram_gb == 24
     assert {f.name for f in e.files} == {
@@ -133,6 +146,27 @@ def test_the_shipped_catalogue_is_pinned_and_safe():
         assert len(f.sha256) == 64 and f.size > 1_000_000
         assert "/main/" not in f.url  # a commit, not a branch that can move
     assert 16_100_000_000 < e.total_bytes < 16_200_000_000
+
+
+def test_the_video_catalogue_lists_the_offered_models_and_what_each_can_do():
+    entries = load_catalogue(PRODUCTS, ["wasifyai-video"])
+    assert [e.id for e in entries] == ["ltx-video-2b", "wan2.2-14b", "minimax-h3"]
+    assert [e.can for e in entries] == [
+        ("video.animate", "video.extend", "video.generate"),
+        ("video.generate",),
+        ("video.generate",),
+    ]
+
+
+def test_a_pinned_model_the_product_does_not_offer_is_not_shown(tmp_path):
+    product = tmp_path / "p"
+    product.mkdir()  # Video's catalogue, with a product that offers only LTX-Video
+    (product / "models.yaml").write_text((PRODUCTS / "wasifyai-video" / "models.yaml").read_text())
+    (product / "product.yaml").write_text(
+        "id: p\nmodels:\n  - id: ltx-video-2b\n"
+        "    capabilities: { video.generate: { provider: fake } }\n"
+    )
+    assert [e.id for e in load_catalogue(tmp_path, ["p"])] == ["ltx-video-2b"]
 
 
 def test_a_catalogue_entry_cannot_name_a_path_outside_the_models_folder():

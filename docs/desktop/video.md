@@ -28,6 +28,18 @@ each needs its licence and a measurement first), a smaller text encoder (the 8-b
 download by a third; its effect on the picture is not measured), sound for clips, clips longer than 5 seconds, and checking the
 finished clip (the known gap of images too).
 
+### Several models (ADR-0097, built 2026-11-07; `docs/image-video-models-plan.md`)
+
+`product.yaml` lists `models:`: LTX-Video 2B (the default; Create, Animate, Extend; 24 frames a second), Wan 2.2 14B
+(Create only; 16 a second; a 5 second clip at 832x480 took 30 minutes on an M5 Pro, 2026-11-07) and MiniMax-H3
+(Create only, with sound; 24 a second in steps of 17 frames; a 5 second clip at 768x512 took 24 minutes). Wan and
+MiniMax-H3 have no draft setting and take no taught looks. A model's `settings` say its frame rate, so a 5 second clip
+is 121 frames on LTX, 81 on Wan and 124 on MiniMax-H3, and whether it has a draft setting and takes looks; the graph
+refuses what the chosen model cannot do before any work. The window sends the chosen model's id as `model`, hides the
+Video items it cannot do, and `GET /desktop/models` gives each entry `can`; a pinned model the product does not list is
+not shown. Wan runs on its fp16 files (57 GB): torch has no float8 on Apple's graphics chip, so the fp8 ones do not
+load. Its picture to video workflow (`wan2.2-14b-i2v`) is written but waits for its own fp16 files.
+
 ## Video Builder (ADR-0077, stages V1a to V1c and MG1; experimental)
 
 Videos written as an HTML page and drawn frame by frame on this computer, in a locked box. It is always in the

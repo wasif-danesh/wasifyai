@@ -17,13 +17,16 @@ from wasifyai_platform_sdk.workflows import Workflow, workflow_problems
 PRODUCTS = Path(__file__).resolve().parents[2]
 WORKFLOWS = PRODUCTS / "wasifyai-video" / "workflows"
 NAMES = ["ltx-video-2b-t2v", "ltx-video-2b-i2v", "ltx-video-2b-extend"]
+WAN = ["wan2.2-14b-t2v", "wan2.2-14b-i2v"]
 
 
 def test_the_product_config_loads_and_binds_every_mode():
     cfg = load_product_config(PRODUCTS, "wasifyai-video", environ={})
-    assert cfg.capabilities["video.generate"].workflow == "ltx-video-2b-t2v"
-    assert cfg.capabilities["video.animate"].workflow == "ltx-video-2b-i2v"
-    assert cfg.capabilities["video.extend"].workflow == "ltx-video-2b-extend"
+    first = cfg.model(None)  # the default model (ADR-0097)
+    assert first is not None and first.id == "ltx-video-2b"
+    assert first.capabilities["video.generate"].workflow == "ltx-video-2b-t2v"
+    assert first.capabilities["video.animate"].workflow == "ltx-video-2b-i2v"
+    assert first.capabilities["video.extend"].workflow == "ltx-video-2b-extend"
     assert "text.moderate" not in cfg.capabilities
     assert cfg.capabilities["text.enhance"].model == "prompt-enhancer"
     assert cfg.capabilities["text.describe_image"].model == "multimodal"
@@ -153,3 +156,22 @@ def test_every_video_workflow_takes_up_to_two_looks_before_the_sampler(name):
     ]["inputs"]["model"] == ["44", 0]
     with pytest.raises(ValueError, match="at most 2"):
         wf.fill(values, [("a.safetensors", 1.0), ("b.safetensors", 1.0), ("c.safetensors", 1.0)])
+
+
+def test_each_video_model_names_its_frame_rate_and_takes_what_the_screen_sends():
+    import yaml
+
+    cfg = load_product_config(PRODUCTS, "wasifyai-video", environ={})
+    catalogue = yaml.safe_load((PRODUCTS / "wasifyai-video" / "models.yaml").read_text())["models"]
+    kept = {e["id"]: {f"{f['folder']}/{f['name']}" for f in e["files"]} for e in catalogue}
+    sent = {"generate": {"prompt", "seed", "width", "height", "length"},
+            "animate": {"prompt", "seed", "length", "image"}}  # fmt: skip
+    for m in cfg.models:
+        assert m.settings.get("frames_per_second"), m.id
+        for name, binding in m.capabilities.items():
+            wf = Workflow.load(WORKFLOWS, binding.workflow)
+            assert not wf.problems()
+            verb = name.split(".", 1)[1]
+            if verb in sent:
+                assert sent[verb] <= set(wf.map.inputs), (m.id, verb)
+            assert set(wf.map.models) <= kept[m.id], (m.id, set(wf.map.models) - kept[m.id])

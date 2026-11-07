@@ -41,10 +41,13 @@ export function resolveItem(
   opts: {
     conversationId: string | null;
     notebook: string | null;
+    /** items the chosen model cannot do (ADR-0097): not shown */
+    cannot?: ReadonlySet<string>;
   },
 ): ItemResolver {
-  const { conversationId, notebook } = opts;
+  const { conversationId, notebook, cannot } = opts;
   return (id): ItemView | undefined => {
+    if (cannot?.has(id)) return { hidden: true };
     if (id === "chat") {
       return {
         current: route === "home" && !conversationId,

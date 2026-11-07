@@ -24,6 +24,8 @@ chair from the second. The two originals stay. You choose the shape of the new p
 - `image_ids`: Two pictures of your library, in order.
 - `prompt`: What to make from them.
 - `size`: The shape of the new picture (square, landscape, portrait, wide or tall).
+- `model`: which image model makes it, by its id (for example `qwen-image-2.1`); left out, the default. A model
+  that cannot do this is refused ("This model cannot ...").
 
 ## Limits
 

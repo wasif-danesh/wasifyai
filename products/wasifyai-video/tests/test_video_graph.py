@@ -362,3 +362,73 @@ async def test_a_look_that_is_not_the_persons_own_is_refused_before_any_work(tmp
     )
     assert s.state["status"] == "refused" and "not yours" in s.state["refusal"]["message"]
     assert rig.sink.submitted == []
+
+
+# ---- choosing a model (ADR-0097) -----------------------------------------------------------
+
+MODELS = [
+    {"id": "ltx", "settings": {"frames_per_second": 24}, "capabilities": {
+        verb: {"provider": "fake", "defaults": {"made_by": "ltx"}}
+        for verb in ("video.generate", "video.animate", "video.extend")}},
+    {"id": "wan", "settings": {"frames_per_second": 16, "frame_step": 4, "frame_offset": 1,
+                              "draft": False, "looks": False},
+     "capabilities": {
+        "video.generate": {"provider": "fake", "defaults": {"made_by": "wan"}},
+        "video.animate": {"provider": "fake", "defaults": {"made_by": "wan"}}}},
+]  # fmt: skip
+
+
+async def test_the_chosen_model_makes_the_clip_at_its_own_frame_rate(tmp_path, ctx):
+    rig = make_rig(tmp_path, models=MODELS)
+    await Story(rig).start({"mode": "text", "prompt": "a fox", "model": "wan", "seconds": 5})
+    job = rig.sink.submitted[0]
+    assert job.prompt["made_by"] == "wan" and job.prompt["length"] == 81  # 16 a second, and one
+    await Story(rig).start({"mode": "text", "prompt": "a fox", "seconds": 8})  # none: the first
+    job = rig.sink.submitted[1]
+    assert job.prompt["made_by"] == "ltx" and job.prompt["length"] == LENGTHS[8] == 193
+
+
+async def test_a_video_model_not_offered_or_that_cannot_do_it_is_refused(tmp_path, ctx):
+    rig = make_rig(tmp_path, models=MODELS)
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "model": "nope"})
+    assert "choose one of the video models" in s.state["refusal"]["message"]
+    s = await Story(rig).start(
+        {"mode": "extend", "prompt": "more", "source_id": "x", "model": "wan"}
+    )
+    assert s.state["refusal"]["message"] == "This model cannot extend a video."
+    assert rig.sink.submitted == []
+
+
+async def test_a_model_without_a_draft_or_looks_says_so_before_any_work(tmp_path, ctx):
+    rig = make_rig(tmp_path, models=MODELS)
+    s = await Story(rig).start(
+        {
+            "mode": "text",
+            "prompt": "a fox",
+            "model": "wan",
+            "loras": [{"name": "wasify-video-ena-1a2b3c4d.safetensors", "weight": 1}],
+        }
+    )
+    assert "taught on" in s.state["refusal"]["message"]
+    assert rig.sink.submitted == []
+
+
+def test_a_clip_is_the_fewest_frames_the_model_can_make_at_its_rate():
+    class Video:
+        def __init__(self, **s):
+            self.s = s
+
+        def setting(self, model, name, default=None):
+            return self.s.get(name, default)
+
+    class Caps:
+        def __init__(self, **s):
+            self.video = Video(**s)
+
+    from wasifyai_video.graphs.video import frames_for
+
+    assert [frames_for(Caps(), None, s) for s in (5, 8)] == [121, 193]  # LTX, the default
+    wan = Caps(frames_per_second=16, frame_step=4, frame_offset=1)
+    assert [frames_for(wan, "wan", s) for s in (5, 8)] == [81, 129]
+    minimax = Caps(frames_per_second=24, frame_step=17, frame_offset=5)
+    assert [frames_for(minimax, "m", s) for s in (5, 8)] == [124, 192]

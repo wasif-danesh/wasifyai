@@ -1,0 +1,23 @@
+workflow: qwen-image-2.1.json
+notes: >
+  Text to image with Qwen-Image 2.1 (int8). Converted from ComfyUI's own template image_qwen_image_2_1_t2i with
+  ComfyUI 0.44.2 (graphToPrompt), its prompt rewriter removed (the app has Enhance) and its size selector replaced
+  by the request's width and height. Euler, 25 steps, cfg 1, as the template.
+models:
+  - diffusion_models/qwen_image_2.1_int8_convrot.safetensors
+  - text_encoders/qwen3vl_8b_int8_convrot.safetensors
+  - vae/qwen_image_2.1_vae_bf16.safetensors
+inputs:
+  prompt: { node: "3", field: prompt }
+  seed: { node: "8", field: seed }
+  steps: { node: "8", field: steps }
+  width: { node: "6", field: width }
+  height: { node: "6", field: height }
+outputs:
+  image: { node: "10", type: image }
+lora_chain:
+  loader: LoraLoaderModelOnly
+  max: 8
+  from: { node: "2", output: 0 }
+  to:
+    - { node: "9", field: model }

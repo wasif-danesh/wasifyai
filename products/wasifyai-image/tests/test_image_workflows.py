@@ -21,10 +21,12 @@ WORKFLOWS = PRODUCTS / "wasifyai-image" / "workflows"
 
 def test_the_product_config_loads_and_binds_every_mode():
     cfg = load_product_config(PRODUCTS, "wasifyai-image", environ={})
-    assert cfg.capabilities["image.generate"].workflow == "flux2-klein-4b"
-    assert cfg.capabilities["image.edit"].workflow == "flux2-klein-4b-edit"
-    assert cfg.capabilities["image.reference"].workflow == "flux2-klein-4b-reference"
-    assert cfg.capabilities["image.inpaint"].workflow == "flux2-klein-4b-inpaint"
+    klein = cfg.model(None)  # the first model answers a request that names none (ADR-0097)
+    assert klein is not None and klein.id == "flux2-klein-4b"
+    assert klein.capabilities["image.generate"].workflow == "flux2-klein-4b"
+    assert klein.capabilities["image.edit"].workflow == "flux2-klein-4b-edit"
+    assert klein.capabilities["image.reference"].workflow == "flux2-klein-4b-reference"
+    assert klein.capabilities["image.inpaint"].workflow == "flux2-klein-4b-inpaint"
     assert "text.moderate" not in cfg.capabilities and "text.moderate_image" not in cfg.capabilities
     assert cfg.uploads["image"].max_bytes == 10 * 1024 * 1024
 
@@ -34,7 +36,35 @@ ALL = [
     "flux2-klein-4b-edit",
     "flux2-klein-4b-reference",
     "flux2-klein-4b-inpaint",
+    "qwen-image-2.1",
+    "qwen-image-2.1-edit",
+    "qwen-image-2.1-reference",
+    "z-image-turbo",
+    "ideogram-4",
+    "hidream-o1",
 ]
+
+# what the image graph sends for each verb (graphs/image.py); `steps` is sent when a person sets it
+SENT = {
+    "generate": {"prompt", "seed", "steps", "width", "height"},
+    "edit": {"prompt", "seed", "steps", "image"},
+    "reference": {"prompt", "seed", "steps", "width", "height", "image", "image2"},
+    "inpaint": {"prompt", "seed", "steps", "image", "mask"},
+}
+
+
+def test_each_models_workflows_take_what_the_screen_sends_from_files_in_the_catalogue():
+    import yaml
+
+    cfg = load_product_config(PRODUCTS, "wasifyai-image", environ={})
+    catalogue = yaml.safe_load((PRODUCTS / "wasifyai-image" / "models.yaml").read_text())["models"]
+    files = {m["id"]: {f"{f['folder']}/{f['name']}" for f in m["files"]} for m in catalogue}
+    for model in cfg.models:
+        assert model.id in files, f"{model.id} is not in models.yaml"
+        for cap, binding in model.capabilities.items():
+            wf = Workflow.load(WORKFLOWS, binding.workflow)
+            assert set(wf.map.inputs) == SENT[cap.split(".")[1]], (model.id, cap)
+            assert set(wf.map.models) <= files[model.id], (model.id, cap)
 
 
 @pytest.mark.parametrize("name", ALL)

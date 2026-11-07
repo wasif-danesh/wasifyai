@@ -25,6 +25,8 @@ replace the animal. The original stays.
 - `image_id`: The picture to change.
 - `prompt`: What to put in the area.
 - `region`: The area, as a rectangle: `left`, `top`, `width` and `height` as shares of the picture (0 to 1). In the app you paint it.
+- `model`: which image model makes it, by its id (for example `qwen-image-2.1`); left out, the default. A model
+  that cannot do this is refused ("This model cannot ...").
 
 ## Limits
 

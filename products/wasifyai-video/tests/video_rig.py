@@ -71,8 +71,9 @@ class Rig:
         return [p for p in self.asked() if not isinstance(p, str)]
 
 
-def make_rig(tmp_path: Path, enhance=None, describe=None):
-    """Capabilities for a throwaway `wasifyai-video` product with scripted replies."""
+def make_rig(tmp_path: Path, enhance=None, describe=None, models=None):
+    """Capabilities for a throwaway `wasifyai-video` product with scripted replies. `models`: the
+    product's models (ADR-0097) in place of its own video bindings."""
     d = tmp_path / "wasifyai-video"
     d.mkdir(parents=True, exist_ok=True)
     (d / "product.yaml").write_text(
@@ -89,10 +90,17 @@ def make_rig(tmp_path: Path, enhance=None, describe=None):
                         "defaults": {"replies": describe or ["A blue square."]},
                         "inputs": ["text", "image"],
                     },
-                    "video.generate": {"provider": "fake"},
-                    "video.animate": {"provider": "fake"},
-                    "video.extend": {"provider": "fake"},
+                    **(
+                        {}
+                        if models
+                        else {
+                            "video.generate": {"provider": "fake"},
+                            "video.animate": {"provider": "fake"},
+                            "video.extend": {"provider": "fake"},
+                        }
+                    ),
                 },
+                **({"models": models} if models else {}),
                 "uploads": {"image": {}},
                 "enhance": {
                     "text_to_video": {"prompt": "enhance_text_to_video", "max_chars": 500},

@@ -1,0 +1,21 @@
+workflow: wan2.2-14b-i2v.json
+notes: >
+  Picture to video with Wan 2.2 14B (fp8). The picture is scaled to about 0.4 megapixel, in steps of 16.
+  ComfyUI's template written out by hand (ComfyUI 0.44.2): the high-noise model makes the first two of four steps and
+  the low-noise model the last two, each with Lightx2v's 4-step LoRA, CFG 1, shift 5, euler (the only sampler that
+  worked for Wan on this Mac, docs/spikes, W0). 16 frames a second: 81 frames make 5 s.
+models:
+  - diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors
+  - diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors
+  - loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors
+  - loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors
+  - text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors
+  - vae/wan_2.1_vae.safetensors
+inputs:
+  prompt: { node: "14", field: text }
+  seed: { node: "7", field: noise_seed }
+  megapixels: { node: "18", field: megapixels }
+  length: { node: "16", field: length }
+  image: { node: "17", field: image }
+outputs:
+  video: { node: "1", type: video }

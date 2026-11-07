@@ -84,10 +84,33 @@ def _is_uuid(value: str) -> bool:
     return True
 
 
+def frames_for(caps: Capabilities, model: str | None, seconds: int) -> int:
+    """The frames of a clip of `seconds` on the chosen model (its `settings`, ADR-0097): the
+    fewest at its frame rate that it can make, a count of `frame_step * n + frame_offset`.
+    LTX-Video (24 a second, 8n + 1) gives the 121 and 193 of LENGTHS; Wan 2.2 (16, 4n + 1) 81;
+    MiniMax-H3 (24, 17n + 5) 124."""
+    fps = int(caps.video.setting(model, "frames_per_second", FPS))
+    step = int(caps.video.setting(model, "frame_step", 8))
+    offset = int(caps.video.setting(model, "frame_offset", 1))
+    least = fps * seconds
+    return least + (offset - least) % step
+
+
+# the capability verb of each mode, and what a model that lacks it cannot do (ADR-0097)
+VERBS = {"text": "generate", "image": "animate", "extend": "extend"}
+CANNOT = {
+    "text": "make a video from words",
+    "image": "animate a picture",
+    "extend": "extend a video",
+}
+
+
 class VideoState(TypedDict, total=False):
     # request
     mode: str
     prompt: str
+    # which of the product's models makes the clip (ADR-0097); absent: the first in product.yaml
+    model: str
     shape: str
     seconds: int
     quality: str  # image: final, or draft (quicker and softer)
@@ -214,6 +237,13 @@ def build_video_graph(
         if seconds not in LENGTHS:
             lengths = " or ".join(str(n) for n in LENGTHS)
             return refuse_with("invalid_request", f"Please choose a length of {lengths} seconds.")
+        model = state.get("model")
+        if model is not None:  # one of this product's models, and one that can do this (ADR-0097)
+            offered = caps.video.models()
+            if not isinstance(model, str) or model not in offered:
+                return refuse_with("invalid_request", "Please choose one of the video models.")
+            if VERBS[mode] not in offered[model]:
+                return refuse_with("invalid_request", f"This model cannot {CANNOT[mode]}.")
         if mode == "image" and (not key or await find_upload(key) is None):
             return refuse_with("invalid_request", "Please upload your picture again.")
         quality = state.get("quality") or "final"
@@ -222,6 +252,13 @@ def build_video_graph(
         loras, why = check_looks(state.get("loras"))
         if why:
             return refuse_with("invalid_request", why)
+        # a model may have no draft setting and take no looks (its `settings`, ADR-0097)
+        if quality == "draft" and not caps.video.setting(model, "draft", True):
+            return refuse_with("invalid_request", "This model has no draft setting.")
+        if loras and not caps.video.setting(model, "looks", True):
+            return refuse_with(
+                "invalid_request", "Your looks work only with the model they were taught on."
+            )
         lora_files: dict[str, str] = {}
         resolve_looks = caps.extras.get(
             "person_looks"
@@ -242,6 +279,7 @@ def build_video_graph(
             "loras": loras,
             "lora_files": lora_files,
             "status": "working",
+            **({"model": model} if model else {}),
             # the run keeps what it was given: only a source that is checked below is kept
             "source_id": "",
             "source_image_id": "",
@@ -302,7 +340,12 @@ def build_video_graph(
         ctx = require_context()
         seconds, edit = state["seconds"], state["mode"] == "image"
         extend = state["mode"] == "extend"
-        frames = state["keep_frames"] + state["new_frames"] if extend else LENGTHS[seconds]
+        chosen: dict[str, Any] = {"model": state["model"]} if state.get("model") else {}
+        frames = (
+            state["keep_frames"] + state["new_frames"]
+            if extend
+            else frames_for(caps, state.get("model"), seconds)
+        )
         video_id = str(uuid4())
         await videos.add(
             VideoRecord(
@@ -355,15 +398,17 @@ def build_video_graph(
                     length=state["new_frames"],
                     seed=seed,
                     **looks,
+                    **chosen,
                 )
             elif edit:
                 handle = await caps.video.animate(
                     prompt=state["prompt"],
                     image_key=state["image_key"],
-                    length=LENGTHS[seconds],
+                    length=frames,
                     seed=seed,
                     **(DRAFT if state.get("quality") == "draft" else {}),
                     **looks,
+                    **chosen,
                 )
             else:
                 width, height = SHAPES[state["shape"]]
@@ -371,9 +416,10 @@ def build_video_graph(
                     prompt=state["prompt"],
                     width=width,
                     height=height,
-                    length=LENGTHS[seconds],
+                    length=frames,
                     seed=seed,
                     **looks,
+                    **chosen,
                 )
         except Exception:
             await fail_clip(

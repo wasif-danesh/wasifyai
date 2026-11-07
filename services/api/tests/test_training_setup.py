@@ -68,7 +68,7 @@ def alone(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
 def test_the_pins_name_ai_toolkit_and_the_text_encoders_small_files():
     p = ts.load_pins()
-    assert p.tool_version == "0.13.25" and "f7a1fb9a" in p.tool_url
+    assert p.tool_version == "0.13.41" and "beb94824" in p.tool_url
     assert p.tool_size > 1_000_000 and len(p.tool_sha256) == 64
     assert p.model == "flux2-klein-4b"  # the image model's own files are taught
     assert p.base_repo == "black-forest-labs/FLUX.2-klein-base-4B"

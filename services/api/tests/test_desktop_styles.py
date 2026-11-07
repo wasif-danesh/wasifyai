@@ -357,7 +357,8 @@ def hub_rig(tmp_path, data: bytes, *, enabled=True, gated=False, card=None, extr
         client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(serve))
     )
     hub = SimpleNamespace(require=require, client=SimpleNamespace(get=get, has_token=False))
-    models = SimpleNamespace(downloads=downloads, models_dir=tmp_path)
+    # the chosen models folder is elsewhere (another drive): a style still lands where Styles reads
+    models = SimpleNamespace(downloads=downloads, models_dir=tmp_path / "other-drive")
     styles = StylesService(tmp_path / "loras")
     return HubStyles(styles, hub, models), asked, fetched
 

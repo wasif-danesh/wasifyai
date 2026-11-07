@@ -6,7 +6,7 @@ import asyncio
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from wasifyai_platform_sdk.actions import (
@@ -38,6 +38,19 @@ class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+def model_field() -> Any:
+    """The optional `model` of a video action (ADR-0097)."""
+    return Field(
+        None, pattern=r"^[a-z0-9][a-z0-9.-]{0,63}$",
+        description="Which video model makes it, by its id (as the Models page names it, for "
+        "example wan2.2-14b); leave it out for the default model.",
+    )  # fmt: skip
+
+
+def _chosen(p: Any) -> dict:
+    return {"model": p.model} if p.model else {}
+
+
 class GenerateIn(Strict):
     prompt: str = Field(
         min_length=1, max_length=MAX_PROMPT_CHARS,
@@ -45,6 +58,7 @@ class GenerateIn(Strict):
     )  # fmt: skip
     shape: Shape = Field("landscape", description="The shape of the picture.")
     seconds: Literal[5, 8] = Field(5, description="How long the clip is.")
+    model: str | None = model_field()
 
 
 class AnimateIn(Strict):
@@ -60,6 +74,7 @@ class AnimateIn(Strict):
             "making it well."
         ),
     )
+    model: str | None = model_field()
 
 
 class ExtendIn(Strict):
@@ -72,6 +87,7 @@ class ExtendIn(Strict):
         ),
     )  # fmt: skip
     seconds: Literal[5, 8] = Field(5, description="How much is added: about 5 or about 8 seconds.")
+    model: str | None = model_field()
 
 
 class VideoOut(BaseModel):
@@ -101,7 +117,9 @@ def _made(outputs: dict, prompt: str) -> Outcome | None:
 
 
 def _generate_input(p: GenerateIn, ctx: ActionContext) -> dict:
-    return {"mode": "text", "prompt": p.prompt, "shape": p.shape, "seconds": p.seconds}
+    return {
+        "mode": "text", "prompt": p.prompt, "shape": p.shape, "seconds": p.seconds, **_chosen(p)
+    }  # fmt: skip
 
 
 def _generate_result(outputs: dict, p: GenerateIn) -> Outcome | None:
@@ -125,7 +143,7 @@ async def _animate_input(p: AnimateIn, ctx: ActionContext) -> dict:
     key = await stage_picture(ctx, PRODUCT_ID, await _picture_data(ctx, p.image_id))
     return {
         "mode": "image", "prompt": p.prompt, "image_key": key, "seconds": p.seconds,
-        "source_image_id": p.image_id, "quality": p.quality,
+        "source_image_id": p.image_id, "quality": p.quality, **_chosen(p),
     }  # fmt: skip
 
 
@@ -147,7 +165,10 @@ async def _extend_check(p: ExtendIn, ctx: ActionContext) -> None:
 
 
 def _extend_input(p: ExtendIn, ctx: ActionContext) -> dict:
-    return {"mode": "extend", "prompt": p.prompt, "source_id": p.video_id, "seconds": p.seconds}
+    return {
+        "mode": "extend", "prompt": p.prompt, "source_id": p.video_id, "seconds": p.seconds,
+        **_chosen(p),
+    }  # fmt: skip
 
 
 def _extend_result(outputs: dict, p: ExtendIn) -> Outcome | None:

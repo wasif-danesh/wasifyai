@@ -50,8 +50,21 @@ def styles_field() -> Any:
     )  # fmt: skip
 
 
+def model_field() -> Any:
+    """The optional `model` of an image action (ADR-0097)."""
+    return Field(
+        None, pattern=r"^[a-z0-9][a-z0-9.-]{0,63}$",
+        description="Which image model makes it, by its id (as the Models page names it, for "
+        "example qwen-image-2.1); leave it out for the default model.",
+    )  # fmt: skip
+
+
 def _styles(p: "GenerateIn | EditIn | ReferenceIn | InpaintIn") -> dict:
-    return {"styles": [s.model_dump() for s in p.styles]} if p.styles else {}
+    """The styles and the chosen model, as the image run takes them."""
+    out: dict = {"styles": [s.model_dump() for s in p.styles]} if p.styles else {}
+    if p.model:
+        out["model"] = p.model
+    return out
 
 
 class GenerateIn(Strict):
@@ -61,6 +74,7 @@ class GenerateIn(Strict):
     )  # fmt: skip
     size: Size = Field("square", description="The shape of the picture.")
     styles: list[StyleIn] = styles_field()
+    model: str | None = model_field()
 
 
 class EditIn(Strict):
@@ -69,6 +83,7 @@ class EditIn(Strict):
         min_length=1, max_length=MAX_PROMPT_CHARS, description="What to change, in English."
     )
     styles: list[StyleIn] = styles_field()
+    model: str | None = model_field()
 
 
 class ReferenceIn(Strict):
@@ -83,6 +98,7 @@ class ReferenceIn(Strict):
     )  # fmt: skip
     size: Size = Field("square", description="The shape of the new picture.")
     styles: list[StyleIn] = styles_field()
+    model: str | None = model_field()
 
 
 class Region(Strict):
@@ -104,6 +120,7 @@ class InpaintIn(Strict):
         description="The area to change, as a rectangle. Everything outside it stays as it is."
     )
     styles: list[StyleIn] = styles_field()
+    model: str | None = model_field()
 
 
 class ImageOut(BaseModel):

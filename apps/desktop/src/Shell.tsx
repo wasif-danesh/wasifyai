@@ -31,6 +31,7 @@ import { ArrowLeft, ArrowRight, PanelLeft } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { client, connectionsApi, creationsApi, externalApi, voiceApi } from "./api";
+import { useItemsTheModelCannotDo } from "./engine-hooks";
 import { runningJobs } from "./jobs";
 import { resolveItem, titleFor } from "./menu";
 import { CreatePage } from "./pages/Create";
@@ -197,9 +198,10 @@ export function Shell() {
   // the one search (⌘K and the bar's button): any tool by name, or a creation by what it is about
   const [searching, setSearching] = useState(false);
   const openSearch = useCallback(() => setSearching(true), []);
+  const cannot = useItemsTheModelCannotDo();
   const resolve = useMemo(
-    () => resolveItem(route, go, { conversationId, notebook }),
-    [route, go, conversationId, notebook],
+    () => resolveItem(route, go, { conversationId, notebook, cannot }),
+    [route, go, conversationId, notebook, cannot],
   );
   const title = useMemo(() => titleFor(resolve, route), [resolve, route]);
   const places = useMemo(

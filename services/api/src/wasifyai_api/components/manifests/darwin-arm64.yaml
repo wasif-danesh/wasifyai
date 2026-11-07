@@ -18,14 +18,14 @@ components:
       strip: 1
   comfyui:
     title: Image engine (ComfyUI)
-    version: 0.40.0
+    version: 0.44.2
     source: github.com/comfyanonymous/ComfyUI
     min_free_bytes: 4294967296
     lock: comfyui/requirements-aarch64-apple-darwin.lock  # in the engine bundle (scripts/build-engine-bundle.sh)
     archive:
-      url: https://github.com/comfyanonymous/ComfyUI/archive/refs/tags/v0.40.0.tar.gz
-      size: 12722767
-      sha256: d82636cc721b8060099cf31b8d9ed40807c2147db438f88321a0396b7894e8e5
+      url: https://github.com/comfyanonymous/ComfyUI/archive/refs/tags/v0.44.2.tar.gz
+      size: 12872812
+      sha256: 99474c884b31800b4736f01f897b0261658b347539b6e040ed493b7a46435c33
       kind: tar.gz
       strip: 1
 # What the parts the engine's services set up fetch (stage F2; these were the *_pins.json files).
@@ -176,19 +176,19 @@ parts:
       - darwin-arm64
   trainer-pictures:
     pins:
-      comment: AI Toolkit (Ostris) at the commit the owner's character-lora runs used on this Mac (2026-10-14);
-        its own manager sets up its environment for this computer (PyTorch with MPS on Apple silicon, CUDA
+      comment: AI Toolkit (Ostris), main of 2026-11-04 (it has FLUX.3 Image Klein; ADR-0097); the
+        owner's character-lora runs used f7a1fb9a on this Mac (2026-10-14). Its own manager sets up its environment for this computer (PyTorch with MPS on Apple silicon, CUDA
         with an NVIDIA card). The image model's files are the ones Create uses (`model`); only the text
         encoder's small files are fetched here (ADR-0073, amendment 2026-11-07).
       schema: 1
       tool:
         id: ai-toolkit
-        version: 0.13.25
-        commit: f7a1fb9a77e5418269b1e9eda4ace6d7c1b7bb47
+        version: 0.13.41
+        commit: beb94824c51480a04d3c86c718603676fdef6938
         source: github.com/ostris/ai-toolkit
-        url: https://codeload.github.com/ostris/ai-toolkit/tar.gz/f7a1fb9a77e5418269b1e9eda4ace6d7c1b7bb47
-        size: 35326066
-        sha256: 688f0ef17c70a257187fa032ce757191fb9ea8e3ede254f0cc507439da3fad3f
+        url: https://codeload.github.com/ostris/ai-toolkit/tar.gz/beb94824c51480a04d3c86c718603676fdef6938
+        size: 35446242
+        sha256: 025d01a3d8ad3b46afc3be1bd5b3857627e9ebac06648bd31cbdbbc346cf2cbf
         packages_bytes: 1800000000  # its environment and FFmpeg on the M5 Pro: 1.6 GB and 126 MB
         python: '3.12'
       base:

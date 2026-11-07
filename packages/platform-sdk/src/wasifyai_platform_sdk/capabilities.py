@@ -144,10 +144,26 @@ class MediaCapabilities:
         family: str,
         bound: dict[str, tuple[CapabilityBinding, MediaProvider]],
         product: str = "",
+        models: dict[str, dict[str, tuple[CapabilityBinding, MediaProvider]]] | None = None,
+        settings: dict[str, dict[str, Any]] | None = None,
     ):
         self._family = family
-        self._bound = bound
+        self._bound = bound  # the first model's, or the product's own when it lists no models
         self._product = product
+        # model id -> verb -> binding (ADR-0097); a request names one with `model=`
+        self._models = models or {}
+        self._settings = settings or {}  # model id -> its `settings` in product.yaml
+
+    def models(self) -> dict[str, list[str]]:
+        """Each model this product offers in this family, with the verbs it can do."""
+        return {m: sorted(b) for m, b in self._models.items() if b}
+
+    def setting(self, model: str | None, name: str, default: Any = None) -> Any:
+        """A model's setting (`frames_per_second`, say); the first model's when `model` is None,
+        and `default` when the model does not say or the product lists no models."""
+        if model is None:
+            model = next(iter(self._models), None)
+        return self._settings.get(model or "", {}).get(name, default)
 
     async def generate(self, **inputs: Any) -> JobHandle:
         return await self._run("generate", inputs)
@@ -174,11 +190,22 @@ class MediaCapabilities:
 
     async def _run(self, verb: str, inputs: dict[str, Any]) -> JobHandle:
         name = f"{self._family}.{verb}"
+        model = inputs.pop(
+            "model", None
+        )  # which of the product's models (ADR-0097); None: the first
+        bound = self._bound
+        if model is not None:
+            if model not in self._models:
+                raise CapabilityNotConfigured(
+                    f"model {model!r} is not offered by product {self._product!r}"
+                )
+            bound = self._models[model]
         try:
-            binding, provider = self._bound[verb]
+            binding, provider = bound[verb]
         except KeyError:
+            what = f"capability {name!r}" + (f" of model {model!r}" if model else "")
             raise CapabilityNotConfigured(
-                f"capability {name!r} is not configured for product {self._product!r}"
+                f"{what} is not configured for product {self._product!r}"
             ) from None
         return await provider.generate(name, binding, inputs)
 

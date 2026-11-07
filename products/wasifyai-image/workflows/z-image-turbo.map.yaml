@@ -1,0 +1,22 @@
+workflow: z-image-turbo.json
+notes: >
+  Text to image with Z-Image Turbo (bf16). ComfyUI's template image_z_image_turbo converted with ComfyUI 0.44.2:
+  8 steps, res_multistep, cfg 1, AuraFlow shift 3. Z-Image Turbo has no editing workflow.
+models:
+  - diffusion_models/z_image_turbo_bf16.safetensors
+  - text_encoders/qwen_3_4b.safetensors
+  - vae/ae.safetensors
+inputs:
+  prompt: { node: "6", field: text }
+  seed: { node: "2", field: seed }
+  steps: { node: "2", field: steps }
+  width: { node: "5", field: width }
+  height: { node: "5", field: height }
+outputs:
+  image: { node: "1", type: image }
+lora_chain:
+  loader: LoraLoaderModelOnly
+  max: 8
+  from: { node: "7", output: 0 }
+  to:
+    - { node: "4", field: model }

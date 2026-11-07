@@ -41,6 +41,8 @@ export type ModelEntry = {
   fit: Fit | null;
   /** the descriptor of a speech model (ADR-0066); null for other models */
   voice?: { tasks: string[] } | null;
+  /** what the product's model of this id can do (`image.edit` ...), ADR-0097; empty for a product of one model */
+  can?: string[];
 };
 
 export type DownloadState = {

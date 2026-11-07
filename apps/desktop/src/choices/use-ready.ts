@@ -14,6 +14,8 @@ export function useGroupReady(api: ChoicesApi | null, picker: RefObject<ModelSel
   const [ready, setReady] = useState<boolean | null>(null);
   // the chosen row is the person's own key (ADR-0095): this computer's memory does not matter then
   const [keyed, setKeyed] = useState(false);
+  // the id of the chosen row (a catalogue model's id, or `key:<product>`), null before one is chosen
+  const [chosen, setChosen] = useState<string | null>(null);
   const version = useChoicesVersion();
   // biome-ignore lint/correctness/useExhaustiveDependencies: the version is the trigger
   useEffect(() => {
@@ -23,7 +25,9 @@ export function useGroupReady(api: ChoicesApi | null, picker: RefObject<ModelSel
       .then((l) => {
         if (gone) return;
         setReady(l.choices.some((c) => c.chosen && c.state === "ready"));
-        setKeyed(isKeyed(l.choices.find((c) => c.chosen)?.id));
+        const row = l.choices.find((c) => c.chosen);
+        setKeyed(isKeyed(row?.id));
+        setChosen(row?.id ?? null);
       })
       .catch(() => !gone && setReady(null));
     return () => {
@@ -35,5 +39,5 @@ export function useGroupReady(api: ChoicesApi | null, picker: RefObject<ModelSel
     picker.current?.open();
     return false;
   }, [ready, picker]);
-  return { ready, ensure, keyed };
+  return { ready, ensure, keyed, chosen };
 }

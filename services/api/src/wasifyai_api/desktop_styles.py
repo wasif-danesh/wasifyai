@@ -601,7 +601,9 @@ class HubStyles:
             id=f"style:{repo}/{file}", product_id="styles", title=repo,
             source=f"huggingface.co/{repo}", note="", approx_ram_gb=0, files=(target,),
         )  # fmt: skip
-        d = self.models.downloads.start(entry, [target], self.models.models_dir)
+        # into the folder Styles reads (`<its folder>/loras`), not the chosen models folder: when a
+        # person keeps models on another drive the style would land where Styles never looks
+        d = self.models.downloads.start(entry, [target], self.styles.dir.parent)
         base, word = card_of(data)
         self.jobs[d.id] = {}
         title = Path(file).stem.replace("_", " ").replace("-", " ")

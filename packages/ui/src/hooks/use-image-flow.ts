@@ -43,6 +43,8 @@ export type ImageRequest = {
   steps?: number;
   width?: number;
   height?: number;
+  /** which of the product's models makes it (ADR-0097); the product's first when absent */
+  model?: string;
 };
 
 const sleep = (ms: number, signal: AbortSignal) =>
@@ -168,6 +170,7 @@ export function useImageFlow(api: ImageFlowApi) {
         ...(request.styles && request.styles.length > 0 ? { styles: request.styles } : {}),
         ...(mode !== "text" && request.sourceId ? { source_id: request.sourceId } : {}),
         ...(request.steps ? { steps: request.steps } : {}),
+        ...(request.model ? { model: request.model } : {}),
         ...((mode === "text" || mode === "reference") && request.width && request.height
           ? { width: request.width, height: request.height }
           : {}),

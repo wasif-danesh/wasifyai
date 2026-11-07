@@ -292,7 +292,11 @@ def media_capabilities_from(registry: Any, products_dir: Any, env: str) -> list[
         except Exception:
             log.exception("could not read the config of %s", product_id)
             continue
-        for name, binding in config.capabilities.items():
+        bound = list(config.capabilities.items())
+        first = config.model(None)  # a product with several models (ADR-0097): its default one
+        if first is not None:
+            bound += list(first.capabilities.items())
+        for name, binding in bound:
             if binding.provider == "comfyui" and family(name) in {"image", "music", "video"}:
                 out.append(
                     MediaCapability(

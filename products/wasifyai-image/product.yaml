@@ -2,10 +2,26 @@ id: wasifyai-image
 capabilities:
   text.enhance:        { provider: litellm, model: prompt-enhancer }
   text.describe_image: { provider: litellm, model: multimodal, inputs: [text, image] }
-  image.generate:      { provider: comfyui, workflow: flux2-klein-4b, defaults: { width: 1024, height: 1024 } }
-  image.edit:          { provider: comfyui, workflow: flux2-klein-4b-edit }
-  image.reference:     { provider: comfyui, workflow: flux2-klein-4b-reference, defaults: { width: 1024, height: 1024 } }
-  image.inpaint:       { provider: comfyui, workflow: flux2-klein-4b-inpaint }
+# The models a person can choose in Images (ADR-0097), ids as in models.yaml; the first is used when a
+# request names none. A model binds only what it can do.
+models:
+  - id: flux2-klein-4b
+    capabilities:
+      image.generate:  { provider: comfyui, workflow: flux2-klein-4b, defaults: { width: 1024, height: 1024 } }
+      image.edit:      { provider: comfyui, workflow: flux2-klein-4b-edit }
+      image.reference: { provider: comfyui, workflow: flux2-klein-4b-reference, defaults: { width: 1024, height: 1024 } }
+      image.inpaint:   { provider: comfyui, workflow: flux2-klein-4b-inpaint }
+  - id: qwen-image-2.1
+    capabilities:
+      image.generate:  { provider: comfyui, workflow: qwen-image-2.1, defaults: { width: 1024, height: 1024 } }
+      image.edit:      { provider: comfyui, workflow: qwen-image-2.1-edit }
+      image.reference: { provider: comfyui, workflow: qwen-image-2.1-reference, defaults: { width: 1024, height: 1024 } }
+  - id: z-image-turbo
+    capabilities:
+      image.generate:  { provider: comfyui, workflow: z-image-turbo, defaults: { width: 1024, height: 1024 } }
+  - id: hidream-o1
+    capabilities:
+      image.generate:  { provider: comfyui, workflow: hidream-o1, defaults: { width: 1024, height: 1024 } }
 uploads:
   image: { max_bytes: 10485760 }
 enhance:

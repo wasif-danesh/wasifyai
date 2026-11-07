@@ -16,8 +16,19 @@ without one the graph draws it, so the recipe always holds the seed that made th
 | SQLite columns on an older file | migration 1 of the image store (`SQLITE_MIGRATIONS`, `columns=`), run by the SDK's `migrate` (stage J1) |
 | "Make it again" | text images with a recipe only: an edit's source picture is deleted once the image is saved |
 
-The recipe does not name the model: the graph asks for a capability. The same seed gives the same picture on the
-same installed model. `docs/phase2-stage-b-plan.md` has the decisions.
+The graph asks for a capability, not a model. Since ADR-0097 the recipe also keeps the model the person chose
+(`model`, the product's first when it was left out), so "Make it again" uses the same one. The same seed gives the
+same picture on the same installed model.
+
+### Several models (ADR-0097, built 2026-11-07; `docs/image-video-models-plan.md`)
+
+`product.yaml` lists `models:`, each with the capabilities it binds: FLUX.2 klein 4B (all four), Qwen-Image 2.1
+(Create, Edit, Reference), Z-Image Turbo (Create) and HiDream-O1 (Create). The person picks one with "Select image model"; the window
+remembers it (`wasifyai:model:images`) and sends its id as `model` on every request. The engine's
+`GET /desktop/models` gives each entry `can` (its capabilities, from `product.yaml`), so the side menu leaves out what the
+chosen model cannot do and a screen opened anyway says so instead of making. The graph refuses an unknown model or one
+that cannot do the mode before any work. Measured here (ComfyUI 0.44.2, 1024 px, first run includes loading): Qwen-Image
+2.1 at 20 steps 137 s; Z-Image Turbo at 8 steps, see the plan. `docs/phase2-stage-b-plan.md` has the decisions.
 
 ### Reference and Inpaint (built 2026-10-21; `docs/image-inpaint-reference-plan.md`, `docs/spikes/image-ir0.md`)
 

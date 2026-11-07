@@ -38,6 +38,8 @@ export type VideoRequest = {
   draft?: boolean;
   /** looks the person taught (LoRAs on the video model), each with its strength */
   loras?: { name: string; weight: number }[];
+  /** which of the product's models makes it (ADR-0097); the product's first when absent */
+  model?: string;
 };
 
 const sleep = (ms: number, signal: AbortSignal) =>
@@ -166,8 +168,11 @@ export function useVideoFlow(api: VideoFlowApi) {
                 : {}),
               ...(request.mode === "image" && request.draft ? { quality: "draft" } : {}),
             };
-      const body =
-        request.loras && request.loras.length > 0 ? { ...input, loras: request.loras } : input;
+      const body = {
+        ...input,
+        ...(request.loras && request.loras.length > 0 ? { loras: request.loras } : {}),
+        ...(request.model ? { model: request.model } : {}),
+      };
       void follow((signal) => startRun(VIDEO_PRODUCT, body, signal, onEvent), ctrl.signal);
     },
     [dispatch, follow, onEvent, startRun],

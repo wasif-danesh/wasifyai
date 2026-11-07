@@ -17,7 +17,7 @@ import logging
 import os
 import shutil
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -76,6 +76,9 @@ class ModelEntry:
     approx_ram_gb: int
     files: tuple[ModelFile, ...]
     voice: VoiceModel | None = None  # the descriptor of a speech, music or avatar model (ADR-0066)
+    # what the product's model of this id can do (`image.edit` ...), from `product.yaml` `models:`
+    # (ADR-0097); empty when the product binds one model at the top level
+    can: tuple[str, ...] = ()
 
     @property
     def total_bytes(self) -> int:
@@ -111,12 +114,29 @@ def parse_catalogue(raw: dict[str, Any], product_id: str) -> list[ModelEntry]:
     return out
 
 
+def model_verbs(product_yaml: Path) -> dict[str, tuple[str, ...]]:
+    """Each model of a product's `models:` list (ADR-0097) and the capabilities it binds."""
+    if not product_yaml.is_file():
+        return {}
+    raw = yaml.safe_load(product_yaml.read_text()) or {}
+    return {
+        str(m["id"]): tuple(sorted(m.get("capabilities") or {})) for m in raw.get("models") or []
+    }
+
+
 def load_catalogue(products_dir: Path, product_ids: list[str]) -> list[ModelEntry]:
     out: list[ModelEntry] = []
     for pid in product_ids:
         path = products_dir / pid / "models.yaml"
         if path.is_file():
-            out += parse_catalogue(yaml.safe_load(path.read_text()) or {}, pid)
+            verbs = model_verbs(products_dir / pid / "product.yaml")
+            # a product that lists its models offers only those: a catalogue entry it does not list
+            # (pinned, waiting for a file that runs here) is not shown
+            out += [
+                replace(e, can=verbs.get(e.id, ()))
+                for e in parse_catalogue(yaml.safe_load(path.read_text()) or {}, pid)
+                if not verbs or e.id in verbs
+            ]
     return out
 
 
@@ -442,6 +462,7 @@ class ModelsService:
             "memory_warning": gate,
             "fit": fit.public() if fit else None,
             "voice": e.voice.public() if e.voice else None,
+            "can": list(e.can),
         }  # fmt: skip
 
     def remove(self, e: ModelEntry) -> int:

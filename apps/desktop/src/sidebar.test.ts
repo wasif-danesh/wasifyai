@@ -15,6 +15,15 @@ describe("the window's side menu", () => {
     expect(train && !("hidden" in train)).toBe(true);
   });
 
+  it("leaves out what the chosen image model cannot do (ADR-0097)", () => {
+    const cannot = new Set(["images.edit", "images.inpaint"]);
+    const r = resolveItem("create", () => {}, { conversationId: null, notebook: null, cannot });
+    expect(r("images.edit")).toEqual({ hidden: true });
+    expect(r("images.inpaint")).toEqual({ hidden: true });
+    const make = r("images.create");
+    expect(make && !("hidden" in make) ? make.current : null).toBe(true);
+  });
+
   it("shows the screens that are built, and marks the page being shown", () => {
     for (const [id, route, path] of [
       ["motion", "videobuilder", "/video/builder"],

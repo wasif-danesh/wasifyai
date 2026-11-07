@@ -70,11 +70,43 @@ class EnhanceRule(BaseModel):
     needs_picture: bool = False  # the user's uploaded picture is described first
 
 
+MODEL_ID = re.compile(r"^[a-z0-9][a-z0-9.-]{0,63}$")
+
+
+class ModelChoice(BaseModel):
+    """One model a person can choose for a media product (ADR-0097): its id in the product's
+    `models.yaml` and the image or video capabilities it answers, each with its own workflow. A
+    model binds only what it can do; a capability it lacks is not offered while it is chosen."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    capabilities: dict[str, CapabilityBinding] = Field(default_factory=dict)
+    # what a graph needs to know about the model to ask for the right amounts, by name, for example
+    # `frames_per_second` of a video model; a graph reads them with `caps.video.setting(...)`
+    settings: dict[str, int | float | str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _media_only(self) -> "ModelChoice":
+        if not MODEL_ID.match(self.id):
+            raise ValueError(f"invalid model id {self.id!r}")
+        bad = [n for n in self.capabilities if not re.match(r"^(image|video)\.[a-z0-9_]+$", n)]
+        if bad:
+            raise ValueError(f"model {self.id!r}: only image and video capabilities, not {bad}")
+        if not self.capabilities:
+            raise ValueError(f"model {self.id!r} binds no capability")
+        return self
+
+
 class ProductConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
     capabilities: dict[str, CapabilityBinding] = Field(default_factory=dict)
+    # The models a person can choose between (ADR-0097); the first is used when a request names
+    # none. A product with this list binds its image and video capabilities here, not in
+    # `capabilities`.
+    models: list[ModelChoice] = Field(default_factory=list)
     # Kinds of file a user may upload to this product: `uploads: { image: { max_bytes: ... } }`.
     uploads: dict[Literal["image", "audio"], UploadRule] = Field(default_factory=dict)
     # Prompts the user can have rewritten, by kind (ADR-0038). Absent: no Enhance button.
@@ -86,7 +118,22 @@ class ProductConfig(BaseModel):
         bad = [n for n in self.capabilities if not CAPABILITY_NAME.match(n)]
         if bad:
             raise ValueError(f"invalid capability name(s) {bad}: expected e.g. 'text.chat'")
+        ids = [m.id for m in self.models]
+        if len(ids) != len(set(ids)):
+            raise ValueError(f"a model is listed twice in {ids}")
+        if self.models:
+            media = [n for n in self.capabilities if n.startswith(("image.", "video."))]
+            if media:
+                raise ValueError(f"{media}: bind these under `models`, not `capabilities`")
         return self
+
+    def model(self, model_id: str | None) -> ModelChoice | None:
+        """The chosen model, the first when `model_id` is None; None when there is no such model."""
+        if not self.models:
+            return None
+        if model_id is None:
+            return self.models[0]
+        return next((m for m in self.models if m.id == model_id), None)
 
 
 def _deep_merge(base: dict[str, Any], over: Mapping[str, Any]) -> dict[str, Any]:
@@ -167,7 +214,11 @@ def load_product_config(
 
 def config_file_problems(config: ProductConfig, product_dir: Path) -> list[str]:
     out: list[str] = []
-    for cap, binding in config.capabilities.items():
+    bound = [(cap, b) for cap, b in config.capabilities.items()]
+    bound += [
+        (f"models.{m.id}.{cap}", b) for m in config.models for cap, b in m.capabilities.items()
+    ]
+    for cap, binding in bound:
         if binding.provider == "comfyui" and binding.workflow:
             out += [
                 f"{cap}: {p}"

@@ -19,6 +19,18 @@ import { videos } from "../videos";
 
 type PageMode = Exclude<VideoMode, "import">;
 
+/** the capability each screen asks for, and what it does in words (ADR-0097) */
+const VERB: Record<PageMode, string> = {
+  text: "video.generate",
+  image: "video.animate",
+  extend: "video.extend",
+};
+const CANNOT: Record<PageMode, string> = {
+  text: "make a video from words",
+  image: "animate a picture",
+  extend: "extend a video",
+};
+
 export function VideoPage({
   mode,
   go,
@@ -32,12 +44,15 @@ export function VideoPage({
   sourceImage?: { url: string; name: string; id?: string } | null;
   sourceVideo?: VideoSummary | null;
 }) {
-  const model = useModelOf("wasifyai-video");
-  const engine = useImageEngine();
   // "Select video model": the model in use, or the way to get one (ADR-0086)
   const choices = useChoicesFor("video");
   const picker = useRef<ModelSelectHandle>(null);
-  const { ensure, keyed } = useGroupReady(choices, picker);
+  const { ensure, keyed, chosen } = useGroupReady(choices, picker);
+  const model = useModelOf("wasifyai-video", keyed ? null : chosen);
+  const engine = useImageEngine();
+  // the chosen model makes the clip (ADR-0097); one that cannot do this screen's work says so
+  const offered = !keyed && model !== null && model.id === chosen && (model.can?.length ?? 0) > 0;
+  const cannot = offered && !model.can?.includes(VERB[mode]);
   const looks = useVideoLooks();
 
   // only a real model can be too big: the placeholder engine runs anywhere
@@ -57,8 +72,13 @@ export function VideoPage({
       onExtendThis={onExtendThis}
       sourceImage={sourceImage}
       sourceVideo={sourceVideo}
+      model={offered ? model.id : null}
       blockedReason={
-        tooBig && model?.fit ? `${model.title} will not fit. ${model.fit.reason}` : null
+        cannot
+          ? `${model?.title} cannot ${CANNOT[mode]}. Choose another video model above.`
+          : tooBig && model?.fit
+            ? `${model.title} will not fit. ${model.fit.reason}`
+            : null
       }
       beforeMake={ensure}
       looks={looks}

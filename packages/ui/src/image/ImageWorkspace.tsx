@@ -155,6 +155,8 @@ export type ImageWorkspaceProps = {
   canSave?: boolean;
   /** Where an image can be downloaded from (the web app): "Download" is offered when given. */
   downloadHref?: (image: ImageSummary) => string;
+  /** which of the product's models makes the picture (ADR-0097): the one the person chose */
+  model?: string | null;
   /** Why making an image is not possible right now (for example: the model cannot fit). */
   blockedReason?: string | null;
   /** Asked before an image is made; false stops it (the window opens its model picker when none is ready). */
@@ -223,6 +225,7 @@ export function ImageWorkspace({
   canSave = false,
   downloadHref,
   blockedReason = null,
+  model = null,
   beforeMake,
   loras = [],
   availableLoras = [],
@@ -401,9 +404,10 @@ export function ImageWorkspace({
         width: withOwn?.width,
         height: withOwn?.height,
         sourceId: mode !== "text" ? (fromLibrary.current ?? undefined) : undefined,
+        model: model ?? undefined,
       });
     },
-    [mode, pic, pic2, flow, runs, stylesApi, steps, own],
+    [mode, pic, pic2, flow, runs, stylesApi, steps, own, model],
   );
 
   const generate = useCallback(() => {

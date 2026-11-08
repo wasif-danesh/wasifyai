@@ -169,6 +169,7 @@ def test_each_video_model_names_its_frame_rate_and_takes_what_the_screen_sends()
     for m in cfg.models:
         assert m.settings.get("frames_per_second"), m.id
         for name, binding in m.capabilities.items():
+            assert binding.workflow
             wf = Workflow.load(WORKFLOWS, binding.workflow)
             assert not wf.problems()
             verb = name.split(".", 1)[1]

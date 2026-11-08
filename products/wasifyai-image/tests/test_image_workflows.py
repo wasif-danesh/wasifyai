@@ -62,6 +62,7 @@ def test_each_models_workflows_take_what_the_screen_sends_from_files_in_the_cata
     for model in cfg.models:
         assert model.id in files, f"{model.id} is not in models.yaml"
         for cap, binding in model.capabilities.items():
+            assert binding.workflow
             wf = Workflow.load(WORKFLOWS, binding.workflow)
             assert set(wf.map.inputs) == SENT[cap.split(".")[1]], (model.id, cap)
             assert set(wf.map.models) <= files[model.id], (model.id, cap)

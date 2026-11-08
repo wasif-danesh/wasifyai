@@ -435,7 +435,8 @@ async def test_the_chosen_model_makes_the_picture_and_the_recipe_names_it(tmp_pa
     s = await Story(rig).start({"mode": "text", "prompt": "a fox", "model": "small"})
     assert rig.sink.submitted[0].prompt["made_by"] == "small"
     await s.finish_job()
-    assert s.images.images[0].recipe["model"] == "small"
+    recipe = s.images.images[0].recipe
+    assert recipe is not None and recipe["model"] == "small"
     await Story(rig).start({"mode": "text", "prompt": "a fox"})  # none chosen: the first
     assert rig.sink.submitted[1].prompt["made_by"] == "big"
 

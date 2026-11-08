@@ -33,10 +33,10 @@ def _products_dir() -> Path:
 
 async def run(argv: list[str], out=print) -> int:
     if not argv:
-        out(__doc__.strip().splitlines()[0])
+        out((__doc__ or "").strip().splitlines()[0])
         return 2
     folder = Path(argv[0])  # `main` expands a leading ~
-    products = [argv[1]] if len(argv) > 1 else list(PRODUCTS)
+    products: list[str] = [argv[1]] if len(argv) > 1 else list(PRODUCTS)
     wanted = argv[2:]
     folders = FolderModels(load_catalogue(_products_dir(), products), folder)
     if not wanted:

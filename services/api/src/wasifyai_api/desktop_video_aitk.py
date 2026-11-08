@@ -110,7 +110,9 @@ class AitkVideoTrainer:
 
     def create_files_missing(self, recipe: VideoBase) -> bool:
         models = self.pictures.models
-        entry = models.catalogue.get(recipe.model) if models is not None else None
+        if models is None:
+            return True
+        entry = models.catalogue.get(recipe.model)
         return entry is None or any(models.locate(f) is None for f in entry.files)
 
     def problem(self, base_id: str | None = None) -> str | None:

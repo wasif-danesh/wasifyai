@@ -438,7 +438,10 @@ def test_a_clip_is_the_fewest_frames_the_model_can_make_at_its_rate():
         def __init__(self, **s):
             self.video = Video(**s)
 
-    from wasifyai_video.graphs.video import frames_for
+    from wasifyai_video.graphs.video import frames_for as real
+
+    def frames_for(caps: Any, model: str | None, seconds: int) -> int:
+        return real(caps, model, seconds)  # a stand-in for the capabilities
 
     assert [frames_for(Caps(), None, s) for s in (5, 8)] == [121, 193]  # LTX, the default
     wan = Caps(frames_per_second=16, frame_step=4, frame_offset=1)

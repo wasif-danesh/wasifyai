@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 from wasifyai_api import desktop_training as dt
+from wasifyai_api import desktop_video_aitk as dva
 from wasifyai_api.desktop_video_aitk import AitkVideoTrainer, VideoTrainers, video_config
 from wasifyai_api.desktop_video_training import LtxTrainer
 from wasifyai_training.picture_bases import NVIDIA
@@ -63,6 +64,7 @@ def test_it_says_what_stops_a_video_model_being_taught(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setattr(dt.sys, "platform", "darwin")
+    monkeypatch.setattr(dva, "picture_supported", lambda: True)  # a Mac with Apple silicon
     t = trainers(home)
     assert "NVIDIA graphics card" in (t.aitk.problem("minimax-h3") or "")
     assert NVIDIA in VIDEO_BASES["wan2.2-14b"].devices
@@ -75,6 +77,7 @@ async def test_a_run_writes_the_clips_and_pictures_and_returns_the_adapter(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setattr(dt.sys, "platform", "darwin")
+    monkeypatch.setattr(dva, "picture_supported", lambda: True)  # a Mac with Apple silicon
     t = trainers(home)
     marker = dt.hub_marker(t.aitk.pictures.hub_home(), LTX_25.hub[0])
     marker.parent.mkdir(parents=True)

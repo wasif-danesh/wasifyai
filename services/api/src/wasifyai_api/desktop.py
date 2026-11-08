@@ -20,7 +20,7 @@ import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -50,19 +50,14 @@ from wasifyai_api.config import Settings
 from wasifyai_api.creation_index import IndexStore
 from wasifyai_api.decision_setup import LOCK_NAME as DECISION_LOCK_NAME
 from wasifyai_api.decision_setup import DecisionSetup
-from wasifyai_api.desktop_decision_training import LayaTrainer, make_decision_trainer
 from wasifyai_api.desktop_discovery import DiscoveryService
 from wasifyai_api.desktop_fit import assess_fit, need_declared, process_rss_bytes
 from wasifyai_api.desktop_hub import TOKEN_ALIASES, HubService
 from wasifyai_api.desktop_language import LanguageService
-from wasifyai_api.desktop_language_training import MlxLmTrainer, make_language_trainer
 from wasifyai_api.desktop_model3d import Model3dService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
 from wasifyai_api.desktop_styles import StylesService
-from wasifyai_api.desktop_training import make_trainer
-from wasifyai_api.desktop_video_aitk import AitkVideoTrainer, VideoTrainers
 from wasifyai_api.desktop_video_builder import VideoBuilderService
-from wasifyai_api.desktop_video_training import VIDEO_MODEL, LtxTrainer, make_video_trainer
 from wasifyai_api.desktop_vision import VisionService
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
 from wasifyai_api.language_setup import LOCK_NAME as LANGUAGE_LOCK_NAME
@@ -81,6 +76,12 @@ from wasifyai_api.training_setup import HUB, PictureSetup
 from wasifyai_api.video_setup import LOCK_NAME as VIDEO_LOCK_NAME
 from wasifyai_api.video_setup import VideoSetup
 from wasifyai_api.web_search import WebService, load_or_create_key
+
+if TYPE_CHECKING:  # the trainers need the training product, which a web build leaves out
+    from wasifyai_api.desktop_decision_training import LayaTrainer
+    from wasifyai_api.desktop_language_training import MlxLmTrainer
+    from wasifyai_api.desktop_video_aitk import VideoTrainers
+    from wasifyai_api.desktop_video_training import LtxTrainer
 
 log = logging.getLogger("wasifyai_api.desktop")
 
@@ -123,15 +124,15 @@ class DesktopBackends:
     model3d: Model3dService | None = None  # the 3D engine, installed on request (ADR-0080)
     training_setup: PictureSetup | None = None  # the trainer's component, set up on request
     language_setup: LanguageSetup | None = None  # the writing trainer's component
-    writing: MlxLmTrainer | None = None  # the language trainer: mlx-lm on a Mac (ADR-0074)
+    writing: "MlxLmTrainer | None" = None  # the language trainer: mlx-lm on a Mac (ADR-0074)
     decision_setup: DecisionSetup | None = None  # the decision trainer's component
     music_analysis: MusicAnalysis | None = None  # the song analysis component (ADR-0090)
-    deciding: LayaTrainer | None = None  # the decision trainer: Laya on a Mac (ADR-0075)
+    deciding: "LayaTrainer | None" = None  # the decision trainer: Laya on a Mac (ADR-0075)
     video_setup: VideoSetup | None = None  # the video trainer's component
-    teaching_video: LtxTrainer | None = None  # the video trainer: diffusers on a Mac (ADR-0073)
+    teaching_video: "LtxTrainer | None" = None  # the video trainer: diffusers on a Mac (ADR-0073)
     # what the video product teaches with: LTX-Video 2B's own trainer and AI Toolkit for the newer
     # video models (ADR-0097, MV5)
-    video_trainers: VideoTrainers | None = None
+    video_trainers: "VideoTrainers | None" = None
     training: Any = None  # the trainer: a preview until the real one is installed (ADR-0073)
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
@@ -273,6 +274,13 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         cache_dir=cache if cache.is_dir() else None,
         base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
     )
+    # here, not at the top: the web's engine imports this module and has no training product
+    from wasifyai_api.desktop_decision_training import make_decision_trainer
+    from wasifyai_api.desktop_language_training import make_language_trainer
+    from wasifyai_api.desktop_training import make_trainer
+    from wasifyai_api.desktop_video_aitk import AitkVideoTrainer, VideoTrainers
+    from wasifyai_api.desktop_video_training import VIDEO_MODEL, make_video_trainer
+
     video_entry = models.catalogue.get(VIDEO_MODEL)
     video_setup.video_model_bytes = video_entry.total_bytes if video_entry is not None else 0
     teaching_video = make_video_trainer(settings.desktop_dir, models)

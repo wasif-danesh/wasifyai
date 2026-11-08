@@ -240,9 +240,9 @@ def build_video_graph(
         model = state.get("model")
         chosen_by_admin = caps.extras.get("chosen_model")  # the web: an admin's choice (MV6)
         if model is None and chosen_by_admin is not None:
-            picked = await chosen_by_admin()
-            if picked and VERBS[mode] in caps.video.models().get(picked, ()):
-                model = picked  # used when it can do this; otherwise the product's first model
+            admin_pick = await chosen_by_admin()
+            if admin_pick and VERBS[mode] in caps.video.models().get(admin_pick, ()):
+                model = admin_pick  # used when it can do this; otherwise the product's first model
         if model is not None:  # one of this product's models, and one that can do this (ADR-0097)
             offered = caps.video.models()
             if not isinstance(model, str) or model not in offered:
@@ -284,11 +284,12 @@ def build_video_graph(
             "loras": loras,
             "lora_files": lora_files,
             "status": "working",
-            **({"model": model} if model else {}),
             # the run keeps what it was given: only a source that is checked below is kept
             "source_id": "",
             "source_image_id": "",
         }
+        if model:
+            out["model"] = str(model)
         if mode == "image":
             # a picture of the library (Animate this): kept as where the clip came from. The
             # pictures are another product's, so only its shape is checked here; the picture list,

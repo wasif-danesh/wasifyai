@@ -88,7 +88,9 @@ def test_models_bind_media_only_and_once(tmp_path):
 
     gen = {"image.generate": {"provider": "fake"}}
     ok = ProductConfig.model_validate({"id": "p", "models": [{"id": "a", "capabilities": gen}]})
-    assert ok.model(None).id == "a" and ok.model("a").id == "a" and ok.model("b") is None
+    first, named = ok.model(None), ok.model("a")
+    assert first is not None and first.id == "a" and named is not None and named.id == "a"
+    assert ok.model("b") is None
     for bad in (
         {"id": "p", "models": [{"id": "a", "capabilities": {"text.chat": {"provider": "fake"}}}]},
         {"id": "p", "models": [{"id": "a", "capabilities": {}}]},

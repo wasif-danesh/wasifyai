@@ -1,5 +1,6 @@
 """The AI Toolkit launcher: offline, a split model's parts are looked up in the cache only."""
 
+import importlib
 import sys
 import types
 
@@ -14,14 +15,16 @@ def stand_in_diffusers(monkeypatch: pytest.MonkeyPatch) -> tuple[types.ModuleTyp
         calls.append({"local_files_only": local_files_only, **kwargs})
         return [], {}
 
-    hub_utils = types.ModuleType("diffusers.utils.hub_utils")
-    hub_utils._get_checkpoint_shard_files = shards  # noqa: SLF001
-    modeling_utils = types.ModuleType("diffusers.models.modeling_utils")
-    modeling_utils._get_checkpoint_shard_files = shards  # noqa: SLF001
-    utils, models = types.ModuleType("diffusers.utils"), types.ModuleType("diffusers.models")
-    utils.hub_utils, models.modeling_utils = hub_utils, modeling_utils
-    root = types.ModuleType("diffusers")
-    root.utils, root.models = utils, models
+    def module(name: str, **attrs: object) -> types.ModuleType:
+        mod = types.ModuleType(name)
+        vars(mod).update(attrs)
+        return mod
+
+    hub_utils = module("diffusers.utils.hub_utils", _get_checkpoint_shard_files=shards)
+    modeling_utils = module("diffusers.models.modeling_utils", _get_checkpoint_shard_files=shards)
+    utils = module("diffusers.utils", hub_utils=hub_utils)
+    models = module("diffusers.models", modeling_utils=modeling_utils)
+    root = module("diffusers", utils=utils, models=models)
     for name, mod in {
         "diffusers": root, "diffusers.utils": utils, "diffusers.utils.hub_utils": hub_utils,
         "diffusers.models": models, "diffusers.models.modeling_utils": modeling_utils,
@@ -60,7 +63,7 @@ def test_offline_a_file_not_in_the_cache_is_one_the_repo_does_not_have(
     # put back after the test: missing_is_absent replaces these too
     monkeypatch.setattr(huggingface_hub, "hf_hub_download", huggingface_hub.hf_hub_download)
     try:
-        from transformers.utils import hub as transformers_hub
+        transformers_hub = importlib.import_module("transformers.utils.hub")  # when installed
     except ImportError:
         pass
     else:

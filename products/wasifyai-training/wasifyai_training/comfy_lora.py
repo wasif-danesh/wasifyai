@@ -57,7 +57,6 @@ def write_tensors(path: Path, tensors: dict[str, dict[str, Any]], meta: dict[str
             f.write(t["data"])
 
 
-
 def check_tensors(tensors: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """The tensors of an adapter in ComfyUI's names, sorted; a `ConvertError` when one is not."""
     layers: dict[str, set[str]] = {}

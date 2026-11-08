@@ -519,6 +519,7 @@ async def test_a_hub_recipe_is_taught_once_its_files_are_fetched(home: Path, hub
         trainer.fetch_hub(hub_recipe.id, 1)
     state = trainer.fetch_hub(hub_recipe.id, 3_000_000_000)
     assert state["state"] == "fetching"
+    assert trainer._hub_task is not None  # noqa: SLF001
     await trainer._hub_task  # noqa: SLF001
     assert trainer.hub_state()["state"] == "done"
     cache = home / "models" / "huggingface" / "hub"
@@ -537,6 +538,7 @@ async def test_a_gated_repo_that_cannot_be_fetched_says_what_to_do(
     monkeypatch.setitem(pb.PICTURE_BASES, gated.id, gated)
     trainer = dt.AiToolkitTrainer(home / "data", models_dir=home / "models")
     trainer.fetch_hub(gated.id, 10)
+    assert trainer._hub_task is not None  # noqa: SLF001
     await trainer._hub_task  # noqa: SLF001
     out = trainer.hub_state()
     assert out["state"] == "error" and out["error"]

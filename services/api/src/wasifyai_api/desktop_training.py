@@ -40,6 +40,7 @@ from wasifyai_training.video_bases import VIDEO_BASES, VideoBase
 from wasifyai_api.desktop_fit import assess_fit, need_declared, read_machine
 from wasifyai_api.desktop_models import free_disk_bytes
 from wasifyai_api.training_setup import (
+    PictureSetup,
     TrainingSetup,
     find_base,
     find_tool,
@@ -493,14 +494,16 @@ class AiToolkitTrainer:
         """The image model's files the recipe of `base` is taught from, by part (transformer,
         text_encoder, vae), where the Models screen keeps them; None when one is missing."""
         recipe = picture_base(base or self.base)
-        entry = self.models.catalogue.get(recipe.model) if self.models is not None else None
+        models = self.models
+        entry = models.catalogue.get(recipe.model) if models is not None else None
         env = os.environ.get(MODEL_DIR_ENV)
         found: dict[str, Path] = {}
         for part, name in recipe.files.items():
             path = None
-            for f in entry.files if entry is not None else ():
-                if f.name == name:
-                    path = self.models.locate(f)
+            if models is not None and entry is not None:
+                for f in entry.files:
+                    if f.name == name:
+                        path = models.locate(f)
             if path is None and env:
                 hits = sorted(Path(env).expanduser().glob(f"*/{name}"))
                 path = hits[0] if hits else None
@@ -841,7 +844,7 @@ def make_trainer(
     except ImportError:
         return None
     trainer = AiToolkitTrainer(data_dir, models_dir, setup, models)
-    if setup is not None and hasattr(setup, "picture_model"):
+    if isinstance(setup, PictureSetup):
         setup.picture_model = trainer.model_files
         entry = models.catalogue.get(KLEIN_4B.model) if models is not None else None
         setup.picture_model_bytes = entry.total_bytes if entry is not None else 0

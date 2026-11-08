@@ -21,7 +21,10 @@ says so, as the Hub would.
 
 And FLUX.3's position encoding (`rope`) is worked out in float64, which Apple's graphics chip does
 not have. On a Mac, `flux3_rope_on_mac` works the frequencies out in float64 on the processor and
-uses them in float32, as ComfyUI does for FLUX on a Mac."""
+uses them in float32, as ComfyUI does for FLUX on a Mac. LTX-2.5's position encodings (diffusers'
+`LTX2AudioVideoRotaryPosEmbed` and the text connectors' `LTX2RotaryPosEmbed1d`) make their table
+of frequencies in float64 too, then turn it into float32; on a Mac `ltx2_rope_on_mac` makes it in
+float32 (`double_precision` off), which differs only by float32's rounding of that table."""
 
 import functools
 import json
@@ -135,6 +138,32 @@ def flux3_rope_on_mac() -> None:
     transformer.rope = rope
 
 
+def ltx2_rope_on_mac() -> list[str]:
+    """LTX-2.5's position encodings without float64 on Apple's graphics chip (see the module's
+    note). Answers the classes it changed."""
+    import importlib
+
+    changed = []
+    for module, name in (
+        ("diffusers.models.transformers.transformer_ltx2", "LTX2AudioVideoRotaryPosEmbed"),
+        ("diffusers.pipelines.ltx2.connectors", "LTX2RotaryPosEmbed1d"),
+    ):
+        try:
+            cls = getattr(importlib.import_module(module), name)
+        except (ImportError, AttributeError):
+            continue  # a diffusers without LTX-2: AI Toolkit says so itself
+        original = cls.__init__
+
+        @functools.wraps(original)
+        def init(self, *args, _original=original, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202
+            _original(self, *args, **kwargs)
+            self.double_precision = False
+
+        cls.__init__ = init
+        changed.append(name)
+    return changed
+
+
 def main(home: Path, cfg: Path) -> None:
     sys.path.insert(0, str(home))
     cache_only_shards()
@@ -142,6 +171,8 @@ def main(home: Path, cfg: Path) -> None:
     config = json.loads(cfg.read_text())
     if sys.platform == "darwin" and uses_arch(config, "flux3"):
         flux3_rope_on_mac()
+    if sys.platform == "darwin" and uses_arch(config, "ltx2"):
+        ltx2_rope_on_mac()
     found = klein_text_encoder(config)
     if found is not None:
         point_klein_at(*found)

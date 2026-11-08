@@ -79,3 +79,31 @@ def test_the_mac_rope_is_used_only_for_flux3():
     flux3 = {"config": {"process": [{"model": {"arch": "flux3"}}]}}
     klein = {"config": {"process": [{"model": {"arch": "flux2_klein_4b"}}]}}
     assert run.uses_arch(flux3, "flux3") and not run.uses_arch(klein, "flux3")
+
+
+def test_ltx2_position_tables_are_made_in_float32_on_a_mac(monkeypatch: pytest.MonkeyPatch):
+    """Apple's graphics chip has no float64: LTX-2.5's two position encodings turn
+    `double_precision` off."""
+
+    def rope_class() -> type:
+        class Rope:
+            def __init__(self, dim: int, double_precision: bool = True) -> None:
+                self.dim, self.double_precision = dim, double_precision
+
+        return Rope
+
+    made = {}
+    for module, name in (
+        ("diffusers.models.transformers.transformer_ltx2", "LTX2AudioVideoRotaryPosEmbed"),
+        ("diffusers.pipelines.ltx2.connectors", "LTX2RotaryPosEmbed1d"),
+    ):
+        mod = types.ModuleType(module)
+        made[name] = rope_class()
+        setattr(mod, name, made[name])
+        monkeypatch.setitem(sys.modules, module, mod)
+    assert run.ltx2_rope_on_mac() == ["LTX2AudioVideoRotaryPosEmbed", "LTX2RotaryPosEmbed1d"]
+    for cls in made.values():
+        rope = cls(64, double_precision=True)
+        assert rope.dim == 64 and rope.double_precision is False
+    ltx = {"config": {"process": [{"model": {"arch": "ltx2.5"}}]}}
+    assert run.uses_arch(ltx, "ltx2") and not run.uses_arch(ltx, "flux3")

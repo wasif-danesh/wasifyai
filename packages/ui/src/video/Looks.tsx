@@ -4,8 +4,14 @@ import type { TrainedModel, TrainingApi } from "@wasifyai/client";
 import { useEffect, useId, useState } from "react";
 import { hint } from "../styles";
 
-/** A look the person taught the video model (Train models): the file it is kept in, its name and its magic word. */
-export type VideoLook = { name: string; title: string; word: string };
+/**
+ * A look the person taught a video model (Train models): the file it is kept in, its name, its magic word and
+ * the video model it was taught on (it works only with that one).
+ */
+export type VideoLook = { name: string; title: string; word: string; model: string };
+
+/** The first video model, the one every look taught before looks recorded their model was taught on. */
+const FIRST_VIDEO_MODEL = "ltx-video-2b";
 
 /** A look chosen for a clip, with its strength. */
 export type LookChoice = { name: string; weight: number };
@@ -123,8 +129,15 @@ export function Looks({
 export function looksOf(models: TrainedModel[]): VideoLook[] {
   return models.flatMap((m) => {
     const name = m.card.published?.lora_name;
-    return m.card.family === "video" && name ? [{ name, title: m.name, word: m.trigger_word }] : [];
+    return m.card.family === "video" && name
+      ? [{ name, title: m.name, word: m.trigger_word, model: m.base || FIRST_VIDEO_MODEL }]
+      : [];
   });
+}
+
+/** The looks that work with `model` (all of them while no model is chosen: the engine then checks). */
+export function looksFor(looks: VideoLook[], model: string | null | undefined): VideoLook[] {
+  return model ? looks.filter((l) => l.model === model) : looks;
 }
 
 /** Read the looks once when the screen opens; none (or no way to read them) is fine: the chooser stays hidden. */

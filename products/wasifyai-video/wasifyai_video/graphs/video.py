@@ -264,6 +264,17 @@ def build_video_graph(
             return refuse_with(
                 "invalid_request", "Your looks work only with the model they were taught on."
             )
+        taught_on = caps.extras.get("look_models")  # which model each look was taught on
+        if loras and taught_on is not None:
+            ctx = require_context()
+            found = await taught_on(ctx.tenant_id, ctx.user_id, [x["name"] for x in loras])
+            using = model or next(iter(caps.video.models()), None)  # none named: the first
+            if any(found.get(x["name"], using) != using for x in loras):
+                return refuse_with(
+                    "invalid_request",
+                    "A look works only with the video model it was taught on. Choose that model, "
+                    "or leave the look out.",
+                )
         lora_files: dict[str, str] = {}
         resolve_looks = caps.extras.get(
             "person_looks"

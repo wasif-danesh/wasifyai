@@ -231,8 +231,18 @@ describe("VideoWorkspace", () => {
     fetchMock.mockResolvedValueOnce(sse([node("check_request"), node("generate_video"), ready]));
     const user = userEvent.setup();
     const looks = [
-      { name: "wasify-video-ena-12345678.safetensors", title: "Ena", word: "enaz" },
-      { name: "wasify-video-fog-87654321.safetensors", title: "Fog", word: "fogzy" },
+      {
+        name: "wasify-video-ena-12345678.safetensors",
+        title: "Ena",
+        word: "enaz",
+        model: "ltx-video-2b",
+      },
+      {
+        name: "wasify-video-fog-87654321.safetensors",
+        title: "Fog",
+        word: "fogzy",
+        model: "ltx-video-2b",
+      },
     ];
     const { unmount } = render(<VideoWorkspace mode="text" runs={client} />);
     expect(screen.queryByRole("region", { name: "My looks" })).toBeNull();
@@ -265,12 +275,25 @@ describe("VideoWorkspace", () => {
       name: `${n}.safetensors`,
       title: n,
       word: `${n}word`,
+      model: "ltx-video-2b",
     }));
     render(<VideoWorkspace mode="text" runs={client} looks={looks} />);
     await user.click(screen.getByRole("button", { name: /My looks/ }));
     await user.click(screen.getByRole("checkbox", { name: /^a/ }));
     await user.click(screen.getByRole("checkbox", { name: /^b/ }));
     expect((screen.getByRole("checkbox", { name: /^c/ }) as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it("offers only the looks taught on the chosen video model", async () => {
+    const user = userEvent.setup();
+    const looks = [
+      { name: "old.safetensors", title: "Old", word: "oldw", model: "ltx-video-2b" },
+      { name: "new.safetensors", title: "New", word: "neww", model: "ltx-2.5" },
+    ];
+    render(<VideoWorkspace mode="text" runs={client} looks={looks} model="ltx-2.5" />);
+    await user.click(screen.getByRole("button", { name: /My looks/ }));
+    expect(screen.getByRole("checkbox", { name: /^New/ })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /^Old/ })).toBeNull();
   });
 
   it("needs a picture before it can animate one", async () => {

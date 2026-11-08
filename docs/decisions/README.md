@@ -97,5 +97,6 @@
 | [0095](0095-own-provider-keys-per-product.md) | The person's own provider keys, one per product (mockup `docs/spikes/own-keys-mockup.html`) | Proposed (mockup approved 2026-10-29; real-key tests at release) |
 | [0096](0096-motion-graphics-scene-editor.md) | Motion graphics becomes a scene editor for promotion and social content, with the assistant built in (mockup `docs/spikes/motion-editor-mockup.html`) | Accepted (2026-10-31; mockup approved; MX1 to MX7 built) |
 | [0097](0097-several-image-and-video-models.md) | Images and Video offer several models, each taught with AI Toolkit (plan `docs/image-video-models-plan.md`) | Accepted (2026-11-07) |
+| [0098](0098-writing-training-on-windows-and-linux.md) | Teaching writing on Windows and Linux: PEFT + TRL on CUDA PyTorch, mlx-lm stays on the Mac (spike `docs/spikes/writing-peft-wp0.md`) | Proposed |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

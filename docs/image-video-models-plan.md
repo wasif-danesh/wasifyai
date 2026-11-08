@@ -153,7 +153,9 @@ own files through `MODELS_PATH`. Taught through the app's own trainer, 10 steps,
 | FLUX.3 Image Klein | 1348 | 51.5 GB | 80 MB | learning 4 to 11 s a step; the base's bf16 weights (11.1 GB) |
 
 klein 9B, Qwen-Image 2.1 and HiDream-O1 have recipes not run here (their training files, 35 GB and more each, were
-not fetched); Ideogram 4 is NVIDIA only. ADR-0073 has what the runs needed (offline loading, FLUX.3's base weights
+not fetched); Ideogram 4 is NVIDIA only. **klein 9B, 2026-11-08:** its training files (`black-forest-labs/FLUX.2-klein-base-9B`)
+answer 403 with the saved token, while the model file (`FLUX.2-klein-9B`) is open to it: the owner has to accept that
+repo's terms on huggingface.co before the recipe can run. ADR-0073 has what the runs needed (offline loading, FLUX.3's base weights
 and text encoder, a Mac position encoding).
 
 **MV4 done.** MiniMax-H3 picture to video (`minimax-h3-i2v`): a 5 s clip from a square fox picture, 640x640 with
@@ -166,9 +168,23 @@ On a 64 GB Mac it is at the edge.
 
 **MV5 done.** `video_bases.py` has recipes for LTX-2.5 (allowed on a Mac), Wan 2.2 14B and MiniMax-H3 (NVIDIA only:
 their weights do not load on a Mac); `desktop_video_aitk.py` teaches them through the picture trainer's AI Toolkit
-process, and LTX-Video 2B keeps its own trainer. Not run here: LTX-2.5's training files (23 GB) were not fetched.
-Taught looks are not tagged with their model yet, so the new video models take no looks.
+process, and LTX-Video 2B keeps its own trainer.
+
+**LTX-2.5 recipe run (2026-11-08).** Its training files (22.96 GB, the dev transformer and the conv VAE) were fetched
+through the app's trainer in 870 s. The first run stopped at step 0: diffusers' LTX-2 position encodings make a table
+in float64, which Apple's graphics chip lacks; `ltx2_rope_on_mac` in `training_aitk_run.py` makes it in float32 on a
+Mac (as `flux3_rope_on_mac` does for FLUX.3). Then a 30-step run on 21 pictures at 512 pixels through
+`AitkVideoTrainer`: 811 s with a 206 s load, about 19 s a step, 51.5 GB at its highest, a 674 MB adapter (rank 32),
+published to the loras folder. On the `ltx-2.5-t2v` workflow with the look (768x512, 49 frames, 282 s) the clip
+differs from the same seed without it and ComfyUI loaded every key: the look path works; 30 steps are too few to show
+the look itself. Clips in the set (49 frames) were not measured, so the screen's 40 s a step and 56 GB stay estimates.
+Looks now know their model (2026-11-08): LTX-2.5 takes them, Wan 2.2 and MiniMax-H3 do not yet.
 
 **MV6 done.** Admin › Media › Models picks each product's model on the web (`media.model.<product_id>`); the web's
 `/models/in-use` names it; `python -m wasifyai_api.comfy_models` fetches a model's files onto the ComfyUI host
-(`docs/configuration.md`). Checked by tests, not walked in a browser on a web deployment.
+(`docs/configuration.md`). **Walked in a browser 2026-11-08** on the local stack (`AUTH_MODE=stub`): Images set to
+Z-Image Turbo and then Qwen-Image 2.1, Video to LTX-2.5; both kept after a reload, `/models/in-use` named them and the Image and
+Video screens' model buttons showed them. The walk found that React's reset of a form after its action put the select
+back on the model the page loaded with, so "Saved" showed beside the old name; the form now sends from `onSubmit`, and
+"Saved" shows only while the saved model is the one picked (`media-models.test.tsx`). No picture or clip was made
+through a web worker on the chosen model.

@@ -9,7 +9,7 @@ import {
   clipLength,
 } from "@wasifyai/client";
 import { Film, Maximize2, Save } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Action } from "../components/actions-row";
 import { Button } from "../components/button";
 import { Chip } from "../components/chip";
@@ -29,7 +29,7 @@ import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../save";
 import { PageHeader } from "../window-bar";
 import { appearsHere, makeLabel, makingLabel } from "../words";
 import { ClipInput, EXTEND_LENGTHS } from "./ClipInput";
-import { type LookChoice, Looks, type VideoLook, withWords } from "./Looks";
+import { type LookChoice, Looks, type VideoLook, looksFor, withWords } from "./Looks";
 
 export const MAX_VIDEO_PROMPT = 500;
 
@@ -226,7 +226,7 @@ export function VideoWorkspace({
   onExtendThis,
   sourceImage = null,
   sourceVideo = null,
-  looks = [],
+  looks: allLooks = [],
 }: VideoWorkspaceProps) {
   const id = useId();
   const flow = useVideoFlow(runs);
@@ -246,7 +246,9 @@ export function VideoWorkspace({
   const [draft, setDraft] = useState(false);
   const [source, setSource] = useState<VideoSummary | null>(sourceVideo);
   const [chosen, setChosen] = useState<LookChoice[]>([]);
-  // a look that was taken away (its model removed) cannot stay chosen
+  // a look works only with the video model it was taught on: the others are not offered
+  const looks = useMemo(() => looksFor(allLooks, model), [allLooks, model]);
+  // a look that was taken away (its model removed, or another model chosen) cannot stay chosen
   const usable = chosen.filter((c) => looks.some((l) => l.name === c.name));
   const [asked, setAsked] = useState<VideoFormValue | null>(null);
   const [picked, setPicked] = useState<VideoSummary | null>(null);

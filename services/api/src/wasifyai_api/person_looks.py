@@ -11,6 +11,8 @@ from typing import Any
 
 from wasifyai_api.remote_train import look_key
 
+FIRST_VIDEO_MODEL = "ltx-video-2b"  # every look taught before looks recorded their model
+
 
 def person_looks(
     state: Any, video: bool = True
@@ -31,6 +33,31 @@ def person_looks(
             if model is None:
                 return None
             out[name] = look_key(tenant, user, model["run_id"], name)
+        return out
+
+    return resolve
+
+
+def look_models(state: Any) -> Callable[[str, str, list[str]], Awaitable[dict[str, str]]]:
+    """Which video model each of a person's looks was taught on, by the look's file name (desktop and web):
+    a look works only with that model (ADR-0097). A look this cannot find is left out, and the request goes
+    on to the other checks (the web's says it is not theirs; the desktop's file may be one put there by hand)."""
+
+    async def resolve(tenant: str, user: str, names: list[str]) -> dict[str, str]:
+        store = state.training_store
+        if store is None:
+            try:  # the desktop opens the training store when the training product first needs it
+                from wasifyai_training.runtime import store_for
+            except ImportError:  # a build without training: no looks were taught here
+                return {}
+            store = store_for(state)
+        models = await asyncio.to_thread(store.list_models, tenant, user, 500)
+        out: dict[str, str] = {}
+        for m in models:
+            card = m["card"]
+            name = (card.get("published") or {}).get("lora_name")
+            if card.get("family") == "video" and name in names:
+                out[name] = str(m.get("base") or card.get("base") or FIRST_VIDEO_MODEL)
         return out
 
     return resolve

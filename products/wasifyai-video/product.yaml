@@ -25,7 +25,7 @@ models:
       video.generate:  { provider: comfyui, workflow: minimax-h3-t2v, defaults: { width: 768, height: 512, length: 124 } }
       video.animate:   { provider: comfyui, workflow: minimax-h3-i2v, defaults: { length: 124, megapixels: 0.4 } }
   - id: ltx-2.5
-    settings: { frames_per_second: 24, frame_step: 8, frame_offset: 1, draft: false, looks: false }
+    settings: { frames_per_second: 24, frame_step: 8, frame_offset: 1, draft: false }
     capabilities:
       video.generate:  { provider: comfyui, workflow: ltx-2.5-t2v, defaults: { width: 1024, height: 576, length: 121 } }
       video.animate:   { provider: comfyui, workflow: ltx-2.5-i2v, defaults: { length: 121, megapixels: 0.6 } }

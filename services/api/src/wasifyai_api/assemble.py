@@ -623,6 +623,11 @@ def _build_graphs(
         caps.extras["tool_host"] = r.tool_host  # the assistant's tools (ADR-0057)
         caps.extras["actions"] = s.actions  # ...which run as actions (ADR-0068)
         caps.extras["app_state"] = s  # notebooks reach their library through it
+        if product_id == "wasifyai-video":
+            # a look works only with the video model it was taught on (desktop and web)
+            from wasifyai_api.person_looks import look_models
+
+            caps.extras["look_models"] = look_models(s)
         if not r.desktop and product_id in ("wasifyai-video", "wasifyai-image"):
             # the web: a look or a style is the person's own file in storage
             from wasifyai_api.person_looks import person_looks

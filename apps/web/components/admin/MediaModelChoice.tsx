@@ -14,7 +14,7 @@ import {
 import { panel } from "@/lib/styles";
 import { cn } from "@/lib/utils";
 import type { ProductModels } from "@wasifyai/contracts";
-import { useActionState, useId, useState } from "react";
+import { startTransition, useActionState, useId, useState } from "react";
 
 const IDLE: ModelChoiceState = { status: "idle" };
 
@@ -46,8 +46,19 @@ export function MediaModelChoice({ choice }: { choice: ProductModels }) {
   const [model, setModel] = useState(choice.chosen);
   const picked = choice.models.find((m) => m.id === model);
   const title = PRODUCT_TITLE[choice.product_id] ?? choice.product_id;
+  // Sent from onSubmit, not the form's action prop: React resets a form after its action, and the
+  // reset put the select back on the model the page was loaded with. "Saved" speaks of the model
+  // that was saved, so picking another hides it until that one is saved too.
   return (
-    <form action={action} className={cn(panel, "gap-4")} aria-busy={pending}>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        const form = new FormData(e.currentTarget);
+        startTransition(() => action(form));
+      }}
+      className={cn(panel, "gap-4")}
+      aria-busy={pending}
+    >
       <Field>
         <FieldLabel htmlFor={`${id}-model`}>{title} model</FieldLabel>
         <Select name="model" value={model} onValueChange={setModel}>
@@ -73,7 +84,7 @@ export function MediaModelChoice({ choice }: { choice: ProductModels }) {
           Use this model
         </Button>
       </div>
-      {state.status === "saved" ? (
+      {state.status === "saved" && state.model === model ? (
         <Notice tone="ok" title="Saved">
           The next {title} job uses it. The ComfyUI host needs its files first.
         </Notice>

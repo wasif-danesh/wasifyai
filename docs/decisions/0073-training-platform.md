@@ -414,6 +414,11 @@ distilled klein as the image engine. Three picture sets: 12 pictures of one fict
   therefore not the lever; untried: more pictures of more different subjects (15 was used), the text-stream layers (mflux's recipe here trains the
   image stream only), a higher rank. The check reports it honestly and says what to try ("add pictures of different things"); the style preset
   stays at 250 steps and 1e-4. Backlog D32.
+- **Retested on AI Toolkit (2026-11-08): not passed.** The app's trainer as shipped (klein 4B, `style` preset: 250 steps, 1e-4, rank 16, 512
+  pixels; all of the transformer's linear layers, so the text stream too) on 21 collage pictures of different subjects: 0 of 4 new scenes, and
+  unlike mflux not even a scene it was shown (the owl of the set, in the trainer's own step-250 sample) turned to paper; strength 2.0 only
+  softens the picture. With AI Toolkit the run is under-taught rather than over-fitted, so a higher rate and more steps are worth trying here
+  again, then the klein base weights instead of the distilled file Create runs. Backlog D32.
 
 ## Built (2026-10-25): the choice of model and method
 

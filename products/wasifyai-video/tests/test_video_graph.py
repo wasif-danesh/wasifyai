@@ -448,3 +448,34 @@ def test_a_clip_is_the_fewest_frames_the_model_can_make_at_its_rate():
     assert [frames_for(wan, "wan", s) for s in (5, 8)] == [81, 129]
     minimax = Caps(frames_per_second=24, frame_step=17, frame_offset=5)
     assert [frames_for(minimax, "m", s) for s in (5, 8)] == [124, 192]
+
+
+async def test_a_look_is_used_only_with_the_video_model_it_was_taught_on(tmp_path, ctx):
+    two = [MODELS[0], {**MODELS[0], "id": "ltx2"}]  # two models that both take looks
+    rig = make_rig(tmp_path, models=two)
+    asked: list[list[str]] = []
+
+    async def taught_on(tenant, user, names):
+        asked.append(names)
+        # a file it does not know is left to the other checks
+        return {"on-ltx2.safetensors": "ltx2"}
+
+    rig.caps.extras["look_models"] = taught_on
+    look = [{"name": "on-ltx2.safetensors", "weight": 1.5}]
+    s = await Story(rig).start(
+        {"mode": "text", "prompt": "a fox", "seconds": 5, "model": "ltx", "loras": look}
+    )
+    assert s.state["status"] == "refused" and "taught on" in s.state["refusal"]["message"]
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "seconds": 5, "loras": look})
+    # no model named: the first one, which it was not taught on
+    assert s.state["status"] == "refused"
+    assert rig.sink.submitted == []
+    await Story(rig).start(
+        {"mode": "text", "prompt": "a fox", "seconds": 5, "model": "ltx2", "loras": look}
+    )
+    other = [{"name": "by-hand.safetensors", "weight": 1.0}]
+    await Story(rig).start(
+        {"mode": "text", "prompt": "a fox", "seconds": 5, "model": "ltx", "loras": other}
+    )
+    assert [j.prompt["loras"] for j in rig.sink.submitted] == [look, other]
+    assert asked[-1] == ["by-hand.safetensors"]

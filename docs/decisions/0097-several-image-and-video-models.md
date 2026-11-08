@@ -75,4 +75,4 @@ MV0 to MV6 are built; `docs/image-video-models-plan.md` has the measured numbers
   (Creative's stills and clips, the assistant, another app over MCP) is made by it when it can do the job, as with an
   admin's choice on the web, and its recipe names it. Before this, Creative always used klein 4B and LTX-Video 2B
   (found in a real-window run, 2026-11-08).
-- Not built: taught looks for the new video models (a look does not record the model it was taught on).
+- **Looks know their model (2026-11-08).** A look is offered on the Video screens only with the video model it was taught on (`looksFor`, from the trained model's `base`; looks from before count as LTX-Video 2B), and the engine refuses a look on another model (`look_models` in `person_looks.py`, desktop and web). LTX-2.5's two workflows take up to two looks on the transformer both passes use, so it no longer says `looks: false` (a look taught on this Mac through the app, after a float32 position-table fix for LTX-2 in `training_aitk_run.py`, loaded and changed a clip, 2026-11-08); Wan 2.2 and MiniMax-H3 still do (taught on NVIDIA only, two experts for Wan: not checked here).

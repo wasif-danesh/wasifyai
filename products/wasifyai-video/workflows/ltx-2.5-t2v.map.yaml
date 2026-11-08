@@ -23,3 +23,13 @@ inputs:
     - { node: "16", field: frames_number }
 outputs:
   video: { node: "1", type: video }
+# two model-only LoRA loaders after the transformer: a look taught on LTX-2.5 (AI Toolkit teaches the dev transformer;
+# Create runs the distilled one, which the look patches the same way). Both guiders, the first pass and the refine,
+# take the patched model.
+lora_chain:
+  loader: LoraLoaderModelOnly
+  max: 2
+  from: { node: "28", output: 0 }
+  to:
+    - { node: "32", field: model }
+    - { node: "33", field: model }

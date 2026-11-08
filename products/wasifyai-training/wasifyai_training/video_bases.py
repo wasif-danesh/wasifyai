@@ -74,6 +74,9 @@ LTX_25 = VideoBase(
     dataset_fields={"do_i2v": False, "do_audio": False, "fps": 24, "auto_frame_count": False},
     fps=24,
     frames=49,
+    # a 30-step run through the app on 21 pictures at 512 pixels (2026-11-08, the owner's M5 Pro, 64 GB): 51.5 GB at
+    # its highest, 206 s to load, about 19 s a step (12 to 28), a 674 MB adapter; clips (49 frames) were not measured,
+    # so the time and memory below stay estimates for a set with clips
     need_gb=56.0,
     seconds_per_step=40.0,
     note="Learns a look, a motion or a subject from pictures and short clips. " + _GUESS,

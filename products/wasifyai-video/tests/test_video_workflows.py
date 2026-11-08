@@ -17,6 +17,7 @@ from wasifyai_platform_sdk.workflows import Workflow, workflow_problems
 PRODUCTS = Path(__file__).resolve().parents[2]
 WORKFLOWS = PRODUCTS / "wasifyai-video" / "workflows"
 NAMES = ["ltx-video-2b-t2v", "ltx-video-2b-i2v", "ltx-video-2b-extend"]
+LTX25 = {"ltx-2.5-t2v": ("28", ("32", "33")), "ltx-2.5-i2v": ("33", ("37", "38"))}
 WAN = ["wan2.2-14b-t2v", "wan2.2-14b-i2v"]
 
 
@@ -176,3 +177,18 @@ def test_each_video_model_names_its_frame_rate_and_takes_what_the_screen_sends()
             if verb in sent:
                 assert sent[verb] <= set(wf.map.inputs), (m.id, verb)
             assert set(wf.map.models) <= kept[m.id], (m.id, set(wf.map.models) - kept[m.id])
+
+
+@pytest.mark.parametrize("name", sorted(LTX25))
+def test_ltx_2_5_takes_up_to_two_looks_on_both_passes(name):
+    """A look taught on LTX-2.5 patches the transformer both guiders use (first pass, refine)."""
+    wf = Workflow.load(WORKFLOWS, name)
+    assert wf.accepts_loras and not wf.problems()
+    source, guiders = LTX25[name]
+    values = {"prompt": "a fox", "seed": 1, "length": 49}
+    values.update({"width": 512, "height": 512} if name.endswith("t2v") else {"image": "x.png"})
+    graph = wf.fill(values, [("a.safetensors", 1.5), ("b.safetensors", 0.8)])
+    by_name = {n["inputs"].get("lora_name"): k for k, n in graph.items()}
+    assert graph[by_name["a.safetensors"]]["inputs"]["model"] == [source, 0]
+    for g in guiders:
+        assert graph[g]["inputs"]["model"] == [by_name["b.safetensors"], 0]

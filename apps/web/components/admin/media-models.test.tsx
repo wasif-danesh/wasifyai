@@ -53,4 +53,19 @@ describe("MediaModelChoice", () => {
     expect(screen.getByText(/Can create\. /)).toBeTruthy();
     expect(save.disabled).toBe(false);
   });
+
+  it("keeps the saved model shown, and says Saved only while it is", async () => {
+    apiSend.mockResolvedValue({ status: 200, data: IMAGES });
+    const { MediaModelChoice } = await import("./MediaModelChoice");
+    render(<MediaModelChoice choice={IMAGES} />);
+    await userEvent.click(screen.getByRole("combobox", { name: "Images model" }));
+    await userEvent.click(screen.getByRole("option", { name: "Ideogram 4" }));
+    await userEvent.click(screen.getByRole("button", { name: "Use this model" }));
+    expect(await screen.findByText("Saved")).toBeTruthy();
+    // the save leaves the saved model shown (a form action's reset used to put the old one back)
+    expect(screen.getByRole("combobox", { name: "Images model" }).textContent).toBe("Ideogram 4");
+    await userEvent.click(screen.getByRole("combobox", { name: "Images model" }));
+    await userEvent.click(screen.getByRole("option", { name: "FLUX.2 klein 4B" }));
+    expect(screen.queryByText("Saved")).toBeNull();
+  });
 });

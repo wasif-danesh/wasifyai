@@ -41,8 +41,9 @@ second clip took 12 minutes at 1024x576 and 11 minutes from a square picture at 
 2026-11-08). LTX-2.5 runs near a 64 GB Mac's limit: Animate ran out of memory in ComfyUI right after other video
 runs until its frames were decoded in smaller tiles, and still needed a freshly started engine. LTX-2.5 reads a latent upscaler
 from ComfyUI's `latent_upscale_models` folder, which the catalogue and the sidecar now allow. Wan,
-MiniMax-H3 and LTX-2.5 have no draft setting and take no taught looks yet: a look is not tagged with the model it was
-taught on, so the graph cannot tell an LTX-Video 2B look from an LTX-2.5 one. A model's `settings` say its frame rate, so a 5 second clip
+MiniMax-H3 and LTX-2.5 have no draft setting. A look knows the video model it was taught on (the trained model's `base`):
+My looks shows only the looks of the chosen model, and the graph refuses a look on another one. LTX-Video 2B and LTX-2.5 take
+looks; Wan and MiniMax-H3 do not yet. A model's `settings` say its frame rate, so a 5 second clip
 is 121 frames on LTX, 81 on Wan and 124 on MiniMax-H3, and whether it has a draft setting and takes looks; the graph
 refuses what the chosen model cannot do before any work. The window sends the chosen model's id as `model`, hides the
 Video items it cannot do, and `GET /desktop/models` gives each entry `can`; a pinned model the product does not list is

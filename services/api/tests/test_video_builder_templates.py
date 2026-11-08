@@ -249,6 +249,12 @@ async def test_the_opaque_templates_have_no_clear_pixels(tmp_path, engine):
 # ---- the longest video ----------------------------------------------------------
 
 
+# about 7 minutes each on a CI runner (no GPU): CI makes them nightly (video-builder-nightly.yml),
+# not on every push; on a Mac they take seconds and always run
+@pytest.mark.skipif(
+    bool(os.environ.get("CI")) and os.environ.get("WASIFYAI_LONG_RENDERS") != "1",
+    reason="the 90 second renders run nightly in CI (WASIFYAI_LONG_RENDERS=1)",
+)
 @pytest.mark.parametrize(("template", "fmt"), [("title", "mp4"), ("lower_third", "webm")])
 async def test_a_90_second_video_is_made_in_a_minute_and_holds_the_same_memory(
     tmp_path, engine, template, fmt

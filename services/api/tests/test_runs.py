@@ -438,3 +438,48 @@ async def test_stop_that_reaches_another_replica_is_noticed_by_the_one_running_t
     events = await log.read("t", rec.run_id, 0, 10_000)
     assert [e["code"] for e in events if e["event"] == "error"] == ["cancelled"]
     await mgr.aclose()
+
+
+@pytest.mark.parametrize("ending", ["done", "run_error", "crash"])
+async def test_a_run_is_marked_finished_only_once_its_last_event_is_in_the_log(ending):
+    """A stream that finds the run finished and nothing new in the log stops: if the state said
+    finished before the closing event was logged, the stream ended without it (the kind smoke)."""
+    from wasifyai_api.runs import RunManager
+    from wasifyai_contracts import TERMINAL_EVENTS
+    from wasifyai_platform_sdk import RunError
+
+    log = InMemoryEventLog()
+    seen: list[str | None] = []
+
+    class Store(InMemoryRunStore):
+        async def set_state(
+            self,
+            tenant_id: str,
+            run_id: str,
+            status: str,
+            awaiting: str | None = None,
+            waiting_job: str | None = None,
+        ) -> None:
+            if status in ("done", "error"):
+                last = await log.read(tenant_id, run_id, 0, 1)
+                seen.append(last[-1]["event"] if last else None)
+            await super().set_state(tenant_id, run_id, status, awaiting, waiting_job)
+
+    def graph(caps, checkpointer):  # noqa: ANN001, ANN202
+        def node(state):  # noqa: ANN001, ANN202
+            if ending == "run_error":
+                raise RunError("bad", "Bad.", False)
+            if ending == "crash":
+                raise ConnectionError("no model server")
+            return {"draft": "ok"}
+
+        g = StateGraph(ApproveState)
+        g.add_node("n", node)
+        g.add_edge(START, "n")
+        g.add_edge("n", END)
+        return g.compile(checkpointer=checkpointer)
+
+    runs = RunManager(log, Store(), {"g": graph(None, InMemorySaver())})
+    events = [e async for e in runs.run_child("g", "t1", "u1", {})]
+    assert events[-1]["event"] == ("done" if ending == "done" else "error")
+    assert seen and seen[-1] in TERMINAL_EVENTS

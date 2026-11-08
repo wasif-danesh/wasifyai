@@ -363,7 +363,7 @@ jobs:
     # Each page attacks while HyperFrames renders it; a service on loopback must hear nothing and the filter
     # must refuse what the page asks for. Apple-silicon macOS only: that is where the component is supported.
     runs-on: macos-latest
-    timeout-minutes: 60   # about 25 minutes: the 90 second renders take 7 minutes each here (no GPU)
+    timeout-minutes: 60   # about 12 minutes; the 90 second renders (7 minutes each here) run nightly in video-builder-nightly.yml
     env:
       WASIFYAI_SESSION_TIMEOUT_S: "3000"   # the watchdog in conftest.py: this job's tests run longer than the others'
     steps:

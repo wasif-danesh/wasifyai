@@ -309,7 +309,6 @@ class RunManager:
                     for node in chunk:
                         await self._emit(rec, NodeEvent, node=node, status="completed", label=node)
             state = await graph.aget_state(config)
-            await self.store.set_state(rec.tenant_id, rec.run_id, "done")
             refusal = (
                 (state.values.get("refusal") or {})
                 if state.values.get("status") == "refused"
@@ -319,12 +318,14 @@ class RunManager:
                 record_run(rec.product_id, "refused", refusal=str(refusal.get("code", "")))
             else:
                 record_run(rec.product_id, "done")
+            # the event first, then the state: a stream that finds the run finished and nothing
+            # new in the log stops, so the state must not say finished before the event is there
             await self._emit(rec, DoneEvent, outputs=dict(state.values))
+            await self.store.set_state(rec.tenant_id, rec.run_id, "done")
             return "refused" if refusal else "done"
         except JobFailed as e:
             err = e.result.error
             record_run(rec.product_id, "error", code=err.code if err else "job_failed")
-            await self.store.set_state(rec.tenant_id, rec.run_id, "error")
             await self._emit(
                 rec,
                 ErrorEvent,
@@ -333,21 +334,22 @@ class RunManager:
                 retryable=err.retryable if err else False,
                 job_id=e.result.job_id,
             )
+            await self.store.set_state(rec.tenant_id, rec.run_id, "error")
             return "error"
         except RunError as e:
             record_run(rec.product_id, "error", code=e.code)
-            await self.store.set_state(rec.tenant_id, rec.run_id, "error")
             await self._emit(rec, ErrorEvent, code=e.code, message=e.message, retryable=e.retryable)
+            await self.store.set_state(rec.tenant_id, rec.run_id, "error")
             return "error"
         except asyncio.CancelledError:
             raise
         except Exception:
             log.exception("run failed", extra={"run_id": rec.run_id})
             record_run(rec.product_id, "error", code="run_failed")
-            await self.store.set_state(rec.tenant_id, rec.run_id, "error")
             await self._emit(
                 rec, ErrorEvent, code="run_failed", message="The run failed.", retryable=True
             )
+            await self.store.set_state(rec.tenant_id, rec.run_id, "error")
             return "error"
 
     async def _emit_custom(self, rec: RunRecord, chunk: dict[str, Any]) -> None:

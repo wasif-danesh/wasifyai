@@ -84,4 +84,7 @@ release   ─► tag or promotion PR ─► Argo CD ─► prod
 - Home lab setup: [runbooks/homelab-k3s.md](runbooks/homelab-k3s.md).
 - Notebooks and speech on the web profile (switches, gateway aliases, the worker): [runbooks/web-notebooks-voice.md](runbooks/web-notebooks-voice.md).
 - CI also installs charts into a `kind` cluster as a smoke test.
+- The two 90 second Video Builder renders (about 7 minutes each on a runner with no GPU) run nightly in
+  `.github/workflows/video-builder-nightly.yml`, or by hand from the Actions tab; `desktop.yml`'s
+  `video-builder` job skips them unless `WASIFYAI_LONG_RENDERS=1`. On a Mac they always run.
 - Occasionally smoke-test a second cloud so portability does not rot.

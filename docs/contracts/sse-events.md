@@ -62,6 +62,9 @@ Every `data` object includes:
 Rules:
 
 - `done` and fatal `error` are terminal; the server closes the stream after them.
+- A run's terminal event is in its log before its stored state says it has finished. The stream also
+  stops when it finds the run finished and nothing new in the log, so this order makes the terminal
+  event always reach the client (a Stop sets `cancelled` first, so other replicas notice it at once).
 - Asset fields are always URLs (pre-signed or served by the API), never bytes.
 - `message` fields never contain stack traces or internal hostnames.
 - New optional fields may be added without an ADR. Renaming or removing fields, or adding

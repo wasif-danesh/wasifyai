@@ -4,8 +4,9 @@ notes: >
   hand: the conditional model with CFG 3 for the last 30 percent, the unconditional model for the negative side
   (DualModelGuider, cfg 7), the template's "Default" preset (mu 0, std 1.75), euler. The text encoder is the
   Qwen3-VL 8B int8 that Qwen-Image 2.1 already keeps, not the template's fp8 copy. No edit workflow yet.
-  Not offered yet (2026-11-07): Ideogram 4 needs its structured JSON caption (the template's prompt writer makes
-  it); a plain sentence makes a grey "Image blocked by safety filter" card. See docs/image-video-models-plan.md.
+  Ideogram 4 reads a structured JSON caption: a plain sentence makes a grey "Image blocked by safety filter" card.
+  The model's `prompt_writer` (product.yaml) has the text model write that caption from the person's words
+  (wasifyai_image/caption.py), and the caption is the prompt sent here.
 models:
   - diffusion_models/ideogram4_int8_convrot.safetensors
   - diffusion_models/ideogram4_unconditional_int8_convrot.safetensors

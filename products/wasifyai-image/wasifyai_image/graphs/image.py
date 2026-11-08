@@ -38,6 +38,7 @@ from wasifyai_platform_sdk import (
     upload_store,
 )
 
+from wasifyai_image.caption import write_caption
 from wasifyai_image.images import (
     IMAGE_CREATED,
     ImageRecord,
@@ -76,6 +77,8 @@ class ImageState(TypedDict, total=False):
     ]  # on the web: the storage key of each style, which is the person's own
     # which of the product's models makes the picture (ADR-0097); absent: the first in product.yaml
     model: str
+    # what the job is sent instead of the prompt: a prompt writer's caption (Ideogram 4)
+    job_prompt: str
     # the picture of the library the change starts from, when the person chose one there
     # (not a file they added)
     source_id: str
@@ -348,6 +351,11 @@ def build_image_graph(
             return refuse_with(code, message)
 
         model = state.get("model")
+        chosen_by_admin = caps.extras.get("chosen_model")  # the web: an admin's choice (MV6)
+        if model is None and chosen_by_admin is not None:
+            picked = await chosen_by_admin()
+            if picked and VERBS[mode] in caps.image.models().get(picked, ()):
+                model = picked  # used when it can do this; otherwise the product's first model
         if model is not None:  # one of this product's models, and one that can do this (ADR-0097)
             offered = caps.image.models()
             if not isinstance(model, str) or model not in offered:
@@ -430,6 +438,23 @@ def build_image_graph(
             out["model"] = model
         if "width" in advanced:
             out["width"], out["height"] = advanced["width"], advanced["height"]
+        writer = str(caps.image.setting(model, "prompt_writer", "")) if mode == "text" else ""
+        if writer:  # this model reads a structured caption, written from the person's words
+            write({"type": "node", "node": "write_caption", "status": "started",
+                   "label": "Writing the picture's caption"})  # fmt: skip
+            width, height = size_of(out)
+            try:
+                caption = await write_caption(caps, writer, prompt, width, height)
+            except Exception:
+                log.exception("the prompt writer failed")
+                caption = None
+            if caption is None:
+                return await refused(
+                    "model_unavailable",
+                    "This model needs the text model to write its caption, and it could not. "
+                    "Please try again, or choose another image model.",
+                )
+            out["job_prompt"] = caption
         return out
 
     def after_check(state: ImageState) -> str:
@@ -463,7 +488,7 @@ def build_image_graph(
             extra["lora_files"] = state["lora_files"]
         if state.get("model"):
             extra["model"] = state["model"]
-        prompt = state["prompt"]
+        prompt = state.get("job_prompt") or state["prompt"]
         if mode == "image":
             handle = await caps.image.edit(
                 prompt=prompt, image_key=state["image_key"], seed=seed, **extra

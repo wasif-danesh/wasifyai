@@ -60,6 +60,7 @@ from wasifyai_api.desktop_model3d import Model3dService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
 from wasifyai_api.desktop_styles import StylesService
 from wasifyai_api.desktop_training import make_trainer
+from wasifyai_api.desktop_video_aitk import AitkVideoTrainer, VideoTrainers
 from wasifyai_api.desktop_video_builder import VideoBuilderService
 from wasifyai_api.desktop_video_training import VIDEO_MODEL, LtxTrainer, make_video_trainer
 from wasifyai_api.desktop_vision import VisionService
@@ -128,6 +129,9 @@ class DesktopBackends:
     deciding: LayaTrainer | None = None  # the decision trainer: Laya on a Mac (ADR-0075)
     video_setup: VideoSetup | None = None  # the video trainer's component
     teaching_video: LtxTrainer | None = None  # the video trainer: diffusers on a Mac (ADR-0073)
+    # what the video product teaches with: LTX-Video 2B's own trainer and AI Toolkit for the newer
+    # video models (ADR-0097, MV5)
+    video_trainers: VideoTrainers | None = None
     training: Any = None  # the trainer: a preview until the real one is installed (ADR-0073)
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
@@ -149,6 +153,8 @@ class DesktopBackends:
             self.teaching_video.on_published = (
                 self.discovery.scan
             )  # and a look the video engine can use
+        if self.video_trainers is not None and self.discovery is not None:
+            self.video_trainers.aitk.on_published = self.discovery.scan
         worker, self._worker_cleanup, self.slot = _build_worker(self)
         self._worker_task = asyncio.create_task(worker.run_forever())
         self._consumer = LocalCompletionConsumer(self.queue, runs, self.run_store)
@@ -272,6 +278,14 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     teaching_video = make_video_trainer(settings.desktop_dir, models)
     if teaching_video is not None:
         video_setup.video_model = teaching_video.model_files
+    trainer = make_trainer(settings.desktop_dir, settings.models_dir, setup, models)
+    if trainer is not None:
+        trainer.hub_token = lambda: hub.client.token  # fetches a recipe's gated repos
+    video_trainers = (
+        VideoTrainers(teaching_video, AitkVideoTrainer(trainer, teaching_video))
+        if trainer is not None and teaching_video is not None
+        else None
+    )
     return DesktopBackends(
         web=web,
         secrets=secrets,
@@ -284,7 +298,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         video_builder=VideoBuilderService(settings.desktop_dir),
         model3d=Model3dService(settings.desktop_dir),
         training_setup=setup,
-        training=make_trainer(settings.desktop_dir, settings.models_dir, setup, models),
+        training=trainer,
         language_setup=language_setup,
         writing=make_language_trainer(settings.desktop_dir),
         decision_setup=decision_setup,
@@ -292,6 +306,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         deciding=make_decision_trainer(settings.desktop_dir),
         video_setup=video_setup,
         teaching_video=teaching_video,
+        video_trainers=video_trainers,
         language=language,
         vision=vision,
         hub=hub,

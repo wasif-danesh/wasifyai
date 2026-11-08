@@ -123,7 +123,8 @@ async def finished(d, wait_s=10):
 def test_the_shipped_catalogue_is_pinned_and_safe():
     entries = load_catalogue(PRODUCTS, ["wasifyai-image", "hello"])
     assert [e.id for e in entries] == [
-        "flux2-klein-4b", "qwen-image-2.1", "z-image-turbo", "hidream-o1"
+        "flux2-klein-4b", "qwen-image-2.1", "z-image-turbo", "hidream-o1", "ideogram-4",
+        "flux3-image-klein", "flux2-klein-9b",
     ]  # fmt: skip
     for entry in entries:  # every file of every model is pinned to a commit
         for f in entry.files:
@@ -135,6 +136,9 @@ def test_the_shipped_catalogue_is_pinned_and_safe():
         ("image.edit", "image.generate", "image.reference"),
         ("image.generate",),
         ("image.generate",),
+        ("image.generate",),
+        ("image.edit", "image.generate"),
+        ("image.edit", "image.generate", "image.inpaint", "image.reference"),
     ]
     e = entries[0]
     assert e.approx_ram_gb == 24
@@ -150,11 +154,12 @@ def test_the_shipped_catalogue_is_pinned_and_safe():
 
 def test_the_video_catalogue_lists_the_offered_models_and_what_each_can_do():
     entries = load_catalogue(PRODUCTS, ["wasifyai-video"])
-    assert [e.id for e in entries] == ["ltx-video-2b", "wan2.2-14b", "minimax-h3"]
+    assert [e.id for e in entries] == ["ltx-video-2b", "wan2.2-14b", "minimax-h3", "ltx-2.5"]
     assert [e.can for e in entries] == [
         ("video.animate", "video.extend", "video.generate"),
         ("video.generate",),
-        ("video.generate",),
+        ("video.animate", "video.generate"),
+        ("video.animate", "video.generate"),
     ]
 
 

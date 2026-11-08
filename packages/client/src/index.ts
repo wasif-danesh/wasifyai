@@ -439,6 +439,7 @@ export {
   type WritingStatus,
   type TrainChoice,
   type TrainChoices,
+  type TrainHubState,
   type TrainFamily,
   type TrainKind,
   type TrainMethod,

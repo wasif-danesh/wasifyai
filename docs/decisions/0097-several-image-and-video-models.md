@@ -56,3 +56,18 @@ workflow set and a training recipe.
 ## Not decided here
 
 - Which models are taught on this Mac and which only on NVIDIA: decided per model from its measured run.
+
+## Built (2026-11-08)
+
+MV0 to MV6 are built; `docs/image-video-models-plan.md` has the measured numbers.
+
+- Images offer klein 4B, klein 9B, FLUX.3 Image Klein, Qwen-Image 2.1, Z-Image Turbo, HiDream-O1 and Ideogram 4;
+  Video offers LTX-Video 2B, LTX-2.5, Wan 2.2 14B and MiniMax-H3, each binding only what it can do.
+- A model's `settings` may name a prompt writer (Ideogram 4 needs a structured caption).
+- Every image model has a training recipe, and LTX-2.5, Wan 2.2 14B and MiniMax-H3 have video recipes, all taught
+  by AI Toolkit. A recipe pins the Hub files it reads; the person fetches them from the Train screen first. Z-Image
+  and FLUX.3 Image Klein were taught here through the app; the others are marked not measured, and Wan 2.2,
+  MiniMax-H3 and Ideogram 4 say they need an NVIDIA card.
+- On the web the admin picks each product's model in Admin › Media; the ComfyUI host fetches its files with
+  `python -m wasifyai_api.comfy_models`.
+- Not built: taught looks for the new video models (a look does not record the model it was taught on).

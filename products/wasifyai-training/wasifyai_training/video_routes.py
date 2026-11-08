@@ -45,10 +45,27 @@ async def video_status_of(deps: RouteDeps, kind: str = "character") -> dict[str,
         "window_frames": WINDOW_FRAMES,
         "windows_per_clip": MAX_WINDOWS,
         "min_clip_seconds": clips.MIN_SECONDS,
-        "choices": bases.choices(
-            kind, engine.fit(base.need_gb) if ready else None, ready, [], family="video"
-        ),
+        "choices": _choices(engine, kind, ready),
     }
+
+
+def _choices(engine: Any, kind: str, ready: bool) -> dict[str, Any]:
+    """The "Model to teach" rows; on the desktop each model asks its own trainer (AI Toolkit for the newer
+    video models) whether it can be taught here and what it still needs fetched."""
+    if not hasattr(engine, "for_base"):
+        base = bases.descriptors("video")[0]
+        return bases.choices(
+            kind, engine.fit(base.need_gb) if ready else None, ready, [], family="video"
+        )
+
+    def stop(d: bases.Descriptor) -> str | None:
+        why = engine.for_base(d.id).problem(d.id)
+        return None if why is None or why.startswith("The training files") else why
+
+    return bases.choices(
+        kind, (lambda d: engine.for_base(d.id).fit(d.need_gb)) if ready else None, ready, [],
+        family="video", why=stop, fetch_bytes=engine.fetch_bytes,
+    )  # fmt: skip
 
 
 def add_video_routes(router: APIRouter, deps: RouteDeps) -> None:

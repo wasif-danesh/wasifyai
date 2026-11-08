@@ -113,6 +113,25 @@ def backend_views() -> list[BackendView]:
     ]  # fmt: skip
 
 
+MODEL_KEY = "media.model.{product_id}"  # the model an admin chose for a product (ADR-0097, MV6)
+
+
+class ModelOption(BaseModel):
+    id: str
+    title: str
+    can: list[str]  # the capabilities it binds: what the product's screens can do with it
+
+
+class ProductModels(BaseModel):
+    product_id: str
+    models: list[ModelOption]
+    chosen: str  # the model its jobs use when a request names none: the admin's, else the first
+
+
+class ModelChoiceIn(BaseModel):
+    model: str
+
+
 class MediaAccess:
     def __init__(
         self,
@@ -124,7 +143,10 @@ class MediaAccess:
         video_local_url: str = "",
         checks: SettingsStore | None = None,
         changed: Callable[[str], Awaitable[None]] | None = None,
+        models: Callable[[], dict[str, list[ModelOption]]] | None = None,
     ):
+        self._read_models = models or dict
+        self._models_read: dict[str, list[ModelOption]] | None = None
         self._checks = checks
         self._changed = changed  # where the API runs a row itself (`AdminProviders.changed`)
         self._store = store
@@ -133,6 +155,41 @@ class MediaAccess:
         self._local_url = local_url
         self._video_local_url = video_local_url
         self._http = http
+
+    # ---- which model each product uses (ADR-0097, MV6) ----------------------------------------
+
+    def _models(self) -> dict[str, list[ModelOption]]:
+        """The products' models, read once: product.yaml does not change while the API runs."""
+        if self._models_read is None:
+            self._models_read = self._read_models()
+        return self._models_read
+
+    async def chosen_model(self, product_id: str) -> str | None:
+        """The model an admin chose for `product_id`, while the product still offers it."""
+        offered = {m.id for m in self._models().get(product_id, [])}
+        saved = (
+            await self._checks.get(MODEL_KEY.format(product_id=product_id))
+            if self._checks is not None
+            else None
+        )
+        return saved if isinstance(saved, str) and saved in offered else None
+
+    async def model_choices(self) -> list[ProductModels]:
+        out = []
+        for product_id, models in sorted(self._models().items()):
+            if models:
+                chosen = await self.chosen_model(product_id) or models[0].id
+                out.append(ProductModels(product_id=product_id, models=models, chosen=chosen))
+        return out
+
+    async def choose_model(self, product_id: str, model: str, by: str) -> ProductModels:
+        models = self._models().get(product_id) or []
+        if model not in {m.id for m in models}:
+            raise MediaAccessError(f"{product_id} does not offer the model {model!r}")
+        if self._checks is None:
+            raise MediaAccessError("the model choice cannot be kept here")
+        await self._checks.put(MODEL_KEY.format(product_id=product_id), model, by)
+        return ProductModels(product_id=product_id, models=models, chosen=model)
 
     def _find(self, product_id: str, capability: str) -> MediaCapability:
         for c in self._capabilities():
@@ -305,4 +362,28 @@ def media_capabilities_from(registry: Any, products_dir: Any, env: str) -> list[
                 )
     products = set(registry.products())
     out += [MediaCapability(product_id=p, capability=c) for p, c in API_ROWS if p in products]
+    return out
+
+
+def media_models_from(registry: Any, products_dir: Any, env: str) -> dict[str, list[ModelOption]]:
+    """Each product's models (`models:` in product.yaml) with their catalogue titles, in order."""
+    from pathlib import Path
+
+    from wasifyai_platform_sdk import load_product_config
+
+    from wasifyai_api.desktop_models import load_catalogue
+
+    out: dict[str, list[ModelOption]] = {}
+    for product_id in registry.products():
+        try:
+            config = load_product_config(products_dir, product_id, env=env)
+            titles = {e.id: e.title for e in load_catalogue(Path(products_dir), [product_id])}
+        except Exception:
+            log.exception("could not read the models of %s", product_id)
+            continue
+        if config.models:
+            out[product_id] = [
+                ModelOption(id=m.id, title=titles.get(m.id, m.id), can=sorted(m.capabilities))
+                for m in config.models
+            ]
     return out

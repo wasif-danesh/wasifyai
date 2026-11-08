@@ -80,6 +80,13 @@ class CaptionsIn(BaseModel):
     item_ids: list[str] | None = Field(default=None, max_length=200)
 
 
+class HubIn(BaseModel):
+    """The model whose training files to fetch, and the size the person was shown."""
+
+    base: str = Field(max_length=80)
+    confirm_bytes: int = Field(ge=0)
+
+
 class RunIn(BaseModel):
     dataset_id: str = Field(min_length=32, max_length=32)
     base: str | None = Field(default=None, max_length=80)  # the person's choice; none = recommended
@@ -246,7 +253,43 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         found = deps.state.desktop_discovery
         installed = [i.public() for i in getattr(found, "items", [])]
         ready = engine.ready()
-        return bases.choices(kind, engine.fit() if ready else None, ready, installed)
+        if not hasattr(engine, "hub_missing"):  # the preview trainer and the web's worker
+            return bases.choices(kind, engine.fit() if ready else None, ready, installed)
+
+        def stop(d: bases.Descriptor) -> str | None:
+            why = engine.problem(d.id)
+            return None if why is None or why.startswith("The training files") else why
+
+        return bases.choices(
+            kind, (lambda d: engine.fit(d.id)) if ready else None, ready, installed,
+            why=stop, fetch_bytes=lambda d: sum(h.bytes for h in engine.hub_missing(d.id)),
+        )  # fmt: skip
+
+    # ---- a recipe's training files (desktop: fetched from Hugging Face, then read offline) --
+
+    @router.get("/hub")
+    async def hub_state(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        engine = guard()
+        if not hasattr(engine, "hub_state"):
+            raise HTTPException(404, "not available in this deployment")
+        return engine.hub_state()
+
+    @router.post("/hub", status_code=202)
+    async def hub_fetch(body: HubIn, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        engine = guard()
+        if not hasattr(engine, "fetch_hub"):
+            raise HTTPException(404, "not available in this deployment")
+        try:
+            return engine.fetch_hub(body.base, body.confirm_bytes)
+        except ValueError as e:
+            raise HTTPException(409, {"code": "cannot_fetch", "message": str(e)}) from None
+
+    @router.post("/hub/cancel")
+    async def hub_cancel(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        engine = guard()
+        if not hasattr(engine, "cancel_hub"):
+            raise HTTPException(404, "not available in this deployment")
+        return await engine.cancel_hub()
 
     # ---- datasets -------------------------------------------------------------------------
 

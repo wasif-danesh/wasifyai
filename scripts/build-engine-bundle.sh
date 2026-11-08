@@ -81,7 +81,6 @@ cp "$READER_SRC"/requirements-*.lock "$OUT/products/wasifyai-notebooks/reader/"
 # The picture trainer is AI Toolkit, set up by its own manager from a pinned source archive (no lock here).
 TRAINER_SRC="products/wasifyai-training/trainer"
 mkdir -p "$OUT/products/wasifyai-training/trainer"
-cp "$TRAINER_SRC"/requirements-*.lock "$OUT/products/wasifyai-training/trainer/"
 
 # The writing trainer (ADR-0074): mlx-lm, the same way (scripts/lock-language-trainer.sh writes the lock).
 if [ ! -f "$TRAINER_SRC/language-requirements-aarch64-apple-darwin.lock" ]; then

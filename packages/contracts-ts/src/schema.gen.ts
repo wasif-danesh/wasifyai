@@ -115,6 +115,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/media/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Models
+         * @description Each product with several models (ADR-0097): its models and the one its jobs use.
+         */
+        get: operations["list_models_admin_media_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/media/models/{product_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Choose Model */
+        put: operations["choose_model_admin_media_models__product_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/media/{product_id}/{capability}": {
         parameters: {
             query?: never;
@@ -2514,6 +2551,41 @@ export interface paths {
         get: operations["decision_status_products_wasifyai_training_train_decision_status_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/hub": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Hub State */
+        get: operations["hub_state_products_wasifyai_training_train_hub_get"];
+        put?: never;
+        /** Hub Fetch */
+        post: operations["hub_fetch_products_wasifyai_training_train_hub_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-training/train/hub/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hub Cancel */
+        post: operations["hub_cancel_products_wasifyai_training_train_hub_cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4922,6 +4994,16 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * HubIn
+         * @description The model whose training files to fetch, and the size the person was shown.
+         */
+        HubIn: {
+            /** Base */
+            base: string;
+            /** Confirm Bytes */
+            confirm_bytes: number;
+        };
         /** ImagePage */
         ImagePage: {
             /** Images */
@@ -5315,12 +5397,26 @@ export interface components {
             /** Seq */
             seq: number;
         };
+        /** ModelChoiceIn */
+        ModelChoiceIn: {
+            /** Model */
+            model: string;
+        };
         /** ModelList */
         ModelList: {
             /** Models */
             models: components["schemas"]["ModelView"][];
             /** Providers */
             providers: components["schemas"]["ProviderView"][];
+        };
+        /** ModelOption */
+        ModelOption: {
+            /** Can */
+            can: string[];
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
         };
         /** ModelRow */
         ModelRow: {
@@ -5529,6 +5625,15 @@ export interface components {
             target: number;
             /** Text */
             text: string;
+        };
+        /** ProductModels */
+        ProductModels: {
+            /** Chosen */
+            chosen: string;
+            /** Models */
+            models: components["schemas"]["ModelOption"][];
+            /** Product Id */
+            product_id: string;
         };
         /** ProjectIn */
         ProjectIn: {
@@ -6402,6 +6507,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MediaList"];
+                };
+            };
+        };
+    };
+    list_models_admin_media_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductModels"][];
+                };
+            };
+        };
+    };
+    choose_model_admin_media_models__product_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelChoiceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductModels"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -11823,6 +11983,85 @@ export interface operations {
         };
     };
     decision_status_products_wasifyai_training_train_decision_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    hub_state_products_wasifyai_training_train_hub_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    hub_fetch_products_wasifyai_training_train_hub_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HubIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hub_cancel_products_wasifyai_training_train_hub_cancel_post: {
         parameters: {
             query?: never;
             header?: never;

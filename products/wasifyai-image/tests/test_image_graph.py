@@ -1,6 +1,7 @@
 """The image graph end to end with scripted fake models and an in-memory queue: no GPU, no network.
 The "worker" is the test itself, resuming the graph with a job result."""
 
+import json
 from typing import Any
 
 import pytest
@@ -439,6 +440,20 @@ async def test_the_chosen_model_makes_the_picture_and_the_recipe_names_it(tmp_pa
     assert rig.sink.submitted[1].prompt["made_by"] == "big"
 
 
+async def test_the_admins_model_is_used_when_it_can_do_it_else_the_first(tmp_path, ctx):
+    rig = make_rig(tmp_path, models=MODELS)
+
+    async def chosen():
+        return "small"
+
+    rig.caps.extras["chosen_model"] = chosen  # the web: Admin > Media chose "small" (MV6)
+    await Story(rig).start({"mode": "text", "prompt": "a fox"})
+    assert rig.sink.submitted[0].prompt["made_by"] == "small"
+    up = await put_upload(rig)
+    await Story(rig).start({"mode": "image", "prompt": "make it dusk", "image_key": up.key})
+    assert rig.sink.submitted[1].prompt["made_by"] == "big"  # "small" cannot change a picture
+
+
 async def test_a_model_that_is_not_offered_or_cannot_do_it_is_refused_before_any_work(
     tmp_path, ctx
 ):
@@ -452,3 +467,33 @@ async def test_a_model_that_is_not_offered_or_cannot_do_it_is_refused_before_any
     assert s.state["refusal"]["message"] == "This model cannot change a picture."
     assert not await exists(rig, up.key)  # the upload is let go on the way out, as on every refusal
     assert rig.sink.submitted == []
+
+
+CAPTION = (
+    '{"high_level_description": "A fox in snow.", "compositional_deconstruction":'
+    ' {"background": "Snow.",'
+    ' "elements": [{"type": "obj", "bbox": [100, 200, 900, 800], "desc": "A red fox."}]}}'
+)
+WRITER = [
+    {"id": "caption", "settings": {"prompt_writer": "write_ideogram_caption"}, "capabilities": {
+        "image.generate": {"provider": "fake"}}},
+]  # fmt: skip
+
+
+async def test_a_model_with_a_prompt_writer_gets_the_written_caption_and_keeps_the_words(
+    tmp_path, ctx
+):
+    rig = make_rig(tmp_path, models=WRITER, enhance=["Here it is: " + CAPTION])
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "size": "wide"})
+    sent = json.loads(rig.sink.submitted[0].prompt["prompt"])
+    assert sent["aspect_ratio"] == "16:9" and sent["high_level_description"] == "A fox in snow."
+    assert "a fox" in rig.asked()[0]  # the person's words went to the writer
+    await s.finish_job()
+    assert s.images.images[0].prompt == "a fox"  # the person's words are what is kept
+
+
+async def test_a_prompt_writer_that_cannot_write_a_caption_refuses_before_any_job(tmp_path, ctx):
+    rig = make_rig(tmp_path, models=WRITER, enhance=["A fox in the snow.", "Still not JSON."])
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox"})
+    assert s.state["refusal"]["code"] == "model_unavailable"
+    assert len(rig.asked()) == 2 and rig.sink.submitted == []

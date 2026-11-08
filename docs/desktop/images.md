@@ -23,12 +23,29 @@ same picture on the same installed model.
 ### Several models (ADR-0097, built 2026-11-07; `docs/image-video-models-plan.md`)
 
 `product.yaml` lists `models:`, each with the capabilities it binds: FLUX.2 klein 4B (all four), Qwen-Image 2.1
-(Create, Edit, Reference), Z-Image Turbo (Create) and HiDream-O1 (Create). The person picks one with "Select image model"; the window
+(Create, Edit, Reference), Z-Image Turbo (Create), HiDream-O1 (Create), Ideogram 4 (Create), FLUX.3 Image Klein (Create,
+Edit; its 8-bit int8 files, which run on a Mac) and FLUX.2 klein 9B (all four; its bf16 file, since the fp8 one does
+not load on Apple's graphics chip). The person picks one with "Select image model"; the window
 remembers it (`wasifyai:model:images`) and sends its id as `model` on every request. The engine's
 `GET /desktop/models` gives each entry `can` (its capabilities, from `product.yaml`), so the side menu leaves out what the
 chosen model cannot do and a screen opened anyway says so instead of making. The graph refuses an unknown model or one
 that cannot do the mode before any work. Measured here (ComfyUI 0.44.2, 1024 px, first run includes loading): Qwen-Image
-2.1 at 20 steps 137 s; Z-Image Turbo at 8 steps, see the plan. `docs/phase2-stage-b-plan.md` has the decisions.
+2.1 at 20 steps 137 s; Z-Image Turbo at 8 steps, see the plan; FLUX.3 Image Klein at 16 steps 60 s for 1344x768 once
+loaded (108 s for the first picture with the load) and an edit at 1024 px in 121 s. FLUX.2 klein 9B at 1024 px: 104 s for the first picture with
+the load, 25 s once loaded, an edit in 47 s (2026-11-08). `docs/phase2-stage-b-plan.md` has
+the decisions.
+
+**A model's prompt writer.** Ideogram 4 draws a refusal card for a plain sentence and a good picture for its structured
+caption (a JSON object of a description and the picture's parts with their boxes). Its entry in `product.yaml` names a
+writer in `settings` (`prompt_writer: write_ideogram_caption`, a prompt in `prompts/`); before the job the graph shows
+"Writing the picture's caption", runs the person's words through `text.enhance` with that prompt (two tries), checks
+the reply (`wasifyai_image/caption.py`: at most 8 parts, boxes kept in the frame, the shape the nearest common one) and
+sends the caption as the job's prompt. The person's own words stay the picture's prompt and recipe. When the text model
+cannot write it, the request is refused with `model_unavailable`: "This model needs the text model to write its
+caption, and it could not."
+
+**On the web** the admin chooses the model each product uses (Admin › Media › Models, below); a request that names
+none uses it when it can do the mode, else the product's first model.
 
 ### Reference and Inpaint (built 2026-10-21; `docs/image-inpaint-reference-plan.md`, `docs/spikes/image-ir0.md`)
 

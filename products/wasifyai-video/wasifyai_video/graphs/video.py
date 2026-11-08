@@ -238,6 +238,11 @@ def build_video_graph(
             lengths = " or ".join(str(n) for n in LENGTHS)
             return refuse_with("invalid_request", f"Please choose a length of {lengths} seconds.")
         model = state.get("model")
+        chosen_by_admin = caps.extras.get("chosen_model")  # the web: an admin's choice (MV6)
+        if model is None and chosen_by_admin is not None:
+            picked = await chosen_by_admin()
+            if picked and VERBS[mode] in caps.video.models().get(picked, ()):
+                model = picked  # used when it can do this; otherwise the product's first model
         if model is not None:  # one of this product's models, and one that can do this (ADR-0097)
             offered = caps.video.models()
             if not isinstance(model, str) or model not in offered:

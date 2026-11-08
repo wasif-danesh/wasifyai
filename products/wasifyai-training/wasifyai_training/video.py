@@ -221,7 +221,9 @@ class VideoRunManager:
             chosen, how = bases.resolve(dataset["kind"], base, method, family=FAMILY)
         except bases.Unavailable as e:
             raise Refused("cannot_teach", str(e)) from None
-        if why := engine.problem():
+        if hasattr(engine, "for_base"):  # the desktop: AI Toolkit teaches the newer video models
+            engine = engine.for_base(chosen.id)
+        if why := engine.problem(chosen.id):
             raise Refused("not_ready", why)
         if self.busy() or self.others_busy():
             raise Refused("busy", "A model is being taught. Wait for it to finish.")
@@ -236,7 +238,7 @@ class VideoRunManager:
             raise Refused("not_now", blockers[0])
         run = store.add_run(
             identity.tenant_id, identity.user_id, dataset_id, base=chosen.id, steps=plan["steps"],
-            settings={"family": FAMILY, "kind": dataset["kind"], "steps": plan["steps"], "method": how,
+            settings={"family": FAMILY, "base": chosen.id, "kind": dataset["kind"], "steps": plan["steps"], "method": how,
                       "engine": chosen.engine, "size": plan["size"], "pictures": plan["pictures"],
                       "clips": plan["clips"], "frames": plan["frames"],
                       "seconds_per_step": plan["seconds_per_step"]},

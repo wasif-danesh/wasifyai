@@ -1,0 +1,23 @@
+workflow: flux3-image-klein-edit.json
+notes: >
+  Image to image with FLUX.3 Image Klein: one picture and an instruction. ComfyUI's template
+  image_flux3_klein_distilled_image_edit converted with ComfyUI 0.44.2, without its prompt upsampler and box layout
+  (the instruction goes straight to the text encoder); the picture is scaled to about one megapixel as a reference
+  latent, so the result has its shape and there is no size input.
+models:
+  - diffusion_models/flux3-image-klein-int8-convrot.safetensors
+  - text_encoders/qwen3vl_4b_int8_convrot.safetensors
+  - vae/flux2-vae.safetensors
+inputs:
+  prompt: { node: "4", field: text }
+  seed: { node: "5", field: seed }
+  steps: { node: "5", field: steps }
+  image: { node: "8", field: image }
+outputs:
+  image: { node: "7", type: image }
+lora_chain:
+  loader: LoraLoaderModelOnly
+  max: 8
+  from: { node: "1", output: 0 }
+  to:
+    - { node: "5", field: model }

@@ -628,3 +628,37 @@ graphics chip) and on NVIDIA (CUDA), on Windows and Linux too.
   empty uv cache (how long the PyTorch download takes), style and object runs with AI Toolkit, and the web worker on
   a CUDA host. The old mflux component folder (`components/mflux`, about 8 GB) is no
   longer used and can be removed from the computer.
+
+## Built (2026-11-08): a recipe for each picture and video model (ADR-0097, MV3 and MV5)
+
+- **One recipe per model.** `picture_bases.py` holds a recipe for each image model the owner chose (klein 4B, klein
+  9B, FLUX.3 Image Klein, Qwen-Image 2.1, Z-Image through De-Turbo, HiDream-O1, Ideogram 4) and `video_bases.py` one
+  for LTX-2.5, Wan 2.2 14B and MiniMax-H3. LTX-Video 2B keeps its own trainer; the newer video models go through
+  AI Toolkit (`desktop_video_aitk.py`), the same process and slot as the pictures.
+- **Training files.** AI Toolkit runs offline and reads some files only from the Hub layout. A recipe pins the Hub
+  repos and commits it reads (`HubFiles`, sizes from the Hub). The Train screen shows "Get its training files (N GB)"
+  first; the fetch runs `snapshot_download` in AI Toolkit's own environment into `<models>/huggingface`, with the
+  person's Hugging Face token in that process only, and marks each finished repo. Runs set `HF_HOME` there and
+  `MODELS_PATH` to the models folder, so AI Toolkit reuses Create's files where it can instead of a second copy.
+- **Where a model is taught.** A recipe names its devices. Wan 2.2 14B, MiniMax-H3 (its text encoder is nvfp4) and
+  Ideogram 4 say they can be taught only on a computer with an NVIDIA card; the others are allowed on a Mac.
+- **Offline loading.** AI Toolkit loads a repo by name, which offline means the cache's `refs/main`; a fetch at a
+  pinned commit writes none, so the app's fetch points `refs/main` at the pin. Two loaders in AI Toolkit's
+  environment still reached for the Hub offline: diffusers 0.39 dev asks the Hub API whether a split model's
+  parts exist, and transformers 5.5 reads "not in the cache" as "cannot connect" even for a file the repo does not
+  have (a tokenizer folder's `config.json`). The launcher (`training_aitk_run.py`) answers both from the cache
+  when `HF_HUB_OFFLINE=1`: the fetch keeps a whole pinned copy, so a file not there is not in the repo.
+- **Measured on this Mac (2026-11-08):** Z-Image (De-Turbo) through the app's own trainer: 10 steps with two
+  sample pictures every 2 steps in 1474 s, peak 50.5 GB, an 85 MB adapter; learning alone is 5.8 s a step at
+  21.0 GB (sampling off). FLUX.3 Image Klein through the app: 10 steps with samples every 2 steps in 1348 s,
+  peak 51.5 GB, an 80 MB adapter, a learning step 4 to 11 s. The recipes not marked measured (klein 9B, Qwen-Image
+  2.1, HiDream-O1, and Ideogram 4 and the video models, which are NVIDIA only) are written from AI Toolkit's own
+  example configs and their memory numbers are estimates.
+- **What FLUX.3 needed.** Create's FLUX.3 file is the step-distilled model, which AI Toolkit refuses to teach: the
+  recipe fetches the base package's bf16 weights (11.1 GB) and links AI Toolkit's name for them in the models
+  folder to the fetched file (`model_links`), instead of AI Toolkit copying it. Its text encoder loader looks for
+  a ComfyUI file of Qwen3-VL 4B and would fetch one; the recipe names the fetched repo's folder in the models
+  folder (`{models}/...` in `model_fields`). AI Toolkit's default empty negative prompt is `False`, which FLUX.3
+  cannot encode, so the config says `""`. FLUX.3's position encoding is worked out in float64, which Apple's
+  graphics chip lacks; on a Mac the launcher works it out in float64 on the processor and uses it in float32
+  (largest difference 4.4e-6), as ComfyUI does.

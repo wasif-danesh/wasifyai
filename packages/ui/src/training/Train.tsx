@@ -24,6 +24,7 @@ import { BackInBar } from "../window-bar";
 import { CheckIt, EvaluationLine } from "./CheckIt";
 import { Choose } from "./Choose";
 import { Decide, DecideResult } from "./Decide";
+import { HubFetch } from "./HubFetch";
 import { SetupCard } from "./SetupCard";
 import { TeachModelSelect } from "./TeachModelSelect";
 import { TryIt } from "./TryIt";
@@ -1066,6 +1067,11 @@ function CheckStep({
         bases={choosing.choices?.bases ?? []}
         chosen={choosing.base}
         onPick={choosing.pickBase}
+        below={
+          choosing.row ? (
+            <HubFetch api={api} base={choosing.row} onDone={choosing.reload} />
+          ) : undefined
+        }
       />
       <Choose c={choosing} />
       <div className={actions}>
@@ -1082,7 +1088,8 @@ function CheckStep({
             t.state.status?.busy === true ||
             video?.status?.ready === false ||
             video?.status?.busy === true ||
-            preflight?.ok === false
+            preflight?.ok === false ||
+            (choosing.row?.fetch_bytes ?? 0) > 0
           }
           onClick={() => void t.teach(choosing.choice)}
         >

@@ -14,6 +14,8 @@ from wasifyai_api.media_access import (
     MediaBindingIn,
     MediaList,
     MediaView,
+    ModelChoiceIn,
+    ProductModels,
 )
 from wasifyai_api.services import services_of
 
@@ -48,6 +50,26 @@ def _describe(b: MediaBindingIn) -> dict:
 @router.get("", response_model=MediaList)
 async def list_media(request: Request, who: Identity = Depends(require_admin)) -> MediaList:
     return await _media(request).list(who.tenant_id)
+
+
+@router.get("/models", response_model=list[ProductModels])
+async def list_models(
+    request: Request, who: Identity = Depends(require_admin)
+) -> list[ProductModels]:
+    """Each product with several models (ADR-0097): its models and the one its jobs use."""
+    return await _media(request).model_choices()
+
+
+@router.put("/models/{product_id}", response_model=ProductModels)
+async def choose_model(
+    product_id: str, body: ModelChoiceIn, request: Request, who: Identity = Depends(require_admin)
+) -> ProductModels:
+    try:
+        out = await _media(request).choose_model(product_id, body.model, who.user_id)
+    except MediaAccessError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    await _audit(request, who, "admin.media.model", product_id, model=body.model)
+    return out
 
 
 @router.put("/{product_id}/{capability}", response_model=MediaView)

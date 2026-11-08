@@ -1,0 +1,24 @@
+workflow: flux3-image-klein.json
+notes: >
+  Text to image with FLUX.3 Image Klein (distilled, int8 convrot, black-forest-labs/flux-3-image-klein-comfy). ComfyUI's
+  template image_flux3_klein_distilled_t2i converted with ComfyUI 0.44.2: 16 steps, euler, cfg 1. The template's
+  prompt upsampler (Qwen3.5 9B w4a8, which needs NVIDIA) is left out: the prompt goes straight to the text encoder, and
+  "Improve my description" does that work.
+models:
+  - diffusion_models/flux3-image-klein-int8-convrot.safetensors
+  - text_encoders/qwen3vl_4b_int8_convrot.safetensors
+  - vae/flux2-vae.safetensors
+inputs:
+  prompt: { node: "5", field: text }
+  seed: { node: "8", field: seed }
+  steps: { node: "8", field: steps }
+  width: { node: "7", field: width }
+  height: { node: "7", field: height }
+outputs:
+  image: { node: "1", type: image }
+lora_chain:
+  loader: LoraLoaderModelOnly
+  max: 8
+  from: { node: "2", output: 0 }
+  to:
+    - { node: "8", field: model }

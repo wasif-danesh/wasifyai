@@ -1,0 +1,25 @@
+workflow: ltx-2.5-t2v.json
+notes: >
+  Text to video with sound, LTX-2.5 22B distilled (int8 convrot, Lightricks/LTX-2.5). ComfyUI's template
+  video_ltx2_5_t2v converted with ComfyUI 0.44.2: a first pass at half the size (8 steps), the latent upscaled 2x and
+  refined (3 steps), euler ancestral, CFG 1, 24 frames a second. The template's prompt enhancer (Gemma 4 E2B) is left
+  out. Width and height must be multiples of 64 (the first pass is half of each, in multiples of 32); the length is
+  8n + 1 frames.
+models:
+  - diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors
+  - text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors
+  - vae/ltx-2.5-video-vae-bf16.safetensors
+  - vae/ltx-2.5-audio-vae-bf16.safetensors
+  - latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors
+inputs:
+  prompt: { node: "14", field: text }
+  seed:
+    - { node: "2", field: noise_seed }
+    - { node: "3", field: noise_seed }
+  width: { node: "9", field: values.a }
+  height: { node: "10", field: values.a }
+  length:
+    - { node: "11", field: length }
+    - { node: "16", field: frames_number }
+outputs:
+  video: { node: "1", type: video }

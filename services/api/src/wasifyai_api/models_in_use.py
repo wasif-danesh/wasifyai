@@ -125,6 +125,18 @@ async def _media(request: Request, who: Identity, group: str) -> list[InUseModel
         return []
     # the product's own workflow runs the catalogue's model; another backend is named by its service
     if all(i.source == "default" for i in items):
+        # the model the product's jobs use: the one an admin chose, else its first (ADR-0097, MV6)
+        choice = next((c for c in await media.model_choices() if c.product_id == product_id), None)
+        if choice is not None:
+            model = next(m for m in choice.models if m.id == choice.chosen)
+            return [
+                InUseModel(
+                    id=f"{product_id}:{model.id}",
+                    title=model.title,
+                    plain="Chosen by your admin.",
+                    ready=True,
+                )
+            ]
         known = _titles(request, product_id)
         if known:
             return [

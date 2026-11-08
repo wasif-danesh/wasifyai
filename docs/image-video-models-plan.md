@@ -81,22 +81,21 @@ chip (`torch.median`), so the workflow uses `average`. Memory is set to 40 GB (f
 
 Ideogram 4 (int8, `Comfy-Org/Ideogram-4`, open, both halves on `AI-1TB`) has a workflow (`ideogram-4`) that runs: 20
 steps at 1024 px in 308 to 341 s, reading Qwen-Image 2.1's Qwen3-VL 8B int8 text encoder instead of a second copy.
-**It is not offered yet:** given a plain sentence, or a JSON with only `high_level_description`, it draws a grey card
-saying "Image blocked by safety filter"; given the template's full structured caption (`compositional_deconstruction`
-with elements, boxes and text) it makes the picture well. Ideogram's own service and ComfyUI's template write that
-caption with a prompt writer first. To offer it: a model gets an optional prompt writer in `product.yaml` (a prompt
-file in `prompts/`, run through `text.enhance` before the job, like the existing "Improve my description"), so the
-graph still names no model. Until then it is out of `models.yaml` and `product.yaml`; its catalogue lines are the pins
-in the workflow's map notes and below.
+Given a plain sentence, or a JSON with only `high_level_description`, it draws a grey card saying "Image blocked
+by safety filter"; given the template's full structured caption (`compositional_deconstruction` with elements, boxes
+and text) it makes the picture well. It is offered with a prompt writer (2026-11-08): its `settings` name
+`prompt_writer: write_ideogram_caption`, a prompt in `prompts/` run through `text.enhance` before the job, so the
+graph still names no model.
 
 | File | Pin |
 |---|---|
 | `ideogram4_int8_convrot.safetensors` | `Comfy-Org/Ideogram-4@2aa6c75c`, 9583465712 bytes, sha256 `a9164002…a163d` |
-| `ideogram4_unconditional_int8_convrot.safetensors` | same commit, 9583465712 bytes, sha256 `cd03ed94…6c23d` | **Blocked:** FLUX.3 Image Klein
-(`black-forest-labs/flux-3-image-klein-comfy`) and the klein 9B model file (`black-forest-labs/FLUX.2-klein-9B`) still
-answer 403: the owner accepts their terms on Hugging Face, then they are added the same way.
+| `ideogram4_unconditional_int8_convrot.safetensors` | same commit, 9583465712 bytes, sha256 `cd03ed94…6c23d` |
 
-**MV3 findings (not built).** AI Toolkit loads each model differently, so a recipe is more than a line in
+FLUX.3 Image Klein and the klein 9B model file were gated (403) until the owner accepted their terms on 2026-11-07;
+both are now offered (see Progress 2026-11-08).
+
+**MV3 findings (built 2026-11-08, see below).** AI Toolkit loads each model differently, so a recipe is more than a line in
 `picture_bases.py`; the training setup must pin and fetch each model's Hub files (it runs offline):
 
 | Model | AI Toolkit `arch` | What it reads besides our files |
@@ -130,5 +129,46 @@ Offered: LTX-Video 2B (the default; Create, Animate, Extend), Wan 2.2 14B (Creat
   at 768x512 with sound (124 frames), 8 steps at about 162 s each, 1445 s (24 min) in all; the picture is good. The
   int8 video VAE does not run on a Mac (torch has no `_int_mm` on Apple's graphics chip), so the fp16 one (5.2 GB) is
   used.
-  Picture to video (the template's `first_frame`) is not written yet.
-- **LTX-2.5** (`Lightricks/LTX-2.5`) answers 403 for files: the owner accepts its terms.
+  Picture to video (`minimax-h3-i2v`, the template's `first_frame`) is written (2026-11-08).
+- **LTX-2.5** (`Lightricks/LTX-2.5`) was gated until 2026-11-07; it is offered for Create and Animate (2026-11-08).
+
+## Progress (2026-11-08)
+
+All stages are built. Measured on the owner's M5 Pro (64 GB), ComfyUI 0.44.2, AI Toolkit `beb94824`, models on
+`AI-1TB`.
+
+**MV2 done.** In Images: FLUX.3 Image Klein (Create, Edit; the int8 step-distilled file: 60 s for 1344x768 once
+loaded, 108 s with the load, an edit at 1024 px in 121 s), FLUX.2 klein 9B (all four; bf16, since fp8 does not load
+on a Mac: 104 s for the first 1024 px picture with the load, 25 s once loaded, an edit in 47 s), Ideogram 4 (Create,
+through its prompt writer) and HiDream-O1. Every picture was looked at.
+
+**MV3 done.** A recipe per image model in `picture_bases.py`, each with the Hub repos and commits it reads
+(`HubFiles`). The Train screen offers "Get its training files (N GB)"; the fetch runs in AI Toolkit's environment
+into `<models>/huggingface` with the person's token, and runs are offline (`HF_HUB_OFFLINE=1`), reading Create's
+own files through `MODELS_PATH`. Taught through the app's own trainer, 10 steps, 512 px, samples every 2 steps:
+
+| Recipe | Seconds | Peak | Adapter | Note |
+|---|---|---|---|---|
+| Z-Image (De-Turbo) | 1474 | 50.5 GB | 85 MB | learning alone 5.8 s a step at 21.0 GB |
+| FLUX.3 Image Klein | 1348 | 51.5 GB | 80 MB | learning 4 to 11 s a step; the base's bf16 weights (11.1 GB) |
+
+klein 9B, Qwen-Image 2.1 and HiDream-O1 have recipes not run here (their training files, 35 GB and more each, were
+not fetched); Ideogram 4 is NVIDIA only. ADR-0073 has what the runs needed (offline loading, FLUX.3's base weights
+and text encoder, a Mac position encoding).
+
+**MV4 done.** MiniMax-H3 picture to video (`minimax-h3-i2v`): a 5 s clip from a square fox picture, 640x640 with
+sound, 1502 s (25 min) with the load; it keeps the picture and moves it. LTX-2.5 22B distilled (int8 transformer,
+Gemma 4 12B int8 text encoder, 39.7 GB in all): Create, 121 frames at 1024x576 with sound, 735 s with the load;
+Animate from the square fox picture, 768x768, 676 s. Both look right; the sound is quiet (mean -42 dB). Animate ran
+out of memory in ComfyUI three times after other runs (about 60 GB held outside the model pool, even after
+`/free`); with its frames decoded in smaller tiles (384 px, 32 frames) on a freshly started ComfyUI it finished.
+On a 64 GB Mac it is at the edge.
+
+**MV5 done.** `video_bases.py` has recipes for LTX-2.5 (allowed on a Mac), Wan 2.2 14B and MiniMax-H3 (NVIDIA only:
+their weights do not load on a Mac); `desktop_video_aitk.py` teaches them through the picture trainer's AI Toolkit
+process, and LTX-Video 2B keeps its own trainer. Not run here: LTX-2.5's training files (23 GB) were not fetched.
+Taught looks are not tagged with their model yet, so the new video models take no looks.
+
+**MV6 done.** Admin › Media › Models picks each product's model on the web (`media.model.<product_id>`); the web's
+`/models/in-use` names it; `python -m wasifyai_api.comfy_models` fetches a model's files onto the ComfyUI host
+(`docs/configuration.md`). Checked by tests, not walked in a browser on a web deployment.

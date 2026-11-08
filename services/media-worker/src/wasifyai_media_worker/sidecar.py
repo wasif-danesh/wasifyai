@@ -41,6 +41,7 @@ MODEL_FOLDERS = (
     "loras",
     "controlnet",
     "upscale_models",
+    "latent_upscale_models",  # LTX-2.5's latent upscaler
     "embeddings",
 )
 # which workflow input names a model file, and the folders that file may be in
@@ -50,6 +51,7 @@ LOADER_FIELDS: dict[str, tuple[str, ...]] = {
     "vae_name": ("vae",),
     "lora_name": ("loras",),
     "ckpt_name": ("checkpoints",),
+    "model_name": ("latent_upscale_models", "upscale_models"),
 }
 # folders ComfyUI needs to exist in its base directory (it stops at start-up without custom_nodes)
 BASE_FOLDERS = ("models", "input", "output", "temp", "user", "custom_nodes")

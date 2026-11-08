@@ -60,6 +60,33 @@ async def test_it_names_the_chat_model_and_what_the_product_ships(tmp_path):
     assert all(m.ready for m in out.images + out.video)
 
 
+async def test_it_names_the_model_an_admin_chose_and_the_choice_is_checked(tmp_path):
+    from wasifyai_api.media_access import MediaAccessError, ModelOption
+    from wasifyai_api.settings_store import InMemorySettingsStore
+
+    options = {
+        "wasifyai-image": [
+            ModelOption(id="klein", title="FLUX.2 klein 4B", can=["image.generate"]),
+            ModelOption(id="qwen", title="Qwen-Image 2.1", can=["image.generate"]),
+        ]
+    }
+    request = request_with(catalogue(tmp_path))
+    media = MediaAccess(
+        InMemoryMediaBindingStore(), SecretBox(SecretBox.generate_key()), lambda: CAPS,
+        "http://c", checks=InMemorySettingsStore(), models=lambda: options,
+    )  # fmt: skip
+    request.app.state.services.media = media
+    out = await in_use(request, WHO)
+    assert [m.title for m in out.images] == ["FLUX.2 klein 4B"]  # none chosen: the first
+    await media.choose_model("wasifyai-image", "qwen", "admin")
+    out = await in_use(request, WHO)
+    assert [m.title for m in out.images] == ["Qwen-Image 2.1"]
+    assert await media.chosen_model("wasifyai-image") == "qwen"
+    with pytest.raises(MediaAccessError):
+        await media.choose_model("wasifyai-image", "nope", "admin")
+    assert [c.chosen for c in await media.model_choices()] == ["qwen"]
+
+
 async def test_a_chosen_service_is_named_by_the_service(tmp_path):
     request = request_with(catalogue(tmp_path))
     from wasifyai_api.media_access import MediaBindingIn

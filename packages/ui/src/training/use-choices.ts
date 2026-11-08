@@ -18,10 +18,11 @@ export function useChoices(api: TrainingApi, kind: TrainKind, family: TrainFamil
   const [choices, setChoices] = useState<TrainChoices | null>(null);
   const [base, setBase] = useState<string | null>(null);
   const [method, setMethod] = useState<TrainMethodId | null>(null);
+  const [round, setRound] = useState(0); // read the list again (after a model's files arrive)
 
   useEffect(() => {
     let alive = true;
-    setChoices(null);
+    if (round === 0) setChoices(null); // a reload keeps the list shown while it is read
     api
       .choices(kind, family)
       .then((c) => {
@@ -33,7 +34,7 @@ export function useChoices(api: TrainingApi, kind: TrainKind, family: TrainFamil
     return () => {
       alive = false;
     };
-  }, [api, kind, family]);
+  }, [api, kind, family, round]);
 
   const chosenBase = base ?? choices?.default_base ?? "";
   const row = choices?.bases.find((b) => b.id === chosenBase) ?? null;
@@ -56,6 +57,7 @@ export function useChoices(api: TrainingApi, kind: TrainKind, family: TrainFamil
     method: usable ? chosenMethod : (choices?.default_method ?? "lora"),
     choice,
     changed: Object.keys(choice).length > 0,
+    reload: () => setRound((n) => n + 1),
     pickBase: (id: string) => {
       setBase(id);
       setMethod(null); // a new model starts from its own recommendation

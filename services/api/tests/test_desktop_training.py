@@ -31,6 +31,7 @@ first = int(saves[-1].stem.rsplit("_", 1)[1]) + 1 if saves else 1
 Path(os.environ["FAKE_PID_FILE"]).write_text(str(os.getpid()))
 from extensions_built_in.diffusion_models.flux2.flux2_klein_model import Flux2Klein4BModel
 cfg["klein_te"] = Flux2Klein4BModel.flux2_klein_te_path
+cfg["hf_home"] = os.environ.get("HF_HOME")
 Path(os.environ["FAKE_CFG_FILE"]).write_text(json.dumps(cfg))
 mode = os.environ.get("FAKE_MODE", "ok")
 pictures = len(list(Path(p["datasets"][0]["folder_path"]).glob("*.png")))
@@ -478,3 +479,119 @@ def test_set_up_finds_only_the_picture_model_it_pinned(tmp_path):
 
     pins = ts.load_pins()
     assert ts.find_base(tmp_path, pins, base="flux2-klein-9b") is None
+
+
+# ---- a recipe AI Toolkit loads from Hugging Face -------------------------------------------------
+
+from wasifyai_training import picture_bases as pb  # noqa: E402
+
+HUB_RECIPE = pb.PictureBase(
+    id="test-hub", title="Test Hub", model="test-hub", use_with="Test Hub", arch="flux3",
+    name_or_path="org/test-base", hub=(pb.HubFiles("org/test-base", "abc123", ("*.json",), 3_000_000_000),),
+    need_gb=1.0,
+)  # fmt: skip
+
+FETCH = """
+import os, sys
+from pathlib import Path
+home = Path(os.environ["HF_HOME"]) / "hub"
+home.mkdir(parents=True, exist_ok=True)
+(home / "got.json").write_text(sys.argv[1] + "@" + sys.argv[2] + " " + sys.argv[3])
+(home / "token").write_text(os.environ.get("HF_TOKEN", "none"))
+sys.exit(1 if sys.argv[1] == "org/gated" else 0)
+"""
+
+
+@pytest.fixture
+def hub_recipe(monkeypatch: pytest.MonkeyPatch) -> pb.PictureBase:
+    monkeypatch.setitem(pb.PICTURE_BASES, HUB_RECIPE.id, HUB_RECIPE)
+    monkeypatch.setattr(dt, "HUB_FETCH", FETCH)
+    return HUB_RECIPE
+
+
+async def test_a_hub_recipe_is_taught_once_its_files_are_fetched(home: Path, hub_recipe):
+    trainer = dt.AiToolkitTrainer(home / "data", models_dir=home / "models")
+    trainer.hub_token = lambda: "hf_secret"
+    why = trainer.problem(hub_recipe.id) or ""
+    assert "training files of Test Hub" in why and "3 GB" in why
+    assert trainer.problem() is None  # the default model is unaffected
+    with pytest.raises(ValueError, match="size changed"):
+        trainer.fetch_hub(hub_recipe.id, 1)
+    state = trainer.fetch_hub(hub_recipe.id, 3_000_000_000)
+    assert state["state"] == "fetching"
+    await trainer._hub_task  # noqa: SLF001
+    assert trainer.hub_state()["state"] == "done"
+    cache = home / "models" / "huggingface" / "hub"
+    assert (cache / "got.json").read_text() == 'org/test-base@abc123 ["*.json"]'
+    assert (cache / "token").read_text() == "hf_secret"  # in the child's environment only
+    assert trainer.problem(hub_recipe.id) is None and trainer.hub_missing(hub_recipe.id) == []
+
+
+async def test_a_gated_repo_that_cannot_be_fetched_says_what_to_do(
+    home: Path, hub_recipe, monkeypatch
+):
+    gated = pb.PictureBase(
+        id="test-gated", title="Gated", model="g", use_with="Gated", arch="x",
+        name_or_path="org/gated", hub=(pb.HubFiles("org/gated", "r1", bytes=10),),
+    )  # fmt: skip
+    monkeypatch.setitem(pb.PICTURE_BASES, gated.id, gated)
+    trainer = dt.AiToolkitTrainer(home / "data", models_dir=home / "models")
+    trainer.fetch_hub(gated.id, 10)
+    await trainer._hub_task  # noqa: SLF001
+    out = trainer.hub_state()
+    assert out["state"] == "error" and out["error"]
+    assert trainer.hub_missing(gated.id)
+
+
+def test_a_recipe_for_nvidia_only_says_so_on_a_mac(home: Path, monkeypatch: pytest.MonkeyPatch):
+    nvidia = pb.PictureBase(
+        id="test-nvidia", title="Big One", model="b", use_with="Big One", arch="x",
+        devices=(pb.NVIDIA,),
+    )  # fmt: skip
+    monkeypatch.setitem(pb.PICTURE_BASES, nvidia.id, nvidia)
+    monkeypatch.setattr(dt.sys, "platform", "darwin")
+    trainer = dt.AiToolkitTrainer(home / "data", models_dir=home / "models")
+    assert "NVIDIA graphics card" in (trainer.problem(nvidia.id) or "")
+    with pytest.raises(ValueError, match="NVIDIA"):
+        trainer.fetch_hub(nvidia.id, 0)
+
+
+async def test_a_hub_run_reads_its_repo_offline_from_the_cache_beside_the_models(
+    home: Path, hub_recipe
+):
+    trainer = dt.AiToolkitTrainer(home / "data", models_dir=home / "models")
+    marker = dt.hub_marker(trainer.hub_home(), hub_recipe.hub[0])
+    marker.parent.mkdir(parents=True)
+    marker.write_text("done")
+    job = job_in(home, steps=4)
+    job.base = hub_recipe.id  # type: ignore[attr-defined]
+    await trainer.train(job, lambda *_: None, lambda *_: None)
+    cfg = json.loads((home / "cfg.json").read_text())
+    model = cfg["config"]["process"][0]["model"]
+    assert model["name_or_path"] == "org/test-base" and model["arch"] == "flux3"
+    assert "te_name_or_path" not in model
+    assert cfg["hf_home"] == str(home / "models" / "huggingface")
+
+
+def test_a_recipe_link_lets_ai_toolkit_use_the_fetched_file(tmp_path: Path):
+    links = pb.FLUX3_KLEIN.model_links
+    fetched = tmp_path / links[0][1]
+    fetched.parent.mkdir(parents=True)
+    fetched.write_bytes(b"bf16")
+    dt.link_models(tmp_path, links)
+    dt.link_models(tmp_path, links)  # a second run keeps the link
+    alias = tmp_path / "diffusion_models" / "flux3_image_klein_bf16.safetensors"
+    assert alias.is_symlink() and alias.read_bytes() == b"bf16"
+    dt.link_models(tmp_path, (("vae/missing.safetensors", "vae/not-there.safetensors"),))
+    assert not (tmp_path / "vae").exists()  # nothing to point at: no link
+
+
+def test_a_recipe_path_in_the_models_folder_becomes_the_real_one(tmp_path: Path):
+    config = dt.training_config(
+        10, tmp_path / "w", tmp_path / "o", {}, sample_every=5, prompts=[], kind="character",
+        side=512, recipe=pb.FLUX3_KLEIN,
+    )  # fmt: skip
+    model = dt.in_models_folder(config, tmp_path)["config"]["process"][0]["model"]
+    assert model["te_name_or_path"].startswith(str(tmp_path / "huggingface" / "hub"))
+    assert model["name_or_path"] == "black-forest-labs/flux-3-image-klein-base"
+    assert config["config"]["process"][0]["sample"]["neg"] == ""  # not AI Toolkit's False

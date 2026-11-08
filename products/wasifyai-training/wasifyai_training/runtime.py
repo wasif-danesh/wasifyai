@@ -82,6 +82,13 @@ def not_ready(engine: Any) -> str:
     return getattr(engine, "problem", lambda: None)() or "Training is not set up yet."
 
 
+def problem_for(engine: Any, base: str) -> str | None:
+    """What stops `base` being taught by `engine`; an engine with one model answers for it."""
+    if hasattr(engine, "hub_missing"):  # the desktop trainer knows each recipe
+        return engine.problem(base)
+    return None if engine.ready() else not_ready(engine)
+
+
 # ---- files ----------------------------------------------------------------------------------
 
 
@@ -385,8 +392,6 @@ class RunManager:
         recommendation, so a caller that does not know about the choice keeps working."""
         state = self._deps.state
         engine, store = engine_for(state), store_for(state)
-        if not engine.ready():
-            raise Refused("not_ready", not_ready(engine))
         others = (
             getattr(state, name, None) for name in ("writing_runs", "decision_runs", "video_runs")
         )
@@ -398,16 +403,18 @@ class RunManager:
         items = store.list_items(identity.tenant_id, identity.user_id, dataset_id)
         if why := ready_to_train(dataset, items):
             raise Refused("not_ready_to_train", why)
-        fit = engine.fit()
+        try:
+            chosen, how = bases.resolve(dataset["kind"], base, method)
+        except bases.Unavailable as e:
+            raise Refused("cannot_teach", str(e)) from None
+        if why := problem_for(engine, chosen.id):
+            raise Refused("not_ready", why)
+        fit = engine.fit(chosen.id) if hasattr(engine, "hub_missing") else engine.fit()
         if fit["verdict"] == "too_big":
             raise Refused("too_big", fit["reason"])
         check = getattr(engine, "preflight", None)
         if check is not None and (blockers := check()["blockers"]):
             raise Refused("not_now", blockers[0])  # not enough disk, a flat battery
-        try:
-            chosen, how = bases.resolve(dataset["kind"], base, method)
-        except bases.Unavailable as e:
-            raise Refused("cannot_teach", str(e)) from None
         # the chosen model, never the trainer's own default: each one's recipe is in
         # `picture_bases`
         steps = trainer.steps_for(dataset["kind"], len(items), chosen.id)

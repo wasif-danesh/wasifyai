@@ -1,0 +1,24 @@
+workflow: ltx-2.5-i2v.json
+notes: >
+  Picture to video with sound, LTX-2.5 22B distilled. ComfyUI's template video_ltx2_5_i2v converted with ComfyUI 0.44.2,
+  the same two passes as text to video, the picture placed as the first frame in both. Instead of the template's fixed
+  16:9 size, the picture is scaled to about `megapixels` in multiples of 64 and the clip takes its shape. The
+  template's prompt enhancer is left out.
+models:
+  - diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors
+  - text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors
+  - vae/ltx-2.5-video-vae-bf16.safetensors
+  - vae/ltx-2.5-audio-vae-bf16.safetensors
+  - latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors
+inputs:
+  prompt: { node: "19", field: text }
+  seed:
+    - { node: "3", field: noise_seed }
+    - { node: "4", field: noise_seed }
+  megapixels: { node: "11", field: megapixels }
+  length:
+    - { node: "15", field: length }
+    - { node: "21", field: frames_number }
+  image: { node: "2", field: image }
+outputs:
+  video: { node: "1", type: video }

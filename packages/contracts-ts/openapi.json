@@ -1944,6 +1944,27 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HubIn": {
+        "description": "The model whose training files to fetch, and the size the person was shown.",
+        "properties": {
+          "base": {
+            "maxLength": 80,
+            "title": "Base",
+            "type": "string"
+          },
+          "confirm_bytes": {
+            "minimum": 0.0,
+            "title": "Confirm Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "base",
+          "confirm_bytes"
+        ],
+        "title": "HubIn",
+        "type": "object"
+      },
       "ImagePage": {
         "properties": {
           "images": {
@@ -2884,6 +2905,19 @@
         "title": "MessageOut",
         "type": "object"
       },
+      "ModelChoiceIn": {
+        "properties": {
+          "model": {
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model"
+        ],
+        "title": "ModelChoiceIn",
+        "type": "object"
+      },
       "ModelList": {
         "properties": {
           "models": {
@@ -2906,6 +2940,32 @@
           "providers"
         ],
         "title": "ModelList",
+        "type": "object"
+      },
+      "ModelOption": {
+        "properties": {
+          "can": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Can",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "can"
+        ],
+        "title": "ModelOption",
         "type": "object"
       },
       "ModelRow": {
@@ -3448,6 +3508,32 @@
           "text"
         ],
         "title": "PlanBook",
+        "type": "object"
+      },
+      "ProductModels": {
+        "properties": {
+          "chosen": {
+            "title": "Chosen",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelOption"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "models",
+          "chosen"
+        ],
+        "title": "ProductModels",
         "type": "object"
       },
       "ProjectIn": {
@@ -5505,6 +5591,84 @@
           }
         },
         "summary": "List Media",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/media/models": {
+      "get": {
+        "description": "Each product with several models (ADR-0097): its models and the one its jobs use.",
+        "operationId": "list_models_admin_media_models_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProductModels"
+                  },
+                  "title": "Response List Models Admin Media Models Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Models",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/media/models/{product_id}": {
+      "put": {
+        "operationId": "choose_model_admin_media_models__product_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "product_id",
+            "required": true,
+            "schema": {
+              "title": "Product Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelChoiceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductModels"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Choose Model",
         "tags": [
           "admin"
         ]
@@ -13325,6 +13489,93 @@
           }
         },
         "summary": "Decision Status",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/hub": {
+      "get": {
+        "operationId": "hub_state_products_wasifyai_training_train_hub_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Hub State Products Wasifyai Training Train Hub Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Hub State",
+        "tags": [
+          "wasifyai-training"
+        ]
+      },
+      "post": {
+        "operationId": "hub_fetch_products_wasifyai_training_train_hub_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HubIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Hub Fetch Products Wasifyai Training Train Hub Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Hub Fetch",
+        "tags": [
+          "wasifyai-training"
+        ]
+      }
+    },
+    "/products/wasifyai-training/train/hub/cancel": {
+      "post": {
+        "operationId": "hub_cancel_products_wasifyai_training_train_hub_cancel_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Hub Cancel Products Wasifyai Training Train Hub Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Hub Cancel",
         "tags": [
           "wasifyai-training"
         ]

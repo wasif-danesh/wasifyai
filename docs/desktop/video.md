@@ -31,9 +31,18 @@ finished clip (the known gap of images too).
 ### Several models (ADR-0097, built 2026-11-07; `docs/image-video-models-plan.md`)
 
 `product.yaml` lists `models:`: LTX-Video 2B (the default; Create, Animate, Extend; 24 frames a second), Wan 2.2 14B
-(Create only; 16 a second; a 5 second clip at 832x480 took 30 minutes on an M5 Pro, 2026-11-07) and MiniMax-H3
-(Create only, with sound; 24 a second in steps of 17 frames; a 5 second clip at 768x512 took 24 minutes). Wan and
-MiniMax-H3 have no draft setting and take no taught looks. A model's `settings` say its frame rate, so a 5 second clip
+(Create only; 16 a second; a 5 second clip at 832x480 took 30 minutes on an M5 Pro, 2026-11-07), MiniMax-H3
+(Create and Animate, with sound; 24 a second in steps of 17 frames; a 5 second clip at 768x512 took 24 minutes; Animate
+scales the picture to about 0.4 megapixels and the clip takes its shape; a 5 second clip from a square picture,
+640x640, took 25 minutes with the load, 2026-11-08) and LTX-2.5 22B (Create and Animate, with
+sound; 24 a second; two passes, the first at half size, then the latent upscaled 2x and refined; Create is 1024x576 by
+default, in multiples of 64, and Animate scales the picture to about 0.6 megapixels; on an M5 Pro with 64 GB a 5
+second clip took 12 minutes at 1024x576 and 11 minutes from a square picture at 768x768, both with the load,
+2026-11-08). LTX-2.5 runs near a 64 GB Mac's limit: Animate ran out of memory in ComfyUI right after other video
+runs until its frames were decoded in smaller tiles, and still needed a freshly started engine. LTX-2.5 reads a latent upscaler
+from ComfyUI's `latent_upscale_models` folder, which the catalogue and the sidecar now allow. Wan,
+MiniMax-H3 and LTX-2.5 have no draft setting and take no taught looks yet: a look is not tagged with the model it was
+taught on, so the graph cannot tell an LTX-Video 2B look from an LTX-2.5 one. A model's `settings` say its frame rate, so a 5 second clip
 is 121 frames on LTX, 81 on Wan and 124 on MiniMax-H3, and whether it has a draft setting and takes looks; the graph
 refuses what the chosen model cannot do before any work. The window sends the chosen model's id as `model`, hides the
 Video items it cannot do, and `GET /desktop/models` gives each entry `can`; a pinned model the product does not list is

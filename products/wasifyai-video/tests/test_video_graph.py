@@ -388,6 +388,19 @@ async def test_the_chosen_model_makes_the_clip_at_its_own_frame_rate(tmp_path, c
     assert job.prompt["made_by"] == "ltx" and job.prompt["length"] == LENGTHS[8] == 193
 
 
+async def test_the_admins_model_is_used_when_a_request_names_none_and_it_can_do_it(tmp_path, ctx):
+    rig = make_rig(tmp_path, models=MODELS)
+
+    async def chosen():
+        return "wan"
+
+    rig.caps.extras["chosen_model"] = chosen  # the web: Admin > Media chose Wan (MV6)
+    await Story(rig).start({"mode": "text", "prompt": "a fox", "seconds": 5})
+    assert rig.sink.submitted[0].prompt["made_by"] == "wan"
+    await Story(rig).start({"mode": "text", "prompt": "a fox", "model": "ltx", "seconds": 5})
+    assert rig.sink.submitted[1].prompt["made_by"] == "ltx"  # a request's own choice wins
+
+
 async def test_a_video_model_not_offered_or_that_cannot_do_it_is_refused(tmp_path, ctx):
     rig = make_rig(tmp_path, models=MODELS)
     s = await Story(rig).start({"mode": "text", "prompt": "a fox", "model": "nope"})

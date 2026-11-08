@@ -26,7 +26,16 @@ from pathlib import Path
 from typing import Any
 
 from PIL import Image
-from wasifyai_training.picture_bases import KLEIN_4B, PICTURE_BASES, PictureBase, picture_base
+from wasifyai_training.picture_bases import (
+    KLEIN_4B,
+    MAC,
+    NVIDIA,
+    PICTURE_BASES,
+    HubFiles,
+    PictureBase,
+    picture_base,
+)
+from wasifyai_training.video_bases import VIDEO_BASES, VideoBase
 
 from wasifyai_api.desktop_fit import assess_fit, need_declared, read_machine
 from wasifyai_api.desktop_models import free_disk_bytes
@@ -75,6 +84,82 @@ def device() -> str:
     return "mps" if sys.platform == "darwin" else "cuda:0"
 
 
+# fetches a recipe's Hugging Face files in AI Toolkit's own environment, into HF_HOME; the token,
+# when there is one, is in the child's environment only and is sent only to huggingface.co
+HUB_FETCH = (
+    "import json, sys\n"
+    "from huggingface_hub import snapshot_download\n"
+    "repo, revision, into = sys.argv[1], sys.argv[2], sys.argv[4]\n"
+    "patterns = json.loads(sys.argv[3])\n"
+    "snapshot_download(repo, revision=revision, allow_patterns=patterns, local_dir=into or None)\n"
+    # AI Toolkit loads a repo by name, which offline means the cache's "main": point it at the pin
+    "if not into:\n"
+    "    from pathlib import Path\n"
+    "    from huggingface_hub.constants import HF_HUB_CACHE\n"
+    "    refs = Path(HF_HUB_CACHE) / ('models--' + repo.replace('/', '--')) / 'refs'\n"
+    "    refs.mkdir(parents=True, exist_ok=True)\n"
+    "    (refs / 'main').write_text(revision)\n"
+)
+
+
+def recipe_of(base: str) -> PictureBase | VideoBase:
+    """The picture or video recipe AI Toolkit teaches `base` with; a `KeyError` when none."""
+    if base in VIDEO_BASES:
+        return VIDEO_BASES[base]
+    return picture_base(base)
+
+
+def hub_marker(home: Path, files: HubFiles) -> Path:
+    """Written once every file of `files` is in the cache: a half-fetched repo is not used."""
+    return home / ".wasify" / f"{files.repo.replace('/', '--')}@{files.revision}.done"
+
+
+def folder_bytes(folder: Path) -> int:
+    total = 0
+    for root, _, names in os.walk(folder):
+        for n in names:
+            with contextlib.suppress(OSError):
+                total += (Path(root) / n).stat().st_size
+    return total
+
+
+MODELS_MARK = "{models}/"
+
+
+def in_models_folder(config: dict[str, Any], root: Path) -> dict[str, Any]:
+    """A recipe names a path in the models folder as `{models}/...`; the run gets the real one."""
+    for process in config["config"]["process"]:
+        model = process["model"]
+        for key, value in model.items():
+            if isinstance(value, str) and value.startswith(MODELS_MARK):
+                model[key] = str(root / value.removeprefix(MODELS_MARK))
+    return config
+
+
+def link_models(root: Path, links: tuple[tuple[str, str], ...]) -> None:
+    """Each (AI Toolkit's name, the file) under `root`: AI Toolkit's name made a link to the file
+    when the file is there and the name is free."""
+    for alias, target in links:
+        src, dst = root / target, root / alias
+        if src.is_file() and not dst.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.unlink(missing_ok=True)  # a link left pointing at a removed file
+            dst.symlink_to(src)
+
+
+def where_taught(recipe: PictureBase | VideoBase) -> str | None:
+    """Why `recipe` cannot be taught on this kind of computer, or None when it can."""
+    here = MAC if sys.platform == "darwin" else NVIDIA
+    if here in recipe.devices:
+        return None
+    if recipe.devices == (NVIDIA,):
+        return (
+            f"{recipe.title} can be taught only on a computer with an NVIDIA graphics card: "
+            "its weights do not load on a Mac."
+        )
+    return f"{recipe.title} cannot be taught on this computer."
+
+
 def training_config(
     steps: int,
     work: Path,
@@ -90,23 +175,31 @@ def training_config(
     """AI Toolkit's config for the model `recipe` describes, taught from the image model's own
     `files` (transformer, text encoder folder, vae): a LoRA at rank 16, a checkpoint every 25 steps
     (the newest two kept, so a paused run picks up where it stopped) and sample pictures."""
-    model: dict[str, Any] = {
-        "name_or_path": str(files["transformer"]),
-        "arch": recipe.arch,
-        "te_name_or_path": str(files["text_encoder"]),
-        "vae_path": str(files["vae"]),
-        "low_vram": False,
-    }
+    model: dict[str, Any]
+    if recipe.name_or_path:  # loaded from its Hugging Face repos, read offline from the cache
+        model = {"name_or_path": recipe.name_or_path, "arch": recipe.arch, "low_vram": False}
+        if recipe.extras:
+            model["extras_name_or_path"] = recipe.extras
+    else:  # taught from the image model's own files
+        model = {
+            "name_or_path": str(files["transformer"]),
+            "arch": recipe.arch,
+            "te_name_or_path": str(files["text_encoder"]),
+            "vae_path": str(files["vae"]),
+            "low_vram": False,
+        }
+    if recipe.model_kwargs:
+        model["model_kwargs"] = dict(recipe.model_kwargs)
+    model |= dict(recipe.model_fields)
     if recipe.quantize:
-        model |= {
-            "quantize": True, "qtype": recipe.quantize,
-            "quantize_te": True, "qtype_te": recipe.quantize,
-        }  # fmt: skip
+        model |= {"quantize": True, "qtype": recipe.quantize}
+        if recipe.quantize_te:
+            model |= {"quantize_te": True, "qtype_te": recipe.quantize}
     process = {
         "type": "sd_trainer",
         "training_folder": str(out),
         "device": device(),
-        "network": {"type": "lora", "linear": RANK, "linear_alpha": RANK},
+        "network": {"type": "lora", "linear": RANK, "linear_alpha": RANK, **recipe.network_fields},
         "save": {
             "dtype": "float16", "save_every": CHECKPOINT_EVERY, "max_step_saves_to_keep": 2,
         },
@@ -121,13 +214,15 @@ def training_config(
             "gradient_checkpointing": recipe.gradient_checkpointing,
             "noise_scheduler": "flowmatch", "optimizer": "adamw",
             "lr": recipe.learning_rate.get(kind, 1e-4), "dtype": "bf16",
-            "disable_sampling": False,
+            "disable_sampling": False, **recipe.train_fields,
         },
         "model": model,
         "sample": {
             "sampler": "flowmatch", "sample_every": max(1, sample_every),
             "width": 512, "height": 512, "prompts": prompts, "seed": 42,
             "guidance_scale": recipe.guidance, "sample_steps": recipe.sample_steps,
+            # no negative prompt; AI Toolkit's own default is False, which FLUX.3 cannot encode
+            "neg": "",
         },
     }  # fmt: skip
     return {
@@ -259,10 +354,14 @@ class AiToolkitTrainer:
         self._pausing = False
         self.peak_bytes = 0  # the most memory the last run held
         self._words: dict[tuple[str, str], dict[str, Any]] = {}  # how words were split
+        self.hub_token: Callable[[], str | None] | None = None  # the person's Hugging Face token
+        self._hub: dict[str, Any] = {"state": "idle"}
+        self._hub_task: asyncio.Task[None] | None = None
 
     # ---- what the product asks ---------------------------------------------------------------
 
-    def problem(self) -> str | None:
+    def problem(self, base: str | None = None) -> str | None:
+        """What stops `base` (the default model when None) being taught here, or None."""
         if not picture_supported():
             return (
                 "Teaching a picture model needs a Mac with Apple silicon, or a computer with an "
@@ -270,12 +369,125 @@ class AiToolkitTrainer:
             )
         if find_tool(self.data_dir) is None or find_base(self.data_dir) is None:
             return "Training is not set up on this computer yet. Set it up first."
-        if self.model_files() is None:
+        try:
+            recipe = picture_base(base or self.base)
+        except KeyError:
+            return "This picture model cannot be taught yet."
+        if why := where_taught(recipe):
+            return why
+        if recipe.hub:
+            if self.hub_missing(recipe.id):
+                return (
+                    f"The training files of {recipe.title} are not on this computer yet "
+                    f"(about {recipe.hub_bytes / 1e9:.0f} GB). Get them first."
+                )
+            return None
+        if self.model_files(recipe.id) is None:
             return (
-                f"{KLEIN_4B.use_with} is not on this computer yet. Choose Select image model on "
+                f"{recipe.use_with} is not on this computer yet. Choose Select image model on "
                 "an Images screen to get it."
             )
         return None
+
+    # ---- a recipe's Hugging Face files ---------------------------------------------------------
+
+    def hub_home(self) -> Path:
+        """The Hugging Face cache AI Toolkit reads a recipe's repos from: beside the models."""
+        return self.models_root() / "huggingface"
+
+    def models_root(self) -> Path:
+        """The models folder in ComfyUI's layout: AI Toolkit reads it as MODELS_PATH."""
+        return self.models_dir or (self.data_dir or Path.home()) / "models"
+
+    def hub_missing(self, base: str) -> list[HubFiles]:
+        recipe = recipe_of(base)
+        return [h for h in recipe.hub if not hub_marker(self.hub_home(), h).is_file()]
+
+    def hub_env(self) -> dict[str, str]:
+        """Where a run reads a recipe's files: the Hugging Face cache, and the models (MODELS_PATH,
+        ComfyUI's layout)."""
+        return {"HF_HOME": str(self.hub_home()), "MODELS_PATH": str(self.models_root())}
+
+    def hub_state(self) -> dict[str, Any]:
+        out = dict(self._hub)
+        if out.get("state") == "fetching":
+            out["bytes_done"] = folder_bytes(self.hub_home() / "hub")
+        return out
+
+    def fetch_hub(self, base: str, confirm_bytes: int) -> dict[str, Any]:
+        """Start fetching the training files of `base` after the person agreed to their size."""
+        try:
+            recipe = recipe_of(base)
+        except KeyError:
+            raise ValueError("This model cannot be taught yet.") from None
+        if self._hub_task is not None and not self._hub_task.done():
+            raise ValueError("Training files are being fetched already.")
+        if why := where_taught(recipe):
+            raise ValueError(why)
+        tool = find_tool(self.data_dir)
+        if tool is None:
+            raise ValueError("Training is not set up on this computer yet. Set it up first.")
+        missing = self.hub_missing(base)
+        need = sum(h.bytes for h in missing)
+        if missing and confirm_bytes != need:
+            raise ValueError("The size changed since you were asked. Look again.")
+        self._hub = {
+            "base": base, "state": "fetching", "bytes_total": need,
+            "bytes_start": folder_bytes(self.hub_home() / "hub"), "error": None,
+        }  # fmt: skip
+        self._hub_task = asyncio.create_task(self._fetch(tool[0], missing))
+        return self.hub_state()
+
+    async def _fetch(self, home: Path, missing: list[HubFiles]) -> None:
+        env = {
+            k: v for k, v in os.environ.items() if not k.startswith(("VIRTUAL_ENV", "PYTHONHOME"))
+        }
+        env |= {"HF_HOME": str(self.hub_home()), "PYTHONUNBUFFERED": "1"}
+        env.pop("HF_HUB_OFFLINE", None)
+        token = self.hub_token() if self.hub_token is not None else None
+        if token:
+            env["HF_TOKEN"] = token
+        try:
+            for files in missing:
+                proc = await asyncio.create_subprocess_exec(
+                    str(venv_python(home)), "-P", "-c", HUB_FETCH, files.repo, files.revision,
+                    json.dumps(list(files.patterns)),
+                    str(self.models_root()) if files.into_models else "", cwd=str(home), env=env,
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+                    stdin=asyncio.subprocess.DEVNULL,
+                )  # fmt: skip
+                out, _ = await proc.communicate()
+                if proc.returncode != 0:
+                    text = out.decode(errors="replace")
+                    log_tail = text.strip().splitlines()[-1:] or ["no output"]
+                    gated = "401" in text or "403" in text or "gated" in text.lower()
+                    self._hub |= {
+                        "state": "error",
+                        "error": (
+                            f"{files.repo} needs your Hugging Face token and its terms accepted "
+                            "on huggingface.co."
+                            if gated
+                            else "The training files could not be fetched: " + log_tail[0][-200:]
+                        ),
+                    }
+                    return
+                marker = hub_marker(self.hub_home(), files)
+                await asyncio.to_thread(marker.parent.mkdir, parents=True, exist_ok=True)
+                await asyncio.to_thread(marker.write_text, files.repo)
+            self._hub |= {"state": "done"}
+        except asyncio.CancelledError:
+            self._hub |= {"state": "idle"}
+            raise
+        except OSError as e:
+            why = f"The training files could not be fetched: {e}"
+            self._hub |= {"state": "error", "error": why}
+
+    async def cancel_hub(self) -> dict[str, Any]:
+        if self._hub_task is not None and not self._hub_task.done():
+            self._hub_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._hub_task
+        return self.hub_state()
 
     def model_files(self, base: str | None = None) -> dict[str, Path] | None:
         """The image model's files the recipe of `base` is taught from, by part (transformer,
@@ -301,7 +513,8 @@ class AiToolkitTrainer:
         return self.problem() is None
 
     def fit(self, base: str | None = None) -> dict[str, Any]:
-        recipe = PICTURE_BASES.get(base or self.base)
+        key = base or self.base
+        recipe = PICTURE_BASES.get(key) or PICTURE_BASES.get(KLEIN_4B.id)
         need = recipe.need_gb if recipe else NEED_GB
         return assess_fit(need_declared(need), read_machine()).public()
 
@@ -433,9 +646,11 @@ class AiToolkitTrainer:
             recipe = picture_base(getattr(job, "base", None))
         except KeyError:
             raise RuntimeError("This picture model cannot be taught yet.") from None
-        tool, small = find_tool(self.data_dir), find_base(self.data_dir, base=recipe.id)
-        files = self.model_files(recipe.id)
-        why = self.problem()
+        hub = bool(recipe.hub)
+        tool = find_tool(self.data_dir)
+        small = find_base(self.data_dir, base=None if hub else recipe.id)
+        files = {} if hub else self.model_files(recipe.id)
+        why = self.problem(recipe.id)
         if tool is None or small is None or files is None or why:
             raise RuntimeError(
                 why or f"{recipe.title} is not on this computer yet. Set it up first."
@@ -458,17 +673,26 @@ class AiToolkitTrainer:
                 await asyncio.to_thread(shutil.rmtree, work, True)
                 await asyncio.to_thread(shutil.rmtree, out, True)
                 prompts = await asyncio.to_thread(prepare_data, job, work)
-                te = await asyncio.to_thread(
-                    text_encoder_dir, small[0], files["text_encoder"], folder / "text-encoder"
-                )
+                if not hub:
+                    te = await asyncio.to_thread(
+                        text_encoder_dir, small[0], files["text_encoder"], folder / "text-encoder"
+                    )
+                    files = {**files, "text_encoder": te}
                 config = training_config(
-                    job.steps, work, out, {**files, "text_encoder": te},
+                    job.steps, work, out, files,
                     sample_every=max(1, job.steps // 4), prompts=prompts, kind=job.kind,
                     side=int(job.settings.get("side", recipe.side_for(job.kind))), recipe=recipe,
                 )  # fmt: skip
+                if hub:
+                    config = in_models_folder(config, self.models_root())
                 await asyncio.to_thread(cfg.write_text, json.dumps(config, indent=2))
+            if hub:
+                await asyncio.to_thread(link_models, self.models_root(), recipe.model_links)
             try:
-                await self._run(home, [str(cfg)], saves, job, report, sample)
+                await self._run(
+                    home, [str(cfg)], saves, job, report, sample,
+                    self.hub_env() if hub else None,
+                )  # fmt: skip
             except RuntimeError:
                 if not self._pausing:
                     raise
@@ -497,6 +721,7 @@ class AiToolkitTrainer:
     async def _run(
         self, home: Path, args: list[str], saves: Path, job: Any,
         report: Callable[[int, str], None], sample: Callable[[str], None],
+        extra_env: dict[str, str] | None = None,
     ) -> None:  # fmt: skip
         env = {
             k: v for k, v in os.environ.items() if not k.startswith(("VIRTUAL_ENV", "PYTHONHOME"))
@@ -504,7 +729,7 @@ class AiToolkitTrainer:
         env |= {
             "PYTHONUNBUFFERED": "1",
             "HF_HUB_OFFLINE": "1",  # every file is on the computer or the run does not start
-        }
+        } | (extra_env or {})
         report(0, "Loading the model")
         tail: list[str] = []
         seen: set[str] = set()

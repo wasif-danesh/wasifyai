@@ -105,7 +105,7 @@ from wasifyai_api.mcp_server.endpoint import attach as attach_mcp
 from wasifyai_api.mcp_server.endpoint import build_server as build_mcp_server
 from wasifyai_api.mcp_server.fixed_port import FixedPort
 from wasifyai_api.mcp_server.runtime_file import Launcher, remove_runtime_file
-from wasifyai_api.media_access import MediaAccess, media_capabilities_from
+from wasifyai_api.media_access import MediaAccess, media_capabilities_from, media_models_from
 from wasifyai_api.model_access import ModelAccess, load_defaults
 from wasifyai_api.own_keys_engines import KeyedModel3d, KeyedSpeechEngine
 from wasifyai_api.own_keys_text import KeyedTextProvider
@@ -384,6 +384,7 @@ async def _shared(
         video_local_url=settings.comfyui_video_base_url,
         checks=settings_store,
         changed=s.admin_providers.changed if s.admin_providers else None,
+        models=lambda: media_models_from(reg, pdir, settings.product_env),
     )
     s.caps = {}
     configs = r.configs
@@ -627,6 +628,8 @@ def _build_graphs(
             from wasifyai_api.person_looks import person_looks
 
             caps.extras["person_looks"] = person_looks(s, video=product_id == "wasifyai-video")
+            if s.media is not None:  # the model an admin chose, when a request names none (MV6)
+                caps.extras["chosen_model"] = lambda p=product_id: s.media.chosen_model(p)
         if not r.desktop and product_id == "wasifyai-image" and s.service_styles is not None:
             # the web: the styles an admin added, by id, fetched by the media worker per job
             caps.extras["styles"] = s.service_styles.files_for
@@ -903,7 +906,8 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     s.language_setup = desktop.language_setup  # its component, set up on request
     s.decision_training = desktop.deciding  # Laya on a Mac (ADR-0075)
     s.decision_setup = desktop.decision_setup  # its component, set up on request
-    s.video_training = desktop.teaching_video  # diffusers on a Mac (ADR-0073)
+    # diffusers on a Mac for LTX-Video 2B (ADR-0073), AI Toolkit for the newer models (ADR-0097)
+    s.video_training = desktop.video_trainers or desktop.teaching_video
     s.video_setup = desktop.video_setup  # its component, set up on request
     s.music_analysis = desktop.music_analysis  # finds a song's beats (ADR-0090)
     if desktop.video_builder is not None:  # and the model it asks to fill a template

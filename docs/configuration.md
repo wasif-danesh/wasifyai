@@ -191,6 +191,16 @@ for another fal.ai row** (`key_from`; the key is copied inside the store). The l
 (settings key `media_checks`) and shown as "Key not working" until the key changes. People see the admin's choice on
 the model button (`/models/in-use`, e.g. "FLUX.2 · fal.ai"); they bring no keys on the web.
 
+**Models (ADR-0097, stage MV6).** Under the backends, Admin › Media › Models has one row per product with several
+models (Images, Video): the admin picks the model a request uses when it names none (settings key
+`media.model.<product_id>`, audited as `admin.media.model`; `GET /admin/media/models`,
+`PUT /admin/media/models/{product_id}`). The graph uses the choice only when that model can do the mode (an image model
+that cannot edit is skipped for Edit), else the product's first model; `/models/in-use` names it ("Chosen by your
+admin."). The model's files must be on the ComfyUI host: `python -m wasifyai_api.comfy_models <models folder>
+[product] [model id ...]` lists what each model is missing and fetches it with the desktop's downloader (pinned to a
+commit, checked by size and SHA-256, continued where it stopped); a gated repository needs `HF_TOKEN` in the
+environment, sent only to huggingface.co.
+
 The worker looks the binding up for every job, so a change applies to the next job. API keys are
 encrypted with `MEDIA_SECRETS_KEY` (set once by `make setup`; changing it makes saved keys unreadable) and are
 never shown, logged or audited. Remote backends take no GPU lock; their time is recorded as

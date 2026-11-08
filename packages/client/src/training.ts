@@ -89,7 +89,19 @@ export type TrainBase = {
   can_teach: boolean;
   reason: string;
   installed: boolean;
+  /** the size of the training files still to fetch before it can be taught (desktop); 0 = none */
+  fetch_bytes?: number;
   methods: TrainMethod[];
+};
+
+/** Fetching a model's training files from Hugging Face (desktop only). */
+export type TrainHubState = {
+  state: "idle" | "fetching" | "done" | "error";
+  base?: string;
+  bytes_total?: number;
+  bytes_start?: number;
+  bytes_done?: number;
+  error?: string | null;
 };
 
 export type TrainChoices = {
@@ -538,6 +550,10 @@ export type TrainingApi = {
   startRun(datasetId: string, choice?: TrainChoice): Promise<TrainRun>;
   /** The models and methods that can be chosen for a kind of teaching. */
   choices(kind: TrainKind, family?: TrainFamily): Promise<TrainChoices>;
+  /** A model's training files from Hugging Face (desktop only); `confirmBytes` is the size shown. */
+  hubState?(): Promise<TrainHubState>;
+  fetchHub?(baseId: string, confirmBytes: number): Promise<TrainHubState>;
+  cancelHub?(): Promise<TrainHubState>;
   /** "Make my own look or motion for video": whether it can be taught here (desktop only). */
   videoStatus(): Promise<VideoTrainStatus>;
   /** The video trainer's component, set up the same way. */
@@ -821,5 +837,12 @@ export function createTrainingApi(
       json<{ freed_bytes: number } & TrainingSetupState>("/desktop/training-setup/uninstall", {
         method: "POST",
       }),
+    hubState: () => json<TrainHubState>(`${base}/hub`),
+    fetchHub: (baseId, confirmBytes) =>
+      json<TrainHubState>(
+        `${base}/hub`,
+        send("POST", { base: baseId, confirm_bytes: confirmBytes }),
+      ),
+    cancelHub: () => json<TrainHubState>(`${base}/hub/cancel`, { method: "POST" }),
   };
 }

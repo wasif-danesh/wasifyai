@@ -81,3 +81,75 @@ models:
         url: https://huggingface.co/Comfy-Org/HiDream-O1-Image/resolve/7b75f4cd7e757d55d9bd1d30fb40375fb446f38c/checkpoints/hidream_o1_image_bf16.safetensors
         size: 16365209824
         sha256: 0520134a47e5b2bacea25804b2a6021413eb95945344b5a953aa14170edff1aa
+  - id: ideogram-4
+    title: Ideogram 4
+    source: https://huggingface.co/Comfy-Org/Ideogram-4
+    note: >-
+      Text to image with very good writing in pictures. Your words are first turned into the detailed caption
+      it reads, by the text model. Slow on a Mac. Needs about 40 GB of memory.
+    approx_ram_gb: 40
+    files:
+      - folder: diffusion_models
+        name: ideogram4_int8_convrot.safetensors
+        url: https://huggingface.co/Comfy-Org/Ideogram-4/resolve/2aa6c75ce6d5fabded0ca4d0f76abbfaf8edc87d/diffusion_models/ideogram4_int8_convrot.safetensors
+        size: 9583465712
+        sha256: a9164002943463b4c7b2abd88c82a488c088acc35762651e4d8604d6ce4a163d
+      - folder: diffusion_models
+        name: ideogram4_unconditional_int8_convrot.safetensors
+        url: https://huggingface.co/Comfy-Org/Ideogram-4/resolve/2aa6c75ce6d5fabded0ca4d0f76abbfaf8edc87d/diffusion_models/ideogram4_unconditional_int8_convrot.safetensors
+        size: 9583465712
+        sha256: cd03ed94f244c9cb705e7d30ca0f40b5f5b004bb20674117adff88d16416c23d
+      - folder: text_encoders
+        name: qwen3vl_8b_int8_convrot.safetensors
+        url: https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/aacf31a6d48e707f352ecba714cee0680da3479b/text_encoders/qwen3vl_8b_int8_convrot.safetensors
+        size: 9350798360
+        sha256: 8bfd0f6e12abf2d2d697ecc888e5e90b0d6741d6708f05799f53afa560452e8f
+      - folder: vae
+        name: flux2-vae.safetensors
+        url: https://huggingface.co/Comfy-Org/flux2-klein-4B/resolve/5f526678002e43af5551dadb73ce2e8c91b43afe/split_files/vae/flux2-vae.safetensors
+        size: 336211292
+        sha256: 868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3
+  - id: flux3-image-klein
+    title: FLUX.3 Image Klein
+    source: https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy
+    note: >-
+      Text to image and image editing, in 8-bit weights that run on a Mac. Needs about 24 GB of memory.
+    approx_ram_gb: 24
+    files:
+      - folder: diffusion_models
+        name: flux3-image-klein-int8-convrot.safetensors
+        url: https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/9d36114cf7a2e03a45c28f5cc4987d20ebfdb6c1/diffusion_models/flux3-image-klein-int8-convrot.safetensors
+        size: 5827874779
+        sha256: 847d8933548afd93df4af2cac2498e70891bf28d9dae06d695f536992e168fe2
+      - folder: text_encoders
+        name: qwen3vl_4b_int8_convrot.safetensors
+        url: https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/9d36114cf7a2e03a45c28f5cc4987d20ebfdb6c1/text_encoders/qwen3vl_4b_int8_convrot.safetensors
+        size: 4858559240
+        sha256: 32de113cbf8282b02cbff0794b637b9d6676da09314a1db5a30bcea9bf4ee01c
+      - folder: vae
+        name: flux2-vae.safetensors
+        url: https://huggingface.co/Comfy-Org/flux2-klein-4B/resolve/5f526678002e43af5551dadb73ce2e8c91b43afe/split_files/vae/flux2-vae.safetensors
+        size: 336211292
+        sha256: 868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3
+  - id: flux2-klein-9b
+    title: FLUX.2 klein 9B
+    source: https://huggingface.co/black-forest-labs/FLUX.2-klein-9B
+    note: >-
+      Text to image, editing, inpainting and reference pictures; sharper than klein 4B and slower. Needs about 40 GB of memory.
+    approx_ram_gb: 40
+    files:
+      - folder: diffusion_models
+        name: flux-2-klein-9b.safetensors
+        url: https://huggingface.co/black-forest-labs/FLUX.2-klein-9B/resolve/92196c8e11f7b6cf2b7493e037d8c5345c559216/flux-2-klein-9b.safetensors
+        size: 18157185168
+        sha256: 0975d6b77b5f510b99547d6724a208e36527df654e8f6134f59ece3f9f30da58
+      - folder: text_encoders
+        name: qwen_3_8b_fp8mixed.safetensors
+        url: https://huggingface.co/Comfy-Org/flux2-klein-9B/resolve/1138ce884c8e977cdacacbe779784fec4426bb3f/split_files/text_encoders/qwen_3_8b_fp8mixed.safetensors
+        size: 8664848742
+        sha256: abad16806e0cbabc54e0325d6565847443fe396d5f0be38bb3cd3fe75a1201d6
+      - folder: vae
+        name: flux2-vae.safetensors
+        url: https://huggingface.co/Comfy-Org/flux2-klein-4B/resolve/5f526678002e43af5551dadb73ce2e8c91b43afe/split_files/vae/flux2-vae.safetensors
+        size: 336211292
+        sha256: 868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3

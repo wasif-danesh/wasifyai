@@ -1,11 +1,12 @@
 import { Notice } from "@/components/Notice";
+import { MediaModelChoice } from "@/components/admin/MediaModelChoice";
 import { MediaTable } from "@/components/admin/tables";
 import { TableCell, TableHead, TableRow } from "@/components/ui/table";
 import { TextLink } from "@/components/ui/text-link";
 import { apiGet } from "@/lib/api";
 import { fullDate } from "@/lib/format";
 import { muted } from "@/lib/styles";
-import type { MediaList } from "@wasifyai/contracts";
+import type { MediaList, ProductModels } from "@wasifyai/contracts";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Media" };
@@ -13,8 +14,12 @@ export const dynamic = "force-dynamic";
 
 export default async function Media() {
   let list: MediaList | null = null;
+  let choices: ProductModels[] = [];
   try {
-    list = await apiGet<MediaList>("/admin/media");
+    [list, choices] = await Promise.all([
+      apiGet<MediaList>("/admin/media"),
+      apiGet<ProductModels[]>("/admin/media/models").catch(() => []),
+    ]);
   } catch {
     // shown below
   }
@@ -39,6 +44,22 @@ export default async function Media() {
           need no key still work.
         </Notice>
       )}
+      {choices.length ? (
+        <section aria-labelledby="media-models" className="grid gap-4">
+          <h2 id="media-models" className="font-semibold text-lg">
+            Models
+          </h2>
+          <p className={muted}>
+            Images and Video can run several models. Choose the one each uses; its files must be on
+            the ComfyUI host (<code>python -m wasifyai_api.comfy_models</code>).
+          </p>
+          <div className="grid gap-4 md:grid-cols-2">
+            {choices.map((c) => (
+              <MediaModelChoice key={c.product_id} choice={c} />
+            ))}
+          </div>
+        </section>
+      ) : null}
       <MediaTable
         rows={list.items.map((m) => ({
           product: m.product_id,

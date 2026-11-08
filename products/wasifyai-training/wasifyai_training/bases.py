@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from wasifyai_training.picture_bases import PICTURE_BASES
+from wasifyai_training.video_bases import VIDEO_BASES
 
 FAMILY_FOR_KIND = {
     "character": "image",
@@ -180,6 +181,26 @@ def descriptor(base: str) -> Descriptor | None:
     return next((d for d in DESCRIPTORS if d.id == base), None)
 
 
+_VIDEO_METHODS_NOT = {
+    "qlora": "This model is taught as a small adapter. The less-memory version is for writing models.",
+    "full": "Teaching all of a video model needs far more memory than a computer here has, and the trainer does "
+    "not do it.",
+}
+# the video models AI Toolkit teaches (ADR-0097, MV5), after LTX-Video 2B, which stays the first (recommended)
+DESCRIPTORS += tuple(
+    Descriptor(
+        id=v.id,
+        title=v.title,
+        family="video",
+        engine="ai-toolkit",
+        need_gb=v.need_gb,
+        note=f"{v.note} Use it in Create with {v.use_with}.",
+        methods_not=_VIDEO_METHODS_NOT,
+    )
+    for v in VIDEO_BASES.values()
+)
+
+
 def descriptors(family: str) -> list[Descriptor]:
     return [d for d in DESCRIPTORS if d.family == family]
 
@@ -201,13 +222,17 @@ def choices(
     installed: list[dict[str, Any]],
     have: Callable[[Descriptor], bool] | None = None,
     family: str | None = None,
+    why: Callable[[Descriptor], str | None] | None = None,
+    fetch_bytes: Callable[[Descriptor], int] | None = None,
 ) -> dict[str, Any]:
     """The rows of the "Model to teach" drop-down for a kind of teaching.
 
     `fit` is the engine's verdict for this computer (or a function that gives it for a base),
     `ready` whether the engine is set up, `have` whether a base is on this computer (a row that is
     not can still be chosen: the screen offers to get it) and `installed` the models found on this
-    computer (`kind`, `name`, `format` at least)."""
+    computer (`kind`, `name`, `format` at least). `why` says what else stops a base being taught
+    here (an NVIDIA-only recipe on a Mac), and `fetch_bytes` the size of the training files a base
+    still needs fetched before it can be taught (the screen offers to get them)."""
     family = family or FAMILY_FOR_KIND.get(kind, "image")
     rows: list[dict[str, Any]] = []
     for d in descriptors(family):
@@ -220,12 +245,16 @@ def choices(
             )
         elif verdict and verdict.get("verdict") == "too_big":
             can, reason = False, str(verdict.get("reason", ""))
+        elif why is not None and (stop := why(d)):
+            can, reason = False, stop
+        fetch = fetch_bytes(d) if fetch_bytes is not None and can else 0
         rows.append(
             {
                 "id": d.id, "title": d.title, "engine": d.engine,
                 "note": d.note, "measured": d.measured,
                 "recommended": d is descriptors(family)[0], "can_teach": can, "reason": reason,
-                "installed": ready and (have(d) if have else True), "methods": method_rows(d),
+                "installed": ready and not fetch and (have(d) if have else True),
+                "fetch_bytes": fetch, "methods": method_rows(d),
             }
         )  # fmt: skip
     known = {d.title.lower() for d in DESCRIPTORS}

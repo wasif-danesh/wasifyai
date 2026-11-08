@@ -8,9 +8,24 @@ Why: AI Toolkit's klein models ignore the config's `te_name_or_path` and always 
 "Qwen/Qwen3-4B" (commit f7a1fb9a, and main of 2026-11-04). That is the text encoder the image model
 already keeps (`qwen_3_4b.safetensors`), so a second 8 GB copy is not needed. The owner's
 character-lora project made klein read it with a five-line edit to AI Toolkit's file; this does
-the same without changing AI Toolkit's files, so the checkout stays as it was downloaded."""
+the same without changing AI Toolkit's files, so the checkout stays as it was downloaded.
 
+Also: the app runs AI Toolkit offline (`HF_HUB_OFFLINE=1`, every file fetched first), and the
+diffusers AI Toolkit installs (0.39 dev) still asks the Hub API whether a split model's parts
+exist before reading them from the cache, which offline mode refuses. `cache_only_shards` makes
+that check read the cache only, which is what offline means. And transformers (5.5) reads "not in
+the cache" as "cannot connect" even for a file a repo does not have (a tokenizer folder's
+`config.json`), so the load stops where it would carry on online. The app's fetch keeps a whole
+pinned copy of each repo, so offline a file not in the cache is not there: `missing_is_absent`
+says so, as the Hub would.
+
+And FLUX.3's position encoding (`rope`) is worked out in float64, which Apple's graphics chip does
+not have. On a Mac, `flux3_rope_on_mac` works the frequencies out in float64 on the processor and
+uses them in float32, as ComfyUI does for FLUX on a Mac."""
+
+import functools
 import json
+import os
 import runpy
 import sys
 from pathlib import Path
@@ -41,9 +56,93 @@ def point_klein_at(arch: str, te: str) -> None:
         raise SystemExit(f"AITK-RUN this AI Toolkit has no klein model called {arch}")
 
 
+def cache_only_shards() -> None:
+    """Offline, a split model's parts are looked up in the cache only (see the module's note)."""
+    if os.environ.get("HF_HUB_OFFLINE") != "1":
+        return
+    try:
+        from diffusers.models import modeling_utils
+        from diffusers.utils import hub_utils
+    except ImportError:  # not a diffusers model: nothing to do
+        return
+    original = hub_utils._get_checkpoint_shard_files  # noqa: SLF001
+
+    @functools.wraps(original)
+    def from_cache(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        kwargs["local_files_only"] = True
+        return original(*args, **kwargs)
+
+    hub_utils._get_checkpoint_shard_files = from_cache  # noqa: SLF001
+    modeling_utils._get_checkpoint_shard_files = from_cache  # noqa: SLF001
+
+
+def missing_is_absent() -> None:
+    """Offline, a file not in the cache is answered as one the repo does not have."""
+    if os.environ.get("HF_HUB_OFFLINE") != "1":
+        return
+    try:
+        import huggingface_hub
+        from huggingface_hub import file_download
+        from huggingface_hub.errors import EntryNotFoundError, LocalEntryNotFoundError
+    except ImportError:
+        return
+    original = file_download.hf_hub_download
+
+    @functools.wraps(original)
+    def absent(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        try:
+            return original(*args, **kwargs)
+        except LocalEntryNotFoundError as e:
+            raise EntryNotFoundError(str(e)) from e
+
+    file_download.hf_hub_download = absent
+    huggingface_hub.hf_hub_download = absent
+    try:
+        from transformers.utils import hub as transformers_hub
+    except ImportError:
+        return
+    transformers_hub.hf_hub_download = absent
+
+
+def uses_arch(config: dict, prefix: str) -> bool:
+    return any(
+        p.get("model", {}).get("arch", "").startswith(prefix)
+        for p in config.get("config", {}).get("process", [])
+    )
+
+
+def flux3_rope_on_mac() -> None:
+    """FLUX.3's `rope` without float64 on Apple's graphics chip (see the module's note)."""
+    try:
+        import torch
+        from einops import rearrange
+        from extensions_built_in.diffusion_models.flux3.src import transformer
+    except ImportError:  # an AI Toolkit without FLUX.3: it says so itself
+        return
+
+    original = transformer.rope
+
+    @functools.wraps(original)
+    def rope(pos, dim: int, theta: int):  # noqa: ANN001, ANN202
+        if pos.device.type != "mps":
+            return original(pos, dim, theta)
+        scale = torch.arange(0, dim, 2, dtype=torch.float64) / dim
+        omega = (1.0 / (theta**scale)).to(torch.float32).to(pos.device)
+        out = torch.einsum("...n,d->...nd", pos.float(), omega)
+        out = torch.stack([torch.cos(out), -torch.sin(out), torch.sin(out), torch.cos(out)], -1)
+        return rearrange(out, "b n d (i j) -> b n d i j", i=2, j=2).float()
+
+    transformer.rope = rope
+
+
 def main(home: Path, cfg: Path) -> None:
     sys.path.insert(0, str(home))
-    found = klein_text_encoder(json.loads(cfg.read_text()))
+    cache_only_shards()
+    missing_is_absent()
+    config = json.loads(cfg.read_text())
+    if sys.platform == "darwin" and uses_arch(config, "flux3"):
+        flux3_rope_on_mac()
+    found = klein_text_encoder(config)
     if found is not None:
         point_klein_at(*found)
     sys.argv = [str(home / "run.py"), str(cfg)]

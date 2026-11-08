@@ -77,3 +77,27 @@ export async function submitMedia(
   }
   return { status: "error", message: "Unknown action." };
 }
+
+export type ModelChoiceState =
+  | { status: "idle" }
+  | { status: "saved"; model: string }
+  | { status: "error"; message: string };
+
+/** Choose the model a product's jobs use when a request names none (ADR-0097, MV6). */
+export async function chooseModel(
+  product: string,
+  _previous: ModelChoiceState,
+  form: FormData,
+): Promise<ModelChoiceState> {
+  const model = text(form, "model");
+  if (!PART.test(product) || !PART.test(model)) {
+    return { status: "error", message: "Unknown model." };
+  }
+  const { status, data } = await apiSend("PUT", `/admin/media/models/${product}`, { model });
+  if (status !== 200) {
+    const out = problem(status, data);
+    return out.status === "error" ? out : { status: "error", message: "Not saved." };
+  }
+  revalidatePath("/admin/media");
+  return { status: "saved", model };
+}

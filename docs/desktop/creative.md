@@ -9,6 +9,14 @@ ADR-0090. A project goes from a song or a story to a finished video: a plan, sti
 3. **The chat model writes** the story, then one sentence per shot, a part at a time (`writer.py`). A sentence that fails the checks is asked for again, then falls back to the part's words with a mark on the shot.
 4. **Each step is kept** as a checkpoint, so stopping or a crash loses at most one part. **Go on** continues from there. **Plan again** starts afresh, and Undo brings the earlier plan back.
 
+## Which models make the pictures and clips
+
+The stills and clips are made by the image and video models chosen in the bar (the model buttons on this screen, the
+Image and Video screens share the choice). The window tells the engine the choice, and the products use it for any
+run that names no model; a model that cannot do a step (one that cannot change a picture, say) leaves that step to
+the product's first model. A real 30 s song in the real window, 2026-11-08: plan 4 min on a 27B model, 7 stills
+4 min, a draft with one sung shot 262 s, the cut 3 s.
+
 ## The screen
 
 One project is one screen: the Make panel on the left, the plan as the stage, the media rail on the right.

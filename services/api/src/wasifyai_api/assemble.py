@@ -630,6 +630,11 @@ def _build_graphs(
             caps.extras["person_looks"] = person_looks(s, video=product_id == "wasifyai-video")
             if (media := s.media) is not None:  # an admin's model, when a request names none (MV6)
                 caps.extras["chosen_model"] = lambda p=product_id, m=media: m.chosen_model(p)
+        if r.desktop and product_id in ("wasifyai-video", "wasifyai-image") and s.media:
+            # the desktop: the model the person chose on a screen, kept in the engine, for what
+            # names none (Creative's stills and clips, the assistant, another app over MCP)
+            media = s.media
+            caps.extras["chosen_model"] = lambda p=product_id, m=media: m.chosen_model(p)
         if not r.desktop and product_id == "wasifyai-image" and s.service_styles is not None:
             # the web: the styles an admin added, by id, fetched by the media worker per job
             caps.extras["styles"] = s.service_styles.files_for

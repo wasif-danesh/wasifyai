@@ -186,3 +186,21 @@ clean data folder. What is true:
 - **Not built:** the Hugging Face dataset and JSON/JSONL imports (stage D1); the model kept warm so a first answer is not 4 s; auto-tagging
   new notes and sources and moving files into folders; the endpoint for other programs; Clef and the LLM decision heads (not run:
   19 GB and no need yet); the web (the trainer is the desktop's); sharing a sorter; "that was wrong" feedback (T5b).
+
+## Amendment (2026-11-08): Windows and Linux with an NVIDIA graphics card
+
+The owner asked for training to work beyond the Mac. Laya and PyTorch run anywhere PyTorch has a graphics build, so the decision trainer
+is now offered on a Mac with Apple silicon **or** on Windows and Linux with an NVIDIA card (`apple_or_nvidia()` in `training_setup.py`,
+the same rule as the picture trainer); elsewhere the card says so in one sentence.
+
+- **One hashed lock per platform** (`scripts/lock-decision-trainer.sh`): `decision-requirements-<target>.lock` for `aarch64-apple-darwin`
+  (unchanged, torch 2.14.1, resolved natively on the Mac), `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu` and
+  `x86_64-pc-windows-msvc` (**torch 2.11.0+cu128**, laya 0.4.15). The engine picks the lock for its own platform (`lock_name()`) and installs
+  with `--torch-backend cu128` (`DecisionSetup.install_args`), the same flag the locks were compiled with.
+- **Why CUDA 12.8 and not torch 2.14:** PyTorch's 12.8 index stops at 2.11; 2.14 is built for CUDA 12.6 (no RTX 50 series) and 13.0
+  (driver 580 or later, older cards dropped). 12.8 covers Volta to the RTX 50 series on drivers 570 and later.
+- **Sizes (wheel sizes from the indexes, nothing downloaded):** Windows 2.80 GB, Linux x86-64 4.00 GB, Linux arm64 3.65 GB, against 168 MB on
+  the Mac; the manifests carry these as `packages_bytes`, so the consent card shows them.
+- **Checked:** every lock passes `uv pip install --dry-run --require-hashes --no-deps --torch-backend cu128` for its platform; the tests cover
+  the locks, the platform rule and the install flag. **Not checked:** an install or a run on a real NVIDIA machine (none here); the
+  measurements above are the Mac's.

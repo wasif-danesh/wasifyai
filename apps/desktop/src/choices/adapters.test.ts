@@ -147,6 +147,34 @@ describe("images and video", () => {
     expect(save).toHaveBeenCalledWith("images", "here");
   });
 
+  it("tells the engine which model is chosen, once, so what it makes on its own uses it", async () => {
+    const choose = vi.fn(async (product: string, id: string) => ({
+      product_id: product,
+      chosen: id,
+    }));
+    const ready = entry({ status: "ready", bytes_missing: 0 });
+    const models = { overview: async () => overview([ready]), choose } as unknown as ModelsApi;
+    const api = catalogueChoices(
+      { models, engines: engines(true), memory: memory() },
+      CATALOGUE_GROUPS.images,
+    );
+    await api.list(); // a choice made before the engine kept one is told when the list shows it
+    await api.list();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(choose).toHaveBeenCalledTimes(1);
+    expect(choose).toHaveBeenCalledWith("wasifyai-image", ready.id);
+    await api.choose("other-model");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(choose).toHaveBeenLastCalledWith("wasifyai-image", "other-model");
+    const docs = catalogueChoices(
+      { models, engines: engines(true), memory: memory() },
+      CATALOGUE_GROUPS.documents,
+    );
+    await docs.choose("bge-small-en-v1.5");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(choose).toHaveBeenCalledTimes(2); // the documents' model is not an image or video model
+  });
+
   it("shows a model that is on the computer as ready only when its engine is too", async () => {
     const models = {
       overview: async () => overview([entry({ status: "ready", bytes_missing: 0 })]),

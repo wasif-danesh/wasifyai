@@ -84,15 +84,19 @@ function ImageMaker({
   onMade,
   ensure,
   keyed,
+  chosen,
   go,
 }: {
   onMade: (id: string) => void;
   ensure: () => boolean;
   keyed: boolean;
+  /** the image model chosen in the bar (ADR-0097): it makes the picture, and its fit is the one shown */
+  chosen: string | null;
   go: (r: Route) => void;
 }) {
   const [mode, setMode] = useState<ImageMode>("text");
-  const model = useModelOf("wasifyai-image");
+  const model = useModelOf("wasifyai-image", keyed ? null : chosen);
+  const offered = !keyed && model !== null && model.id === chosen;
   const engine = useImageEngine();
   const { blockedReason, notices } = fitOf(model, engine?.state === "installed" && !keyed);
   return (
@@ -121,6 +125,7 @@ function ImageMaker({
           onOpenFolders={() => go("settings")}
           canSave
           blockedReason={blockedReason}
+          model={offered ? model.id : null}
         />
       </div>
     </>
@@ -131,15 +136,19 @@ function VideoMaker({
   onMade,
   ensure,
   keyed,
+  chosen,
   go,
 }: {
   onMade: (id: string, kind?: string) => void;
   ensure: () => boolean;
   keyed: boolean;
+  /** the video model chosen in the bar (ADR-0097): it makes the clip, and its fit is the one shown */
+  chosen: string | null;
   go: (r: Route) => void;
 }) {
   const [mode, setMode] = useState<VideoMakeMode>("text");
-  const model = useModelOf("wasifyai-video");
+  const model = useModelOf("wasifyai-video", keyed ? null : chosen);
+  const offered = !keyed && model !== null && model.id === chosen;
   const engine = useImageEngine();
   const looks = useVideoLooks();
   const { blockedReason, notices } = fitOf(model, engine?.state === "installed" && !keyed);
@@ -178,6 +187,7 @@ function VideoMaker({
             onMade={onMade}
             looks={looks}
             notices={notices}
+            model={offered ? model.id : null}
           />
         )}
       </div>
@@ -210,10 +220,22 @@ export function CreativePage({ go }: { go: (r: Route) => void }) {
   const makers = useMemo<MakePanelMakers>(
     () => ({
       image: (onMade) => (
-        <ImageMaker onMade={onMade} ensure={image.ensure} keyed={image.keyed} go={go} />
+        <ImageMaker
+          onMade={onMade}
+          ensure={image.ensure}
+          keyed={image.keyed}
+          chosen={image.chosen}
+          go={go}
+        />
       ),
       video: (onMade) => (
-        <VideoMaker onMade={onMade} ensure={video.ensure} keyed={video.keyed} go={go} />
+        <VideoMaker
+          onMade={onMade}
+          ensure={video.ensure}
+          keyed={video.keyed}
+          chosen={video.chosen}
+          go={go}
+        />
       ),
       voice: (onMade) => (
         <SpeakWorkspace
@@ -236,7 +258,7 @@ export function CreativePage({ go }: { go: (r: Route) => void }) {
         />
       ),
     }),
-    [image.ensure, image.keyed, video.ensure, video.keyed, go],
+    [image.ensure, image.keyed, image.chosen, video.ensure, video.keyed, video.chosen, go],
   );
   return (
     <Creative

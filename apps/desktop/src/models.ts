@@ -135,6 +135,18 @@ export function createModelsApi(transport: Transport) {
         headers: JSON_HEADERS,
         body: JSON.stringify({ models_dir: modelsDir, extra_dirs: extraDirs }),
       }),
+    /** Keep the image or video model the person chose in the engine too: what the engine makes on its own
+     * (Creative's stills and clips, the assistant) names no model and uses this one (ADR-0097). */
+    choose: (productId: string, modelId: string) =>
+      json<{ product_id: string; chosen: string }>(
+        transport,
+        `/desktop/models/chosen/${productId}`,
+        {
+          method: "PUT",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ model_id: modelId }),
+        },
+      ),
     engine: () => json<EngineInfo>(transport, "/desktop/engine"),
     unload: () =>
       json<{ unloaded: boolean }>(transport, "/desktop/engine/unload", { method: "POST" }),

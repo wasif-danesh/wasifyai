@@ -112,6 +112,34 @@ def test_an_image_is_made_end_to_end_on_the_desktop_profile(data_dir):
         assert replay[0][1]["seq"] == 2 and replay[-1][0] == "done"
 
 
+def test_a_picture_that_names_no_model_is_made_by_the_one_the_person_chose(data_dir):
+    """Creative's stills, the assistant and other apps name no model: the one chosen on the Image
+    screen makes their pictures, as an admin's choice does on the web (ADR-0097)."""
+    with TestClient(create_app()) as c:
+        assert c.get("/desktop/models/chosen", headers=auth()).json()["wasifyai-image"] is None
+        r = c.put(
+            "/desktop/models/chosen/wasifyai-image", json={"model_id": "nope"}, headers=auth()
+        )
+        assert r.status_code == 422
+        r = c.put(
+            "/desktop/models/chosen/wasifyai-image",
+            json={"model_id": "flux2-klein-9b"},
+            headers=auth(),
+        )
+        assert r.status_code == 200, r.text
+        assert c.get("/desktop/models/chosen", headers=auth()).json()["wasifyai-image"] == (
+            "flux2-klein-9b"
+        )
+        events = make_image(c)
+        done = events[-1][1]["outputs"]
+        assert events[-1][0] == "done" and done["model"] == "flux2-klein-9b"
+        image = c.get(f"/products/wasifyai-image/images/{done['image_id']}", headers=auth())
+        assert image.json()["recipe"]["model"] == "flux2-klein-9b"  # and the recipe says so
+        assert c.put(
+            "/desktop/models/chosen/wasifyai-image", json={"model_id": "x"}
+        ).status_code in (401, 403)  # the shell's token, as on every route
+
+
 def test_recipes_favourites_and_saving_a_copy_on_the_desktop_profile(data_dir, monkeypatch):
     export = data_dir / "Downloads"
     monkeypatch.setenv("WASIFYAI_EXPORT_DIR", str(export))

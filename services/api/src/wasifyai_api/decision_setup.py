@@ -9,7 +9,8 @@ fetched when it is chosen.
 
 Where Laya and the model are already on the computer (a copy named by `WASIFYAI_LAYA_DIR`, a models
 folder named by `WASIFYAI_DECISION_BASE_DIR`) they are used where they are and nothing is offered.
-PyTorch uses the graphics chip of a Mac with Apple silicon; elsewhere the setup says so and offers
+PyTorch uses the graphics chip of a Mac with Apple silicon, or an NVIDIA graphics card on Windows and
+Linux (PyTorch's CUDA 12.8 build, one lock per platform); elsewhere the setup says so and offers
 nothing."""
 
 import asyncio
@@ -35,20 +36,30 @@ from wasifyai_api.training_setup import (
     Pins,
     Progress,
     TrainingSetup,
+    apple_or_nvidia,
     load_pins,
+    uv_target,
 )
 
 PART = "trainer-deciding"  # its pins in the component manifests
-LOCK_NAME = "decision-requirements-aarch64-apple-darwin.lock"
+CUDA_BACKEND = "cu128"  # keep in step with scripts/lock-decision-trainer.sh
 COMPONENT = "decision-trainer"
 
 STEP_TEXT = {
     "disk": "Checking free space",
     "environment": "Preparing the trainer's environment",
-    "packages": "Installing the trainer's packages (about 170 MB)",
+    "packages": "Installing the trainer's packages",
     "model": "Getting the model",
     "check": "Checking that it starts",
 }
+
+
+def lock_name(target: str | None = None) -> str:
+    """The hashed lock for this computer (or `target`)."""
+    return f"decision-requirements-{target or uv_target()}.lock"
+
+
+UNSUPPORTED = "Teaching it to decide needs a Mac with Apple silicon, or a computer with an NVIDIA graphics card."
 
 
 def load_decision_pins() -> Pins:
@@ -164,8 +175,16 @@ class DecisionSetup(TrainingSetup):
     _fetches: dict[str, asyncio.Task[None]] = field(default_factory=dict)
 
     @property
+    def supported(self) -> bool:
+        return apple_or_nvidia()
+
+    @property
     def root(self) -> Path:
         return component_root(self.data_dir)
+
+    def install_args(self) -> list[str]:
+        # the Windows and Linux locks name PyTorch's CUDA build, which only PyTorch's own index serves
+        return [] if uv_target().endswith("apple-darwin") else ["--torch-backend", CUDA_BACKEND]
 
     def tool(self) -> tuple[Path, str] | None:  # type: ignore[override]
         python = find_python(self.data_dir, self.pins)
@@ -181,10 +200,7 @@ class DecisionSetup(TrainingSetup):
 
     def problem(self) -> str | None:
         if not self.supported:
-            return (
-                "Teaching it to decide works on a Mac with Apple silicon for now. Windows and "
-                "Linux (with an NVIDIA graphics card) come later."
-            )
+            return UNSUPPORTED
         if self.tool() is None and (self.lock is None or not self.lock.is_file() or not self.uv):
             return "The tool that sets up the trainer is not part of this build."
         return None

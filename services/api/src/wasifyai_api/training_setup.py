@@ -93,10 +93,25 @@ def nvidia_gpu() -> bool:
     return shutil.which("nvidia-smi") is not None
 
 
-def picture_supported() -> bool:
-    """Where AI Toolkit can teach a picture model: a Mac with Apple silicon, or Windows or Linux
-    with an NVIDIA graphics card."""
+def apple_or_nvidia() -> bool:
+    """A Mac with Apple silicon, or Windows or Linux with an NVIDIA graphics card: where the
+    PyTorch trainers (pictures, decisions) run on the graphics chip."""
     return apple_silicon() or (sys.platform in ("win32", "linux") and nvidia_gpu())
+
+
+def picture_supported() -> bool:
+    """Where AI Toolkit can teach a picture model."""
+    return apple_or_nvidia()
+
+
+def uv_target() -> str:
+    """This computer as uv names a platform: the suffix of a per-platform lock file."""
+    arm = platform.machine().lower() in ("arm64", "aarch64")
+    if sys.platform == "darwin":
+        return "aarch64-apple-darwin" if arm else "x86_64-apple-darwin"
+    if sys.platform == "win32":
+        return "x86_64-pc-windows-msvc"
+    return "aarch64-unknown-linux-gnu" if arm else "x86_64-unknown-linux-gnu"
 
 
 # ---- the pins ------------------------------------------------------------------------------------
@@ -445,6 +460,11 @@ class TrainingSetup:
         tmp.write_text(json.dumps(record))
         tmp.replace(self.root / STATE_FILE)  # last: this is what makes it installed
 
+    def install_args(self) -> list[str]:
+        """More arguments for `uv pip install` (a trainer whose lock names a CUDA build adds the
+        index it comes from)."""
+        return []
+
     async def _install_tool(self) -> None:
         """The trainer's own environment from its hashed lock, through the one installer (F2)."""
         assert self.lock is not None and self.uv is not None
@@ -456,7 +476,7 @@ class TrainingSetup:
         await installer.make_environment(
             self.uv, self.python, self.root / "venv", self.lock, None, "environment", "packages",
             run, self._env(), on_step=self._say, on_line=lambda text: log.info("%s", text[-300:]),
-            owner="The trainer",
+            owner="The trainer", extra_args=self.install_args(),
         )  # fmt: skip
 
     async def _get_base(self, before: int) -> None:

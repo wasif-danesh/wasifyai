@@ -70,4 +70,9 @@ MV0 to MV6 are built; `docs/image-video-models-plan.md` has the measured numbers
   MiniMax-H3 and Ideogram 4 say they need an NVIDIA card.
 - On the web the admin picks each product's model in Admin › Media; the ComfyUI host fetches its files with
   `python -m wasifyai_api.comfy_models`.
+- On the desktop the window also keeps the image and video model chosen in the bar in the engine
+  (`PUT /desktop/models/chosen/{product_id}`, the same `media.model.<product>` setting). A run that names no model
+  (Creative's stills and clips, the assistant, another app over MCP) is made by it when it can do the job, as with an
+  admin's choice on the web, and its recipe names it. Before this, Creative always used klein 4B and LTX-Video 2B
+  (found in a real-window run, 2026-11-08).
 - Not built: taught looks for the new video models (a look does not record the model it was taught on).

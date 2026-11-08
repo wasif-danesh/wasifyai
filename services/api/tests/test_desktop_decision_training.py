@@ -73,7 +73,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("FAKE_LOG", str(tmp_path / "calls.log"))
     monkeypatch.delenv("FAKE_MODE", raising=False)
     monkeypatch.setattr(ts, "apple_silicon", lambda: True)
-    monkeypatch.setattr(dd, "apple_silicon", lambda: True)
+    monkeypatch.setattr(dd, "apple_or_nvidia", lambda: True)
     return tmp_path
 
 
@@ -117,7 +117,7 @@ def test_it_says_in_words_why_it_cannot_run(home, monkeypatch: pytest.MonkeyPatc
     assert eng.base_folder("laya-english") == home / "models" / "laya-english"
     monkeypatch.setenv("WASIFYAI_LAYA_DIR", str(home / "nowhere"))
     assert "not set up" in (eng.problem() or "")
-    monkeypatch.setattr(dd, "apple_silicon", lambda: False)
+    monkeypatch.setattr(dd, "apple_or_nvidia", lambda: False)
     assert "Apple silicon" in (eng.problem() or "") and "NVIDIA" in (eng.problem() or "")
 
 

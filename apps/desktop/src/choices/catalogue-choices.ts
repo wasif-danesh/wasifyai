@@ -60,6 +60,8 @@ export type CatalogueGroup = {
   /** the product of Settings › Your keys this group follows, if it can run on a key */
   keyed?: string;
   key: string;
+  /** the product whose model the engine keeps as chosen (ADR-0097): what it makes on its own uses it */
+  product?: string;
 };
 
 export const CATALOGUE_GROUPS = {
@@ -68,12 +70,14 @@ export const CATALOGUE_GROUPS = {
     imageEngine: true,
     key: "images",
     keyed: "images",
+    product: "wasifyai-image",
   },
   video: {
     has: (e) => e.product_id === "wasifyai-video",
     imageEngine: true,
     key: "video",
     keyed: "video",
+    product: "wasifyai-video",
   },
   documents: {
     has: (e) => e.id === "bge-small-en-v1.5",
@@ -128,6 +132,19 @@ export function catalogueRow(
 
 export function catalogueChoices(deps: CatalogueDeps, group: CatalogueGroup): ChoicesApi {
   const key = `wasifyai:model:${group.key}`;
+  // the engine keeps the chosen model too (ADR-0097), told once per change; a choice made before it kept
+  // one is told the first time the list shows it. A failure only means it is told next time.
+  let told: string | null = null;
+  const keep = (id: string) => {
+    const product = group.product;
+    if (!product || told === id) return;
+    told = id;
+    Promise.resolve()
+      .then(() => deps.models.choose(product, id))
+      .catch(() => {
+        told = null;
+      });
+  };
   const read = async () => {
     const [overview, engine, found] = await Promise.all([
       deps.models.overview(),
@@ -153,6 +170,7 @@ export function catalogueChoices(deps: CatalogueDeps, group: CatalogueGroup): Ch
         entries.find((e) => e.id === last && e.status === "ready") ??
         entries.find((e) => e.status === "ready") ??
         null;
+      if (chosen) keep(chosen.id);
       return {
         choices: withKeyed(
           entries.map((e) => catalogueRow(e, engine, chosen?.id ?? null, foundFor(e, found))),
@@ -166,6 +184,7 @@ export function catalogueChoices(deps: CatalogueDeps, group: CatalogueGroup): Ch
     async choose(id) {
       if (group.keyed && (await leaveKey(deps.keys, group.keyed, id))) return;
       deps.memory.set(key, id);
+      keep(id);
     },
 
     async remove(id) {
@@ -193,6 +212,7 @@ export function catalogueChoices(deps: CatalogueDeps, group: CatalogueGroup): Ch
       }
       await runSteps(steps, on, signal);
       deps.memory.set(key, id);
+      keep(id);
     },
   };
 }

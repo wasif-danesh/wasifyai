@@ -1,7 +1,7 @@
 # ruff: noqa: E501  (prose in the docstrings and a script in a string are easier to read on one line)
 """The decision training engine of the desktop profile (ADR-0075, ADR-0073).
 
-On a Mac with Apple silicon it is Laya (Apache-2.0) on PyTorch, which uses the graphics chip. It runs
+On a Mac with Apple silicon, or Windows or Linux with an NVIDIA card, it is Laya (Apache-2.0) on PyTorch, which uses the graphics chip. It runs
 as a separate process of its own: `decision_train.py` reads a job (the question, the examples, the
 texts to check on) and prints what the model said before it was taught, its progress, and what it says
 after; `decision_answer.py` asks a finished model about some texts. This module builds the job, reads
@@ -24,11 +24,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from wasifyai_api.decision_setup import find_model, find_python
+from wasifyai_api.decision_setup import UNSUPPORTED, find_model, find_python
 from wasifyai_api.desktop_fit import assess_fit, need_declared, read_machine
 from wasifyai_api.desktop_models import free_disk_bytes
 from wasifyai_api.desktop_training import _kill_group, _no_slot, process_footprint
-from wasifyai_api.training_setup import apple_silicon
+from wasifyai_api.training_setup import apple_or_nvidia
 
 ENGINE = "laya"
 TRAIN_SCRIPT = Path(__file__).with_name("decision_train.py")
@@ -66,11 +66,8 @@ class LayaTrainer:
     # ---- what the product asks ---------------------------------------------------------------
 
     def problem(self, base_id: str | None = None) -> str | None:
-        if not apple_silicon():
-            return (
-                "Teaching it to decide works on a Mac with Apple silicon for now. Windows and "
-                "Linux (with an NVIDIA graphics card) come later."
-            )
+        if not apple_or_nvidia():
+            return UNSUPPORTED
         if find_python(self.data_dir) is None:
             return "Training is not set up on this computer yet. Set it up first."
         if base_id is not None and find_model(self.data_dir, base_id) is None:

@@ -26,7 +26,7 @@ from uuid import uuid4
 import httpx
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from wasifyai_platform_sdk import Identity, VoiceModel, parse_voice_model
 
 from wasifyai_api.desktop_fit import (
@@ -39,6 +39,7 @@ from wasifyai_api.desktop_fit import (
     read_machine,
 )
 from wasifyai_api.identity import get_identity
+from wasifyai_api.media_access import MediaAccessError
 from wasifyai_api.services import services_of
 from wasifyai_api.settings_store import SettingsStore
 
@@ -586,6 +587,35 @@ async def remove_model(
     if svc.downloads.active:
         raise HTTPException(409, "Wait for the download to finish first.")
     return {"removed": svc.remove(_entry(svc, entry_id))}
+
+
+class Chosen(BaseModel):
+    model_id: str = Field(min_length=1, max_length=100)
+
+
+# The image and video model the person chose on a screen (ADR-0097). The window keeps it too, but
+# what the engine makes on its own (Creative's stills and clips, the assistant, another app over
+# MCP) names no model, so the graphs ask for this one, as they ask for an admin's choice on the web.
+@router.get("/models/chosen")
+async def chosen_models(request: Request, _: Identity = Depends(get_identity)) -> dict[str, Any]:
+    media = services_of(request).media
+    if media is None:
+        raise HTTPException(404, "not available in this deployment")
+    return {p: await media.chosen_model(p) for p in ("wasifyai-image", "wasifyai-video")}
+
+
+@router.put("/models/chosen/{product_id}")
+async def choose_model(
+    product_id: str, body: Chosen, request: Request, who: Identity = Depends(get_identity)
+) -> dict[str, Any]:
+    media = services_of(request).media
+    if media is None:
+        raise HTTPException(404, "not available in this deployment")
+    try:
+        await media.choose_model(product_id, body.model_id, who.user_id)
+    except MediaAccessError as exc:
+        raise HTTPException(422, str(exc)) from None
+    return {"product_id": product_id, "chosen": body.model_id}
 
 
 @router.put("/models/folders")

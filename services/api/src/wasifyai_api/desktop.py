@@ -48,8 +48,8 @@ from wasifyai_api.audio_runtime import AudioEngine, AudioInstaller, AudioServer
 from wasifyai_api.comfy_music import ComfyMusic
 from wasifyai_api.config import Settings
 from wasifyai_api.creation_index import IndexStore
-from wasifyai_api.decision_setup import LOCK_NAME as DECISION_LOCK_NAME
 from wasifyai_api.decision_setup import DecisionSetup
+from wasifyai_api.decision_setup import lock_name as decision_lock_name
 from wasifyai_api.desktop_discovery import DiscoveryService
 from wasifyai_api.desktop_fit import assess_fit, need_declared, process_rss_bytes
 from wasifyai_api.desktop_hub import TOKEN_ALIASES, HubService
@@ -256,7 +256,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     )
     decision_setup = DecisionSetup(
         root,
-        lock=products / "wasifyai-training" / "trainer" / DECISION_LOCK_NAME,
+        lock=products / "wasifyai-training" / "trainer" / decision_lock_name(),
         uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
         cache_dir=cache if cache.is_dir() else None,
         base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),

@@ -391,7 +391,7 @@ parts:
         id: laya
         version: 0.4.15
         source: pypi.org
-        packages_bytes: 167600000
+        packages_bytes: 3997987057  # wheels of decision-requirements-x86_64-unknown-linux-gnu.lock (CUDA 12.8 PyTorch), summed from the indexes 2026-11-08
         python: '3.12'
       base:
         id: laya-english

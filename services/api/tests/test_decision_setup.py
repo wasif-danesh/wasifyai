@@ -4,6 +4,7 @@ and the install through stand-ins for `uv` and the model's server (the real run 
 import hashlib
 import json
 import os
+import re
 from dataclasses import replace
 from pathlib import Path
 
@@ -66,11 +67,47 @@ def test_the_pins_name_every_file_with_a_size_and_a_checksum():
     assert cat[0].folder == cat[0].id
 
 
-def test_the_lock_is_committed_and_hashed():
-    lock = Path(__file__).parents[3] / "products/wasifyai-training/trainer" / ds.LOCK_NAME
+@pytest.mark.parametrize(
+    "target",
+    [
+        "aarch64-apple-darwin", "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu",
+        "x86_64-pc-windows-msvc",
+    ],
+)  # fmt: skip
+def test_every_platform_has_a_committed_hashed_lock(target: str):
+    lock = Path(__file__).parents[3] / "products/wasifyai-training/trainer" / ds.lock_name(target)
     text = lock.read_text()
     assert "laya==0.4.15" in text and "torch==" in text and "--hash=sha256:" in text
     assert "mlx" not in text  # the writing trainer's packages are another environment
+    pinned = re.findall(r"^[A-Za-z0-9_.\-]+==", text, flags=re.MULTILINE)
+    assert text.count("--hash=sha256:") >= len(pinned)
+    # Windows and Linux get PyTorch's CUDA build, the one the installer asks for
+    cuda = re.search(r"^torch==\S+\+(cu\d+)", text, flags=re.MULTILINE)
+    if target.endswith("apple-darwin"):
+        assert cuda is None
+    else:
+        assert cuda is not None and cuda.group(1) == ds.CUDA_BACKEND
+
+
+def test_windows_and_linux_with_an_nvidia_card_can_set_it_up(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    setup, _, _ = setup_for(tmp_path)
+    monkeypatch.setattr(ts, "apple_silicon", lambda: False)
+    for system, target in (
+        ("win32", "x86_64-pc-windows-msvc"),
+        ("linux", "x86_64-unknown-linux-gnu"),
+    ):
+        monkeypatch.setattr(ts.sys, "platform", system)
+        monkeypatch.setattr(ts.platform, "machine", lambda: "AMD64")
+        monkeypatch.setattr(ts, "nvidia_gpu", lambda: True)
+        assert setup.supported and ds.lock_name() == f"decision-requirements-{target}.lock"
+        assert setup.install_args() == ["--torch-backend", ds.CUDA_BACKEND]
+        monkeypatch.setattr(ts, "nvidia_gpu", lambda: False)
+        assert not setup.supported and "NVIDIA" in (setup.problem() or "")
+    monkeypatch.setattr(ts.sys, "platform", "darwin")
+    monkeypatch.setattr(ts.platform, "machine", lambda: "arm64")
+    assert setup.install_args() == []
 
 
 def test_the_trainer_is_found_in_a_setting_or_the_app_folder(

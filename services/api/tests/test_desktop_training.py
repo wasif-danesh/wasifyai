@@ -143,12 +143,17 @@ def test_the_config_teaches_the_image_models_own_files_at_rank_16():
     assert p["model"]["qtype"] == p["model"]["qtype_te"] == "convrot8"
     assert p["network"] == {"type": "lora", "linear": 16, "linear_alpha": 16}
     assert p["train"]["steps"] == 200 and p["train"]["lr"] == 1e-4
-    # the sampler's shifted noise levels: AI Toolkit's default (sigmoid) never taught klein a style
-    assert p["train"]["timestep_type"] == "shift"
     assert p["save"]["save_every"] == dt.CHECKPOINT_EVERY == 25
     assert p["sample"]["sample_every"] == 50 and p["sample"]["prompts"] == ["a", "b"]
     assert p["datasets"][0]["folder_path"] == "/w" and p["datasets"][0]["resolution"] == [512]
     assert p["training_folder"] == "/o"
+
+
+def test_a_style_is_taught_on_the_samplers_shifted_noise_levels_a_character_on_the_default():
+    # AI Toolkit's default (sigmoid) never taught klein a style; "shift" lost a character in far scenes
+    assert config(kind="style")["train"]["timestep_type"] == "shift"
+    assert "timestep_type" not in config(kind="character")["train"]
+    assert "timestep_type" not in config(kind="object")["train"]
 
 
 def test_the_config_runs_on_the_macs_graphics_chip_or_the_first_nvidia_card(monkeypatch):

@@ -427,9 +427,10 @@ distilled klein as the image engine. Three picture sets: 12 pictures of one fict
   unquantised model failed alike; the cached latents, the loss target and the config were all right) but the noise levels training draws.
   AI Toolkit's default `timestep_type` (sigmoid) centres on the middle and barely trains the high noise levels where klein's four steps
   decide the look; the loss at each noise level stayed flat for 300 steps. The klein 4B recipe now sets `timestep_type: shift` (the
-  sampler's own shifted schedule) and teaches a style at 4e-4. In Create's klein workflow, four new scenes with and without the word turned
-  to torn paper on card (4e-4, 300 steps); at 1e-4 for 250 steps only the palette and flat shapes came, washed out. Character and object
-  with `shift` are not measured yet (backlog D32).
+  sampler's own shifted schedule) for a style only and teaches a style at 4e-4. In Create's klein workflow, four new scenes with and without the word turned
+  to torn paper on card (4e-4, 300 steps); at 1e-4 for 250 steps only the palette and flat shapes came, washed out. A character taught
+  with `shift` (Ena, 37 pictures, 500 steps) held her in a portrait and a saree but lost her on a rainy street where the default-taught
+  Ena kept her, so a character and an object keep AI Toolkit's default (backlog D32).
 
 ## Built (2026-10-25): the choice of model and method
 

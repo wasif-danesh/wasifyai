@@ -216,6 +216,7 @@ def training_config(
             "noise_scheduler": "flowmatch", "optimizer": "adamw",
             "lr": recipe.learning_rate.get(kind, 1e-4), "dtype": "bf16",
             "disable_sampling": False, **recipe.train_fields,
+            **recipe.kind_train_fields.get(kind, {}),
         },
         "model": model,
         "sample": {

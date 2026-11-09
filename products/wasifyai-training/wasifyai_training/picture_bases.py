@@ -67,6 +67,8 @@ class PictureBase:
     # `network` sections (`unconditional_lora_path`, `timestep_type`, `ignore_if_contains`, ...)
     model_fields: dict[str, object] = field(default_factory=dict)
     train_fields: dict[str, object] = field(default_factory=dict)
+    # for one kind only ("style", ...), merged over `train_fields`
+    kind_train_fields: dict[str, dict[str, object]] = field(default_factory=dict)
     network_fields: dict[str, object] = field(default_factory=dict)
     # (the name AI Toolkit looks for, a file it can use), both under the models folder: a link
     # lets AI Toolkit use a file already there instead of copying or fetching it again
@@ -118,11 +120,13 @@ KLEIN_4B = PictureBase(
     # shapes on new scenes in Create but washed out; 4e-4 for 300 steps gave torn paper on card on all four (2026-11-09)
     learning_rate={"character": 1e-4, "object": 1e-4, "style": 4e-4},
     quantize="convrot8",
-    # noise levels drawn as the sampler's own shifted schedule. AI Toolkit's default (sigmoid, centred on the middle)
-    # barely trains the high noise levels where klein's four steps decide the look: a style taught with it never left
-    # photographs (500 steps, 1e-4 and 4e-4, the distilled and the base weights; the loss at each noise level flat),
-    # and the same run with "shift" drew the style in 300 steps (2026-11-09, ADR-0073 "Style recipe")
-    train_fields={"timestep_type": "shift"},
+    # a style: noise levels drawn as the sampler's own shifted schedule. AI Toolkit's default (sigmoid, centred on the
+    # middle) barely trains the high noise levels where klein's four steps decide the look: a style taught with it never
+    # left photographs (500 steps, 1e-4 and 4e-4, the distilled and the base weights; the loss at each noise level flat),
+    # and the same run with "shift" drew the style in 300 steps. A character keeps the default: Ena taught with "shift"
+    # (37 pictures, 500 steps) matched the sigmoid-taught Ena in a portrait and a saree but lost her on a rainy street
+    # where the sigmoid one kept her (2026-11-09, ADR-0073 "Style recipe fixed")
+    kind_train_fields={"style": {"timestep_type": "shift"}},
     note="The model Create image uses, taught as it is. Learns a character, a style or an object from 15 to 25 pictures.",
 )
 

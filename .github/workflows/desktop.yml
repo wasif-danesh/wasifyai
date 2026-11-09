@@ -62,6 +62,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --all-packages
       - name: Engine tests under the desktop profile
+        # the watchdog (conftest.py) must fire before the job's 20 minutes, or a hang is cancelled with no stack
+        env: { WASIFYAI_TEST_TIMEOUT_S: "300", WASIFYAI_SESSION_TIMEOUT_S: "900" }
         run: >
           uv run pytest -v
           packages/platform-sdk/tests/test_sqlite_adapters.py

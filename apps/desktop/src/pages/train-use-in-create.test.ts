@@ -1,5 +1,7 @@
 import type { TrainedModel } from "@wasifyai/client";
 import { describe, expect, it, vi } from "vitest";
+// a static import: vi.mock is hoisted above it, and loading the screen stays out of each test's 5 s
+import { presetForModel } from "./Train";
 
 const list = vi.fn();
 vi.mock("../api", () => ({ client: {}, stylesApi: { list: () => list() } }));
@@ -10,7 +12,6 @@ const style = (id: string, source: object) => ({ id, source });
 
 describe("Use in Create", () => {
   it("chooses Train's style by its run, and puts the word in the prompt", async () => {
-    const { presetForModel } = await import("./Train");
     list.mockResolvedValue({
       styles: [style("x", { kind: "file" }), style("e1", { kind: "trained", run: "b37ba287" })],
     });
@@ -21,7 +22,6 @@ describe("Use in Create", () => {
   });
 
   it("still opens Create when the style is not found", async () => {
-    const { presetForModel } = await import("./Train");
     list.mockRejectedValue(new Error("engine away"));
     expect((await presetForModel(model)).styles).toEqual([]);
   });

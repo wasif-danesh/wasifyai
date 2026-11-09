@@ -7,8 +7,8 @@ from pathlib import Path
 
 from redis.asyncio import Redis
 from wasifyai_api.config import get_settings
-from wasifyai_api.decision_setup import LOCK_NAME as DECISION_LOCK_NAME
 from wasifyai_api.decision_setup import DecisionSetup
+from wasifyai_api.decision_setup import lock_name as decision_lock_name
 from wasifyai_api.desktop_decision_training import make_decision_trainer
 from wasifyai_api.desktop_language_training import make_language_trainer
 from wasifyai_api.desktop_model3d import Model3dService
@@ -95,7 +95,7 @@ async def main() -> None:
     image_trainer = make_trainer(api.desktop_dir, api.models_dir, image_setup, models)
     decision_setup = DecisionSetup(
         api.desktop_dir,
-        lock=products / "wasifyai-training" / "trainer" / DECISION_LOCK_NAME,
+        lock=products / "wasifyai-training" / "trainer" / decision_lock_name(),
         uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
         base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
     )

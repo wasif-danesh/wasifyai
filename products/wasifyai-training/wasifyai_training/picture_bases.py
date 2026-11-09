@@ -114,8 +114,15 @@ KLEIN_4B = PictureBase(
     # a character and an object bound their magic word in 150 to 200 steps on 10 to 15 pictures; a style learnt
     # the scenes it was shown by 250 steps (measured with mflux, 2026-10-25; the Ena run used 500)
     presets={"character": 200, "style": 250, "object": 150},
-    learning_rate={"character": 1e-4, "object": 1e-4, "style": 1e-4},
+    # style at 4e-4: with shifted noise levels (below), 21 collage pictures at 1e-4 for 250 steps gave the palette and flat
+    # shapes on new scenes in Create but washed out; 4e-4 for 300 steps gave torn paper on card on all four (2026-11-09)
+    learning_rate={"character": 1e-4, "object": 1e-4, "style": 4e-4},
     quantize="convrot8",
+    # noise levels drawn as the sampler's own shifted schedule. AI Toolkit's default (sigmoid, centred on the middle)
+    # barely trains the high noise levels where klein's four steps decide the look: a style taught with it never left
+    # photographs (500 steps, 1e-4 and 4e-4, the distilled and the base weights; the loss at each noise level flat),
+    # and the same run with "shift" drew the style in 300 steps (2026-11-09, ADR-0073 "Style recipe")
+    train_fields={"timestep_type": "shift"},
     note="The model Create image uses, taught as it is. Learns a character, a style or an object from 15 to 25 pictures.",
 )
 

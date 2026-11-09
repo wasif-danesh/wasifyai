@@ -255,6 +255,7 @@ async def run_engine(
                 )
             if desktop is None:
                 await _resume_web_jobs(s)
+            await _stop_orphan_clips(r)
             # the SDK's session manager lives as long as the engine (spike S1)
             async with s.mcp.session_manager.run():
                 # the opt-in fixed port is the desktop's (ADR-0069, M3); a service listens on
@@ -275,6 +276,25 @@ async def run_engine(
             s.runs.langfuse.flush()
         tracing.flush()  # send the spans still waiting
         await _close(s, r, given, desktop, consumer)
+
+
+async def _stop_orphan_clips(r: _Running) -> None:
+    """A clip whose run was stopped as the engine closed is still "working": mark it stopped, or it
+    would refuse every new clip for 90 minutes (ADR-0037)."""
+    try:
+        from wasifyai_video.videos import stop_orphans, video_store
+    except ImportError:  # the video product is not part of this build
+        return
+
+    async def state(tenant_id: str, run_id: str) -> str | None:
+        rec = await r.run_store.get(tenant_id, run_id)
+        return rec.status if rec is not None else None
+
+    try:
+        if marked := await stop_orphans(video_store(r.db), state):
+            log.info("marked %d clips stopped: their runs ended as the engine closed", marked)
+    except Exception:  # a store not set up yet (a fresh web database): nothing to mark
+        log.warning("could not look for clips left working", exc_info=True)
 
 
 async def _shared(

@@ -419,6 +419,17 @@ distilled klein as the image engine. Three picture sets: 12 pictures of one fict
   unlike mflux not even a scene it was shown (the owl of the set, in the trainer's own step-250 sample) turned to paper; strength 2.0 only
   softens the picture. With AI Toolkit the run is under-taught rather than over-fitted, so a higher rate and more steps are worth trying here
   again, then the klein base weights instead of the distilled file Create runs. Backlog D32.
+  **Tried the same day, all not passed:** 4e-4 for 500 steps on the distilled file; the klein base weights at 1e-4 for 250 and at 4e-4
+  for 500 steps. Even the exact training caption stays a photograph after 24 passes over the set, and a very high rate (1e-3) pushes
+  towards grey photographs, not collage: the app's klein 4B path is not learning from its pictures, which no setting fixes. To be
+  debugged with the trainer's loss, the cached latents and the character-lora config side by side (backlog D32).
+- **Style recipe fixed (2026-11-09): passed.** The cause was not the steps, the rate, the file or AI Toolkit's version (an older one and an
+  unquantised model failed alike; the cached latents, the loss target and the config were all right) but the noise levels training draws.
+  AI Toolkit's default `timestep_type` (sigmoid) centres on the middle and barely trains the high noise levels where klein's four steps
+  decide the look; the loss at each noise level stayed flat for 300 steps. The klein 4B recipe now sets `timestep_type: shift` (the
+  sampler's own shifted schedule) and teaches a style at 4e-4. In Create's klein workflow, four new scenes with and without the word turned
+  to torn paper on card (4e-4, 300 steps); at 1e-4 for 250 steps only the palette and flat shapes came, washed out. Character and object
+  with `shift` are not measured yet (backlog D32).
 
 ## Built (2026-10-25): the choice of model and method
 

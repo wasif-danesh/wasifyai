@@ -52,6 +52,7 @@ from wasifyai_video.schemas import (
     check_looks,
 )
 from wasifyai_video.videos import (
+    STOPPED,
     TAIL_FRAMES,
     VIDEO_CREATED,
     ClipError,
@@ -72,7 +73,6 @@ log = logging.getLogger(__name__)
 Status = Literal["working", "done", "refused", "failed"]
 BUSY = "You already have a video being made. It will be in My creations when it's ready."
 FAILED = "Your video couldn't be made. Please try again."
-STOPPED = "Stopped. Nothing was kept."
 NOT_EXTENDABLE = "Please choose one of your finished videos to carry on."
 
 

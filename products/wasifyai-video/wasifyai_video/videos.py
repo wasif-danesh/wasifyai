@@ -2,12 +2,15 @@
 
 A row exists from the moment a run starts (status "working") so that the site can show "being made"
 on any page (ADR-0037). A row that stays "working" for 90 minutes belongs to a run that died;
-it is marked "failed" the next time anyone reads the table."""
+it is marked "failed" the next time anyone reads the table. One whose run is already over (the run
+was stopped as the engine closed, before its clean-up could mark the row) is marked "failed" when
+the engine next starts (`stop_orphans`), so it does not hold the one-at-a-time rule that long."""
 
 import asyncio
 import logging
 import re
 import tempfile
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -31,6 +34,8 @@ VIDEO_CREATED = "video.created"
 POSTER_PX = 480
 STALE_AFTER = timedelta(minutes=90)  # a long clip on a slow computer takes most of an hour
 STALE_MESSAGE = "This took too long and was stopped. Please try again."
+STOPPED = "Stopped. Nothing was kept."
+RUN_OVER = ("done", "error", "cancelled")  # a run in one of these states makes nothing more
 FFMPEG_TIMEOUT_S = 60
 JOIN_TIMEOUT_S = 180
 IMPORT_TIMEOUT_S = 300
@@ -97,6 +102,8 @@ class VideoStore(Protocol):
     async def delete(self, tenant_id: str, user_id: str, video_id: str) -> None: ...
 
     async def working_count(self, tenant_id: str, user_id: str) -> int: ...
+
+    async def working(self) -> "list[VideoRecord]": ...
 
 
 _COLUMNS = (
@@ -260,6 +267,19 @@ class PostgresVideoStore:
                 )
             ).one()
             return int(row[0])
+
+    async def working(self) -> "list[VideoRecord]":
+        """Every clip still being made, of every person (for `stop_orphans` at startup)."""
+        async with self._engine.begin() as conn:
+            rows = (
+                await conn.execute(
+                    text(
+                        f"SELECT {_COLUMNS} FROM videos WHERE product_id = 'wasifyai-video' "
+                        "AND status = 'working'"
+                    )
+                )
+            ).all()
+        return [_record(r) for r in rows]
 
 
 _SQLITE_DDL = (
@@ -444,6 +464,20 @@ class SqliteVideoStore:
             ).one()
             return int(row[0])
 
+    async def working(self) -> "list[VideoRecord]":
+        """Every clip still being made, of every person (for `stop_orphans` at startup)."""
+        await self._ready()
+        async with self._engine.begin() as conn:
+            rows = (
+                await conn.execute(
+                    text(
+                        f"SELECT {_COLUMNS} FROM videos WHERE product_id = 'wasifyai-video' "
+                        "AND status = 'working'"
+                    )
+                )
+            ).all()
+        return [self._record(r) for r in rows]
+
 
 def video_store(engine: AsyncEngine) -> VideoStore:
     """The store for the database the engine speaks to: Postgres in the web profile, SQLite in the
@@ -527,6 +561,11 @@ class InMemoryVideoStore:
             v
             for v in self.videos
             if (v.tenant_id, v.user_id, v.id) != (tenant_id, user_id, video_id)
+        ]
+
+    async def working(self) -> "list[VideoRecord]":
+        return [
+            v for v in self.videos if v.product_id == "wasifyai-video" and v.status == "working"
         ]
 
     async def working_count(self, tenant_id: str, user_id: str) -> int:
@@ -727,3 +766,21 @@ async def tail_of(mp4: bytes, frames: int, total: int) -> bytes:
             log.error("ffmpeg could not cut the end of a clip (exit %s): %s", rc, report[-300:])
             raise ClipError("That video could not be read.")
         return out.read_bytes()
+
+
+async def stop_orphans(
+    store: VideoStore, run_state: Callable[[str, str], Awaitable[str | None]]
+) -> int:
+    """Mark "failed" every clip still "working" whose run is over or gone (`run_state` answers the
+    run's state, None when there is none): a run stopped as the engine closed never marked its
+    row, which would hold the one-at-a-time rule for 90 minutes. A clip with no run id is left
+    to that rule. Answers how many were marked."""
+    marked = 0
+    for clip in await store.working():
+        if not clip.run_id:
+            continue
+        state = await run_state(clip.tenant_id, str(clip.run_id))
+        if state is None or state in RUN_OVER:
+            await store.fail(clip.tenant_id, clip.id, STOPPED)
+            marked += 1
+    return marked

@@ -1,5 +1,6 @@
 """Video records and their search source on the desktop profile SQLite file (ADR-0056)."""
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -8,9 +9,11 @@ from wasifyai_platform_sdk.sqlite import create_sqlite_engine
 from wasifyai_video.index import CombinedIndexSource, SqliteVideoIndexSource, video_index_source
 from wasifyai_video.videos import (
     STALE_AFTER,
+    STOPPED,
     InMemoryVideoStore,
     SqliteVideoStore,
     VideoRecord,
+    stop_orphans,
     video_store,
 )
 
@@ -120,3 +123,31 @@ async def test_the_index_source_lists_only_finished_clips(engine):
     assert [i.item_id for i in await source.page(first[-1].item_id, 2)] == ids[2:]
     assert await source.present([ids[0], pending.id, "gone"]) == {ids[0]}
     assert await source.present([]) == set()
+
+
+@pytest.mark.parametrize("on_sqlite", [True, False])
+async def test_a_clip_whose_run_ended_as_the_engine_closed_is_marked_stopped(engine, on_sqlite):
+    """The run was stopped as the engine closed but its clean-up never marked the row: at the next
+    start the clip is marked stopped, and no longer holds the one-at-a-time rule."""
+    store = SqliteVideoStore(engine) if on_sqlite else InMemoryVideoStore()
+    stopped, gone = replace(rec(), run_id="r-stopped"), replace(rec(), run_id="r-gone")
+    waiting, old_row = (
+        replace(rec(user="u2"), run_id="r-wait"),
+        replace(rec(user="u3"), run_id=None),
+    )
+    for r in (stopped, gone, waiting, old_row):
+        await store.add(r)
+    assert await store.working_count("t1", "u1") == 2
+    states = {"r-stopped": "cancelled", "r-wait": "waiting_job"}  # r-gone: no run any more
+
+    async def state(tenant_id: str, run_id: str) -> str | None:
+        assert tenant_id == "t1"
+        return states.get(run_id)
+
+    assert await stop_orphans(store, state) == 2
+    assert await store.working_count("t1", "u1") == 0  # a new clip may start
+    for r in (stopped, gone):
+        got = await store.get("t1", "u1", r.id)
+        assert got is not None and got.status == "failed" and got.error == STOPPED
+    # a run still waiting for its job goes on; a clip with no run is left to the 90 minutes
+    assert {v.id for v in await store.working()} == {waiting.id, old_row.id}

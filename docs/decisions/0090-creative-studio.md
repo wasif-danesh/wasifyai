@@ -460,7 +460,10 @@ a take (mode `draft` or `final`, chosen), tagged with the project and the shot, 
   the clip "Stopped. Nothing was kept." and Go on made the rest. Stills had the same gap, hidden by being quick.
 - A clip refused because another video is being made (the Video tab) now ends the run at once and says so, instead of counting failures.
 - The walk moved on before its clip was done, and the engine closed under it. A clip whose engine closes stays "working", and the video product refuses new clips for
-  90 minutes (the rule from ADR-0037): older than CS4, not changed here.
+  90 minutes (the rule from ADR-0037): older than CS4, not changed here. **Fixed 2026-11-08:** closing the engine stops the waiting Creative run, which stops the
+  clip's run (its state is saved as `cancelled` first), but the engine is gone before the clip's row is marked. At the next start the engine marks every clip
+  still "working" whose run is over or gone "Stopped. Nothing was kept." (`stop_orphans` in `wasifyai_video/videos.py`, called from `assemble.py`, desktop and
+  web); a clip whose run still waits for its job is left to finish. Checked on a real engine start from a throwaway data folder.
 - A clip can draw a little garbled text in a corner (LTX); the redo is the shot's Make a clip.
 
 **Checked in a browser with the real engine** (walk `creative-motion`, not the Tauri window): the Motion panel, its starts and Make it better, a real draft clip of one

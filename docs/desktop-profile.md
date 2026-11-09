@@ -54,7 +54,10 @@ Store adapters that depend on the database are chosen by the **engine's dialect*
    The engine allows the window's origins by CORS (`DESKTOP_ALLOWED_ORIGINS`).
 5. The shell keeps the engine's stdin open. If the shell dies, however it dies, the engine sees EOF and exits.
    On a normal quit (and on SIGTERM or Ctrl+C) the shell closes stdin, waits 8 seconds, then ends the process
-   group (Windows: `taskkill /T /F`).
+   group (Windows: `taskkill /T /F`). The engine gives open connections 3 seconds (`SHUTDOWN_GRACE_S` in
+   `desktop.py`), so the window's endless `/desktop/events` stream no longer holds it past the shell's 8 (2026-11-09).
+6. ComfyUI is started through `comfy_boot.py` (media worker), which ends it as soon as its engine is gone, also when
+   the engine is killed (`kill -9`, a crash): before 2026-11-09 it was left running with its models in memory.
 
 Nothing listens on the network: the engine's socket is bound to loopback and every route except `/health` and
 the signed `/files` links needs the token.

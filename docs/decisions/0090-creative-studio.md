@@ -364,7 +364,7 @@ earlier "live inside the project" is dropped, so **a 55-shot project adds 55 pic
 - "a person in a photograph's face" read badly, hence "someone".
 - The Ask guide needed "there is no creative.add_shot": with four action names, 8B invented that one and `creative.move_cut` (11 of 13 until said).
 - A database of CS1 lacks `media.made`: a guarded migration (schema 2).
-- A hard kill of the engine leaves its ComfyUI child running (a process and memory; a later engine starts its own). This is not new to CS2 and is not fixed here.
+- A hard kill of the engine leaves its ComfyUI child running (a process and memory; a later engine starts its own). This is not new to CS2 and is not fixed here. **Fixed 2026-11-09:** ComfyUI starts through `comfy_boot.py`, which exits when its engine is gone; after `kill -9` of the engine it was gone within 1 s.
 
 **Checked in a browser with the real engine** (walk `creative-shots`, not the Tauri window): a real redo (53 s), takes chosen, the tabs, a real file added as a take that does not replace the chosen one, axe clean on each, no sideways scroll at the window's smallest size.
 
@@ -571,6 +571,19 @@ were found in ComfyUI's folder further down (only Advanced offered "Use it"); fi
 which adds the folder and downloads nothing (checked on an empty data folder: both models ready, 0 bytes fetched; ADR-0086). Seen, not changed: the plan writer wrote "eyes glowing with light" for the sung shot, and the
 still and its sung clip show glowing eyes (the picture checker of CS6 is for this); the engine needs a second, forced stop after a stop request (the window
 already ends it that way). Not run: Make it better at the final setting, the Voice and Titles tabs, a story project.
+
+**The paths not run, run (2026-11-09)**, on the same throwaway desktop engine and screens (not the Tauri window). **Make it better** on the 30 s song: one clip
+at the final setting (672x384, 121 frames) in 121 s, inside its 2 to 3 minute estimate; only shots marked Animate get final clips, and Cut says honestly how many
+pieces still use a draft. **Titles:** a title and a lower third added from the tab are both in the 1920x1080 export over the captions. **Voice:** Captions
+lists the timed lines; Speak (Kokoro 82M) made a line that joins the project's media; it is not placed on the timeline (as designed). **A story** (about 110
+words, Mira from an earlier project, the narrator's voice for her quote since no voice was saved): read and planned in **29 s** (14 shots: 10 hold, 3 animate,
+1 speaking shot on "I brought the light"), **14 reference stills in 5 min 11 s** (estimate 8 to 10 minutes), **4 final clips with the speaking shot in 7 min
+52 s** (estimate 7 to 10 minutes), the 45 s video in 6 s with the narration and its parts as captions. Seen, not changed: a story's screens still say "song"
+in places (Preview the whole song, the media rail's Song, "its face sings its part of the song"); a caption joined from a quote loses its quotes and comma
+("... dark window she said."); the narration is quieter than a song (mean -27 dB against -13 dB); the plan's first shot gives Mira the lanterns she buys later.
+**Both faults are fixed:** ComfyUI now starts through `comfy_boot.py` and exits within a second of its engine being killed, and the engine gives open
+connections 3 s (`SHUTDOWN_GRACE_S`), so one stop request ends it in about 3.6 s with the window's event stream open (it hung for more than 20 s before).
+Left: the Tauri window's Save As and Finder drops (a person in the window), and CS6.
 
 **Sharp clips by default (2026-11-05, owner).** The 2026-11-04 test video looked poor because its moving shots were draft
 clips (480x288, 15 steps) stretched to 1080p. LTX's final setting is much better at 2.5 to 3.4 minutes a clip, and Wan 2.2

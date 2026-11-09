@@ -2,6 +2,7 @@
 the shell's token. The image product runs with the stub image engine, so no GPU or model is needed.
 """
 
+import contextlib
 import json
 import time
 from collections.abc import Iterator
@@ -436,6 +437,24 @@ def test_the_launcher_starts_serves_and_exits_when_the_shell_goes(tmp_path):
         assert events[-1][0] == "done" and events[-1][1]["outputs"]["status"] == "done"
         assert httpx.get(f"{base}/products/wasifyai-image/images").status_code == 401
 
+        # the window holds its event stream open for as long as it lives: the engine must still stop
+        # on the first request, not wait for that stream (it did, until a second, forced stop)
+        import threading
+
+        opened = threading.Event()
+
+        def listen() -> None:
+            with (
+                contextlib.suppress(httpx.HTTPError),
+                httpx.stream(
+                    "GET", f"{base}/desktop/events", headers=auth(), timeout=None
+                ) as events,
+            ):
+                for _ in events.iter_text():
+                    opened.set()
+
+        threading.Thread(target=listen, daemon=True).start()
+        assert opened.wait(10)
         proc.stdin.close()  # type: ignore[union-attr]
         assert proc.wait(timeout=15) == 0
     finally:

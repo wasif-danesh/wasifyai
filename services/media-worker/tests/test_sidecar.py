@@ -286,3 +286,50 @@ async def test_changing_the_model_folders_restarts_a_running_comfyui(tmp_path):
         assert paths["wasifyai_1"]["base_path"] == str(tmp_path / "shared")
     finally:
         await s.stop()
+
+
+@unix_only
+def test_comfyui_ends_when_its_engine_is_killed(tmp_path):
+    """A killed engine cannot stop ComfyUI itself: the launcher sees its parent go and exits."""
+    import os
+    import signal
+    import subprocess
+    import time
+
+    from wasifyai_media_worker.sidecar import BOOT
+
+    (tmp_path / "main.py").write_text(
+        "import os, sys, time\n"
+        "open('pid', 'w').write(str(os.getpid()) + ' ' + ' '.join(sys.argv))\n"
+        "time.sleep(600)\n"
+    )
+    # a stand-in engine: starts the launcher as the sidecar does, then waits for ever
+    engine = subprocess.Popen(
+        [sys.executable, "-c",
+         "import os, subprocess, sys, time\n"
+         f"boot = {str(BOOT)!r}\n"
+         "subprocess.Popen([sys.executable, '-P', boot, str(os.getpid()), '--port', '1'])\n"
+         "time.sleep(600)\n"],
+        cwd=tmp_path,
+    )  # fmt: skip
+    try:
+        deadline = time.monotonic() + 20
+        while not (tmp_path / "pid").is_file() and time.monotonic() < deadline:
+            time.sleep(0.1)
+        pid, *argv = (tmp_path / "pid").read_text().split()
+        assert argv == ["main.py", "--port", "1"]  # ComfyUI sees its own arguments only
+        os.kill(int(pid), 0)  # running
+
+        engine.send_signal(signal.SIGKILL)  # a crash or a forced quit: no clean-up runs
+        engine.wait()
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            try:
+                os.kill(int(pid), 0)
+            except ProcessLookupError:
+                return  # gone, as it should be
+            time.sleep(0.2)
+        os.kill(int(pid), signal.SIGKILL)
+        raise AssertionError("ComfyUI outlived its engine")
+    finally:
+        engine.kill()

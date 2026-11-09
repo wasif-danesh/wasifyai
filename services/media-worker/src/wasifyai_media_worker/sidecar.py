@@ -53,6 +53,7 @@ LOADER_FIELDS: dict[str, tuple[str, ...]] = {
     "ckpt_name": ("checkpoints",),
     "model_name": ("latent_upscale_models", "upscale_models"),
 }
+BOOT = Path(__file__).with_name("comfy_boot.py")
 # folders ComfyUI needs to exist in its base directory (it stops at start-up without custom_nodes)
 BASE_FOLDERS = ("models", "input", "output", "temp", "user", "custom_nodes")
 
@@ -204,7 +205,9 @@ class ComfySidecar:
         try:
             self._proc = await asyncio.create_subprocess_exec(
                 str(self.venv_python),
-                "main.py",
+                "-P",
+                str(BOOT),  # ends ComfyUI when this engine ends, even killed (comfy_boot.py)
+                str(os.getpid()),
                 "--listen", "127.0.0.1",
                 "--port", str(port),
                 "--disable-auto-launch",

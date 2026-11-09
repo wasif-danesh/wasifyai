@@ -522,6 +522,11 @@ async def get_file(key: str, e: int, s: str, request: Request) -> Response:
 # ---- entry point ----------------------------------------------------------------------------
 
 
+# seconds a stop gives open requests (a run's stream, the window's events) before ending them;
+# well inside the shell's own grace before it signals the engine (GRACE in src-tauri/src/engine.rs)
+SHUTDOWN_GRACE_S = 3
+
+
 def _bind(port: int) -> socket.socket:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -543,7 +548,13 @@ async def _serve() -> None:
     from wasifyai_api.main import create_app
 
     server = uvicorn.Server(
-        uvicorn.Config(create_app(), log_level=os.environ.get("LOG_LEVEL", "info").lower())
+        uvicorn.Config(
+            create_app(),
+            log_level=os.environ.get("LOG_LEVEL", "info").lower(),
+            # a stop waits this long for open requests, then ends them: the window's event stream
+            # (`/desktop/events`) never ends by itself, so without a limit a stop waited for ever
+            timeout_graceful_shutdown=SHUTDOWN_GRACE_S,
+        )
     )
 
     async def announce() -> None:

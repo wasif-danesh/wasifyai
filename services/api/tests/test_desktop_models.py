@@ -315,6 +315,22 @@ async def test_not_enough_disk_is_said_before_anything_is_fetched(tmp_path, orig
     assert origin.requests == []
 
 
+async def test_a_folder_the_app_may_not_write_is_said_not_blamed_on_the_connection(
+    tmp_path, origin
+):
+    svc = service(tmp_path, origin)
+    svc.models_dir.mkdir(parents=True, exist_ok=True)
+    svc.models_dir.chmod(0o500)  # as macOS does to an outside drive the app is not allowed on
+    try:
+        e = svc.catalogue["demo"]
+        d = svc.downloads.start(e, list(e.files), svc.models_dir)
+        await finished(d)
+    finally:
+        svc.models_dir.chmod(0o700)
+    assert d.status == "failed" and "not allowed to save" in d.error
+    assert str(svc.models_dir) in d.error and "connection" not in d.error
+
+
 async def test_one_download_at_a_time_and_cancel_keeps_the_partial_file(tmp_path, origin):
     origin.slow = 0.05
     svc = service(tmp_path, origin)

@@ -12,6 +12,7 @@ and total size the window showed the person (`Confirm`), so a stale or forged ca
 """
 
 import asyncio
+import errno
 import hashlib
 import logging
 import os
@@ -245,13 +246,26 @@ class DownloadManager:
             d.status = "cancelled"  # the partial file is kept: a later start continues it
         except DownloadError as e:
             d.status, d.error = "failed", str(e)
-        except (httpx.HTTPError, OSError) as e:
+        except PermissionError as e:
+            # not the connection: macOS keeps an app off an outside drive until it is allowed
             log.warning("model download failed: %s", e)
             d.status = "failed"
             d.error = (
-                "The download was interrupted. Check the connection and try again: it continues "
-                "where it stopped."
+                f"Wasify AI is not allowed to save in {models_dir}. On a Mac, allow it in "
+                "System Settings › Privacy & Security › Files and Folders (Removable Volumes "
+                "for an outside drive), or choose another folder under Models › Where models "
+                "are kept."
             )
+        except (httpx.HTTPError, OSError) as e:
+            log.warning("model download failed: %s", e)
+            d.status = "failed"
+            if isinstance(e, OSError) and e.errno == errno.ENOSPC:
+                d.error = f"There is not enough free space in {models_dir}."
+            else:
+                d.error = (
+                    "The download was interrupted. Check the connection and try again: it "
+                    "continues where it stopped."
+                )
         finally:
             if self._active is d:
                 self._active = None

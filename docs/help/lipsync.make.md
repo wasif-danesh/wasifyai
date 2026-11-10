@@ -28,7 +28,8 @@ Make a picture talk: a video of the face saying words or a recording.
 
 ## Limits
 
-- Short pictures and voices only; the screen shows the limits.
+- Voices of up to 60 seconds; the screen shows the limits.
+- It is slow: about 14 seconds of work for each second of video on a 64 GB Mac.
 
 ## Needs
 

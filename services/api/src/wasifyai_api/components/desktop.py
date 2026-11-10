@@ -57,11 +57,11 @@ def trainer_part(cid: str, setup: Any) -> ServiceComponent:
 
 
 def lipsync_part(sidecar: Any) -> ServiceComponent:
-    """The lip sync engine's component (MuseTalk), here and on an engine worker."""
+    """The lip sync engine's component (EchoMimic v3), here and on an engine worker."""
     lip = sidecar.installer
     return ServiceComponent(
-        "musetalk", "Lip sync engine (MuseTalk)",
-        (Step("source", "Getting MuseTalk"), Step("unpack", "Unpacking it"),
+        "lipsync", "Lip sync engine (EchoMimic)",
+        (Step("source", "Getting EchoMimic"), Step("unpack", "Unpacking it"),
          Step("environment", "Creating its environment"),
          Step("packages", "Installing its packages"), Step("verify", "Checking that it starts")),
         sidecar.state, lip.start, progress_key="install", stop=_cancel(lip), finish=_waiter(lip),

@@ -244,7 +244,7 @@ def test_a_version_four_file_gains_clips_and_pictures(tmp_path):
     s = VoiceStore.in_folder(root)
     p = s.add_picture("t", "u", key="lipsync/p1.png", width=640, height=480, picture_id="p1")
     c = s.add_clip(
-        "t", "u", title="Hello", model_id="musetalk-v15", picture_key=p["key"],
+        "t", "u", title="Hello", model_id="echomimic-v3-flash", picture_key=p["key"],
         video_key="lipsync/c1.mp4", voice={"kind": "speech", "id": "s1"}, script="Hi there",
         seconds=2.0, fps=25, width=640, height=480, load_s=0, elapsed_s=3, clip_id="c1",
     )  # fmt: skip

@@ -1,5 +1,5 @@
 """A stand-in for the lip sync server (`wasifyai_api/lipsync_server/server.py`), to test the sidecar
-without torch or MuseTalk. A picture of `noface` is refused with 422, `boom` fails with 500, `slow`
+without torch or EchoMimic. A picture of `noface` is refused with 422, `boom` fails with 500, `slow`
 never answers; every answer records what it was sent in `last.json`."""
 
 import asyncio
@@ -25,7 +25,7 @@ def mp4(w: int, h: int) -> bytes:
 def health() -> dict:
     return {
         "ok": True, "device": "cpu", "loaded": state["loaded"],
-        "dir": os.environ.get("MUSETALK_DIR"), "torch_home": os.environ.get("TORCH_HOME"),
+        "dir": os.environ.get("ECHOMIMIC_DIR"), "weights": os.environ.get("LIPSYNC_WEIGHTS"),
     }  # fmt: skip
 
 
@@ -37,7 +37,7 @@ async def lipsync(
 ) -> Response:
     pic, voice = await image.read(), await audio.read()
     if pic == b"noface":
-        raise HTTPException(422, "no face found in the picture")
+        raise HTTPException(422, "the picture could not be read")
     if pic == b"boom":
         raise HTTPException(500, "the lip sync could not be made")
     if pic == b"slow":

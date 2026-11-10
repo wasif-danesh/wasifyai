@@ -182,6 +182,9 @@ Built as designed, with these differences, all small and recorded here:
 
 ## Engine change: MuseTalk (2026-10-09)
 
+*On 2026-11-10 the owner replaced MuseTalk with EchoMimic v3 flash on the desktop (ADR-0066, amendment "Lip sync
+model"). What follows is kept as the record of that time.*
+
 A first run of InfiniteTalk on the Mac, at the only size it could manage (256x256, 2 steps), looked poor, and
 the owner decided that a prototype must run on the development machine. **The default engine is now MuseTalk
 v1.5** (TMElyralab; checked 2026-10-09). InfiniteTalk stays as

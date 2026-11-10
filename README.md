@@ -289,8 +289,8 @@ missing and points back to `make setup`.
   about five times slower than real time on a CPU, so give the Podman VM about **12 GB** (`podman machine set
   --memory 12288`). Its model is gated: accept the terms on its Hugging Face page and put a read token in
   `.env` as `HF_TOKEN`.
-- The lip sync server (MuseTalk) runs natively on the Mac so it can use the Apple GPU: about 12 GB of memory
-  and 5 seconds of compute per second of video. `make dev` starts and `make down` stops it.
+- Lip sync (EchoMimic v3 flash) is a desktop component on Apple-silicon Macs: about 15 GB of memory and about
+  14 seconds of work per second of video. The web reaches it through an engine worker on such a Mac.
 - Ollama runs natively on the host so it can use the GPU. On Apple Silicon it uses Metal. On
   Intel Macs and machines without a supported GPU it runs on CPU, so replies are slow.
 - Linux and WSL: Ollama listens on `127.0.0.1` by default, which containers may not reach.

@@ -153,7 +153,7 @@ describe("the picker on the web", () => {
       /speech engine/,
     );
     const lipsync = model({
-      id: "musetalk-v15",
+      id: "echomimic-v3-flash",
       engine: "sidecar",
       state: "can_install",
       runtime_ready: false,
@@ -202,7 +202,7 @@ describe("the picker on the web", () => {
     const { deps, workers } = rig(
       [
         model({
-          id: "musetalk-v15",
+          id: "echomimic-v3-flash",
           engine: "sidecar",
           state: "can_install",
           runtime_ready: false,
@@ -212,9 +212,9 @@ describe("the picker on the web", () => {
       ],
       { lipsync },
     );
-    await webChoicesFor(deps, "faces", "lipsync").get("musetalk-v15", () => {}, never);
+    await webChoicesFor(deps, "faces", "lipsync").get("echomimic-v3-flash", () => {}, never);
     expect(workers.fetchEngine).toHaveBeenCalledWith("lipsync-engine");
-    expect(workers.fetchModel).toHaveBeenCalledWith("musetalk-v15");
+    expect(workers.fetchModel).toHaveBeenCalledWith("echomimic-v3-flash");
   });
 
   it("does not let anyone but an admin start a fetch", async () => {

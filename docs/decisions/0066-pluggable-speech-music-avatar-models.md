@@ -125,7 +125,8 @@ deployment-level choice.
 
 1. **Reuse level:** reference only for VoiceStudio and Unsloth's audio code; audio.cpp is the engine.
 2. **Now:** V1 (speak and transcribe), then V2 (design, clone, voices for the notebook overview). Start with the V0 spike.
-3. **Lip sync:** MuseTalk stays, as an optional download (a `sidecar` component).
+3. **Lip sync:** MuseTalk stays, as an optional download (a `sidecar` component). *Replaced on 2026-11-10 by
+   EchoMimic v3 flash, see the amendment "Lip sync model".*
 
 ## Amendments
 
@@ -196,3 +197,17 @@ deployment-level choice.
   (ADR-0047); (b) a product is retired by `PRODUCTS_RETIRED`, which keeps its routes and saved results and makes nothing
   new; (c) the older results are read where they are, not migrated, until there is data to move; (d) the older packages are
   deleted only after that and after the web runs music on a GPU host through the voice product.
+- **Lip sync model (owner, 2026-11-10; `docs/spikes/lipsync-echomimic-v3.md`, `-s0.md`, `-s1.md`):** answer 3 is
+  replaced. **The lip sync model is EchoMimic v3 flash** (`antgroup/echomimic_v3`, on Wan2.1-Fun-V1.1-1.3B-InP);
+  MuseTalk is removed from the catalogue, the component and the code. (a) It moves the whole head, the eyes and the
+  mouth, and works on drawings, where MuseTalk only redrew the mouth; (b) it is about three times slower: on a 64 GB
+  M5 Pro Mac, through the app's installer and sidecar, 30 seconds to load, then about 14 seconds of work per
+  second of video for a 9.4 second voice (19 for a short 5.7 second one, which still costs a whole window), and
+  about 15 GB of memory; (c) the settings are the fast
+  ones of S1: 448 pixel area, 8 steps, TeaCache 0.2 after two steps, 81-frame windows chained from the last frame,
+  each frame's colour matched to the picture; (d) its fixed prompts are shipped encoded
+  (`lipsync_server/echomimic_prompts.safetensors`, made by `make_prompts.py`), so the 11 GB text encoder is never
+  downloaded or loaded; (e) the Mac fixes (time embedding and rotary table without float64 or complex numbers on the
+  GPU, autocast on MPS) live in our `lipsync_server/engine.py`, the upstream code is used unchanged at a pinned
+  commit; (f) the longest voice is 60 seconds and the catalogue entry is `echomimic-v3-flash` (7 files, 9.4 GB);
+  (g) Apple-silicon Macs only, as before.

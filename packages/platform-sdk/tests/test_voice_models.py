@@ -494,7 +494,7 @@ def talker(**over):
         "server_task": "lipsync", "voices": [], "default_voice": None, "options": [],
         "lipsync": lipsync_rules(),
     }  # fmt: skip
-    return parse_voice_model("musetalk", "MuseTalk", raw(**{**base, **over}))
+    return parse_voice_model("echomimic", "EchoMimic", raw(**{**base, **over}))
 
 
 @pytest.mark.parametrize(

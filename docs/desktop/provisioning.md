@@ -68,7 +68,7 @@ install from before is found as it is. Steps, progress, Repair and `logs/provisi
 ComfyUI is supported on Apple-silicon Macs only in this version; elsewhere the window says so and the placeholder
 engine keeps working.
 
-The other optional parts are on the same installer: the speech runtime (audio.cpp), lip sync (MuseTalk), 3D
+The other optional parts are on the same installer: the speech runtime (audio.cpp), lip sync (EchoMimic v3), 3D
 (Pixal3D), Motion graphics, the four trainers and the notebooks' document reader fetch through its `download`,
 `unpack` and `make_environment` (`wasifyai_platform_sdk/installer.py`), keep their own state files and setup cards,
 and are listed by `GET /components` with the same status shape (`components/service.py`). Their pins are the

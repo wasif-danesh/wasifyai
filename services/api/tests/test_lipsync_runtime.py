@@ -20,10 +20,9 @@ from tests.test_audio_runtime import ALL, Models, make_engine
 
 REPO = Path(__file__).parents[3]
 LIPSYNC_FILES = {
-    "musetalk-v15-unet.pth", "musetalk-v15.json", "sd-vae-ft-mse.bin", "sd-vae-ft-mse.json",
-    "whisper-tiny.bin", "whisper-tiny.json", "whisper-tiny-preprocessor.json",
-    "face-parsing-bisenet.pth", "resnet18-5c106cde.pth", "s3fd-619a316812.pth",
-    "2DFAN4-11f355bf06.pth.tar",
+    "echomimic-v3-flash-pro.safetensors", "echomimic-v3-flash-pro.json", "wan21-vae.pth",
+    "wan21-clip-vit-h14.pth", "chinese-wav2vec2-base.bin", "chinese-wav2vec2-base.json",
+    "chinese-wav2vec2-base-preprocessor.json",
 }  # fmt: skip
 
 
@@ -33,16 +32,16 @@ LIPSYNC_FILES = {
 def test_the_pins_are_exact_and_the_shipped_lock_is_the_one_pinned():
     pins = lr.load_pins()
     assert len(pins.commit) == 40 and pins.url.endswith(f"{pins.commit}.tar.gz")
-    assert pins.url.startswith("https://github.com/TMElyralab/MuseTalk/archive/")
+    assert pins.url.startswith("https://github.com/antgroup/echomimic_v3/archive/")
     assert lr._sha256_file(pins.lock) == pins.lock_sha256  # noqa: SLF001
     assert pins.platforms == ("darwin-arm64",)
     text = pins.lock.read_text()
-    assert "--hash=sha256:" in text and "torch==" in text and "numpy==1." in text
+    assert "--hash=sha256:" in text and "torch==" in text and "diffusers==" in text
     assert "gdown" not in text  # the weights come from Models, not from a download script
 
 
 def test_a_pin_without_a_hash_is_refused(tmp_path):
-    raw = part_pins("musetalk")
+    raw = part_pins("lipsync")
     raw["source"]["sha256"] = "abc"
     bad = tmp_path / "pins.json"
     bad.write_text(json.dumps(raw))
@@ -51,11 +50,11 @@ def test_a_pin_without_a_hash_is_refused(tmp_path):
 
 
 def test_every_weight_file_of_the_catalogue_has_a_place_to_be_laid_out():
-    entry = Models(Path("/x"), set()).catalogue["musetalk-v15"]
+    entry = Models(Path("/x"), set()).catalogue["echomimic-v3-flash"]
     names = {f.name for f in entry.files}
-    assert names == LIPSYNC_FILES == set(lr.WEIGHTS) | set(lr.TORCH_WEIGHTS)
+    assert names == LIPSYNC_FILES == set(lr.WEIGHTS)
     assert all(f.folder == "lipsync" and f.url.startswith("https://") for f in entry.files)
-    assert sum(f.size for f in entry.files) == pytest.approx(4.2e9, rel=0.05)
+    assert sum(f.size for f in entry.files) == pytest.approx(9.39e9, rel=0.01)
     assert entry.voice and "mark" not in entry.voice.lipsync
     assert entry.voice.engine == "sidecar"
 
@@ -72,8 +71,9 @@ def test_no_mark_is_drawn_or_written():
 
 def managed(tmp_path, **state):
     pins = lr.load_pins()
-    root = tmp_path / "engine" / "musetalk"
-    (root / "src" / "musetalk").mkdir(parents=True, exist_ok=True)
+    root = tmp_path / "engine" / "lipsync"
+    (root / "src" / lr.MARKER).parent.mkdir(parents=True, exist_ok=True)
+    (root / "src" / lr.MARKER).write_text("")
     py = lr._venv_python(root / "venv")  # noqa: SLF001
     py.parent.mkdir(parents=True, exist_ok=True)
     if not py.exists():
@@ -84,12 +84,12 @@ def managed(tmp_path, **state):
 
 
 def test_nothing_is_installed_until_the_record_matches_the_pins(tmp_path, monkeypatch):
-    monkeypatch.delenv("WASIFYAI_MUSETALK_HOME", raising=False)
+    monkeypatch.delenv("WASIFYAI_LIPSYNC_HOME", raising=False)
     assert lr.find_install(tmp_path) is None
     root = managed(tmp_path)
     found = lr.find_install(tmp_path)
     assert found is not None and found.source == "managed" and not found.in_place
-    assert found.src == root / "src" and found.torch_home == root / "torch"
+    assert found.src == root / "src" and found.weights == root / "weights"
     managed(tmp_path, commit="old")
     assert lr.find_install(tmp_path) is None  # another version of the code
     managed(tmp_path, lock_sha256="0" * 64)
@@ -100,14 +100,15 @@ def test_nothing_is_installed_until_the_record_matches_the_pins(tmp_path, monkey
 
 def test_a_copy_set_up_by_hand_is_used_as_it_is(tmp_path, monkeypatch):
     home = tmp_path / "home"
-    (home / "src" / "musetalk").mkdir(parents=True)
+    (home / "src" / lr.MARKER).parent.mkdir(parents=True)
+    (home / "src" / lr.MARKER).write_text("")
     py = lr._venv_python(home / "venv")  # noqa: SLF001
     py.parent.mkdir(parents=True)
     py.write_text("")
-    monkeypatch.setenv("WASIFYAI_MUSETALK_HOME", str(home))
+    monkeypatch.setenv("WASIFYAI_LIPSYNC_HOME", str(home))
     found = lr.find_install(tmp_path)
     assert found is not None and found.source == "env" and found.in_place
-    assert found.torch_home is None
+    assert found.weights == home / "weights"
 
 
 def test_uv_is_the_one_the_shell_gave_or_the_one_downloaded_or_on_the_path(tmp_path, monkeypatch):
@@ -135,21 +136,20 @@ def weights(tmp_path):
     return files
 
 
-def test_weights_are_linked_to_where_musetalk_and_the_face_package_read_them(tmp_path):
+def test_weights_are_linked_to_where_the_server_reads_them(tmp_path):
     root = managed(tmp_path)
     install = lr.find_install(tmp_path)
     assert install is not None
     files = weights(tmp_path)
     lr._lay_out(install, files)  # noqa: SLF001
-    assert (root / "src/models/musetalkV15/unet.pth").read_bytes() == b"musetalk-v15-unet.pth"
-    assert (root / "src/models/face-parse-bisent/79999_iter.pth").is_file()
-    assert (
-        root / "torch/hub/checkpoints/s3fd-619a316812.pth"
-    ).read_bytes() == b"s3fd-619a316812.pth"
+    transformer = root / "weights/transformer/diffusion_pytorch_model.safetensors"
+    assert transformer.read_bytes() == b"echomimic-v3-flash-pro.safetensors"
+    assert (root / "weights/wav2vec2/preprocessor_config.json").is_file()
+    assert (root / "weights/Wan2.1_VAE.pth").read_bytes() == b"wan21-vae.pth"
     lr._lay_out(install, files)  # again: nothing breaks
-    (root / "src/models/sd-vae/config.json").unlink()
+    (root / "weights/transformer/config.json").unlink()
     lr._lay_out(install, files)
-    assert (root / "src/models/sd-vae/config.json").is_file()
+    assert (root / "weights/transformer/config.json").is_file()
 
 
 def test_a_missing_weight_file_is_told_as_a_model_to_get(tmp_path):
@@ -157,7 +157,7 @@ def test_a_missing_weight_file_is_told_as_a_model_to_get(tmp_path):
     install = lr.find_install(tmp_path)
     assert install is not None
     files = weights(tmp_path)
-    del files["whisper-tiny.bin"]
+    del files["chinese-wav2vec2-base.bin"]
     with pytest.raises(VoiceEngineError) as e:
         lr._lay_out(install, files)  # noqa: SLF001
     assert e.value.code == "model_missing"
@@ -170,8 +170,8 @@ def tarball() -> bytes:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as t:
         for name, data in (
-            ("MuseTalk-abc/musetalk/__init__.py", b""),
-            ("MuseTalk-abc/LICENSE", b"MIT"),
+            ("echomimic_v3-abc/src/pipeline_wan_fun_inpaint_audio_2512.py", b""),
+            ("echomimic_v3-abc/LICENSE", b"Apache-2.0"),
         ):
             info = tarfile.TarInfo(name)
             info.size = len(data)
@@ -184,7 +184,7 @@ def installer_for(tmp_path, data: bytes, monkeypatch, platforms=None):
     (tmp_path / "uv").write_text("")
     base = lr.load_pins()
     pins = lr.Pins(
-        base.commit, "https://example.test/musetalk.tar.gz", len(data),
+        base.commit, "https://example.test/echomimic.tar.gz", len(data),
         hashlib.sha256(data).hexdigest(), "3.12", base.lock, base.lock_sha256, 1_000_000,
         platforms or (lr.platform_key(),),
     )  # fmt: skip
@@ -193,7 +193,7 @@ def installer_for(tmp_path, data: bytes, monkeypatch, platforms=None):
     )
     data_dir = tmp_path / "data"
     (data_dir / "engine").mkdir(parents=True, exist_ok=True)
-    inst = lr.MuseTalkInstaller(data_dir, pins, client)
+    inst = lr.LipSyncInstaller(data_dir, pins, client)
     calls: list[list[str]] = []
 
     async def run(args, cwd, env, limit_s: float = 3600):
@@ -220,7 +220,7 @@ async def finished(inst):
 async def test_the_installer_shows_the_plan_then_gets_checks_builds_and_records(
     tmp_path, monkeypatch
 ):
-    monkeypatch.delenv("WASIFYAI_MUSETALK_HOME", raising=False)
+    monkeypatch.delenv("WASIFYAI_LIPSYNC_HOME", raising=False)
     inst, pins, calls, data_dir = installer_for(tmp_path, tarball(), monkeypatch)
     plan = inst.plan()
     assert plan["supported"] and plan["bytes"] == pins.size + pins.packages_bytes and plan["uv"]
@@ -233,16 +233,16 @@ async def test_the_installer_shows_the_plan_then_gets_checks_builds_and_records(
     assert inst.progress.state == "ready", inst.progress
     found = lr.find_install(data_dir, pins)
     assert found is not None and found.source == "managed"
-    assert (found.src / "musetalk" / "__init__.py").is_file() and (found.src / "LICENSE").is_file()
+    assert (found.src / lr.MARKER).is_file() and (found.src / "LICENSE").is_file()
     kinds = [c[1] if c[1] in ("venv", "pip") else "check" for c in calls]
     assert kinds == ["venv", "pip", "check"]
-    state = json.loads((data_dir / "engine/musetalk/state.json").read_text())
+    state = json.loads((data_dir / "engine/lipsync/state.json").read_text())
     assert state["accelerator"] == "mps" and state["commit"] == pins.commit
-    assert not list((data_dir / "engine/musetalk").glob("stage-*"))  # the staging folder is gone
+    assert not list((data_dir / "engine/lipsync").glob("stage-*"))  # the staging folder is gone
 
 
 async def test_a_download_that_does_not_match_leaves_nothing(tmp_path, monkeypatch):
-    monkeypatch.delenv("WASIFYAI_MUSETALK_HOME", raising=False)
+    monkeypatch.delenv("WASIFYAI_LIPSYNC_HOME", raising=False)
     inst, pins, calls, data_dir = installer_for(tmp_path, tarball(), monkeypatch)
     inst.pins = lr.Pins(pins.commit, pins.url, pins.size, "0" * 64, *[getattr(pins, f) for f in
         ("python", "lock", "lock_sha256", "packages_bytes", "platforms")])  # fmt: skip
@@ -256,7 +256,7 @@ async def test_a_download_that_does_not_match_leaves_nothing(tmp_path, monkeypat
 async def test_a_failing_step_says_which_and_the_old_install_is_not_left_half_there(
     tmp_path, monkeypatch, failing, message
 ):
-    monkeypatch.delenv("WASIFYAI_MUSETALK_HOME", raising=False)
+    monkeypatch.delenv("WASIFYAI_LIPSYNC_HOME", raising=False)
     inst, pins, calls, data_dir = installer_for(tmp_path, tarball(), monkeypatch)
     ok = inst.run
 
@@ -273,7 +273,7 @@ async def test_a_failing_step_says_which_and_the_old_install_is_not_left_half_th
 
 
 async def test_the_check_that_torch_starts_decides_whether_it_is_installed(tmp_path, monkeypatch):
-    monkeypatch.delenv("WASIFYAI_MUSETALK_HOME", raising=False)
+    monkeypatch.delenv("WASIFYAI_LIPSYNC_HOME", raising=False)
     inst, pins, calls, data_dir = installer_for(tmp_path, tarball(), monkeypatch)
     ok = inst.run
 
@@ -317,10 +317,10 @@ def sidecar_for(tmp_path, monkeypatch, with_weights=True):
     py = lr._venv_python(root / "venv")  # noqa: SLF001
     py.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')  # the test's own interpreter
     py.chmod(0o755)
-    monkeypatch.delenv("WASIFYAI_MUSETALK_HOME", raising=False)
+    monkeypatch.delenv("WASIFYAI_LIPSYNC_HOME", raising=False)
     side = lr.LipSyncSidecar(tmp_path)
     files = weights(tmp_path) if with_weights else {}
-    model = Models(tmp_path, set()).catalogue["musetalk-v15"].voice
+    model = Models(tmp_path, set()).catalogue["echomimic-v3-flash"].voice
     assert model is not None
     return side, model, files, server_dir
 
@@ -339,10 +339,10 @@ async def test_a_clip_is_made_and_the_weights_are_laid_out(tmp_path, monkeypatch
         pic, voice = inputs(tmp_path)
         out = await side.generate(model, req, pic, voice, files)
         assert out.mp4[4:8] == b"ftyp" and (out.width, out.height) == (640, 480)
-        assert out.fps == 25 and out.seconds == 3.0 and out.model_id == "musetalk-v15"
+        assert out.fps == 25 and out.seconds == 3.0 and out.model_id == "echomimic-v3-flash"
         sent = json.loads((server_dir / "last.json").read_text())
         assert "mark" not in sent and sent["fps"] == 25 and sent["voice"] == 12
-        assert (tmp_path / "engine/musetalk/src/models/musetalkV15/unet.pth").exists()
+        assert (tmp_path / "engine/lipsync/weights/transformer/config.json").exists()
         again = await side.generate(model, req, pic, voice, files)  # warm: no loading to report
         assert again.load_s == 0.0 and out.load_s >= 0.0
         assert side.running
@@ -352,14 +352,14 @@ async def test_a_clip_is_made_and_the_weights_are_laid_out(tmp_path, monkeypatch
         await side.close()
 
 
-async def test_the_server_is_told_where_musetalk_and_torch_files_are(tmp_path, monkeypatch):
+async def test_the_server_is_told_where_the_code_and_weights_are(tmp_path, monkeypatch):
     side, model, files, _ = sidecar_for(tmp_path, monkeypatch)
     try:
         url = await side.ensure_running(files)
         async with httpx.AsyncClient() as http:
             health = (await http.get(f"{url}/health")).json()
-        assert health["dir"] == str(tmp_path / "engine/musetalk/src")
-        assert health["torch_home"] == str(tmp_path / "engine/musetalk/torch")
+        assert health["dir"] == str(tmp_path / "engine/lipsync/src")
+        assert health["weights"] == str(tmp_path / "engine/lipsync/weights")
         assert await side.ensure_running(files) == url  # still the same process
     finally:
         await side.close()
@@ -374,7 +374,7 @@ async def test_no_face_a_failure_and_a_stopped_server_are_told_apart(tmp_path, m
             with pytest.raises(VoiceEngineError) as e:
                 await side.generate(model, req, pic, voice, files)
             assert e.value.code == code
-        assert "front-facing" in (await _msg(side, model, req, files, tmp_path))
+        assert "could not be read" in (await _msg(side, model, req, files, tmp_path))
     finally:
         await side.close()
 
@@ -429,7 +429,7 @@ def test_the_size_of_a_video_is_read_from_its_header():
 def lipsync_engine(tmp_path, monkeypatch, installed: bool):
     eng, server = make_engine(tmp_path, monkeypatch, present=ALL | LIPSYNC_FILES)
     side = lr.LipSyncSidecar(tmp_path / "data")
-    monkeypatch.delenv("WASIFYAI_MUSETALK_HOME", raising=False)
+    monkeypatch.delenv("WASIFYAI_LIPSYNC_HOME", raising=False)
     if installed:
         managed(tmp_path / "data")
     eng.lipsync_sidecar = side
@@ -441,18 +441,18 @@ def test_the_model_is_listed_with_what_it_needs_and_never_default_without_the_en
 ):
     eng, _, _ = lipsync_engine(tmp_path, monkeypatch, installed=False)
     got = {m["id"]: m for m in eng.models("lipsync")}
-    assert set(got) == {"musetalk-v15"}
+    assert set(got) == {"echomimic-v3-flash"}
     assert (
-        got["musetalk-v15"]["state"] == "needs_runtime"
-        and got["musetalk-v15"]["engine"] == "sidecar"
+        got["echomimic-v3-flash"]["state"] == "needs_runtime"
+        and got["echomimic-v3-flash"]["engine"] == "sidecar"
     )
-    assert "mark" not in got["musetalk-v15"]["lipsync"]
+    assert "mark" not in got["echomimic-v3-flash"]["lipsync"]
     with pytest.raises(VoiceEngineError) as e:
-        eng.resolve("lipsync", "musetalk-v15")
+        eng.resolve("lipsync", "echomimic-v3-flash")
     assert e.value.code == "runtime_missing" and "lip sync engine" in e.value.message
     eng, _, _ = lipsync_engine(tmp_path, monkeypatch, installed=True)
     assert {m["state"] for m in eng.models("lipsync")} == {"ready"}
-    assert eng.resolve("lipsync", None).id == "musetalk-v15"
+    assert eng.resolve("lipsync", None).id == "echomimic-v3-flash"
 
 
 async def test_the_engine_holds_the_lip_sync_slot_and_passes_the_located_files(

@@ -86,7 +86,7 @@ function EngineCard({
       ) : (
         <>
           <p className="text-muted-foreground">
-            Lip sync runs here, with no account and nothing sent away. It needs MuseTalk's program
+            Lip sync runs here, with no account and nothing sent away. It needs EchoMimic's program
             and its environment ({formatBytes(plan.bytes)}); the model's files are fetched in the
             Model hub afterwards. Setting up takes a few minutes.
           </p>

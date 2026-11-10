@@ -106,15 +106,15 @@ Windows and Linux with a graphics card, where the pinned audio.cpp build runs on
 ### Lip sync (stage V5)
 
 A picture and a voice make a video of the face saying it. The model is chosen from the list like every other
-(MuseTalk 1.5, MIT, the only one so far); the engine is an **optional component**, not part of the app.
+(EchoMimic v3 flash, the only one; it replaced MuseTalk on 2026-11-10, ADR-0066); the engine is an **optional component**, not part of the app.
 
 | Piece | What it does |
 |---|---|
-| The engine | MuseTalk's code at an exact commit and a hashed package lock (`musetalk_pins.json`, `lipsync_server/musetalk.lock.txt`), set up on a click after the size (about 2.1 GB on disk) is shown, with the app's own `uv`, into `<app data>/engine/musetalk` (its own environment: torch must not touch the engine's). Apple-silicon Macs only for now (the one measured). The engine does this itself, like the speech runtime, not the shell like the image engine. A copy set up by hand is used as it is when `WASIFYAI_MUSETALK_HOME` names it (development) |
-| The weights | the catalogue entry `musetalk-v15` (11 files, 4.2 GB: MuseTalk 1.5, the VAE, whisper-tiny, the face parser, ResNet18, and the face detector and landmark model) fetched in Models after the person sees their size; when the server starts they are linked to where MuseTalk reads them |
-| The process | one `uvicorn` server on loopback (`lipsync_server/`), started on demand, stopped when something else takes the memory (it is its own owner of the one slot, about 12 GB) and when a run is cancelled |
+| The engine | EchoMimic v3's code at an exact commit and a hashed package lock (the `lipsync` part of `components/manifests/<platform>.yaml`, `lipsync_server/echomimic.lock.txt`), set up on a click after the size is shown, with the app's own `uv`, into `<app data>/engine/lipsync` (its own environment: torch must not touch the engine's). Apple-silicon Macs only for now (the one measured). The engine does this itself, like the speech runtime, not the shell like the image engine. A copy set up by hand is used as it is when `WASIFYAI_LIPSYNC_HOME` names it (development: `src/` the code, `venv/`, `weights/`) |
+| The weights | the catalogue entry `echomimic-v3-flash` (7 files, 9.4 GB: the EchoMimic v3 flash-pro transformer and its config, the Wan 2.1 VAE and CLIP image encoder, chinese-wav2vec2-base) fetched in Models after the person sees their size; when the server starts they are linked under `weights/`. The two fixed prompts ship encoded in `lipsync_server/echomimic_prompts.safetensors`, so the 11 GB text encoder is not needed |
+| The process | one `uvicorn` server on loopback (`lipsync_server/`), started on demand, stopped when something else takes the memory (it is its own owner of the one slot, about 15 GB) and when a run is cancelled |
 | The picture | added with `POST /pictures`: checked, flattened to a clean PNG (no location or camera data), at most 1024 pixels; kept until a clip uses it, or for a day |
-| The voice | words (made into speech here with the default model, and kept as a speech), or a recording from the library; at most 5 minutes |
+| The voice | words (made into speech here with the default model, and kept as a speech), or a recording from the library; at most 60 seconds (the model's `max_voice_s`) |
 | The clip | `clips` in `voice.db` (schema 5): the video, the picture (its poster), what the voice came from, the person's answers, the time taken; `GET/PATCH/DELETE /clips`, `/clips/{id}/download`; My creations search finds it by title and words (kind `lipsync`) |
 
 **Consent and the mark (ADR-0044, ADR-0066 decision 8).** Before anything is made the person says **what the picture
@@ -126,8 +126,8 @@ dark plate in the bottom-left corner of every frame, drawn by the server, and a 
 must say `mark: required` or it does not load, and there is no switch. The system safeguards of ADR-0047 (classifier,
 moderation, daily limit) are not part of the desktop; consent and the mark are.
 
-Not built: other lip sync models (InfiniteTalk, LivePortrait, the CUDA `liveavatar`), video as the input, moving
-the head (MuseTalk redraws the mouth and keeps the head still), several faces, a CUDA lock for Windows and Linux, and
+Not built: other lip sync models (InfiniteTalk, LivePortrait, the CUDA `liveavatar`), video as the input,
+faster settings for long voices (a clip costs about 14 seconds of work per second on a 64 GB M5 Pro), several faces, a CUDA lock for Windows and Linux, and
 languages: nothing was tested beyond English.
 
 ### Dubbing (stage V6)

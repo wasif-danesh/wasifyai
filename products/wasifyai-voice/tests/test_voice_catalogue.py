@@ -30,7 +30,7 @@ def test_every_model_has_a_descriptor_and_a_pinned_file():
             "tone-color-vc",
             "meanvc2",
             "dots-tts-edit",
-            "musetalk-v15",
+            "echomimic-v3-flash",
         }
     )
     for m in RAW.values():

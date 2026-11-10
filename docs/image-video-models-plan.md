@@ -155,7 +155,10 @@ own files through `MODELS_PATH`. Taught through the app's own trainer, 10 steps,
 klein 9B, Qwen-Image 2.1 and HiDream-O1 have recipes not run here (their training files, 35 GB and more each, were
 not fetched); Ideogram 4 is NVIDIA only. **klein 9B, 2026-11-08:** its training files (`black-forest-labs/FLUX.2-klein-base-9B`)
 answer 403 with the saved token, while the model file (`FLUX.2-klein-9B`) is open to it: the owner has to accept that
-repo's terms on huggingface.co before the recipe can run. ADR-0073 has what the runs needed (offline loading, FLUX.3's base weights
+repo's terms on huggingface.co before the recipe can run. **2026-11-09:** the terms are accepted and the files
+(34.9 GB) were fetched through the app in 60 minutes; the 9B base needed the plain-download retry (ADR-0073
+"Training files"). A style is taught on 9B through the app (30.1 GB with gradient checkpointing, about 65 minutes for
+21 pictures) and carries to new scenes in Create at strength 1.5 (ADR-0073 "klein 9B measured"). ADR-0073 has what the runs needed (offline loading, FLUX.3's base weights
 and text encoder, a Mac position encoding).
 
 **MV4 done.** MiniMax-H3 picture to video (`minimax-h3-i2v`): a 5 s clip from a square fox picture, 640x640 with

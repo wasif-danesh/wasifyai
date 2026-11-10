@@ -505,7 +505,18 @@ home = Path(os.environ["HF_HOME"]) / "hub"
 home.mkdir(parents=True, exist_ok=True)
 (home / "got.json").write_text(sys.argv[1] + "@" + sys.argv[2] + " " + sys.argv[3])
 (home / "token").write_text(os.environ.get("HF_TOKEN", "none"))
-sys.exit(1 if sys.argv[1] == "org/gated" else 0)
+xet = os.environ.get("HF_HUB_DISABLE_XET") != "1"
+(home / ("tries-" + sys.argv[1].replace("/", "-"))).open("a").write("xet " if xet else "http ")
+if sys.argv[1] == "org/gated":
+    print("huggingface_hub.errors.GatedRepoError: 403 Client Error. Cannot access gated repo")
+    sys.exit(1)
+if sys.argv[1] == "org/xet-broken" and xet:
+    print("RuntimeError: Task error: Unable to parse string as hex hash value (got '****')")
+    sys.exit(1)
+if sys.argv[1] == "org/broken":  # a failure that is not about access, with a size that has 403 in it
+    print("Downloading: 1.403G of 18.2G")
+    print("OSError: No space left on device")
+    sys.exit(1)
 """
 
 
@@ -548,8 +559,54 @@ async def test_a_gated_repo_that_cannot_be_fetched_says_what_to_do(
     assert trainer._hub_task is not None  # noqa: SLF001
     await trainer._hub_task  # noqa: SLF001
     out = trainer.hub_state()
-    assert out["state"] == "error" and out["error"]
+    assert out["state"] == "error" and "terms accepted" in out["error"]
     assert trainer.hub_missing(gated.id)
+
+
+def test_a_fetchs_progress_counts_each_file_once_not_its_link_too(tmp_path: Path):
+    """The Hugging Face cache keeps a file under blobs/ and links it from snapshots/."""
+    repo = tmp_path / "hub" / "models--org--m"
+    (repo / "blobs").mkdir(parents=True)
+    (repo / "snapshots" / "r1").mkdir(parents=True)
+    (repo / "blobs" / "abc").write_bytes(b"x" * 1000)
+    (repo / "snapshots" / "r1" / "model.safetensors").symlink_to(repo / "blobs" / "abc")
+    assert dt.folder_bytes(tmp_path / "hub") == 1000
+
+
+def hub_base(monkeypatch: pytest.MonkeyPatch, repo: str) -> pb.PictureBase:
+    base = pb.PictureBase(
+        id="test-" + repo.split("/")[1], title="Some", model="s", use_with="Some", arch="x",
+        name_or_path=repo, hub=(pb.HubFiles(repo, "r1", bytes=10),),
+    )  # fmt: skip
+    monkeypatch.setitem(pb.PICTURE_BASES, base.id, base)
+    return base
+
+
+async def test_a_fetch_the_hubs_fast_path_breaks_is_done_again_as_a_plain_download(
+    home: Path, hub_recipe, monkeypatch
+):
+    base = hub_base(monkeypatch, "org/xet-broken")
+    trainer = dt.AiToolkitTrainer(home / "data", models_dir=home / "models")
+    trainer.fetch_hub(base.id, 10)
+    assert trainer._hub_task is not None  # noqa: SLF001
+    await trainer._hub_task  # noqa: SLF001
+    assert trainer.hub_state()["state"] == "done"
+    tries = home / "models" / "huggingface" / "hub" / "tries-org-xet-broken"
+    assert tries.read_text() == "xet http "
+    assert trainer.hub_missing(base.id) == []
+
+
+async def test_a_failed_fetch_is_not_blamed_on_the_terms_without_the_hubs_word_for_it(
+    home: Path, hub_recipe, monkeypatch
+):
+    base = hub_base(monkeypatch, "org/broken")
+    trainer = dt.AiToolkitTrainer(home / "data", models_dir=home / "models")
+    trainer.fetch_hub(base.id, 10)
+    assert trainer._hub_task is not None  # noqa: SLF001
+    await trainer._hub_task  # noqa: SLF001
+    out = trainer.hub_state()
+    assert out["state"] == "error" and "terms" not in out["error"]
+    assert "No space left on device" in out["error"]
 
 
 def test_a_recipe_for_nvidia_only_says_so_on_a_mac(home: Path, monkeypatch: pytest.MonkeyPatch):

@@ -164,17 +164,27 @@ KLEIN_9B = PictureBase(
             336_211_292,
         ),
     ),
-    need_gb=48.0,
+    # 30.1 GB held by a 294-step style run through the app at 512 pixels with gradient checkpointing; without it
+    # the trainer held 76 GB on the owner's 64 GB Mac and swapped, two minutes a step (2026-11-09)
+    need_gb=32.0,
     sides=_SIDES,
-    seconds_per_step={512: 9.0},
+    # 294 steps in 68 minutes, the model load and the sample pictures included, on the owner's M5 Pro, 64 GB
+    # (2026-11-09)
+    seconds_per_step={512: 13.9},
     presets=_PRESETS,
-    learning_rate=_RATE,
+    # a style as on klein 4B, 4e-4 with shifted noise levels: 21 collage pictures at 1e-4 with "weighted" for 294 steps
+    # drew torn paper in the trainer's own samples but only photographs in Create's 9B workflow; 4e-4 with "shift"
+    # put new scenes on torn card at strength 1.0 and drew three of four as full collage at 1.5, photographs without
+    # the word (2026-11-09)
+    learning_rate={**_RATE, "style": 4e-4},
     quantize="convrot8",
     model_kwargs={"match_target_res": False},
+    gradient_checkpointing=True,
     train_fields={"timestep_type": "weighted"},
-    measured=False,
+    kind_train_fields={"style": {"timestep_type": "shift"}},
+    measured=True,
     note="Sharper than klein 4B and slower to teach. Learns a character, a style or an object from 15 to 25 pictures. "
-    + _GUESS,
+    "A style shows most at a strength of 1.5.",
 )
 
 FLUX3_KLEIN = PictureBase(

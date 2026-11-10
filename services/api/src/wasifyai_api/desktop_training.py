@@ -14,6 +14,7 @@ screen keeps them; nothing is downloaded during a run."""
 import asyncio
 import contextlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -47,6 +48,8 @@ from wasifyai_api.training_setup import (
     picture_supported,
     venv_python,
 )
+
+log = logging.getLogger(__name__)
 
 # starts `run.py` with klein reading the text encoder folder the config names (AI Toolkit ignores
 # it); run with -P so this folder's modules (`logging.py`) do not shadow the standard library's
@@ -103,6 +106,10 @@ HUB_FETCH = (
 )
 
 
+# what huggingface_hub prints when the token or the repo's terms are the problem, and nothing else
+GATED_SIGNS = ("GatedRepoError", "401 Client Error", "403 Client Error", "Cannot access gated repo")
+
+
 def recipe_of(base: str) -> PictureBase | VideoBase:
     """The picture or video recipe AI Toolkit teaches `base` with; a `KeyError` when none."""
     if base in VIDEO_BASES:
@@ -116,11 +123,16 @@ def hub_marker(home: Path, files: HubFiles) -> Path:
 
 
 def folder_bytes(folder: Path) -> int:
+    """The bytes of the files in `folder`. A link is not counted: the Hugging Face cache links each
+    finished file from its snapshot, and following the links counted every file twice (a fetch
+    read "45.7 of 34.9 GB", 2026-11-09)."""
     total = 0
     for root, _, names in os.walk(folder):
         for n in names:
             with contextlib.suppress(OSError):
-                total += (Path(root) / n).stat().st_size
+                path = Path(root) / n
+                if not path.is_symlink():
+                    total += path.stat().st_size
     return total
 
 
@@ -444,25 +456,41 @@ class AiToolkitTrainer:
         env = {
             k: v for k, v in os.environ.items() if not k.startswith(("VIRTUAL_ENV", "PYTHONHOME"))
         }
-        env |= {"HF_HOME": str(self.hub_home()), "PYTHONUNBUFFERED": "1"}
+        # no progress bars: the output is read for the reason of a failure, and a bar's byte counts
+        # ("1.403G") read as an HTTP status
+        env |= {
+            "HF_HOME": str(self.hub_home()), "PYTHONUNBUFFERED": "1",
+            "HF_HUB_DISABLE_PROGRESS_BARS": "1",
+        }  # fmt: skip
         env.pop("HF_HUB_OFFLINE", None)
         token = self.hub_token() if self.hub_token is not None else None
         if token:
             env["HF_TOKEN"] = token
+
+        async def fetch(files: HubFiles, more: dict[str, str]) -> tuple[int, str]:
+            proc = await asyncio.create_subprocess_exec(
+                str(venv_python(home)), "-P", "-c", HUB_FETCH, files.repo, files.revision,
+                json.dumps(list(files.patterns)),
+                str(self.models_root()) if files.into_models else "", cwd=str(home),
+                env=env | more, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+                stdin=asyncio.subprocess.DEVNULL,
+            )  # fmt: skip
+            out, _ = await proc.communicate()
+            return proc.returncode or 0, out.decode(errors="replace")
+
         try:
             for files in missing:
-                proc = await asyncio.create_subprocess_exec(
-                    str(venv_python(home)), "-P", "-c", HUB_FETCH, files.repo, files.revision,
-                    json.dumps(list(files.patterns)),
-                    str(self.models_root()) if files.into_models else "", cwd=str(home), env=env,
-                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-                    stdin=asyncio.subprocess.DEVNULL,
-                )  # fmt: skip
-                out, _ = await proc.communicate()
-                if proc.returncode != 0:
-                    text = out.decode(errors="replace")
+                code, text = await fetch(files, {})
+                if code != 0:
+                    # the Hub's fast path (xet) can fail where a plain download works: a gated
+                    # repo's file came back with its hash masked ("Unable to parse string as hex
+                    # hash value"; FLUX.2 klein base 9B on huggingface_hub 1.23 and hf_xet 1.8,
+                    # 2026-11-09)
+                    log.warning("fetching %s failed; once more without xet", files.repo)
+                    code, text = await fetch(files, {"HF_HUB_DISABLE_XET": "1"})
+                if code != 0:
                     log_tail = text.strip().splitlines()[-1:] or ["no output"]
-                    gated = "401" in text or "403" in text or "gated" in text.lower()
+                    gated = any(sign in text for sign in GATED_SIGNS)
                     self._hub |= {
                         "state": "error",
                         "error": (

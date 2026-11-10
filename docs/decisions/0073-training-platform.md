@@ -431,6 +431,13 @@ distilled klein as the image engine. Three picture sets: 12 pictures of one fict
   to torn paper on card (4e-4, 300 steps); at 1e-4 for 250 steps only the palette and flat shapes came, washed out. A character taught
   with `shift` (Ena, 37 pictures, 500 steps) held her in a portrait and a saree but lost her on a rainy street where the default-taught
   Ena kept her, so a character and an object keep AI Toolkit's default (backlog D32).
+- **klein 9B measured (2026-11-09).** The same 21 collage pictures through the app on `FLUX.2-klein-base-9B`. Without gradient
+  checkpointing the trainer held 76 GB on the owner's 64 GB Mac and swapped (two minutes a step); with it (now in the recipe) a
+  294-step run held 30.1 GB and took 68 minutes (13.9 s a step with the load and samples). The recipe as it was (1e-4,
+  `weighted`) drew torn paper in the trainer's own samples, but Create's 9B workflow drew photographs on four new scenes. With
+  the 4B style settings (4e-4, `shift`; 31.1 GB, 63 minutes) the new scenes sat on torn card at strength 1.0, and at 1.5 the
+  lighthouse, the station and the portrait were collage, the fruit bowl partly; without the word they stayed photographs.
+  The 9B recipe now teaches a style that way, and its card says a style shows most at 1.5. Character and object on 9B are not measured.
 
 ## Built (2026-10-25): the choice of model and method
 
@@ -657,6 +664,10 @@ graphics chip) and on NVIDIA (CUDA), on Windows and Linux too.
   first; the fetch runs `snapshot_download` in AI Toolkit's own environment into `<models>/huggingface`, with the
   person's Hugging Face token in that process only, and marks each finished repo. Runs set `HF_HOME` there and
   `MODELS_PATH` to the models folder, so AI Toolkit reuses Create's files where it can instead of a second copy.
+  **2026-11-09:** a failed fetch is tried once more as a plain download (`HF_HUB_DISABLE_XET=1`): the Hub's fast path
+  (xet) got klein base 9B's file hash masked and stopped, while a plain download worked. "Accept the terms" is said
+  only on the Hub's own access errors (`GatedRepoError`, 401 or 403 Client Error), not on any "403" in the output,
+  and the progress no longer counts the cache's links as files (it read "45.7 of 34.9 GB").
 - **Where a model is taught.** A recipe names its devices. Wan 2.2 14B, MiniMax-H3 (its text encoder is nvfp4) and
   Ideogram 4 say they can be taught only on a computer with an NVIDIA card; the others are allowed on a Mac.
 - **Offline loading.** AI Toolkit loads a repo by name, which offline means the cache's `refs/main`; a fetch at a

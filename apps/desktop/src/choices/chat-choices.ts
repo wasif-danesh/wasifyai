@@ -9,7 +9,7 @@ import type { HubApi, Variant } from "../hub";
 import type { LanguageApi, LanguageState } from "../language";
 import { type ModelsApi, downloadFraction } from "../models";
 import { CHAT_SHELF, type ChatShelfItem, recommendedChat } from "./copy";
-import { keyedId, keyedRow, leaveKey, withKeyed } from "./keyed";
+import { chooseCloud, cloudOf, cloudRows, withCloud } from "./keyed";
 import { type Step, pause, runSteps } from "./steps";
 import type { Engines } from "./types";
 
@@ -26,8 +26,6 @@ export type ChatDeps = {
 const EMBEDDING = /embed|bge-|minilm|e5-|gte-|arctic-embed/i;
 const HUB = "hub:";
 const SERVER = "server:";
-/** the row of Chat and writing on the person's own key (ADR-0095, K2) */
-export const KEYED = keyedId("chat");
 
 /** The folder the app puts a hub download in, by the engine's rule (desktop_hub.build_download). */
 export const folderOf = (repo: string) => `language/${repo.replace("/", "--")}`;
@@ -167,15 +165,16 @@ export function chatChoices(deps: ChatDeps): ChoicesApi {
   }
 
   return {
+    cloud: cloudOf(["chat"]),
     async list(): Promise<ChoiceList> {
-      const [{ state, overview, engine, shelf }, keys] = await Promise.all([
+      const [{ state, overview, engine, shelf }, cloud] = await Promise.all([
         read(),
-        deps.keys?.list().catch(() => null) ?? Promise.resolve(null),
+        cloudRows(deps.keys, "chat"),
       ]);
       const local = rows(state, shelf, engine, overview?.memory_bytes ?? null);
       return {
-        // while chat runs with the key, no model on this computer is the one in use
-        choices: withKeyed(local, keyedRow(keys, "chat")),
+        // while chat runs on a cloud model, no model on this computer is the one in use
+        choices: withCloud(local, cloud),
         diskFreeBytes: overview?.disk_free_bytes ?? null,
         memoryBytes: overview?.memory_bytes ?? null,
       };
@@ -186,8 +185,8 @@ export function chatChoices(deps: ChatDeps): ChoicesApi {
     },
 
     async choose(id) {
-      // choosing a model on this computer takes chat off the key (the key stays saved)
-      if (await leaveKey(deps.keys, "chat", id)) return;
+      // a cloud model makes chat run there; one on this computer takes chat off the cloud (the keys stay)
+      if (await chooseCloud(deps.keys, "chat", id)) return;
       const state = await deps.language.state();
       const context = state.selected?.context ?? 8192;
       if (id.startsWith(SERVER)) {

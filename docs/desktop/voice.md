@@ -112,8 +112,9 @@ A picture and a voice make a video of the face saying it. The model is chosen fr
 |---|---|
 | The engine | EchoMimic v3's code at an exact commit and a hashed package lock (the `lipsync` part of `components/manifests/<platform>.yaml`, `lipsync_server/echomimic.lock.txt`), set up on a click after the size is shown, with the app's own `uv`, into `<app data>/engine/lipsync` (its own environment: torch must not touch the engine's). Apple-silicon Macs only for now (the one measured). The engine does this itself, like the speech runtime, not the shell like the image engine. A copy set up by hand is used as it is when `WASIFYAI_LIPSYNC_HOME` names it (development: `src/` the code, `venv/`, `weights/`) |
 | The weights | the catalogue entry `echomimic-v3-flash` (7 files, 9.4 GB: the EchoMimic v3 flash-pro transformer and its config, the Wan 2.1 VAE and CLIP image encoder, chinese-wav2vec2-base) fetched in Models after the person sees their size; when the server starts they are linked under `weights/`. The two fixed prompts ship encoded in `lipsync_server/echomimic_prompts.safetensors`, so the 11 GB text encoder is not needed |
-| The process | one `uvicorn` server on loopback (`lipsync_server/`), started on demand, stopped when something else takes the memory (it is its own owner of the one slot, about 15 GB) and when a run is cancelled |
+| The process | one `uvicorn` server on loopback (`lipsync_server/`), started on demand, stopped when something else takes the memory (it is its own owner of the one slot: about 29 GB at 720p from a near-square picture, 41 GB at 720x1280) and when a run is cancelled |
 | The picture | added with `POST /pictures`: checked, flattened to a clean PNG (no location or camera data), at most 1024 pixels; kept until a clip uses it, or for a day |
+| The shape and size | as the picture (kept between 9:16 and 16:9), 9:16, 16:9, 1:1 or 4:5, at 480p or 720p on the short side (the model's `lipsync.sizes`, default 720). The engine works out the size (`lipsync_frame`) and the server crops the picture to it, centred across and 40% down; the screen shows the same crop and the size in pixels |
 | The voice | words (made into speech here with the default model, and kept as a speech), or a recording from the library; at most 60 seconds (the model's `max_voice_s`) |
 | The clip | `clips` in `voice.db` (schema 5): the video, the picture (its poster), what the voice came from, the person's answers, the time taken; `GET/PATCH/DELETE /clips`, `/clips/{id}/download`; My creations search finds it by title and words (kind `lipsync`) |
 
@@ -127,7 +128,7 @@ must say `mark: required` or it does not load, and there is no switch. The syste
 moderation, daily limit) are not part of the desktop; consent and the mark are.
 
 Not built: other lip sync models (InfiniteTalk, LivePortrait, the CUDA `liveavatar`), video as the input,
-faster settings for long voices (a clip costs about 14 seconds of work per second on a 64 GB M5 Pro), several faces, a CUDA lock for Windows and Linux, and
+faster settings that keep the face (at 720p a clip costs about 2.5 minutes of work per second of video on a 64 GB M5 Pro, 6.7 minutes in portrait; 448 px is ten times faster but changes the face), choosing where the crop is, several faces, a CUDA lock for Windows and Linux, and
 languages: nothing was tested beyond English.
 
 ### Dubbing (stage V6)

@@ -34,6 +34,8 @@ async def lipsync(
     image: UploadFile = File(...),  # noqa: B008
     audio: UploadFile = File(...),  # noqa: B008
     fps: int = Form(25),
+    width: int = Form(0),
+    height: int = Form(0),
 ) -> Response:
     pic, voice = await image.read(), await audio.read()
     if pic == b"noface":
@@ -42,7 +44,7 @@ async def lipsync(
         raise HTTPException(500, "the lip sync could not be made")
     if pic == b"slow":
         await asyncio.sleep(60)
-    note = {"fps": fps, "pic": len(pic), "voice": len(voice)}
+    note = {"fps": fps, "pic": len(pic), "voice": len(voice), "width": width, "height": height}
     await asyncio.to_thread(Path("last.json").write_text, json.dumps(note))
     state["loaded"] = True
-    return Response(mp4(640, 480), media_type="video/mp4")
+    return Response(mp4(width or 640, height or 480), media_type="video/mp4")

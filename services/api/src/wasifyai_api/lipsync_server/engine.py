@@ -2,10 +2,11 @@
 
 The whole picture moves with the voice: head, eyes and mouth. This file wraps EchoMimic's modules
 (`ECHOMIMIC_DIR`, the pinned source) with the settings measured on an Apple-silicon Mac
-(`docs/spikes/lipsync-echomimic-v3-s1.md`): about 448 px, 8 steps, UniPC, TeaCache 0.2 after 2
-steps, bf16. A voice is made in windows of 81 frames; each window starts from the last frame of
-the one before, and every frame is matched to the picture's colour so the face does not drift
-paler.
+(`docs/spikes/lipsync-echomimic-v3-s1.md`, "Size and the face"): about 768 px, 8 steps, UniPC,
+TeaCache 0.1 after 5 steps, bf16, as EchoMimic's own flash script. A smaller size is about ten times
+faster but changes the face (slimmer, smoother, younger) within the first window. A voice is
+made in windows of 81 frames; each window starts from the last frame of the one before, and every
+frame is matched to the picture's colour so the face does not drift paler.
 
 It differs from EchoMimic's `infer_flash.py` in these ways, all here and none in their code:
 - the prompts are fixed and shipped already encoded (`echomimic_prompts.safetensors`,
@@ -32,11 +33,13 @@ import numpy as np
 import torch
 
 # the side of a square of the same area as the video
-SIZE = int(os.environ.get("LIPSYNC_SIZE", "448"))
+SIZE = int(os.environ.get("LIPSYNC_SIZE", "768"))
+# where a crop to another shape is centred, across and down: a face is usually in the upper part
+CROP_CENTRE = (0.5, 0.4)
 FRAMES = 81  # frames per window (3.24 s at 25 fps), as the model was trained
 STEPS = 8
-TEACACHE = 0.2
-FORCED_STEPS = 2  # steps TeaCache always computes
+TEACACHE = 0.1
+FORCED_STEPS = 5  # steps TeaCache always computes
 FPS = 25  # the model's own rate
 AUDIO_GUIDANCE = 3.0
 SEED = 43
@@ -242,10 +245,15 @@ class Engine:
         idx = torch.arange(total).unsqueeze(1) + (torch.arange(5) - 2).unsqueeze(0)
         return emb[idx.clamp(0, emb.shape[0] - 1)], total
 
-    def generate(self, picture: bytes, voice_path: str, fps: int = FPS) -> bytes:
+    def generate(
+        self, picture: bytes, voice_path: str, fps: int = FPS, size: tuple[int, int] = (0, 0)
+    ) -> bytes:
+        """The talking video as an MP4. `size` is the video's width and height: the picture is
+        cropped to that shape, keeping its top part where a face usually is, then scaled. (0, 0)
+        keeps the picture's shape at about SIZE x SIZE pixels."""
         if fps != FPS:
             raise ValueError(f"EchoMimic makes {FPS} frames a second")
-        from PIL import Image
+        from PIL import Image, ImageOps
 
         with self._lock, torch.no_grad():
             self.load()
@@ -253,7 +261,11 @@ class Engine:
             if bgr is None:
                 raise NoFace
             ref = Image.fromarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
-            w, h = _video_size(*ref.size)
+            if size[0] and size[1]:
+                w, h = size
+                ref = ImageOps.fit(ref, (w, h), Image.LANCZOS, centering=CROP_CENTRE)
+            else:
+                w, h = _video_size(*ref.size)
             target = _lab_stats(np.array(ref.resize((w, h), Image.LANCZOS)))
             emb, total = self._audio(voice_path)
             if total < 5:

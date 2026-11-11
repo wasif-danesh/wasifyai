@@ -1,9 +1,10 @@
 """Images and video on the person's own key (ADR-0095, stage K3).
 
-`KeyedMediaRouter` is the desktop worker's router: a job of a product set to "With my key" in
-Settings › Your keys runs on that provider (fal.ai, `FalRunner`) with that key; every other job runs
-where it always did (the computer's own ComfyUI). It is asked again for every job, so a change in
-Settings applies to the next picture or clip."""
+`KeyedMediaRouter` is the desktop worker's router: a job of a product set to a cloud model in the
+picker's Cloud tab runs on that provider (fal.ai: `FalRunner`; WaveSpeed and Runware:
+`CloudImageRunner`) with the key saved in Settings › Your keys; every other job runs where it
+always did (the computer's own ComfyUI). It is asked again for every job, so a change in the
+picker applies to the next picture or clip."""
 
 from typing import Any
 
@@ -35,11 +36,16 @@ class KeyedMediaRouter:
     async def resolve(self, job: JobRequest) -> Any:
         product = PRODUCT_OF.get(job.product_id)
         route = await self._keys.route(product) if product else None
-        if route is None or route.provider.id != "fal":
+        if route is None or route.provider.id not in ("fal", "wavespeed", "runware"):
             return self._local
         # the media worker is the desktop's (an extra of the API): imported where it runs
-        from wasifyai_media_worker.backends import FalRunner
+        from wasifyai_media_worker.backends import CloudImageRunner, FalRunner
 
-        return FalRunner(
-            route.key, route.model, self._http, self._timeout, self._poll, route.base_url
-        )
+        if route.provider.id == "fal":
+            return FalRunner(
+                route.key, route.model, self._http, self._timeout, self._poll, route.base_url
+            )
+        return CloudImageRunner(
+            route.provider.id, route.key, route.model, self._http, self._timeout, self._poll,
+            route.base_url,
+        )  # fmt: skip

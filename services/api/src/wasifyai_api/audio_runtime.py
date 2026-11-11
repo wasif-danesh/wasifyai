@@ -902,7 +902,7 @@ class AudioEngine:
         entry = next(e for e in self._entries() if e.id == model.id)
         files = {f.name: self._models.locate(f) for f in entry.files}
         hold = self.slot.hold("lipsync") if self.slot is not None else contextlib.nullcontext()
-        async with hold:  # EchoMimic takes about 15 GB: one big model at a time
+        async with hold:  # EchoMimic takes about 29 GB: one big model at a time
             return await sidecar.generate(  # type: ignore[no-any-return]
                 model, req, picture, voice, {k: v for k, v in files.items() if v is not None}
             )

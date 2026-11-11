@@ -201,13 +201,20 @@ deployment-level choice.
   replaced. **The lip sync model is EchoMimic v3 flash** (`antgroup/echomimic_v3`, on Wan2.1-Fun-V1.1-1.3B-InP);
   MuseTalk is removed from the catalogue, the component and the code. (a) It moves the whole head, the eyes and the
   mouth, and works on drawings, where MuseTalk only redrew the mouth; (b) it is about three times slower: on a 64 GB
-  M5 Pro Mac, through the app's installer and sidecar, 30 seconds to load, then about 14 seconds of work per
-  second of video for a 9.4 second voice (19 for a short 5.7 second one, which still costs a whole window), and
-  about 15 GB of memory; (c) the settings are the fast
-  ones of S1: 448 pixel area, 8 steps, TeaCache 0.2 after two steps, 81-frame windows chained from the last frame,
-  each frame's colour matched to the picture; (d) its fixed prompts are shipped encoded
+  M5 Pro Mac about 150 to 160 seconds of work per second of video and about 29 GB of memory; (c) the settings are EchoMimic's
+  own: 768 pixel area, 8 steps, TeaCache 0.1 after five steps, 81-frame windows chained from the last frame, each
+  frame's colour matched to the picture. The faster settings of S1 (448, TeaCache 0.2 after two steps, ten times
+  faster) were built first and dropped the same day: they changed the face within the first window, and the owner
+  chose quality over speed; (d) its fixed prompts are shipped encoded
   (`lipsync_server/echomimic_prompts.safetensors`, made by `make_prompts.py`), so the 11 GB text encoder is never
   downloaded or loaded; (e) the Mac fixes (time embedding and rotary table without float64 or complex numbers on the
   GPU, autocast on MPS) live in our `lipsync_server/engine.py`, the upstream code is used unchanged at a pinned
   commit; (f) the longest voice is 60 seconds and the catalogue entry is `echomimic-v3-flash` (7 files, 9.4 GB);
   (g) Apple-silicon Macs only, as before.
+- **Lip sync shape and size (owner, 2026-11-11; `docs/spikes/lipsync-echomimic-v3-s1.md`, "Shape and size"):** the
+  person chooses the video's shape and size. (a) A lip sync descriptor lists the short sides it makes
+  (`lipsync.sizes`, with `default_size`) in place of `max_side`; EchoMimic makes 480p and 720p. (b) The shapes are
+  the same for every model: as the picture (kept between 9:16 and 16:9), 9:16, 16:9, 1:1, 4:5. (c) `check_lipsync`
+  works out the width and height (`lipsync_frame`); the sidecar crops the picture to them, centred across and 40%
+  down, so any lip sync model takes the same request. (d) 720x1280 measured 403 seconds of work per second of video
+  and 41 GB, so `approx_ram_gb` is 41 and the wait is 800 seconds per second of voice.

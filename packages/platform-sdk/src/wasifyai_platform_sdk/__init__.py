@@ -145,6 +145,7 @@ from wasifyai_platform_sdk.usage import InMemoryUsageRecorder, UsageEvent, Usage
 from wasifyai_platform_sdk.usage_postgres import PostgresUsageRecorder
 from wasifyai_platform_sdk.usage_queries import start_of_day_utc, sum_usage
 from wasifyai_platform_sdk.voice_models import (
+    LIPSYNC_SHAPES,
     ConvertRequest,
     LipSyncRequest,
     LipSyncResult,
@@ -174,6 +175,7 @@ from wasifyai_platform_sdk.voice_models import (
     check_speech_edit,
     check_transcribe,
     edit_markup,
+    lipsync_frame,
     parse_voice_model,
 )
 
@@ -181,6 +183,8 @@ __all__ = [
     "LipSyncRequest",
     "LipSyncResult",
     "check_lipsync",
+    "lipsync_frame",
+    "LIPSYNC_SHAPES",
     "PICTURE_SLOTS",
     "input_image_name",
     "UPLOAD_CREATED",

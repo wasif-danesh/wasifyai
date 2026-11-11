@@ -1,5 +1,7 @@
-"""The person's own provider keys (ADR-0095, stage K1): saved once tested, kept in the secret store
-under `keys.<product>`, never answered back, copied inside the store, removed with the settings."""
+"""The person's own provider keys (ADR-0095; amendment of 2026-11-11): keys per product and
+provider, saved once tested, kept in the secret store under `keys.<product>.<provider>`, never
+answered back; the picker's Cloud tab lists the models of each provider with a key and sets
+`use`."""
 
 import httpx
 import pytest
@@ -7,7 +9,16 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from wasifyai_api import own_keys
 from wasifyai_api.identity import get_identity
-from wasifyai_api.own_keys import OwnKeysService, Provider, Tried, try_fal, try_text
+from wasifyai_api.own_keys import (
+    SETTINGS,
+    OwnKeysService,
+    Provider,
+    Tried,
+    try_fal,
+    try_runware,
+    try_text,
+    try_wavespeed,
+)
 from wasifyai_api.services import ApiServices
 from wasifyai_api.settings_store import InMemorySettingsStore
 from wasifyai_platform_sdk import Identity, InMemorySecretStore
@@ -52,130 +63,193 @@ def rows(body: dict) -> dict[str, dict]:
     return {p["id"]: p for p in body["products"]}
 
 
-def test_every_product_starts_on_this_computer_and_the_providers_are_listed():
+def test_every_product_starts_with_no_keys_and_offers_its_providers():
     c, _, _ = rig()
     body = c.get("/desktop/keys").json()
-    assert list(rows(body)) == ["chat", "images", "video", "voice", "model3d"]
-    assert all(p["mode"] == "here" and not p["key_saved"] for p in body["products"])
-    by = {p["id"]: p for p in body["providers"]}
-    assert by["openrouter"]["kind"] == "text" and by["fal"]["kind"] == "media"
-    assert by["compatible"]["needs_base"] and not by["openrouter"]["needs_base"]
-    assert rows(body)["images"]["models"] == ["fal-ai/flux-2"] and body["can_save"] is True
+    assert list(rows(body)) == [
+        "chat", "images", "video", "voice", "music", "sfx", "lipsync", "model3d",
+    ]  # fmt: skip
+    assert all(p["keys"] == [] and p["use"] is None for p in body["products"])
+    by = rows(body)
+    assert by["images"]["providers"] == ["fal", "wavespeed", "runware"]
+    assert by["lipsync"]["providers"] == ["fal", "wavespeed"]
+    assert by["video"]["providers"] == ["fal"]
+    assert by["chat"]["providers"][:3] == ["fal", "wavespeed", "runware"]
+    assert by["chat"]["providers"][-1] == "compatible"
+    providers = {p["id"]: p for p in body["providers"]}
+    assert providers["compatible"]["needs_base"] and not providers["fal"]["needs_base"]
+    assert body["can_save"] is True
 
 
-def test_a_key_is_tested_saved_in_the_store_and_never_answered_back():
+def test_a_key_is_tested_saved_per_provider_and_never_answered_back():
     c, secrets, testers = rig()
-    choice = {"mode": "key", "provider": "openrouter", "model": "openai/gpt-4o-mini", "key": GOOD}
-    r = c.put("/desktop/keys/chat", json=choice)
+    r = c.put("/desktop/keys/lipsync/keys/fal", json={"key": GOOD})
     assert r.status_code == 200, r.text
     assert GOOD not in r.text  # the key is never in an answer
-    chat = rows(r.json())["chat"]
-    assert chat["mode"] == "key" and chat["state"] == "ok" and chat["key_saved"]
-    assert (chat["provider"], chat["model"]) == ("openrouter", "openai/gpt-4o-mini")
-    assert secrets.values == {"keys.chat": GOOD}
-    assert testers.calls == [
-        ("openrouter", "openai/gpt-4o-mini", GOOD, own_keys.PROVIDERS["openrouter"].base_url)
-    ]
+    c.put("/desktop/keys/lipsync/keys/wavespeed", json={"key": GOOD + "-ws"})
+    lipsync = rows(c.get("/desktop/keys").json())["lipsync"]
+    assert [(k["provider"], k["state"]) for k in lipsync["keys"]] == [
+        ("fal", "ok"), ("wavespeed", "ok"),
+    ]  # fmt: skip
+    assert lipsync["use"] is None  # saving a key chooses no model
+    assert secrets.values == {"keys.lipsync.fal": GOOD, "keys.lipsync.wavespeed": GOOD + "-ws"}
+    # media keys are tested against the provider's media API; chat ones against its text route
+    assert testers.calls[0][3] == own_keys.PROVIDERS["fal"].media_url
+    c.put("/desktop/keys/chat/keys/fal", json={"key": GOOD})
+    assert testers.calls[-1][1:] == ("google/gemini-2.5-flash", GOOD, own_keys.FAL_TEXT)
 
 
 def test_a_key_the_provider_refuses_is_not_saved_and_the_reason_is_said():
     c, secrets, _ = rig()
-    r = c.put(
-        "/desktop/keys/images",
-        json={"mode": "key", "provider": "fal", "model": "fal-ai/flux-2", "key": BAD},
-    )
+    r = c.put("/desktop/keys/images/keys/fal", json={"key": BAD})
     assert r.status_code == 422 and r.json()["detail"] == "fal.ai did not accept the key."
     assert secrets.values == {}
-    assert rows(c.get("/desktop/keys").json())["images"]["mode"] == "here"
+    assert rows(c.get("/desktop/keys").json())["images"]["keys"] == []
 
 
 def test_test_saves_nothing_and_uses_the_saved_key_when_none_is_given():
     c, secrets, testers = rig()
-    t = c.post(
-        "/desktop/keys/video/test",
-        json={"provider": "fal", "model": "fal-ai/ltx-2/text-to-video/fast", "key": GOOD},
-    )
+    t = c.post("/desktop/keys/video/keys/fal/test", json={"key": GOOD})
     assert t.json() == {"ok": True, "ms": 12, "said": None} and secrets.values == {}
-    nothing = c.post("/desktop/keys/video/test", json={"provider": "fal", "model": "m"})
+    nothing = c.post("/desktop/keys/video/keys/fal/test", json={})
     assert nothing.status_code == 422 and "Paste the key" in nothing.json()["detail"]
-    c.put("/desktop/keys/video", json={"mode": "key", "provider": "fal", "model": "m", "key": GOOD})
-    again = c.post("/desktop/keys/video/test", json={"provider": "fal", "model": "m"})
+    c.put("/desktop/keys/video/keys/fal", json={"key": GOOD})
+    again = c.post("/desktop/keys/video/keys/fal/test", json={})
     assert again.json()["ok"] and testers.calls[-1][2] == GOOD
 
 
 @pytest.mark.parametrize(
-    ("product", "body", "words"),
+    ("product", "provider", "body", "words"),
     [
-        ("chat", {"provider": "fal", "model": "x", "key": GOOD}, "can do chat"),
-        ("images", {"provider": "openai", "model": "x", "key": GOOD}, "can do images"),
-        ("chat", {"provider": "openai", "model": " ", "key": GOOD}, "Choose a model"),
-        ("chat", {"provider": "compatible", "model": "m", "key": GOOD}, "server's address"),
-        (
-            "chat",
-            {"provider": "compatible", "model": "m", "key": GOOD, "base_url": "ftp://x"},
-            "https://",
-        ),
+        ("video", "wavespeed", {"key": GOOD}, "no video models"),
+        ("images", "openai", {"key": GOOD}, "no images models"),
+        ("chat", "compatible", {"key": GOOD, "base_url": "https://x"}, "Name the model"),
+        ("chat", "compatible", {"key": GOOD, "model": "m"}, "server's address"),
+        ("chat", "compatible", {"key": GOOD, "model": "m", "base_url": "ftp://x"}, "https://"),
     ],
 )
-def test_what_cannot_be_used_is_refused_in_words(product, body, words):
+def test_what_cannot_be_used_is_refused_in_words(product, provider, body, words):
     c, _, testers = rig()
-    r = c.post(f"/desktop/keys/{product}/test", json=body)
+    r = c.post(f"/desktop/keys/{product}/keys/{provider}/test", json=body)
     assert r.status_code == 422 and words in r.json()["detail"]
     assert testers.calls == []
-    assert c.post("/desktop/keys/nope/test", json=body).status_code == 404
+    assert c.post(f"/desktop/keys/nope/keys/{provider}/test", json=body).status_code == 404
 
 
-def test_an_openai_compatible_server_keeps_its_address():
+def test_the_cloud_tab_lists_every_model_of_each_provider_with_a_key():
+    c, _, _ = rig()
+    empty = c.get("/desktop/keys/lipsync/cloud").json()
+    assert empty == {"product": "lipsync", "models": [], "has_keys": False}
+    c.put("/desktop/keys/lipsync/keys/fal", json={"key": GOOD})
+    c.put("/desktop/keys/lipsync/keys/wavespeed", json={"key": GOOD})
+    cloud = c.get("/desktop/keys/lipsync/cloud").json()
+    assert [(m["provider"], m["title"]) for m in cloud["models"]] == [
+        ("fal", "LongCat Avatar"), ("fal", "InfiniteTalk"),
+        ("wavespeed", "LongCat Avatar"), ("wavespeed", "InfiniteTalk"),
+        ("wavespeed", "InfiniteTalk Fast"),
+    ]  # fmt: skip
+    first = cloud["models"][1]
+    assert first["price"] == "$0.20 per second" and first["provider_title"] == "fal.ai"
+    assert first["works"] and not first["chosen"]
+
+
+def test_choosing_a_cloud_model_routes_the_product_and_clearing_it_keeps_the_keys():
+    c, secrets, _ = rig()
+    svc = c.app.state.services.own_keys  # type: ignore[attr-defined]
+    c.put("/desktop/keys/lipsync/keys/wavespeed", json={"key": GOOD})
+    chosen = c.put(
+        "/desktop/keys/lipsync/use",
+        json={"provider": "wavespeed", "model": "wavespeed-ai/infinitetalk"},
+    )
+    assert chosen.status_code == 200, chosen.text
+    assert [m["model"] for m in chosen.json()["models"] if m["chosen"]] == [
+        "wavespeed-ai/infinitetalk"
+    ]
+    route = svc.known("lipsync")
+    assert (route.provider.id, route.model, route.key) == (
+        "wavespeed",
+        "wavespeed-ai/infinitetalk",
+        GOOD,
+    )
+    assert route.base_url == own_keys.PROVIDERS["wavespeed"].media_url
+    use = rows(c.get("/desktop/keys").json())["lipsync"]["use"]
+    assert use["title"] == "InfiniteTalk" and use["price"].startswith("$0.03")
+    off = c.put("/desktop/keys/lipsync/use", json={"provider": None})
+    assert off.status_code == 200 and svc.known("lipsync") is None
+    assert secrets.values == {"keys.lipsync.wavespeed": GOOD}
+
+
+@pytest.mark.parametrize(
+    ("body", "status", "words"),
+    [
+        ({"provider": "fal", "model": "fal-ai/infinitalk"}, 409, "Save a fal.ai key"),
+        ({"provider": "wavespeed", "model": "fal-ai/infinitalk"}, 422, "no lip sync model"),
+        ({"provider": "openai", "model": "gpt-4o-mini"}, 422, "no lip sync models"),
+    ],
+)
+def test_a_cloud_model_needs_its_key_and_must_be_in_the_list(body, status, words):
+    c, _, _ = rig()
+    c.put("/desktop/keys/lipsync/keys/wavespeed", json={"key": GOOD})
+    r = c.put("/desktop/keys/lipsync/use", json=body)
+    assert r.status_code == status and words in r.json()["detail"]
+
+
+def test_an_openai_compatible_server_keeps_its_address_and_its_model():
     c, _, testers = rig()
-    body = {"mode": "key", "provider": "compatible", "model": "llama3",
-            "base_url": "http://192.168.1.5:8000/v1/", "key": GOOD}  # fmt: skip
-    chat = rows(c.put("/desktop/keys/chat", json=body).json())["chat"]
-    assert chat["base_url"] == "http://192.168.1.5:8000/v1"
-    assert testers.calls[-1][3] == "http://192.168.1.5:8000/v1"
+    body = {"model": "llama3", "base_url": "http://192.168.1.5:8000/v1/", "key": GOOD}
+    chat = rows(c.put("/desktop/keys/chat/keys/compatible", json=body).json())["chat"]
+    (key,) = chat["keys"]
+    assert (key["base_url"], key["model"]) == ("http://192.168.1.5:8000/v1", "llama3")
+    assert testers.calls[-1][1:] == ("llama3", GOOD, "http://192.168.1.5:8000/v1")
+    (row,) = c.get("/desktop/keys/chat/cloud").json()["models"]
+    assert (row["model"], row["provider"]) == ("llama3", "compatible")
+    c.put("/desktop/keys/chat/use", json={"provider": "compatible", "model": "llama3"})
+    route = c.app.state.services.own_keys.known("chat")  # type: ignore[attr-defined]
+    assert route.base_url == "http://192.168.1.5:8000/v1" and route.model == "llama3"
 
 
 def test_a_saved_key_that_stops_working_says_so_after_a_check():
     c, secrets, _ = rig()
-    c.put(
-        "/desktop/keys/voice",
-        json={"mode": "key", "provider": "fal", "model": "fal-ai/kokoro", "key": GOOD},
-    )
-    secrets.values["keys.voice"] = BAD  # revoked at the provider, say
-    voice = rows(c.post("/desktop/keys/voice/check").json())["voice"]
-    assert voice["state"] == "bad" and voice["said"] == "fal.ai did not accept the key."
-    assert c.post("/desktop/keys/chat/check").status_code == 422  # chat runs here
+    c.put("/desktop/keys/voice/keys/fal", json={"key": GOOD})
+    secrets.values["keys.voice.fal"] = BAD  # revoked at the provider, say
+    voice = rows(c.post("/desktop/keys/voice/keys/fal/check").json())["voice"]
+    (key,) = voice["keys"]
+    assert key["state"] == "bad" and key["said"] == "fal.ai did not accept the key."
+    assert c.post("/desktop/keys/chat/keys/openai/check").status_code == 422  # none saved
 
 
-def test_the_same_key_is_copied_inside_the_store_between_products_of_one_kind():
+def test_removing_a_key_forgets_it_and_a_model_that_used_it():
     c, secrets, _ = rig()
-    c.put(
-        "/desktop/keys/images",
-        json={"mode": "key", "provider": "fal", "model": "fal-ai/flux-2", "key": GOOD},
-    )
-    r = c.post("/desktop/keys/voice/copy", json={"source": "images"})
-    assert r.status_code == 200 and GOOD not in r.text
-    voice = rows(r.json())["voice"]
-    assert voice["key_saved"] and voice["provider"] == "fal" and voice["mode"] == "here"
-    assert secrets.values["keys.voice"] == GOOD
-    wrong = c.post("/desktop/keys/chat/copy", json={"source": "images"})
-    assert wrong.status_code == 422 and "another kind" in wrong.json()["detail"]
-    empty = c.post("/desktop/keys/model3d/copy", json={"source": "video"})
-    assert empty.status_code == 422 and "no key saved" in empty.json()["detail"]
-    # now saved with the copied key: no key need be pasted again
-    saved = c.put(
-        "/desktop/keys/voice", json={"mode": "key", "provider": "fal", "model": "fal-ai/kokoro"}
-    )
-    assert rows(saved.json())["voice"]["state"] == "ok"
+    svc = c.app.state.services.own_keys  # type: ignore[attr-defined]
+    c.put("/desktop/keys/music/keys/fal", json={"key": GOOD})
+    c.put("/desktop/keys/music/keys/runware", json={"key": GOOD})
+    c.put("/desktop/keys/music/use", json={"provider": "fal", "model": "fal-ai/elevenlabs/music"})
+    music = rows(c.delete("/desktop/keys/music/keys/fal").json())["music"]
+    assert [k["provider"] for k in music["keys"]] == ["runware"] and music["use"] is None
+    assert svc.known("music") is None and secrets.values == {"keys.music.runware": GOOD}
 
 
-def test_back_to_this_computer_keeps_the_key_and_remove_forgets_both():
-    c, secrets, _ = rig()
-    c.put("/desktop/keys/chat", json={"mode": "key", "provider": "groq", "model": "m", "key": GOOD})
-    here = rows(c.put("/desktop/keys/chat", json={"mode": "here"}).json())["chat"]
-    assert here["mode"] == "here" and here["key_saved"] and secrets.values["keys.chat"] == GOOD
-    gone = rows(c.delete("/desktop/keys/chat").json())["chat"]
-    assert gone["mode"] == "here" and not gone["key_saved"] and gone["provider"] is None
-    assert secrets.values == {}
+async def test_a_row_saved_before_keys_per_provider_is_read_as_one_key_and_its_use():
+    secrets, store = Store(), InMemorySettingsStore()
+    await store.put(SETTINGS, {
+        "chat": {"mode": "key", "provider": "fal_text", "model": "openai/gpt-4o-mini", "ok": True,
+                 "said": "", "tested_at": 1.0, "base_url": ""},
+        "images": {"mode": "here", "provider": "fal", "model": "fal-ai/flux-2", "ok": True},
+        "video": {"mode": "here"},
+    }, "desktop")  # fmt: skip
+    await secrets.put("keys.chat", GOOD)
+    await secrets.put("keys.images", GOOD)
+    svc = OwnKeysService(store, secrets, {"text": FakeProviders(), "media": FakeProviders()})
+    route = await svc.route("chat")
+    assert route is not None and (route.provider.id, route.model) == ("fal", "openai/gpt-4o-mini")
+    assert route.base_url == own_keys.FAL_TEXT
+    assert await svc.route("images") is None  # it ran on this computer; the key stays
+    assert secrets.values == {"keys.chat.fal": GOOD, "keys.images.fal": GOOD}
+    saved = await store.get(SETTINGS)
+    assert isinstance(saved, dict)
+    assert saved["images"] == {"keys": {"fal": {
+        "ok": True, "said": "", "tested_at": None, "base_url": "", "model": ""}}}  # fmt: skip
+    assert saved["video"] == {"keys": {}}
 
 
 # ---- the real testers, against fake providers ---------------------------------------------------
@@ -238,3 +312,78 @@ async def test_a_text_provider_is_asked_for_one_token(monkeypatch, status, ok, w
     assert GOOD not in tried.said
     assert str(seen[0].url) == "https://openrouter.ai/api/v1/chat/completions"
     assert seen[0].headers["authorization"] == f"Bearer {GOOD}"
+
+
+async def test_fal_ai_as_a_text_provider_sends_its_key_as_key_not_bearer(monkeypatch):
+    seen: list[httpx.Request] = []
+
+    def answer(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        return httpx.Response(200, json={
+            "id": "c", "object": "chat.completion", "created": 0, "model": "m",
+            "choices": [{"index": 0, "finish_reason": "length",
+                         "message": {"role": "assistant", "content": "OK"}}],
+        })  # fmt: skip
+
+    real = own_keys.AsyncOpenAI
+    monkeypatch.setattr(
+        own_keys,
+        "AsyncOpenAI",
+        lambda **kw: real(
+            **kw,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(answer)),  # pyright: ignore[reportArgumentType]
+        ),
+    )
+    v = own_keys.PROVIDERS["fal"]
+    assert v.text_url == own_keys.FAL_TEXT and v.host == "fal.ai"
+    tried = await try_text(v, "google/gemini-2.5-flash", GOOD, v.text_url)
+    assert tried.ok
+    assert str(seen[0].url) == "https://fal.run/openrouter/router/openai/v1/chat/completions"
+    assert seen[0].headers["authorization"] == f"Key {GOOD}"
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "ok", "words"),
+    [(200, {"data": {"balance": 1.0}}, True, ""), (401, {}, False, "did not accept"),
+     (503, {}, False, "answered 503")],
+)  # fmt: skip
+async def test_wavespeed_is_asked_for_its_balance(monkeypatch, status, body, ok, words):
+    seen: list[httpx.Request] = []
+
+    def answer(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        return httpx.Response(status, json=body)
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(
+        own_keys.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(answer))
+    )
+    v = own_keys.PROVIDERS["wavespeed"]
+    tried = await try_wavespeed(v, "", GOOD, v.media_url)
+    assert tried.ok is ok and words in tried.said
+    assert str(seen[0].url) == "https://api.wavespeed.ai/api/v3/balance"
+    assert seen[0].headers["authorization"] == f"Bearer {GOOD}"
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "ok"),
+    [(200, {"data": [{"taskType": "authentication", "connectionSessionUUID": "x"}]}, True),
+     (200, {"errors": [{"code": "invalidApiKey", "message": "Invalid API key"}]}, False),
+     (401, {}, False)],
+)  # fmt: skip
+async def test_runware_is_sent_its_authentication_task(monkeypatch, status, body, ok):
+    seen: list[httpx.Request] = []
+
+    def answer(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        return httpx.Response(status, json=body)
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(
+        own_keys.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(answer))
+    )
+    v = own_keys.PROVIDERS["runware"]
+    tried = await try_runware(v, "", GOOD, v.media_url)
+    assert tried.ok is ok
+    assert seen[0].method == "POST" and str(seen[0].url) == "https://api.runware.ai/v1"
+    assert b'"taskType":"authentication"' in seen[0].content.replace(b" ", b"")

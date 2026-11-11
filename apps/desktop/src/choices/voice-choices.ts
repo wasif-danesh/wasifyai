@@ -12,7 +12,7 @@ import type { ChoiceList, ChoicesApi, GroupId, ModelChoice } from "@wasifyai/ui"
 import type { ModelEntry, ModelsApi } from "../models";
 import { removable } from "./catalogue-choices";
 import { COPY, hostOf, plainFor } from "./copy";
-import { isKeyed, keyedRow, leaveKey, withKeyed } from "./keyed";
+import { chooseCloud, cloudOf, cloudRows, engineKeyedId, isEngineKeyed, withCloud } from "./keyed";
 import { type Step, modelStep, pause, runSteps } from "./steps";
 import type { Engines, Memory } from "./types";
 
@@ -21,8 +21,16 @@ export type VoiceChoicesDeps = {
   models: ModelsApi;
   memory: Memory;
   engines: Engines;
-  /** Settings › Your keys (ADR-0095, K4): speaking may run with the person's key */
+  /** Settings › Your keys (ADR-0095): speaking, music, sound effects and lip sync may run on cloud models */
   keys?: OwnKeysApi;
+};
+
+/** The product a voice task runs as on a cloud model (the other tasks run on this computer only). */
+const CLOUD_PRODUCT: Record<string, string> = {
+  speak: "voice",
+  music: "music",
+  sfx: "sfx",
+  lipsync: "lipsync",
 };
 
 type Context = {
@@ -143,22 +151,26 @@ async function pollInstall(
 
 export function voiceChoices(deps: VoiceChoicesDeps, group: GroupId, task?: string): ChoicesApi {
   const tasks = task ? [task] : (GROUP_TASKS[group] ?? []);
+  const products = [
+    ...new Set(tasks.map((t) => CLOUD_PRODUCT[t]).filter((p): p is string => Boolean(p))),
+  ];
   return {
+    ...(products.length && deps.keys ? { cloud: cloudOf(products) } : {}),
     async list(): Promise<ChoiceList> {
-      const speaks = tasks.includes("speak");
-      const [{ models: all, ctx, overview }, keys] = await Promise.all([
+      const [{ models: all, ctx, overview }, clouds] = await Promise.all([
         read(deps, tasks),
-        speaks && deps.keys ? deps.keys.list().catch(() => null) : Promise.resolve(null),
+        Promise.all(products.map((p) => cloudRows(deps.keys, p, engineKeyedId(p)))),
       ]);
-      // the engine lists the keyed model too (the speech screen takes it from there); here it is the keyed row
-      const models = all.filter((m) => !isKeyed(m.id));
+      // the engine lists the model in use in the cloud too (`key:lipsync`: the screens take it from there); here
+      // it is the cloud rows
+      const models = all.filter((m) => !isEngineKeyed(m.id));
       // one task has a model in use; the whole group (the Models page) shows none as in use
       const chosen = task
         ? (defaultOf(models, task, deps.memory.get(choiceKey(task)))?.id ?? null)
         : null;
       const rows = models.map((m) => voiceRow(m, tasks, ctx, chosen));
       return {
-        choices: speaks ? withKeyed(rows, keyedRow(keys, "voice")) : rows,
+        choices: withCloud(rows, clouds.flat()),
         diskFreeBytes: overview?.disk_free_bytes ?? null,
         memoryBytes: overview?.memory_bytes ?? null,
       };
@@ -167,9 +179,12 @@ export function voiceChoices(deps: VoiceChoicesDeps, group: GroupId, task?: stri
     async choose(id) {
       const { models } = await read(deps, tasks);
       const m = models.find((x) => x.id === id);
-      // choosing a model on this computer for speaking takes Voice off the key (the key stays saved)
-      if (tasks.includes("speak") && (isKeyed(id) || m?.tasks.includes("speak"))) {
-        if (await leaveKey(deps.keys, "voice", id)) return;
+      // a cloud model makes its product run there; a model on this computer takes the products of its tasks off
+      // the cloud (the keys stay)
+      for (const t of tasks) {
+        const product = CLOUD_PRODUCT[t];
+        if (!product || (m && !m.tasks.includes(t as never))) continue;
+        if (await chooseCloud(deps.keys, product, id)) return;
       }
       for (const t of tasks)
         if (!m || m.tasks.includes(t as never)) deps.memory.set(choiceKey(t), id);

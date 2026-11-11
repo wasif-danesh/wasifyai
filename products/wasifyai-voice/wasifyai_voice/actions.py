@@ -931,6 +931,12 @@ class LipSyncIn(Strict):
     end: float | None = Field(None, gt=0, le=36000, description="And to this second.")
     title: str | None = Field(None, max_length=120)
     model: str | None = Field(None, max_length=100)
+    shape: Literal["picture", "9:16", "16:9", "1:1", "4:5"] | None = Field(
+        None, description="The video's shape: the picture's own (the default), or one to crop to."
+    )
+    size: int | None = Field(
+        None, ge=256, le=2048, description="The short side of the video, as 480 for 480p."
+    )
 
     @model_validator(mode="after")
     def _one_voice(self) -> "LipSyncIn":
@@ -978,7 +984,10 @@ async def _lipsync_input(p: LipSyncIn, ctx: ActionContext) -> dict[str, Any]:
     else:
         assert p.source_kind and p.source_id
         graph |= _source(p.source_kind, p.source_id)
-    return graph | _clean({"title": p.title, "model": p.model, "start": p.start, "end": p.end})
+    return graph | _clean({
+        "title": p.title, "model": p.model, "start": p.start, "end": p.end,
+        "shape": p.shape, "size": p.size,
+    })  # fmt: skip
 
 
 async def _lipsync_check(p: LipSyncIn, ctx: ActionContext) -> None:

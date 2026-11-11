@@ -14,6 +14,7 @@ from wasifyai_platform_sdk import (
     check_speech_edit,
     check_transcribe,
     edit_markup,
+    lipsync_frame,
     parse_voice_model,
 )
 
@@ -485,7 +486,7 @@ def test_an_edit_request_is_checked_before_it_is_tagged():
 
 
 def lipsync_rules(**over):
-    return {"max_voice_s": 300, "max_side": 768, "fps": 25, **over}
+    return {"max_voice_s": 300, "sizes": [480, 720], "default_size": 720, "fps": 25, **over}
 
 
 def talker(**over):
@@ -503,7 +504,9 @@ def talker(**over):
         ({"lipsync": {}}, "declares `lipsync` rules"),
         ({"engine": "audiocpp"}, "runs as a sidecar"),
         ({"lipsync": lipsync_rules(max_voice_s=1)}, "max_voice_s"),
-        ({"lipsync": lipsync_rules(max_side=64)}, "max_side"),
+        ({"lipsync": lipsync_rules(sizes=[64])}, "sizes"),
+        ({"lipsync": lipsync_rules(sizes=[500])}, "sizes"),
+        ({"lipsync": lipsync_rules(default_size=1080)}, "default_size"),
         ({"lipsync": lipsync_rules(fps=1)}, "fps"),
     ],
 )
@@ -522,6 +525,7 @@ def test_a_lip_sync_request_needs_only_a_voice_the_model_takes():
     m = talker()
     ok = check_lipsync(m, 12.5)
     assert ok.fps == 25 and ok.voice_seconds == 12.5
+    assert (ok.width, ok.height) == (0, 0)  # no picture: the server keeps its own size
     for seconds, code in ((0.3, "too_short"), (301, "too_long"), (float("nan"), "too_short")):
         with pytest.raises(VoiceRequestError) as e:
             check_lipsync(m, seconds)
@@ -529,3 +533,32 @@ def test_a_lip_sync_request_needs_only_a_voice_the_model_takes():
     with pytest.raises(VoiceRequestError) as e:
         check_lipsync(model(), 10)
     assert e.value.code == "wrong_task"
+
+
+@pytest.mark.parametrize(
+    "picture, shape, size, frame",
+    [
+        ((1024, 924), "picture", 720, (800, 720)),  # the picture's own shape, 720 on the short side
+        ((1024, 924), "9:16", 720, (720, 1280)),
+        ((1024, 924), "16:9", 480, (848, 480)),  # 853 rounds to 16 pixels
+        ((1024, 924), "1:1", 720, (720, 720)),
+        ((1024, 924), "4:5", 720, (720, 896)),
+        ((400, 2000), "picture", 480, (480, 848)),  # a very tall picture is cropped to 9:16
+        ((3000, 500), "picture", 480, (848, 480)),  # and a very wide one to 16:9
+    ],
+)
+def test_a_lip_sync_video_has_the_shape_and_size_asked_for(picture, shape, size, frame):
+    req = check_lipsync(talker(), 10, picture=picture, shape=shape, size=size)
+    assert (req.width, req.height) == frame
+    assert lipsync_frame(picture, shape, size) == frame
+
+
+def test_a_lip_sync_shape_or_size_the_model_does_not_make_is_refused():
+    m = talker()
+    assert check_lipsync(m, 10, picture=(1000, 1000)).height == 720  # the model's default size
+    for kw, code in (({"shape": "3:1"}, "bad_shape"), ({"size": 1080}, "bad_size")):
+        with pytest.raises(VoiceRequestError) as e:
+            check_lipsync(m, 10, picture=(1000, 1000), **kw)
+        assert e.value.code == code
+    with pytest.raises(VoiceRequestError, match="480p, 720p"):
+        check_lipsync(m, 10, picture=(1000, 1000), size=1080)

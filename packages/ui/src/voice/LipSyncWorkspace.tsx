@@ -4,15 +4,18 @@ import {
   type AddedPicture,
   type AudioSource,
   type Clip,
+  type ClipShape,
   type LipSyncEngine,
   type ParsedEvent,
   type VoiceApi,
+  clipFrame,
   makeClip,
 } from "@wasifyai/client";
 import { Film, Pencil, Save, Trash2, UserRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Action } from "../components/actions-row";
 import { Button } from "../components/button";
+import { Chip } from "../components/chip";
 import { ConfirmDialog, NameDialog } from "../components/dialog";
 import { Label } from "../components/label";
 import { MakeScreen } from "../components/make-screen";
@@ -135,6 +138,22 @@ function EngineCard({
 
 const STEPS = ["Picture", "Voice", "Make"];
 
+/** The shapes a talking video can have; the picture is cropped to one, keeping its upper part. */
+export const CLIP_SHAPES: { id: ClipShape; label: string; hint: string }[] = [
+  { id: "picture", label: "As the picture", hint: "" },
+  { id: "9:16", label: "Portrait", hint: "9:16" },
+  { id: "16:9", label: "Landscape", hint: "16:9" },
+  { id: "1:1", label: "Square", hint: "1:1" },
+  { id: "4:5", label: "Social feed", hint: "4:5" },
+];
+
+/** where a crop is centred, across and down, as the engine does it (`CROP_CENTRE`) */
+const CROP_POSITION = "50% 40%";
+
+/** The work grows faster than the pixels: measured on EchoMimic at 672x592, 800x720 and 720x1280
+ * (`docs/spikes/lipsync-echomimic-v3-s1.md`, "Shape and size"). */
+const WORK_GROWTH = 1.8;
+
 /**
  * Talking videos on the one make screen (ADR-0093, stage U6): a picture and a voice make a video of the face
  * saying it. The steps are in the ask column: the picture, then the voice; the stage shows the face before
@@ -158,6 +177,8 @@ export function LipSyncWorkspace({
   const [voiceFrom, setVoiceFrom] = useState<"words" | "recording">("words");
   const [words, setWords] = useState("");
   const [source, setSource] = useState<AudioSource | null>(null);
+  const [shape, setShape] = useState<ClipShape>("picture");
+  const [size, setSize] = useState<number | null>(null);
   const [library, setLibrary] = useState<Library>({ tracks: [], speeches: [] });
   const [clips, setClips] = useState<Clip[] | null>(null);
   const [shownId, setShownId] = useState<string | null>(null);
@@ -173,6 +194,10 @@ export function LipSyncWorkspace({
 
   const chosen = models.find((m) => m.id === modelId) ?? pickModel(models, "lipsync", modelId);
   const ready = chosen?.state === "ready";
+  const sizes = chosen?.lipsync?.sizes ?? [];
+  const sizeNow =
+    size !== null && sizes.includes(size) ? size : (chosen?.lipsync?.default_size ?? null);
+  const frame = picture && sizeNow ? clipFrame(picture, shape, sizeNow) : null;
   const maxWords = 1000;
 
   const loadEngine = useCallback(
@@ -248,6 +273,8 @@ export function LipSyncWorkspace({
         {
           picture: picture.id,
           model: chosen.id,
+          shape,
+          ...(sizeNow ? { size: sizeNow } : {}),
           ...(voiceFrom === "words" ? { text: words } : { source: source ?? undefined }),
         },
         signal,
@@ -316,7 +343,11 @@ export function LipSyncWorkspace({
   }
   if (loading || engine === null) return <LoadingModels />;
 
-  const speed = chosen?.measured.speed_x;
+  const measuredAt = chosen?.lipsync?.speed_pixels;
+  const speed =
+    chosen?.measured.speed_x && frame && measuredAt
+      ? chosen.measured.speed_x / ((frame.width * frame.height) / measuredAt) ** WORK_GROWTH
+      : chosen?.measured.speed_x;
   const voiceSeconds =
     voiceFrom === "recording" && source
       ? source.kind === "track"
@@ -388,13 +419,25 @@ export function LipSyncWorkspace({
         : picture
           ? {
               kind: "result",
-              children: (
-                <img
-                  src={picture.url}
-                  alt="The face to bring to life"
-                  className="max-h-[calc(100dvh-24rem)] rounded-lg object-contain"
-                />
-              ),
+              children:
+                shape === "picture" || !frame ? (
+                  <img
+                    src={picture.url}
+                    alt="The face to bring to life"
+                    className="max-h-[calc(100dvh-24rem)] rounded-lg object-contain"
+                  />
+                ) : (
+                  // what the video keeps of the picture: the same crop as the engine's
+                  <img
+                    src={picture.url}
+                    alt="The face to bring to life, as the video will show it"
+                    style={{
+                      aspectRatio: `${frame.width} / ${frame.height}`,
+                      objectPosition: CROP_POSITION,
+                    }}
+                    className="max-h-[calc(100dvh-24rem)] max-w-full rounded-lg object-cover"
+                  />
+                ),
               caption: problem ? (
                 <p role="alert" className="m-0 text-destructive text-sm">
                   {problem}
@@ -433,7 +476,10 @@ export function LipSyncWorkspace({
         lead={lead}
         ask={
           <>
-            <EngineCard engine={engine} api={api} onChanged={loadEngine} />
+            {/* a model on the person's key needs nothing set up on this computer */}
+            {chosen?.engine !== "remote" && (
+              <EngineCard engine={engine} api={api} onChanged={loadEngine} />
+            )}
             <ModelPicker
               models={models}
               task="lipsync"
@@ -476,6 +522,51 @@ export function LipSyncWorkspace({
                 A front-facing face works best. Photos are cleaned of location and camera data.
               </p>
             </section>
+
+            <fieldset className="m-0 grid gap-2 border-0 p-0">
+              <legend className="mb-1 font-semibold text-ui-lg">Shape</legend>
+              <div className="flex flex-wrap gap-2">
+                {CLIP_SHAPES.map((s) => (
+                  <Chip
+                    key={s.id}
+                    aria-pressed={shape === s.id}
+                    disabled={working}
+                    onClick={() => setShape(s.id)}
+                  >
+                    {s.label} {s.hint ? <span className="opacity-85">{s.hint}</span> : null}
+                  </Chip>
+                ))}
+              </div>
+              <p className="m-0 text-muted-foreground text-xs">
+                Another shape crops the picture, keeping its upper part, where a face usually is.
+              </p>
+            </fieldset>
+
+            {sizes.length > 1 ? (
+              <fieldset className="m-0 grid gap-2 border-0 p-0">
+                <legend className="mb-1 font-semibold text-ui-lg">Size</legend>
+                <div className="flex flex-wrap gap-2">
+                  {sizes.map((n) => (
+                    <Chip
+                      key={n}
+                      aria-pressed={sizeNow === n}
+                      disabled={working}
+                      onClick={() => setSize(n)}
+                    >
+                      {n}p{" "}
+                      <span className="opacity-85">
+                        {n === sizes[0] ? "quicker" : n === sizes.at(-1) ? "sharper" : ""}
+                      </span>
+                    </Chip>
+                  ))}
+                </div>
+                {frame ? (
+                  <p className="m-0 text-muted-foreground text-xs">
+                    The video will be {frame.width}×{frame.height} pixels.
+                  </p>
+                ) : null}
+              </fieldset>
+            ) : null}
 
             <section className="grid gap-3" aria-label="The voice">
               <h2 className="m-0 font-semibold text-ui-lg">The voice</h2>

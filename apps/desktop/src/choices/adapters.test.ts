@@ -5,7 +5,7 @@ import type { HubApi } from "../hub";
 import type { LanguageApi, LanguageState } from "../language";
 import type { ModelEntry, ModelsApi } from "../models";
 import { CATALOGUE_GROUPS, catalogueChoices } from "./catalogue-choices";
-import { KEYED, chatChoices, fitOf, pickVariant } from "./chat-choices";
+import { chatChoices, fitOf, pickVariant } from "./chat-choices";
 import { recommendedChat } from "./copy";
 import { model3dChoices } from "./model3d-choices";
 import type { Step } from "./steps";
@@ -77,74 +77,85 @@ const overview = (models: ModelEntry[]) => ({
   download: null,
 });
 
-describe("images and video", () => {
-  const imageKey = (mode: "here" | "key") => {
-    const save = vi.fn(async () => ({}));
-    const keys = {
-      list: async () => ({
-        can_save: true,
-        providers: [
-          {
-            id: "fal",
-            title: "fal.ai",
-            kind: "media",
-            host: "fal.ai",
-            needs_base: false,
-            models: [],
-          },
-        ],
-        products: ["images", "video"].map((id) => ({
-          id,
-          title: id,
+/** A fake of the keys API: `product` has fal.ai models `models`, `inUse` the one it runs on (null: this computer). */
+function cloudKeys(product: string, models: string[], inUse: string | null) {
+  const use = vi.fn(async () => ({ product, models: [], has_keys: true }));
+  const keys = {
+    list: async () => ({
+      can_save: true,
+      providers: [],
+      products: [
+        {
+          id: product,
+          title: product,
           kind: "media",
-          mode: id === "images" ? mode : "here",
-          provider: id === "images" && mode === "key" ? "fal" : null,
-          model: id === "images" && mode === "key" ? "fal-ai/flux-2" : null,
-          base_url: null,
-          key_saved: mode === "key",
-          state: id === "images" && mode === "key" ? "ok" : "here",
-          said: null,
-          tested_at: null,
-          models: [],
-        })),
-      }),
-      save,
-    } as unknown as OwnKeysApi;
-    return { keys, save };
-  };
+          providers: ["fal"],
+          keys: [],
+          use: inUse ? { provider: "fal", model: inUse, title: inUse, price: "" } : null,
+        },
+      ],
+    }),
+    cloud: async (p: string) => ({
+      product: p,
+      has_keys: p === product,
+      models:
+        p === product
+          ? models.map((m) => ({
+              provider: "fal",
+              provider_title: "fal.ai",
+              host: "fal.ai",
+              model: m,
+              title: `Model ${m}`,
+              about: "It makes things.",
+              price: "$1 each",
+              works: true,
+              chosen: m === inUse,
+            }))
+          : [],
+    }),
+    use,
+  } as unknown as OwnKeysApi;
+  return { keys, use };
+}
 
-  it("with images on the person's key, that row is in use even with no image engine here", async () => {
+describe("images and video", () => {
+  it("with images on a cloud model, that row is in use even with no image engine here", async () => {
     const models = {
       overview: async () => overview([entry({ status: "missing", bytes_missing: 9e9 })]),
     } as unknown as ModelsApi;
-    const deps = { models, engines: engines(false), memory: memory(), keys: imageKey("key").keys };
-    const rows = (await catalogueChoices(deps, CATALOGUE_GROUPS.images).list()).choices;
-    expect(rows[0]).toMatchObject({
-      id: "key:images",
+    const { keys } = cloudKeys("images", ["fal-ai/flux-2"], "fal-ai/flux-2");
+    const deps = { models, engines: engines(false), memory: memory(), keys };
+    const api = catalogueChoices(deps, CATALOGUE_GROUPS.images);
+    expect(api.cloud?.product).toBe("Images");
+    const rows = (await api.list()).choices;
+    expect(rows.find((r) => r.place === "cloud")).toMatchObject({
+      id: "cloud:images:fal:fal-ai/flux-2",
       chosen: true,
       state: "ready",
-      title: "fal-ai/flux-2 · with your key · fal.ai",
+      title: "Model fal-ai/flux-2",
+      providerTitle: "fal.ai",
+      price: "$1 each",
     });
     expect(rows.filter((r) => r.chosen)).toHaveLength(1);
     // video follows its own setting, which is on this computer
     const video = (await catalogueChoices(deps, CATALOGUE_GROUPS.video).list()).choices;
-    expect(video.some((r) => r.id.startsWith("key:"))).toBe(false);
+    expect(video.some((r) => r.place === "cloud")).toBe(false);
   });
 
-  it("choosing a model on this computer takes images off the key", async () => {
+  it("choosing a cloud row uses it; one on this computer takes images off the cloud", async () => {
     const models = {
       overview: async () => overview([entry({ status: "ready", bytes_missing: 0 })]),
     } as unknown as ModelsApi;
-    const { keys, save } = imageKey("key");
+    const { keys, use } = cloudKeys("images", ["fal-ai/flux-2"], "fal-ai/flux-2");
     const mem = memory();
     const api = catalogueChoices(
       { models, engines: engines(true), memory: mem, keys },
       CATALOGUE_GROUPS.images,
     );
-    await api.choose("key:images");
-    expect(save).not.toHaveBeenCalled();
+    await api.choose("cloud:images:fal:fal-ai/flux-2");
+    expect(use).toHaveBeenCalledWith("images", { provider: "fal", model: "fal-ai/flux-2" });
     await api.choose(entry({}).id);
-    expect(save).toHaveBeenCalledWith("images", "here");
+    expect(use).toHaveBeenLastCalledWith("images", null);
   });
 
   it("tells the engine which model is chosen, once, so what it makes on its own uses it", async () => {
@@ -380,42 +391,9 @@ const voiceModel = (over: Partial<VoiceModelInfo> = {}): VoiceModelInfo =>
     ...over,
   }) as VoiceModelInfo;
 
-/** Settings › Your keys with one product on fal.ai (`mode` "key") or back on this computer. */
+/** Settings › Your keys with fal.ai keys for one product: its cloud rows, and the one in use (or none). */
 function onKey(product: string, model: string, mode: "here" | "key" = "key") {
-  const save = vi.fn(async () => ({}));
-  const keys = {
-    list: async () => ({
-      can_save: true,
-      providers: [
-        {
-          id: "fal",
-          title: "fal.ai",
-          kind: "media",
-          host: "fal.ai",
-          needs_base: false,
-          models: [],
-        },
-      ],
-      products: [
-        {
-          id: product,
-          title: product,
-          kind: "media",
-          mode,
-          provider: "fal",
-          model,
-          base_url: null,
-          key_saved: true,
-          state: mode === "key" ? "ok" : "here",
-          said: null,
-          tested_at: null,
-          models: [],
-        },
-      ],
-    }),
-    save,
-  } as unknown as OwnKeysApi;
-  return { keys, save };
+  return cloudKeys(product, [model], mode === "key" ? model : null);
 }
 
 describe("speech and listening", () => {
@@ -483,14 +461,14 @@ describe("speech and listening", () => {
       recommended: ["speak"],
       state: "ready",
     });
-    // the engine lists the keyed model for the speech screen; the picker shows the keyed row instead
+    // the engine lists the cloud model for the speech screen; the picker shows the cloud rows instead
     const keyed = voiceModel({
       id: "key:voice",
       tasks: ["speak"],
       state: "ready",
       engine: "remote",
     });
-    const { keys, save } = onKey("voice", "fal-ai/kokoro");
+    const { keys, use } = onKey("voice", "fal-ai/kokoro");
     const api = voiceChoices(
       { voice: voice([keyed, local]), models, memory: memory(), engines: engines(), keys },
       "voice",
@@ -498,28 +476,52 @@ describe("speech and listening", () => {
     );
     const rows = (await api.list()).choices;
     expect(rows.map((r) => [r.id, r.chosen])).toEqual([
-      ["key:voice", true],
       ["kokoro-82m", false],
+      ["cloud:voice:fal:fal-ai/kokoro", true],
     ]);
-    expect(rows[0]?.title).toBe("fal-ai/kokoro · with your key · fal.ai");
-    expect(rows[0]?.plain).toContain("the words it speaks");
-    await api.choose("key:voice");
-    expect(save).not.toHaveBeenCalled();
-    await api.choose("kokoro-82m"); // a model on this computer takes Voice off the key
-    expect(save).toHaveBeenCalledWith("voice", "here");
+    // the screen knows it by the engine's id while it is in use
+    expect(rows[1]?.engineId).toBe("key:voice");
+    expect(rows[1]?.plain).toContain("the words it speaks");
+    await api.choose("cloud:voice:fal:fal-ai/kokoro");
+    expect(use).toHaveBeenCalledWith("voice", { provider: "fal", model: "fal-ai/kokoro" });
+    await api.choose("kokoro-82m"); // a model on this computer takes Voice off the cloud
+    expect(use).toHaveBeenLastCalledWith("voice", null);
   });
 
   it("listening and the other voice tools do not follow the Voice key", async () => {
-    const { keys, save } = onKey("voice", "fal-ai/kokoro");
+    const { keys, use } = onKey("voice", "fal-ai/kokoro");
     const ready = [voiceModel({ id: "a", state: "ready" })];
     const api = voiceChoices(
       { voice: voice(ready), models, memory: memory(), engines: engines(), keys },
       "listening",
       "transcribe",
     );
-    expect((await api.list()).choices.some((r) => r.id.startsWith("key:"))).toBe(false);
+    expect(api.cloud).toBeUndefined();
+    expect((await api.list()).choices.some((r) => r.place === "cloud")).toBe(false);
     await api.choose("a");
-    expect(save).not.toHaveBeenCalled();
+    expect(use).not.toHaveBeenCalled();
+  });
+
+  it("lip sync lists its cloud models and a cloud model of music is chosen for music", async () => {
+    const { keys, use } = cloudKeys(
+      "lipsync",
+      ["fal-ai/infinitalk", "fal-ai/longcat-single-avatar/image-audio-to-video"],
+      null,
+    );
+    const local = voiceModel({ id: "echomimic", tasks: ["lipsync"], state: "ready" });
+    const api = voiceChoices(
+      { voice: voice([local]), models, memory: memory(), engines: engines(), keys },
+      "faces",
+      "lipsync",
+    );
+    expect(api.cloud?.product).toBe("Lip sync");
+    const rows = (await api.list()).choices;
+    expect(rows.filter((r) => r.place === "cloud").map((r) => [r.id, r.engineId])).toEqual([
+      ["cloud:lipsync:fal:fal-ai/infinitalk", "key:lipsync"],
+      ["cloud:lipsync:fal:fal-ai/longcat-single-avatar/image-audio-to-video", "key:lipsync"],
+    ]);
+    await api.choose("cloud:lipsync:fal:fal-ai/infinitalk");
+    expect(use).toHaveBeenCalledWith("lipsync", { provider: "fal", model: "fal-ai/infinitalk" });
   });
 });
 
@@ -536,8 +538,8 @@ describe("3D", () => {
   const api3d = (c: ReturnType<typeof component>) =>
     ({ component: async () => c }) as unknown as Parameters<typeof model3dChoices>[0];
 
-  it("with 3D on the person's key, that row is in use and this computer's is still to set up", async () => {
-    const { keys, save } = onKey("model3d", "fal-ai/pixal3d");
+  it("with 3D on a cloud model, that row is in use and this computer's is still to set up", async () => {
+    const { keys, use } = onKey("model3d", "fal-ai/pixal3d");
     // the engine says installed for the 3D screen while on the key; `here` is this computer
     const api = model3dChoices(
       api3d(component({ installed: true, here: false, keyed: true })),
@@ -545,17 +547,21 @@ describe("3D", () => {
     );
     const rows = (await api.list()).choices;
     expect(rows.map((r) => [r.id, r.chosen, r.state])).toEqual([
-      ["key:model3d", true, "ready"],
       ["pixal3d", false, "needs_download"],
+      ["cloud:model3d:fal:fal-ai/pixal3d", true, "ready"],
     ]);
     await api.choose("pixal3d");
-    expect(save).toHaveBeenCalledWith("model3d", "here");
+    expect(use).toHaveBeenCalledWith("model3d", null);
   });
 
-  it("on this computer the one row is as before", async () => {
+  it("on this computer its row is in use and the cloud one is only offered", async () => {
     const { keys } = onKey("model3d", "fal-ai/pixal3d", "here");
     const rows = (await model3dChoices(api3d(component({ installed: true })), keys).list()).choices;
-    expect(rows.map((r) => [r.id, r.chosen, r.state])).toEqual([["pixal3d", true, "ready"]]);
+    // the key is saved, so its model is offered under Cloud, but this computer's is the one in use
+    expect(rows.map((r) => [r.id, r.chosen, r.state])).toEqual([
+      ["pixal3d", true, "ready"],
+      ["cloud:model3d:fal:fal-ai/pixal3d", false, "ready"],
+    ]);
   });
 });
 
@@ -659,69 +665,35 @@ describe("chat", () => {
     expect(choose).toHaveBeenCalledWith({ item_id: "f1", context: 8192 });
   });
 
-  const keysWith = (mode: "here" | "key") => {
-    const save = vi.fn(async () => ({}));
-    const keys = {
-      list: async () => ({
-        can_save: true,
-        providers: [
-          {
-            id: "openrouter",
-            title: "OpenRouter",
-            kind: "text",
-            host: "openrouter.ai",
-            needs_base: false,
-            models: [],
-          },
-        ],
-        products: [
-          {
-            id: "chat",
-            title: "Chat and writing",
-            kind: "text",
-            mode,
-            provider: mode === "key" ? "openrouter" : null,
-            model: mode === "key" ? "openai/gpt-4o-mini" : null,
-            base_url: null,
-            key_saved: mode === "key",
-            state: mode === "key" ? "ok" : "here",
-            said: null,
-            tested_at: null,
-            models: [],
-          },
-        ],
-      }),
-      save,
-    } as unknown as OwnKeysApi;
-    return { keys, save };
-  };
+  const chatKeys = (inUse: boolean) =>
+    cloudKeys("chat", ["openai/gpt-4o-mini"], inUse ? "openai/gpt-4o-mini" : null);
+  const CLOUD_ROW = "cloud:chat:fal:openai/gpt-4o-mini";
 
-  it("with chat on the person's key, that is the row in use and no local model is", async () => {
+  it("with chat on a cloud model, that is the row in use and no local model is", async () => {
     const state = language([found()]);
     state.files = state.files.map((f) => ({ ...f, chosen: true }));
     const { deps: d } = deps(state);
-    const rows = (await chatChoices({ ...d, keys: keysWith("key").keys }).list()).choices;
-    expect(rows[0]).toMatchObject({
-      id: KEYED,
+    const rows = (await chatChoices({ ...d, keys: chatKeys(true).keys }).list()).choices;
+    expect(rows.find((r) => r.place === "cloud")).toMatchObject({
+      id: CLOUD_ROW,
       chosen: true,
       state: "ready",
-      title: "openai/gpt-4o-mini · with your key · OpenRouter",
-      from: "openrouter.ai",
+      from: "fal.ai",
     });
-    expect(rows.filter((r) => r.chosen).map((r) => r.id)).toEqual([KEYED]);
-    const here = (await chatChoices({ ...d, keys: keysWith("here").keys }).list()).choices;
-    expect(here.some((r) => r.id === KEYED)).toBe(false);
+    expect(rows.filter((r) => r.chosen).map((r) => r.id)).toEqual([CLOUD_ROW]);
+    const here = (await chatChoices({ ...d, keys: chatKeys(false).keys }).list()).choices;
+    expect(here.filter((r) => r.chosen).map((r) => r.id)).toEqual(["f1"]);
   });
 
-  it("choosing a model on this computer takes chat off the key, and the key row is a no-op", async () => {
+  it("choosing a cloud row uses it; a model on this computer takes chat off the cloud", async () => {
     const { deps: d, choose } = deps(language([found()]));
-    const { keys, save } = keysWith("key");
+    const { keys, use } = chatKeys(true);
     const api = chatChoices({ ...d, keys });
-    await api.choose(KEYED);
-    expect(save).not.toHaveBeenCalled();
+    await api.choose(CLOUD_ROW);
+    expect(use).toHaveBeenCalledWith("chat", { provider: "fal", model: "openai/gpt-4o-mini" });
     expect(choose).not.toHaveBeenCalled();
     await api.choose("f1");
-    expect(save).toHaveBeenCalledWith("chat", "here");
+    expect(use).toHaveBeenLastCalledWith("chat", null);
     expect(choose).toHaveBeenCalledWith({ item_id: "f1", context: 8192 });
   });
 

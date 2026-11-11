@@ -25,7 +25,7 @@ from wasifyai_platform_sdk.usage import (
     record_safely,
 )
 
-from wasifyai_api.own_keys import KeyRoute, OwnKeysService, said_of
+from wasifyai_api.own_keys import KeyRoute, OwnKeysService, said_of, text_client
 
 PRODUCT = "chat"  # the one setting every text product follows
 
@@ -41,7 +41,9 @@ class KeyedTextProvider:
 
     @staticmethod
     def _client(route: KeyRoute) -> AsyncOpenAI:
-        return AsyncOpenAI(base_url=route.base_url, api_key=route.key, max_retries=0)
+        return text_client(
+            route.provider, route.base_url, route.key, factory=AsyncOpenAI, max_retries=0
+        )
 
     @staticmethod
     def _refused(route: KeyRoute, e: Exception) -> RunError:

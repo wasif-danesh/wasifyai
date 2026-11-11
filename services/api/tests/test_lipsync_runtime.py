@@ -342,12 +342,24 @@ async def test_a_clip_is_made_and_the_weights_are_laid_out(tmp_path, monkeypatch
         assert out.fps == 25 and out.seconds == 3.0 and out.model_id == "echomimic-v3-flash"
         sent = json.loads((server_dir / "last.json").read_text())
         assert "mark" not in sent and sent["fps"] == 25 and sent["voice"] == 12
+        assert (sent["width"], sent["height"]) == (0, 0)  # no size asked: the server's own
         assert (tmp_path / "engine/lipsync/weights/transformer/config.json").exists()
         again = await side.generate(model, req, pic, voice, files)  # warm: no loading to report
         assert again.load_s == 0.0 and out.load_s >= 0.0
         assert side.running
         assert await side.stop() is True and not side.running
         assert await side.stop() is False
+    finally:
+        await side.close()
+
+
+async def test_the_video_size_asked_for_reaches_the_server(tmp_path, monkeypatch):
+    side, model, files, server_dir = sidecar_for(tmp_path, monkeypatch)
+    try:
+        req = check_lipsync(model, 3.0, picture=(1024, 924), shape="9:16", size=480)
+        out = await side.generate(model, req, *inputs(tmp_path), files)
+        sent = json.loads((server_dir / "last.json").read_text())
+        assert (sent["width"], sent["height"]) == (480, 848) == (out.width, out.height)
     finally:
         await side.close()
 

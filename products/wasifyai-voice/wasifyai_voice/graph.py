@@ -66,6 +66,8 @@ class SpeakState(TypedDict, total=False):
     picture: str  # lipsync: the id of an added picture
     start: float  # lipsync: only part of the recording, from this second
     end: float  # lipsync: to this second
+    shape: str  # lipsync: "picture" (its own shape), "9:16", "16:9", "1:1" or "4:5"
+    size: int  # lipsync: the short side of the video (480 is 480p); the model's default otherwise
     clip_id: str
     video_url: str
     language: str  # dubbing: the language to dub into

@@ -325,8 +325,8 @@ function WhatLeaves() {
       <li>Getting a model downloads it from the place its row names; nothing is uploaded.</li>
       <li>Other apps (connections and tools) are reached only once you add them.</li>
       <li>
-        A product you set to run with your own key (Your keys) sends what you make with it to that
-        provider.
+        A cloud model you choose in a picker (with a key saved in Your keys) sends what you make
+        with it to that model's provider.
       </li>
     </ul>
   );
@@ -413,7 +413,8 @@ const GROUPS: Group[] = [
       {
         id: "own-keys",
         title: "Your keys",
-        words: "api key provider openrouter openai anthropic gemini groq fal hosted cloud own key",
+        words:
+          "api key provider openrouter openai anthropic gemini groq fal wavespeed runware hosted cloud own key",
         body: <YourKeys api={ownKeysApi} />,
         own: true,
       },

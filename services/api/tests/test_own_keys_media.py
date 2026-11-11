@@ -38,8 +38,10 @@ async def test_with_no_key_every_job_stays_on_this_computer():
 
 async def test_a_product_on_its_key_runs_on_fal_with_its_own_model_and_key():
     router, keys, local = rig()
-    await keys.save("images", "key", "fal", "fal-ai/flux-2", None, "img-key")
-    await keys.save("video", "key", "fal", "fal-ai/ltx-2/text-to-video/fast", None, "vid-key")
+    await keys.save_key("images", "fal", "img-key")
+    await keys.use("images", "fal", "fal-ai/flux-2")
+    await keys.save_key("video", "fal", "vid-key")
+    await keys.use("video", "fal", "fal-ai/ltx-2/text-to-video/fast")
     pic = await router.resolve(job("wasifyai-image", "image.generate"))
     clip = await router.resolve(job("wasifyai-video", "video.animate"))
     assert isinstance(pic, FalRunner) and isinstance(clip, FalRunner)
@@ -53,10 +55,11 @@ async def test_a_product_on_its_key_runs_on_fal_with_its_own_model_and_key():
 
 async def test_back_to_this_computer_applies_to_the_next_job():
     router, keys, local = rig()
-    await keys.save("images", "key", "fal", "fal-ai/flux-2", None, "img-key")
+    await keys.save_key("images", "fal", "img-key")
+    await keys.use("images", "fal", "fal-ai/flux-2")
     assert isinstance(await router.resolve(job("wasifyai-image", "image.generate")), FalRunner)
-    await keys.save("images", "here", None, None, None, None)
+    await keys.use("images", None, None)
     assert await router.resolve(job("wasifyai-image", "image.generate")) is local
-    await keys.save("images", "key", "fal", "fal-ai/flux-2", None, None)  # the key stayed saved
-    await keys.remove("images")
+    await keys.use("images", "fal", "fal-ai/flux-2")  # the key stayed saved
+    await keys.remove_key("images", "fal")
     assert await router.resolve(job("wasifyai-image", "image.generate")) is local

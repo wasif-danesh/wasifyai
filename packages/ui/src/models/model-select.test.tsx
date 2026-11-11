@@ -249,4 +249,113 @@ describe("choosing a model that is not on the computer", () => {
     expect(timeText(916_000_000)).toBe("about 2 minutes");
     expect(timeText(40e9)).toBe("over an hour");
   });
+
+  it("lists cloud models under Cloud by provider, and choosing one tells the screen its engine's id", async () => {
+    const cloud = (over: Partial<ModelChoice>): ModelChoice =>
+      choice({
+        state: "ready",
+        tier: "also",
+        place: "cloud",
+        downloadBytes: 0,
+        fit: null,
+        engineId: "key:lipsync",
+        works: true,
+        ...over,
+      });
+    const rows = [
+      choice({ id: "echo", title: "EchoMimic", state: "ready", chosen: true }),
+      cloud({
+        id: "cloud:fal:a",
+        title: "LongCat Avatar",
+        provider: "fal",
+        providerTitle: "fal.ai",
+        price: "$0.15 per s",
+      }),
+      cloud({
+        id: "cloud:fal:b",
+        title: "InfiniteTalk",
+        provider: "fal",
+        providerTitle: "fal.ai",
+        price: "$0.20 per s",
+      }),
+      cloud({
+        id: "cloud:wavespeed:c",
+        title: "InfiniteTalk Fast",
+        provider: "wavespeed",
+        providerTitle: "WaveSpeed",
+        works: false,
+      }),
+    ];
+    const api = fake(rows, { cloud: { product: "Lip sync" } });
+    const changed = vi.fn();
+    const user = userEvent.setup();
+    render(<ModelSelect group="faces" api={api} value="echo" onChanged={changed} />);
+    await user.click(await screen.findByRole("button", { name: /EchoMimic/ }));
+    // the computer's tab does not list cloud models
+    expect(screen.queryByText("LongCat Avatar")).toBeNull();
+    await user.click(screen.getByRole("tab", { name: "Cloud" }));
+    const fal = screen.getByRole("list", { name: "With your fal.ai key" });
+    expect(within(fal).getByText("$0.20 per s", { exact: false })).toBeTruthy();
+    const ws = screen.getByRole("list", { name: "With your WaveSpeed key" });
+    expect(within(ws).getByText(/Key not working/)).toBeTruthy();
+    await user.click(within(fal).getByRole("button", { name: /InfiniteTalk/ }));
+    expect(api.choose).toHaveBeenCalledWith("cloud:fal:b");
+    expect(changed).toHaveBeenCalledWith("key:lipsync");
+  });
+
+  it("names the provider on the button and opens on Cloud while a cloud model is in use", async () => {
+    const rows = [
+      choice({ id: "echo", title: "EchoMimic", state: "ready" }),
+      choice({
+        id: "cloud:fal:b",
+        title: "InfiniteTalk",
+        state: "ready",
+        chosen: true,
+        place: "cloud",
+        provider: "fal",
+        providerTitle: "fal.ai",
+        price: "$0.20 per s",
+        engineId: "key:lipsync",
+      }),
+    ];
+    const user = userEvent.setup();
+    // the screen knows the model by its engine's id
+    render(
+      <ModelSelect
+        group="faces"
+        api={fake(rows, { cloud: { product: "Lip sync" } })}
+        value="key:lipsync"
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: /InfiniteTalk · fal.ai/ }));
+    expect(screen.getByRole("tab", { name: "Cloud" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText(/In use · fal.ai · \$0.20 per s/)).toBeTruthy();
+  });
+
+  it("says how to get cloud models when no key is saved", async () => {
+    const setUp = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ModelSelect
+        group="faces"
+        api={fake([choice({ state: "ready", chosen: true })], {
+          cloud: { product: "Lip sync", setUp },
+        })}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: /Parakeet/ }));
+    await user.click(screen.getByRole("tab", { name: "Cloud" }));
+    expect(screen.getByText(/Save a provider key for Lip sync/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Open Your keys" }));
+    expect(setUp).toHaveBeenCalled();
+  });
+
+  it("has no Cloud tab for a group that cannot run in the cloud", async () => {
+    const user = userEvent.setup();
+    render(
+      <ModelSelect group="documents" api={fake([choice({ state: "ready", chosen: true })])} />,
+    );
+    await user.click(await screen.findByRole("button", { name: /Parakeet/ }));
+    expect(screen.queryByRole("tab", { name: "Cloud" })).toBeNull();
+  });
 });

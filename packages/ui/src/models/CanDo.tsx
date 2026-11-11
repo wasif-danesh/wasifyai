@@ -27,7 +27,7 @@ function JobLine({ group, title }: { group: GroupId; title: string }) {
         .then((l) => {
           if (gone) return;
           const chosen = l.choices.find((c) => c.chosen);
-          const here = l.choices.filter((c) => c.state === "ready");
+          const here = l.choices.filter((c) => c.state === "ready" && c.place !== "cloud");
           if (chosen?.state === "ready")
             setLine({ state: "ready", text: `Ready: ${displayName(chosen.title)}` });
           else if (chosen)

@@ -367,7 +367,10 @@ def build_tools(
                 if end - start < 0.5:
                     return refuse_with("bad_part", "That part of the recording is too short.")
                 voice_audio, seconds = audio_input.slice_wav(voice_audio, start, end)
-            req = check_lipsync(model, seconds)
+            req = check_lipsync(
+                model, seconds, picture=(int(picture["width"]), int(picture["height"])),
+                shape=state.get("shape") or None, size=state.get("size") or None,
+            )  # fmt: skip
             pic = await scratch_file(png, ".png")
             voice_wav = await scratch_file(voice_audio)
             write(

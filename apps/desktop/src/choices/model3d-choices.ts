@@ -2,7 +2,7 @@
 // The 3D group's one model (ADR-0080): it is a component of the engine, set up with its size shown first.
 import type { Model3dApi, OwnKeysApi } from "@wasifyai/client";
 import type { ChoiceList, ChoicesApi, ModelChoice } from "@wasifyai/ui";
-import { keyedRow, leaveKey, withKeyed } from "./keyed";
+import { chooseCloud, cloudOf, cloudRows, withCloud } from "./keyed";
 import { pause, runSteps } from "./steps";
 
 export const MODEL3D_ID = "pixal3d";
@@ -38,17 +38,18 @@ export function model3dRow(component: Awaited<ReturnType<Model3dApi["component"]
 
 export function model3dChoices(api: Model3dApi, keys?: OwnKeysApi): ChoicesApi {
   return {
+    ...(keys ? { cloud: cloudOf(["model3d"]) } : {}),
     async list(): Promise<ChoiceList> {
-      const [c, own] = await Promise.all([api.component(), keys?.list().catch(() => null)]);
+      const [c, cloud] = await Promise.all([api.component(), cloudRows(keys, "model3d")]);
       return {
-        choices: withKeyed([model3dRow(c)], keyedRow(own ?? null, "model3d")),
+        choices: withCloud([model3dRow(c)], cloud),
         diskFreeBytes: null,
         memoryBytes: null,
       };
     },
     async choose(id) {
-      // choosing the one on this computer takes 3D off the key (the key stays saved)
-      await leaveKey(keys, "model3d", id);
+      // a cloud model makes 3D run there; the one on this computer takes 3D off the cloud (the keys stay)
+      await chooseCloud(keys, "model3d", id);
     },
     async remove() {
       await api.uninstall();

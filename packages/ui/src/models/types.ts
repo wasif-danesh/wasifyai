@@ -126,6 +126,17 @@ export type ModelChoice = {
   /** `needs_download` whose files another tool already has on the computer ("ComfyUI"): getting it uses them where
    * they are, nothing of the model is downloaded (`downloadBytes` is then 0) */
   foundIn?: string | null;
+  /** a cloud model on the person's key (ADR-0095, amendment of 2026-11-11): shown under Cloud, not on this computer */
+  place?: "cloud";
+  /** a cloud model's provider: its id and name ("fal.ai") */
+  provider?: string;
+  providerTitle?: string;
+  /** a cloud model's price as the provider lists it, in words */
+  price?: string;
+  /** a cloud model's key worked when last tested */
+  works?: boolean;
+  /** the id the screen's engine knows a cloud model by while it is in use (`key:lipsync`), when not this row's id */
+  engineId?: string;
 };
 
 export type ChoiceList = {
@@ -150,4 +161,7 @@ export type ChoicesApi = {
   remove?(id: string): Promise<void>;
   /** what "More models" shows: search, model folders, Hugging Face (the window gives its own) */
   more?: ReactNode;
+  /** the group can run on cloud models with the person's keys: the picker shows a Cloud tab. `product` names it
+   * in words ("Lip sync"); `setUp` opens Settings › Your keys */
+  cloud?: { product: string; setUp?: () => void };
 };

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { type ChoicesApi, type ModelSelectHandle, useChoicesVersion } from "@wasifyai/ui";
 import { type RefObject, useCallback, useEffect, useState } from "react";
-import { isKeyed } from "./keyed";
+import { isCloud } from "./keyed";
 
 /** The window's self-test (smoke.ts) makes placeholder pictures with no model on the computer: it asks the gate to let it. */
 export const gate = { open: false };
@@ -12,9 +12,10 @@ export const gate = { open: false };
  */
 export function useGroupReady(api: ChoicesApi | null, picker: RefObject<ModelSelectHandle | null>) {
   const [ready, setReady] = useState<boolean | null>(null);
-  // the chosen row is the person's own key (ADR-0095): this computer's memory does not matter then
+  // the chosen row is a cloud model on the person's key (ADR-0095): this computer's memory does not matter then
   const [keyed, setKeyed] = useState(false);
-  // the id of the chosen row (a catalogue model's id, or `key:<product>`), null before one is chosen
+  // the id of the chosen row (a catalogue model's id, or `cloud:<product>:<provider>:<model>`), null before one is
+  // chosen
   const [chosen, setChosen] = useState<string | null>(null);
   const version = useChoicesVersion();
   // biome-ignore lint/correctness/useExhaustiveDependencies: the version is the trigger
@@ -26,7 +27,7 @@ export function useGroupReady(api: ChoicesApi | null, picker: RefObject<ModelSel
         if (gone) return;
         setReady(l.choices.some((c) => c.chosen && c.state === "ready"));
         const row = l.choices.find((c) => c.chosen);
-        setKeyed(isKeyed(row?.id));
+        setKeyed(isCloud(row?.id));
         setChosen(row?.id ?? null);
       })
       .catch(() => !gone && setReady(null));

@@ -119,3 +119,42 @@ A short voice costs more per second because its last window is padded to the mod
 showed that the old window rule dropped up to 7 frames at the end and ffmpeg's `-shortest` then cut the voice;
 the last window is now rounded up, padded with the last voice frame, and only the frames needed are written.
 
+
+## Size and the face (2026-11-10, after the first clips in the app)
+
+The owner's first clip in the app (a 1024x924 portrait, 16 s voice) changed the face: slimmer, smoother and
+younger, already by the end of the first window, more in later ones. EchoMimic's own flash script makes one
+81-frame window at 768x768 with TeaCache 0.1 after five steps; ours used 448 and TeaCache 0.2 after two. Each
+setting was run on that picture for one window (the picture is not kept in the repository):
+
+| Setting | Size | One window (3.24 s) | Work per second of video | The face at the window's end |
+|---|---|---|---|---|
+| ours | 464x416 | 47 s | 15 s | changed |
+| 448, their TeaCache | 464x416 | 85 s | 26 s | changed |
+| 640, their TeaCache | 672x592 | 301 s | 93 s | kept |
+| 768, their TeaCache (theirs) | 800x720 | 526 s | 162 s | kept, the most detail |
+
+The size is the cause: at 448 the face is about 120 pixels wide, too few for the model to keep it. At 768, three
+windows chained from the last frame (9.6 s) kept the face; also taking the CLIP picture from the original for
+every window looked the same, so the chaining is left as EchoMimic does it. Peak footprint at 768 was 29 GB.
+The owner chose quality over speed: the app now uses 768 with TeaCache 0.1 after five steps, about 2.5 minutes of
+work per second of video, and waits up to 400 seconds per second of voice.
+
+## Shape and size (2026-11-11, owner)
+
+The owner asked for common sizes and portrait or landscape on the Lip sync screen. The screen now offers:
+- **shapes:** as the picture, 9:16, 16:9, 1:1 and 4:5. Another shape crops the picture centred across and 40% down,
+  where a face usually is.
+- **sizes:** 480p and 720p on the short side, from the model's `lipsync.sizes`.
+
+720p from a near-square picture is the 800x720 measured above. The largest size, 720p portrait (720x1280), was run
+on the same picture for one window, with the same settings:
+
+| Size | One window (3.24 s) | Work per second of video | Peak footprint | The face |
+|---|---|---|---|---|
+| 720x1280 | 1306 s | 403 s | 41 GB | kept |
+
+Fitted on 672x592, 800x720 and 720x1280, the work grows with about the 1.8th power of the pixels. The screen's
+estimate uses that power, measured from `speed_pixels` (576,000). The wait is now 800 seconds per second of voice.
+The 480p sizes were not run. By the same power, 480p portrait (480x848) is about 1.4 minutes of work per second of
+video.

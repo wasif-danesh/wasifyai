@@ -49,7 +49,9 @@ SERVER_DIR = Path(__file__).with_name("lipsync_server")
 STATE_FILE = "state.json"
 START_TIMEOUT_S = 120.0
 MIN_FREE_BYTES = 2_000_000_000
-SECONDS_PER_SECOND = 60  # the longest wait per second of voice (measured: about 17 on an M5 Pro)
+# the longest wait per second of voice (measured on an M5 Pro: about 162 at 720p from a near-square
+# picture, 403 at 720p portrait, 720x1280)
+SECONDS_PER_SECOND = 800
 # a file of EchoMimic's code that must be there: the pipeline the server runs
 MARKER = Path("src") / "pipeline_wan_fun_inpaint_audio_2512.py"
 
@@ -478,7 +480,8 @@ class LipSyncSidecar:
             async with httpx.AsyncClient(timeout=httpx.Timeout(30, read=wait)) as http:
                 r = await http.post(
                     f"{url}/v1/lipsync",
-                    data={"fps": str(req.fps)},
+                    data={"fps": str(req.fps)}
+                    | ({"width": str(req.width), "height": str(req.height)} if req.width else {}),
                     files={"image": ("face.png", pic, "image/png"),
                            "audio": ("voice.wav", wav, "audio/wav")},
                 )  # fmt: skip

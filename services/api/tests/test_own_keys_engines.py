@@ -90,7 +90,8 @@ def keys_service() -> OwnKeysService:
 
 
 async def on_key(keys: OwnKeysService, product: str, model: str) -> None:
-    await keys.save(product, "key", "fal", model, None, KEY)
+    await keys.save_key(product, "fal", KEY)
+    await keys.use(product, "fal", model)
 
 
 # ---- speech ------------------------------------------------------------------------------------
@@ -143,7 +144,7 @@ async def test_back_on_this_computer_the_keyed_model_is_not_asked_for_again():
     await on_key(keys, "voice", "fal-ai/kokoro")
     engine = KeyedSpeechEngine(local, keys)
     model = engine.resolve("speak", None)
-    await keys.save("voice", "here", None, None, None, None)
+    await keys.use("voice", None, None)
     assert engine.resolve("speak", KEYED_VOICE).id == "local:speak"  # a remembered keyed id
     with pytest.raises(VoiceEngineError) as e:  # a request made just before the change
         await engine.speak(model, "hi", None, {})
@@ -262,5 +263,5 @@ async def test_removing_the_3d_key_brings_it_back_here_at_once():
     await on_key(keys, "model3d", "fal-ai/pixal3d")
     engine = KeyedModel3d(local, keys)
     assert engine.ready()
-    await keys.remove("model3d")
+    await keys.remove_key("model3d", "fal")
     assert not engine.ready() and engine.state() == local.state()

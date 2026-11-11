@@ -6,7 +6,7 @@ import type { ChoiceList, ChoicesApi, ModelChoice } from "@wasifyai/ui";
 import type { DiscoveryApi, FoundModel } from "../discovery";
 import type { ModelEntry, ModelsApi } from "../models";
 import { COPY, hostOf, plainFor } from "./copy";
-import { keyedRow, leaveKey, withKeyed } from "./keyed";
+import { chooseCloud, cloudOf, cloudRows, withCloud } from "./keyed";
 import { modelStep, runSteps } from "./steps";
 import type { Engines, Memory } from "./types";
 
@@ -160,10 +160,11 @@ export function catalogueChoices(deps: CatalogueDeps, group: CatalogueGroup): Ch
     return { overview, engine, found, entries: overview.models.filter(group.has) };
   };
   return {
+    ...(group.keyed && deps.keys ? { cloud: cloudOf([group.keyed]) } : {}),
     async list(): Promise<ChoiceList> {
-      const [{ overview, engine, found, entries }, keys] = await Promise.all([
+      const [{ overview, engine, found, entries }, cloud] = await Promise.all([
         read(),
-        group.keyed && deps.keys ? deps.keys.list().catch(() => null) : Promise.resolve(null),
+        group.keyed ? cloudRows(deps.keys, group.keyed) : Promise.resolve([]),
       ]);
       const last = deps.memory.get(key);
       const chosen =
@@ -172,9 +173,9 @@ export function catalogueChoices(deps: CatalogueDeps, group: CatalogueGroup): Ch
         null;
       if (chosen) keep(chosen.id);
       return {
-        choices: withKeyed(
+        choices: withCloud(
           entries.map((e) => catalogueRow(e, engine, chosen?.id ?? null, foundFor(e, found))),
-          group.keyed ? keyedRow(keys, group.keyed) : null,
+          cloud,
         ),
         diskFreeBytes: overview.disk_free_bytes,
         memoryBytes: overview.memory_bytes,
@@ -182,7 +183,7 @@ export function catalogueChoices(deps: CatalogueDeps, group: CatalogueGroup): Ch
     },
 
     async choose(id) {
-      if (group.keyed && (await leaveKey(deps.keys, group.keyed, id))) return;
+      if (group.keyed && (await chooseCloud(deps.keys, group.keyed, id))) return;
       deps.memory.set(key, id);
       keep(id);
     },

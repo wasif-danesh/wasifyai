@@ -359,8 +359,8 @@ def _check_tool_rules(
 
 
 def _check_lipsync_rules(entry_id: str, engine: str, tasks: tuple[str, ...], lipsync: dict) -> None:
-    """What a lip sync model declares: the longest voice and the largest picture it takes, the frame
-    rate (ADR-0044, ADR-0066 decision 8)."""
+    """What a lip sync model declares: the longest voice, the video sizes it makes (the short side,
+    as in 480p and 720p) and the frame rate (ADR-0044, ADR-0066 decision 8)."""
     if ("lipsync" in tasks) != bool(lipsync):
         raise ValueError(f"{entry_id}: a lipsync model declares `lipsync` rules, and only it does")
     if not lipsync:
@@ -369,8 +369,11 @@ def _check_lipsync_rules(entry_id: str, engine: str, tasks: tuple[str, ...], lip
         raise ValueError(f"{entry_id}: a lip sync model runs as a sidecar here")
     if not 5 <= float(lipsync.get("max_voice_s", 0)) <= 3600:
         raise ValueError(f"{entry_id}: lipsync.max_voice_s must be 5 to 3600")
-    if not 256 <= int(lipsync.get("max_side", 0)) <= 2048:
-        raise ValueError(f"{entry_id}: lipsync.max_side must be 256 to 2048")
+    sizes = lipsync.get("sizes")
+    if not sizes or not all(isinstance(n, int) and 256 <= n <= 2048 and n % 16 == 0 for n in sizes):
+        raise ValueError(f"{entry_id}: lipsync.sizes must list short sides of 256 to 2048, in 16s")
+    if lipsync.get("default_size") not in sizes:
+        raise ValueError(f"{entry_id}: lipsync.default_size must be one of lipsync.sizes")
     if not 5 <= int(lipsync.get("fps", 0)) <= 60:
         raise ValueError(f"{entry_id}: lipsync.fps must be 5 to 60")
 
@@ -812,14 +815,40 @@ def check_speech_edit(
 class LipSyncRequest:
     fps: int
     voice_seconds: float
+    # the video's size: the picture is cropped to this shape and scaled (0: the server's own choice)
+    width: int = 0
+    height: int = 0
+
+
+# the shapes a talking video can have, width to height; "picture" keeps the picture's own
+LIPSYNC_SHAPES: dict[str, tuple[int, int] | None] = {
+    "picture": None, "9:16": (9, 16), "16:9": (16, 9), "1:1": (1, 1), "4:5": (4, 5),
+}  # fmt: skip
+# a picture's own shape is kept between these, and cropped beyond them
+_WIDEST, _TALLEST = 16 / 9, 9 / 16
+
+
+def lipsync_frame(picture: tuple[int, int], shape: str, size: int) -> tuple[int, int]:
+    """The video's width and height: `size` on the short side (480 is 480p), in the shape asked for,
+    both rounded to 16 pixels as the video models need."""
+    ratio = LIPSYNC_SHAPES[shape]
+    pw, ph = picture
+    aspect = ratio[0] / ratio[1] if ratio else min(_WIDEST, max(_TALLEST, pw / max(1, ph)))
+    w, h = (size * aspect, size) if aspect >= 1 else (size, size / aspect)
+    return max(16, round(w / 16) * 16), max(16, round(h / 16) * 16)
 
 
 def check_lipsync(
     model: VoiceModel,
     voice_seconds: float,
     options: dict[str, Any] | None = None,
+    *,
+    picture: tuple[int, int] | None = None,
+    shape: str | None = None,
+    size: int | None = None,
 ) -> LipSyncRequest:
-    """A lip sync request: a voice of a length the model takes."""
+    """A lip sync request: a voice of a length the model takes, and the video's shape and size (one
+    the model makes; with no picture the server keeps its own choice)."""
     if "lipsync" not in model.tasks:
         raise VoiceRequestError("wrong_task", f"{model.title} does not make talking videos.")
     if not voice_seconds or voice_seconds != voice_seconds or voice_seconds < 1:
@@ -831,7 +860,17 @@ def check_lipsync(
             "minutes. Use a shorter one.",
         )
     check_options(model, options)
-    return LipSyncRequest(int(model.lipsync["fps"]), voice_seconds)
+    shape = shape or "picture"
+    if shape not in LIPSYNC_SHAPES:
+        raise VoiceRequestError("bad_shape", "Choose one of the shapes offered.")
+    sizes = [int(n) for n in model.lipsync["sizes"]]
+    size = int(size or model.lipsync["default_size"])
+    if size not in sizes:
+        raise VoiceRequestError(
+            "bad_size", f"{model.title} makes videos of {', '.join(f'{n}p' for n in sizes)}."
+        )
+    w, h = lipsync_frame(picture, shape, size) if picture else (0, 0)
+    return LipSyncRequest(int(model.lipsync["fps"]), voice_seconds, w, h)
 
 
 def check_transcribe(model: VoiceModel, options: dict[str, Any] | None) -> dict[str, Any]:

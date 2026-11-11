@@ -654,6 +654,7 @@ async def test_a_picture_and_a_recording_make_a_clip(tmp_path, ctx):
     model_id, req, voice_facts, _ = rig.engine.lipsynced[0]
     assert model_id == "echomimic-v3-flash" and voice_facts == (16000, 1)
     assert req.fps == 25 and not hasattr(req, "mark")
+    assert (req.width, req.height) == (960, 720)  # 64x48 (4:3): the picture's shape at 720p
     store = store_for(rig.state)
     clip = store.get_clip("t1", "u1", final["clip_id"])
     assert "consent" not in clip
@@ -669,6 +670,23 @@ async def test_a_picture_and_a_recording_make_a_clip(tmp_path, ctx):
     assert [e["node"] for e in events if e["type"] == "node"] == ["check_request", "lipsync"]
     assert [(u.kind, u.unit) for u in rig.usage.events][-1] == ("voice.lipsync", "clips")
     assert not list((store.root / "tmp").glob("*"))  # the scratch copies are gone
+
+
+async def test_the_shape_and_size_chosen_reach_the_engine_and_others_are_refused(tmp_path, ctx):
+    rig = Rig(tmp_path)
+    await library_track(rig, rate=16000, channels=1, seconds=3.0)
+    await a_picture(rig)
+    final, _ = await rig.run(
+        task="lipsync", picture="pic1", source_track="song", shape="9:16", size=480,
+    )  # fmt: skip
+    assert final["status"] == "done"
+    req = rig.engine.lipsynced[0][1]
+    assert (req.width, req.height) == (480, 848)
+    await a_picture(rig, "pic2")
+    for bad, code in (({"shape": "2:1"}, "bad_shape"), ({"size": 1080}, "bad_size")):
+        final, _ = await rig.run(task="lipsync", picture="pic2", source_track="song", **bad)
+        assert final["refusal"]["code"] == code
+    assert len(rig.engine.lipsynced) == 1
 
 
 async def test_a_script_is_spoken_here_and_kept_as_a_speech(tmp_path, ctx):

@@ -69,7 +69,16 @@ export type VoiceModelInfo = {
   separate?: { stems?: string[]; max_source_s?: number };
   convert?: { reference_seconds?: [number, number]; max_source_s?: number };
   speech_edit?: { max_changes?: number; max_source_s?: number };
-  lipsync?: { max_voice_s?: number; max_side?: number; fps?: number; mark?: string };
+  /** `sizes` are the short sides of the videos it makes (480 is 480p) */
+  lipsync?: {
+    max_voice_s?: number;
+    sizes?: number[];
+    default_size?: number;
+    /** the video's width times height when `measured.speed_x` was measured */
+    speed_pixels?: number;
+    fps?: number;
+    mark?: string;
+  };
   state: ModelState;
   files_ready: boolean;
   runtime_ready: boolean;
@@ -1012,7 +1021,43 @@ export type ClipRequest = {
   voice?: string;
   model?: string;
   title?: string;
+  /** the video's shape: the picture's own when left out */
+  shape?: ClipShape;
+  /** the short side of the video (480 is 480p): the model's default when left out */
+  size?: number;
 };
+
+export type ClipShape = "picture" | "9:16" | "16:9" | "1:1" | "4:5";
+
+/** The video's width and height for a picture, a shape and a size: the engine's own rule
+ * (`lipsync_frame` in the platform SDK), so the screen can show what will be made. */
+export function clipFrame(
+  picture: { width: number; height: number },
+  shape: ClipShape,
+  size: number,
+): { width: number; height: number } {
+  const ratios: Record<ClipShape, number | null> = {
+    picture: null,
+    "9:16": 9 / 16,
+    "16:9": 16 / 9,
+    "1:1": 1,
+    "4:5": 4 / 5,
+  };
+  const own = Math.min(16 / 9, Math.max(9 / 16, picture.width / Math.max(1, picture.height)));
+  const aspect = ratios[shape] ?? own;
+  const [w, h] = aspect >= 1 ? [size * aspect, size] : [size, size / aspect];
+  const r16 = (n: number) => Math.max(16, roundHalfEven(n / 16) * 16);
+  return { width: r16(w), height: r16(h) };
+}
+
+/** Python's round(): halves go to the even number, so both sides agree on every size */
+function roundHalfEven(n: number): number {
+  const f = Math.floor(n);
+  const d = n - f;
+  if (d > 0.5) return f + 1;
+  if (d < 0.5) return f;
+  return f % 2 === 0 ? f : f + 1;
+}
 
 export type ClipResult =
   | { ok: true; clip: { id: string; title: string; seconds: number; video_url: string } }
@@ -1042,6 +1087,8 @@ export async function makeClip(
   } else if (request.source) Object.assign(input, sourceInput(request.source));
   if (request.model) input.model = request.model;
   if (request.title?.trim()) input.title = request.title;
+  if (request.shape && request.shape !== "picture") input.shape = request.shape;
+  if (request.size) input.size = request.size;
   await runs.startRun(VOICE_PRODUCT, input, signal, (e) => {
     const data = e.data as unknown as Record<string, unknown>;
     if (e.event === "node" && typeof data.label === "string") onStep?.(data.label);

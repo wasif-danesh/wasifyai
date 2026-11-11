@@ -74,3 +74,56 @@ and people do not bring keys; own keys are a desktop feature. Stage K5 is the ad
 3. ~~On the web, the admin's models beside the person's keys~~ Answered 2026-10-29 (owner): the web has no own keys; the admin selects the models and providers (K5).
 4. ~~CLAUDE.md rule 5 and the person's key~~ Answered 2026-10-29 (owner): LiteLLM is for the web; on the desktop,
    the person's own key may go straight to its provider. Rule 5 of CLAUDE.md says so.
+
+## Amendment: fal.ai for every product (owner, 2026-11-11; `docs/own-keys-fal-everywhere-plan.md`)
+
+The owner chose fal.ai as the one provider to test own keys with, because it covers the most products with one key,
+and asked for it to be built against a fake fal.ai until a real key is registered.
+
+1. **fal.ai is also a text provider** (`fal_text`): its OpenAI-compatible route to OpenRouter's models,
+   `https://fal.run/openrouter/router/openai/v1`. Its key is sent as `Authorization: Key …` instead of `Bearer`; the
+   provider says how (`Provider.auth`). **Built 2026-11-11** against a fake.
+2. **New rows in Settings › Your keys: Music, Sound effects and Lip sync** (`keys.music`, `keys.sfx`,
+   `keys.lipsync`), each its own key as decision 2 says. `KeyedSpeechEngine` offers the keyed model first and keeps
+   this computer's models beside it:
+   - Music: `fal-ai/minimax-music/v2.6` (lyrics or written by MiniMax, instrumental; MiniMax chooses the length) or
+     `fal-ai/elevenlabs/music` (no lyrics, 3 s to 10 min).
+   - Sound effects: `fal-ai/elevenlabs/sound-effects/v2` (0.5 to 22 s).
+   - Lip sync: `fal-ai/longcat-single-avatar/image-audio-to-video` (LongCat, up to about 50 s in segments) or
+     `fal-ai/infinitalk` (up to 28 s), 480p or 720p. The picture is cut to the chosen shape here first.
+   - fal.ai's audio (MP3) is turned into WAV before it is saved.
+
+   **Built 2026-11-11** against a fake. Neither the screens nor these routes have been seen with a real key.
+3. **K4's "Lip sync is not on a key" no longer holds.** It was true for fal.ai's MuseTalk, which needs a video;
+   LongCat and InfiniteTalk start from a picture. MuseTalk stays on this computer only (owner, 2026-11-11).
+4. **The check:** `scripts/check_fal_key.py` makes one small thing per product (text, picture, clip, speech,
+   instrumental, song, sound effect, 3D model, lip sync). It uses a fake fal.ai unless `--real` is given; with
+   `--real` it costs about $5.
+5. **Not built yet** (stage F6): the web's Admin › Media rows for music, sound effects and lip sync; voices longer
+   than one lip sync request, made in pieces and joined; a real-key run.
+
+## Amendment: keys hold no model; the picker's Cloud tab (owner, 2026-11-11; `docs/own-keys-cloud-tab-plan.md`)
+
+The owner found a key bound to one model per product confusing, and asked for: "The 'Your keys' screen should only
+store key for each product. Where product runs should be part of the model selection dropdown for each product. We
+need to allow users to select a cloud model when a key is setup." The third mockup
+(`docs/spikes/provider-keys-mockup.html`) was approved ("Approve, build it"). This replaces decision 1's "On this
+computer / With my key" switch and the one provider and model of each product row; decision 2 (a key per product)
+stands, now one key per provider within a product.
+
+1. **Settings › Your keys stores keys only.** Each product row holds any number of provider keys, each tested before
+   it is saved. The secret is `keys.<product>.<provider>`. "Use the same key as …" is gone: a key is pasted per
+   product. Rows saved before this are read once as one key and, when the product ran on it, its `use`.
+2. **The model picker has a Cloud tab** (Recommended · On this computer · Cloud · More) in every group that can run
+   on a cloud model. It lists every model the app can call for that product, for each provider with a key, grouped
+   "With your fal.ai key", each with its listed price. Choosing one sets the product's `use`; choosing a model on
+   this computer clears it. With no key the tab says how to add one.
+3. **The models are a catalogue** (`own_keys_catalogue.py`): only models whose request the app builds. More models
+   are more lines there.
+4. **WaveSpeed and Runware are providers** beside fal.ai: WaveSpeed for chat, pictures, music and lip sync
+   (InfiniteTalk, InfiniteTalk Fast, LongCat Avatar); Runware for chat, pictures and music. Their clients are
+   `wasifyai_platform_sdk/cloud_queues.py`. Video, speaking, sound effects and 3D on them are not built.
+5. `route(product)` answers as before, from `use`, so the chat, media, speech and 3D code and the web's admin rows
+   are unchanged.
+
+**Built 2026-11-11** against fakes of all three providers. Not seen in the real window; no real key used yet.

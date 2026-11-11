@@ -840,9 +840,10 @@ models:
   title: EchoMimic v3 flash
   source: https://huggingface.co/BadToBest/EchoMimicV3
   note: Makes the person in a still picture say a voice. The head, eyes and mouth all move. Needs the lip sync
-    engine (set up first) and about 9.4 GB of files. About 14 seconds of work for each second of video and
-    about 15 GB of memory, measured on an Apple-silicon Mac with 64 GB.
-  approx_ram_gb: 16
+    engine (set up first) and about 9.4 GB of files. At 720p, about 2.5 minutes of work for each second of
+    video and about 29 GB of memory from a near-square picture, and about 6.7 minutes and 41 GB in portrait
+    (720x1280), measured on an Apple-silicon Mac with 64 GB. 480p is quicker.
+  approx_ram_gb: 41
   files:
   - folder: lipsync
     name: echomimic-v3-flash-pro.safetensors
@@ -893,9 +894,13 @@ models:
     sample_rate: 0
     measured:
       platform: darwin-arm64
-      speed_x: 0.07
-      memory_gb: 15
+      speed_x: 0.0065
+      memory_gb: 29
     lipsync:
       max_voice_s: 60
-      max_side: 448
+      # the short side of the video: 480p and 720p
+      sizes: [480, 720]
+      default_size: 720
+      # the video's pixels when speed_x was measured (800x720); work grows faster than the pixels
+      speed_pixels: 576000
       fps: 25

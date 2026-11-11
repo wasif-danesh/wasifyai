@@ -128,3 +128,16 @@ class FalQueue:
             raise FalError("missing_output", "The file fal.ai made could not be fetched.")
         ctype = (item.get("content_type") or got.headers.get("content-type") or "").split(";")[0]
         return got.content, ctype.strip() or fallback_type
+
+    async def make(
+        self, endpoint: str, body: dict[str, Any], field: str, fallback_type: str,
+        on_progress: ProgressFn,
+    ) -> tuple[bytes, str, dict[str, Any]]:  # fmt: skip
+        """`call`, then the file in the result's `field` (the first, for a list): the bytes, their
+        type and the whole result. The same shape as the other providers' `make`
+        (`cloud_queues.py`)."""
+        result = await self.call(endpoint, body, on_progress)
+        item = result.get(field)
+        item = item[0] if isinstance(item, list) and item else item
+        data, ctype = await self.fetch(item, fallback_type)
+        return data, ctype, result

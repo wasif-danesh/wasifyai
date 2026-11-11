@@ -21,6 +21,7 @@ from wasifyai_platform_sdk import (
     SecretsUnavailable,
     input_image_name,
 )
+from wasifyai_platform_sdk.cloud_queues import RunwareTasks, WaveSpeedQueue
 from wasifyai_platform_sdk.fal import FAL_QUEUE, FalError, FalQueue, data_uri
 
 from wasifyai_media_worker.comfy import ComfyClient, ComfyError, ProgressFn, use_picture
@@ -375,6 +376,84 @@ class FalRunner:
             raise _fal_failed(e) from None
         await on_progress(1.0)
         return {name: (data, ctype, _EXT.get(ctype, "mp4" if kind == "video" else "png"))}
+
+
+# ---- WaveSpeed and Runware, on the person's own key (ADR-0095, amendment of 2026-11-11) ----------
+
+
+def _sixty_four(side: Any) -> int:
+    """Runware's sides: a multiple of 64 from 128 to 2048."""
+    n = side if isinstance(side, int) else 1024
+    return min(2048, max(128, round(n / 64) * 64))
+
+
+class CloudImageRunner:
+    """A picture made from a description on WaveSpeed or Runware with the person's key. Only
+    making is offered there in this app; changing and combining pictures, and video, run on fal.ai
+    or on this computer (`docs/own-keys-cloud-tab-plan.md`)."""
+
+    local_gpu = False
+
+    def __init__(
+        self,
+        provider: str,
+        key: str,
+        model: str,
+        http: httpx.AsyncClient,
+        timeout_s: float,
+        poll_s: float = 2.0,
+        base_url: str = "",
+    ):
+        self.backend = provider
+        self._model = model
+        queue = WaveSpeedQueue if provider == "wavespeed" else RunwareTasks
+        self._queue = queue(key, http, timeout_s, poll_s, *([base_url] if base_url else []))
+
+    def _body(self, job: JobRequest) -> dict[str, Any]:
+        if job.capability != "image.generate":
+            raise ComfyError(
+                "not_with_key",
+                f"Only making a picture runs on {self._queue.title} in this app. Choose a fal.ai "
+                "or a computer model in the picker for this.",
+            )
+        if job.inputs.get("loras"):
+            raise ComfyError(
+                "not_with_key", "Styles and looks made on this computer cannot be used with a key."
+            )
+        prompt = job.inputs.get("prompt")
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ComfyError("invalid_input", "The request has no description.")
+        w, h = job.inputs.get("width"), job.inputs.get("height")
+        seed = job.inputs.get("seed")
+        if self.backend == "wavespeed":
+            body: dict[str, Any] = {"prompt": prompt, "output_format": "png"}
+            if isinstance(w, int) and isinstance(h, int):  # WaveSpeed takes 256 to 1536 a side
+                body["size"] = f"{min(1536, max(256, w))}*{min(1536, max(256, h))}"
+            if isinstance(seed, int):
+                body["seed"] = seed
+            return body
+        task: dict[str, Any] = {
+            "taskType": "imageInference", "positivePrompt": prompt, "numberResults": 1,
+            "outputFormat": "PNG",
+            "width": _sixty_four(w), "height": _sixty_four(h),
+        }  # fmt: skip
+        if isinstance(seed, int):
+            task["seed"] = seed
+        return task
+
+    async def run(
+        self, job: JobRequest, on_progress: ProgressFn, files: InputFiles | None = None
+    ) -> Files:
+        name = next(iter(job.outputs), "output")
+        body = self._body(job)
+        try:
+            data, ctype, _ = await self._queue.make(
+                self._model, body, "images", "image/png", on_progress
+            )
+        except FalError as e:
+            raise _fal_failed(e) from None
+        await on_progress(1.0)
+        return {name: (data, ctype, _EXT.get(ctype, "png"))}
 
 
 class BackendRouter:

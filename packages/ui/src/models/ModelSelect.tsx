@@ -51,6 +51,11 @@ export function timeText(bytes: number): string {
 }
 
 function stateLine(c: ModelChoice): string {
+  if (c.place === "cloud") {
+    const where = [c.providerTitle, c.price].filter(Boolean).join(" · ");
+    if (c.works === false) return `Key not working · ${c.providerTitle ?? ""}`;
+    return c.chosen ? `In use · ${where}` : where;
+  }
   if (c.state === "ready") return c.chosen ? "In use" : "On this computer";
   if (c.state === "too_big") return "Too big for this computer";
   if (c.state === "unavailable") return c.unavailableReason ?? "Not available here";
@@ -59,7 +64,17 @@ function stateLine(c: ModelChoice): string {
   return `${formatBytes(c.downloadBytes + c.engineBytes)} to download`;
 }
 
-type Tab = "recommended" | "device" | "more";
+type Tab = "recommended" | "device" | "cloud" | "more";
+
+/** The cloud rows by provider, in the order they came: "With your fal.ai key". */
+function byProvider(rows: ModelChoice[]): [string, ModelChoice[]][] {
+  const out = new Map<string, ModelChoice[]>();
+  for (const c of rows) {
+    const k = c.providerTitle ?? c.provider ?? "";
+    out.set(k, [...(out.get(k) ?? []), c]);
+  }
+  return [...out];
+}
 
 /**
  * "Select image model": the same button and drop-down panel for every group (ADR-0086). Choosing a model that is on the
@@ -107,17 +122,27 @@ export function ModelSelect({
   );
 
   // opening starts on what suits: the model in use is shown first; with nothing on the computer, the recommended ones
-  const choices = (m.list?.choices ?? []).map((c) =>
-    value === undefined ? c : { ...c, chosen: c.id === value && c.state === "ready" },
+  // a cloud row in use is the screen's choice too when the screen knows it by its engine's id (`key:lipsync`)
+  const all = (m.list?.choices ?? []).map((c) =>
+    value === undefined
+      ? c
+      : {
+          ...c,
+          chosen:
+            (c.id === value && c.state === "ready") ||
+            (c.chosen && c.engineId !== undefined && c.engineId === value),
+        },
   );
-  const chosen = choices.find((c) => c.chosen) ?? null;
+  const cloud = all.filter((c) => c.place === "cloud");
+  const choices = all.filter((c) => c.place !== "cloud");
+  const chosen = all.find((c) => c.chosen) ?? null;
   const onDevice = choices.filter((c) => c.state === "ready");
   // only when the panel opens
   // biome-ignore lint/correctness/useExhaustiveDependencies: the tab is chosen once per opening
   useEffect(() => {
     if (open) {
       void m.reload();
-      setTab(onDevice.length > 0 ? "device" : "recommended");
+      setTab(chosen?.place === "cloud" ? "cloud" : onDevice.length > 0 ? "device" : "recommended");
     }
   }, [open]);
 
@@ -126,15 +151,21 @@ export function ModelSelect({
       ? firstView(choices)
       : tab === "device"
         ? onDevice
-        : choices.filter((c) => c.tier === "advanced");
+        : tab === "cloud"
+          ? cloud
+          : choices.filter((c) => c.tier === "advanced");
 
   const getting = m.working;
-  const label = chosen ? displayName(chosen.title) : g.select;
+  const label = chosen
+    ? chosen.place === "cloud"
+      ? `${displayName(chosen.title)} · ${chosen.providerTitle ?? ""}`
+      : displayName(chosen.title)
+    : g.select;
 
   async function pick(c: ModelChoice) {
     if (c.state === "ready") {
       await m.choose(c.id);
-      onChanged?.(c.id);
+      onChanged?.(c.engineId ?? c.id);
       changed();
       setOpen(false);
     } else if (c.state === "needs_download" && c.foundIn && c.engineBytes === 0) {
@@ -202,6 +233,7 @@ export function ModelSelect({
                 [
                   ["recommended", "Recommended"],
                   ["device", "On this computer"],
+                  ...(api?.cloud ? [["cloud", "Cloud"]] : []),
                   ...(api?.more || choices.some((c) => c.tier === "advanced")
                     ? [["more", "More"]]
                     : []),
@@ -235,7 +267,29 @@ export function ModelSelect({
             ) : null}
 
             {!m.list && !m.error ? <p className="text-muted-foreground text-sm">Looking…</p> : null}
-            {m.list && shown.length === 0 && tab !== "more" ? (
+            {m.list && shown.length === 0 && tab === "cloud" ? (
+              <div className="grid gap-2 text-sm">
+                <p className="m-0 text-muted-foreground">
+                  No cloud models yet. Save a provider key for {api?.cloud?.product ?? "this"} in
+                  Settings › Your keys, and its models appear here.
+                </p>
+                {api?.cloud?.setUp ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="justify-self-start"
+                    onClick={() => {
+                      setOpen(false);
+                      api.cloud?.setUp?.();
+                    }}
+                  >
+                    Open Your keys
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+            {m.list && shown.length === 0 && tab !== "more" && tab !== "cloud" ? (
               <p className="text-muted-foreground text-sm">
                 {tab === "device"
                   ? "Nothing is on this computer yet. Choose one under Recommended."
@@ -243,52 +297,84 @@ export function ModelSelect({
               </p>
             ) : null}
 
-            <ul
-              className="m-0 grid list-none gap-1 p-0"
-              aria-label={tab === "device" ? "On this computer" : "Models"}
-            >
-              {shown.map((c) => (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    disabled={c.state === "too_big" || c.state === "unavailable"}
-                    aria-current={c.chosen ? "true" : undefined}
-                    className={cn(
-                      "grid w-full grid-cols-[minmax(0,1fr)] gap-0.5 rounded-lg px-3 py-2 text-start outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 disabled:hover:bg-transparent",
-                      c.chosen && "bg-accent",
-                    )}
-                    onClick={() => void pick(c)}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate font-medium text-sm" title={c.title}>
-                        {displayName(c.title)}
-                      </span>
-                      {c.readsPictures ? (
-                        <span title="Can read pictures" className="text-muted-foreground">
-                          <Eye className="size-3.5" aria-label="Can read pictures" />
-                        </span>
-                      ) : null}
-                      {c.tier === "recommended" ? (
-                        <span className="rounded-full border px-2 py-0.5 text-xs">Recommended</span>
-                      ) : null}
-                    </span>
-                    <span className="text-muted-foreground text-sm [overflow-wrap:anywhere]">
-                      {c.plain}
-                    </span>
-                    <span
-                      className={cn(
-                        "flex items-center gap-1.5 text-xs",
-                        c.state === "ready" ? "text-ok" : "text-muted-foreground",
-                      )}
+            {(tab === "cloud" ? byProvider(shown) : [["", shown] as [string, ModelChoice[]]]).map(
+              ([provider, rows]) => (
+                <ul
+                  key={provider}
+                  className="m-0 grid list-none gap-1 p-0"
+                  aria-label={
+                    tab === "cloud"
+                      ? `With your ${provider} key`
+                      : tab === "device"
+                        ? "On this computer"
+                        : "Models"
+                  }
+                >
+                  {tab === "cloud" ? (
+                    <li
+                      className="px-3 pt-1 font-medium text-muted-foreground text-xs"
+                      aria-hidden="true"
                     >
-                      <ReadyDot state={readinessOf(c)} />
-                      {stateLine(c)}
-                      {c.fit === "tight" ? " · may be slow here" : ""}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+                      With your {provider} key
+                    </li>
+                  ) : null}
+                  {rows.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        disabled={c.state === "too_big" || c.state === "unavailable"}
+                        aria-current={c.chosen ? "true" : undefined}
+                        className={cn(
+                          "grid w-full grid-cols-[minmax(0,1fr)] gap-0.5 rounded-lg px-3 py-2 text-start outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 disabled:hover:bg-transparent",
+                          c.chosen && "bg-accent",
+                        )}
+                        onClick={() => void pick(c)}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="min-w-0 flex-1 truncate font-medium text-sm"
+                            title={c.title}
+                          >
+                            {displayName(c.title)}
+                          </span>
+                          {c.readsPictures ? (
+                            <span title="Can read pictures" className="text-muted-foreground">
+                              <Eye className="size-3.5" aria-label="Can read pictures" />
+                            </span>
+                          ) : null}
+                          {c.tier === "recommended" ? (
+                            <span className="rounded-full border px-2 py-0.5 text-xs">
+                              Recommended
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="text-muted-foreground text-sm [overflow-wrap:anywhere]">
+                          {c.plain}
+                        </span>
+                        <span
+                          className={cn(
+                            "flex items-center gap-1.5 text-xs",
+                            c.place === "cloud"
+                              ? c.works === false
+                                ? "text-destructive"
+                                : c.chosen
+                                  ? "text-ok"
+                                  : "text-muted-foreground"
+                              : c.state === "ready"
+                                ? "text-ok"
+                                : "text-muted-foreground",
+                          )}
+                        >
+                          <ReadyDot state={readinessOf(c)} />
+                          {stateLine(c)}
+                          {c.fit === "tight" ? " · may be slow here" : ""}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ),
+            )}
 
             {tab === "more" && api?.more ? <div className="grid gap-2">{api.more}</div> : null}
           </PopoverPrimitive.Content>

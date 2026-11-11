@@ -68,6 +68,7 @@ function statusOf(
   place: Place,
 ): { text: string; tone: "ok" | "use" | "plain" | "warn" } {
   const here = place === "service" ? "On the worker" : "On this computer";
+  if (c.place === "cloud") return { text: `In use · ${c.providerTitle ?? "cloud"}`, tone: "use" };
   if (c.state === "ready")
     return c.chosen ? { text: "In use", tone: "use" } : { text: here, tone: "ok" };
   if (c.state === "too_big") return { text: "Won't fit here", tone: "warn" };
@@ -107,7 +108,11 @@ function GroupTable({ group, place }: { group: GroupId; place: Place }) {
     void m.reload();
   }, [version]);
 
-  const rows = useMemo(() => tableOrder(m.list?.choices ?? []), [m.list]);
+  // the models of this computer (or the worker); a cloud model shows only while it is the one in use
+  const rows = useMemo(
+    () => tableOrder((m.list?.choices ?? []).filter((c) => c.place !== "cloud" || c.chosen)),
+    [m.list],
+  );
 
   async function use(c: ModelChoice) {
     await m.choose(c.id);

@@ -4253,6 +4253,41 @@
             ],
             "default": null,
             "title": "Model"
+          },
+          "shape": {
+            "anyOf": [
+              {
+                "enum": [
+                  "picture",
+                  "9:16",
+                  "16:9",
+                  "1:1",
+                  "4:5"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The video's shape: the picture's own (the default), or one to crop to.",
+            "title": "Shape"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "maximum": 2048,
+                "minimum": 256,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The short side of the video, as 480 for 480p.",
+            "title": "Size"
           }
         },
         "required": [

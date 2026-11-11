@@ -30,7 +30,14 @@ const model = (over: Partial<VoiceModelInfo> = {}): VoiceModelInfo => ({
   default_voice: null,
   options: [],
   music: {},
-  lipsync: { max_voice_s: 300, max_side: 768, fps: 25, mark: "required" },
+  lipsync: {
+    max_voice_s: 300,
+    sizes: [480, 720],
+    default_size: 720,
+    speed_pixels: 576000,
+    fps: 25,
+    mark: "required",
+  },
   state: "ready",
   files_ready: true,
   runtime_ready: true,
@@ -194,11 +201,30 @@ describe("making a talking video", () => {
       picture: "p1",
       text: "Good evening, everyone.",
       model: "echomimic-v3-flash",
+      size: 720,
     });
     // the new video plays on the stage
     const stage = screen.getByRole("region", { name: "Result" });
     await waitFor(() => expect(stage.textContent).toContain("Mona says hello"));
     expect(stage.querySelector("video")).toHaveAttribute("src", "http://x/c.mp4");
+  });
+
+  it("makes the shape and size chosen, shows the crop, and says the size and the time", async () => {
+    const runs = runsThat([finished]);
+    render(<LipSyncWorkspace api={api()} runs={runs} />);
+    await addFace(); // 300x447
+    expect(screen.getByText("The video will be 720×1072 pixels.")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /Portrait 9:16/ }));
+    await userEvent.click(screen.getByRole("button", { name: /480p/ }));
+    expect(screen.getByRole("button", { name: /480p/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("The video will be 480×848 pixels.")).toBeTruthy();
+    const crop = screen.getByAltText(/as the video will show it/);
+    expect(crop.style.aspectRatio).toBe("480 / 848");
+    await userEvent.type(screen.getByLabelText("What should it say?"), "Good evening, everyone.");
+    expect(screen.getByText(/of work on this computer/)).toBeTruthy();
+    await userEvent.click(makeButton());
+    await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
+    expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({ shape: "9:16", size: 480 });
   });
 
   it("makes a video from any recording, without asking whose voice it is", async () => {
@@ -216,6 +242,7 @@ describe("making a talking video", () => {
       picture: "p1",
       source_speech: "s1",
       model: "echomimic-v3-flash",
+      size: 720,
     });
   });
 
@@ -271,6 +298,22 @@ describe("the lip sync engine and the videos", () => {
     await waitFor(() => expect(a.installLipsyncEngine).toHaveBeenCalledWith(1_516_000_000));
     expect(makeButton().disabled).toBe(true);
     expect(screen.getAllByText(/Needs the lip sync engine/).length).toBeGreaterThan(0);
+  });
+
+  it("asks for nothing to be set up while the model runs on the person's key", async () => {
+    const a = api({ lipsyncEngine: vi.fn(async () => engine({ installed: false })) }, [
+      model({
+        id: "key:lipsync",
+        title: "LongCat Avatar · with your key",
+        engine: "remote",
+        family: "fal",
+        measured: { platform: "", speed_x: null, memory_gb: null, load_s: null },
+      }),
+    ]);
+    render(<LipSyncWorkspace api={a} runs={runsThat([])} />);
+    await addFace();
+    expect(screen.queryByRole("button", { name: /Set up lip sync \(/ })).toBeNull();
+    expect(screen.queryByText(/Needs the lip sync engine/)).toBeNull();
   });
 
   it("says when there is no engine for this computer or the installer is missing", async () => {

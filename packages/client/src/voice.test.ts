@@ -6,6 +6,7 @@ import {
   HOSTED_RUNTIME,
   MAX_READ_ALOUD_CHARS,
   type VoiceModelInfo,
+  clipFrame,
   convertVoice,
   createVoiceApi,
   dictationReadiness,
@@ -521,6 +522,33 @@ describe("lip sync", () => {
       picture: "p1",
       text: "Hello there",
       voice: "af_heart",
+    });
+  });
+
+  it("sends the shape and size chosen, and leaves out the picture's own shape", async () => {
+    const r = runs([made]);
+    const base = { picture: "p1", text: "Hi there" };
+    await makeClip(r, { ...base, shape: "9:16", size: 480 }, new AbortController().signal);
+    expect(r.seen.input).toMatchObject({ shape: "9:16", size: 480 });
+    await makeClip(r, { ...base, shape: "picture" }, new AbortController().signal);
+    expect(r.seen.input).not.toHaveProperty("shape");
+    expect(r.seen.input).not.toHaveProperty("size");
+  });
+
+  it("works out the video's size as the engine does", () => {
+    const pic = { width: 1024, height: 924 };
+    expect(clipFrame(pic, "picture", 720)).toEqual({ width: 800, height: 720 });
+    expect(clipFrame(pic, "9:16", 720)).toEqual({ width: 720, height: 1280 });
+    expect(clipFrame(pic, "16:9", 480)).toEqual({ width: 848, height: 480 });
+    expect(clipFrame(pic, "1:1", 720)).toEqual({ width: 720, height: 720 });
+    expect(clipFrame(pic, "4:5", 720)).toEqual({ width: 720, height: 896 });
+    expect(clipFrame({ width: 400, height: 2000 }, "picture", 480)).toEqual({
+      width: 480,
+      height: 848,
+    });
+    expect(clipFrame({ width: 64, height: 48 }, "picture", 720)).toEqual({
+      width: 960,
+      height: 720,
     });
   });
 

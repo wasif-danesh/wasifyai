@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { languageApi, ownKeysApi } from "./api";
 
 /** Whether a chat model is chosen (null while it is not known) and its name: one on this computer, or Chat and
- * writing on the person's own key (ADR-0095, K2). */
+ * writing on a cloud model with the person's key (ADR-0095). */
 export function useChatModel(): { chosen: boolean | null; name: string } {
   const [state, setState] = useState<{ chosen: boolean | null; name: string }>({
     chosen: null,
@@ -19,7 +19,7 @@ export function useChatModel(): { chosen: boolean | null; name: string } {
       .then(([s, keys]) => {
         if (gone) return;
         const chat = keys?.products.find((p) => p.id === "chat");
-        if (chat?.mode === "key") setState({ chosen: true, name: chat.model ?? "your model" });
+        if (chat?.use) setState({ chosen: true, name: chat.use.title });
         else setState({ chosen: s.selected !== null, name: s.selected?.name ?? "" });
       })
       .catch(() => {});

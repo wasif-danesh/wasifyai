@@ -95,7 +95,8 @@ async def rig(monkeypatch, answer=None):
 
 
 async def with_key(keys: OwnKeysService) -> None:
-    await keys.save("chat", "key", "openrouter", "openai/gpt-4o-mini", None, KEY)
+    await keys.save_key("chat", "openrouter", KEY)
+    await keys.use("chat", "openrouter", "openai/gpt-4o-mini")
 
 
 async def text(it) -> str:
@@ -166,16 +167,17 @@ async def test_back_to_this_computer_or_removing_the_key_is_followed_at_once(mon
     p, keys, local, _, seen = await rig(monkeypatch)
     await with_key(keys)
     await text(p.stream("chat", BINDING, "s", "hi"))
-    await keys.save("chat", "here", None, None, None, None)
+    await keys.use("chat", None, None)
     assert await text(p.stream("chat", BINDING, "s", "hi")) == "from this computer"
     await with_key(keys)
-    await keys.remove("chat")
+    await keys.remove_key("chat", "openrouter")
     assert await text(p.stream("chat", BINDING, "s", "hi")) == "from this computer"
     assert len(seen) == 1 and local.asked == ["chat", "chat"]
 
 
 async def test_only_chat_and_writing_decides_where_text_goes(monkeypatch, ctx):
     p, keys, local, _, seen = await rig(monkeypatch)
-    await keys.save("images", "key", "fal", "fal-ai/flux-2", None, KEY)
+    await keys.save_key("images", "fal", KEY)
+    await keys.use("images", "fal", "fal-ai/flux-2")
     assert await text(p.stream("chat", BINDING, "s", "hi")) == "from this computer"
     assert seen == []

@@ -10,6 +10,7 @@ import { recommendedChat } from "./copy";
 import { cloudRow } from "./keyed";
 import { model3dChoices } from "./model3d-choices";
 import type { Step } from "./steps";
+import { TRAIN_HERE_ID, trainChoices } from "./train-choices";
 import type { Engines, Memory } from "./types";
 import { choiceKey, voiceChoices } from "./voice-choices";
 
@@ -614,6 +615,28 @@ describe("3D", () => {
       ["pixal3d", true, "ready"],
       ["cloud:model3d:fal:fal-ai/pixal3d", false, "ready"],
     ]);
+  });
+});
+
+describe("training (ADR-0100, CP10)", () => {
+  it("teaches on this computer until a cloud trainer is chosen, and comes back to it", async () => {
+    const here = onKey("train", "z-image-look", "here");
+    const rows = (await trainChoices(here.keys).list()).choices;
+    expect(rows.map((r) => [r.id, r.chosen])).toEqual([
+      [TRAIN_HERE_ID, true],
+      ["cloud:train:fal:z-image-look", false],
+    ]);
+    const { keys, use } = onKey("train", "z-image-look");
+    const api = trainChoices(keys);
+    expect(api.cloud?.product).toBe("Train models");
+    const on = (await api.list()).choices;
+    expect(on.map((r) => [r.id, r.chosen])).toEqual([
+      [TRAIN_HERE_ID, false],
+      ["cloud:train:fal:z-image-look", true],
+    ]);
+    expect(on[1]?.plain).toContain("the pictures and their captions");
+    await api.choose(TRAIN_HERE_ID);
+    expect(use).toHaveBeenCalledWith("train", null);
   });
 });
 

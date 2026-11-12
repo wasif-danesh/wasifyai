@@ -102,5 +102,21 @@ blocks Inpaint before Make for the other three. A provider that refuses before r
 offer. The requests are `services/media-worker/.../cloud_recipes.py` (the field names of each provider's schema,
 `docs/spikes/fal-v1-fa0-inputs.md` and `docs/spikes/cloud-v1-cp0.md`); input pictures go to fal.ai's and WaveSpeed's
 file stores first and inside the task on Runware; OpenAI's mask is turned into its clear-where-it-changes form. Looks
-taught on this computer are for this computer's models and are refused on a cloud model; looks taught on fal.ai come
-with stage CP10 (FLUX.3 klein's `lora` endpoint is in its offer). Checked against fakes only; the real run is CP13.
+taught on this computer are for this computer's models and are refused on a cloud model; looks taught on a cloud
+trainer are used as below. Checked against fakes only; the real run is CP13.
+
+### Looks taught on a cloud model (ADR-0100, stage CP10)
+
+With a key for Train models (Settings › Your keys) and a cloud trainer chosen under "Where it is taught" on the
+pictures card (the Training group of the model picker: "This computer (AI Toolkit)" or, under Cloud, "FLUX.3 klein
+look" or "Z-Image look"; `apps/desktop/src/choices/train-choices.ts`), Teach it sends the pictures and their captions as one zip (`001.png` beside `001.txt`) to the cheapest trainer with a
+key instead of AI Toolkit on this computer: FLUX.3 klein on fal.ai; Z-Image on Runware (style looks only) or fal.ai
+(style or a person or thing). It is priced per step and writes a `cloud.cost` usage event; a cloud run cannot be
+paused. The look's file is kept beside the other styles as `wasify-cloud-<title>-<run>.safetensors` with where the
+provider keeps it and the cloud model it is for (`cloud` in the styles list). On Images, a cloud look is chosen like
+any style; the job carries its address (`lora_urls`) and runs on fal.ai's `lora` endpoint of that model, even when
+another key is cheaper. A look taught on this computer, or for another cloud model, is refused in words. The code is
+`services/api/.../cloud_train.py` (`CloudLookTrainer`), `desktop_styles.py` and `OfferRunner._check_looks` in the
+media worker. Not built: video looks (no cloud video model in the catalogue takes a look since LTX-2 left in CP5);
+the web's Train cards on the cloud come with CP11. Checked against fakes only; Runware's `modelTraining` task and its
+answer field, fal.ai's trainer fields and `training_type` are checked in the real run (CP13).

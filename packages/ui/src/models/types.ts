@@ -13,7 +13,8 @@ export type GroupId =
   | "music"
   | "faces"
   | "documents"
-  | "three_d";
+  | "three_d"
+  | "train";
 
 export type Group = {
   id: GroupId;
@@ -74,6 +75,12 @@ export const GROUPS: Group[] = [
     title: "3D",
     select: "Select 3D model",
     about: "Turns a picture into a 3D model",
+  },
+  {
+    id: "train",
+    title: "Training",
+    select: "Select where to teach",
+    about: "Teaches your own looks from your pictures",
   },
 ];
 

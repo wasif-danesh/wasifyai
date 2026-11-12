@@ -953,6 +953,10 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
             s.audio = KeyedSpeechEngine(desktop.audio, desktop.own_keys, usage=desktop.usage)
         if desktop.model3d is not None:
             s.model3d = KeyedModel3d(desktop.model3d, desktop.own_keys, usage=desktop.usage)
+        if desktop.training is not None:  # picture looks taught on a cloud model (ADR-0100, CP10)
+            from wasifyai_api.cloud_train import CloudLookTrainer
+
+            s.training = CloudLookTrainer(desktop.training, desktop.own_keys, usage=desktop.usage)
     if desktop.web is not None:  # web search: off until the person allows it (ADR-0083)
         desktop.web.usage = s.usage
         s.web = desktop.web

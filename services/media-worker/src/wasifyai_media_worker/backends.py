@@ -573,6 +573,23 @@ class OfferRunner:
         self.backend = self._choices[0].provider if self._choices else "cloud"
         self.cost: Priced[CloudChoice] | None = None
 
+    def _check_looks(self, job: JobRequest) -> None:
+        """A look is used on a cloud model only when it was taught on one, for this model
+        (stage CP10): it is loaded there by its address."""
+        urls = job.inputs.get("lora_urls") or {}
+        looks = [urls.get(x.get("name")) for x in job.inputs.get("loras") or []]
+        if not all(isinstance(u, dict) and u.get("url") for u in looks):
+            raise ComfyError(
+                "not_with_key",
+                "Styles and looks made on this computer cannot be used with your key.",
+            )
+        if any(u.get("model") not in ("", self.model) for u in looks if isinstance(u, dict)):
+            raise ComfyError(
+                "not_with_key",
+                f"That look was taught for another cloud model, not {self._title}. Choose that "
+                "model to use it.",
+            )
+
     def _runner(self, c: CloudChoice) -> Any:
         if (c.provider, self.model) in RECIPES:
             return RecipeRunner(self.model, c, self._http, self._timeout, self._poll)
@@ -589,6 +606,9 @@ class OfferRunner:
         self, job: JobRequest, on_progress: ProgressFn, files: InputFiles | None = None
     ) -> Files:
         needs = NEEDS.get(job.capability, ())
+        if job.inputs.get("loras"):
+            needs = (*needs, "lora")
+            self._check_looks(job)
         ordered = order(self._choices, lambda c: c.offer, job_settings(job), needs)
         if not ordered:
             e = no_offer(self._title, [c.offer for c in self._choices], needs, None)

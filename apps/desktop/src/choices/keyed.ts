@@ -41,6 +41,7 @@ const PRODUCT_TITLES: Record<string, string> = {
   musicedit: "Edit music",
   lipsync: "Lip sync",
   model3d: "3D",
+  train: "Train models",
 };
 
 /** What leaves the computer while a product runs on a cloud model. */
@@ -56,6 +57,7 @@ const SENT: Record<string, string> = {
   musicedit: "the clip and what you describe",
   lipsync: "the picture and the voice",
   model3d: "the picture you add",
+  train: "the pictures and their captions",
 };
 
 /** Settings › Your keys, from the picker's Cloud tab. */

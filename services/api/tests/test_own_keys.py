@@ -71,7 +71,7 @@ def test_every_product_starts_with_no_keys_and_offers_its_providers():
     body = c.get("/desktop/keys").json()
     assert list(rows(body)) == [
         "chat", "media", "images", "video", "voice", "voiceclone", "transcribe", "voicechange",
-        "music", "sfx", "split", "musicedit", "lipsync", "model3d",
+        "music", "sfx", "split", "musicedit", "lipsync", "model3d", "train",
     ]  # fmt: skip
     assert all(p["keys"] == [] and p["use"] is None for p in body["products"])
     by = rows(body)
@@ -86,6 +86,7 @@ def test_every_product_starts_with_no_keys_and_offers_its_providers():
     for media in ("transcribe", "voicechange", "sfx", "split"):
         assert by[media]["providers"] == ["wavespeed", "fal"], media
     assert by["musicedit"]["providers"] == ["runware", "fal"]
+    assert by["train"]["providers"] == ["runware", "fal"]
     assert [p["id"] for p in body["providers"]] == [
         "anthropic", "openai", "gemini", "deepseek", "zai", "openrouter",
         "runware", "wavespeed", "fal",

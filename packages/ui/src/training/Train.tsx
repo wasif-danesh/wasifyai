@@ -19,6 +19,8 @@ import { JobMeter, WorkingCard } from "../components/create";
 import { Notice } from "../components/notice";
 import { Stepper } from "../components/stepper";
 import type { ImageFlowApi } from "../hooks/use-image-flow";
+import { ModelSelect } from "../models/ModelSelect";
+import { useChoicesFor } from "../models/context";
 import { actions, chips, eyebrow, field, fieldLabel, hint, panel } from "../styles";
 import { BackInBar } from "../window-bar";
 import { CheckIt, EvaluationLine } from "./CheckIt";
@@ -924,6 +926,8 @@ function CheckStep({
   const [own, setOwn] = useState("");
   const isVideo = video !== undefined;
   const choosing = useChoices(api, d.kind, isVideo ? "video" : "image");
+  // where a picture look is taught (ADR-0100, CP10): this computer, or a cloud trainer with the person's key
+  const where = useChoicesFor("train");
   const nameId = useId();
   const ownId = useId();
   const items = d.items ?? [];
@@ -1062,6 +1066,14 @@ function CheckStep({
         <Notice tone="warn" title="It cannot start now">
           {noVideo}
         </Notice>
+      ) : null}
+      {where && !isVideo ? (
+        <div className={field}>
+          <span className={fieldLabel}>Where it is taught</span>
+          <div>
+            <ModelSelect group="train" api={where} onChanged={() => choosing.reload()} />
+          </div>
+        </div>
       ) : null}
       <TeachModelSelect
         bases={choosing.choices?.bases ?? []}

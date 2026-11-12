@@ -64,6 +64,13 @@ def ask_of(job: JobRequest, files: dict[str, bytes] | None) -> Ask:
         raise FalError("invalid_input", "The request has no description.")
     w, h, seed = job.inputs.get("width"), job.inputs.get("height"), job.inputs.get("seed")
     frames = job.inputs.get("length")
+    # a look taught on a cloud model: its address there, which the model loads (stage CP10)
+    urls = job.inputs.get("lora_urls") or {}
+    loras = [
+        {"path": urls[x["name"]]["url"], "scale": float(x.get("weight", 1.0))}
+        for x in job.inputs.get("loras") or []
+        if isinstance(x, dict) and isinstance(urls.get(x.get("name")), dict)
+    ]
     return Ask(
         capability=job.capability, prompt=prompt.strip(),
         width=w if isinstance(w, int) else None, height=h if isinstance(h, int) else None,
@@ -71,6 +78,7 @@ def ask_of(job: JobRequest, files: dict[str, bytes] | None) -> Ask:
         pictures=tuple(files[n] for n in ("image", "image2") if n in files),
         mask=files.get("mask"), video=files.get("video"),
         seconds=frames / 24 if isinstance(frames, int) and frames > 0 else None,
+        extra={"loras": loras} if loras else {},
     )  # fmt: skip
 
 
@@ -212,6 +220,11 @@ async def z_image_fal(ask: Ask, o: Offer, send: Send) -> tuple[str, dict[str, An
         body["image_size"] = size
     if ask.seed is not None:
         body["seed"] = ask.seed
+    if ask.extra.get("loras"):  # a look trained on a cloud model (stage CP10): its own endpoint
+        if ask.verb != "make":
+            raise _bad("A look is used on Z-Image Turbo only to make a picture.")
+        body["loras"] = ask.extra["loras"]
+        return o.endpoint_for("lora"), body
     if ask.verb == "make":
         return o.endpoint, body
     if ask.verb != "inpaint" or ask.mask is None or not ask.pictures:

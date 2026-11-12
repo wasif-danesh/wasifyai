@@ -94,8 +94,8 @@ CATALOGUE: tuple[CloudModel, ...] = (
                             "lora": "blackforestlabs/flux-3/klein/text-to-image/lora"})),
     _media("images", "z-image-turbo", "Z-Image Turbo", "Tongyi. The cheapest; makes pictures and paints over part of one.",
            offer("runware", "runware:z-image@turbo", 0.002, "picture", "mask"),
-           offer("fal", "fal-ai/z-image/turbo", 0.005, "picture", "mask",
-                 endpoints={"inpaint": "fal-ai/z-image/turbo/inpaint"})),
+           offer("fal", "fal-ai/z-image/turbo", 0.005, "picture", "mask", "lora",
+                 endpoints={"inpaint": "fal-ai/z-image/turbo/inpaint", "lora": "fal-ai/z-image/turbo/lora"})),
     # ---- video (ADR-0100, CP5: per second at 720p, 768p for MiniMax H3, without sound; "animate"
     # starts from a picture, "extend" makes a clip longer; prices as listed 2026-11-12)
     _media("video", "gemini-omni-flash-1.2", "Gemini Omni Flash 1.2", "Google. Makes and animates clips of 3 to 15 s, wide or tall; extends them with a Runware key.",
@@ -218,6 +218,12 @@ CATALOGUE: tuple[CloudModel, ...] = (
            offer("fal", "fal-ai/infinitalk", 0.20, "second", setting="resolution", by={"480p": 0.20, "720p": 0.40}),
            speed="about 50 s per second of video at 480p"),
     # ---- 3D
+    # ---- Train models (ADR-0100, CP10): picture looks, used afterwards on the cloud image model
+    _media("train", "flux3-klein-look", "Picture look on FLUX.3 klein", "Black Forest Labs' trainer. People, things or a style.",
+           offer("fal", "fal-ai/flux-3-klein-trainer", 0.0043, "step", "style", "content")),
+    _media("train", "z-image-look", "Picture look on Z-Image", "Tongyi. Style looks on Runware; people and things on fal.ai.",
+           offer("runware", "runware:z-image@style-lora-training", 0.00182, "step", "style"),
+           offer("fal", "fal-ai/z-image-trainer", 0.00226, "step", "style", "content")),
     _media("model3d", "pixal3d", "Pixal3D", "A textured 3D model from a picture.",
            offer("fal", "fal-ai/pixal3d", 0.06, "model")),
     # ADR-0100, CP9. Hunyuan3D without PBR ($0.15 more on both); TRELLIS 2 on Runware is billed by

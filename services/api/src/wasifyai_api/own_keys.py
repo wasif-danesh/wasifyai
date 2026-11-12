@@ -131,6 +131,7 @@ PRODUCTS = (
     Product("musicedit", "Edit music", "media"),
     Product("lipsync", "Lip sync", "media"),
     Product("model3d", "3D", "media"),
+    Product("train", "Train models", "media"),
 )
 BY_ID = {p.id: p for p in PRODUCTS}
 

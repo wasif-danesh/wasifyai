@@ -25,7 +25,10 @@ Keep = Callable[[str, str], Awaitable[str | None]]
 # track and as `video_id` (Extend) as a clip; a field not named here keeps the usual kind
 # fields that take an attachment as it is (the keep itself; notebook sources, CE4)
 TAKES_ATTACHMENT = {"attachment_id", "attachment_ids"}
-AS_KIND = {"source_id": "track", "video_id": "video", "image_id": "image", "image_ids": "image"}
+AS_KIND = {
+    "source_id": "track", "track_id": "track", "video_id": "video",
+    "image_id": "image", "image_ids": "image",
+}  # fmt: skip
 
 
 def attachment_names(history: list[Message]) -> dict[str, str]:
@@ -60,7 +63,8 @@ async def kept_in_place(
     """`params` with each attachment it names replaced by its library id. `done` remembers what
     was kept in this run, so one file is kept once. A field that takes an attachment itself
     (`attachment_id`, `attachment_ids`: the keep, a notebook's sources) gets its id for a file
-    name, and nothing is kept for it. A value that is not an attachment is left as it is."""
+    name, and nothing is kept for it. A field inside an object is looked at the same way. A value
+    that is not an attachment is left as it is."""
     if not names:
         return params
 
@@ -82,6 +86,10 @@ async def kept_in_place(
 
     out: dict[str, Any] = {}
     for key, value in params.items():
+        if isinstance(value, dict) and action_id != KEEP:
+            # a field inside an object: Creative Studio's song is `brief.track_id`
+            out[key] = await kept_in_place(action_id, value, names, keep, done)
+            continue
         if key in TAKES_ATTACHMENT:
             out[key] = [named(v) for v in value] if isinstance(value, list) else named(value)
         elif action_id == KEEP or not key.endswith(("_id", "_ids")):

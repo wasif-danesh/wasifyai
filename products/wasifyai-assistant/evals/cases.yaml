@@ -892,7 +892,7 @@ cases:
     attach: [{ kind: image, name: beach.jpg }]
     expect: propose_action
     action: library.keep_attachment
-    kept_for: [image.edit]
+    kept_for: [image.edit, image.inpaint]
   - id: menu-images-edit-follow
     menu: images.edit
     after: *fox

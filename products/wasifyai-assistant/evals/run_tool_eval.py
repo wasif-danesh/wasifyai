@@ -398,6 +398,8 @@ def names_attachment(case: dict, params: dict) -> bool:
         [Message(id="m", conversation_id="c", seq=0, role="user", parts=parts)]
     )
     for key, value in params.items():
+        if isinstance(value, dict) and names_attachment(case, value):
+            return True  # a field inside an object (Creative Studio's brief.track_id)
         if not key.endswith(("_id", "_ids")):
             continue
         for v in value if isinstance(value, list) else [value]:

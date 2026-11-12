@@ -3,7 +3,7 @@ action: lipsync.make
 screen: voice.lipsync
 synonyms: [talking picture, make a picture talk, avatar, lip sync]
 ---
-# Lip sync
+# Lip sync: make a picture say words out loud
 
 Action: `lipsync.make`
 

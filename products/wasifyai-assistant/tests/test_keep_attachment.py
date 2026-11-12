@@ -184,6 +184,15 @@ async def test_a_clip_is_kept_as_what_the_field_takes():
     extend = await kept_in_place("video.extend", {"video_id": "talk.mp4"}, names, keep, done)
     assert dub == {"source_id": "track-c1"} and extend == {"video_id": "video-c1"}
     assert asked == [("c1", "track"), ("c1", "video")]
+    # a song inside Creative Studio's brief is kept as a song too
+    plan = await kept_in_place(
+        "creative.plan",
+        {"brief": {"track_id": "talk.mp4", "idea": "a road trip"}},
+        names,
+        keep,
+        done,
+    )
+    assert plan == {"brief": {"track_id": "track-c1", "idea": "a road trip"}}
 
 
 def clip_with_sound(seconds: float = 2) -> bytes:

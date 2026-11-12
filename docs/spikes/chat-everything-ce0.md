@@ -141,3 +141,47 @@ chains 4 of 4 (20 of 30 together), asks with an attachment 11 of 22, follow-ups 
 
 Still failing: Make a picture from two pictures (the model makes a new picture instead), Lip sync (it proposes a picture),
 the notebooks list (it answers in words), and some asks that still end in words after a lookup.
+
+## CE8: the table again, and what is left (2026-11-12)
+
+Two more fixes first: an attachment named inside an object is kept too (Creative Studio's song is `brief.track_id`), and
+the lip sync guide is titled "Lip sync: make a picture say words out loud". Then the whole table on the local default:
+**50 of 78** (22 of 74 at the baseline): plain asks and chains 18 of 30, asks with an attachment 14 of 22 (1 at the
+baseline), follow-ups 18 of 26 (8). Runs differ by two or three cases at temperature 0.2.
+
+| Menu item | Passed | Menu item | Passed |
+|---|---|---|---|
+| images.create | 2/3 | voice.speak | 1/3 |
+| images.edit | 2/3 | voice.transcribe | 1/3 |
+| images.inpaint | 2/3 | voice.convert | 2/3 |
+| images.reference | 0/3 | voice.voices | 2/3 |
+| video.create | 2/2 | voice.edit | 2/3 |
+| video.animate | 3/3 | voice.dub | 2/4 |
+| video.extend | 2/3 | voice.audiobook | 4/4 |
+| model3d | 3/3 | voice.lipsync | 1/3 |
+| music.create | 3/3 | notebook.create | 2/3 |
+| music.lyrics | 1/2 | notebook.list | 0/2 |
+| music.separate | 2/3 | library | 3/3 |
+| creative | 2/4 | train | 2/4 |
+| motion | 3/3 | models | 1/2 |
+
+### The gaps, row by row
+
+Every action the menu items need can now be proposed from the chat with what it needs (attachments kept first, ids
+told, areas found, sets made). What fails is the local 8B model's choice:
+
+- **Answers in words after a lookup** (12 cases: edit, inpaint, reference, extend, transcribe, voices, convert, dub,
+  notebooks list, creative, train with photos, models). The guide now says to propose; the small model still
+  sometimes explains. Haiku 5.5 is expected to do better; not measured (the owner's $0 rule).
+- **The wrong action**: two pictures become `image.generate` instead of `image.reference` (3); "make this face say …"
+  becomes `image.edit` instead of `lipsync.make` (2); a follow-up dub starts at `dub.make` without a script, speech
+  edits use invented ids (`speech.edit_speech`), a split runs `music.analyse`, a sketch becomes a new picture.
+- **Outside tools** for a recording (`call_external`): the model reached for an outside server once.
+- **Lost details**: the lyrics follow-up drops the lyrics; a trained look is named as `style_id` without its magic word.
+
+### Not walked
+
+The plan's walk "in the real window and on the web" was not done in this run: the owner's desktop app was running on
+the same data folder (the walk script needs it closed: both would use one database), and the web runs only cloud models,
+which cost money (the owner chose $0 for this work). Haiku 5.5 was not measured for the same reason. These three stay
+for the owner: a walk of the window with the app closed, a run of this table on Haiku 5.5 with a key, and the web walk.

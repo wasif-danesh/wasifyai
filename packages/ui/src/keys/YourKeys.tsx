@@ -28,16 +28,26 @@ function problem(e: unknown): string {
 const titleOf = (providers: KeyProvider[], id: string) =>
   providers.find((v) => v.id === id)?.title ?? id;
 
+/** Whose keys these are: the person's, on this computer; or the service's, kept by an admin on the web (CP11). */
+export type KeysPlace = "computer" | "service";
+
 /** What a row with no key of its own means. */
-function noKey(product: KeyProduct): string {
+function noKey(product: KeyProduct, place: KeysPlace): string {
   if (product.id === "media") return "No key: add one to use cloud models in every media product.";
+  const otherwise = place === "service" ? "" : ", or this computer's models";
   if (product.kind === "media") {
-    return `No key of its own: ${product.title} uses the keys under Every media product, or this computer's models.`;
+    return `No key of its own: ${product.title} uses the keys under Every media product${otherwise}.`;
   }
   return `No key: ${product.title} uses this computer's models only.`;
 }
 
-export function YourKeys({ api }: { api: OwnKeysApi }) {
+export function YourKeys({
+  api,
+  place = "computer",
+}: {
+  api: OwnKeysApi;
+  place?: KeysPlace;
+}) {
   const [keys, setKeys] = useState<OwnKeys | null>(null);
   const [error, setError] = useState<string | null>(null);
   // a key added or removed changes what each picker's Cloud tab lists: every screen hears it
@@ -63,19 +73,31 @@ export function YourKeys({ api }: { api: OwnKeysApi }) {
   };
 
   return (
-    <section className="grid gap-4" aria-label="Your keys">
-      <h3 className="m-0 font-semibold text-base">Your keys</h3>
-      <p className="m-0 text-muted-foreground text-sm">
-        Save a provider key for a product, and that provider's models for it appear in the product's
-        model picker, under Cloud. One Runware, WaveSpeed or fal.ai key under Every media product
-        serves pictures, video, voice, music, lip sync and 3D; more keys let each job go to the
-        cheapest. A key is kept in this computer's keychain, used only by its products, and never
-        shown again. Testing a key costs nothing.
-      </p>
+    <section className="grid gap-4" aria-label={place === "service" ? "Service keys" : "Your keys"}>
+      <h3 className="m-0 font-semibold text-base">
+        {place === "service" ? "Service keys" : "Your keys"}
+      </h3>
+      {place === "service" ? (
+        <p className="m-0 text-muted-foreground text-sm">
+          The service runs every picture, clip, voice, song, lip sync, 3D model and look on cloud
+          models. One Runware, WaveSpeed or fal.ai key under Every media product serves them all;
+          more keys let each job go to the cheapest, and a product's own key bills it apart. A key
+          is encrypted in the service's database and never shown again. Testing a key costs nothing.
+        </p>
+      ) : (
+        <p className="m-0 text-muted-foreground text-sm">
+          Save a provider key for a product, and that provider's models for it appear in the
+          product's model picker, under Cloud. One Runware, WaveSpeed or fal.ai key under Every
+          media product serves pictures, video, voice, music, lip sync and 3D; more keys let each
+          job go to the cheapest. A key is kept in this computer's keychain, used only by its
+          products, and never shown again. Testing a key costs nothing.
+        </p>
+      )}
       {!keys.can_save ? (
         <Notice tone="warn" title="Keys cannot be kept here">
-          This computer has nowhere safe to keep a key, so every product uses this computer's
-          models.
+          {place === "service"
+            ? "The service has no key to encrypt them with: set MEDIA_SECRETS_KEY and restart the API and the worker."
+            : "This computer has nowhere safe to keep a key, so every product uses this computer's models."}
         </Notice>
       ) : null}
       <ul className="m-0 grid list-none gap-0 divide-y rounded-xl border p-0">
@@ -83,6 +105,7 @@ export function YourKeys({ api }: { api: OwnKeysApi }) {
           <ProductKeys
             key={p.id}
             api={api}
+            place={place}
             product={p}
             providers={keys.providers}
             canSave={keys.can_save}
@@ -96,12 +119,14 @@ export function YourKeys({ api }: { api: OwnKeysApi }) {
 
 function ProductKeys({
   api,
+  place,
   product,
   providers,
   canSave,
   onChanged,
 }: {
   api: OwnKeysApi;
+  place: KeysPlace;
   product: KeyProduct;
   providers: KeyProvider[];
   canSave: boolean;
@@ -127,7 +152,7 @@ function ProductKeys({
           />
         ))}
         {product.keys.length === 0 && !adding ? (
-          <p className="m-0 text-muted-foreground text-sm">{noKey(product)}</p>
+          <p className="m-0 text-muted-foreground text-sm">{noKey(product, place)}</p>
         ) : null}
         {adding ? (
           <AddKey

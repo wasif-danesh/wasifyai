@@ -20,12 +20,20 @@ from wasifyai_platform_sdk import (
     MediaBinding,
     MediaBindingStore,
     SecretBox,
+    SecretStore,
     SecretsUnavailable,
     input_image_name,
 )
 from wasifyai_platform_sdk.cloud_queues import RunwareTasks, WaveSpeedQueue, queue_for
 from wasifyai_platform_sdk.fal import FAL_QUEUE, FalError, FalQueue
-from wasifyai_platform_sdk.offers import Offer, Priced, no_offer, order, run_cheapest
+from wasifyai_platform_sdk.offers import (
+    Offer,
+    Priced,
+    no_offer,
+    offer_of_dict,
+    order,
+    run_cheapest,
+)
 
 from wasifyai_media_worker.cloud_recipes import RECIPES, ask_of
 from wasifyai_media_worker.comfy import ComfyClient, ComfyError, ProgressFn, use_picture
@@ -623,8 +631,24 @@ class OfferRunner:
         return made
 
 
+class NoCloudModel:
+    """The web's default runner (`COMFYUI_MODE=cloud`, stage CP11): it runs no model of its own, so
+    a job that came with no offers says what is missing."""
+
+    local_gpu = False
+    backend = "cloud"
+
+    async def run(self, job: JobRequest, on_progress: ProgressFn, files: Any = None) -> Files:
+        raise ComfyError(
+            "backend_misconfigured",
+            "No cloud model can make this yet: an admin adds a Runware, WaveSpeed or fal.ai key "
+            "in Admin › Media.",
+        )
+
+
 class BackendRouter:
-    """Chooses the runner for each job: the admin's binding if there is one, else the default."""
+    """Chooses the runner for each job: the offers it came with (the web, CP11), else the admin's
+    binding if there is one, else the default."""
 
     def __init__(
         self,
@@ -634,6 +658,7 @@ class BackendRouter:
         box: SecretBox,
         http: httpx.AsyncClient,
         poll_s: float = 2.0,
+        secrets: SecretStore | None = None,
     ):
         self._default = default
         self._s = settings
@@ -641,6 +666,7 @@ class BackendRouter:
         self._box = box
         self._http = http
         self._poll = poll_s
+        self._secrets = secrets
         self._cache: dict[tuple[str, str, str], tuple[float, MediaBinding | None]] = {}
         self._comfy: dict[str, Any] = {}
 
@@ -670,7 +696,36 @@ class BackendRouter:
                 "backend_misconfigured", "The generation backend is not set up correctly."
             ) from exc
 
+    async def _planned(self, plan: Any) -> OfferRunner:
+        """A job sent with its offers and where each key is kept (the web, stage CP11): the keys are
+        read here, never carried in the job."""
+        if not isinstance(plan, dict) or not isinstance(plan.get("offers"), list):
+            raise ComfyError("backend_misconfigured", "The job's cloud model is not set up.")
+        choices: list[CloudChoice] = []
+        for item in plan["offers"]:
+            try:
+                o = offer_of_dict(item["offer"])
+                name = str(item["secret"])
+            except (KeyError, TypeError, ValueError):
+                log.warning("a job's offer could not be read")
+                continue
+            key = await self._secrets.get(name) if self._secrets is not None else None
+            if key:
+                choices.append(CloudChoice(o.provider, key, str(item.get("base_url") or ""), o))
+        if not choices:
+            raise ComfyError(
+                "backend_misconfigured",
+                "The cloud model's keys could not be read: an admin checks them in Admin › Media.",
+            )
+        model = str(plan.get("model") or "")
+        return OfferRunner(
+            model, str(plan.get("title") or model), choices, self._http, self._s.job_timeout_s,
+            self._poll,
+        )  # fmt: skip
+
     async def resolve(self, job: JobRequest) -> Any:
+        if "cloud" in job.inputs:
+            return await self._planned(job.inputs["cloud"])
         b = await self._binding(job)
         from wasifyai_media_worker.processor import ComfyRunner  # circular at import time
 

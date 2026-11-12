@@ -35,27 +35,6 @@ check "media job: queued, ran, completed" "printf '%s' \"\$media\" | grep -q 'ev
 check "media run finished with done and an image URL" "printf '%s' \"\$media\" | tail -4 | grep -q 'event: done' && printf '%s' \"\$media\" | grep -q 'image_url'"
 check "worker usage recorded (job.completed)" "kubectl -n $NS exec statefulset/wasifyai-postgres -- psql -U wasifyai -d wasifyai -tAc \"select count(*) from usage_events where kind='job.completed'\" | grep -qv '^0\$'"
 
-# KIND_MODE=full: nothing is native, so check each pod that stands in for a host service really works.
-if kubectl -n $NS get deploy wasifyai-comfyui >/dev/null 2>&1; then
-  step "Pods that replace native services"
-  check "Ollama pod has the language model" "kubectl -n $NS exec deploy/wasifyai-ollama -- ollama list | grep -q gemma4"
-  check "speech server has its models installed" "kubectl -n $NS exec deploy/wasifyai-speech -- curl -fsS localhost:8000/v1/models | grep -q Kokoro"
-  check "lip sync server is reachable from the worker" "kubectl -n $NS exec deploy/wasifyai-media-worker -c media-worker -- python -c \"import urllib.request; urllib.request.urlopen('http://wasifyai-lipsync:8000/health', timeout=5)\""
-  check "ComfyUI pod answers" "kubectl -n $NS exec deploy/wasifyai-comfyui -- python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8188/system_stats', timeout=5)\""
-  # Bind the demo product to the ComfyUI pod: the worker sends a real graph (no models needed) and gets a real file.
-  kubectl -n $NS exec deploy/wasifyai-api -c api -- python -c "
-import json, urllib.request
-r = urllib.request.Request('http://localhost:8000/admin/media/media-demo/image.generate', method='PUT',
-    data=json.dumps({'backend': 'comfyui-local', 'config': {'base_url': 'http://wasifyai-comfyui:8188'}}).encode(),
-    headers={'content-type': 'application/json'})
-print(urllib.request.urlopen(r, timeout=10).status)" >/dev/null 2>&1
-  sleep 5   # the worker caches binding lookups for a few seconds
-  real="$(curl -sN -m 180 -X POST http://localhost:3000/api/products/media-demo/runs \
-    -H 'content-type: application/json' -d '{"input":{"prompt":"a lighthouse"}}' 2>&1)"
-  check "media job ran on the ComfyUI pod and finished" "printf '%s' \"\$real\" | grep -q 'image_url'"
-  check "ComfyUI pod really executed the graph" "kubectl -n $NS exec deploy/wasifyai-comfyui -- python -c \"import json,urllib.request; assert json.load(urllib.request.urlopen('http://localhost:8188/history', timeout=5))\""
-fi
-
 # Monitoring (ADR-0048), when installed: Prometheus must see the API and the worker and the alert rules.
 if kubectl get ns monitoring >/dev/null 2>&1 && kubectl -n monitoring get pod prometheus-monitoring-prometheus-0 >/dev/null 2>&1; then
   step "Monitoring"

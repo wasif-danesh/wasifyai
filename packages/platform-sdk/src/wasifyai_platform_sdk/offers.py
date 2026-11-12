@@ -126,6 +126,32 @@ def offer(
     )  # fmt: skip
 
 
+def offer_dict(o: Offer) -> dict[str, Any]:
+    """An offer as plain data, for a job that carries its offers to the media worker (the web,
+    stage CP11): never a key."""
+    return {
+        "provider": o.provider, "endpoint": o.endpoint, "can": sorted(o.can),
+        "endpoints": dict(o.endpoints),
+        "price": {"amount": o.price.amount, "unit": o.price.unit, "setting": o.price.setting,
+                  "by": dict(o.price.by), "minimum": o.price.minimum},
+    }  # fmt: skip
+
+
+def offer_of_dict(d: Mapping[str, Any]) -> Offer:
+    """`offer_dict` read back; a ValueError when it is not one."""
+    p = d.get("price") or {}
+    if str(d.get("provider")) not in TIE_ORDER:
+        raise ValueError(f"unknown media provider {d.get('provider')!r}")
+    return Offer(
+        str(d["provider"]), str(d["endpoint"]),
+        Price(float(p["amount"]), str(p["unit"]), str(p.get("setting") or ""),
+              {str(k): float(v) for k, v in (p.get("by") or {}).items()},
+              float(p.get("minimum") or 0.0)),
+        frozenset(str(c) for c in d.get("can") or ()),
+        {str(k): str(v) for k, v in (d.get("endpoints") or {}).items()},
+    )  # fmt: skip
+
+
 def cheapest_words(offers: Iterable[Offer]) -> str:
     """ "from $x per y": the lowest list price of a model, for the Cloud tab."""
     found = sorted(offers, key=lambda o: o.price.amount)

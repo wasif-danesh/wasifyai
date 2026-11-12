@@ -213,7 +213,7 @@ async def test_a_clip_the_model_made_is_not_looked_at_again(tmp_path, ctx):
     assert rig.asked() == []
 
 
-# ---- a cloud model's Extend (ADR-0100, CP5): it answers what it was sent, then the new part -------
+# ---- a cloud model's Extend (ADR-0100, CP5): it answers what it was sent, then the new part ---
 
 
 @pytest.mark.parametrize(("frames", "sent"), [(49, 49), (300, 24)])

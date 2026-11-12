@@ -17,7 +17,7 @@ import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from wasifyai_platform_sdk.cloud_queues import queue_for
@@ -109,8 +109,13 @@ class CloudLookTrainer:
         self._published: dict[str, dict[str, str]] = {}  # a published name -> the same
 
     def __getattr__(self, name: str) -> Any:
+        if name.startswith("_"):
+            raise AttributeError(name)
         if name == "pause" and self._cloud() is not None:
             raise AttributeError(name)  # a run on a cloud model cannot be paused
+        if name == "hub_missing":  # only where the trainer knows each recipe (the desktop's)
+            getattr(self._local, name)
+            return self._hub_missing
         return getattr(self._local, name)
 
     # ---- where it runs ------------------------------------------------------------------------
@@ -141,24 +146,24 @@ class CloudLookTrainer:
     def ready(self, *a: Any) -> bool:
         return True if self._cloud() is not None else bool(self._local.ready(*a))
 
-    def fit(self, base: str | None = None) -> dict[str, Any]:
+    def fit(self, *a: Any) -> dict[str, Any]:
         if self._cloud() is None:
-            return self._local.fit(base) if base is not None else self._local.fit()  # type: ignore[no-any-return]
+            return self._local.fit(*a)  # type: ignore[no-any-return]
         return {
             "verdict": "fits", "reason": "Taught on a cloud model with your key.",
             "needed_bytes": 0, "budget_bytes": None, "capacity_bytes": None, "estimate": False,
             "partly_on_cpu": False,
         }  # fmt: skip
 
-    def hub_missing(self, base: str) -> list[Any]:
+    def _hub_missing(self, base: str) -> list[Any]:
         on = self._cloud()
         if on is not None and on[2].base == base:
             return []  # nothing to fetch: the cloud model has its files
         return list(self._local.hub_missing(base))
 
-    def preflight(self) -> dict[str, Any]:
+    def preflight(self, *a: Any) -> dict[str, Any]:
         if self._cloud() is None:
-            return self._local.preflight()  # type: ignore[no-any-return]
+            return self._local.preflight(*a)  # type: ignore[no-any-return]
         return {
             "ok": True, "blockers": [], "warnings": [],
             "pauses": "The pictures and their captions are sent to the cloud model.",
@@ -241,18 +246,24 @@ class CloudLookTrainer:
         cloud = self._made.pop(adapter, None)
         if cloud is None:
             return await self._local.publish(adapter, title, run_id, **kw)  # type: ignore[no-any-return]
-        folder = getattr(self._local, "models_dir", None)
-        if folder is None:
-            return None
         import re
         import shutil
 
         slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:40] or "look"
         name = f"wasify-cloud-{slug}-{run_id[:8]}.safetensors"
-        target = Path(folder) / "loras" / name
-        await asyncio.to_thread(target.parent.mkdir, parents=True, exist_ok=True)
-        await asyncio.to_thread(shutil.copyfile, adapter, target)
+        folder = getattr(self._local, "models_dir", None)
+        if folder is not None:  # the desktop: beside the other styles
+            target = Path(folder) / "loras" / name
+            await asyncio.to_thread(target.parent.mkdir, parents=True, exist_ok=True)
+            await asyncio.to_thread(shutil.copyfile, adapter, target)
+        elif callable(keep_file := getattr(self._local, "keep_file", None)):
+            await cast("Any", keep_file)(adapter, name, run_id)  # the web: the person's storage
+        else:
+            return None
         self._published[name] = cloud
+        keep = getattr(self._keys, "keep_look", None)  # the web fills it into image jobs
+        if callable(keep):
+            await cast("Any", keep)(name, cloud)
         return name
 
     def cloud_of(self, name: str) -> dict[str, str] | None:

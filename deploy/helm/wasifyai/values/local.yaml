@@ -12,14 +12,9 @@ web:
     type: NodePort
     nodePort: 30080          # mapped to localhost:3000 by deploy/kind/cluster.yaml
 
-# Use the Ollama already running natively on the Mac. scripts/kind-up.sh sets
-# ollama.externalUrl to an address the cluster can reach.
-ollama:
-  enabled: false
-
 postgres:
   storage: 1Gi
 
-# No GPU on a laptop cluster: ComfyUI (when enabled) must not ask for one.
-comfyui:
-  gpuResources: null
+# No keys on a laptop cluster: placeholder pictures and clips
+mediaWorker:
+  comfyuiMode: stub

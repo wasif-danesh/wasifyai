@@ -16,8 +16,6 @@ secrets:
 env:
   LOG_LEVEL: INFO
   PRODUCT_ENV: ""                        # selects products/<id>/product.<env>.yaml overlays (the kind overlay: kind)
-  COMFYUI_BASE_URL: ""                   # Phase 4
-  COMFYUI_VIDEO_BASE_URL: ""             # a separate ComfyUI for video (ADR-0037); empty = the one above
 
 tracing:
   # Traces (stage O1): the OTLP/HTTP endpoint of Tempo (scripts/monitoring-up.sh installs it in `monitoring`,
@@ -78,9 +76,9 @@ voice:
 mediaWorker:
   enabled: true
   replicas: 1
-  # stub: placeholder images/audio, no GPU or ComfyUI. real: drive ComfyUI (set comfyui.enabled or
-  # env.COMFYUI_BASE_URL). One job at a time per GPU id; workers sharing a GPU share `gpuId`.
-  comfyuiMode: stub
+  # The web runs only cloud models (ADR-0099; ADR-0100, CP11): cloud runs each picture or clip on the cheapest
+  # offer it came with, the keys in Admin › Media. stub: placeholder files, for trying the stack without keys.
+  comfyuiMode: cloud
   gpuId: gpu0
   jobTimeoutSeconds: 900
   resources:
@@ -95,23 +93,6 @@ litellm:
   resources:
     requests: { cpu: 100m, memory: 512Mi }
     limits: { memory: 2Gi }
-
-ollama:
-  enabled: true
-  externalUrl: ""                        # set to use an Ollama outside the cluster
-  # What the pod pulls. Keep in step with the `ollama_chat/` and `ollama/` models in
-  # services/api/src/wasifyai_api/model_defaults.yaml (a test checks this).
-  models: []  # ADR-0100: no default alias uses Ollama any more (CP11 removes it)
-  image: ollama/ollama:latest
-  storage: 20Gi
-  storageClass: ""
-  resources:
-    requests: { cpu: "1", memory: 6Gi }
-    limits: { memory: 12Gi }
-  # GPU: set e.g. { "nvidia.com/gpu": 1 } in a cloud overlay (Phase 4)
-  gpuResources: {}
-  nodeSelector: {}
-  tolerations: []
 
 postgres:
   enabled: true                          # false -> managed DB; provide DATABASE_URL in the Secret
@@ -139,22 +120,6 @@ storage:
   resources:
     requests: { cpu: 50m, memory: 256Mi }
     limits: { memory: 1Gi }
-
-# ComfyUI for real media generation. No image is chosen for you: build or pick one that matches
-# your GPU and set `image`. Requires the NVIDIA GPU Operator (see docs/runbooks/homelab-k3s.md).
-comfyui:
-  enabled: false
-  image: ""
-  port: 8188
-  # Extra arguments for ComfyUI. The image defaults to --cpu; on a GPU host set args: "" (see services/comfyui).
-  storage: 40Gi             # models and outputs
-  storageClass: ""
-  gpuResources: { nvidia.com/gpu: 1 }
-  resources:
-    requests: { cpu: "1", memory: 8Gi }
-    limits: { memory: 24Gi }
-  nodeSelector: {}
-  tolerations: []
 
 # Monitoring (ADR-0048). The monitoring stack itself is installed separately (scripts/monitoring-up.sh); this
 # chart only describes what to scrape and when to alert. The objects are created only when the cluster has the

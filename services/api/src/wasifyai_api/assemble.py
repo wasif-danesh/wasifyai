@@ -66,7 +66,7 @@ from wasifyai_platform_sdk.providers.litellm import LiteLLMTextProvider
 
 from wasifyai_api.actions_engine import build_executor
 from wasifyai_api.admin import AdminStore, PostgresAdminStore
-from wasifyai_api.admin_providers import AdminProviders
+from wasifyai_api.admin_providers import AdminProviders, CloudPlanSink
 from wasifyai_api.auth import Claims
 from wasifyai_api.components.comfyui import ComfyUiComponent
 from wasifyai_api.components.desktop import service_components
@@ -365,6 +365,12 @@ async def _shared(
             SqlSecretStore(db, SecretBox(settings.media_secrets_key)), EnvSecretStore()
         )
     s.secrets = secrets
+    if not desktop:
+        # the web runs only cloud models (ADR-0099, stage CP11): the service's media keys in
+        # Admin › Media, and each picture or clip job sent with the offers it may run on
+        s.admin_providers = AdminProviders(settings_store, secrets, settings.default_tenant_id)
+        s.own_keys = s.admin_providers
+        sink.sink = CloudPlanSink(sink.sink, s.admin_providers)
     deps = ProviderDeps(
         products_dir=pdir,
         usage=recorder,
@@ -393,8 +399,7 @@ async def _shared(
     s.products_dir = pdir  # the picker names the models a product ships (models_in_use)
     bindings = InMemoryMediaBindingStore() if injected or desktop else PostgresMediaBindingStore(db)
     box = SecretBox(settings.media_secrets_key)
-    if not desktop:  # speaking and 3D follow the admin's rows on the web (ADR-0095, K5)
-        s.admin_providers = AdminProviders(bindings, box, settings.default_tenant_id)
+    if s.admin_providers is not None:  # kept current: the admin may save on another replica
         r.background.append(asyncio.create_task(s.admin_providers.run()))
     s.media = given.media_access or MediaAccess(
         bindings,
@@ -403,7 +408,6 @@ async def _shared(
         settings.comfyui_base_url,
         video_local_url=settings.comfyui_video_base_url,
         checks=settings_store,
-        changed=s.admin_providers.changed if s.admin_providers else None,
         models=lambda: media_models_from(reg, pdir, settings.product_env),
     )
     s.caps = {}
@@ -855,6 +859,10 @@ async def _web_training(s: ApiServices, settings: Settings, queue: Callable[[], 
     tq, tdir, backing = queue(), s.engine_workers, s.storage.backing
     s.video_training = RemoteVideoTrainer(tq, backing, tdir, usage=s.usage)
     s.training = RemoteImageTrainer(tq, backing, tdir, usage=s.usage)
+    if s.admin_providers is not None:  # picture looks on the cloud trainer (ADR-0100, CP10, CP11)
+        from wasifyai_api.cloud_train import CloudLookTrainer
+
+        s.training = CloudLookTrainer(s.training, s.admin_providers, usage=s.usage)
     s.language_training = RemoteWritingTrainer(tq, backing, tdir, usage=s.usage)
     s.decision_training = RemoteDecisionTrainer(tq, backing, tdir, usage=s.usage)
     # a run a gone service left going is failed, and its worker job stopped

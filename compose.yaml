@@ -70,9 +70,10 @@ services:
   media-worker:
     build: { context: ., dockerfile: services/media-worker/Containerfile }
     env_file: .env
-    # COMFYUI_MODE=stub (the default in .env.example) returns placeholder files, so the whole
-    # media flow works without ComfyUI or a GPU. Set COMFYUI_MODE=real to use ComfyUI at
-    # COMFYUI_BASE_URL (native ComfyUI on the host: http://host.containers.internal:8188).
+    # The web runs only cloud models (ADR-0099; ADR-0100, CP11). COMFYUI_MODE=stub (the default
+    # in .env.example) returns placeholder files, so the whole media flow works with no key;
+    # COMFYUI_MODE=cloud runs each picture or clip on the cloud offers it came with (the keys in
+    # Admin › Media).
     depends_on: [redis, postgres, seaweedfs]
   # Reads the sources people add to notebooks and makes their Studio outputs (ADR-0065). Notebooks are always on, so this
   # always runs. The image holds the document reader and its models (about 1.5 GB, fetched while building).

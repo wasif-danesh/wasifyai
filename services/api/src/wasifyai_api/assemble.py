@@ -548,6 +548,14 @@ def _tool_host(
         found = await image_store(s.engine).get(tenant, user, item_id)
         return found.prompt if found else ""
 
+    async def describe_video(tenant: str, user: str, item_id: str) -> str:
+        # the words a clip was made from, as for a picture (a clip has no title of its own)
+        from wasifyai_video.videos import video_store
+
+        assert s.engine is not None
+        found = await video_store(s.engine).get(tenant, user, item_id)
+        return found.prompt if found else ""
+
     async def describe_voice_item(tenant: str, user: str, item_id: str) -> str:
         # the title of a track (or the words of a speech, a transcript or a voice's name)
         from wasifyai_voice.runtime import store_for
@@ -607,6 +615,7 @@ def _tool_host(
         lambda: s.creation_index,
         {
             "image": describe_image,
+            "video": describe_video,
             "notebook": describe_notebook,
             "track": describe,
             "speech": describe,

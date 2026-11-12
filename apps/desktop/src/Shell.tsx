@@ -286,6 +286,10 @@ export function Shell() {
                     setLibraryOpen({ kind: entry.kind, id: entry.id });
                     go("creations");
                   }}
+                  onOpenInLibrary={(kind, id) => {
+                    setLibraryOpen({ kind, id });
+                    go("creations");
+                  }}
                 />
               ) : null}
               {route === "create" ? (

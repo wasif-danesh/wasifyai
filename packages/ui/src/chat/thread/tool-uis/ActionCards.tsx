@@ -22,8 +22,8 @@ const CREATION_KEYS: Record<string, string> = {
   notebook_id: "notebook",
 };
 
-/** The creation an action's output names: by its id key (`image_id`), or as the library's own `{kind, id}`
- * (`library.keep_attachment`). */
+/** The creation an action's output names: by its id key (`image_id`), as the library's own `{kind, id}`
+ * (`library.keep_attachment`), or by its `wasify://creation/<kind>/<id>` address. */
 export function creationOf(output: Record<string, unknown> | undefined): [string, string] | null {
   for (const [key, kind] of Object.entries(CREATION_KEYS)) {
     const id = output?.[key];
@@ -32,8 +32,12 @@ export function creationOf(output: Record<string, unknown> | undefined): [string
   const kind = output?.kind;
   const id = output?.id;
   if (typeof kind === "string" && kind && typeof id === "string" && id) return [kind, id];
-  return null;
+  // every made thing also says its address (lip sync's `clip_id` is a `lipsync`)
+  const at = typeof output?.uri === "string" ? CREATION_URI.exec(output.uri) : null;
+  return at?.[1] && at[2] ? [at[1], at[2]] : null;
 }
+
+const CREATION_URI = /^wasify:\/\/creation\/([a-z0-9_]+)\/([A-Za-z0-9-]+)$/;
 
 /** What a person often asks next about a result, by its kind (docs/chat-does-everything-plan.md, CE3). The chat was
  * told the result's id, so "that picture" is found. */

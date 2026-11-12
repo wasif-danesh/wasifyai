@@ -35,12 +35,15 @@ export function HomePage({
   conversationId,
   onAdopt,
   onOpenEntry,
+  onOpenInLibrary,
 }: {
   go: (r: Route) => void;
   conversationId: string | null;
   onAdopt: (id: string) => void;
   /** open a recent creation in the Library */
   onOpenEntry?: (entry: CreationEntry) => void;
+  /** open one creation in the Library, by its Library kind (`song` for a track) */
+  onOpenInLibrary?: (kind: string, id: string) => void;
 }) {
   const choices = useChoicesFor("chat");
   const picker = useRef<ModelSelectHandle>(null);
@@ -77,9 +80,10 @@ export function HomePage({
       onOpenEntry={onOpenEntry}
       onOpenLibrary={() => go("creations")}
       onOpenCreation={(kind, id) => {
-        if (kind === "image") go("library");
-        else if (kind === "notebook") openNotebook(id);
-        else if (kind === "track") go("tracks");
+        // a notebook opens itself; anything else opens in the Library, on that item
+        if (kind === "notebook") openNotebook(id);
+        else if (onOpenInLibrary) onOpenInLibrary(kind === "track" ? "song" : kind, id);
+        else go("creations");
       }}
     />
   );

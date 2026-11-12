@@ -6,7 +6,7 @@ job book."""
 import asyncio
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from wasifyai_platform_sdk.actions.executor import ActionContext
 from wasifyai_platform_sdk.actions.library import LibraryItem, LibraryKind, creation_uri
@@ -213,9 +213,22 @@ async def _web_read(p: WebReadIn, ctx: ActionContext) -> Outcome:
 # ---- library.list / get / export / rename / delete --------------------------------------------
 
 
+# the words a person (or a model) uses for a kind
+KIND_WORDS = {
+    "picture": "image", "pictures": "image", "images": "image", "photo": "image",
+    "videos": "video", "clip": "video", "clips": "video", "music": "track", "song": "track",
+    "songs": "track", "tracks": "track", "recording": "track", "notebooks": "notebook",
+}  # fmt: skip
+
+
 class ListIn(Strict):
     kind: Kind = Field(description="Which sort of creation to list.")
     limit: int = Field(20, ge=1, le=50)
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _kind_word(cls, v: Any) -> Any:
+        return KIND_WORDS.get(v.strip().lower(), v.strip().lower()) if isinstance(v, str) else v
 
 
 class ListOut(BaseModel):

@@ -121,6 +121,8 @@ async def test_list_get_rename_and_delete_go_through_the_kind(tmp_path):
     assert [i["id"] for i in listed.output["items"]] == ["s1", "s2"]
     assert listed.output["items"][0]["uri"] == "wasify://creation/track/s1"
     assert "Rain song (track id s1)" in listed.text  # the chat is told the id, not only the title
+    as_words = await run(ex, "library.list", {"kind": "Music"})  # the word a person uses
+    assert [i["id"] for i in as_words.output["items"]] == ["s1", "s2"]
     got = await run(ex, "library.get", {"kind": "track", "id": "s1"})
     assert got.output["item"]["title"] == "Rain song"
     missing = await run(ex, "library.get", {"kind": "track", "id": "nope"})

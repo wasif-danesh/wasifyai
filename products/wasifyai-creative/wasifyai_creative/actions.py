@@ -5,7 +5,7 @@ and projects as a kind of creation. Nothing is made at this stage: a plan is wor
 import asyncio
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from wasifyai_platform_sdk.actions import (
     CHAT,
     Action,
@@ -44,6 +44,12 @@ class PlanIn(BaseModel):
 
     brief: Brief = Field(description="The song, the idea, who is in it and where.")
     title: str = Field("", max_length=200, description="A name for the project.")
+
+    @field_validator("brief", mode="before")
+    @classmethod
+    def _idea(cls, v: Any) -> Any:
+        # a model often gives the brief as a line of words: that line is its idea
+        return {"idea": v} if isinstance(v, str) else v
 
 
 class PlanOut(BaseModel):

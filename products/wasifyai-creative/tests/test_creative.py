@@ -721,3 +721,13 @@ def test_a_person_is_found_by_how_they_look_as_well_as_by_name():
     assert who_in("The green jacket hangs on a hook by the door.", cast) == ["Mira"]
     assert who_in("A photograph of Sam lies on the dashboard.", cast) == ["Sam"]
     assert who_in("An empty road runs along the sea.", cast) == []
+
+
+def test_a_brief_given_as_a_line_of_words_is_told_what_is_missing():
+    import pytest
+    from pydantic import ValidationError
+    from wasifyai_creative.actions import PlanIn
+
+    # the model is told what is really missing, not that the brief is the wrong shape
+    with pytest.raises(ValidationError, match="Choose a song from Your music"):
+        PlanIn.model_validate({"brief": "a music video for a summer road trip song"})

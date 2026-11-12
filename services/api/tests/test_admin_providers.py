@@ -20,13 +20,20 @@ from wasifyai_api.media_access import (
 from wasifyai_api.models_in_use import in_use
 from wasifyai_api.own_keys_engines import (
     KEYED_LIPSYNC,
+    KEYED_MUSIC,
+    KEYED_SFX,
     KEYED_VOICE,
     KeyedModel3d,
     KeyedSpeechEngine,
 )
 from wasifyai_api.services import ApiServices
 from wasifyai_api.settings_store import InMemorySettingsStore
-from wasifyai_platform_sdk import InMemoryMediaBindingStore, SecretBox, check_lipsync
+from wasifyai_platform_sdk import (
+    InMemoryMediaBindingStore,
+    SecretBox,
+    check_lipsync,
+    check_music,
+)
 
 from tests.test_own_keys_engines import WAV, Fal, Local3d, LocalSpeech
 from tests.test_own_keys_music_lipsync import KEY as FILES_KEY
@@ -93,7 +100,8 @@ def test_the_api_rows_appear_only_for_products_that_are_there(tmp_path):
     registry = SimpleNamespace(products=lambda: ["wasifyai-voice"])
     found = media_capabilities_from(registry, tmp_path, "dev")
     assert [(c.product_id, c.capability) for c in found] == [
-        ("wasifyai-voice", "speech.speak"), ("wasifyai-voice", "speech.lipsync"),
+        ("wasifyai-voice", "speech.speak"), ("wasifyai-voice", "speech.music"),
+        ("wasifyai-voice", "speech.sfx"), ("wasifyai-voice", "speech.lipsync"),
     ]  # fmt: skip
 
 
@@ -188,6 +196,51 @@ async def test_lip_sync_runs_on_the_admins_fal_model_beside_the_workers_models(t
     # reset: back on the engine workers only
     await media.reset(T, "wasifyai-voice", "speech.lipsync")
     assert [m["id"] for m in engine.models("lipsync")] == ["echomimic"]
+
+
+async def test_music_and_sound_effects_run_on_the_admins_fal_models_before_the_workers():
+    media, providers, _ = rig()
+    minimax, sfx = "fal-ai/minimax-music/v2.6", "fal-ai/elevenlabs/sound-effects/v2"
+    await media.set(T, "wasifyai-voice", "speech.music", fal(minimax, key=FILES_KEY), "admin")
+    await media.set(T, "wasifyai-voice", "speech.sfx", fal(sfx, key=FILES_KEY), "admin")
+    queue = FalFiles({"audio": {"url": "https://v3.fal.media/s.wav"}}, a_wav(2.0, 44100))
+    engine = KeyedSpeechEngine(LocalVoice(), providers, queue.client, poll_s=0, admin=True)
+    rows = engine.models("music")
+    assert [m["id"] for m in rows] == [KEYED_MUSIC, KEYED_SFX, "ace-step"]
+    assert [m["title"] for m in rows[:2]] == [
+        "MiniMax Music 2.6 · fal.ai", "ElevenLabs Sound Effects · fal.ai",
+    ]  # fmt: skip
+    song = engine.resolve("music", None)
+    await engine.music(song, check_music(song, "song", "Warm city pop", "La la", False, None,
+                                         None, None))  # fmt: skip
+    effect = engine.resolve("music", KEYED_SFX)
+    await engine.music(effect, check_music(effect, "sfx", "A door slams", None, False, 3, None,
+                                           None))  # fmt: skip
+    assert [u for u, _ in queue.posts()] == [
+        f"https://queue.fal.run/{minimax}", f"https://queue.fal.run/{sfx}",
+    ]  # fmt: skip
+    assert all(
+        r.headers.get("authorization") == f"Key {FILES_KEY}"
+        for r in queue.requests
+        if r.url.host == "queue.fal.run"
+    )
+    await media.reset(T, "wasifyai-voice", "speech.music")
+    await media.reset(T, "wasifyai-voice", "speech.sfx")
+    assert [m["id"] for m in engine.models("music")] == ["ace-step"]
+
+
+async def test_music_and_sound_effects_rows_take_only_their_own_kind_of_model():
+    media, _, _ = rig()
+    with pytest.raises(MediaAccessError, match="not a music model"):
+        await media.set(
+            T, "wasifyai-voice", "speech.music", fal("fal-ai/elevenlabs/sound-effects/v2"), "admin"
+        )
+    with pytest.raises(MediaAccessError, match="not a sound effects model"):
+        await media.set(
+            T, "wasifyai-voice", "speech.sfx", fal("fal-ai/minimax-music/v2.6"), "admin"
+        )
+    with pytest.raises(MediaAccessError, match="not a music model"):  # WaveSpeed's name
+        await media.test(T, "wasifyai-voice", "speech.music", fal("minimax/music-2.6"))
 
 
 async def test_lip_sync_on_fal_takes_only_the_models_this_service_can_ask():

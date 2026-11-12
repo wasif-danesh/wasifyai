@@ -125,6 +125,11 @@ model named "Fabric 1.0 Fast · fal.ai", its price on the picker and its time an
 go to fal.ai's file store first. Reset sends it back to the engine workers. A run the API was making when it restarted is not
 picked up again.
 
+**Music and sound effects on fal.ai (2026-11-12).** The same, with the rows `speech.music` (`fal-ai/minimax-music/v2.6`, songs
+with lyrics or words it writes; or `fal-ai/elevenlabs/music`, 3 s to 10 min) and `speech.sfx`
+(`fal-ai/elevenlabs/sound-effects/v2`, 0.5 to 22 s). Both show on Create music, before the workers' models; sound effects are
+its Sound effects mode. A row takes only its own kind of model (the cloud catalogue's, `own_keys_catalogue.py`).
+
 
 ### Images and video on a Mac: the media worker (the same pattern)
 

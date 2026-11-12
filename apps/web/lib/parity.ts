@@ -69,7 +69,10 @@ export const PARITY: Record<string, Parity> = {
   "voice.dub": { status: "live", note: "shown when a ready model can do it" },
   "voice.audiobook": { status: "live", note: "shown when a ready model can do it" },
 
-  "music.create": { status: "live", note: "shown when a ready model can do it" },
+  "music.create": {
+    status: "live",
+    note: "shown when a ready model can do it: a worker, or fal.ai set by an admin in Admin › Media (rows speech.music and speech.sfx)",
+  },
   "music.lyrics": { status: "live", note: "shown when a ready model can do it" },
   "music.separate": { status: "live", note: "shown when a ready model can do it" },
 };

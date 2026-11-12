@@ -65,6 +65,9 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     items: [
       { id: "video.create", label: "Create", icon: Sparkles },
       { id: "video.animate", label: "Animate an image", icon: Film },
+      // makes a video from a picture and a voice, so it is found with video (owner, 2026-11-12); its id,
+      // address, action and help stay `voice.lipsync`
+      { id: "voice.lipsync", label: "Lip sync", icon: Film },
       { id: "video.extend", label: "Extend video", icon: Maximize2 },
     ],
   },
@@ -75,7 +78,6 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     items: [
       { id: "voice.speak", label: "Text to speech", icon: Volume2 },
       { id: "voice.transcribe", label: "Speech to text", icon: Mic },
-      { id: "voice.lipsync", label: "Lip sync", icon: Film },
       { id: "voice.voices", label: "Voices", icon: Users },
       { id: "voice.convert", label: "Change a voice", icon: Shuffle },
       { id: "voice.edit", label: "Edit speech", icon: Pencil },

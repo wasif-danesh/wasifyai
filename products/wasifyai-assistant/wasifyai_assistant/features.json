@@ -94,6 +94,16 @@
     ]
   },
   {
+    "screen": "voice.lipsync",
+    "where": "Video › Lip sync",
+    "actions": [
+      "lipsync.make"
+    ],
+    "does": [
+      "Lip sync"
+    ]
+  },
+  {
     "screen": "video.extend",
     "where": "Video › Extend video",
     "actions": [
@@ -121,16 +131,6 @@
     ],
     "does": [
       "Speech to text"
-    ]
-  },
-  {
-    "screen": "voice.lipsync",
-    "where": "Voice › Lip sync",
-    "actions": [
-      "lipsync.make"
-    ],
-    "does": [
-      "Lip sync"
     ]
   },
   {

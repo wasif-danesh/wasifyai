@@ -32,27 +32,39 @@ log = logging.getLogger(__name__)
 
 DEFAULT_BACKEND = "comfyui-local"
 CHECKS = "media_checks"  # the last test of each saved row: "Key not working" comes from here
-# the rows the API runs itself (ADR-0095, K5): speaking, lip sync and 3D models, engine workers or
-# fal.ai
+# the rows the API runs itself (ADR-0095, K5): speaking, music, sound effects, lip sync and 3D
+# models, engine workers or fal.ai
 API_ROWS = (
     ("wasifyai-voice", "speech.speak"),
+    ("wasifyai-voice", "speech.music"),
+    ("wasifyai-voice", "speech.sfx"),
     ("wasifyai-voice", "speech.lipsync"),
     ("wasifyai-model3d", "model3d.generate"),
 )
+# the rows whose fal.ai model must be one this app knows how to ask (each takes its own fields), by
+# the product of the cloud catalogue (`own_keys_catalogue.py`) that lists them, and their words
+CHECKED_ROWS = {
+    "speech.music": ("music", "a music model"),
+    "speech.sfx": ("sfx", "a sound effects model"),
+    "speech.lipsync": ("lipsync", "a lip sync model"),
+}
 
 
 def _check_model(backend: str, capability: str, config: dict[str, Any]) -> None:
-    """Lip sync on fal.ai takes only the models this app knows how to ask (their size, length
-    and speed settings differ); another name would never be offered to anyone."""
-    from wasifyai_api.own_keys_engines import LIPSYNC_MODELS
+    """Music, sound effects and lip sync on fal.ai take only the catalogue's models: another name
+    would never be offered to anyone."""
+    from wasifyai_api.own_keys_catalogue import models_of
 
-    if backend == "fal" and capability == "speech.lipsync":
-        model = str(config.get("model") or "")
-        if model not in LIPSYNC_MODELS:
-            raise MediaAccessError(
-                f"{model or 'That'} is not a lip sync model this service can use on fal.ai. "
-                f"Use one of: {', '.join(LIPSYNC_MODELS)}."
-            )
+    if backend != "fal" or capability not in CHECKED_ROWS:
+        return
+    product, what = CHECKED_ROWS[capability]
+    known = [m.model for m in models_of(product, "fal")]
+    model = str(config.get("model") or "")
+    if model not in known:
+        raise MediaAccessError(
+            f"{model or 'That'} is not {what} this service can use on fal.ai. "
+            f"Use one of: {', '.join(known)}."
+        )
 
 
 class MediaAccessError(Exception):

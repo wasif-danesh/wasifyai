@@ -69,7 +69,7 @@ before it is saved, as everything else is.
 | F3 | Sound effects on the key | a sound effect from the fake is saved. **Built 2026-11-11** |
 | F4 | Lip sync on the key (LongCat, InfiniteTalk) | a lip sync video from the fake is saved; the screen asks nothing to be set up for a keyed model. **Built 2026-11-11**; longer voices in pieces not yet |
 | F5 | The check script, all products, fake by default | it passes against the fake (all nine, 2026-11-11); the owner runs `--real` |
-| F6 | Web Admin rows, help, search, docs; seen in the real window | walked in the window. **Lip sync built 2026-11-12**: the Admin › Media row `wasifyai-voice/speech.lipsync` on fal.ai (the four models of `LIPSYNC_MODELS` only), run by the API through `KeyedSpeechEngine` over `AdminProviders`; tested against a fake, not seen in a browser. Music and sound effects rows not built |
+| F6 | Web Admin rows, help, search, docs; seen in the real window | walked in the window. **Lip sync built 2026-11-12**: the Admin › Media row `wasifyai-voice/speech.lipsync` on fal.ai (the four models of `LIPSYNC_MODELS` only), run by the API through `KeyedSpeechEngine` over `AdminProviders`; tested against a fake, not seen in a browser. **Music and sound effects built 2026-11-12**: rows `speech.music` and `speech.sfx`, each taking only the catalogue's fal.ai models of its kind; fake-tested, not seen in a browser |
 
 ## The real run (owner, with a real key)
 

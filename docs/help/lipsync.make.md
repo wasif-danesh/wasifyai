@@ -13,7 +13,7 @@ Make a picture talk: a video of the face saying words or a recording.
 
 ## Steps in the app
 
-1. Open **Voice › Lip sync**.
+1. Open **Video › Lip sync**.
 2. Choose the model with the model button: **On this computer** (EchoMimic v3) or, once a fal.ai key is saved for
    Lip sync under Your keys in Settings, **Cloud**: Fabric 1.0 Fast, Kling Avatar v2, OmniHuman 1.5 or InfiniteTalk.
    Each cloud row says its price and how long a second of video takes.

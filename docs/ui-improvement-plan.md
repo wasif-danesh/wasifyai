@@ -60,6 +60,11 @@ the Library. "Your images", "Your videos" and "Your music" stay as items of thei
 them with the one Library and each screen's recent strip. Voices stays a page until U5 makes it a panel in Text to
 speech. The menu's names stay as they are (decision 1).
 
+**Lip sync moved to Video (owner, 2026-11-12).** It makes a video from a picture and a voice, so it is the third item
+of Video (Create, Animate an image, Lip sync, Extend video) instead of the third of Voice. Only its place in
+`MENU_GROUPS` changed: its id `voice.lipsync`, its address, its action and its help stay, so links and the assistant
+keep working.
+
 ### The top bar
 
 One row, 48 px, on the window and on the web: back and forward (window only; the web has the browser's); the

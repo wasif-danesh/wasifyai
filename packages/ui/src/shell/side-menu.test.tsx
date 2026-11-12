@@ -20,10 +20,12 @@ describe("the menu definition", () => {
     const items = (id: string) => MENU_GROUPS.find((g) => g.id === id)?.items.map((i) => i.label);
     expect(items("notebook")).toEqual(["Create", "View notebooks"]);
     // the "Your …" pages are the one Library now (ADR-0093, U8)
-    expect(items("video")).toEqual(["Create", "Animate an image", "Extend video"]);
+    // Lip sync makes a video, so it is with video (owner, 2026-11-12)
+    expect(items("video")).toEqual(["Create", "Animate an image", "Lip sync", "Extend video"]);
     expect(items("music")).toEqual(["Create", "Lyrics", "Split into parts"]);
     expect(items("images")).toEqual(["Create", "Edit", "Inpaint", "Reference"]);
-    expect(items("voice")).toHaveLength(8);
+    expect(items("voice")).toHaveLength(7);
+    expect(items("voice")).not.toContain("Lip sync");
     const ids = MENU_GROUPS.flatMap((g) => g.items.map((i) => i.id));
     expect(new Set(ids).size).toBe(ids.length); // every id is unique
   });

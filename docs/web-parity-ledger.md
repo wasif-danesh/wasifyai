@@ -79,7 +79,7 @@ web job's test step fail without one. The desktop's actions are held to the same
 | `voice.edit` | live | shown when a ready model can do it |  |
 | `voice.dub` | live | shown when a ready model can do it |  |
 | `voice.audiobook` | live | shown when a ready model can do it |  |
-| `music.create` | live | shown when a ready model can do it |  |
+| `music.create` | live | shown when a ready model can do it: a worker, or fal.ai set by an admin in Admin › Media (rows speech.music and speech.sfx) |  |
 | `music.lyrics` | live | shown when a ready model can do it |  |
 | `music.separate` | live | shown when a ready model can do it |  |
 <!-- parity:end -->

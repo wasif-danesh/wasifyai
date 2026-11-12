@@ -154,6 +154,19 @@ describe("the picker on the web", () => {
     );
   });
 
+  it("names the provider of music an admin put on fal.ai", () => {
+    const song = model({
+      id: "key:music",
+      title: "MiniMax Music 2.6 · fal.ai",
+      engine: "remote",
+      state: "ready",
+      tasks: ["music"],
+    });
+    expect(webRow(song, ["music"], null, false, null).plain).toBe(
+      "Runs on fal.ai, chosen by your admin; what you add is sent there.",
+    );
+  });
+
   it("offers a missing model to an admin with its size, and asks anyone else to ask an admin", () => {
     const missing = model({ id: "voxcpm2", state: "can_install", bytes_missing: 4e9 });
     const admin = webRow(missing, ["speak"], null, true, null);

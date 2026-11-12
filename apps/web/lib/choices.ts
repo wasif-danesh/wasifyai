@@ -51,7 +51,7 @@ type Engine = WorkerInfo["lipsync_engine"];
  * smallest size, so people know what a video costs the service. */
 export function remotePlain(m: VoiceModelInfo): string | undefined {
   if (m.engine !== "remote") return undefined;
-  const where = m.lipsync?.where ?? "a cloud provider";
+  const where = m.lipsync?.where ?? m.title.split(" · ")[1] ?? "a cloud provider";
   const size = m.lipsync?.sizes?.[0];
   const price = size ? m.lipsync?.price_per_s?.[String(size)] : undefined;
   const cost =

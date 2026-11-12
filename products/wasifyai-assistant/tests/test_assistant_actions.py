@@ -161,6 +161,18 @@ async def test_a_proposal_leaves_an_audit_entry_and_a_usage_event(tmp_path, ctx)
     ]
 
 
+async def test_an_actions_id_opens_the_screen_it_is_done_on(tmp_path, ctx):
+    rig = Rig(
+        tmp_path,
+        [{"tool_calls": [{"name": "open_screen", "arguments": {"screen_id": "speech.speak"}}]},
+         {"text": "There."}],
+        FakeHost(),
+    )  # fmt: skip
+    _, events = await rig.turn("open text to speech")
+    result = next(e for e in events if e["type"] == "tool_result")
+    assert result["status"] == "ok" and result["output"]["screen"] == "voice.speak"
+
+
 async def test_how_to_and_open_screen_read_the_apps_own_files(tmp_path, ctx):
     rig = Rig(
         tmp_path,

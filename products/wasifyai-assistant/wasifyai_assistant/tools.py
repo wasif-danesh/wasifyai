@@ -733,7 +733,12 @@ async def call_tool(
 
         return await how_to(params["question"], served, ready)
     if name == "open_screen":
-        return open_screen(params["screen_id"], served)
+        # an action's id (`image.edit`) names the screen it is done on (`images.edit`)
+        screen_id = params["screen_id"]
+        action = executor.registry.get(screen_id)
+        if action is not None and action.ui and screen_id not in guides.screens(served):
+            screen_id = action.ui
+        return open_screen(screen_id, served)
     if name == EXTERNAL_TOOLS:
         return await external_tools(params["query"], executor)
     if name in (PROPOSE, CALL_EXTERNAL):

@@ -223,7 +223,8 @@ async def _list(p: ListIn, ctx: ActionContext) -> Outcome:
     items = await _kind(ctx, p.kind).list(ctx, p.limit)
     if not items:
         return Outcome.ok({"items": []}, f"There are no {p.kind} creations yet.")
-    lines = [f"- {i.title or i.id}" for i in items]
+    # each with its id: the chat acts on an item by its id, never by its title
+    lines = [f"- {i.title or 'Untitled'} ({p.kind} id {i.id})" for i in items]
     return Outcome.ok(
         {"items": [_item_out(i) for i in items]}, f"{len(items)} found:\n" + "\n".join(lines)
     )

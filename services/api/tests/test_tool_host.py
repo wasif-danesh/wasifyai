@@ -34,3 +34,24 @@ async def test_without_notebooks_the_tool_says_so(ctx):
     host = ApiToolHost(lambda: None, lambda: None)
     with pytest.raises(ToolUnavailable, match="not available"):
         await host.search_notebooks("anything")
+
+
+async def test_chats_that_match_first_do_not_push_the_creations_out(ctx):
+    """The chats are indexed too; a chat that made the fox matches "red fox" before the fox."""
+    from types import SimpleNamespace
+
+    asked: list[int] = []
+
+    class Index:
+        async def search(self, tenant, user, query, kind, limit):
+            asked.append(limit)
+            chats = [
+                SimpleNamespace(kind="conversation", product_id="a", item_id=f"c{i}")
+                for i in range(8)
+            ]
+            fox = SimpleNamespace(kind="image", product_id="wasifyai-image", item_id="fox")
+            return chats + [fox], False
+
+    host = ApiToolHost(lambda: None, Index)
+    out = await host.search_creations("red fox", 6)
+    assert [r["id"] for r in out] == ["fox"] and asked[0] > 6

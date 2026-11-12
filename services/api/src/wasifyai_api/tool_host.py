@@ -71,11 +71,16 @@ class ApiToolHost:
 
     async def search_creations(self, query: str, limit: int = 6) -> list[dict[str, Any]]:
         ctx = require_context()
+        want = max(1, min(limit, 12))
+        # the chats are indexed too and often match first ("red fox" is in the chat that made the
+        # fox): more are asked for, so the creations are not pushed out by them
         hits, _degraded = await self._index().search(
-            ctx.tenant_id, ctx.user_id, query.strip()[:200], None, max(1, min(limit, 12))
+            ctx.tenant_id, ctx.user_id, query.strip()[:200], None, 50
         )
         out: list[dict[str, Any]] = []
         for h in hits:
+            if len(out) >= want:
+                break
             if h.kind == "conversation":
                 continue  # the assistant finds creations, not its own chats
             row: dict[str, Any] = {"kind": h.kind, "product_id": h.product_id, "id": h.item_id}

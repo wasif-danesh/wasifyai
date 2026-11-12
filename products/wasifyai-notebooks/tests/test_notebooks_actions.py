@@ -279,6 +279,9 @@ async def test_a_notebook_is_made_from_attached_documents_named_by_their_first_l
     assert nid in r.text and "2 attached documents" in r.text
     docs = rig.store.list_documents("t1", "u1", nid)
     assert sorted(d["title"] for d in docs) == ["Budget: 40,000 dollars.", "Launch plan"]
+    # with no name of its own, it is named after its first document
+    r = await rig.go("notebook.create", {"attachment_ids": [plan]})
+    assert r.ok and r.output["title"] == "Launch plan"
 
 
 async def test_a_note_can_come_from_an_attached_document_and_not_from_someone_elses(rig):

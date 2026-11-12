@@ -8679,6 +8679,7 @@
         "properties": {
           "title": {
             "default": "Untitled notebook",
+            "description": "Left out with attached documents: the first document's first line.",
             "maxLength": 200,
             "minLength": 1,
             "title": "Title",

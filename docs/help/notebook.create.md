@@ -19,7 +19,7 @@ its first sources.
 
 ## Fields
 
-- `title`: A name, up to 200 characters.
+- `title`: A name, up to 200 characters. Left out with attached documents, the first document's first line.
 - `attachment_ids`: Up to 4 documents attached in the chat, to add as its first sources.
 
 ## Limits

@@ -125,8 +125,14 @@ async def _list(p: ListIn, ctx: ActionContext) -> Outcome:
 # ---- notebook.create / add_source -------------------------------------------------------------
 
 
+UNTITLED = "Untitled notebook"
+
+
 class CreateIn(Strict):
-    title: str = Field("Untitled notebook", min_length=1, max_length=200)
+    title: str = Field(
+        UNTITLED, min_length=1, max_length=200,
+        description="Left out with attached documents: the first document's first line.",
+    )  # fmt: skip
     attachment_ids: list[str] = Field(
         default_factory=list, max_length=4,
         description="Documents the person attached in the chat, by their attachment id, to add "
@@ -152,7 +158,9 @@ class NotebookOut(BaseModel):
 async def _create(p: CreateIn, ctx: ActionContext) -> Outcome:
     rt, a = _rt(ctx), ctx.actor
     texts = [await attached_document(ctx, i) for i in p.attachment_ids]  # all there before anything
-    made = await _call(rt.store.create_notebook, a.tenant_id, a.user_id, p.title)
+    # a notebook made from documents with no name of its own is named after the first of them
+    title = title_from(texts[0]) if texts and p.title == UNTITLED else p.title
+    made = await _call(rt.store.create_notebook, a.tenant_id, a.user_id, title)
     for text in texts:
         await _call(
             rt.store.add_note, a.tenant_id, a.user_id, made["id"], title=title_from(text),
